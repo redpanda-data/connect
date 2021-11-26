@@ -121,6 +121,15 @@ func NewObjectField(name string, fields ...*ConfigField) *ConfigField {
 	}
 }
 
+// NewObjectListField describes a new list type config field consisting of
+// objects with one or more child fields.
+func NewObjectListField(name string, fields ...*ConfigField) *ConfigField {
+	objField := NewObjectField(name, fields...)
+	return &ConfigField{
+		field: objField.field.Array(),
+	}
+}
+
 // NewInternalField returns a ConfigField derived from an internal package field
 // spec. This function is for internal use only.
 func NewInternalField(ifield docs.FieldSpec) *ConfigField {
@@ -192,7 +201,7 @@ func (c *ConfigSpec) configFromNode(mgr bundle.NewManagement, node *yaml.Node) (
 		return &ParsedConfig{mgr: mgr, asStruct: conf}, nil
 	}
 
-	fields, err := c.component.Config.Children.YAMLToMap(node, docs.ToValueConfig{})
+	fields, err := c.component.Config.YAMLToValue(node, docs.ToValueConfig{})
 	if err != nil {
 		return nil, err
 	}
@@ -327,10 +336,19 @@ func (c *ConfigSpec) Description(description string) *ConfigSpec {
 // Field sets the specification of a field within the config spec, used for
 // linting and generating documentation for the component.
 //
+// If the provided field has an empty name then it registered as the value at
+// the root of the config spec.
+//
 // When creating a spec with a struct constructor the fields from that struct
 // will already be inferred. However, setting a field explicitly is sometimes
 // useful for enriching the field documentation with more information.
 func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
+	if f.field.Name == "" {
+		// Set field to root of config spec
+		c.component.Config = f.field
+		return c
+	}
+
 	c.component.Config.Type = docs.FieldTypeObject
 	for i, s := range c.component.Config.Children {
 		if s.Name == f.field.Name {
@@ -338,6 +356,7 @@ func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
 			return c
 		}
 	}
+
 	c.component.Config.Children = append(c.component.Config.Children, f.field)
 	return c
 }
@@ -414,7 +433,7 @@ type ParsedConfig struct {
 	hiddenPath []string
 	mgr        bundle.NewManagement
 	asStruct   interface{}
-	generic    map[string]interface{}
+	generic    interface{}
 }
 
 // AsStruct returns the root of the parsed config. If the configuration spec was
@@ -641,4 +660,30 @@ func (p *ParsedConfig) FieldBool(path ...string) (bool, error) {
 		return false, fmt.Errorf("expected field '%v' to be a bool, got %T", p.fullDotPath(path...), v)
 	}
 	return b, nil
+}
+
+// FieldObjectList accesses a field that is a list of objects from the parsed
+// config by its name and returns the value as an array of *ParsedConfig types,
+// where each one represents an object in the list. Returns an error if the
+// field is not found, or is not a list of objects.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldObjectList(path ...string) ([]*ParsedConfig, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iList, ok := v.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.fullDotPath(path...), v)
+	}
+	sList := make([]*ParsedConfig, len(iList))
+	for i, ev := range iList {
+		sList[i] = &ParsedConfig{
+			mgr:     p.mgr,
+			generic: ev,
+		}
+	}
+	return sList, nil
 }
