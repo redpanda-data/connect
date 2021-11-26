@@ -142,7 +142,6 @@ func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
 	fmt.Println("## CONNECTING to", c.pgConfig.ConnString())
 	// Connect to the pool
 	c.pgPool, err = pgxpool.ConnectConfig(c.ctx, c.pgConfig)
-	fmt.Println("Eeee")
 	if err != nil {
 		fmt.Println("## ERR")
 		fmt.Println(err)
@@ -168,43 +167,57 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		return nil, nil, service.ErrEndOfInput
 	}
 
-	// for c.rows.Next() would keep processing the rows
-	if c.rows.Next() {
-		values, err := c.rows.Values()
-		if err != nil {
-			// TODO: Any errors need capturing here to signal a lost connection?
-			return nil, nil, err
+	rowChan := make(chan *service.Message)
+	errChan := make(chan error)
+
+	go func() {
+		// for c.rows.Next() would keep processing the rows
+		if c.rows.Next() {
+			values, err := c.rows.Values()
+			if err != nil {
+				// TODO: Any errors need capturing here to signal a lost connection?
+				c.logger.Error("Error reading row values!")
+				errChan <- err
+			}
+			// Construct the new JSON
+			var jsonBytes []byte
+			jsonBytes, err = json.Marshal(map[string]string{
+				"table":       values[0].(string),
+				"primary_key": string(values[1].([]byte)), // Stringified JSON (Array)
+				"row":         string(values[2].([]byte)), // Stringified JSON (Object)
+			})
+			// TODO: Store the current time for the CURSOR offset to cache
+			if err != nil {
+				c.logger.Error("Failed to marshal JSON")
+				errChan <- err
+			}
+			fmt.Println("## SENDING NEW MESSAGE")
+			msg := service.NewMessage(jsonBytes)
+			rowChan <- msg
 		}
-		// Construct the new JSON
-		var jsonBytes []byte
-		jsonBytes, err = json.Marshal(map[string]string{
-			"table":       values[0].(string),
-			"primary_key": string(values[1].([]byte)), // Stringified JSON (Array)
-			"row":         string(values[2].([]byte)), // Stringified JSON (Object)
-		})
-		// TODO: Store the current time for the CURSOR offset to cache
-		if err != nil {
-			c.logger.Error("Failed to marshal JSON")
-			return nil, nil, err
-		}
-		fmt.Println("## SENDING NEW MESSAGE")
-		msg := service.NewMessage(jsonBytes)
+	}()
+
+	select {
+	case msg := <-rowChan:
 		return msg, func(ctx context.Context, err error) error {
 			// No acking in core changefeeds
 			return nil
 		}, nil
+	case err := <-errChan:
+		return nil, nil, err
+	case <-ctx.Done():
+		c.logger.Debug("Read context cancelled, ending")
+		return nil, nil, nil
 	}
-	// This query will block and wait for more changes so if we reach this point then the query should have died
-	c.logger.Debug("no more rows!")
-	fmt.Println("## NO MORE ROWS")
-	return nil, nil, service.ErrEndOfInput
 }
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
 	fmt.Println("## CLOSING")
 	c.cancelFunc()
 	fmt.Println("## CANCELLED CONTEXT")
-	c.shutSig.CloseNow()
+	c.pgPool.Close()
+	fmt.Println("## CLOSED POOL")
+	c.shutSig.ShutdownComplete()
 	fmt.Println("## SHUTDOWN")
 	select {
 	case <-c.shutSig.HasClosedChan():
