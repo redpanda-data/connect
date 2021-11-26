@@ -147,13 +147,6 @@ func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
 		fmt.Println(err)
 		return err
 	}
-	fmt.Println("## Querying", c.statement)
-	c.rows, err = c.pgPool.Query(c.ctx, c.statement)
-	if err != nil {
-		fmt.Println("## ERR2")
-		fmt.Println(err)
-	}
-	fmt.Println("## CONNECTED")
 	return err
 }
 
@@ -163,8 +156,14 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		return nil, nil, service.ErrNotConnected
 	}
 
+	var err error
 	if c.rows == nil {
-		return nil, nil, service.ErrEndOfInput
+		c.logger.Debug(fmt.Sprintf("Running query %s", c.statement))
+		c.rows, err = c.pgPool.Query(c.ctx, c.statement)
+		if err != nil {
+			c.logger.Error("Error querying")
+			return nil, nil, err
+		}
 	}
 
 	rowChan := make(chan *service.Message)
