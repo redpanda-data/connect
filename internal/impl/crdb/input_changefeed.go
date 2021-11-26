@@ -232,7 +232,9 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
 	c.logger.Debug("Got close signal")
 	c.cancelFunc()
-	c.pgPool.Close()
+	if c.pgPool != nil {
+		c.pgPool.Close()
+	}
 	c.shutSig.ShutdownComplete()
 	select {
 	case <-c.shutSig.HasClosedChan():
