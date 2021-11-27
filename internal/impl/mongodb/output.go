@@ -42,11 +42,7 @@ func init() {
 		Description: ioutput.Description(true, true, ""),
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
-				docs.FieldCommon(
-					"operation",
-					"The mongo operation to perform. Must be one of the following: insert-one, delete-one, delete-many, "+
-						"replace-one, update-one.",
-				),
+				outputOperationDocs(client.OperationUpdateOne),
 				docs.FieldCommon(
 					"write_concern",
 					"The write concern settings for the mongo connection.",
@@ -107,11 +103,18 @@ func NewWriter(
 	log log.Modular,
 	stats metrics.Type,
 ) (*Writer, error) {
+	// TODO: Remove this after V4 lands and #972 is fixed
+	operation := client.NewOperation(conf.Operation)
+	if operation == client.OperationInvalid {
+		return nil, fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one or update-one", conf.Operation)
+	}
+
 	db := &Writer{
-		conf:    conf,
-		log:     log,
-		stats:   stats,
-		shutSig: shutdown.NewSignaller(),
+		conf:      conf,
+		log:       log,
+		stats:     stats,
+		operation: operation,
+		shutSig:   shutdown.NewSignaller(),
 	}
 
 	if conf.MongoConfig.URL == "" {
@@ -126,23 +129,10 @@ func NewWriter(
 		return nil, errors.New("mongo collection must be specified")
 	}
 
-	var filterNeeded, documentNeeded bool
-	var hintAllowed, upsertAllowed bool
-
-	if _, ok := documentMapOps[conf.Operation]; !ok {
-		return nil, fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, or update-one", conf.Operation)
-	}
-
-	documentNeeded = documentMapOps[conf.Operation]
-	filterNeeded = filterMapOps[conf.Operation]
-	hintAllowed = hintAllowedOps[conf.Operation]
-	upsertAllowed = upsertAllowedOps[conf.Operation]
-
 	bEnv := mgr.BloblEnvironment()
-
 	var err error
 
-	if filterNeeded {
+	if isFilterAllowed(db.operation) {
 		if conf.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
@@ -150,10 +140,10 @@ func NewWriter(
 			return nil, fmt.Errorf("failed to parse filter_map: %v", err)
 		}
 	} else if conf.FilterMap != "" {
-		return nil, fmt.Errorf("mongodb filter_map not allowed for '%s' operation", conf.Operation)
+		return nil, fmt.Errorf("mongodb filter_map not allowed for '%s' operation", db.operation)
 	}
 
-	if documentNeeded {
+	if isDocumentAllowed(db.operation) {
 		if conf.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
@@ -161,19 +151,19 @@ func NewWriter(
 			return nil, fmt.Errorf("failed to parse document_map: %v", err)
 		}
 	} else if conf.DocumentMap != "" {
-		return nil, fmt.Errorf("mongodb document_map not allowed for '%s' operation", conf.Operation)
+		return nil, fmt.Errorf("mongodb document_map not allowed for '%s' operation", db.operation)
 	}
 
-	if hintAllowed && conf.HintMap != "" {
+	if isHintAllowed(db.operation) && conf.HintMap != "" {
 		if db.hintMap, err = bEnv.NewMapping(conf.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.HintMap != "" {
-		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.Operation)
+		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", db.operation)
 	}
 
-	if !upsertAllowed && conf.Upsert {
-		return nil, fmt.Errorf("mongodb upsert not allowed for '%s' operation", conf.Operation)
+	if !isUpsertAllowed(db.operation) && conf.Upsert {
+		return nil, fmt.Errorf("mongodb upsert not allowed for '%s' operation", db.operation)
 	}
 
 	if db.wcTimeout, err = time.ParseDuration(conf.WriteConcern.WTimeout); err != nil {
@@ -194,6 +184,7 @@ type Writer struct {
 	filterMap   *mapping.Executor
 	documentMap *mapping.Executor
 	hintMap     *mapping.Executor
+	operation   client.Operation
 
 	mu         sync.Mutex
 	client     *mongo.Client
@@ -267,8 +258,8 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		var filterVal, documentVal types.Part
 		var upsertVal, filterValWanted, documentValWanted bool
 
-		filterValWanted = filterMapOps[m.conf.Operation]
-		documentValWanted = documentMapOps[m.conf.Operation]
+		filterValWanted = isFilterAllowed(m.operation)
+		documentValWanted = isDocumentAllowed(m.operation)
 		upsertVal = m.conf.Upsert
 
 		if filterValWanted {
@@ -317,29 +308,29 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 
 		var writeModel mongo.WriteModel
 
-		switch m.conf.Operation {
-		case "insert-one":
+		switch m.operation {
+		case client.OperationInsertOne:
 			writeModel = &mongo.InsertOneModel{
 				Document: docJSON,
 			}
-		case "delete-one":
+		case client.OperationDeleteOne:
 			writeModel = &mongo.DeleteOneModel{
 				Filter: filterJSON,
 				Hint:   hintJSON,
 			}
-		case "delete-many":
+		case client.OperationDeleteMany:
 			writeModel = &mongo.DeleteManyModel{
 				Filter: filterJSON,
 				Hint:   hintJSON,
 			}
-		case "replace-one":
+		case client.OperationReplaceOne:
 			writeModel = &mongo.ReplaceOneModel{
 				Upsert:      &upsertVal,
 				Filter:      filterJSON,
 				Replacement: docJSON,
 				Hint:        hintJSON,
 			}
-		case "update-one":
+		case client.OperationUpdateOne:
 			writeModel = &mongo.UpdateOneModel{
 				Upsert: &upsertVal,
 				Filter: filterJSON,

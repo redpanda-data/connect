@@ -157,11 +157,12 @@ Default: `""`
 
 ### `operation`
 
-The mongo operation to perform. Must be one of the following: insert-one, delete-one, delete-many, replace-one, update-one.
+The mongodb operation to perform.
 
 
 Type: `string`  
 Default: `"update-one"`  
+Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`.
 
 ### `write_concern`
 
