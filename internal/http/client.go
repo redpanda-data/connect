@@ -159,9 +159,6 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 	if h.metaFilter, err = h.conf.MetadataFilter.New(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
-	if !h.conf.CopyResponseHeaders && h.metaFilter.IsSet() {
-		h.log.Warnln("Metadata include_prefixes / include_patterns are ignored when copy_response_headers isn't set.")
-	}
 
 	h.mCount = h.stats.GetCounter("count")
 	h.mErr = h.stats.GetCounter("error")
@@ -390,7 +387,7 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 					meta := resMsg.Get(index).Metadata()
 					for k, values := range p.Header {
 						normalisedHeader := strings.ToLower(k)
-						if len(values) > 0 && (!h.metaFilter.IsSet() || h.metaFilter.Match(normalisedHeader)) {
+						if len(values) > 0 && h.metaFilter.Match(normalisedHeader) {
 							meta.Set(normalisedHeader, values[0])
 						}
 					}
@@ -413,7 +410,7 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 				meta := resMsg.Get(0).Metadata()
 				for k, values := range res.Header {
 					normalisedHeader := strings.ToLower(k)
-					if len(values) > 0 && (!h.metaFilter.IsSet() || h.metaFilter.Match(normalisedHeader)) {
+					if len(values) > 0 && h.metaFilter.Match(normalisedHeader) {
 						meta.Set(normalisedHeader, values[0])
 					}
 				}

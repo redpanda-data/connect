@@ -52,13 +52,13 @@ type Filter struct {
 	inclduePatterns []*regexp.Regexp
 }
 
-// IsSet returns true if any filters are configured and false otherwise.
-func (f *Filter) IsSet() bool {
-	return len(f.inclduePrefixes) > 0 || len(f.inclduePatterns) > 0
-}
-
-// Match checks if the provided string matches the configured filters.
+// Match checks if the provided string matches the configured filters. Returns
+// true if there is a match or if no filters are configured.
 func (f *Filter) Match(str string) bool {
+	if len(f.inclduePrefixes) == 0 && len(f.inclduePatterns) == 0 {
+		return true
+	}
+
 	for _, prefix := range f.inclduePrefixes {
 		if strings.HasPrefix(str, prefix) {
 			return true
