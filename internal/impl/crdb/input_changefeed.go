@@ -45,13 +45,13 @@ FEIWJFOIEW...
 }
 
 type crdbChangefeedInput struct {
-	dsn        string
-	ctx        context.Context
-	cancelFunc context.CancelFunc
-	pgConfig   *pgxpool.Config
-	pgPool     *pgxpool.Pool
-	rootCA     string
-	statement  string
+	dsn       string
+	pgConfig  *pgxpool.Config
+	pgPool    *pgxpool.Pool
+	rootCA    string
+	statement string
+
+	closeChan chan struct{}
 
 	rows pgx.Rows
 
@@ -62,11 +62,9 @@ type crdbChangefeedInput struct {
 }
 
 func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*crdbChangefeedInput, error) {
-	ctx, cancelFunc := context.WithCancel(context.Background())
 	c := &crdbChangefeedInput{
-		logger:     logger,
-		ctx:        ctx,
-		cancelFunc: cancelFunc,
+		logger:    logger,
+		closeChan: make(chan struct{}),
 	}
 
 	var err error
@@ -135,7 +133,7 @@ func init() {
 
 func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
 	// Connect to the pool
-	c.pgPool, err = pgxpool.ConnectConfig(c.ctx, c.pgConfig)
+	c.pgPool, err = pgxpool.ConnectConfig(context.Background(), c.pgConfig)
 	if err != nil {
 		return err
 	}
@@ -156,14 +154,14 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		go func() {
 			var err error
 			c.logger.Debug(fmt.Sprintf("Running query '%s'", c.statement))
-			c.rows, err = c.pgPool.Query(c.ctx, c.statement)
+			c.rows, err = c.pgPool.Query(ctx, c.statement)
 			if err != nil {
 				c.logger.Error("Error querying")
 				errChan <- err
 			}
 			// Check if the context was cancelled
 			select {
-			case <-c.ctx.Done():
+			case <-ctx.Done():
 				c.logger.Debug("Context was cancelled before query go a first row")
 				c.rows.Close() // Need to close here, c.rows is nil in Close()
 				c.logger.Debug("Closed rows")
@@ -181,7 +179,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		case err := <-errChan:
 			return nil, nil, err
 		case <-ctx.Done():
-			c.logger.Debug("Read context cancelled before first row, ending")
+			c.logger.Debug("Read context cancelled, ending")
 			return nil, nil, service.ErrEndOfInput
 		}
 	}
@@ -228,7 +226,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
 	c.logger.Debug("Got close signal")
-	c.cancelFunc()
+	close(c.closeChan)
 	if c.pgPool != nil {
 		c.pgPool.Close()
 	}
