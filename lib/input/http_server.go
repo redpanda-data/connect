@@ -288,7 +288,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		return nil, fmt.Errorf("failed to parse response status expression: %v", err)
 	}
 	for k, v := range h.conf.Response.Headers {
-		if h.responseHeaders[k], err = interop.NewBloblangField(mgr, v); err != nil {
+		if h.responseHeaders[strings.ToLower(k)], err = interop.NewBloblangField(mgr, v); err != nil {
 			return nil, fmt.Errorf("failed to parse response header '%v' expression: %v", k, err)
 		}
 	}
@@ -516,7 +516,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(statusCode)
 			w.Write(payload)
 		} else if plen > 1 {
-			customContentType, customContentTypeExists := h.responseHeaders["Content-Type"]
+			customContentType, customContentTypeExists := h.responseHeaders["content-type"]
 
 			var buf bytes.Buffer
 			writer := multipart.NewWriter(&buf)
