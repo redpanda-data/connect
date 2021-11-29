@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -59,15 +58,13 @@ type crdbChangefeedInput struct {
 	tables []string
 	optins []string
 
-	logger  *service.Logger
-	shutSig *shutdown.Signaller
+	logger *service.Logger
 }
 
 func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*crdbChangefeedInput, error) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	c := &crdbChangefeedInput{
 		logger:     logger,
-		shutSig:    shutdown.NewSignaller(),
 		ctx:        ctx,
 		cancelFunc: cancelFunc,
 	}
@@ -234,12 +231,6 @@ func (c *crdbChangefeedInput) Close(ctx context.Context) error {
 	c.cancelFunc()
 	if c.pgPool != nil {
 		c.pgPool.Close()
-	}
-	c.shutSig.ShutdownComplete()
-	select {
-	case <-c.shutSig.HasClosedChan():
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 	return nil
 }
