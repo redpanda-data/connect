@@ -51,8 +51,6 @@ type crdbChangefeedInput struct {
 	rootCA    string
 	statement string
 
-	closeChan chan struct{}
-
 	rows pgx.Rows
 
 	tables []string
@@ -63,8 +61,7 @@ type crdbChangefeedInput struct {
 
 func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*crdbChangefeedInput, error) {
 	c := &crdbChangefeedInput{
-		logger:    logger,
-		closeChan: make(chan struct{}),
+		logger: logger,
 	}
 
 	var err error
@@ -226,7 +223,6 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
 	c.logger.Debug("Got close signal")
-	close(c.closeChan)
 	if c.pgPool != nil {
 		c.pgPool.Close()
 	}
