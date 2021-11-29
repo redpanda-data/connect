@@ -45,11 +45,13 @@ FEIWJFOIEW...
 }
 
 type crdbChangefeedInput struct {
-	dsn       string
-	pgConfig  *pgxpool.Config
-	pgPool    *pgxpool.Pool
-	rootCA    string
-	statement string
+	dsn        string
+	pgConfig   *pgxpool.Config
+	pgPool     *pgxpool.Pool
+	rootCA     string
+	statement  string
+	ctx        context.Context
+	cancelFunc context.CancelFunc
 
 	rows pgx.Rows
 
@@ -60,8 +62,11 @@ type crdbChangefeedInput struct {
 }
 
 func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*crdbChangefeedInput, error) {
+	ctx, cancelFunc := context.WithCancel(context.Background())
 	c := &crdbChangefeedInput{
-		logger: logger,
+		logger:     logger,
+		ctx:        ctx,
+		cancelFunc: cancelFunc,
 	}
 
 	var err error
@@ -151,7 +156,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		go func() {
 			var err error
 			c.logger.Debug(fmt.Sprintf("Running query '%s'", c.statement))
-			c.rows, err = c.pgPool.Query(ctx, c.statement)
+			c.rows, err = c.pgPool.Query(c.ctx, c.statement)
 			if err != nil {
 				c.logger.Error("Error querying")
 				errChan <- err
@@ -223,6 +228,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
 	c.logger.Debug("Got close signal")
+	c.cancelFunc()
 	if c.pgPool != nil {
 		c.pgPool.Close()
 	}
