@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.60.0 - 2021-12-01
+
 ### Added
 
 - The `pulsar` input and output now support `oauth2` and `token` authentication mechanisms.
@@ -17,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - The `schema_registry_encode` and `schema_registry_decode` processors now honour path prefixes included in the `url` field.
 - The `mqtt` input and output `keepalive` field is now interpreted as seconds, previously it was being erroneously interpreted as nanoseconds.
 - The header `Content-Type` in the field `http_server.sync_response.headers` is now detected in a case insensitive way when populating multipart message encoding types.
+- The `nats_jetstream` input and outputs should now honour `auth.*` config fields.
 
 ## 3.59.0 - 2021-11-22
 

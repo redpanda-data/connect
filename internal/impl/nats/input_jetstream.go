@@ -144,7 +144,7 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, log *service.Logge
 		j.tlsConf = tlsConf
 	}
 
-	if j.authConf, err = AuthFromParsedConfig(conf); err != nil {
+	if j.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
 		return nil, err
 	}
 
