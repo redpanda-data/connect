@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.60.1 - 2021-12-03
+
+### Fixed
+
+- Fixed an issue where the `mongodb` output would incorrectly report upsert not allowed on valid operators.
+
 ## 3.60.0 - 2021-12-01
 
 ### Added
