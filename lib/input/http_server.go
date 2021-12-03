@@ -123,7 +123,7 @@ You can access these metadata fields using
 				docs.FieldString("headers", "Specify headers to return with synchronous responses.").IsInterpolated().Map().HasDefault(map[string]string{
 					"Content-Type": "application/octet-stream",
 				}),
-				docs.FieldCommon("metadata_filter", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(filter.DocsFields()...),
+				docs.FieldCommon("extract_metadata", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(filter.DocsFields()...),
 			),
 		},
 		Categories: []Category{
@@ -137,9 +137,9 @@ You can access these metadata fields using
 // HTTPServerResponseConfig provides config fields for customising the response
 // given from successful requests.
 type HTTPServerResponseConfig struct {
-	Status         string            `json:"status" yaml:"status"`
-	Headers        map[string]string `json:"headers" yaml:"headers"`
-	MetadataFilter filter.Config     `json:"metadata_filter" yaml:"metadata_filter"`
+	Status          string            `json:"status" yaml:"status"`
+	Headers         map[string]string `json:"headers" yaml:"headers"`
+	ExtractMetadata filter.Config     `json:"extract_metadata" yaml:"extract_metadata"`
 }
 
 // NewHTTPServerResponseConfig creates a new HTTPServerConfig with default values.
@@ -149,7 +149,7 @@ func NewHTTPServerResponseConfig() HTTPServerResponseConfig {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
-		MetadataFilter: filter.NewConfig(),
+		ExtractMetadata: filter.NewConfig(),
 	}
 }
 
@@ -298,7 +298,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		}
 	}
 
-	if h.metaFilter, err = h.conf.Response.MetadataFilter.New(); err != nil {
+	if h.metaFilter, err = h.conf.Response.ExtractMetadata.CreateFilter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 

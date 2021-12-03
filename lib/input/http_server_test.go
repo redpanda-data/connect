@@ -780,8 +780,8 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	conf.HTTPServer.Path = "/testpost"
 	conf.HTTPServer.Response.Headers["Content-Type"] = "application/json"
 	conf.HTTPServer.Response.Headers["foo"] = `${!json("field1")}`
-	conf.HTTPServer.Response.MetadataFilter.IncludePrefixes = []string{"Loca"}
-	conf.HTTPServer.Response.MetadataFilter.IncludePatterns = []string{"name"}
+	conf.HTTPServer.Response.ExtractMetadata.IncludePrefixes = []string{"Loca"}
+	conf.HTTPServer.Response.ExtractMetadata.IncludePatterns = []string{"name"}
 
 	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {

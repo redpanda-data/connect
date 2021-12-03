@@ -323,8 +323,6 @@ func TestHTTPClientReceiveHeaders(t *testing.T) {
 		testStr := fmt.Sprintf("test%v", j)
 		j++
 		w.Header().Set("foo-bar", "baz-0")
-		w.Header().Set("bar-baz", "foo-0")
-		w.Header().Set("baz-foo", "bar-0")
 		w.WriteHeader(http.StatusCreated)
 		w.Write([]byte(testStr + "PART-A"))
 	}))
@@ -333,8 +331,6 @@ func TestHTTPClientReceiveHeaders(t *testing.T) {
 	conf := client.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.CopyResponseHeaders = true
-	conf.MetadataFilter.IncludePrefixes = []string{"foo"}
-	conf.MetadataFilter.IncludePatterns = []string{"r-b"}
 
 	h, err := NewClient(conf)
 	require.NoError(t, err)
@@ -347,9 +343,83 @@ func TestHTTPClientReceiveHeaders(t *testing.T) {
 		assert.Equal(t, 1, resMsg.Len())
 		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).Get()))
 		assert.Equal(t, "baz-0", resMsg.Get(0).Metadata().Get("foo-bar"))
-		assert.Equal(t, "foo-0", resMsg.Get(0).Metadata().Get("bar-baz"))
-		assert.Equal(t, "", resMsg.Get(0).Metadata().Get("baz-foo"))
 		assert.Equal(t, "201", resMsg.Get(0).Metadata().Get("http_status_code"))
+	}
+}
+
+func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("foobar", "baz")
+		w.Header().Set("extra", "val")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer ts.Close()
+
+	conf := client.NewConfig()
+	conf.URL = ts.URL
+
+	for _, tt := range []struct {
+		name                string
+		noExtraMetadata     bool
+		copyResponseHeaders bool
+		includePrefixes     []string
+		includePatterns     []string
+	}{
+		{
+			name:            "no extra metadata",
+			noExtraMetadata: true,
+		},
+		{
+			name:                "copy_response_headers only",
+			copyResponseHeaders: true,
+		},
+		{
+			name:            "include_prefixes only",
+			includePrefixes: []string{"foo"},
+		},
+		{
+			name:            "include_patterns only",
+			includePatterns: []string{".*bar"},
+		},
+		{
+			name:                "both copy_response_headers and include_prefixes",
+			copyResponseHeaders: true,
+			includePrefixes:     []string{"foo"},
+		},
+	} {
+		conf.CopyResponseHeaders = tt.copyResponseHeaders
+		conf.ExtractMetadata.IncludePrefixes = tt.includePrefixes
+		conf.ExtractMetadata.IncludePatterns = tt.includePatterns
+		h, err := NewClient(conf)
+		if err != nil {
+			t.Fatalf("%s: %s", tt.name, err)
+		}
+
+		resMsg, err := h.Send(context.Background(), nil, nil)
+		if err != nil {
+			t.Fatalf("%s: %s", tt.name, err)
+		}
+
+		metadataCount := 0
+		resMsg.Get(0).Metadata().Iter(func(_, _ string) error { metadataCount++; return nil })
+
+		if tt.noExtraMetadata {
+			if metadataCount > 1 {
+				t.Errorf("%s: wrong number of metadata items: %d", tt.name, metadataCount)
+			}
+			if exp, act := "", resMsg.Get(0).Metadata().Get("foobar"); exp != act {
+				t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
+			}
+		} else if exp, act := "baz", resMsg.Get(0).Metadata().Get("foobar"); exp != act {
+			t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
+		} else if tt.copyResponseHeaders && h.metaFilter.IsSet() {
+			if metadataCount < 3 {
+				t.Errorf("%s: wrong number of metadata items: %d", tt.name, metadataCount)
+			}
+			if exp, act := "val", resMsg.Get(0).Metadata().Get("extra"); exp != act {
+				t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
+			}
+		}
 	}
 }
 

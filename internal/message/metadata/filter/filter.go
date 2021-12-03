@@ -30,10 +30,10 @@ func NewConfig() Config {
 	}
 }
 
-// New attempts to construct a filter object.
-func (m Config) New() (*Filter, error) {
+// CreateFilter attempts to construct a filter object.
+func (c Config) CreateFilter() (*Filter, error) {
 	var includePatterns []*regexp.Regexp
-	for _, pattern := range m.IncludePatterns {
+	for _, pattern := range c.IncludePatterns {
 		compiledPattern, err := regexp.Compile(pattern)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compile regexp %q: %s", pattern, err)
@@ -41,7 +41,7 @@ func (m Config) New() (*Filter, error) {
 		includePatterns = append(includePatterns, compiledPattern)
 	}
 	return &Filter{
-		inclduePrefixes: m.IncludePrefixes,
+		inclduePrefixes: c.IncludePrefixes,
 		inclduePatterns: includePatterns,
 	}, nil
 }
@@ -52,13 +52,15 @@ type Filter struct {
 	inclduePatterns []*regexp.Regexp
 }
 
-// Match checks if the provided string matches the configured filters. Returns
-// true if there is a match or if no filters are configured.
-func (f *Filter) Match(str string) bool {
-	if len(f.inclduePrefixes) == 0 && len(f.inclduePatterns) == 0 {
-		return true
-	}
+// IsSet returns true if there are any inclduePrefixes or inclduePatterns
+// configured and false otherwise.
+func (f *Filter) IsSet() bool {
+	return len(f.inclduePrefixes) > 0 || len(f.inclduePatterns) > 0
+}
 
+// Match returns true if the provided string matches the configured filters and
+// false otherwise. It also returns false if no filters are configured.
+func (f *Filter) Match(str string) bool {
 	for _, prefix := range f.inclduePrefixes {
 		if strings.HasPrefix(str, prefix) {
 			return true

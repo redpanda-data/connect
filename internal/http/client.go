@@ -156,7 +156,7 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 		}
 	}
 
-	if h.metaFilter, err = h.conf.MetadataFilter.New(); err != nil {
+	if h.metaFilter, err = h.conf.ExtractMetadata.CreateFilter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
@@ -383,11 +383,11 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 				index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
 				bufferIndex += bytesRead
 
-				if h.conf.CopyResponseHeaders {
+				if h.conf.CopyResponseHeaders || h.metaFilter.IsSet() {
 					meta := resMsg.Get(index).Metadata()
 					for k, values := range p.Header {
 						normalisedHeader := strings.ToLower(k)
-						if len(values) > 0 && h.metaFilter.Match(normalisedHeader) {
+						if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaFilter.Match(normalisedHeader)) {
 							meta.Set(normalisedHeader, values[0])
 						}
 					}
@@ -406,11 +406,11 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 			} else {
 				resMsg.Append(message.NewPart(nil))
 			}
-			if h.conf.CopyResponseHeaders {
+			if h.conf.CopyResponseHeaders || h.metaFilter.IsSet() {
 				meta := resMsg.Get(0).Metadata()
 				for k, values := range res.Header {
 					normalisedHeader := strings.ToLower(k)
-					if len(values) > 0 && h.metaFilter.Match(normalisedHeader) {
+					if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaFilter.Match(normalisedHeader)) {
 						meta.Set(normalisedHeader, values[0])
 					}
 				}

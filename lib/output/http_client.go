@@ -36,11 +36,12 @@ support [synchronous responses](/docs/guides/sync_responses) are able to make us
 these propagated responses.`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: client.FieldSpecs().Add(
+		config: client.FieldSpec(
 			docs.FieldAdvanced("batch_as_multipart", "Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). If disabled messages in batches will be sent as individual requests."),
 			docs.FieldAdvanced("propagate_response", "Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		).Add(batch.FieldSpec()),
+			batch.FieldSpec(),
+		),
 		Categories: []Category{
 			CategoryNetwork,
 		},

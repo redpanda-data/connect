@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Fields `extract_metadata.include_prefixes` and `extract_metadata.include_patterns` added to the `http_client` input and output and to the `http` processor.
+- Fields `sync_response.extract_metadata.include_prefixes` and `sync_response.extract_metadata.include_patterns` added to the `http_server` input.
+- The `http_client` input and output and the `http` processor field `copy_response_headers` has been deprecated in favour of the `extract_metadata` functionality.
+
 ## 3.60.1 - 2021-12-03
 
 ### Fixed
@@ -19,8 +25,6 @@ All notable changes to this project will be documented in this file.
 - The `pulsar` input now enriches messages with more metadata.
 - Fields `message_group_id`, `message_deduplication_id`, and `metadata` added to the `aws_sns` output.
 - Field `upsert` added to the `mongodb` processor and output.
-- Fields `metadata_filter.include_prefixes` and `metadata_filter.include_patterns` added to the `http_client` input and output and to the `http` processor
-- Fields `sync_response.metadata_filter.include_prefixes` and `sync_response.metadata_filter.include_patterns` added to the `http_server` input.
 
 ### Fixed
 
