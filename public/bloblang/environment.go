@@ -200,6 +200,16 @@ func (e *Environment) WithCustomImporter(fn func(name string) ([]byte, error)) *
 	}
 }
 
+// WithMaxMapRecursion returns a copy of the environment where the maximum
+// recursion allowed for maps is set to a given value. If the execution of a
+// mapping from this environment matches this number of recursive map calls the
+// mapping will error out.
+func (e *Environment) WithMaxMapRecursion(n int) *Environment {
+	return &Environment{
+		env: e.env.WithMaxMapRecursion(n),
+	}
+}
+
 //------------------------------------------------------------------------------
 
 // Parse a Bloblang mapping allowing the use of the globally accessible range of

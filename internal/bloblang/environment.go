@@ -10,7 +10,8 @@ import (
 // Environment provides an isolated Bloblang environment where the available
 // features, functions and methods can be modified.
 type Environment struct {
-	pCtx parser.Context
+	pCtx            parser.Context
+	maxMapRecursion int
 }
 
 // GlobalEnvironment returns the global default environment. Modifying this
@@ -70,6 +71,9 @@ func (e *Environment) NewMapping(blobl string) (*mapping.Executor, error) {
 	if err != nil {
 		return nil, err
 	}
+	if e.maxMapRecursion > 0 {
+		exec.SetMaxMapRecursion(e.maxMapRecursion)
+	}
 	return exec, nil
 }
 
@@ -83,9 +87,9 @@ func (e *Environment) NewMapping(blobl string) (*mapping.Executor, error) {
 // empty args if applicable) in order to create a deep copy of the environment
 // that is independent of the source.
 func (e *Environment) Deactivated() *Environment {
-	return &Environment{
-		pCtx: e.pCtx.Deactivated(),
-	}
+	env := *e
+	env.pCtx = env.pCtx.Deactivated()
+	return &env
 }
 
 // OnlyPure removes any methods and functions that have been registered but are
@@ -94,12 +98,10 @@ func (e *Environment) Deactivated() *Environment {
 // files, etc). Note that methods/functions that access the machine clock are
 // not marked as pure, so timestamp functions will still work.
 func (e *Environment) OnlyPure() *Environment {
-	newCtx := e.pCtx
-	newCtx.Functions = newCtx.Functions.OnlyPure()
-	newCtx.Methods = newCtx.Methods.OnlyPure()
-	return &Environment{
-		pCtx: newCtx,
-	}
+	env := *e
+	env.pCtx.Functions = env.pCtx.Functions.OnlyPure()
+	env.pCtx.Methods = env.pCtx.Methods.OnlyPure()
+	return &env
 }
 
 // RegisterMethod adds a new Bloblang method to the environment.
@@ -115,10 +117,9 @@ func (e *Environment) RegisterFunction(spec query.FunctionSpec, ctor query.Funct
 // WithImporter returns a new environment where Bloblang imports are performed
 // from a new importer.
 func (e *Environment) WithImporter(importer parser.Importer) *Environment {
-	nextCtx := e.pCtx.WithImporter(importer)
-	return &Environment{
-		pCtx: nextCtx,
-	}
+	env := *e
+	env.pCtx = env.pCtx.WithImporter(importer)
+	return &env
 }
 
 // WithImporterRelativeToFile returns a new environment where any relative
@@ -126,50 +127,55 @@ func (e *Environment) WithImporter(importer parser.Importer) *Environment {
 // provided path can itself be relative (to the current importer directory) or
 // absolute.
 func (e *Environment) WithImporterRelativeToFile(filePath string) *Environment {
-	nextCtx := e.pCtx.WithImporterRelativeToFile(filePath)
-	return &Environment{
-		pCtx: nextCtx,
-	}
+	env := *e
+	env.pCtx = env.pCtx.WithImporterRelativeToFile(filePath)
+	return &env
 }
 
 // WithDisabledImports returns a version of the environment where imports within
 // mappings are disabled entirely. This prevents mappings from accessing files
 // from the host disk.
 func (e *Environment) WithDisabledImports() *Environment {
-	return &Environment{
-		pCtx: e.pCtx.DisabledImports(),
-	}
+	env := *e
+	env.pCtx = env.pCtx.DisabledImports()
+	return &env
 }
 
 // WithCustomImporter returns a version of the environment where file imports
 // are done exclusively through a provided closure function, which takes an
 // import path (relative or absolute).
 func (e *Environment) WithCustomImporter(fn func(name string) ([]byte, error)) *Environment {
-	return &Environment{
-		pCtx: e.pCtx.CustomImporter(fn),
-	}
+	env := *e
+	env.pCtx = env.pCtx.CustomImporter(fn)
+	return &env
 }
 
 // WithoutMethods returns a copy of the environment but with a variadic list of
 // method names removed. Instantiation of these removed methods within a mapping
 // will cause errors at parse time.
 func (e *Environment) WithoutMethods(names ...string) *Environment {
-	nextCtx := e.pCtx
-	nextCtx.Methods = e.pCtx.Methods.Without(names...)
-	return &Environment{
-		pCtx: nextCtx,
-	}
+	env := *e
+	env.pCtx.Methods = env.pCtx.Methods.Without(names...)
+	return &env
 }
 
 // WithoutFunctions returns a copy of the environment but with a variadic list
 // of function names removed. Instantiation of these removed functions within a
 // mapping will cause errors at parse time.
 func (e *Environment) WithoutFunctions(names ...string) *Environment {
-	nextCtx := e.pCtx
-	nextCtx.Functions = e.pCtx.Functions.Without(names...)
-	return &Environment{
-		pCtx: nextCtx,
-	}
+	env := *e
+	env.pCtx.Functions = env.pCtx.Functions.Without(names...)
+	return &env
+}
+
+// WithMaxMapRecursion returns a copy of the environment where the maximum
+// recursion allowed for maps is set to a given value. If the execution of a
+// mapping from this environment matches this number of recursive map calls the
+// mapping will error out.
+func (e *Environment) WithMaxMapRecursion(n int) *Environment {
+	env := *e
+	env.maxMapRecursion = n
+	return &env
 }
 
 // WalkFunctions executes a provided function argument for every function that
