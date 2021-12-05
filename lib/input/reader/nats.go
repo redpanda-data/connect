@@ -182,7 +182,12 @@ func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 		if res.Error() != nil {
 			return msg.Nak()
 		}
-		return msg.Ack()
+
+		if len(msg.Reply) > 0 {
+			return msg.Ack()
+		}
+
+		return nil
 	}, nil
 }
 
