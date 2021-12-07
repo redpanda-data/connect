@@ -21,7 +21,7 @@ DATE      := $(shell date +"%Y-%m-%dT%H:%M:%SZ")
 VER_FLAGS = -X github.com/Jeffail/benthos/v3/lib/service.Version=$(VERSION) \
 	-X github.com/Jeffail/benthos/v3/lib/service.DateBuilt=$(DATE)
 
-LD_FLAGS   =
+LD_FLAGS   = -w -s
 GO_FLAGS   =
 DOCS_FLAGS =
 
@@ -29,6 +29,7 @@ APPS = benthos
 all: $(APPS)
 
 install: $(APPS)
+	@rm -f $(INSTALL_DIR)/benthos
 	@cp $(PATHINSTBIN)/* $(INSTALL_DIR)/
 
 deps:
