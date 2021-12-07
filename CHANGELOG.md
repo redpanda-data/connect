@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Streams mode paths now resolve glob patterns in all cases.
+- Prevented the `nats` input from error logging when acknowledgments can't be fulfilled due to the lack of message replies.
 
 ## 3.60.1 - 2021-12-03
 

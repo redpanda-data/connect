@@ -179,10 +179,16 @@ func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 	}
 
 	return bmsg, func(ctx context.Context, res types.Response) error {
+		var ackErr error
 		if res.Error() != nil {
-			return msg.Nak()
+			ackErr = msg.Nak()
+		} else {
+			ackErr = msg.Ack()
 		}
-		return msg.Ack()
+		if errors.Is(ackErr, nats.ErrMsgNoReply) {
+			ackErr = nil
+		}
+		return ackErr
 	}, nil
 }
 
