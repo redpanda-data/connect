@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Streams mode paths now resolve glob patterns in all cases.
+
 ## 3.60.1 - 2021-12-03
 
 ### Fixed
