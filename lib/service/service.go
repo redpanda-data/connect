@@ -124,7 +124,7 @@ func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, ove
 //------------------------------------------------------------------------------
 
 func initStreamsMode(
-	strict, watching bool,
+	strict, watching, enableAPI bool,
 	confReader *iconfig.Reader,
 	strmAPITimeout time.Duration,
 	manager *manager.Type,
@@ -138,6 +138,7 @@ func initStreamsMode(
 		strmmgr.OptSetLogger(logger),
 		strmmgr.OptSetManager(manager),
 		strmmgr.OptSetStats(stats),
+		strmmgr.OptAPIEnabled(enableAPI),
 	)
 
 	streamConfs := map[string]stream.Config{}
@@ -293,7 +294,7 @@ func cmdService(
 	resourcesPaths []string,
 	confOverrides []string,
 	overrideLogLevel string,
-	strict, watching bool,
+	strict, watching, enableStreamsAPI bool,
 	streamsMode bool,
 	streamsPaths []string,
 ) int {
@@ -398,7 +399,7 @@ func cmdService(
 
 	// Create data streams.
 	if streamsMode {
-		stoppableStream = initStreamsMode(strict, watching, confReader, strmAPITimeout, manager, logger, stats)
+		stoppableStream = initStreamsMode(strict, watching, enableStreamsAPI, confReader, strmAPITimeout, manager, logger, stats)
 	} else {
 		stoppableStream, dataStreamClosedChan = initNormalMode(strict, watching, confReader, manager, logger, stats)
 	}

@@ -102,6 +102,7 @@ type Type struct {
 	stats      metrics.Type
 	logger     log.Modular
 	apiTimeout time.Duration
+	apiEnabled bool
 
 	pipelineProcCtors []StreamProcConstructorFunc
 
@@ -116,15 +117,26 @@ func New(opts ...func(*Type)) *Type {
 		stats:      metrics.Noop(),
 		apiTimeout: time.Second * 5,
 		logger:     log.Noop(),
+		apiEnabled: true,
 	}
 	for _, opt := range opts {
 		opt(t)
 	}
-	t.registerEndpoints()
+	if t.apiEnabled {
+		t.registerEndpoints()
+	}
 	return t
 }
 
 //------------------------------------------------------------------------------
+
+// OptAPIEnabled sets whether the stream manager registers API endpoints for
+// CRUD operations on streams. This is enabled by default.
+func OptAPIEnabled(b bool) func(*Type) {
+	return func(t *Type) {
+		t.apiEnabled = b
+	}
+}
 
 // OptSetStats sets the metrics aggregator to be used by the manager and all
 // child streams.

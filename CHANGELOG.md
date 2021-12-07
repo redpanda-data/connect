@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Added new cli flag `--no-api` for the `streams` subcommand to disable the REST API.
+
 ### Fixed
 
 - Streams mode paths now resolve glob patterns in all cases.
