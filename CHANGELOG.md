@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 - Streams mode paths now resolve glob patterns in all cases.
 - Prevented the `nats` input from error logging when acknowledgments can't be fulfilled due to the lack of message replies.
+- Fixed an issue where GCP inputs and outputs could terminate requests early due to a cancelled client context.
 
 ## 3.60.1 - 2021-12-03
 

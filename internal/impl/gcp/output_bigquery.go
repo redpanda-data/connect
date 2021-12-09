@@ -297,7 +297,7 @@ func (g *gcpBigQueryOutput) Connect(ctx context.Context) (err error) {
 	defer g.connMut.Unlock()
 
 	var client *bigquery.Client
-	if client, err = g.clientURL.NewClient(ctx, g.conf.ProjectID); err != nil {
+	if client, err = g.clientURL.NewClient(context.Background(), g.conf.ProjectID); err != nil {
 		err = fmt.Errorf("error creating big query client: %w", err)
 		return
 	}
