@@ -212,7 +212,7 @@ func isLastEntity(i, ne int) bool {
 
 func reachedBatchLimit(i int) bool {
 	const batchSizeLimit = 100
-	return i+1%batchSizeLimit == 0
+	return (i+1)%batchSizeLimit == 0
 }
 
 func (a *AzureTableStorage) addToBatch(tableBatch *storage.TableBatch, insertType string, entity *storage.Entity) error {
