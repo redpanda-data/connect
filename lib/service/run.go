@@ -223,6 +223,7 @@ func Run() {
 				!c.Bool("chilled"),
 				c.Bool("watcher"),
 				false,
+				false,
 				nil,
 			))
 			return nil
@@ -283,6 +284,13 @@ func Run() {
 
    For more information check out the docs at:
    https://benthos.dev/docs/guides/streams_mode/about`[4:],
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "no-api",
+						Value: false,
+						Usage: "Disable the HTTP API for streams mode",
+					},
+				},
 				Action: func(c *cli.Context) error {
 					os.Exit(cmdService(
 						c.String("config"),
@@ -291,6 +299,7 @@ func Run() {
 						c.String("log.level"),
 						!c.Bool("chilled"),
 						c.Bool("watcher"),
+						!c.Bool("no-api"),
 						true,
 						c.Args().Slice(),
 					))
@@ -352,7 +361,7 @@ func Run() {
 		}
 
 		deprecatedExecute(*configPath, testSuffix)
-		os.Exit(cmdService(*configPath, nil, nil, "", false, false, false, nil))
+		os.Exit(cmdService(*configPath, nil, nil, "", false, false, false, false, nil))
 		return nil
 	}
 

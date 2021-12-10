@@ -177,7 +177,7 @@ func (g *gcpCloudStorageOutput) ConnectWithContext(ctx context.Context) error {
 	defer g.connMut.Unlock()
 
 	var err error
-	g.client, err = storage.NewClient(ctx)
+	g.client, err = storage.NewClient(context.Background())
 	if err != nil {
 		return err
 	}
@@ -218,7 +218,10 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 			isMerge = true
 
 			if g.conf.CollisionMode == output.GCPCloudStorageErrorIfExistsCollisionMode {
-				return fmt.Errorf("file at path already exists: %s", outputPath)
+				if err == nil {
+					err = fmt.Errorf("file at path already exists: %s", outputPath)
+				}
+				return err
 			} else if g.conf.CollisionMode == output.GCPCloudStorageIgnoreCollisionMode {
 				return nil
 			}

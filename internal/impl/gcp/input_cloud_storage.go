@@ -235,7 +235,7 @@ func newGCPCloudStorageInput(conf input.GCPCloudStorageConfig, log log.Modular, 
 // Cloud Storage bucket.
 func (g *gcpCloudStorageInput) ConnectWithContext(ctx context.Context) error {
 	var err error
-	g.client, err = storage.NewClient(ctx)
+	g.client, err = storage.NewClient(context.Background())
 	if err != nil {
 		return err
 	}
