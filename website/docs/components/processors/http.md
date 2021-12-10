@@ -31,13 +31,13 @@ the original message parts with the body of the response.
 # Common config fields, showing default values
 label: ""
 http:
-  parallel: false
   url: http://localhost:4195/post
   verb: POST
   headers:
     Content-Type: application/octet-stream
   rate_limit: ""
   timeout: 5s
+  parallel: false
 ```
 
 </TabItem>
@@ -47,7 +47,6 @@ http:
 # All config fields, showing default values
 label: ""
 http:
-  parallel: false
   url: http://localhost:4195/post
   verb: POST
   headers:
@@ -81,7 +80,9 @@ http:
     root_cas: ""
     root_cas_file: ""
     client_certs: []
-  copy_response_headers: false
+  extract_metadata:
+    include_prefixes: []
+    include_patterns: []
   rate_limit: ""
   timeout: 5s
   retry_period: 1s
@@ -92,6 +93,7 @@ http:
   drop_on: []
   successful_on: []
   proxy_url: ""
+  parallel: false
 ```
 
 </TabItem>
@@ -132,7 +134,7 @@ field `http_status_code` on the resulting message.
 
 If the field `copy_response_headers` is set to `true` then any headers
 in the response will also be set in the resulting message as metadata.
- 
+
 ## Error Handling
 
 When all retry attempts for a message are exhausted the processor cancels the
@@ -167,14 +169,6 @@ pipeline:
 </Tabs>
 
 ## Fields
-
-### `parallel`
-
-When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request.
-
-
-Type: `bool`  
-Default: `false`  
 
 ### `url`
 
@@ -507,13 +501,28 @@ The path of a certificate key to use.
 Type: `string`  
 Default: `""`  
 
-### `copy_response_headers`
+### `extract_metadata`
 
-Sets whether to copy the headers from the response to the resulting payload.
+Specify criteria for which metadata values are sent with messages as headers.
 
 
-Type: `bool`  
-Default: `false`  
+Type: `object`  
+
+### `extract_metadata.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to be included when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
+
+### `extract_metadata.include_patterns`
+
+Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `rate_limit`
 
@@ -586,5 +595,13 @@ An optional HTTP proxy URL.
 
 Type: `string`  
 Default: `""`  
+
+### `parallel`
+
+When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request.
+
+
+Type: `bool`  
+Default: `false`  
 
 

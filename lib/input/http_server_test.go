@@ -780,6 +780,8 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	conf.HTTPServer.Path = "/testpost"
 	conf.HTTPServer.Response.Headers["Content-Type"] = "application/json"
 	conf.HTTPServer.Response.Headers["foo"] = `${!json("field1")}`
+	conf.HTTPServer.Response.ExtractMetadata.IncludePrefixes = []string{"Loca"}
+	conf.HTTPServer.Response.ExtractMetadata.IncludePatterns = []string{"name"}
 
 	h, err := input.NewHTTPServer(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -796,11 +798,15 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		res, err := http.Post(
-			server.URL+"/testpost",
-			"application/octet-stream",
-			bytes.NewBuffer([]byte(input)),
-		)
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/testpost", bytes.NewBuffer([]byte(input)))
+		if err != nil {
+			t.Error(err)
+		}
+		req.Header.Set("Content-Type", "application/octet-stream")
+		req.Header.Set("Location", "Asgard")
+		req.Header.Set("Username", "Thor")
+		req.Header.Set("Language", "Norse")
+		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Error(err)
 		} else if res.StatusCode != 200 {
@@ -817,6 +823,15 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 			t.Errorf("Wrong sync response header: %v != %v", act, exp)
 		}
 		if exp, act := "bar", res.Header.Get("foo"); exp != act {
+			t.Errorf("Wrong sync response header: %v != %v", act, exp)
+		}
+		if exp, act := "Asgard", res.Header.Get("Location"); exp != act {
+			t.Errorf("Wrong sync response header: %v != %v", act, exp)
+		}
+		if exp, act := "Thor", res.Header.Get("Username"); exp != act {
+			t.Errorf("Wrong sync response header: %v != %v", act, exp)
+		}
+		if exp, act := "", res.Header.Get("Language"); exp != act {
 			t.Errorf("Wrong sync response header: %v != %v", act, exp)
 		}
 	}()

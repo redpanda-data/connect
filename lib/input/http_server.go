@@ -18,6 +18,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/message/metadata/filter"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -122,6 +123,7 @@ You can access these metadata fields using
 				docs.FieldString("headers", "Specify headers to return with synchronous responses.").IsInterpolated().Map().HasDefault(map[string]string{
 					"Content-Type": "application/octet-stream",
 				}),
+				docs.FieldCommon("extract_metadata", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(filter.DocsFields()...),
 			),
 		},
 		Categories: []Category{
@@ -135,8 +137,9 @@ You can access these metadata fields using
 // HTTPServerResponseConfig provides config fields for customising the response
 // given from successful requests.
 type HTTPServerResponseConfig struct {
-	Status  string            `json:"status" yaml:"status"`
-	Headers map[string]string `json:"headers" yaml:"headers"`
+	Status          string            `json:"status" yaml:"status"`
+	Headers         map[string]string `json:"headers" yaml:"headers"`
+	ExtractMetadata filter.Config     `json:"extract_metadata" yaml:"extract_metadata"`
 }
 
 // NewHTTPServerResponseConfig creates a new HTTPServerConfig with default values.
@@ -146,6 +149,7 @@ func NewHTTPServerResponseConfig() HTTPServerResponseConfig {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
+		ExtractMetadata: filter.NewConfig(),
 	}
 }
 
@@ -202,6 +206,7 @@ type HTTPServer struct {
 
 	responseStatus  *field.Expression
 	responseHeaders map[string]*field.Expression
+	metaFilter      *filter.Filter
 
 	handlerWG    sync.WaitGroup
 	transactions chan types.Transaction
@@ -291,6 +296,10 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		if h.responseHeaders[strings.ToLower(k)], err = interop.NewBloblangField(mgr, v); err != nil {
 			return nil, fmt.Errorf("failed to parse response header '%v' expression: %v", k, err)
 		}
+	}
+
+	if h.metaFilter, err = h.conf.Response.ExtractMetadata.CreateFilter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
 	postHdlr := httputil.GzipHandler(h.postHandler)
@@ -509,7 +518,15 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if plen := responseMsg.Len(); plen == 1 {
-			payload := responseMsg.Get(0).Get()
+			part := responseMsg.Get(0)
+			part.Metadata().Iter(func(k, v string) error {
+				if h.metaFilter.Match(k) {
+					w.Header().Set(k, v)
+					return nil
+				}
+				return nil
+			})
+			payload := part.Get()
 			if w.Header().Get("Content-Type") == "" {
 				w.Header().Set("Content-Type", http.DetectContentType(payload))
 			}
@@ -523,7 +540,15 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 
 			var merr error
 			for i := 0; i < plen && merr == nil; i++ {
-				payload := responseMsg.Get(i).Get()
+				part := responseMsg.Get(i)
+				part.Metadata().Iter(func(k, v string) error {
+					if h.metaFilter.Match(k) {
+						w.Header().Set(k, v)
+						return nil
+					}
+					return nil
+				})
+				payload := part.Get()
 
 				mimeHeader := textproto.MIMEHeader{}
 				if customContentTypeExists {
@@ -532,9 +557,9 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 					mimeHeader.Set("Content-Type", http.DetectContentType(payload))
 				}
 
-				var part io.Writer
-				if part, merr = writer.CreatePart(mimeHeader); merr == nil {
-					_, merr = io.Copy(part, bytes.NewReader(payload))
+				var partWriter io.Writer
+				if partWriter, merr = writer.CreatePart(mimeHeader); merr == nil {
+					_, merr = io.Copy(partWriter, bytes.NewReader(payload))
 				}
 			}
 
