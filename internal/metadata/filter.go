@@ -12,8 +12,16 @@ import (
 // ignored by default and must be explicitly included.
 func IncludeFilterDocs() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldString("include_prefixes", "Provide a list of explicit metadata key prefixes to be included when adding metadata to sent messages.").Array(),
-		docs.FieldString("include_patterns", "Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.").Array(),
+		docs.FieldString(
+			"include_prefixes", "Provide a list of explicit metadata key prefixes to be included when adding metadata to sent messages.",
+			[]string{"foo_", "bar_"},
+			[]string{"kafka_"},
+		).Array(),
+		docs.FieldString(
+			"include_patterns", "Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.",
+			[]string{".*"},
+			[]string{"_timestamp_unix$"},
+		).Array(),
 	}
 }
 

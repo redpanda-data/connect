@@ -504,6 +504,17 @@ Provide a list of explicit metadata key prefixes to be included when adding meta
 Type: `array`  
 Default: `[]`  
 
+```yaml
+# Examples
+
+include_prefixes:
+  - foo_
+  - bar_
+
+include_prefixes:
+  - kafka_
+```
+
 ### `extract_headers.include_patterns`
 
 Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.
@@ -511,6 +522,16 @@ Provide a list of explicit metadata key regexp patterns to be included when addi
 
 Type: `array`  
 Default: `[]`  
+
+```yaml
+# Examples
+
+include_patterns:
+  - .*
+
+include_patterns:
+  - _timestamp_unix$
+```
 
 ### `rate_limit`
 
