@@ -41,32 +41,31 @@ func (c Config) CreateFilter() (*Filter, error) {
 		includePatterns = append(includePatterns, compiledPattern)
 	}
 	return &Filter{
-		inclduePrefixes: c.IncludePrefixes,
-		inclduePatterns: includePatterns,
+		includePrefixes: c.IncludePrefixes,
+		includePatterns: includePatterns,
 	}, nil
 }
 
 // Filter provides a way to filter keys based on a Config.
 type Filter struct {
-	inclduePrefixes []string
-	inclduePatterns []*regexp.Regexp
+	includePrefixes []string
+	includePatterns []*regexp.Regexp
 }
 
-// IsSet returns true if there are any inclduePrefixes or inclduePatterns
-// configured and false otherwise.
+// IsSet returns true if there are any rules configured for matching keys.
 func (f *Filter) IsSet() bool {
-	return len(f.inclduePrefixes) > 0 || len(f.inclduePatterns) > 0
+	return len(f.includePrefixes) > 0 || len(f.includePatterns) > 0
 }
 
 // Match returns true if the provided string matches the configured filters and
 // false otherwise. It also returns false if no filters are configured.
 func (f *Filter) Match(str string) bool {
-	for _, prefix := range f.inclduePrefixes {
+	for _, prefix := range f.includePrefixes {
 		if strings.HasPrefix(str, prefix) {
 			return true
 		}
 	}
-	for _, pattern := range f.inclduePatterns {
+	for _, pattern := range f.includePatterns {
 		if matched := pattern.MatchString(str); matched {
 			return true
 		}

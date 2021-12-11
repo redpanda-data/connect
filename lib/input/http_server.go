@@ -123,7 +123,7 @@ You can access these metadata fields using
 				docs.FieldString("headers", "Specify headers to return with synchronous responses.").IsInterpolated().Map().HasDefault(map[string]string{
 					"Content-Type": "application/octet-stream",
 				}),
-				docs.FieldCommon("extract_metadata", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(filter.DocsFields()...),
+				docs.FieldCommon("metadata_headers", "Specify criteria for which metadata values are added to the response as headers.").WithChildren(filter.DocsFields()...),
 			),
 		},
 		Categories: []Category{
@@ -139,7 +139,7 @@ You can access these metadata fields using
 type HTTPServerResponseConfig struct {
 	Status          string            `json:"status" yaml:"status"`
 	Headers         map[string]string `json:"headers" yaml:"headers"`
-	ExtractMetadata filter.Config     `json:"extract_metadata" yaml:"extract_metadata"`
+	ExtractMetadata filter.Config     `json:"metadata_headers" yaml:"metadata_headers"`
 }
 
 // NewHTTPServerResponseConfig creates a new HTTPServerConfig with default values.

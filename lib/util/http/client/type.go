@@ -37,7 +37,7 @@ type Config struct {
 	Verb                string            `json:"verb" yaml:"verb"`
 	Headers             map[string]string `json:"headers" yaml:"headers"`
 	CopyResponseHeaders bool              `json:"copy_response_headers" yaml:"copy_response_headers"`
-	ExtractMetadata     filter.Config     `json:"extract_metadata" yaml:"extract_metadata"`
+	ExtractMetadata     filter.Config     `json:"extract_headers" yaml:"extract_headers"`
 	RateLimit           string            `json:"rate_limit" yaml:"rate_limit"`
 	Timeout             string            `json:"timeout" yaml:"timeout"`
 	Retry               string            `json:"retry_period" yaml:"retry_period"`

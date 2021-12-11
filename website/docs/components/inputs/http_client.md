@@ -85,7 +85,7 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    extract_metadata:
+    extract_headers:
       include_prefixes: []
       include_patterns: []
     rate_limit: ""
@@ -489,14 +489,14 @@ The path of a certificate key to use.
 Type: `string`  
 Default: `""`  
 
-### `extract_metadata`
+### `extract_headers`
 
-Specify criteria for which metadata values are sent with messages as headers.
+Specify which response headers should be added to resulting messages as metadata.
 
 
 Type: `object`  
 
-### `extract_metadata.include_prefixes`
+### `extract_headers.include_prefixes`
 
 Provide a list of explicit metadata key prefixes to be included when adding metadata to sent messages.
 
@@ -504,7 +504,7 @@ Provide a list of explicit metadata key prefixes to be included when adding meta
 Type: `array`  
 Default: `[]`  
 
-### `extract_metadata.include_patterns`
+### `extract_headers.include_patterns`
 
 Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.
 

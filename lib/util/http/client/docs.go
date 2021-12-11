@@ -23,7 +23,7 @@ func FieldSpec(extraChildren ...docs.FieldSpec) docs.FieldSpec {
 	httpSpecs = append(httpSpecs, tls.FieldSpec(),
 		docs.FieldDeprecated("copy_response_headers", "Sets whether to copy the headers from the response to the resulting payload.").
 			HasType(docs.FieldTypeBool).Advanced(),
-		docs.FieldAdvanced("extract_metadata", "Specify criteria for which metadata values are sent with messages as headers.").WithChildren(filter.DocsFields()...),
+		docs.FieldAdvanced("extract_headers", "Specify which response headers should be added to resulting messages as metadata.").WithChildren(filter.DocsFields()...),
 		docs.FieldString("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
 		docs.FieldString("timeout", "A static timeout to apply to requests."),
 		docs.FieldString("retry_period", "The base period to wait between failed requests.").Advanced(),
@@ -40,11 +40,11 @@ func FieldSpec(extraChildren ...docs.FieldSpec) docs.FieldSpec {
 		Linter((func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
 			gObj := gabs.Wrap(value)
 			copyResponseHeaders, copyResponseHeadersSet := gObj.S("copy_response_headers").Data().(bool)
-			metaPrefixCount, _ := gObj.ArrayCountP("extract_metadata.include_prefixes")
-			metaPatternCount, _ := gObj.ArrayCountP("extract_metadata.include_patterns")
+			metaPrefixCount, _ := gObj.ArrayCountP("extract_headers.include_prefixes")
+			metaPatternCount, _ := gObj.ArrayCountP("extract_headers.include_patterns")
 			if copyResponseHeadersSet && copyResponseHeaders && (metaPrefixCount > 0 || metaPatternCount > 0) {
 				return []docs.Lint{
-					docs.NewLintError(line, "Cannot use extract_metadata when copy_response_headers is true."),
+					docs.NewLintError(line, "Cannot use extract_headers when copy_response_headers is true."),
 				}
 			}
 			return nil

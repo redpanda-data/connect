@@ -66,8 +66,8 @@ will not be reattempted and is immediately considered a failed request.
 If the request returns an error response code this processor sets a metadata
 field ` + "`http_status_code`" + ` on the resulting message.
 
-If the field ` + "`copy_response_headers` is set to `true`" + ` then any headers
-in the response will also be set in the resulting message as metadata.
+Use the field ` + "`extract_headers`" + ` to specify rules for which other
+headers should be copied into the resulting message from the response.
 
 ## Error Handling
 

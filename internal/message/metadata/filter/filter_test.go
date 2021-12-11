@@ -14,7 +14,6 @@ func TestMetadataFilter(t *testing.T) {
 		inputMeta  map[string]string
 		outputMeta map[string]string
 		conf       Config
-		isNotSet   bool
 	}{
 		{
 			name: "no filter",
@@ -25,7 +24,6 @@ func TestMetadataFilter(t *testing.T) {
 			},
 			outputMeta: map[string]string{},
 			conf:       NewConfig(),
-			isNotSet:   true,
 		},
 		{
 			name: "foo prefix filter",
@@ -112,7 +110,6 @@ func TestMetadataFilter(t *testing.T) {
 
 			filter, err := test.conf.CreateFilter()
 			require.NoError(t, err)
-			require.Equal(t, test.isNotSet, !filter.IsSet())
 
 			outputMeta := map[string]string{}
 			require.NoError(t, meta.Iter(func(k, v string) error {

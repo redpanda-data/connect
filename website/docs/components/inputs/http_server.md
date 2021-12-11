@@ -64,7 +64,7 @@ input:
       status: "200"
       headers:
         Content-Type: application/octet-stream
-      extract_metadata:
+      metadata_headers:
         include_prefixes: []
         include_patterns: []
 ```
@@ -252,14 +252,14 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `object`  
 Default: `{"Content-Type":"application/octet-stream"}`  
 
-### `sync_response.extract_metadata`
+### `sync_response.metadata_headers`
 
-Specify criteria for which metadata values are sent with messages as headers.
+Specify criteria for which metadata values are added to the response as headers.
 
 
 Type: `object`  
 
-### `sync_response.extract_metadata.include_prefixes`
+### `sync_response.metadata_headers.include_prefixes`
 
 Provide a list of explicit metadata key prefixes to be included when adding metadata to sent messages.
 
@@ -267,7 +267,7 @@ Provide a list of explicit metadata key prefixes to be included when adding meta
 Type: `array`  
 Default: `[]`  
 
-### `sync_response.extract_metadata.include_patterns`
+### `sync_response.metadata_headers.include_patterns`
 
 Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.
 
