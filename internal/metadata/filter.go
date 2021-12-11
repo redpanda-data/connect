@@ -1,4 +1,4 @@
-package filter
+package metadata
 
 import (
 	"fmt"
@@ -8,30 +8,33 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 )
 
-// DocsFields returns a docs spec for the available config fields.
-func DocsFields() docs.FieldSpecs {
+// IncludeFilterDocs returns a docs spec for a metadata filter where keys are
+// ignored by default and must be explicitly included.
+func IncludeFilterDocs() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldString("include_prefixes", "Provide a list of explicit metadata key prefixes to be included when adding metadata to sent messages.").Array(),
 		docs.FieldString("include_patterns", "Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.").Array(),
 	}
 }
 
-// Config describes filtering actions to be performed on provided input strings.
-type Config struct {
+// IncludeFilterConfig contains configuration fields for a metadata filter where
+// keys are ignored by default and must be explicitly included.
+type IncludeFilterConfig struct {
 	IncludePrefixes []string `json:"include_prefixes" yaml:"include_prefixes"`
 	IncludePatterns []string `json:"include_patterns" yaml:"include_patterns"`
 }
 
-// NewConfig returns a Config struct with default values.
-func NewConfig() Config {
-	return Config{
+// NewIncludeFilterConfig returns an IncludeFilterConfig struct with default
+// values.
+func NewIncludeFilterConfig() IncludeFilterConfig {
+	return IncludeFilterConfig{
 		IncludePrefixes: []string{},
 		IncludePatterns: []string{},
 	}
 }
 
 // CreateFilter attempts to construct a filter object.
-func (c Config) CreateFilter() (*Filter, error) {
+func (c IncludeFilterConfig) CreateFilter() (*Filter, error) {
 	var includePatterns []*regexp.Regexp
 	for _, pattern := range c.IncludePatterns {
 		compiledPattern, err := regexp.Compile(pattern)

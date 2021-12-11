@@ -2,7 +2,7 @@ package client
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/message/metadata/filter"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/gabs/v2"
@@ -23,7 +23,7 @@ func FieldSpec(extraChildren ...docs.FieldSpec) docs.FieldSpec {
 	httpSpecs = append(httpSpecs, tls.FieldSpec(),
 		docs.FieldDeprecated("copy_response_headers", "Sets whether to copy the headers from the response to the resulting payload.").
 			HasType(docs.FieldTypeBool).Advanced(),
-		docs.FieldAdvanced("extract_headers", "Specify which response headers should be added to resulting messages as metadata.").WithChildren(filter.DocsFields()...),
+		docs.FieldAdvanced("extract_headers", "Specify which response headers should be added to resulting messages as metadata.").WithChildren(metadata.IncludeFilterDocs()...),
 		docs.FieldString("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
 		docs.FieldString("timeout", "A static timeout to apply to requests."),
 		docs.FieldString("retry_period", "The base period to wait between failed requests.").Advanced(),

@@ -1,4 +1,4 @@
-package filter
+package metadata
 
 import (
 	"testing"
@@ -13,7 +13,7 @@ func TestMetadataFilter(t *testing.T) {
 		name       string
 		inputMeta  map[string]string
 		outputMeta map[string]string
-		conf       Config
+		conf       IncludeFilterConfig
 	}{
 		{
 			name: "no filter",
@@ -23,7 +23,7 @@ func TestMetadataFilter(t *testing.T) {
 				"baz": "baz1",
 			},
 			outputMeta: map[string]string{},
-			conf:       NewConfig(),
+			conf:       NewIncludeFilterConfig(),
 		},
 		{
 			name: "foo prefix filter",
@@ -35,7 +35,7 @@ func TestMetadataFilter(t *testing.T) {
 			outputMeta: map[string]string{
 				"foo": "foo1",
 			},
-			conf: Config{
+			conf: IncludeFilterConfig{
 				IncludePrefixes: []string{"f"},
 			},
 		},
@@ -49,7 +49,7 @@ func TestMetadataFilter(t *testing.T) {
 			outputMeta: map[string]string{
 				"bar": "bar1",
 			},
-			conf: Config{
+			conf: IncludeFilterConfig{
 				IncludePatterns: []string{"ar$"},
 			},
 		},
@@ -65,7 +65,7 @@ func TestMetadataFilter(t *testing.T) {
 				"bar": "bar1",
 				"baz": "baz1",
 			},
-			conf: Config{
+			conf: IncludeFilterConfig{
 				IncludePrefixes: []string{""},
 			},
 		},
@@ -81,7 +81,7 @@ func TestMetadataFilter(t *testing.T) {
 				"bar": "bar1",
 				"baz": "baz1",
 			},
-			conf: Config{
+			conf: IncludeFilterConfig{
 				IncludePatterns: []string{""},
 			},
 		},
@@ -96,7 +96,7 @@ func TestMetadataFilter(t *testing.T) {
 				"foo": "foo1",
 				"bar": "bar1",
 			},
-			conf: Config{
+			conf: IncludeFilterConfig{
 				IncludePrefixes: []string{"foo"},
 				IncludePatterns: []string{"bar"},
 			},

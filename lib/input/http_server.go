@@ -18,7 +18,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/message/metadata/filter"
+	imetadata "github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -123,7 +123,7 @@ You can access these metadata fields using
 				docs.FieldString("headers", "Specify headers to return with synchronous responses.").IsInterpolated().Map().HasDefault(map[string]string{
 					"Content-Type": "application/octet-stream",
 				}),
-				docs.FieldCommon("metadata_headers", "Specify criteria for which metadata values are added to the response as headers.").WithChildren(filter.DocsFields()...),
+				docs.FieldCommon("metadata_headers", "Specify criteria for which metadata values are added to the response as headers.").WithChildren(imetadata.IncludeFilterDocs()...),
 			),
 		},
 		Categories: []Category{
@@ -137,9 +137,9 @@ You can access these metadata fields using
 // HTTPServerResponseConfig provides config fields for customising the response
 // given from successful requests.
 type HTTPServerResponseConfig struct {
-	Status          string            `json:"status" yaml:"status"`
-	Headers         map[string]string `json:"headers" yaml:"headers"`
-	ExtractMetadata filter.Config     `json:"metadata_headers" yaml:"metadata_headers"`
+	Status          string                        `json:"status" yaml:"status"`
+	Headers         map[string]string             `json:"headers" yaml:"headers"`
+	ExtractMetadata imetadata.IncludeFilterConfig `json:"metadata_headers" yaml:"metadata_headers"`
 }
 
 // NewHTTPServerResponseConfig creates a new HTTPServerConfig with default values.
@@ -149,7 +149,7 @@ func NewHTTPServerResponseConfig() HTTPServerResponseConfig {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
-		ExtractMetadata: filter.NewConfig(),
+		ExtractMetadata: imetadata.NewIncludeFilterConfig(),
 	}
 }
 
@@ -206,7 +206,7 @@ type HTTPServer struct {
 
 	responseStatus  *field.Expression
 	responseHeaders map[string]*field.Expression
-	metaFilter      *filter.Filter
+	metaFilter      *imetadata.Filter
 
 	handlerWG    sync.WaitGroup
 	transactions chan types.Transaction
