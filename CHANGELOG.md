@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Fields `sync_response.metadata_headers.include_prefixes` and `sync_response.metadata_headers.include_patterns` added to the `http_server` input.
 - The `http_client` input and output and the `http` processor field `copy_response_headers` has been deprecated in favour of the `extract_headers` functionality.
 - Added new cli flag `--no-api` for the `streams` subcommand to disable the REST API.
+- New experimental `kafka_franz` input and output.
 
 ### Fixed
 

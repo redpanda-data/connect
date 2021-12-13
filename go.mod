@@ -91,7 +91,7 @@ require (
 	github.com/ory/dockertest/v3 v3.6.3
 	github.com/patrobinson/gokini v0.1.0
 	github.com/pebbe/zmq4 v1.2.7
-	github.com/pierrec/lz4/v4 v4.1.10
+	github.com/pierrec/lz4/v4 v4.1.11
 	github.com/pkg/sftp v1.13.4
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.32.1 // indirect
@@ -107,6 +107,8 @@ require (
 	github.com/spf13/cast v1.4.1
 	github.com/stretchr/testify v1.7.0
 	github.com/tilinna/z85 v1.0.0
+	github.com/twmb/franz-go v1.2.6
+	github.com/twmb/franz-go/pkg/kmsg v0.0.0-20211127185622-3b34db0c6d1e
 	github.com/uber/jaeger-client-go v2.24.0+incompatible
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	github.com/urfave/cli/v2 v2.3.0
@@ -119,8 +121,8 @@ require (
 	go.mongodb.org/mongo-driver v1.7.4
 	go.nanomsg.org/mangos/v3 v3.3.0
 	go.uber.org/atomic v1.9.0 // indirect
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
-	golang.org/x/net v0.0.0-20211105192438-b53810dc28af
+	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871
+	golang.org/x/net v0.0.0-20211123203042-d83791d6bcd9
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20211107104306-e0b2ad06fe42 // indirect
