@@ -124,6 +124,43 @@ func TestPolicyPeriod(t *testing.T) {
 	}
 }
 
+func TestPolicyInactivityPeriod_ResetOnPart(t *testing.T) {
+	conf := NewPolicyConfig()
+	conf.ByteSize = 1000
+	conf.InactivityPeriod = "300ms"
+
+	pol, err := NewPolicy(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		pol.CloseAsync()
+		require.NoError(t, pol.WaitForClose(time.Second))
+	})
+
+	if pol.Add(message.NewPart(nil)) {
+		t.Error("Unexpected batch ready")
+	}
+
+	if v := pol.UntilNext(); v < (time.Millisecond * 290) {
+		t.Errorf("Wrong timeout: %v", v)
+	}
+
+	<-time.After(time.Millisecond * 500)
+	if v := pol.UntilNext(); v > 0 {
+		t.Errorf("Wrong timeout: %v", v)
+	}
+
+	if v := pol.Flush(); v == nil {
+		t.Error("Nil msgs from flush")
+	}
+
+	if v := pol.UntilNext(); v != -1 {
+		t.Errorf("Wrong timeout: %v", v)
+	}
+}
+
 func TestPolicySize(t *testing.T) {
 	conf := NewPolicyConfig()
 	conf.ByteSize = 10

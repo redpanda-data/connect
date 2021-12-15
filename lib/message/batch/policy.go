@@ -15,6 +15,15 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
+type batchingTimer int
+
+const (
+	periodTimer batchingTimer = iota + 1
+	inactivityTimer
+)
+
+var zeroTime time.Time
+
 // SanitisePolicyConfig returns a policy config structure ready to be marshalled
 // with irrelevant fields omitted.
 func SanitisePolicyConfig(policy PolicyConfig) (interface{}, error) {
@@ -50,12 +59,13 @@ func isNoopCondition(conf condition.Config) bool {
 
 // PolicyConfig contains configuration parameters for a batch policy.
 type PolicyConfig struct {
-	ByteSize   int                `json:"byte_size" yaml:"byte_size"`
-	Count      int                `json:"count" yaml:"count"`
-	Condition  condition.Config   `json:"condition" yaml:"condition"`
-	Check      string             `json:"check" yaml:"check"`
-	Period     string             `json:"period" yaml:"period"`
-	Processors []processor.Config `json:"processors" yaml:"processors"`
+	ByteSize         int                `json:"byte_size" yaml:"byte_size"`
+	Count            int                `json:"count" yaml:"count"`
+	Condition        condition.Config   `json:"condition" yaml:"condition"`
+	Check            string             `json:"check" yaml:"check"`
+	Period           string             `json:"period" yaml:"period"`
+	InactivityPeriod string             `json:"inactivity_period" yaml:"inactivity_period"`
+	Processors       []processor.Config `json:"processors" yaml:"processors"`
 }
 
 // NewPolicyConfig creates a default PolicyConfig.
@@ -64,12 +74,13 @@ func NewPolicyConfig() PolicyConfig {
 	cond.Type = "static"
 	cond.Static = false
 	return PolicyConfig{
-		ByteSize:   0,
-		Count:      0,
-		Condition:  cond,
-		Check:      "",
-		Period:     "",
-		Processors: []processor.Config{},
+		ByteSize:         0,
+		Count:            0,
+		Condition:        cond,
+		Check:            "",
+		Period:           "",
+		InactivityPeriod: "",
+		Processors:       []processor.Config{},
 	}
 }
 
@@ -135,23 +146,26 @@ func (p PolicyConfig) isHardLimited() bool {
 type Policy struct {
 	log log.Modular
 
-	byteSize  int
-	count     int
-	period    time.Duration
-	cond      condition.Type
-	check     *mapping.Executor
-	procs     []types.Processor
-	sizeTally int
-	parts     []types.Part
+	byteSize         int
+	count            int
+	period           time.Duration
+	inactivityPeriod time.Duration
+	cond             condition.Type
+	check            *mapping.Executor
+	procs            []types.Processor
+	sizeTally        int
+	parts            []types.Part
 
 	triggered bool
 	lastBatch time.Time
+	lastPart  time.Time
 
-	mSizeBatch   metrics.StatCounter
-	mCountBatch  metrics.StatCounter
-	mPeriodBatch metrics.StatCounter
-	mCheckBatch  metrics.StatCounter
-	mCondBatch   metrics.StatCounter
+	mSizeBatch     metrics.StatCounter
+	mCountBatch    metrics.StatCounter
+	mPeriodBatch   metrics.StatCounter
+	mInactiveBatch metrics.StatCounter
+	mCheckBatch    metrics.StatCounter
+	mCondBatch     metrics.StatCounter
 }
 
 // NewPolicy creates an empty policy with default rules.
@@ -184,7 +198,13 @@ func NewPolicy(
 	var period time.Duration
 	if len(conf.Period) > 0 {
 		if period, err = time.ParseDuration(conf.Period); err != nil {
-			return nil, fmt.Errorf("failed to parse duration string: %v", err)
+			return nil, fmt.Errorf("failed to parse period duration string: %v", err)
+		}
+	}
+	var inactivityPeriod time.Duration
+	if len(conf.InactivityPeriod) > 0 {
+		if inactivityPeriod, err = time.ParseDuration(conf.InactivityPeriod); err != nil {
+			return nil, fmt.Errorf("failed to parse inactivity period duration string: %v", err)
 		}
 	}
 	var procs []types.Processor
@@ -196,23 +216,26 @@ func NewPolicy(
 		}
 		procs = append(procs, proc)
 	}
+
 	return &Policy{
 		log: log,
 
-		byteSize: conf.ByteSize,
-		count:    conf.Count,
-		period:   period,
-		cond:     cond,
-		check:    check,
-		procs:    procs,
+		byteSize:         conf.ByteSize,
+		count:            conf.Count,
+		period:           period,
+		inactivityPeriod: inactivityPeriod,
+		cond:             cond,
+		check:            check,
+		procs:            procs,
 
 		lastBatch: time.Now(),
 
-		mSizeBatch:   stats.GetCounter("on_size"),
-		mCountBatch:  stats.GetCounter("on_count"),
-		mPeriodBatch: stats.GetCounter("on_period"),
-		mCheckBatch:  stats.GetCounter("on_check"),
-		mCondBatch:   stats.GetCounter("on_condition"),
+		mSizeBatch:     stats.GetCounter("on_size"),
+		mCountBatch:    stats.GetCounter("on_count"),
+		mPeriodBatch:   stats.GetCounter("on_period"),
+		mInactiveBatch: stats.GetCounter("on_inactive"),
+		mCheckBatch:    stats.GetCounter("on_check"),
+		mCondBatch:     stats.GetCounter("on_condition"),
 	}, nil
 }
 
@@ -254,7 +277,12 @@ func (p *Policy) Add(part types.Part) bool {
 			p.log.Traceln("Batching based on check query")
 		}
 	}
-	return p.triggered || (p.period > 0 && time.Since(p.lastBatch) > p.period)
+
+	tiggeredTimer := p.triggeredTimer()
+	triggered := p.triggered || tiggeredTimer > 0
+	p.lastPart = time.Now()
+
+	return triggered
 }
 
 // Flush clears all messages stored by this batch policy. Returns nil if the
@@ -285,16 +313,24 @@ func (p *Policy) Flush() types.Message {
 func (p *Policy) FlushAny() []types.Message {
 	var newMsg types.Message
 	if len(p.parts) > 0 {
-		if !p.triggered && p.period > 0 && time.Since(p.lastBatch) > p.period {
+		timer := p.triggeredTimer()
+		if !p.triggered && timer == periodTimer {
 			p.mPeriodBatch.Incr(1)
 			p.log.Traceln("Batching based on period")
 		}
+		if !p.triggered && timer == inactivityTimer {
+			p.mInactiveBatch.Incr(1)
+			p.log.Traceln("Batching based on inactivity")
+		}
+
 		newMsg = message.New(nil)
 		newMsg.Append(p.parts...)
 	}
 	p.parts = nil
 	p.sizeTally = 0
-	p.lastBatch = time.Now()
+	now := time.Now()
+	p.lastBatch = now
+	p.lastPart = zeroTime
 	p.triggered = false
 
 	if newMsg == nil {
@@ -322,13 +358,31 @@ func (p *Policy) Count() int {
 }
 
 // UntilNext returns a duration indicating how long until the current batch
-// should be flushed due to a configured period. A negative duration indicates
-// a period has not been set.
+// should be flushed due to a configured batching period or inactivity period. A
+// negative duration indicates neither policies have been set.
 func (p *Policy) UntilNext() time.Duration {
-	if p.period <= 0 {
-		return -1
+	var periodTimeout time.Duration = -1
+	if p.period > 0 {
+		periodTimeout = time.Until(p.lastBatch.Add(p.period))
 	}
-	return time.Until(p.lastBatch.Add(p.period))
+
+	var inactivityTimeout time.Duration = -1
+	if p.inactivityPeriod > 0 && !p.lastPart.IsZero() {
+		inactivityTimeout = time.Until(p.lastPart.Add(p.inactivityPeriod))
+	}
+
+	switch {
+	case periodTimeout < 0:
+		return inactivityTimeout
+	case inactivityTimeout < 0:
+		return periodTimeout
+	default:
+		if periodTimeout <= inactivityTimeout {
+			return periodTimeout
+		} else {
+			return inactivityTimeout
+		}
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -352,3 +406,16 @@ func (p *Policy) WaitForClose(timeout time.Duration) error {
 }
 
 //------------------------------------------------------------------------------
+
+// triggeredTimer returns the id of any timers that are triggered in a batching
+// policy
+func (p *Policy) triggeredTimer() batchingTimer {
+	switch {
+	case (p.period > 0 && time.Since(p.lastBatch) > p.period):
+		return periodTimer
+	case (p.inactivityPeriod > 0 && !p.lastPart.IsZero() && time.Since(p.lastPart) > p.inactivityPeriod):
+		return inactivityTimer
+	default:
+		return 0
+	}
+}
