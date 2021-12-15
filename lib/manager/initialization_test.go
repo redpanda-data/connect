@@ -24,45 +24,45 @@ import (
 func TestInitialization(t *testing.T) {
 	env := bundle.NewEnvironment()
 
-	env.Buffers.Add(func(c buffer.Config, mgr bundle.NewManagement) (buffer.Type, error) {
+	require.NoError(t, env.BufferAdd(func(c buffer.Config, mgr bundle.NewManagement) (buffer.Type, error) {
 		return nil, errors.New("not this buffer")
 	}, docs.ComponentSpec{
 		Name: "testbuffer",
-	})
+	}))
 
-	env.Caches.Add(func(c cache.Config, mgr bundle.NewManagement) (types.Cache, error) {
+	require.NoError(t, env.CacheAdd(func(c cache.Config, mgr bundle.NewManagement) (types.Cache, error) {
 		return nil, errors.New("not this cache")
 	}, docs.ComponentSpec{
 		Name: "testcache",
-	})
+	}))
 
 	lenInputProcs := 0
-	env.Inputs.Add(func(b bool, c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
+	require.NoError(t, env.InputAdd(func(b bool, c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
 		lenInputProcs = len(p)
 		return nil, errors.New("not this input")
 	}, docs.ComponentSpec{
 		Name: "testinput",
-	})
+	}))
 
 	lenOutputProcs := 0
-	env.Outputs.Add(func(c output.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (output.Type, error) {
+	require.NoError(t, env.OutputAdd(func(c output.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (output.Type, error) {
 		lenOutputProcs = len(p)
 		return nil, errors.New("not this output")
 	}, docs.ComponentSpec{
 		Name: "testoutput",
-	})
+	}))
 
-	env.Processors.Add(func(c processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
+	require.NoError(t, env.ProcessorAdd(func(c processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
 		return nil, errors.New("not this processor")
 	}, docs.ComponentSpec{
 		Name: "testprocessor",
-	})
+	}))
 
-	env.RateLimits.Add(func(c ratelimit.Config, mgr bundle.NewManagement) (types.RateLimit, error) {
+	require.NoError(t, env.RateLimitAdd(func(c ratelimit.Config, mgr bundle.NewManagement) (types.RateLimit, error) {
 		return nil, errors.New("not this rate limit")
 	}, docs.ComponentSpec{
 		Name: "testratelimit",
-	})
+	}))
 
 	mgr, err := NewV2(NewResourceConfig(), nil, log.Noop(), metrics.Noop(), OptSetEnvironment(env))
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestInitializationOrdering(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	env.Inputs.Add(func(b bool, c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
+	require.NoError(t, env.InputAdd(func(b bool, c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
 		go func() {
 			defer wg.Done()
 			err := mgr.AccessRateLimit(context.Background(), "testratelimit", func(rl types.RateLimit) {})
@@ -133,9 +133,9 @@ func TestInitializationOrdering(t *testing.T) {
 		return nil, nil
 	}, docs.ComponentSpec{
 		Name: "testinput",
-	})
+	}))
 
-	env.Processors.Add(func(c processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
+	require.NoError(t, env.ProcessorAdd(func(c processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
 		go func() {
 			defer wg.Done()
 			err := mgr.AccessRateLimit(context.Background(), "fooratelimit", func(rl types.RateLimit) {})
@@ -144,13 +144,13 @@ func TestInitializationOrdering(t *testing.T) {
 		return nil, nil
 	}, docs.ComponentSpec{
 		Name: "testprocessor",
-	})
+	}))
 
-	env.RateLimits.Add(func(c ratelimit.Config, mgr bundle.NewManagement) (types.RateLimit, error) {
+	require.NoError(t, env.RateLimitAdd(func(c ratelimit.Config, mgr bundle.NewManagement) (types.RateLimit, error) {
 		return nil, nil
 	}, docs.ComponentSpec{
 		Name: "testratelimit",
-	})
+	}))
 
 	inConf := input.NewConfig()
 	inConf.Label = "fooinput"

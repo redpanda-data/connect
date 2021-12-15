@@ -15,6 +15,24 @@ var AllBuffers = &BufferSet{
 
 //------------------------------------------------------------------------------
 
+// BufferAdd adds a new buffer to this environment by providing a constructor
+// and documentation.
+func (e *Environment) BufferAdd(constructor BufferConstructor, spec docs.ComponentSpec) error {
+	return e.buffers.Add(constructor, spec)
+}
+
+// BufferInit attempts to initialise a buffer from a config.
+func (e *Environment) BufferInit(conf buffer.Config, mgr NewManagement) (buffer.Type, error) {
+	return e.buffers.Init(conf, mgr)
+}
+
+// BufferDocs returns a slice of buffer specs, which document each method.
+func (e *Environment) BufferDocs() []docs.ComponentSpec {
+	return e.buffers.Docs()
+}
+
+//------------------------------------------------------------------------------
+
 // BufferConstructor constructs an buffer component.
 type BufferConstructor func(buffer.Config, NewManagement) (buffer.Type, error)
 

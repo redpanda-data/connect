@@ -15,6 +15,24 @@ var AllRateLimits = &RateLimitSet{
 
 //------------------------------------------------------------------------------
 
+// RateLimitAdd adds a new ratelimit to this environment by providing a
+// constructor and documentation.
+func (e *Environment) RateLimitAdd(constructor RateLimitConstructor, spec docs.ComponentSpec) error {
+	return e.rateLimits.Add(constructor, spec)
+}
+
+// RateLimitInit attempts to initialise a ratelimit from a config.
+func (e *Environment) RateLimitInit(conf ratelimit.Config, mgr NewManagement) (types.RateLimit, error) {
+	return e.rateLimits.Init(conf, mgr)
+}
+
+// RateLimitDocs returns a slice of ratelimit specs, which document each method.
+func (e *Environment) RateLimitDocs() []docs.ComponentSpec {
+	return e.rateLimits.Docs()
+}
+
+//------------------------------------------------------------------------------
+
 // RateLimitConstructor constructs an ratelimit component.
 type RateLimitConstructor func(ratelimit.Config, NewManagement) (types.RateLimit, error)
 
