@@ -377,7 +377,7 @@ func (c *ConfigSpec) Example(title, summary, config string) *ConfigSpec {
 // populate the configuration spec. The schema of this method is undocumented
 // and is not intended for general use.
 //
-// EXPERIMENTAL: This method is not intended for general use and could have its
+// Experimental: This method is not intended for general use and could have its
 // signature and/or behaviour changed outside of major version bumps.
 func (c *ConfigSpec) EncodeJSON(v []byte) error {
 	return json.Unmarshal(v, &c.component)
@@ -413,7 +413,7 @@ func (c *ConfigView) IsDeprecated() bool {
 // JSON object. The schema of this method is undocumented and is not intended
 // for general use.
 //
-// EXPERIMENTAL: This method is not intended for general use and could have its
+// Experimental: This method is not intended for general use and could have its
 // signature and/or behaviour changed outside of major version bumps.
 func (c *ConfigView) FormatJSON() ([]byte, error) {
 	return json.Marshal(c.component)
