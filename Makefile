@@ -35,7 +35,7 @@ install: $(APPS)
 deps:
 	@go mod tidy
 
-SOURCE_FILES = $(shell find lib internal public cmd -type f -name "*.go")
+SOURCE_FILES = $(shell find lib internal public cmd -type f)
 TEMPLATE_FILES = $(shell find template -path template/test -prune -o -type f -name "*.yaml")
 
 $(PATHINSTBIN)/%: $(SOURCE_FILES) $(TEMPLATE_FILES)
