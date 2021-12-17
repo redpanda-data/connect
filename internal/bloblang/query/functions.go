@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
+	"github.com/segmentio/ksuid"
 )
 
 type fieldFunction struct {
@@ -815,6 +816,21 @@ func nanoidFunction(args *ParsedParams) (Function, error) {
 		return gonanoid.New()
 	}, nil), nil
 }
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "ksuid",
+		"Generates a new ksuid each time it is invoked and prints a string representation.",
+		NewExampleSpec("", `root.id = ksuid()`),
+	),
+	func(_ FunctionContext) (interface{}, error) {
+		return ksuid.New().String(), nil
+	},
+)
+
+
 
 //------------------------------------------------------------------------------
 

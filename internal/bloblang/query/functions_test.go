@@ -239,6 +239,16 @@ func TestNanoidFunctionAlphabet(t *testing.T) {
 	assert.Equal(t, "a", res)
 }
 
+func TestKsuidFunction(t *testing.T) {
+	e, err := InitFunctionHelper("ksuid")
+	require.Nil(t, err)
+
+	res, err := e.Exec(FunctionContext{})
+	require.NoError(t, err)
+	assert.NotEmpty(t, res)
+}
+
+
 func TestEnvFunction(t *testing.T) {
 	key := "BENTHOS_TEST_BLOBLANG_FUNCTION"
 	os.Setenv(key, "foobar")

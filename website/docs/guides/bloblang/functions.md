@@ -106,6 +106,19 @@ It is also possible to specify an optional custom alphabet after the length para
 root.id = nanoid(54, "abcde")
 ```
 
+### `ksuid`
+
+Generates a new ksuid each time it is invoked and prints a string representation.
+
+#### Parameters
+
+#### Examples
+
+
+```coffee
+root.id = ksuid()
+```
+
 ### `random_int`
 
 Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.

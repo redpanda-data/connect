@@ -103,6 +103,7 @@ require (
 	github.com/rickb777/date v1.16.1
 	github.com/rickb777/plural v1.4.1 // indirect
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/segmentio/ksuid v1.0.4
 	github.com/smira/go-statsd v1.3.2
 	github.com/spf13/cast v1.4.1
 	github.com/stretchr/testify v1.7.0
