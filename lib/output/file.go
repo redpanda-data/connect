@@ -27,7 +27,9 @@ func init() {
 		Summary: `
 Writes messages to files on disk based on a chosen codec.`,
 		Description: `
-Messages can be written to different files by using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.`,
+Messages can be written to different files by using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.
+
+` + multipartCodecDoc,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
 				"path", "The file to write to, if the file does not yet exist it will be created.",

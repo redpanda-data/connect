@@ -16,12 +16,9 @@ import (
 
 //------------------------------------------------------------------------------
 
-func init() {
-	Constructors[TypeSTDOUT] = TypeSpec{
-		constructor: fromSimpleConstructor(NewSTDOUT),
-		Summary: `
-Prints messages to stdout as a continuous stream of data, dividing messages according to the specified codec.`,
-		Description: `
+var multipartCodecDoc = (`
+## Batches and Mulipart Messages
+
 When writing multipart (batched) messages using the ` + "`lines`" + ` codec the last message ends with double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
 ` + "```" + `
@@ -36,7 +33,16 @@ Whereas a multipart message [ "foo", "bar", "baz" ] would be written as:
 foo\n
 bar\n
 baz\n\n
-` + "```" + ``,
+` + "```" + `
+
+This enables consumers of this output feed to reconstruct the original batches. However, if you wish to avoid this behaviour then add a ` + "[`split` processor](/docs/components/processors/split)" + ` before messages reach this output.`)[1:]
+
+func init() {
+	Constructors[TypeSTDOUT] = TypeSpec{
+		constructor: fromSimpleConstructor(NewSTDOUT),
+		Summary: `
+Prints messages to stdout as a continuous stream of data, dividing messages according to the specified codec.`,
+		Description: multipartCodecDoc,
 		FieldSpecs: docs.FieldSpecs{
 			codec.WriterDocs.AtVersion("3.46.0"),
 			docs.FieldDeprecated("delimiter"),

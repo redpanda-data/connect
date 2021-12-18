@@ -41,7 +41,9 @@ func init() {
 		Version: "3.39.0",
 		Summary: `Writes files to a server over SFTP.`,
 		Description: `
-In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`,
+In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+
+` + multipartCodecDoc,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon(
