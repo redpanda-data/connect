@@ -78,6 +78,17 @@ root.new_nums = this.nums.map_each(num -> if num < 10 { deleted() } else { num -
 # Out: {"new_nums":[1,7]}
 ```
 
+### `ksuid`
+
+Generates a new ksuid each time it is invoked and prints a string representation.
+
+#### Examples
+
+
+```coffee
+root.id = ksuid()
+```
+
 ### `nanoid`
 
 Generates a new nanoid each time it is invoked and prints a string representation.
@@ -104,19 +115,6 @@ It is also possible to specify an optional custom alphabet after the length para
 
 ```coffee
 root.id = nanoid(54, "abcde")
-```
-
-### `ksuid`
-
-Generates a new ksuid each time it is invoked and prints a string representation.
-
-#### Parameters
-
-#### Examples
-
-
-```coffee
-root.id = ksuid()
 ```
 
 ### `random_int`

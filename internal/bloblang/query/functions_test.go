@@ -248,7 +248,6 @@ func TestKsuidFunction(t *testing.T) {
 	assert.NotEmpty(t, res)
 }
 
-
 func TestEnvFunction(t *testing.T) {
 	key := "BENTHOS_TEST_BLOBLANG_FUNCTION"
 	os.Setenv(key, "foobar")
