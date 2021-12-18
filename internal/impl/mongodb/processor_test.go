@@ -16,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/nsf/jsondiff"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -432,43 +433,56 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 		Password:   "secret",
 	}
 
-	mongoConfig := processor.MongoDBConfig{
-		MongoDB: c,
-		WriteConcern: client.WriteConcern{
-			W:        "1",
-			J:        false,
-			WTimeout: "100s",
-		},
-		Parts:     nil,
-		Operation: "find-one",
-		FilterMap: "root.a = this.foo",
+	conf.MongoDB = processor.NewMongoDBConfig()
+	conf.MongoDB.MongoDB = c
+	conf.MongoDB.WriteConcern = client.WriteConcern{
+		W:        "1",
+		J:        false,
+		WTimeout: "100s",
 	}
+	conf.MongoDB.Parts = nil
+	conf.MongoDB.Operation = "find-one"
+	conf.MongoDB.FilterMap = "root.a = this.a"
 
 	mongoClient, err := c.Client()
 	require.NoError(t, err)
 	err = mongoClient.Connect(context.Background())
 	require.NoError(t, err)
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
-	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_find", "b": "bar_find", "c": "c1"})
+	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo", "b": "bar", "c": "baz", "answer_to_everything": 42})
 	assert.NoError(t, err)
 
 	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	conf.MongoDB = mongoConfig
-	m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
-	require.NoError(t, err)
+	for _, tt := range []struct {
+		name        string
+		marshalMode client.JSONMarshalMode
+		expected    string
+	}{
+		{
+			name:        "canonical marshal mode",
+			marshalMode: client.JSONMarshalModeCanonical,
+			expected:    `{"a":"foo","b":"bar","c":"baz","answer_to_everything":{"$numberInt":"42"}}`,
+		},
+		{
+			name:        "relaxed marshal mode",
+			marshalMode: client.JSONMarshalModeRelaxed,
+			expected:    `{"a":"foo","b":"bar","c":"baz","answer_to_everything":42}`,
+		},
+	} {
+		conf.MongoDB.JSONMarshalMode = tt.marshalMode
 
-	parts := [][]byte{
-		[]byte(`{"foo":"foo_find","bar":"bar_update_new"}`),
+		m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
+		require.NoError(t, err)
+		resMsgs, response := m.ProcessMessage(message.New([][]byte{[]byte(`{"a":"foo","x":"ignore_me_via_filter_map"}`)}))
+		require.Nil(t, response)
+		require.Len(t, resMsgs, 1)
+
+		jdopts := jsondiff.DefaultJSONOptions()
+		diff, explanation := jsondiff.Compare(resMsgs[0].Get(0).Get(), []byte(tt.expected), &jdopts)
+		assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
 	}
-
-	resMsgs, response := m.ProcessMessage(message.New(parts))
-	require.Nil(t, response)
-	require.Len(t, resMsgs, 1)
-
-	expected := (`{"_id":"{\"$oid\":\"*\"}","a":"\"foo_find\"","b":"\"bar_find\"","c":"\"c1\""}`)
-	assert.True(t, match(expected, string(resMsgs[0].Get(0).Get())))
 }
 
 func createCollection(resource *dockertest.Resource, collectionName, username, password string) error {
@@ -486,26 +500,4 @@ func createCollection(resource *dockertest.Resource, collectionName, username, p
 
 	time.Sleep(time.Second * 1)
 	return nil
-}
-
-// wildCardToRegexp converts a wildcard pattern to a regular expression pattern.
-func wildCardToRegexp(pattern string) string {
-	var result strings.Builder
-	for i, literal := range strings.Split(pattern, "*") {
-
-		// Replace * with .*
-		if i > 0 {
-			result.WriteString(".*")
-		}
-
-		// Quote any regular expression meta characters in the
-		// literal text.
-		result.WriteString(regexp.QuoteMeta(literal))
-	}
-	return result.String()
-}
-
-func match(pattern, value string) bool {
-	result, _ := regexp.MatchString(wildCardToRegexp(pattern), value)
-	return result
 }

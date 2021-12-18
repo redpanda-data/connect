@@ -39,7 +39,7 @@ mongodb:
   collection: ""
   username: ""
   password: ""
-  operation: insert
+  operation: insert-one
   write_concern:
     w: ""
     j: false
@@ -62,7 +62,7 @@ mongodb:
   collection: ""
   username: ""
   password: ""
-  operation: insert
+  operation: insert-one
   write_concern:
     w: ""
     j: false
@@ -71,6 +71,7 @@ mongodb:
   filter_map: ""
   hint_map: ""
   upsert: false
+  json_marshal_mode: canonical
   parts: []
   max_retries: 3
   backoff:
@@ -132,11 +133,12 @@ Default: `""`
 
 ### `operation`
 
-The mongodb operation to perform. Must be one of the following: insert-one, delete-one, delete-many, replace-one, update-one, find-one.
+The mongodb operation to perform.
 
 
 Type: `string`  
-Default: `"insert"`  
+Default: `"insert-one"`  
+Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`, `find-one`.
 
 ### `write_concern`
 
@@ -225,6 +227,21 @@ The upsert setting is optional and only applies for update-one and replace-one o
 Type: `bool`  
 Default: `false`  
 Requires version 3.60.0 or newer  
+
+### `json_marshal_mode`
+
+The json_marshal_mode setting is optional and controls the format of the output message.
+
+
+Type: `string`  
+Default: `"canonical"`  
+Requires version 3.60.0 or newer  
+
+| Option | Summary |
+|---|---|
+| `canonical` | A string format that emphasizes type preservation at the expense of readability and interoperability. That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases.  |
+| `relaxed` | A string format that emphasizes readability and interoperability at the expense of type preservation.That is, conversion from relaxed format to BSON can lose type information. |
+
 
 ### `parts`
 
