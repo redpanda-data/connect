@@ -8,6 +8,17 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `json_marshal_mode` added to the MongoDB processor.
+- Fields `extract_headers.include_prefixes` and `extract_headers.include_patterns` added to the `http_client` input and output and to the `http` processor.
+- Fields `sync_response.metadata_headers.include_prefixes` and `sync_response.metadata_headers.include_patterns` added to the `http_server` input.
+- The `http_client` input and output and the `http` processor field `copy_response_headers` has been deprecated in favour of the `extract_headers` functionality.
+- Added new cli flag `--no-api` for the `streams` subcommand to disable the REST API.
+- New experimental `kafka_franz` input and output.
+
+### Fixed
+
+- Streams mode paths now resolve glob patterns in all cases.
+- Prevented the `nats` input from error logging when acknowledgments can't be fulfilled due to the lack of message replies.
+- Fixed an issue where GCP inputs and outputs could terminate requests early due to a cancelled client context.
 
 ## 3.60.1 - 2021-12-03
 

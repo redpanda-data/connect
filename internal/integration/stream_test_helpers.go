@@ -38,6 +38,22 @@ func CheckSkip(t *testing.T) {
 	}
 }
 
+// GetFreePort attempts to get a free port. This involves creating a bind and
+// then immediately dropping it and so it's ever so slightly flakey.
+func GetFreePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	listener, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer listener.Close()
+	return listener.Addr().(*net.TCPAddr).Port, nil
+}
+
 // StreamTestConfigVars defines variables that will be accessed by test
 // definitions when generating components through the config template. The main
 // value is the id, which is generated for each test for isolation, and the port
@@ -480,10 +496,12 @@ func initOutput(t testing.TB, trans <-chan types.Transaction, env *streamTestEnv
 
 func closeConnectors(t testing.TB, input types.Input, output types.Output) {
 	if output != nil {
+		t.Log("closing output")
 		output.CloseAsync()
 		require.NoError(t, output.WaitForClose(time.Second*10))
 	}
 	if input != nil {
+		t.Log("closing input")
 		input.CloseAsync()
 		require.NoError(t, input.WaitForClose(time.Second*10))
 	}

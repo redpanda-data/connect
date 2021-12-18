@@ -86,7 +86,9 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    copy_response_headers: false
+    extract_headers:
+      include_prefixes: []
+      include_patterns: []
     rate_limit: ""
     timeout: 5s
     retry_period: 1s
@@ -473,13 +475,49 @@ The path of a certificate key to use.
 Type: `string`  
 Default: `""`  
 
-### `copy_response_headers`
+### `extract_headers`
 
-Sets whether to copy the headers from the response to the resulting payload.
+Specify which response headers should be added to resulting messages as metadata.
 
 
-Type: `bool`  
-Default: `false`  
+Type: `object`  
+
+### `extract_headers.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to be included when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_prefixes:
+  - foo_
+  - bar_
+
+include_prefixes:
+  - kafka_
+```
+
+### `extract_headers.include_patterns`
+
+Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_patterns:
+  - .*
+
+include_patterns:
+  - _timestamp_unix$
+```
 
 ### `rate_limit`
 

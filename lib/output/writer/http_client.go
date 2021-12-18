@@ -109,12 +109,12 @@ func (h *HTTPClient) WriteWithContext(ctx context.Context, msg types.Message) er
 				parts[i] = msgCopy.Get(0)
 			}
 			parts[i].Set(p.Get())
-			if h.conf.CopyResponseHeaders {
-				p.Metadata().Iter(func(k, v string) error {
-					parts[i].Metadata().Set(k, v)
-					return nil
-				})
-			}
+
+			p.Metadata().Iter(func(k, v string) error {
+				parts[i].Metadata().Set(k, v)
+				return nil
+			})
+
 			return nil
 		})
 		msgCopy.SetAll(parts)

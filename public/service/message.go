@@ -259,3 +259,17 @@ func (b MessageBatch) InterpolatedString(index int, i *InterpolatedString) strin
 	}
 	return i.expr.String(index, msg)
 }
+
+// InterpolatedBytes resolves an interpolated string expression on a message
+// batch, from the perspective of a particular message index.
+//
+// This method allows interpolation functions to perform windowed aggregations
+// across message batches, and is a more powerful way to interpolate strings
+// than the standard .String method.
+func (b MessageBatch) InterpolatedBytes(index int, i *InterpolatedString) []byte {
+	msg := message.New(nil)
+	for _, m := range b {
+		msg.Append(m.part)
+	}
+	return i.expr.Bytes(index, msg)
+}

@@ -21,7 +21,7 @@ func (v *FunctionView) Description() string {
 // JSON object. The schema of this method is undocumented and is not intended
 // for general use.
 //
-// EXPERIMENTAL: This method is not intended for general use and could have its
+// Experimental: This method is not intended for general use and could have its
 // signature and/or behaviour changed outside of major version bumps.
 func (v *FunctionView) FormatJSON() ([]byte, error) {
 	return json.Marshal(v.spec)
@@ -41,7 +41,7 @@ func (v *MethodView) Description() string {
 // JSON object. The schema of this method is undocumented and is not intended
 // for general use.
 //
-// EXPERIMENTAL: This method is not intended for general use and could have its
+// Experimental: This method is not intended for general use and could have its
 // signature and/or behaviour changed outside of major version bumps.
 func (v *MethodView) FormatJSON() ([]byte, error) {
 	return json.Marshal(v.spec)

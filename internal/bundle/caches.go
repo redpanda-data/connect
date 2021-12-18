@@ -15,6 +15,24 @@ var AllCaches = &CacheSet{
 
 //------------------------------------------------------------------------------
 
+// CacheAdd adds a new cache to this environment by providing a constructor
+// and documentation.
+func (e *Environment) CacheAdd(constructor CacheConstructor, spec docs.ComponentSpec) error {
+	return e.caches.Add(constructor, spec)
+}
+
+// CacheInit attempts to initialise a cache from a config.
+func (e *Environment) CacheInit(conf cache.Config, mgr NewManagement) (types.Cache, error) {
+	return e.caches.Init(conf, mgr)
+}
+
+// CacheDocs returns a slice of cache specs, which document each method.
+func (e *Environment) CacheDocs() []docs.ComponentSpec {
+	return e.caches.Docs()
+}
+
+//------------------------------------------------------------------------------
+
 // CacheConstructor constructs an cache component.
 type CacheConstructor func(cache.Config, NewManagement) (types.Cache, error)
 

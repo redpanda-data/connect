@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/bundle/tracing"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
@@ -669,6 +671,25 @@ func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
 // Build a Benthos stream pipeline according to the components specified by this
 // stream builder.
 func (s *StreamBuilder) Build() (*Stream, error) {
+	return s.buildWithEnv(s.env.internal)
+}
+
+// BuildTraced creates a Benthos stream pipeline according to the components
+// specified by this stream builder, where each major component (input,
+// processor, output) is wrapped with a tracing module that, during the lifetime
+// of the stream, aggregates tracing events into the returned *TracingSummary.
+// Once the stream has ended the TracingSummary can be queried for events that
+// occurred.
+//
+// Experimental: The behaviour of this method could change outside of major
+// version releases.
+func (s *StreamBuilder) BuildTraced() (*Stream, *TracingSummary, error) {
+	tenv, summary := tracing.TracedBundle(s.env.internal)
+	strm, err := s.buildWithEnv(tenv)
+	return strm, &TracingSummary{summary}, err
+}
+
+func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 	conf := s.buildConfig()
 
 	logger := s.customLogger
@@ -691,7 +712,7 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 		if err == nil {
 			_ = config.Spec().SanitiseYAML(&sanitNode, docs.SanitiseConfig{
 				RemoveTypeField: true,
-				DocsProvider:    s.env.internal,
+				DocsProvider:    env,
 			})
 		}
 		if apiMut, err = api.New("", "", s.http, sanitNode, logger, stats); err != nil {
@@ -712,7 +733,7 @@ func (s *StreamBuilder) Build() (*Stream, error) {
 
 	mgr, err := manager.NewV2(
 		conf.ResourceConfig, apiMut, logger, stats,
-		manager.OptSetEnvironment(s.env.internal),
+		manager.OptSetEnvironment(env),
 		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
 	)
 	if err != nil {

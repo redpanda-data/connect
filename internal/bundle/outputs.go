@@ -16,6 +16,28 @@ var AllOutputs = &OutputSet{
 
 //------------------------------------------------------------------------------
 
+// OutputAdd adds a new output to this environment by providing a constructor
+// and documentation.
+func (e *Environment) OutputAdd(constructor OutputConstructor, spec docs.ComponentSpec) error {
+	return e.outputs.Add(constructor, spec)
+}
+
+// OutputInit attempts to initialise a output from a config.
+func (e *Environment) OutputInit(
+	conf output.Config,
+	mgr NewManagement,
+	pipelines ...types.PipelineConstructorFunc,
+) (types.Output, error) {
+	return e.outputs.Init(conf, mgr, pipelines...)
+}
+
+// OutputDocs returns a slice of output specs, which document each method.
+func (e *Environment) OutputDocs() []docs.ComponentSpec {
+	return e.outputs.Docs()
+}
+
+//------------------------------------------------------------------------------
+
 // OutputConstructorFromSimple provides a way to define an output constructor
 // without manually initializing processors of the config.
 func OutputConstructorFromSimple(fn func(output.Config, NewManagement) (output.Type, error)) OutputConstructor {

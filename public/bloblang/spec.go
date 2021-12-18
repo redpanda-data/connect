@@ -141,7 +141,7 @@ func (p *PluginSpec) Param(def ParamDefinition) *PluginSpec {
 // populate the configuration spec. The schema of this method is undocumented
 // and is not intended for general use.
 //
-// EXPERIMENTAL: This method is not intended for general use and could have its
+// Experimental: This method is not intended for general use and could have its
 // signature and/or behaviour changed outside of major version bumps.
 func (p *PluginSpec) EncodeJSON(v []byte) error {
 	def := struct {

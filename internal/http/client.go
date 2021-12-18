@@ -18,6 +18,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -35,9 +36,10 @@ type Client struct {
 	dropOn    map[int]struct{}
 	successOn map[int]struct{}
 
-	url     *field.Expression
-	headers map[string]*field.Expression
-	host    *field.Expression
+	url        *field.Expression
+	headers    map[string]*field.Expression
+	host       *field.Expression
+	metaFilter *metadata.Filter
 
 	conf          client.Config
 	retryThrottle *throttle.Type
@@ -152,6 +154,10 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
 			}
 		}
+	}
+
+	if h.metaFilter, err = h.conf.ExtractMetadata.CreateFilter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
 	h.mCount = h.stats.GetCounter("count")
@@ -377,11 +383,12 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 				index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
 				bufferIndex += bytesRead
 
-				if h.conf.CopyResponseHeaders {
+				if h.conf.CopyResponseHeaders || h.metaFilter.IsSet() {
 					meta := resMsg.Get(index).Metadata()
 					for k, values := range p.Header {
-						if len(values) > 0 {
-							meta.Set(strings.ToLower(k), values[0])
+						normalisedHeader := strings.ToLower(k)
+						if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaFilter.Match(normalisedHeader)) {
+							meta.Set(normalisedHeader, values[0])
 						}
 					}
 				}
@@ -399,11 +406,12 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 			} else {
 				resMsg.Append(message.NewPart(nil))
 			}
-			if h.conf.CopyResponseHeaders {
+			if h.conf.CopyResponseHeaders || h.metaFilter.IsSet() {
 				meta := resMsg.Get(0).Metadata()
 				for k, values := range res.Header {
-					if len(values) > 0 {
-						meta.Set(strings.ToLower(k), values[0])
+					normalisedHeader := strings.ToLower(k)
+					if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaFilter.Match(normalisedHeader)) {
+						meta.Set(normalisedHeader, values[0])
 					}
 				}
 			}

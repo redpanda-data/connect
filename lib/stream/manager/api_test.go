@@ -113,6 +113,37 @@ func parseGetBody(t *testing.T, data *bytes.Buffer) getBody {
 	return result
 }
 
+type endpointReg struct {
+	endpoints map[string]http.HandlerFunc
+	types.DudMgr
+}
+
+func (f *endpointReg) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
+	f.endpoints[path] = h
+}
+
+func TestTypeAPIDisabled(t *testing.T) {
+	r := &endpointReg{endpoints: map[string]http.HandlerFunc{}}
+	_ = manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(r),
+		manager.OptSetAPITimeout(time.Millisecond*100),
+		manager.OptAPIEnabled(true),
+	)
+	assert.NotEmpty(t, r.endpoints)
+
+	r = &endpointReg{endpoints: map[string]http.HandlerFunc{}}
+	_ = manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(r),
+		manager.OptSetAPITimeout(time.Millisecond*100),
+		manager.OptAPIEnabled(false),
+	)
+	assert.Empty(t, r.endpoints)
+}
+
 func TestTypeAPIBadMethods(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),

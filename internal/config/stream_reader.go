@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"gopkg.in/yaml.v3"
@@ -97,9 +98,13 @@ func (r *Reader) readStreamFile(dir, path string, confs map[string]stream.Config
 }
 
 func (r *Reader) readStreamFiles(streamMap map[string]stream.Config) ([]string, error) {
-	pathLints := []string{}
+	streamsPaths, err := ifilepath.Globs(r.streamsPaths)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve stream glob pattern: %w", err)
+	}
 
-	for _, target := range r.streamsPaths {
+	pathLints := []string{}
+	for _, target := range streamsPaths {
 		target = filepath.Clean(target)
 
 		if info, err := os.Stat(target); err != nil {

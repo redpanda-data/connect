@@ -8,23 +8,23 @@ import (
 // order to build and run streaming pipelines with access to different sets of
 // plugins. This is useful for sandboxing, testing, etc.
 type Environment struct {
-	Buffers    *BufferSet
-	Caches     *CacheSet
-	Inputs     *InputSet
-	Outputs    *OutputSet
-	Processors *ProcessorSet
-	RateLimits *RateLimitSet
+	buffers    *BufferSet
+	caches     *CacheSet
+	inputs     *InputSet
+	outputs    *OutputSet
+	processors *ProcessorSet
+	rateLimits *RateLimitSet
 }
 
 // NewEnvironment creates an empty environment.
 func NewEnvironment() *Environment {
 	return &Environment{
-		Buffers:    &BufferSet{},
-		Caches:     &CacheSet{},
-		Inputs:     &InputSet{},
-		Outputs:    &OutputSet{},
-		Processors: &ProcessorSet{},
-		RateLimits: &RateLimitSet{},
+		buffers:    &BufferSet{},
+		caches:     &CacheSet{},
+		inputs:     &InputSet{},
+		outputs:    &OutputSet{},
+		processors: &ProcessorSet{},
+		rateLimits: &RateLimitSet{},
 	}
 }
 
@@ -32,23 +32,23 @@ func NewEnvironment() *Environment {
 // independently.
 func (e *Environment) Clone() *Environment {
 	newEnv := NewEnvironment()
-	for _, v := range e.Buffers.specs {
-		newEnv.Buffers.Add(v.constructor, v.spec)
+	for _, v := range e.buffers.specs {
+		_ = newEnv.buffers.Add(v.constructor, v.spec)
 	}
-	for _, v := range e.Caches.specs {
-		newEnv.Caches.Add(v.constructor, v.spec)
+	for _, v := range e.caches.specs {
+		_ = newEnv.caches.Add(v.constructor, v.spec)
 	}
-	for _, v := range e.Inputs.specs {
-		newEnv.Inputs.Add(v.constructor, v.spec)
+	for _, v := range e.inputs.specs {
+		_ = newEnv.inputs.Add(v.constructor, v.spec)
 	}
-	for _, v := range e.Outputs.specs {
-		newEnv.Outputs.Add(v.constructor, v.spec)
+	for _, v := range e.outputs.specs {
+		_ = newEnv.outputs.Add(v.constructor, v.spec)
 	}
-	for _, v := range e.Processors.specs {
-		newEnv.Processors.Add(v.constructor, v.spec)
+	for _, v := range e.processors.specs {
+		_ = newEnv.processors.Add(v.constructor, v.spec)
 	}
-	for _, v := range e.RateLimits.specs {
-		newEnv.RateLimits.Add(v.constructor, v.spec)
+	for _, v := range e.rateLimits.specs {
+		_ = newEnv.rateLimits.Add(v.constructor, v.spec)
 	}
 	return newEnv
 }
@@ -60,17 +60,17 @@ func (e *Environment) GetDocs(name string, ctype docs.Type) (docs.ComponentSpec,
 
 	switch ctype {
 	case docs.TypeBuffer:
-		spec, ok = e.Buffers.DocsFor(name)
+		spec, ok = e.buffers.DocsFor(name)
 	case docs.TypeCache:
-		spec, ok = e.Caches.DocsFor(name)
+		spec, ok = e.caches.DocsFor(name)
 	case docs.TypeInput:
-		spec, ok = e.Inputs.DocsFor(name)
+		spec, ok = e.inputs.DocsFor(name)
 	case docs.TypeOutput:
-		spec, ok = e.Outputs.DocsFor(name)
+		spec, ok = e.outputs.DocsFor(name)
 	case docs.TypeProcessor:
-		spec, ok = e.Processors.DocsFor(name)
+		spec, ok = e.processors.DocsFor(name)
 	case docs.TypeRateLimit:
-		spec, ok = e.RateLimits.DocsFor(name)
+		spec, ok = e.rateLimits.DocsFor(name)
 	default:
 		return docs.GetDocs(nil, name, ctype)
 	}
@@ -80,10 +80,10 @@ func (e *Environment) GetDocs(name string, ctype docs.Type) (docs.ComponentSpec,
 
 // GlobalEnvironment contains service-wide singleton bundles.
 var GlobalEnvironment = &Environment{
-	Buffers:    AllBuffers,
-	Caches:     AllCaches,
-	Inputs:     AllInputs,
-	Outputs:    AllOutputs,
-	Processors: AllProcessors,
-	RateLimits: AllRateLimits,
+	buffers:    AllBuffers,
+	caches:     AllCaches,
+	inputs:     AllInputs,
+	outputs:    AllOutputs,
+	processors: AllProcessors,
+	rateLimits: AllRateLimits,
 }

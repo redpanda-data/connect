@@ -410,6 +410,6 @@ func deprecatedExecute(configPath, testSuffix string) {
 		if len(depFlags.streamsDir) > 0 {
 			dirs = append(dirs, depFlags.streamsDir)
 		}
-		os.Exit(cmdService(configPath, nil, nil, "", depFlags.strictConfig, false, depFlags.streamsMode, dirs))
+		os.Exit(cmdService(configPath, nil, nil, "", depFlags.strictConfig, false, false, depFlags.streamsMode, dirs))
 	}
 }
