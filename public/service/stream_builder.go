@@ -61,7 +61,8 @@ type StreamBuilder struct {
 	apiMut       manager.APIReg
 	customLogger log.Modular
 
-	env *Environment
+	env             *Environment
+	lintingDisabled bool
 }
 
 // NewStreamBuilder creates a new StreamBuilder.
@@ -84,6 +85,13 @@ func (s *StreamBuilder) getLintContext() docs.LintContext {
 }
 
 //------------------------------------------------------------------------------
+
+// DisableLinting configures the stream builder to no longer lint YAML configs,
+// allowing you to add snippets of config to the builder without failing on
+// linting rules.
+func (s *StreamBuilder) DisableLinting() {
+	s.lintingDisabled = true
+}
 
 // SetThreads configures the number of pipeline processor threads should be
 // configured. By default the number will be zero, which means the thread count
@@ -433,7 +441,7 @@ func (s *StreamBuilder) AddResourcesYAML(conf string) error {
 		return err
 	}
 
-	if err := lintsToErr(manager.Spec().LintYAML(s.getLintContext(), node)); err != nil {
+	if err := s.lintYAMLSpec(manager.Spec(), node); err != nil {
 		return err
 	}
 
@@ -463,7 +471,7 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 		return err
 	}
 
-	if err := lintsToErr(config.Spec().LintYAML(s.getLintContext(), node)); err != nil {
+	if err := s.lintYAMLSpec(config.Spec(), node); err != nil {
 		return err
 	}
 
@@ -518,7 +526,7 @@ func (s *StreamBuilder) SetFields(pathValues ...interface{}) error {
 		}
 	}
 
-	if err := lintsToErr(config.Spec().LintYAML(s.getLintContext(), &rootNode)); err != nil {
+	if err := s.lintYAMLSpec(config.Spec(), &rootNode); err != nil {
 		return err
 	}
 
@@ -594,7 +602,7 @@ func (s *StreamBuilder) SetLoggerYAML(conf string) error {
 		return err
 	}
 
-	if err := lintsToErr(log.Spec().LintYAML(s.getLintContext(), node)); err != nil {
+	if err := s.lintYAMLSpec(log.Spec(), node); err != nil {
 		return err
 	}
 
@@ -842,6 +850,16 @@ func lintsToErr(lints []docs.Lint) error {
 	return e
 }
 
+func (s *StreamBuilder) lintYAMLSpec(spec docs.FieldSpecs, node *yaml.Node) error {
+	if s.lintingDisabled {
+		return nil
+	}
+	return lintsToErr(spec.LintYAML(s.getLintContext(), node))
+}
+
 func (s *StreamBuilder) lintYAMLComponent(node *yaml.Node, ctype docs.Type) error {
+	if s.lintingDisabled {
+		return nil
+	}
 	return lintsToErr(docs.LintYAML(s.getLintContext(), ctype, node))
 }

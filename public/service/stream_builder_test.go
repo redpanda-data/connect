@@ -700,3 +700,21 @@ output:
 		assert.Contains(t, act, str)
 	}
 }
+
+func TestStreamBuilderDisabledLinting(t *testing.T) {
+	lintingErrorConfig := `
+input:
+  kafka: {}
+  meow: ignore this field
+
+output:
+  nats:
+    another: linting error
+`
+	b := service.NewStreamBuilder()
+	require.Error(t, b.SetYAML(lintingErrorConfig))
+
+	b = service.NewStreamBuilder()
+	b.DisableLinting()
+	require.NoError(t, b.SetYAML(lintingErrorConfig))
+}
