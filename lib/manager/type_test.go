@@ -24,6 +24,8 @@ import (
 //------------------------------------------------------------------------------
 
 func TestManagerProcessorLabels(t *testing.T) {
+	t.Skip("No longer validating labels at construction")
+
 	goodLabels := []string{
 		"foo",
 		"foo_bar",

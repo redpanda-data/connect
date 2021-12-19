@@ -433,9 +433,6 @@ func (t *Type) NewCache(conf cache.Config) (types.Cache, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := docs.ValidateLabel(conf.Label); err != nil {
-			return nil, err
-		}
 		mgr = t.forComponent(conf.Label)
 	}
 	return t.env.CacheInit(conf, mgr)
@@ -499,9 +496,6 @@ func (t *Type) NewInput(conf input.Config, hasBatchProc bool, pipelines ...types
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := docs.ValidateLabel(conf.Label); err != nil {
-			return nil, err
-		}
 		mgr = t.forComponent(conf.Label)
 	}
 	return t.env.InputInit(hasBatchProc, conf, mgr, pipelines...)
@@ -568,9 +562,6 @@ func (t *Type) NewProcessor(conf processor.Config) (types.Processor, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := docs.ValidateLabel(conf.Label); err != nil {
-			return nil, err
-		}
 		mgr = t.forComponent(conf.Label)
 	}
 	return t.env.ProcessorInit(conf, mgr)
@@ -636,9 +627,6 @@ func (t *Type) NewOutput(conf output.Config, pipelines ...types.PipelineConstruc
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := docs.ValidateLabel(conf.Label); err != nil {
-			return nil, err
-		}
 		mgr = t.forComponent(conf.Label)
 	}
 	return t.env.OutputInit(conf, mgr, pipelines...)
@@ -708,9 +696,6 @@ func (t *Type) NewRateLimit(conf ratelimit.Config) (types.RateLimit, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := docs.ValidateLabel(conf.Label); err != nil {
-			return nil, err
-		}
 		mgr = t.forComponent(conf.Label)
 	}
 	return t.env.RateLimitInit(conf, mgr)
