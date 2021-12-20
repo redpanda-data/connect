@@ -1451,6 +1451,11 @@ func TestArray(t *testing.T) {
 			result:    []interface{}{"foo", nil, "bar", []interface{}{true, false}},
 			remaining: " and this",
 		},
+		"multiple elements array line broken windows style": {
+			input:     "[\r\n  \"foo\",\r\n  null,\r\n  \"bar\",\r\n  [true,false]\r\n] and this",
+			result:    []interface{}{"foo", nil, "bar", []interface{}{true, false}},
+			remaining: " and this",
+		},
 		"multiple elements array comments": {
 			input: `[
 	"foo", # this is a thing
