@@ -146,7 +146,7 @@ pipeline:
           - http:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos
               verb: GET
-        result_map: root.image.pull_count = this.pull_count
+        result_map: root.image.pull_count = this
 
 # Example input:  {"id":"foo","some":"pre-existing data"}
 # Example output: {"id":"foo","some":"pre-existing data","image":{"pull_count":1234}}
