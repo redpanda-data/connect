@@ -22,6 +22,7 @@ func TestBatchPolicySanit(t *testing.T) {
 	expSanit := `count: 0
 byte_size: 0
 period: ""
+inactivity_period: ""
 check: ""
 processors: []
 `

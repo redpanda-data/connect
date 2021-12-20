@@ -39,6 +39,11 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 				"A period in which an incomplete batch should be flushed regardless of its size.",
 				"1s", "1m", "500ms",
 			).HasDefault(""),
+			docs.FieldString(
+				"inactivity_period",
+				"A period indicating that a batch should be flushed due to inactivity. Adding a message to the batch starts or resets the inactivity timer.",
+				"1s", "1m", "500ms",
+			).HasDefault(""),
 			docs.FieldBloblang(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.",
