@@ -60,6 +60,7 @@ output:
     seed_brokers: []
     topic: ""
     key: ""
+    partitioner: ""
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -70,6 +71,8 @@ output:
       period: ""
       check: ""
       processors: []
+    max_message_bytes: 1MB
+    compression: ""
     tls:
       enabled: false
       skip_cert_verify: false
@@ -77,6 +80,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    sasl: []
 ```
 
 </TabItem>
@@ -129,6 +133,19 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
+
+### `partitioner`
+
+Override the default murmur2 hashing partitioner.
+
+
+Type: `string`  
+
+| Option | Summary |
+|---|---|
+| `least_backup` | Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch. |
+| `round_robin` | Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions. |
+
 
 ### `metadata`
 
@@ -275,6 +292,30 @@ processors:
   - merge_json: {}
 ```
 
+### `max_message_bytes`
+
+The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.
+
+
+Type: `string`  
+Default: `"1MB"`  
+
+```yaml
+# Examples
+
+max_message_bytes: 100MB
+
+max_message_bytes: 50mib
+```
+
+### `compression`
+
+Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.
+
+
+Type: `string`  
+Options: `lz4`, `snappy`, `gzip`, `none`, `zstd`.
+
 ### `tls`
 
 Custom TLS settings can be used to override system defaults.
@@ -388,5 +429,67 @@ The path of a certificate key to use.
 
 Type: `string`  
 Default: `""`  
+
+### `sasl`
+
+Specify one or more methods of SASL authentication. SASL is tried in order; if the broker supports the first mechanism, all connections will use that mechanism. If the first mechanism fails, the client will pick the first supported mechanism. If the broker does not support any client mechanisms, connections will fail.
+
+
+Type: `array`  
+
+```yaml
+# Examples
+
+sasl:
+  - mechanism: SCRAM-SHA-512
+    password: bar
+    username: foo
+```
+
+### `sasl[].mechanism`
+
+The SASL mechanism to use.
+
+
+Type: `string`  
+
+| Option | Summary |
+|---|---|
+| `OAUTHBEARER` | OAuth Bearer based authentication. |
+| `PLAIN` | Plain text authentication. |
+| `SCRAM-SHA-256` | SCRAM based authentication as specified in RFC5802. |
+| `SCRAM-SHA-512` | SCRAM based authentication as specified in RFC5802. |
+
+
+### `sasl[].username`
+
+A username to provide for PLAIN or SCRAM-* authentication.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].password`
+
+A password to provide for PLAIN or SCRAM-* authentication.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].token`
+
+The token to use for a single session's OAUTHBEARER authentication.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].extensions`
+
+Key/value pairs to add to OAUTHBEARER authentication requests.
+
+
+Type: `object`  
 
 

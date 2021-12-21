@@ -41,6 +41,7 @@ require (
 	github.com/denisenkom/go-mssqldb v0.11.0
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
+	github.com/dustin/go-humanize v1.0.0
 	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/edsrzf/mmap-go v1.0.0

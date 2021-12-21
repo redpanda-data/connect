@@ -3,11 +3,15 @@ package kafka
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
+	"math"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/public/service"
+	"github.com/dustin/go-humanize"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/sasl"
 )
 
 func franzKafkaOutputConfig() *service.ConfigSpec {
@@ -34,6 +38,12 @@ This input is new and experimental, and the existing ` + "`kafka`" + ` input is 
 			Description("A topic to write messages to.")).
 		Field(service.NewInterpolatedStringField("key").
 			Description("An optional key to populate for each message.").Optional()).
+		Field(service.NewStringAnnotatedEnumField("partitioner", map[string]string{
+			"round_robin":  "Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions.",
+			"least_backup": "Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch.",
+		}).
+			Description("Override the default murmur2 hashing partitioner.").
+			Advanced().Optional()).
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional()).
@@ -41,7 +51,18 @@ This input is new and experimental, and the existing ` + "`kafka`" + ` input is 
 			Description("The maximum number of batches to be sending in parallel at any given time.").
 			Default(10)).
 		Field(service.NewBatchPolicyField("batching")).
-		Field(service.NewTLSToggledField("tls"))
+		Field(service.NewStringField("max_message_bytes").
+			Description("The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.").
+			Advanced().
+			Default("1MB").
+			Example("100MB").
+			Example("50mib")).
+		Field(service.NewStringEnumField("compression", "lz4", "snappy", "gzip", "none", "zstd").
+			Description("Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.").
+			Optional().
+			Advanced()).
+		Field(service.NewTLSToggledField("tls")).
+		Field(saslField)
 }
 
 func init() {
@@ -70,12 +91,16 @@ func init() {
 //------------------------------------------------------------------------------
 
 type franzKafkaWriter struct {
-	seedBrokers []string
-	topicStr    string
-	topic       *service.InterpolatedString
-	key         *service.InterpolatedString
-	tlsConf     *tls.Config
-	metaFilter  *service.MetadataFilter
+	seedBrokers      []string
+	topicStr         string
+	topic            *service.InterpolatedString
+	key              *service.InterpolatedString
+	tlsConf          *tls.Config
+	saslConfs        []sasl.Mechanism
+	metaFilter       *service.MetadataFilter
+	partitioner      kgo.Partitioner
+	produceMaxBytes  int32
+	compressionPrefs []kgo.CompressionCodec
 
 	client *kgo.Client
 
@@ -108,6 +133,59 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		}
 	}
 
+	maxBytesStr, err := conf.FieldString("max_message_bytes")
+	if err != nil {
+		return nil, err
+	}
+	maxBytes, err := humanize.ParseBytes(maxBytesStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse max_message_bytes: %w", err)
+	}
+	if maxBytes > uint64(math.MaxInt32) {
+		return nil, fmt.Errorf("invalid max_message_bytes, must not exceed %v", math.MaxInt32)
+	}
+	f.produceMaxBytes = int32(maxBytes)
+
+	if conf.Contains("compression") {
+		cStr, err := conf.FieldString("compression")
+		if err != nil {
+			return nil, err
+		}
+
+		var c kgo.CompressionCodec
+		switch cStr {
+		case "lz4":
+			c = kgo.Lz4Compression()
+		case "gzip":
+			c = kgo.GzipCompression()
+		case "snappy":
+			c = kgo.SnappyCompression()
+		case "zstd":
+			c = kgo.ZstdCompression()
+		case "none":
+			c = kgo.NoCompression()
+		default:
+			return nil, fmt.Errorf("compression codec %v not recognised", cStr)
+		}
+		f.compressionPrefs = append(f.compressionPrefs, c)
+	}
+
+	f.partitioner = kgo.StickyKeyPartitioner(nil)
+	if conf.Contains("partitioner") {
+		partStr, err := conf.FieldString("partitioner")
+		if err != nil {
+			return nil, err
+		}
+		switch partStr {
+		case "round_robin":
+			f.partitioner = kgo.RoundRobinPartitioner()
+		case "least_backup":
+			f.partitioner = kgo.LeastBackupPartitioner()
+		default:
+			return nil, fmt.Errorf("unknown partitioner: %v", partStr)
+		}
+	}
+
 	if conf.Contains("metadata") {
 		if f.metaFilter, err = conf.FieldMetadataFilter("metadata"); err != nil {
 			return nil, err
@@ -120,6 +198,9 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 	}
 	if tlsEnabled {
 		f.tlsConf = tlsConf
+	}
+	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
+		return nil, err
 	}
 
 	return &f, nil
@@ -134,10 +215,18 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 
 	clientOpts := []kgo.Opt{
 		kgo.SeedBrokers(f.seedBrokers...),
+		kgo.SASL(f.saslConfs...),
 		kgo.AllowAutoTopicCreation(), // TODO: Configure this
+		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
 	}
 	if f.tlsConf != nil {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
+	}
+	if f.partitioner != nil {
+		clientOpts = append(clientOpts, kgo.RecordPartitioner(f.partitioner))
+	}
+	if len(f.compressionPrefs) > 0 {
+		clientOpts = append(clientOpts, kgo.ProducerBatchCompression(f.compressionPrefs...))
 	}
 
 	cl, err := kgo.NewClient(clientOpts...)

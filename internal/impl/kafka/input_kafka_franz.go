@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
+	"github.com/twmb/franz-go/pkg/sasl"
 )
 
 func franzKafkaInputConfig() *service.ConfigSpec {
@@ -57,7 +58,8 @@ This input adds the following metadata fields to each message:
 			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
 			Default(100).
 			Advanced()).
-		Field(service.NewTLSToggledField("tls"))
+		Field(service.NewTLSToggledField("tls")).
+		Field(saslField)
 }
 
 func init() {
@@ -87,6 +89,7 @@ type franzKafkaReader struct {
 	topics          []string
 	consumerGroup   string
 	tlsConf         *tls.Config
+	saslConfs       []sasl.Mechanism
 	checkpointLimit int
 
 	msgChan atomic.Value
@@ -139,6 +142,9 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 	}
 	if tlsEnabled {
 		f.tlsConf = tlsConf
+	}
+	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
+		return nil, err
 	}
 
 	return &f, nil
@@ -251,6 +257,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		kgo.SeedBrokers(f.seedBrokers...),
 		kgo.ConsumerGroup(f.consumerGroup),
 		kgo.ConsumeTopics(f.topics...),
+		kgo.SASL(f.saslConfs...),
 		kgo.OnPartitionsRevoked(func(rctx context.Context, c *kgo.Client, m map[string][]int32) {
 			// Note: this is a best attempt, there's a chance of duplicates if
 			// the checkpoint limit is borked with slow moving pending messages,

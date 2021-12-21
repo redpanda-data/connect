@@ -59,6 +59,7 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    sasl: []
 ```
 
 </TabItem>
@@ -244,5 +245,67 @@ The path of a certificate key to use.
 
 Type: `string`  
 Default: `""`  
+
+### `sasl`
+
+Specify one or more methods of SASL authentication. SASL is tried in order; if the broker supports the first mechanism, all connections will use that mechanism. If the first mechanism fails, the client will pick the first supported mechanism. If the broker does not support any client mechanisms, connections will fail.
+
+
+Type: `array`  
+
+```yaml
+# Examples
+
+sasl:
+  - mechanism: SCRAM-SHA-512
+    password: bar
+    username: foo
+```
+
+### `sasl[].mechanism`
+
+The SASL mechanism to use.
+
+
+Type: `string`  
+
+| Option | Summary |
+|---|---|
+| `OAUTHBEARER` | OAuth Bearer based authentication. |
+| `PLAIN` | Plain text authentication. |
+| `SCRAM-SHA-256` | SCRAM based authentication as specified in RFC5802. |
+| `SCRAM-SHA-512` | SCRAM based authentication as specified in RFC5802. |
+
+
+### `sasl[].username`
+
+A username to provide for PLAIN or SCRAM-* authentication.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].password`
+
+A password to provide for PLAIN or SCRAM-* authentication.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].token`
+
+The token to use for a single session's OAUTHBEARER authentication.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].extensions`
+
+Key/value pairs to add to OAUTHBEARER authentication requests.
+
+
+Type: `object`  
 
 
