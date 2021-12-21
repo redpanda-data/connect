@@ -101,6 +101,9 @@ func (p PolicyConfig) IsNoop() bool {
 	if len(p.Period) > 0 {
 		return false
 	}
+	if len(p.InactivityPeriod) > 0 {
+		return false
+	}
 	if len(p.Processors) > 0 {
 		return false
 	}

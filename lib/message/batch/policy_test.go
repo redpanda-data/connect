@@ -37,6 +37,10 @@ func TestPolicyNoop(t *testing.T) {
 	conf = NewPolicyConfig()
 	conf.Period = "10s"
 	assert.False(t, conf.IsNoop())
+
+	conf = NewPolicyConfig()
+	conf.InactivityPeriod = "10s"
+	assert.False(t, conf.IsNoop())
 }
 
 func TestPolicyBasic(t *testing.T) {
