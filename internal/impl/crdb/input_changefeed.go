@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/jackc/pgx/v4"
@@ -193,6 +194,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		go func() {
 			for c.rows == nil {
 				// If we are nil we want to wait for the above goroutine to give the row
+				time.Sleep(time.Millisecond * 1) // lets not use 100% cpu
 			}
 			c.logger.Debug("Checking for available rows")
 			if c.rows.Next() {
