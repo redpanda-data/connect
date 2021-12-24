@@ -51,6 +51,8 @@ type crdbChangefeedInput struct {
 	rootCA    string
 	statement string
 
+	closeChan chan struct{}
+
 	rows pgx.Rows
 
 	tables []string
@@ -61,7 +63,8 @@ type crdbChangefeedInput struct {
 
 func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*crdbChangefeedInput, error) {
 	c := &crdbChangefeedInput{
-		logger: logger,
+		logger:    logger,
+		closeChan: make(chan struct{}),
 	}
 
 	var err error
@@ -146,65 +149,79 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 	readyChan := make(chan struct{})
 	errChan := make(chan error)
 
-	if c.rows == nil {
-		// Put this in a goroutine because .Query() will block until there is a row available to read
-		go func() {
-			var err error
-			c.logger.Debug(fmt.Sprintf("Running query '%s'", c.statement))
-			c.rows, err = c.pgPool.Query(context.Background(), c.statement)
-			if err != nil {
-				c.logger.Error("Error querying")
-				errChan <- err
-			}
-			// Check if the context was cancelled
+	go func() {
+		cc, cancelFunc := context.WithCancel(context.Background())
+		if c.rows == nil {
+			// Put this in a goroutine because .Query() will block until there is a row available to read
+			go func() {
+				var err error
+				c.logger.Debug(fmt.Sprintf("Running query '%s'", c.statement))
+				c.rows, err = c.pgPool.Query(cc, c.statement)
+				if err != nil {
+					c.logger.Error("Error querying")
+					errChan <- err
+				}
+				// Check if the context was cancelled
+				select {
+				case <-ctx.Done():
+					c.logger.Debug("Context was cancelled before query go a first row")
+					c.rows.Close() // Need to close here, c.rows is nil in Close()
+					c.logger.Debug("Closed rows")
+				default:
+					// We found a row and can keep going
+					readyChan <- struct{}{}
+				}
+			}()
+
+			c.logger.Debug("Waiting for first row to be available")
 			select {
+			case <-readyChan:
+				// We	got the first line, go read it
+				break
+			case <-errChan:
+				c.logger.Debug("Got error before reading rows, exiting")
+				cancelFunc()
+				return
 			case <-ctx.Done():
-				c.logger.Debug("Context was cancelled before query go a first row")
-				c.rows.Close() // Need to close here, c.rows is nil in Close()
-				c.logger.Debug("Closed rows")
-			default:
-				// We found a row and can keep going
-				readyChan <- struct{}{}
+				c.logger.Debug("Read context cancelled, ending")
+				cancelFunc()
+				return
+			}
+		}
+
+		// Put this in a goroutine because .Read() will block until there is a row available to read
+		go func() {
+			for c.rows == nil {
+				// If we are nil we want to wait for the above goroutine to give the row
+			}
+			c.logger.Debug("Checking for available rows")
+			if c.rows.Next() {
+				values, err := c.rows.Values()
+				if err != nil {
+					c.logger.Error("Error reading row values!")
+					errChan <- err
+				}
+				// Construct the new JSON
+				var jsonBytes []byte
+				jsonBytes, err = json.Marshal(map[string]string{
+					"table":       values[0].(string),
+					"primary_key": string(values[1].([]byte)), // Stringified JSON (Array)
+					"row":         string(values[2].([]byte)), // Stringified JSON (Object)
+				})
+				// TODO: Store the current time for the CURSOR offset to cache
+				if err != nil {
+					c.logger.Error("Failed to marshal JSON")
+					errChan <- err
+				}
+				msg := service.NewMessage(jsonBytes)
+				rowChan <- msg
 			}
 		}()
 
-		c.logger.Debug("Waiting for first row to be available")
-		select {
-		case <-readyChan:
-			// We	got the first line, go read it
-			break
-		case err := <-errChan:
-			return nil, nil, err
-		case <-ctx.Done():
-			c.logger.Debug("Read context cancelled, ending")
-			return nil, nil, service.ErrEndOfInput
-		}
-	}
-
-	// Put this in a goroutine because .Read() will block until there is a row available to read
-	go func() {
-		c.logger.Debug("Checking for available rows")
-		if c.rows.Next() {
-			values, err := c.rows.Values()
-			if err != nil {
-				c.logger.Error("Error reading row values!")
-				errChan <- err
-			}
-			// Construct the new JSON
-			var jsonBytes []byte
-			jsonBytes, err = json.Marshal(map[string]string{
-				"table":       values[0].(string),
-				"primary_key": string(values[1].([]byte)), // Stringified JSON (Array)
-				"row":         string(values[2].([]byte)), // Stringified JSON (Object)
-			})
-			// TODO: Store the current time for the CURSOR offset to cache
-			if err != nil {
-				c.logger.Error("Failed to marshal JSON")
-				errChan <- err
-			}
-			msg := service.NewMessage(jsonBytes)
-			rowChan <- msg
-		}
+		// Wait for the close signal
+		<-c.closeChan
+		c.logger.Debug("Got close signal from closeChan")
+		cancelFunc()
 	}()
 
 	select {
@@ -223,5 +240,10 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
 	c.logger.Debug("Got close signal")
+	close(c.closeChan)
+	if c.rows != nil {
+		c.rows.Close()
+	}
+	c.pgPool.Close()
 	return nil
 }
