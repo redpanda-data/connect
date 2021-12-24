@@ -47,6 +47,9 @@ func (t *tracedProcessor) ProcessMessage(m types.Message) ([]types.Message, type
 			return nil
 		})
 	}
+	if len(outMsgs) == 0 {
+		t.e.Add(EventDelete, "")
+	}
 
 	return outMsgs, res
 }

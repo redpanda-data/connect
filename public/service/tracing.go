@@ -16,10 +16,27 @@ type TracingEventType string
 //
 // Experimental: This type may change outside of major version releases.
 var (
+	// Note: must match up with ./internal/bundle/tracing/events.go
 	TracingEventProduce TracingEventType = "PRODUCE"
 	TracingEventConsume TracingEventType = "CONSUME"
+	TracingEventDelete  TracingEventType = "DELETE"
 	TracingEventError   TracingEventType = "ERROR"
+	TracingEventUnknown TracingEventType = "UNKNOWN"
 )
+
+func convertTracingEventType(t tracing.EventType) TracingEventType {
+	switch t {
+	case tracing.EventProduce:
+		return TracingEventProduce
+	case tracing.EventConsume:
+		return TracingEventConsume
+	case tracing.EventDelete:
+		return TracingEventDelete
+	case tracing.EventError:
+		return TracingEventError
+	}
+	return TracingEventUnknown
+}
 
 // TracingEvent represents a single event that occured within the stream.
 //
@@ -68,7 +85,7 @@ func (s *TracingSummary) InputEvents() map[string][]TracingEvent {
 		events := make([]TracingEvent, len(v))
 		for i, e := range v {
 			events[i] = TracingEvent{
-				Type:    TracingEventType(e.Type),
+				Type:    convertTracingEventType(e.Type),
 				Content: e.Content,
 			}
 		}
@@ -87,7 +104,7 @@ func (s *TracingSummary) ProcessorEvents() map[string][]TracingEvent {
 		events := make([]TracingEvent, len(v))
 		for i, e := range v {
 			events[i] = TracingEvent{
-				Type:    TracingEventType(e.Type),
+				Type:    convertTracingEventType(e.Type),
 				Content: e.Content,
 			}
 		}
@@ -106,7 +123,7 @@ func (s *TracingSummary) OutputEvents() map[string][]TracingEvent {
 		events := make([]TracingEvent, len(v))
 		for i, e := range v {
 			events[i] = TracingEvent{
-				Type:    TracingEventType(e.Type),
+				Type:    convertTracingEventType(e.Type),
 				Content: e.Content,
 			}
 		}

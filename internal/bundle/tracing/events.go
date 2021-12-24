@@ -10,6 +10,7 @@ type EventType string
 var (
 	EventProduce EventType = "PRODUCE"
 	EventConsume EventType = "CONSUME"
+	EventDelete  EventType = "DELETE"
 	EventError   EventType = "ERROR"
 )
 
