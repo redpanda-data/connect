@@ -28,6 +28,7 @@ var ReaderDocs = docs.FieldCommon(
 	"all-bytes", "Consume the entire file as a single binary message.",
 	"chunker:x", "Consume the file in chunks of a given number of bytes.",
 	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
+	"csv:x", "Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `csv:|` would consume a pipe delimited file.",
 	"delim:x", "Consume the file in segments divided by a custom delimiter.",
 	"gzip", "Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc.",
 	"lines", "Consume the file in segments divided by linebreaks.",
@@ -212,7 +213,7 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		}, true, nil
 	case "csv":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
-			return newCSVReader(r, fn)
+			return newCSVReader(r, fn, nil)
 		}, true, nil
 	case "tar":
 		return newTarReader, true, nil
@@ -224,6 +225,20 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		}
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newCustomDelimReader(conf, r, by, fn)
+		}, true, nil
+	}
+	if strings.HasPrefix(codec, "csv:") {
+		by := strings.TrimPrefix(codec, "csv:")
+		if by == "" {
+			return nil, false, errors.New("custom delimiter codec requires a non-empty delimiter")
+		}
+		byRunes := []rune(by)
+		if len(byRunes) != 1 {
+			return nil, false, errors.New("custom delimiter codec requires a single character delimiter")
+		}
+		byRune := byRunes[0]
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newCSVReader(r, fn, &byRune)
 		}, true, nil
 	}
 	if strings.HasPrefix(codec, "chunker:") {
@@ -401,9 +416,12 @@ type csvReader struct {
 	pending  int32
 }
 
-func newCSVReader(r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
+func newCSVReader(r io.ReadCloser, ackFn ReaderAckFn, customComma *rune) (Reader, error) {
 	scanner := csv.NewReader(r)
 	scanner.ReuseRecord = true
+	if customComma != nil {
+		scanner.Comma = *customComma
+	}
 
 	headers, err := scanner.Read()
 	if err != nil {

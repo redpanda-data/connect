@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Added new cli flag `--no-api` for the `streams` subcommand to disable the REST API.
 - New experimental `kafka_franz` input and output.
 - Added new Bloblang function `ksuid`.
+- All `codec` input fields now support custom csv delimiters.
 
 ### Fixed
 
