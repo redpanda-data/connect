@@ -65,7 +65,7 @@ Default: `""`
 
 ### `sync`
 
-Synchronous pull mode.
+Enable synchronous pull mode.
 
 
 Type: `bool`  
