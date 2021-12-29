@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -565,11 +566,11 @@ func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
 	if !exists {
 		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	i, ok := v.(int)
-	if !ok {
+	i, err := query.IGetInt(v)
+	if err != nil {
 		return 0, fmt.Errorf("expected field '%v' to be an int, got %T", p.fullDotPath(path...), v)
 	}
-	return i, nil
+	return int(i), nil
 }
 
 // FieldIntList accesses a field that is a list of integers from the parsed
@@ -592,9 +593,11 @@ func (p *ParsedConfig) FieldIntList(path ...string) ([]int, error) {
 	}
 	sList := make([]int, len(iList))
 	for i, ev := range iList {
-		if sList[i], ok = ev.(int); !ok {
+		iv, err := query.IToInt(ev)
+		if err != nil {
 			return nil, fmt.Errorf("expected field '%v' to be an integer list, found an element of type %T", p.fullDotPath(path...), ev)
 		}
+		sList[i] = int(iv)
 	}
 	return sList, nil
 }
@@ -619,9 +622,11 @@ func (p *ParsedConfig) FieldIntMap(path ...string) (map[string]int, error) {
 	}
 	sMap := make(map[string]int, len(iMap))
 	for k, ev := range iMap {
-		if sMap[k], ok = ev.(int); !ok {
+		iv, err := query.IToInt(ev)
+		if err != nil {
 			return nil, fmt.Errorf("expected field '%v' to be an integer map, found an element of type %T", p.fullDotPath(path...), ev)
 		}
+		sMap[k] = int(iv)
 	}
 	return sMap, nil
 }
@@ -637,8 +642,8 @@ func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
 	if !exists {
 		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	f, ok := v.(float64)
-	if !ok {
+	f, err := query.IGetNumber(v)
+	if err != nil {
 		return 0, fmt.Errorf("expected field '%v' to be a float, got %T", p.fullDotPath(path...), v)
 	}
 	return f, nil

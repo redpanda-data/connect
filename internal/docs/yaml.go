@@ -632,11 +632,10 @@ func (f FieldSpecs) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 
 	for name, remaining := range specNames {
 		_, isCore := remaining.Type.IsCoreComponent()
-		if !remaining.IsOptional &&
+		if remaining.needsDefault() &&
 			remaining.Default == nil &&
 			!isCore &&
 			remaining.Kind == KindScalar &&
-			!remaining.IsDeprecated &&
 			len(remaining.Children) == 0 {
 			lints = append(lints, NewLintError(node.Line, fmt.Sprintf("field %v is required", name)))
 		}
@@ -860,7 +859,7 @@ func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]i
 	for k, v := range pendingFieldsMap {
 		defValue, err := getDefault(k, v)
 		if err != nil {
-			if !v.IsOptional && !conf.Passive {
+			if v.needsDefault() && !conf.Passive {
 				return nil, err
 			}
 			continue

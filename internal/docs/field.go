@@ -546,6 +546,16 @@ func NewLintWarning(line int, msg string) Lint {
 
 //------------------------------------------------------------------------------
 
+func (f FieldSpec) needsDefault() bool {
+	if f.IsOptional {
+		return false
+	}
+	if f.IsDeprecated {
+		return false
+	}
+	return true
+}
+
 func getDefault(pathName string, field FieldSpec) (interface{}, error) {
 	if field.Default != nil {
 		// TODO: Should be deep copy here?
@@ -562,7 +572,7 @@ func getDefault(pathName string, field FieldSpec) (interface{}, error) {
 			defV, err := getDefault(pathName+"."+v.Name, v)
 			if err == nil {
 				m[v.Name] = defV
-			} else if !v.IsOptional {
+			} else if v.needsDefault() {
 				return nil, err
 			}
 		}
