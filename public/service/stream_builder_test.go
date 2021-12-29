@@ -1,8 +1,10 @@
 package service_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -717,4 +719,125 @@ output:
 	b = service.NewStreamBuilder()
 	b.DisableLinting()
 	require.NoError(t, b.SetYAML(lintingErrorConfig))
+}
+
+type disabledMux struct{}
+
+func (d disabledMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+}
+
+func BenchmarkStreamRun(b *testing.B) {
+	config := `
+input:
+  generate:
+    count: 5
+    interval: ""
+    mapping: |
+      root.id = uuid_v4()
+
+pipeline:
+  processors:
+    - bloblang: 'root = this'
+
+output:
+  drop: {}
+
+logger:
+  level: OFF
+`
+
+	strmBuilder := service.NewStreamBuilder()
+	strmBuilder.SetHTTPMux(disabledMux{})
+	require.NoError(b, strmBuilder.SetYAML(config))
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		strm, err := strmBuilder.Build()
+		require.NoError(b, err)
+
+		require.NoError(b, strm.Run(context.Background()))
+	}
+}
+
+func BenchmarkStreamRunOutputN1(b *testing.B) {
+	benchmarkStreamRunOutputNX(b, 1)
+}
+
+func BenchmarkStreamRunOutputN10(b *testing.B) {
+	benchmarkStreamRunOutputNX(b, 10)
+}
+
+func BenchmarkStreamRunOutputN100(b *testing.B) {
+	benchmarkStreamRunOutputNX(b, 100)
+}
+
+type noopOutput struct{}
+
+func (n *noopOutput) Connect(ctx context.Context) error {
+	return nil
+}
+
+func (n *noopOutput) Write(ctx context.Context, msg *service.Message) error {
+	return nil
+}
+
+func (n *noopOutput) WriteBatch(ctx context.Context, b service.MessageBatch) error {
+	return nil
+}
+
+func (n *noopOutput) Close(ctx context.Context) error {
+	return nil
+}
+
+func benchmarkStreamRunOutputNX(b *testing.B, size int) {
+	var outputsBuf bytes.Buffer
+	for i := 0; i < size; i++ {
+		outputsBuf.WriteString("      - custom: {}\n")
+	}
+
+	config := fmt.Sprintf(`
+input:
+  generate:
+    count: 5
+    interval: ""
+    mapping: |
+      root.id = uuid_v4()
+
+pipeline:
+  processors:
+    - bloblang: 'root = this'
+
+output:
+  broker:
+    outputs:
+%v
+
+logger:
+  level: OFF
+`, outputsBuf.String())
+
+	env := service.NewEnvironment()
+	require.NoError(b, env.RegisterOutput(
+		"custom",
+		service.NewConfigSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
+			return &noopOutput{}, 1, nil
+		},
+	))
+
+	strmBuilder := env.NewStreamBuilder()
+	strmBuilder.SetHTTPMux(disabledMux{})
+	require.NoError(b, strmBuilder.SetYAML(config))
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		strm, err := strmBuilder.Build()
+		require.NoError(b, err)
+
+		require.NoError(b, strm.Run(context.Background()))
+	}
 }

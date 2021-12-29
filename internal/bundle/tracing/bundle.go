@@ -18,6 +18,9 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 	for _, spec := range b.InputDocs() {
 		_ = tracedEnv.InputAdd(func(batchedInput bool, conf input.Config, nm bundle.NewManagement, pcf ...types.PipelineConstructorFunc) (input.Type, error) {
 			i, err := b.InputInit(batchedInput, conf, nm, pcf...)
+			if err != nil {
+				return nil, err
+			}
 			iEvents, ctr := summary.wInputEvents(nm.Label())
 			i = traceInput(iEvents, ctr, i)
 			return i, err
@@ -27,6 +30,9 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 	for _, spec := range b.ProcessorDocs() {
 		_ = tracedEnv.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
 			i, err := b.ProcessorInit(conf, nm)
+			if err != nil {
+				return nil, err
+			}
 			pEvents, errCtr := summary.wProcessorEvents(nm.Label())
 			i = traceProcessor(pEvents, errCtr, i)
 			return i, err
@@ -36,6 +42,9 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 	for _, spec := range b.OutputDocs() {
 		_ = tracedEnv.OutputAdd(func(conf output.Config, nm bundle.NewManagement, pcf ...types.PipelineConstructorFunc) (output.Type, error) {
 			i, err := b.OutputInit(conf, nm, pcf...)
+			if err != nil {
+				return nil, err
+			}
 			oEvents, ctr := summary.wOutputEvents(nm.Label())
 			i = traceOutput(oEvents, ctr, i)
 			return i, err
