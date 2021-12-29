@@ -119,5 +119,42 @@ pipeline:
         format: json_array
 ```
 
+## Creating CSV
+
+Benthos has a few different ways of outputting a stream of CSV data. However, the best way to do it is by converting the documents into CSV rows with Bloblang as this gives you full control over exactly how the schema is generated, erroneous data is handled, and escaping of column data is performed.
+
+A common and simple use case is to simply flatten documents and write out the column values in alphabetical order. The first row we generate should also be prefixed with a row containing those column names. Here's a mapping that achieves this by using a `count` function to detect the very first invocation of the mapping in a stream pipeline:
+
+```coffee
+map escape_csv {
+  root = if this.re_match("[\"\n,]+") {
+    "\"" + this.replace("\"", "\"\"") + "\""
+  } else {
+    this
+  }
+}
+
+# Extract key/value pairs as an array and sort by the key
+let kvs = this.key_values().sort_by(v -> v.key)
+
+# Create a header prefix for our output only on the first row
+let header = if count("rows_in_file") == 1 {
+  $kvs.map_each(kv -> kv.key.apply("escape_csv")).join(",") + "\n"
+} else { "" }
+
+root = $header + $kvs.map_each(kv -> kv.value.string().apply("escape_csv")).join(",")
+```
+
+And with this mapping we can write the data to a newly created CSV file using an output with a simple `lines` codec:
+
+```yaml
+output:
+  file:
+    path: ./result.csv
+    codec: lines
+```
+
+Perhaps the first expansion of this mapping that would be worthwhile is to add an explicit list of column names, or at least confirm that the number of values in a row matches an expected count.
+
 [processors.bloblang]: /docs/components/processors/bloblang
 [processors.unarchive]: /docs/components/processors/unarchive
