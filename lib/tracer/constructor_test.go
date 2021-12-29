@@ -42,9 +42,6 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 	if exp, act := tracer.TypeJaeger, conf[0].Type; exp != act {
 		t.Errorf("Wrong inferred type: %v != %v", act, exp)
 	}
-	if exp, act := "benthos", conf[0].Jaeger.ServiceName; exp != act {
-		t.Errorf("Wrong default operator: %v != %v", act, exp)
-	}
 	if exp, act := "foo", conf[0].Jaeger.AgentAddress; exp != act {
 		t.Errorf("Wrong value: %v != %v", act, exp)
 	}

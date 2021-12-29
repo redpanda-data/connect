@@ -192,6 +192,8 @@ Finally, `prometheus` is now the default metrics type.
 
 https://github.com/Jeffail/benthos/issues/872
 
+Distributed tracing within Benthos is now done via the Open Telemetry client library. Unfortunately, this client library does not support the full breadth of options as we had before. As such, the `jaeger` tracing type now only supports the `const` sampling type, and the field `service_name` has been removed.
+
 ## Logging Changes
 
 https://github.com/Jeffail/benthos/issues/589

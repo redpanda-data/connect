@@ -29,9 +29,8 @@ Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collec
 # Common config fields, showing default values
 tracer:
   jaeger:
-    agent_address: localhost:6831
+    agent_address: ""
     collector_url: ""
-    service_name: benthos
     sampler_type: const
     flush_interval: ""
 ```
@@ -43,11 +42,9 @@ tracer:
 # All config fields, showing default values
 tracer:
   jaeger:
-    agent_address: localhost:6831
+    agent_address: ""
     collector_url: ""
-    service_name: benthos
     sampler_type: const
-    sampler_manager_address: ""
     sampler_param: 1
     tags: {}
     flush_interval: ""
@@ -64,7 +61,7 @@ The address of a Jaeger agent to send tracing events to.
 
 
 Type: `string`  
-Default: `"localhost:6831"`  
+Default: `""`  
 
 ```yml
 # Examples
@@ -87,14 +84,6 @@ Requires version 3.38.0 or newer
 collector_url: https://jaeger-collector:14268/api/traces
 ```
 
-### `service_name`
-
-A name to provide for this service.
-
-
-Type: `string`  
-Default: `"benthos"`  
-
 ### `sampler_type`
 
 The sampler type to use.
@@ -106,18 +95,7 @@ Default: `"const"`
 | Option | Summary |
 |---|---|
 | `const` | A constant decision for all traces, either 1 or 0. |
-| `probabilistic` | The sampler makes a random sampling decision with the probability of sampling equal to the value of sampler param. |
-| `ratelimiting` | The sampler uses a leaky bucket rate limiter to ensure that traces are sampled with a certain constant rate. |
-| `remote` | The sampler consults Jaeger agent for the appropriate sampling strategy to use in the current service. |
 
-
-### `sampler_manager_address`
-
-An optional address of a sampler manager.
-
-
-Type: `string`  
-Default: `""`  
 
 ### `sampler_param`
 

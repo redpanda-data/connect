@@ -156,7 +156,7 @@ func (w *whileProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 	}
 
 	for _, s := range spans {
-		s.SetTag("result", condResult)
+		s.SetTag("result", strconv.FormatBool(condResult))
 	}
 
 	totalParts := 0

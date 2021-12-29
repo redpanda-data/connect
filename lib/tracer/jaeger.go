@@ -1,15 +1,20 @@
 package tracer
 
 import (
+	"context"
 	"fmt"
-	"io"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/opentracing/opentracing-go"
-	"github.com/uber/jaeger-client-go"
-	jaegercfg "github.com/uber/jaeger-client-go/config"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 )
 
 //------------------------------------------------------------------------------
@@ -23,14 +28,12 @@ Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collec
 			docs.FieldCommon("agent_address", "The address of a Jaeger agent to send tracing events to.", "jaeger-agent:6831"),
 			docs.FieldCommon("collector_url", "The URL of a Jaeger collector to send tracing events to. If set, this will override `agent_address`.",
 				"https://jaeger-collector:14268/api/traces").AtVersion("3.38.0"),
-			docs.FieldCommon("service_name", "A name to provide for this service."),
 			docs.FieldCommon("sampler_type", "The sampler type to use.").HasAnnotatedOptions(
 				"const", "A constant decision for all traces, either 1 or 0.",
-				"probabilistic", "The sampler makes a random sampling decision with the probability of sampling equal to the value of sampler param.",
-				"ratelimiting", "The sampler uses a leaky bucket rate limiter to ensure that traces are sampled with a certain constant rate.",
-				"remote", "The sampler consults Jaeger agent for the appropriate sampling strategy to use in the current service.",
+				// "probabilistic", "The sampler makes a random sampling decision with the probability of sampling equal to the value of sampler param.",
+				// "ratelimiting", "The sampler uses a leaky bucket rate limiter to ensure that traces are sampled with a certain constant rate.",
+				// "remote", "The sampler consults Jaeger agent for the appropriate sampling strategy to use in the current service.",
 			),
-			docs.FieldAdvanced("sampler_manager_address", "An optional address of a sampler manager."),
 			docs.FieldFloat("sampler_param", "A parameter to use for sampling. This field is unused for some sampling types.").Advanced(),
 			docs.FieldString("tags", "A map of tags to add to tracing spans.").Map().Advanced(),
 			docs.FieldCommon("flush_interval", "The period of time between each flush of tracing spans."),
@@ -42,26 +45,23 @@ Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collec
 
 // JaegerConfig is config for the Jaeger metrics type.
 type JaegerConfig struct {
-	AgentAddress          string            `json:"agent_address" yaml:"agent_address"`
-	CollectorURL          string            `json:"collector_url" yaml:"collector_url"`
-	ServiceName           string            `json:"service_name" yaml:"service_name"`
-	SamplerType           string            `json:"sampler_type" yaml:"sampler_type"`
-	SamplerManagerAddress string            `json:"sampler_manager_address" yaml:"sampler_manager_address"`
-	SamplerParam          float64           `json:"sampler_param" yaml:"sampler_param"`
-	Tags                  map[string]string `json:"tags" yaml:"tags"`
-	FlushInterval         string            `json:"flush_interval" yaml:"flush_interval"`
+	AgentAddress  string            `json:"agent_address" yaml:"agent_address"`
+	CollectorURL  string            `json:"collector_url" yaml:"collector_url"`
+	SamplerType   string            `json:"sampler_type" yaml:"sampler_type"`
+	SamplerParam  float64           `json:"sampler_param" yaml:"sampler_param"`
+	Tags          map[string]string `json:"tags" yaml:"tags"`
+	FlushInterval string            `json:"flush_interval" yaml:"flush_interval"`
 }
 
 // NewJaegerConfig creates an JaegerConfig struct with default values.
 func NewJaegerConfig() JaegerConfig {
 	return JaegerConfig{
-		AgentAddress:          "localhost:6831",
-		ServiceName:           "benthos",
-		SamplerType:           "const",
-		SamplerManagerAddress: "",
-		SamplerParam:          1.0,
-		Tags:                  map[string]string{},
-		FlushInterval:         "",
+		AgentAddress:  "",
+		CollectorURL:  "",
+		SamplerType:   "const",
+		SamplerParam:  1.0,
+		Tags:          map[string]string{},
+		FlushInterval: "",
 	}
 }
 
@@ -69,7 +69,7 @@ func NewJaegerConfig() JaegerConfig {
 
 // Jaeger is a tracer with the capability to push spans to a Jaeger instance.
 type Jaeger struct {
-	closer io.Closer
+	prov *tracesdk.TracerProvider
 }
 
 // NewJaeger creates and returns a new Jaeger object.
@@ -80,69 +80,74 @@ func NewJaeger(config Config, opts ...func(Type)) (Type, error) {
 		opt(j)
 	}
 
-	var sampler *jaegercfg.SamplerConfig
+	var sampler tracesdk.Sampler
 	if sType := config.Jaeger.SamplerType; len(sType) > 0 {
-		sampler = &jaegercfg.SamplerConfig{
-			Param:             config.Jaeger.SamplerParam,
-			SamplingServerURL: config.Jaeger.SamplerManagerAddress,
-		}
+		// TODO: https://github.com/open-telemetry/opentelemetry-go-contrib/pull/936
 		switch strings.ToLower(sType) {
 		case "const":
-			sampler.Type = jaeger.SamplerTypeConst
+			sampler = tracesdk.TraceIDRatioBased(config.Jaeger.SamplerParam)
 		case "probabilistic":
-			sampler.Type = jaeger.SamplerTypeProbabilistic
+			return nil, fmt.Errorf("probabalistic sampling is no longer available")
 		case "ratelimiting":
-			sampler.Type = jaeger.SamplerTypeRateLimiting
+			return nil, fmt.Errorf("rate limited sampling is no longer available")
 		case "remote":
-			sampler.Type = jaeger.SamplerTypeRemote
+			return nil, fmt.Errorf("remote sampling is no longer available")
 		default:
 			return nil, fmt.Errorf("unrecognised sampler type: %v", sType)
 		}
 	}
 
-	cfg := jaegercfg.Configuration{
-		ServiceName: config.Jaeger.ServiceName,
-		Sampler:     sampler,
-	}
-
-	if tags := config.Jaeger.Tags; len(tags) > 0 {
-		var jTags []opentracing.Tag
-		for k, v := range config.Jaeger.Tags {
-			jTags = append(jTags, opentracing.Tag{
-				Key:   k,
-				Value: v,
-			})
+	// Create the Jaeger exporter
+	var epOpt jaeger.EndpointOption
+	if config.Jaeger.CollectorURL != "" {
+		epOpt = jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.Jaeger.CollectorURL))
+	} else {
+		agentURL, err := url.Parse(config.Jaeger.AgentAddress)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse jaeger agent address: %w", err)
 		}
-		cfg.Tags = jTags
+		agentOpts := []jaeger.AgentEndpointOption{
+			jaeger.WithAgentHost(agentURL.Host),
+		}
+		if p := agentURL.Port(); p != "" {
+			agentOpts = append(agentOpts, jaeger.WithAgentPort(agentURL.Port()))
+		}
+		epOpt = jaeger.WithAgentEndpoint(agentOpts...)
 	}
 
-	reporterConf := &jaegercfg.ReporterConfig{}
+	exp, err := jaeger.New(epOpt)
+	if err != nil {
+		return nil, err
+	}
 
+	var attrs []attribute.KeyValue
+	if tags := config.Jaeger.Tags; len(tags) > 0 {
+		for k, v := range config.Jaeger.Tags {
+			attrs = append(attrs, attribute.String(k, v))
+		}
+	}
+
+	var batchOpts []tracesdk.BatchSpanProcessorOption
 	if i := config.Jaeger.FlushInterval; len(i) > 0 {
 		flushInterval, err := time.ParseDuration(i)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse flush interval '%s': %v", i, err)
 		}
-		reporterConf.BufferFlushInterval = flushInterval
-		cfg.Reporter = reporterConf
+		batchOpts = append(batchOpts, tracesdk.WithBatchTimeout(flushInterval))
 	}
 
-	if i := config.Jaeger.AgentAddress; len(i) > 0 {
-		reporterConf.LocalAgentHostPort = i
-		cfg.Reporter = reporterConf
-	}
+	tp := tracesdk.NewTracerProvider(
+		tracesdk.WithBatcher(exp, batchOpts...),
+		tracesdk.WithResource(resource.NewWithAttributes(semconv.SchemaURL, attrs...)),
+		tracesdk.WithSampler(sampler),
+	)
 
-	if i := config.Jaeger.CollectorURL; len(i) > 0 {
-		reporterConf.CollectorEndpoint = i
-	}
+	otel.SetTracerProvider(tp)
 
-	tracer, closer, err := cfg.NewTracer()
-	if err != nil {
-		return nil, err
-	}
-	opentracing.SetGlobalTracer(tracer)
-	j.closer = closer
+	// TODO: I'm so confused, these APIs are a nightmare.
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 
+	j.prov = tp
 	return j, nil
 }
 
@@ -150,11 +155,9 @@ func NewJaeger(config Config, opts ...func(Type)) (Type, error) {
 
 // Close stops the tracer.
 func (j *Jaeger) Close() error {
-	if j.closer != nil {
-		j.closer.Close()
-		j.closer = nil
+	if j.prov != nil {
+		_ = j.prov.Shutdown(context.Background())
+		j.prov = nil
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

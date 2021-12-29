@@ -1,14 +1,23 @@
 package tracing
 
 import (
+	"context"
+
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // GetSpan returns a span attached to a message part. Returns nil if the part
 // doesn't have a span attached.
 func GetSpan(p *message.Part) *Span {
-	return openTracingSpan(opentracing.SpanFromContext(message.GetContext(p)))
+	ctx := message.GetContext(p)
+	t := trace.SpanFromContext(ctx)
+	if !t.IsRecording() {
+		return nil
+	}
+	return otelSpan(ctx, t)
 }
 
 // CreateChildSpan takes a message part, extracts an existing span if there is
@@ -16,12 +25,11 @@ func GetSpan(p *message.Part) *Span {
 func CreateChildSpan(operationName string, part *message.Part) *Span {
 	span := GetSpan(part)
 	if span == nil {
-		span = openTracingSpan(opentracing.StartSpan(operationName))
+		ctx, t := otel.GetTracerProvider().Tracer("benthos").Start(context.Background(), operationName)
+		span = otelSpan(ctx, t)
 	} else {
-		span = openTracingSpan(opentracing.StartSpan(
-			operationName,
-			opentracing.ChildOf(span.unwrap().Context()),
-		))
+		ctx, t := otel.GetTracerProvider().Tracer("benthos").Start(span.ctx, operationName)
+		span = otelSpan(ctx, t)
 	}
 	return span
 }
@@ -48,21 +56,9 @@ func PartsWithChildSpans(operationName string, parts []*message.Part) ([]*messag
 		if part == nil {
 			continue
 		}
-
-		ctx := message.GetContext(part)
-		otSpan := opentracing.SpanFromContext(ctx)
-		if otSpan == nil {
-			otSpan = opentracing.StartSpan(operationName)
-		} else {
-			otSpan = opentracing.StartSpan(
-				operationName,
-				opentracing.ChildOf(otSpan.Context()),
-			)
-		}
-		ctx = opentracing.ContextWithSpan(ctx, otSpan)
-
-		newParts[i] = message.WithContext(ctx, part)
-		spans = append(spans, openTracingSpan(otSpan))
+		otSpan := CreateChildSpan(operationName, part)
+		newParts[i] = message.WithContext(otSpan.ctx, part)
+		spans = append(spans, otSpan)
 	}
 	return newParts, spans
 }
@@ -90,18 +86,18 @@ func WithChildSpans(operationName string, msg *message.Batch) (*message.Batch, [
 func WithSiblingSpans(operationName string, msg *message.Batch) *message.Batch {
 	parts := make([]*message.Part, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
-		ctx := message.GetContext(part)
-		otSpan := opentracing.SpanFromContext(ctx)
+		otSpan := GetSpan(part)
 		if otSpan == nil {
-			otSpan = opentracing.StartSpan(operationName)
+			ctx, t := otel.GetTracerProvider().Tracer("benthos").Start(context.Background(), operationName)
+			otSpan = otelSpan(ctx, t)
 		} else {
-			otSpan = opentracing.StartSpan(
-				operationName,
-				opentracing.FollowsFrom(otSpan.Context()),
+			ctx, t := otel.GetTracerProvider().Tracer("benthos").Start(
+				context.Background(), operationName,
+				trace.WithLinks(trace.LinkFromContext(otSpan.ctx)),
 			)
+			otSpan = otelSpan(ctx, t)
 		}
-		ctx = opentracing.ContextWithSpan(ctx, otSpan)
-		parts[i] = message.WithContext(ctx, part)
+		parts[i] = message.WithContext(otSpan.ctx, part)
 		return nil
 	})
 
@@ -117,8 +113,8 @@ func WithSiblingSpans(operationName string, msg *message.Batch) *message.Batch {
 // func with that span before finishing the child span.
 func IterateWithChildSpans(operationName string, msg *message.Batch, iter func(int, *Span, *message.Part) error) error {
 	return msg.Iter(func(i int, p *message.Part) error {
-		otSpan, _ := opentracing.StartSpanFromContext(message.GetContext(p), operationName)
-		err := iter(i, openTracingSpan(otSpan), p)
+		otSpan := CreateChildSpan(operationName, p)
+		err := iter(i, otSpan, p)
 		otSpan.Finish()
 		return err
 	})
@@ -141,8 +137,7 @@ func InitSpan(operationName string, part *message.Part) *message.Part {
 	if GetSpan(part) != nil {
 		return part
 	}
-	otSpan := opentracing.StartSpan(operationName)
-	ctx := opentracing.ContextWithSpan(message.GetContext(part), otSpan)
+	ctx, _ := otel.GetTracerProvider().Tracer("benthos").Start(context.Background(), operationName)
 	return message.WithContext(ctx, part)
 }
 
@@ -163,34 +158,26 @@ func InitSpanFromParent(operationName string, parent *Span, part *message.Part) 
 	if GetSpan(part) != nil {
 		return part
 	}
-	span := opentracing.StartSpan(operationName, opentracing.ChildOf(parent.unwrap().Context()))
-	ctx := opentracing.ContextWithSpan(message.GetContext(part), span)
+	ctx, _ := otel.GetTracerProvider().Tracer("benthos").Start(parent.ctx, operationName)
 	return message.WithContext(ctx, part)
 }
 
 // InitSpansFromParentTextMap obtains a span parent reference from a text map
 // and creates child spans for each message.
 func InitSpansFromParentTextMap(operationName string, textMapGeneric map[string]interface{}, msg *message.Batch) error {
-	textMap := make(opentracing.TextMapCarrier, len(textMapGeneric))
+	c := propagation.MapCarrier{}
 	for k, v := range textMapGeneric {
 		if vStr, ok := v.(string); ok {
-			textMap[k] = vStr
+			c[k] = vStr
 		}
 	}
 
-	parentCtx, err := opentracing.GlobalTracer().Extract(opentracing.TextMap, textMap)
-	if err != nil {
-		return err
-	}
+	ctx := otel.GetTextMapPropagator().Extract(context.Background(), c)
 
 	tracedParts := make([]*message.Part, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		otSpan := opentracing.StartSpan(
-			operationName,
-			opentracing.ChildOf(parentCtx),
-		)
-		ctx := opentracing.ContextWithSpan(message.GetContext(p), otSpan)
-		tracedParts[i] = message.WithContext(ctx, p)
+		pCtx, _ := otel.GetTracerProvider().Tracer("benthos").Start(ctx, operationName)
+		tracedParts[i] = message.WithContext(pCtx, p)
 		return nil
 	})
 
@@ -205,7 +192,7 @@ func FinishSpans(msg *message.Batch) {
 		if span == nil {
 			return nil
 		}
-		span.unwrap().Finish()
+		span.unwrap().End()
 		return nil
 	})
 }

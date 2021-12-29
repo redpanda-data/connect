@@ -184,7 +184,7 @@ func IteratePartsWithSpanV2(
 
 		if err := iter(i, span, part); err != nil {
 			FlagErr(part, err)
-			span.SetTag("error", true)
+			span.SetTag("error", "true")
 			span.LogKV(
 				"event", "error",
 				"type", err.Error(),
