@@ -42,7 +42,7 @@ func NewSummary() *Summary {
 func (s *Summary) InputEvents() map[string][]NodeEvent {
 	m := map[string][]NodeEvent{}
 	s.inputEvents.Range(func(key, value interface{}) bool {
-		m[key.(string)] = value.(*events).m
+		m[key.(string)] = value.(*events).Extract()
 		return true
 	})
 	return m
@@ -53,7 +53,7 @@ func (s *Summary) InputEvents() map[string][]NodeEvent {
 func (s *Summary) ProcessorEvents() map[string][]NodeEvent {
 	m := map[string][]NodeEvent{}
 	s.processorEvents.Range(func(key, value interface{}) bool {
-		m[key.(string)] = value.(*events).m
+		m[key.(string)] = value.(*events).Extract()
 		return true
 	})
 	return m
@@ -64,7 +64,7 @@ func (s *Summary) ProcessorEvents() map[string][]NodeEvent {
 func (s *Summary) OutputEvents() map[string][]NodeEvent {
 	m := map[string][]NodeEvent{}
 	s.outputEvents.Range(func(key, value interface{}) bool {
-		m[key.(string)] = value.(*events).m
+		m[key.(string)] = value.(*events).Extract()
 		return true
 	})
 	return m
@@ -100,4 +100,16 @@ func (e *events) Add(t EventType, content string) {
 		Type:    t,
 		Content: content,
 	})
+}
+
+func (e *events) Extract() []NodeEvent {
+	e.mut.Lock()
+	defer e.mut.Unlock()
+
+	eventsCopy := make([]NodeEvent, len(e.m))
+	for i, e := range e.m {
+		eventsCopy[i] = e
+	}
+
+	return eventsCopy
 }
