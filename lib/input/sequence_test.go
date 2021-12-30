@@ -454,3 +454,41 @@ func TestSequenceSad(t *testing.T) {
 	rdr.CloseAsync()
 	assert.NoError(t, rdr.WaitForClose(time.Second))
 }
+
+func TestSequenceEarlyTermination(t *testing.T) {
+	t.Parallel()
+
+	tmpDir, err := os.MkdirTemp("", "benthos_sequence_early_termination")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
+	writeFiles(t, tmpDir, map[string]string{
+		"f1": "foo\nbar\nbaz",
+	})
+
+	conf := NewConfig()
+	conf.Type = TypeSequence
+
+	inConf := NewConfig()
+	inConf.Type = TypeFile
+	inConf.File.Path = filepath.Join(tmpDir, "f1")
+	conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
+
+	rdr, err := New(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	select {
+	case tran, open := <-rdr.TransactionChan():
+		if !open {
+			t.Fatal("closed earlier than expected")
+		}
+		assert.Equal(t, 1, tran.Payload.Len())
+		assert.Equal(t, "foo", string(tran.Payload.Get(0).Get()))
+	case <-time.After(time.Minute):
+		t.Fatal("timed out")
+	}
+
+	rdr.CloseAsync()
+	assert.NoError(t, rdr.WaitForClose(time.Millisecond*100))
+}

@@ -51,6 +51,15 @@ func NewBatcher(
 
 func (m *Batcher) loop() {
 	defer func() {
+		go func() {
+			select {
+			case <-m.shutSig.CloseNowChan():
+				_ = m.child.WaitForClose(0)
+				_ = m.batcher.WaitForClose(0)
+			case <-m.shutSig.HasClosedChan():
+			}
+		}()
+
 		m.child.CloseAsync()
 		_ = m.child.WaitForClose(shutdown.MaximumShutdownWait())
 

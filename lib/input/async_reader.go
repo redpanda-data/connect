@@ -81,6 +81,13 @@ func (r *AsyncReader) loop() {
 
 	defer func() {
 		r.reader.CloseAsync()
+		go func() {
+			select {
+			case <-r.shutSig.CloseNowChan():
+				_ = r.reader.WaitForClose(0)
+			case <-r.shutSig.HasClosedChan():
+			}
+		}()
 		_ = r.reader.WaitForClose(shutdown.MaximumShutdownWait())
 
 		mRunning.Decr(1)
