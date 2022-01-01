@@ -457,27 +457,40 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 
 	for _, tt := range []struct {
 		name        string
+		message     string
 		marshalMode client.JSONMarshalMode
 		expected    string
+		expectedErr error
 	}{
 		{
 			name:        "canonical marshal mode",
 			marshalMode: client.JSONMarshalModeCanonical,
+			message:     `{"a":"foo","x":"ignore_me_via_filter_map"}`,
 			expected:    `{"a":"foo","b":"bar","c":"baz","answer_to_everything":{"$numberInt":"42"}}`,
 		},
 		{
 			name:        "relaxed marshal mode",
 			marshalMode: client.JSONMarshalModeRelaxed,
+			message:     `{"a":"foo","x":"ignore_me_via_filter_map"}`,
 			expected:    `{"a":"foo","b":"bar","c":"baz","answer_to_everything":42}`,
+		},
+		{
+			name:        "no documents found",
+			message:     `{"a":"notfound"}`,
+			expectedErr: mongo.ErrNoDocuments,
 		},
 	} {
 		conf.MongoDB.JSONMarshalMode = tt.marshalMode
 
 		m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
 		require.NoError(t, err)
-		resMsgs, response := m.ProcessMessage(message.New([][]byte{[]byte(`{"a":"foo","x":"ignore_me_via_filter_map"}`)}))
+		resMsgs, response := m.ProcessMessage(message.New([][]byte{[]byte(tt.message)}))
 		require.Nil(t, response)
 		require.Len(t, resMsgs, 1)
+		if tt.expectedErr != nil {
+			require.Equal(t, mongo.ErrNoDocuments.Error(), resMsgs[0].Get(0).Metadata().Get(types.FailFlagKey))
+			continue
+		}
 
 		jdopts := jsondiff.DefaultJSONOptions()
 		diff, explanation := jsondiff.Compare(resMsgs[0].Get(0).Get(), []byte(tt.expected), &jdopts)

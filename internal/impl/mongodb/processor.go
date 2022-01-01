@@ -324,7 +324,10 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			var decoded interface{}
 			err := m.collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded)
 			if err != nil {
-				m.log.Errorf("Error decoding mongo db result, filter = %v", filterJSON)
+				if err == mongo.ErrNoDocuments {
+					return err
+				}
+				m.log.Errorf("Error decoding mongo db result, filter = %v: %s", filterJSON, err)
 				return err
 			}
 			data, err := bson.MarshalExtJSON(decoded, m.conf.JSONMarshalMode == client.JSONMarshalModeCanonical, false)
