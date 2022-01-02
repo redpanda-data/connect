@@ -156,7 +156,7 @@ Type: `object`
 
 ### `metadata.include_prefixes`
 
-Provide a list of explicit metadata key prefixes to be included when adding metadata to sent messages.
+Provide a list of explicit metadata key prefixes to match against.
 
 
 Type: `array`  
@@ -170,11 +170,14 @@ include_prefixes:
 
 include_prefixes:
   - kafka_
+
+include_prefixes:
+  - content-
 ```
 
 ### `metadata.include_patterns`
 
-Provide a list of explicit metadata key regexp patterns to be included when adding metadata to sent messages.
+Provide a list of explicit metadata key regular expression (re2) patterns to match against.
 
 
 Type: `array`  
