@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/google/go-cmp/cmp"
 )
 
 func matchCaseParser(pCtx Context) Func {
@@ -49,7 +50,7 @@ func matchCaseParser(pCtx Context) Func {
 					if v == nil {
 						return false, nil
 					}
-					return *v == lit.Value, nil
+					return cmp.Equal(*v, lit.Value), nil
 				}, nil)
 			} else {
 				caseFn = t

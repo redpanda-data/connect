@@ -241,6 +241,15 @@ func TestExpressionsParser(t *testing.T) {
 				{content: `{"type":"none of them"}`},
 			},
 		},
+		"match array values": {
+			input: `match [ "foo" ] {
+  [ "foo" ] => "first",
+  "bar" => "second",
+  _ => "third",
+}`,
+			output:   `first`,
+			messages: []easyMsg{},
+		},
 	}
 
 	for name, test := range tests {
