@@ -331,32 +331,6 @@ c:
 	assert.Equal(t, 23.1, f)
 }
 
-func TestConfigBatching(t *testing.T) {
-	spec := NewConfigSpec().
-		Field(NewBatchPolicyField("a"))
-
-	parsedConfig, err := spec.ParseYAML(`
-a:
-  count: 20
-  period: 5s
-  processors:
-    - bloblang: 'root = content().uppercase()'
-`, nil)
-	require.NoError(t, err)
-
-	_, err = parsedConfig.FieldTLS("b")
-	require.Error(t, err)
-
-	bConf, err := parsedConfig.FieldBatchPolicy("a")
-	require.NoError(t, err)
-
-	assert.Equal(t, 20, bConf.Count)
-	assert.Equal(t, "5s", bConf.Period)
-	require.Len(t, bConf.procs, 1)
-	assert.Equal(t, "bloblang", bConf.procs[0].Type)
-	assert.Equal(t, "root = content().uppercase()", string(bConf.procs[0].Bloblang))
-}
-
 func TestConfigRootString(t *testing.T) {
 	spec := NewConfigSpec().
 		Field(NewStringField(""))
@@ -494,29 +468,4 @@ b: this is ${! json } an invalid interp string
 
 	res := iConf.String(NewMessage([]byte("hello world")))
 	assert.Equal(t, "foo hello world bar", res)
-}
-
-func TestConfigBloblang(t *testing.T) {
-	spec := NewConfigSpec().
-		Field(NewBloblangField("a")).
-		Field(NewStringField("b"))
-
-	parsedConfig, err := spec.ParseYAML(`
-a: 'root = this.uppercase()'
-b: 'root = this.filter('
-`, nil)
-	require.NoError(t, err)
-
-	_, err = parsedConfig.FieldBloblang("b")
-	require.Error(t, err)
-
-	_, err = parsedConfig.FieldBloblang("c")
-	require.Error(t, err)
-
-	exec, err := parsedConfig.FieldBloblang("a")
-	require.NoError(t, err)
-
-	res, err := exec.Query("hello world")
-	require.NoError(t, err)
-	assert.Equal(t, "HELLO WORLD", res)
 }

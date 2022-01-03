@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -22,7 +24,7 @@ type Processor interface {
 	//
 	// The Message types returned MUST be derived from the provided message, and
 	// CANNOT be custom implementations of Message. In order to copy the
-	// provided message use CopyMessage.
+	// provided message use the Copy method.
 	Process(context.Context, *Message) (MessageBatch, error)
 
 	Closer
@@ -54,7 +56,7 @@ type BatchProcessor interface {
 	//
 	// The Message types returned MUST be derived from the provided messages,
 	// and CANNOT be custom implementations of Message. In order to copy the
-	// provided messages use CopyMessage.
+	// provided messages use the Copy method.
 	ProcessBatch(context.Context, MessageBatch) ([]MessageBatch, error)
 
 	Closer
@@ -123,4 +125,83 @@ func (a *airGapBatchProcessor) ProcessBatch(ctx context.Context, msgs []types.Pa
 
 func (a *airGapBatchProcessor) Close(ctx context.Context) error {
 	return a.p.Close(context.Background())
+}
+
+//------------------------------------------------------------------------------
+
+// OwnedProcessor provides direct ownership of a processor extracted from a
+// plugin config.
+type OwnedProcessor struct {
+	p types.Processor
+}
+
+// Process a single message, returns either a batch of zero or more resulting
+// messages or an error if the message could not be processed.
+func (o *OwnedProcessor) Process(ctx context.Context, msg *Message) (MessageBatch, error) {
+	outMsg := message.New(nil)
+
+	// TODO: After V4 we can modify the internal message type to remove this
+	// requirement.
+	msg.ensureCopied()
+	outMsg.Append(msg.part)
+
+	iMsgs, res := o.p.ProcessMessage(outMsg)
+	if res != nil && res.Error() != nil {
+		return nil, res.Error()
+	}
+
+	var b MessageBatch
+	for _, iMsg := range iMsgs {
+		_ = iMsg.Iter(func(i int, part types.Part) error {
+			b = append(b, newMessageFromPart(part))
+			return nil
+		})
+	}
+	return b, nil
+}
+
+// ProcessBatch attempts to process a batch of messages, returns zero or more
+// batches of resulting messages or an error if the messages could not be
+// processed.
+func (o *OwnedProcessor) ProcessBatch(ctx context.Context, batch MessageBatch) ([]MessageBatch, error) {
+	outMsg := message.New(nil)
+
+	for _, msg := range batch {
+		// TODO: After V4 we can modify the internal message type to remove this
+		// requirement.
+		msg.ensureCopied()
+		outMsg.Append(msg.part)
+	}
+
+	iMsgs, res := o.p.ProcessMessage(outMsg)
+	if res != nil && res.Error() != nil {
+		return nil, res.Error()
+	}
+
+	var batches []MessageBatch
+	for _, iMsg := range iMsgs {
+		var b MessageBatch
+		_ = iMsg.Iter(func(i int, part types.Part) error {
+			b = append(b, newMessageFromPart(part))
+			return nil
+		})
+		batches = append(batches, b)
+	}
+	return batches, nil
+}
+
+// Close the processor, allowing it to clean up resources. It is
+func (o *OwnedProcessor) Close(ctx context.Context) error {
+	o.p.CloseAsync()
+	for {
+		// Gross but will do for now until we replace these with context params.
+		if err := o.p.WaitForClose(time.Millisecond * 100); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+	}
 }

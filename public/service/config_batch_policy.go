@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -73,11 +75,25 @@ func (p *ParsedConfig) FieldBatchPolicy(path ...string) (conf BatchPolicy, err e
 		return
 	}
 
-	var node yaml.Node
-	if err = node.Encode(procsNode); err != nil {
+	procsArray, ok := procsNode.([]interface{})
+	if !ok {
+		err = fmt.Errorf("field 'processors' returned unexpected value, expected array, got %T", procsNode)
 		return
 	}
 
-	err = node.Decode(&conf.procs)
+	for i, iConf := range procsArray {
+		node, ok := iConf.(*yaml.Node)
+		if !ok {
+			err = fmt.Errorf("field 'processors.%v' returned unexpected value, expected object, got %T", i, iConf)
+			return
+		}
+
+		var pconf processor.Config
+		if err = node.Decode(&pconf); err != nil {
+			err = fmt.Errorf("field 'processors.%v': %w", i, err)
+			return
+		}
+		conf.procs = append(conf.procs, pconf)
+	}
 	return
 }
