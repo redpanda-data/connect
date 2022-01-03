@@ -108,6 +108,7 @@ output:
       period: ""
       check: ""
       processors: []
+    multipart: []
 ```
 
 </TabItem>
@@ -713,5 +714,35 @@ processors:
 processors:
   - merge_json: {}
 ```
+
+### `multipart`
+
+A array of parts to add to the request.
+
+
+Type: `array`  
+Default: `[]`  
+
+### `multipart[].contentType`
+
+content type of a single part of the request.
+
+
+Type: `string`  
+
+### `multipart[].contentDisposition`
+
+content disposition of a single part of the request.
+
+
+Type: `string`  
+Default: `""`  
+
+### `multipart[].data`
+
+data of a single part of the request.
+
+
+Type: `string`  
 
 

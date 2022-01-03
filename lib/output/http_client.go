@@ -41,6 +41,13 @@ these propagated responses.`,
 			docs.FieldAdvanced("propagate_response", "Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
+			docs.FieldAdvanced(
+				"multipart", "A array of parts to add to the request.",
+			).Array().HasType(docs.FieldTypeObject).HasDefault([]client.Part{}).WithChildren(
+				docs.FieldString("contentType", "content type of a single part of the request."),
+				docs.FieldString("contentDisposition", "content disposition of a single part of the request.").HasDefault(""),
+				docs.FieldString("data", "data of a single part of the request."),
+			),
 		),
 		Categories: []Category{
 			CategoryNetwork,

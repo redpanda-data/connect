@@ -28,6 +28,12 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
+type part struct {
+	contentDisposition *field.Expression
+	contentType        *field.Expression
+	data               *field.Expression
+}
+
 // Client is a component able to send and receive Benthos messages over HTTP.
 type Client struct {
 	client *http.Client
@@ -38,6 +44,7 @@ type Client struct {
 
 	url        *field.Expression
 	headers    map[string]*field.Expression
+	multipart  []part
 	host       *field.Expression
 	metaFilter *metadata.Filter
 
@@ -143,7 +150,6 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 	if h.url, err = interop.NewBloblangField(h.mgr, conf.URL); err != nil {
 		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
 	}
-
 	for k, v := range conf.Headers {
 		if strings.EqualFold(k, "host") {
 			if h.host, err = interop.NewBloblangField(h.mgr, v); err != nil {
@@ -207,6 +213,25 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 func OptSetLogger(log log.Modular) func(*Client) {
 	return func(t *Client) {
 		t.log = log
+	}
+}
+
+// OptSetMultiPart sets the multipart to request.
+func OptSetMultiPart(multipart []client.Part) func(*Client) {
+	return func(t *Client) {
+		if len(multipart) > 0 {
+			for _, v := range multipart {
+				data, _ := interop.NewBloblangField(t.mgr, v.Data)
+				contentDisposition, _ := interop.NewBloblangField(t.mgr, v.ContentDisposition)
+				contentType, _ := interop.NewBloblangField(t.mgr, v.ContentType)
+				c := part{
+					contentDisposition: contentDisposition,
+					contentType:        contentType,
+					data:               data,
+				}
+				t.multipart = append(t.multipart, c)
+			}
+		}
 	}
 }
 
@@ -290,8 +315,25 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request, err error) {
 	var overrideContentType string
 	var body io.Reader
-
-	if sendMsg != nil && sendMsg.Len() == 1 {
+	if len(h.multipart) > 0 {
+		buf := &bytes.Buffer{}
+		writer := multipart.NewWriter(buf)
+		for _, v := range h.multipart {
+			var part io.Writer
+			mh := make(textproto.MIMEHeader)
+			mh.Set("Content-Type", v.contentType.String(0, refMsg))
+			mh.Set("Content-Disposition", v.contentDisposition.String(0, refMsg))
+			if part, err = writer.CreatePart(mh); err != nil {
+				return
+			}
+			if _, err = io.Copy(part, bytes.NewReader([]byte(v.data.String(0, refMsg)))); err != nil {
+				return
+			}
+		}
+		writer.Close()
+		overrideContentType = writer.FormDataContentType()
+		body = buf
+	} else if sendMsg != nil && sendMsg.Len() == 1 {
 		if msgBytes := sendMsg.Get(0).Get(); len(msgBytes) > 0 {
 			body = bytes.NewBuffer(msgBytes)
 		}

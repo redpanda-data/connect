@@ -52,6 +52,13 @@ type Config struct {
 	OAuth2              auth.OAuth2Config `json:"oauth2" yaml:"oauth2"`
 }
 
+// Part is a configuration struct for an HTTP client for multipart request.
+type Part struct {
+	ContentDisposition string `json:"contentDisposition" yaml:"contentDisposition"`
+	ContentType        string `json:"contentType" yaml:"contentType"`
+	Data               string `json:"data" yaml:"data"`
+}
+
 // NewConfig creates a new Config with default values.
 func NewConfig() Config {
 	return Config{

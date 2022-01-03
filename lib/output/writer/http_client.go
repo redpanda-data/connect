@@ -23,6 +23,7 @@ type HTTPClientConfig struct {
 	MaxInFlight       int                `json:"max_in_flight" yaml:"max_in_flight"`
 	PropagateResponse bool               `json:"propagate_response" yaml:"propagate_response"`
 	Batching          batch.PolicyConfig `json:"batching" yaml:"batching"`
+	Multipart         []client.Part      `json:"multipart" yaml:"multipart"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
@@ -68,6 +69,7 @@ func NewHTTPClient(
 		conf.Config,
 		http.OptSetLogger(h.log),
 		http.OptSetManager(mgr),
+		http.OptSetMultiPart(conf.Multipart),
 		// TODO: V4 Remove this
 		http.OptSetStats(metrics.Namespaced(h.stats, "client")),
 	); err != nil {
