@@ -218,6 +218,7 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 		kgo.SASL(f.saslConfs...),
 		kgo.AllowAutoTopicCreation(), // TODO: Configure this
 		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
+		kgo.WithLogger(&kgoLogger{f.log}),
 	}
 	if f.tlsConf != nil {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))

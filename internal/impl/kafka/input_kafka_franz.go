@@ -289,6 +289,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			checkpoints.removeTopicPartitions(m)
 		}),
 		kgo.AutoCommitMarks(),
+		kgo.WithLogger(&kgoLogger{f.log}),
 	}
 	if f.tlsConf != nil {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
