@@ -54,8 +54,8 @@ type Config struct {
 
 // Part is a configuration struct for an HTTP client for multipart request.
 type Part struct {
-	ContentDisposition string `json:"contentDisposition" yaml:"contentDisposition"`
-	ContentType        string `json:"contentType" yaml:"contentType"`
+	ContentDisposition string `json:"content_disposition" yaml:"content_disposition"`
+	ContentType        string `json:"content_type" yaml:"content_type"`
 	Data               string `json:"data" yaml:"data"`
 }
 

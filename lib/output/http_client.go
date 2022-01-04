@@ -44,9 +44,9 @@ these propagated responses.`,
 			docs.FieldAdvanced(
 				"multipart", "A array of parts to add to the request.",
 			).Array().HasType(docs.FieldTypeObject).HasDefault([]client.Part{}).WithChildren(
-				docs.FieldString("contentType", "content type of a single part of the request."),
-				docs.FieldString("contentDisposition", "content disposition of a single part of the request.").HasDefault(""),
-				docs.FieldString("data", "data of a single part of the request."),
+				docs.FieldString("content_type", "content type of a single part of the request.").HasDefault(""),
+				docs.FieldString("content_disposition", "content disposition of a single part of the request.").HasDefault(""),
+				docs.FieldString("data", "data of a single part of the request.").HasDefault(""),
 			),
 		),
 		Categories: []Category{
