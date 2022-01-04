@@ -723,14 +723,15 @@ A array of parts to add to the request.
 Type: `array`  
 Default: `[]`  
 
-### `multipart[].contentType`
+### `multipart[].content_type`
 
 content type of a single part of the request.
 
 
 Type: `string`  
+Default: `""`  
 
-### `multipart[].contentDisposition`
+### `multipart[].content_disposition`
 
 content disposition of a single part of the request.
 
@@ -744,5 +745,6 @@ data of a single part of the request.
 
 
 Type: `string`  
+Default: `""`  
 
 
