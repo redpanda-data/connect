@@ -53,6 +53,7 @@ output:
     publish_timeout: 60s
     metadata:
       exclude_prefixes: []
+    ordering_key: ""
 ```
 
 </TabItem>
@@ -126,5 +127,14 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 
 Type: `array`  
 Default: `[]`  
+
+### `ordering_key`
+
+The ordering key to use for publishing messages.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
 
 
