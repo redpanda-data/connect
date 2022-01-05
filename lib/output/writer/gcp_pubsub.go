@@ -50,7 +50,9 @@ type GCPPubSub struct {
 	client         *pubsub.Client
 	publishTimeout time.Duration
 	metaFilter     *output.MetadataFilter
-	orderingKey    *field.Expression
+
+	orderingEnabled bool
+	orderingKey     *field.Expression
 
 	topicID  *field.Expression
 	topics   map[string]*pubsub.Topic
@@ -99,14 +101,15 @@ func NewGCPPubSubV2(
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 	return &GCPPubSub{
-		conf:           conf,
-		log:            log,
-		metaFilter:     metaFilter,
-		client:         client,
-		publishTimeout: pubTimeout,
-		stats:          stats,
-		topicID:        topic,
-		orderingKey:    orderingKey,
+		conf:            conf,
+		log:             log,
+		metaFilter:      metaFilter,
+		client:          client,
+		publishTimeout:  pubTimeout,
+		stats:           stats,
+		topicID:         topic,
+		orderingKey:     orderingKey,
+		orderingEnabled: len(conf.OrderingKey) > 0,
 	}, nil
 }
 
@@ -143,9 +146,7 @@ func (c *GCPPubSub) getTopic(ctx context.Context, t string) (*pubsub.Topic, erro
 		return nil, fmt.Errorf("topic '%v' does not exist", t)
 	}
 	topic.PublishSettings.Timeout = c.publishTimeout
-	if c.orderingKey.NumDynamicExpressions() > 0 {
-		topic.EnableMessageOrdering = true
-	}
+	topic.EnableMessageOrdering = c.orderingEnabled
 	c.topics[t] = topic
 	return topic, nil
 }
@@ -177,8 +178,11 @@ func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) err
 			return nil
 		})
 		gmsg := &pubsub.Message{
-			Data:        part.Get(),
-			OrderingKey: c.orderingKey.String(i, msg)}
+			Data: part.Get(),
+		}
+		if c.orderingEnabled {
+			gmsg.OrderingKey = c.orderingKey.String(i, msg)
+		}
 		if len(attr) > 0 {
 			gmsg.Attributes = attr
 		}
