@@ -27,6 +27,7 @@ For information on how to set up credentials check out
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("publish_timeout", "The maximum length of time to wait before abandoning a publish attempt for a message.", "10s", "5m", "60m"),
 			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent as attributes.").WithChildren(output.MetadataFields()...),
+			docs.FieldAdvanced("ordering_key", "The ordering key to use for publishing messages.").IsInterpolated(),
 		},
 		Categories: []Category{
 			CategoryServices,

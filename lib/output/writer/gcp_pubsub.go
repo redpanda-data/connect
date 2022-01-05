@@ -25,6 +25,7 @@ type GCPPubSubConfig struct {
 	MaxInFlight    int             `json:"max_in_flight" yaml:"max_in_flight"`
 	PublishTimeout string          `json:"publish_timeout" yaml:"publish_timeout"`
 	Metadata       output.Metadata `json:"metadata" yaml:"metadata"`
+	OrderingKey    string          `json:"ordering_key" yaml:"ordering_key"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
@@ -35,6 +36,7 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 		MaxInFlight:    1,
 		PublishTimeout: "60s",
 		Metadata:       output.NewMetadata(),
+		OrderingKey:    "",
 	}
 }
 
@@ -48,6 +50,7 @@ type GCPPubSub struct {
 	client         *pubsub.Client
 	publishTimeout time.Duration
 	metaFilter     *output.MetadataFilter
+	orderingKey    *field.Expression
 
 	topicID  *field.Expression
 	topics   map[string]*pubsub.Topic
@@ -83,6 +86,10 @@ func NewGCPPubSubV2(
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
+	orderingKey, err := interop.NewBloblangField(mgr, conf.OrderingKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ordering key: %v", err)
+	}
 	pubTimeout, err := time.ParseDuration(conf.PublishTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse publish timeout duration: %w", err)
@@ -99,6 +106,7 @@ func NewGCPPubSubV2(
 		publishTimeout: pubTimeout,
 		stats:          stats,
 		topicID:        topic,
+		orderingKey:    orderingKey,
 	}, nil
 }
 
@@ -135,6 +143,9 @@ func (c *GCPPubSub) getTopic(ctx context.Context, t string) (*pubsub.Topic, erro
 		return nil, fmt.Errorf("topic '%v' does not exist", t)
 	}
 	topic.PublishSettings.Timeout = c.publishTimeout
+	if c.orderingKey.NumDynamicExpressions() > 0 {
+		topic.EnableMessageOrdering = true
+	}
 	c.topics[t] = topic
 	return topic, nil
 }
@@ -166,8 +177,8 @@ func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) err
 			return nil
 		})
 		gmsg := &pubsub.Message{
-			Data: part.Get(),
-		}
+			Data:        part.Get(),
+			OrderingKey: c.orderingKey.String(i, msg)}
 		if len(attr) > 0 {
 			gmsg.Attributes = attr
 		}
