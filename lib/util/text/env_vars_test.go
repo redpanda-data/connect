@@ -26,6 +26,7 @@ func TestEnvVarDetection(t *testing.T) {
 		"foo ${foo[0]} baz":                             true,
 		"foo ${foo[0]bar} baz":                          true,
 		"foo ${foo.zab\\.rab}":                          true,
+		"foo ${foo.za+b\\.rab}":                         true,
 	}
 
 	for in, exp := range tests {
