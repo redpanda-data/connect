@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Field `sync` added to the `gcp_pubsub` input.
 - New input, processor, and output config field types added to the plugin APIs.
+- Added new experimental `parquet` processor.
 
 ## 3.61.0 - 2021-12-28
 

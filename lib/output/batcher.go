@@ -103,7 +103,7 @@ func (m *Batcher) loop() {
 				m.shutSig.CloseAtLeisure()
 				flushBatch = true
 				// If we're waiting for a timed batch then we will respect it.
-				if nextTimedBatchChan != nil {
+				if nextTimedBatchChan != nil && m.batcher.Count() > 0 {
 					select {
 					case <-nextTimedBatchChan:
 					case <-m.shutSig.CloseNowChan():

@@ -119,6 +119,8 @@ require (
 	github.com/xdg/stringprep v1.0.3 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0
+	github.com/xitongsys/parquet-go v1.6.2
+	github.com/xitongsys/parquet-go-source v0.0.0-20200817004010-026bad9b25d0
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a // indirect
 	go.mongodb.org/mongo-driver v1.7.4
 	go.nanomsg.org/mangos/v3 v3.3.0
