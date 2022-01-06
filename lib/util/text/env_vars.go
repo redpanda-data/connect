@@ -10,8 +10,8 @@ import (
 //------------------------------------------------------------------------------
 
 var (
-	envRegex        = regexp.MustCompile(`\${[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])+)?}`)
-	escapedEnvRegex = regexp.MustCompile(`\${({[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])+)?})}`)
+	envRegex        = regexp.MustCompile(`\${[0-9A-Za-z_.\[\]]+(:((\${[^}]+})|[^}])+)?}`)
+	escapedEnvRegex = regexp.MustCompile(`\${({[0-9A-Za-z_.\[\]]+(:((\${[^}]+})|[^}])+)?})}`)
 )
 
 // ContainsEnvVariables returns true if inBytes contains environment variable
