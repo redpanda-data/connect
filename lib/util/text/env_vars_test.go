@@ -25,7 +25,7 @@ func TestEnvVarDetection(t *testing.T) {
 		"foo ${foo[0].bar} baz":                         true,
 		"foo ${foo[0]} baz":                             true,
 		"foo ${foo[0]bar} baz":                          true,
-		"foo ${foo.\"zab.rab\"}":                        true,
+		"foo ${foo.zab\\.rab}":                          true,
 	}
 
 	for in, exp := range tests {
@@ -66,10 +66,10 @@ func TestEnvSwapping(t *testing.T) {
 		"foo ${{BENTHOS__TEST__FOO}} baz":                                              "foo ${BENTHOS__TEST__FOO} baz",
 		"foo ${BENTHOS_TEST_BAR} baz":                                                  "foo test\\nbar baz",
 		"foo ${BENTHOS_TEST_JSON} baz":                                                 "foo {\"foo\": [{\"bar\": \"baz\"}, {\"zab.rab\": \"yay\"}]} baz",
-		"foo ${BENTHOS_TEST_BAR.foo[0]} baz":                                           "foo [{\"bar\": \"baz\"}, {\"zab.rab\": \"yay\"}] baz",
-		"foo ${BENTHOS_TEST_BAR.foo[0].bar} baz":                                       "foo baz baz",
-		"foo ${BENTHOS_TEST_BAR.foo[1].\"zab.rab\"} baz":                               "foo yay baz",
-		"foo ${BENTHOS_TEST_BAR.foo[2].bar:nope} baz":                                  "foo nope baz",
+		"foo ${BENTHOS_TEST_JSON.foo} baz":                                             "foo [{\"bar\": \"baz\"}, {\"zab.rab\": \"yay\"}] baz",
+		"foo ${BENTHOS_TEST_JSON.foo.0.bar} baz":                                       "foo baz baz",
+		"foo ${BENTHOS_TEST_JSON.foo.1.zab\\.rab} baz":                                 "foo yay baz",
+		"foo ${BENTHOS_TEST_JSON.foo.2.bar:nope} baz":                                  "foo nope baz",
 	}
 
 	for in, exp := range tests {

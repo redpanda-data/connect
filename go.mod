@@ -108,6 +108,7 @@ require (
 	github.com/smira/go-statsd v1.3.2
 	github.com/spf13/cast v1.4.1
 	github.com/stretchr/testify v1.7.0
+	github.com/tidwall/gjson v1.12.1
 	github.com/tilinna/z85 v1.0.0
 	github.com/twmb/franz-go v1.2.6
 	github.com/twmb/franz-go/pkg/kmsg v0.0.0-20211127185622-3b34db0c6d1e
