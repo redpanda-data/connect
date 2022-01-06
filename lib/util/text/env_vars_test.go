@@ -25,6 +25,7 @@ func TestEnvVarDetection(t *testing.T) {
 		"foo ${foo[0].bar} baz":                         true,
 		"foo ${foo[0]} baz":                             true,
 		"foo ${foo[0]bar} baz":                          true,
+		"foo ${foo.\"zab.rab\"}":                        true,
 	}
 
 	for in, exp := range tests {
@@ -42,7 +43,7 @@ func TestEnvSwapping(t *testing.T) {
 
 	os.Setenv("BENTHOS_TEST_FOO", "testfoo")
 	os.Setenv("BENTHOS_TEST_BAR", "test\nbar")
-	os.Setenv("BENTHOS_TEST_JSON", "{\"foo\": [{\"bar\": \"baz\"}]}")
+	os.Setenv("BENTHOS_TEST_JSON", "{\"foo\": [{\"bar\": \"baz\"}, {\"zab.rab\": \"yay\"}]}")
 
 	tests := map[string]string{
 		"foo ${BENTHOS__TEST__FOO:bar} baz":                    "foo bar baz",
@@ -64,10 +65,11 @@ func TestEnvSwapping(t *testing.T) {
 		"foo ${{BENTHOS__TEST__FOO:bar}} baz":                                          "foo ${BENTHOS__TEST__FOO:bar} baz",
 		"foo ${{BENTHOS__TEST__FOO}} baz":                                              "foo ${BENTHOS__TEST__FOO} baz",
 		"foo ${BENTHOS_TEST_BAR} baz":                                                  "foo test\\nbar baz",
-		"foo ${BENTHOS_TEST_JSON} baz":                                                 "foo {\"foo\": [{\"bar\": \"baz\"}]} baz",
-		"foo ${BENTHOS_TEST_BAR.foo[0]} baz":                                           "foo [{\"bar\": \"baz\"}] baz",
+		"foo ${BENTHOS_TEST_JSON} baz":                                                 "foo {\"foo\": [{\"bar\": \"baz\"}, {\"zab.rab\": \"yay\"}]} baz",
+		"foo ${BENTHOS_TEST_BAR.foo[0]} baz":                                           "foo [{\"bar\": \"baz\"}, {\"zab.rab\": \"yay\"}] baz",
 		"foo ${BENTHOS_TEST_BAR.foo[0].bar} baz":                                       "foo baz baz",
-		"foo ${BENTHOS_TEST_BAR.foo[1].bar:nope} baz":                                  "foo nope baz",
+		"foo ${BENTHOS_TEST_BAR.foo[1].\"zab.rab\"} baz":                               "foo yay baz",
+		"foo ${BENTHOS_TEST_BAR.foo[2].bar:nope} baz":                                  "foo nope baz",
 	}
 
 	for in, exp := range tests {
