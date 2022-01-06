@@ -22,9 +22,9 @@ func ContainsEnvVariables(inBytes []byte) bool {
 	return envRegex.Find(inBytes) != nil || escapedEnvRegex.Find(inBytes) != nil
 }
 
-// TargetVarIsJson returns true if inBytes contains either dots or square brackets
+// TargetVarIsJSON returns true if inBytes contains either dots or square brackets
 // signalling that the targetVar is a json object
-func TargetVarIsJson(inBytes []byte) bool {
+func TargetVarIsJSON(inBytes []byte) bool {
 	return jsonPathRegex.Find(inBytes) != nil
 }
 
@@ -54,7 +54,7 @@ func ReplaceEnvVariables(inBytes []byte) []byte {
 			targetVar = string(content[2 : len(content)-1])
 		}
 
-		if TargetVarIsJson([]byte(targetVar)) {
+		if TargetVarIsJSON([]byte(targetVar)) {
 			targetVarSep := strings.SplitN(targetVar, ".", 2)
 			targetVar = targetVarSep[0]
 			jsonPath := targetVarSep[1]
