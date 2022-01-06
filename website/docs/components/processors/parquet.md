@@ -111,20 +111,20 @@ output:
       - file:
           path: ./stuff-${! uuid_v4() }.parquet
           codec: all-bytes
-  batching:
-    count: 100
-    period: 30s
-    processors:
-      - parquet:
-          operator: from_json
-          schema: |-
-            {
-              "Tag": "name=root, repetitiontype=REQUIRED",
-              "Fields": [
-                {"Tag":"name=name,inname=NameIn,type=BYTE_ARRAY,convertedtype=UTF8, repetitiontype=REQUIRED"},
-                {"Tag":"name=age,inname=Age,type=INT32,repetitiontype=REQUIRED"}
-              ]
-            }
+    batching:
+      count: 100
+      period: 30s
+      processors:
+        - parquet:
+            operator: from_json
+            schema: |-
+              {
+                "Tag": "name=root, repetitiontype=REQUIRED",
+                "Fields": [
+                  {"Tag":"name=name,inname=NameIn,type=BYTE_ARRAY,convertedtype=UTF8, repetitiontype=REQUIRED"},
+                  {"Tag":"name=age,inname=Age,type=INT32,repetitiontype=REQUIRED"}
+                ]
+              }
 ```
 
 </TabItem>
