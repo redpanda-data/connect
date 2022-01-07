@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - New input, processor, and output config field types added to the plugin APIs.
 - Added new experimental `parquet` processor.
 
+### Fixed
+
+- The input codec `chunked` is no longer capped by the packet size of the incoming streams.
+
 ## 3.61.0 - 2021-12-28
 
 ### Added
