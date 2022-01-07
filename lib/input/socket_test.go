@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
@@ -20,7 +22,13 @@ import (
 )
 
 func TestSocketBasic(t *testing.T) {
-	ln, err := net.Listen("unix", "/tmp/benthos.sock")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
 		t.Fatalf("failed to listen on a address: %v", err)
 	}
@@ -109,7 +117,13 @@ func TestSocketBasic(t *testing.T) {
 }
 
 func TestSocketReconnect(t *testing.T) {
-	ln, err := net.Listen("unix", "/tmp/benthos.sock")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
 		t.Fatalf("failed to listen on address: %v", err)
 	}
@@ -204,7 +218,13 @@ func TestSocketReconnect(t *testing.T) {
 }
 
 func TestSocketMultipart(t *testing.T) {
-	ln, err := net.Listen("unix", "/tmp/benthos.sock")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
 		t.Fatalf("failed to listen on a port: %v", err)
 	}
@@ -289,7 +309,13 @@ func TestSocketMultipart(t *testing.T) {
 }
 
 func TestSocketMultipartCustomDelim(t *testing.T) {
-	ln, err := net.Listen("unix", "/tmp/benthos.sock")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
 		t.Fatalf("failed to listen on address: %v", err)
 	}
@@ -375,7 +401,13 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 }
 
 func TestSocketMultipartShutdown(t *testing.T) {
-	ln, err := net.Listen("unix", "/tmp/benthos.sock")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
 		t.Fatalf("failed to listen on address: %v", err)
 	}
