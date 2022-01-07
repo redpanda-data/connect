@@ -97,5 +97,10 @@
 
 .auroraImg {
   height: 80px;
-  padding: 0px 10px;
+  padding: 0px;
+}
+
+.rudderstackImg {
+  height: 30px;
+  padding: 0 10px;
 }
