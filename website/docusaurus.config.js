@@ -31,7 +31,7 @@ module.exports = {
       defaultMode: 'light',
     },
     image: 'img/og_img.png',
-    metadatas: [{name: 'twitter:card', content: 'summary'}],
+    metadata: [{name: 'twitter:card', content: 'summary'}],
     navbar: {
       title: 'Benthos',
       logo: {
