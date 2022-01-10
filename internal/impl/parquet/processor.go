@@ -2,7 +2,6 @@ package parquet
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/public/service"
@@ -155,10 +154,7 @@ func (s *parquetProcessor) processBatchReader(ctx context.Context, batch service
 			return nil, fmt.Errorf("failed to read message contents: %w", err)
 		}
 
-		buf, err := buffer.NewBufferFile(mBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create parquet reader buffer: %w", err)
-		}
+		buf := buffer.NewBufferFileFromBytes(mBytes)
 
 		pr, err := reader.NewParquetReader(buf, s.schema, 1)
 		if err != nil {
@@ -190,16 +186,7 @@ func (s *parquetProcessor) processBatchWriter(ctx context.Context, batch service
 		return nil, nil
 	}
 
-	buf, err := buffer.NewBufferFile(nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create parquet writer buffer: %w", err)
-	}
-
-	// Eww, gross
-	realBuf, ok := buf.(buffer.BufferFile)
-	if !ok {
-		return nil, errors.New("failed to create parquet writer buffer")
-	}
+	buf := buffer.NewBufferFile()
 
 	pw, err := writer.NewJSONWriter(s.schema, buf, 1)
 	if err != nil {
@@ -221,7 +208,7 @@ func (s *parquetProcessor) processBatchWriter(ctx context.Context, batch service
 	}
 
 	outMsg := batch[0].Copy()
-	outMsg.SetBytes(realBuf.Bytes())
+	outMsg.SetBytes(buf.Bytes())
 	return []service.MessageBatch{{outMsg}}, nil
 }
 
