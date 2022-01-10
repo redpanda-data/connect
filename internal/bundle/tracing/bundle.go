@@ -41,13 +41,18 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 
 	for _, spec := range b.OutputDocs() {
 		_ = tracedEnv.OutputAdd(func(conf output.Config, nm bundle.NewManagement, pcf ...types.PipelineConstructorFunc) (output.Type, error) {
-			i, err := b.OutputInit(conf, nm, pcf...)
+			pcf = output.AppendProcessorsFromConfig(conf, nm, nm.Logger(), nm.Metrics(), pcf...)
+			conf.Processors = nil
+
+			o, err := b.OutputInit(conf, nm)
 			if err != nil {
 				return nil, err
 			}
+
 			oEvents, ctr := summary.wOutputEvents(nm.Label())
-			i = traceOutput(oEvents, ctr, i)
-			return i, err
+			o = traceOutput(oEvents, ctr, o)
+
+			return output.WrapWithPipelines(o, pcf...)
 		}, spec)
 	}
 

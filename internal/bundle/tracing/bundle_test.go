@@ -134,6 +134,84 @@ func TestBundleOutputTracing(t *testing.T) {
 	}
 }
 
+func TestBundleOutputWithProcessorsTracing(t *testing.T) {
+	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
+
+	outConfig := output.NewConfig()
+	outConfig.Label = "foo"
+	outConfig.Type = output.TypeDrop
+
+	blobConf := processor.NewConfig()
+	blobConf.Type = "bloblang"
+	blobConf.Bloblang = "root = content().uppercase()"
+	outConfig.Processors = append(outConfig.Processors, blobConf)
+
+	mgr, err := manager.NewV2(
+		manager.NewResourceConfig(),
+		types.NoopMgr(),
+		log.Noop(),
+		metrics.Noop(),
+		manager.OptSetEnvironment(tenv),
+	)
+	require.NoError(t, err)
+
+	out, err := mgr.NewOutput(outConfig)
+	require.NoError(t, err)
+
+	tranChan := make(chan types.Transaction)
+	require.NoError(t, out.Consume(tranChan))
+
+	for i := 0; i < 10; i++ {
+		resChan := make(chan types.Response)
+		tran := types.NewTransaction(message.New([][]byte{[]byte("hello world " + strconv.Itoa(i))}), resChan)
+		select {
+		case tranChan <- tran:
+			select {
+			case <-resChan:
+			case <-time.After(time.Second):
+				t.Fatal("timed out")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+	}
+
+	out.CloseAsync()
+	require.NoError(t, out.WaitForClose(time.Second))
+
+	assert.Equal(t, uint64(0), summary.Input)
+	assert.Equal(t, uint64(0), summary.ProcessorErrors)
+	assert.Equal(t, uint64(10), summary.Output)
+
+	outEvents := summary.OutputEvents()
+	require.Contains(t, outEvents, "foo")
+
+	outputEvents := outEvents["foo"]
+	require.Len(t, outputEvents, 10)
+
+	for i, e := range outputEvents {
+		assert.Equal(t, tracing.EventConsume, e.Type)
+		assert.Equal(t, "HELLO WORLD "+strconv.Itoa(i), e.Content)
+	}
+
+	procEvents := summary.ProcessorEvents()
+	require.Contains(t, procEvents, "foo.processor.0")
+
+	processorEvents := procEvents["foo.processor.0"]
+	require.Len(t, processorEvents, 20)
+
+	for i := 0; i < len(processorEvents); i += 2 {
+		consumeEvent := processorEvents[i]
+		produceEvent := processorEvents[i+1]
+
+		assert.Equal(t, tracing.EventConsume, consumeEvent.Type)
+		assert.Equal(t, tracing.EventProduce, produceEvent.Type)
+
+		assert.Equal(t, "hello world "+strconv.Itoa(i/2), consumeEvent.Content)
+		assert.Equal(t, "HELLO WORLD "+strconv.Itoa(i/2), produceEvent.Content)
+	}
+}
+
 func TestBundleProcessorTracing(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
