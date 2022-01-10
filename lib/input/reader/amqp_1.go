@@ -254,13 +254,9 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 		// TODO: These methods were moved in v0.16.0, but nacking seems broken
 		// (integration tests fail)
 		if res.Error() != nil {
-			// nolint: gocritic
-			// return conn.receiver.ModifyMessage(ctx, amqpMsg, true, false, amqpMsg.Annotations)
-			return amqpMsg.Modify(ctx, true, false, amqpMsg.Annotations)
+			return conn.receiver.ModifyMessage(ctx, amqpMsg, true, false, amqpMsg.Annotations)
 		}
-		// nolint: gocritic
-		// return conn.receiver.AcceptMessage(ctx, amqpMsg)
-		return amqpMsg.Accept(ctx)
+		return conn.receiver.AcceptMessage(ctx, amqpMsg)
 	}, nil
 }
 
@@ -359,10 +355,11 @@ func (a *AMQP1) renewWithContext(ctx context.Context, msg *amqp.Message) (time.T
 		return time.Time{}, err
 	}
 
+	replyTo := conn.lockRenewAddressPrefix + lockRenewResponseSuffix
 	renewMsg := &amqp.Message{
 		Properties: &amqp.MessageProperties{
 			MessageID: msg.Properties.MessageID,
-			ReplyTo:   conn.lockRenewAddressPrefix + lockRenewResponseSuffix,
+			ReplyTo:   &replyTo,
 		},
 		ApplicationProperties: map[string]interface{}{
 			"operation": "com.microsoft:renew-lock",

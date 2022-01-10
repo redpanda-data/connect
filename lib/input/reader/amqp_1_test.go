@@ -89,11 +89,14 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 		go func(testStr string) {
 			defer wg.Done()
 
+			contentType := "plain/text"
+			contentEncoding := "utf-8"
+			createdAt := time.Date(2020, time.January, 30, 1, 0, 0, 0, time.UTC)
 			err := sender.Send(ctx, &amqp.Message{
 				Properties: &amqp.MessageProperties{
-					ContentType:     "plain/text",
-					ContentEncoding: "utf-8",
-					CreationTime:    time.Date(2020, time.January, 30, 1, 0, 0, 0, time.UTC),
+					ContentType:     &contentType,
+					ContentEncoding: &contentEncoding,
+					CreationTime:    &createdAt,
 				},
 				Data: [][]byte{[]byte(str)},
 			})
