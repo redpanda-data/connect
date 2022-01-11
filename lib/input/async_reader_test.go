@@ -881,3 +881,65 @@ func TestAsyncReaderSkipAcksALO(t *testing.T) {
 }
 
 //------------------------------------------------------------------------------
+
+func BenchmarkAsyncReaderGenerateN1(b *testing.B) {
+	benchmarkAsyncReaderGenerateN(b, 1)
+}
+
+func BenchmarkAsyncReaderGenerateN10(b *testing.B) {
+	benchmarkAsyncReaderGenerateN(b, 10)
+}
+
+func BenchmarkAsyncReaderGenerateN100(b *testing.B) {
+	benchmarkAsyncReaderGenerateN(b, 100)
+}
+
+func BenchmarkAsyncReaderGenerateN1000(b *testing.B) {
+	benchmarkAsyncReaderGenerateN(b, 1000)
+}
+
+func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
+	bloblConf := NewBloblangConfig()
+	bloblConf.Count = 0
+	bloblConf.Interval = ""
+	bloblConf.Mapping = `root = "hello world"`
+
+	readerImpl, err := newBloblang(types.NoopMgr(), bloblConf)
+	require.NoError(b, err)
+
+	r, err := NewAsyncReader("foo", true, readerImpl, log.Noop(), metrics.Noop())
+	require.NoError(b, err)
+
+	b.Cleanup(func() {
+		r.CloseAsync()
+		if err = r.WaitForClose(time.Second); err != nil {
+			pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+			b.Fatal(err)
+		}
+	})
+
+	resChans := make([]chan<- types.Response, capacity)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N/capacity; i++ {
+		for j := 0; j < capacity; j++ {
+			select {
+			case ts, open := <-r.TransactionChan():
+				require.True(b, open)
+				resChans[j] = ts.ResponseChan
+			case <-time.After(time.Second):
+				b.Fatal("Timed out")
+			}
+		}
+
+		for j := 0; j < capacity; j++ {
+			select {
+			case resChans[j] <- response.NewAck():
+			case <-time.After(time.Second):
+				b.Fatal("Timed out")
+			}
+		}
+	}
+}

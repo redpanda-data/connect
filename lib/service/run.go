@@ -306,29 +306,7 @@ func Run() {
 					return nil
 				},
 			},
-			{
-				Name:  "list",
-				Usage: "List all Benthos component types",
-				Description: `
-   If any component types are explicitly listed then only types of those
-   components will be shown.
-
-   benthos list
-   benthos list --format json inputs output
-   benthos list rate-limits buffers`[4:],
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:  "format",
-						Value: "text",
-						Usage: "Print the component list in a specific format. Options are text or json.",
-					},
-				},
-				Action: func(c *cli.Context) error {
-					listComponents(c)
-					os.Exit(0)
-					return nil
-				},
-			},
+			listCliCommand(),
 			createCliCommand(),
 			test.CliCommand(testSuffix),
 			clitemplate.CliCommand(),

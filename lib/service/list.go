@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -69,6 +70,80 @@ func (f *fullSchema) flattened() map[string][]string {
 		"conditions":         f.conditions,
 		"bloblang-functions": justNamesBloblFuncs(f.BloblangFunctions),
 		"bloblang-methods":   justNamesBloblMethods(f.BloblangMethods),
+	}
+}
+
+func (f *fullSchema) scrub() {
+	scrubFieldSpecs(f.Config)
+	scrubComponentSpecs(f.Buffers)
+	scrubComponentSpecs(f.Caches)
+	scrubComponentSpecs(f.Inputs)
+	scrubComponentSpecs(f.Outputs)
+	scrubComponentSpecs(f.Processors)
+	scrubComponentSpecs(f.RateLimits)
+	scrubComponentSpecs(f.Metrics)
+	scrubComponentSpecs(f.Tracers)
+
+	for i := range f.BloblangFunctions {
+		f.BloblangFunctions[i].Description = ""
+		f.BloblangFunctions[i].Examples = nil
+	}
+	for i := range f.BloblangMethods {
+		f.BloblangMethods[i].Description = ""
+		f.BloblangMethods[i].Examples = nil
+		f.BloblangMethods[i].Categories = nil
+	}
+}
+
+func scrubFieldSpecs(fs []docs.FieldSpec) {
+	for i := range fs {
+		fs[i].Description = ""
+		fs[i].Examples = nil
+		for j := range fs[i].AnnotatedOptions {
+			fs[i].AnnotatedOptions[j][1] = ""
+		}
+		scrubFieldSpecs(fs[i].Children)
+	}
+}
+
+func scrubFieldSpec(fs *docs.FieldSpec) {
+	fs.Description = ""
+	scrubFieldSpecs(fs.Children)
+}
+
+func scrubComponentSpecs(cs []docs.ComponentSpec) {
+	for i := range cs {
+		cs[i].Description = ""
+		cs[i].Summary = ""
+		cs[i].Footnotes = ""
+		cs[i].Examples = nil
+		scrubFieldSpec(&cs[i].Config)
+	}
+}
+
+func listCliCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "list",
+		Usage: "List all Benthos component types",
+		Description: `
+   If any component types are explicitly listed then only types of those
+   components will be shown.
+
+   benthos list
+   benthos list --format json inputs output
+   benthos list rate-limits buffers`[4:],
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "format",
+				Value: "text",
+				Usage: "Print the component list in a specific format. Options are text or json.",
+			},
+		},
+		Action: func(c *cli.Context) error {
+			listComponents(c)
+			os.Exit(0)
+			return nil
+		},
 	}
 }
 
@@ -141,6 +216,13 @@ func listComponents(c *cli.Context) {
 		}
 		fmt.Println(string(jsonBytes))
 	case "json-full":
+		jsonBytes, err := json.Marshal(schema)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(string(jsonBytes))
+	case "json-full-scrubbed":
+		schema.scrub()
 		jsonBytes, err := json.Marshal(schema)
 		if err != nil {
 			panic(err)
