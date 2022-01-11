@@ -7,10 +7,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -41,6 +43,7 @@ func init() {
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
 				processorOperationDocs(client.OperationInsertOne),
+				docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
 				docs.FieldCommon(
 					"write_concern",
 					"The write_concern settings for the mongo connection.",
@@ -94,8 +97,10 @@ type Processor struct {
 	log   log.Modular
 	stats metrics.Type
 
-	client     *mongo.Client
-	collection *mongo.Collection
+	client                       *mongo.Client
+	collection                   *field.Expression
+	database                     *mongo.Database
+	writeConcernCollectionOption *options.CollectionOptions
 
 	parts       []int
 	filterMap   *mapping.Executor
@@ -220,9 +225,12 @@ func NewProcessor(
 		return nil, fmt.Errorf("write_concern validation error: %w", err)
 	}
 
-	m.collection = m.client.
-		Database(conf.MongoDB.MongoDB.Database).
-		Collection(conf.MongoDB.MongoDB.Collection, options.Collection().SetWriteConcern(writeConcern))
+	if m.collection, err = interop.NewBloblangField(mgr, m.conf.MongoDB.Collection); err != nil {
+		return nil, fmt.Errorf("failed to parse collection expression: %v", err)
+	}
+
+	m.database = m.client.Database(conf.MongoDB.MongoDB.Database)
+	m.writeConcernCollectionOption = options.Collection().SetWriteConcern(writeConcern)
 
 	return m, nil
 }
@@ -233,7 +241,7 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	m.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	var writeModels []mongo.WriteModel
+	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
 	processor.IteratePartsWithSpanV2("mongodb", m.parts, newMsg, func(i int, s *tracing.Span, p types.Part) error {
 		var err error
 		var filterVal, documentVal types.Part
@@ -290,6 +298,7 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		}
 
 		var writeModel mongo.WriteModel
+		collection := m.database.Collection(m.collection.String(i, msg), m.writeConcernCollectionOption)
 
 		switch m.operation {
 		case client.OperationInsertOne:
@@ -322,7 +331,7 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			}
 		case client.OperationFindOne:
 			var decoded interface{}
-			err := m.collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded)
+			err := collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded)
 			if err != nil {
 				if err == mongo.ErrNoDocuments {
 					return err
@@ -341,16 +350,19 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		}
 
 		if writeModel != nil {
-			writeModels = append(writeModels, writeModel)
+			writeModelsMap[collection] = append(writeModelsMap[collection], writeModel)
 		}
 		return nil
 	})
 
-	if len(writeModels) > 0 {
-		if _, err := m.collection.BulkWrite(context.Background(), writeModels); err != nil {
-			m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
-			for _, n := range m.parts {
-				processor.FlagErr(newMsg.Get(n), err)
+	if len(writeModelsMap) > 0 {
+		for collection, writeModels := range writeModelsMap {
+			// We should have at least one write model in the slice
+			if _, err := collection.BulkWrite(context.Background(), writeModels); err != nil {
+				m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
+				for _, n := range m.parts {
+					processor.FlagErr(newMsg.Get(n), err)
+				}
 			}
 		}
 	}

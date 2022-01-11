@@ -36,10 +36,10 @@ label: ""
 mongodb:
   url: ""
   database: ""
-  collection: ""
   username: ""
   password: ""
   operation: insert-one
+  collection: ""
   write_concern:
     w: ""
     j: false
@@ -59,10 +59,10 @@ label: ""
 mongodb:
   url: ""
   database: ""
-  collection: ""
   username: ""
   password: ""
   operation: insert-one
+  collection: ""
   write_concern:
     w: ""
     j: false
@@ -107,14 +107,6 @@ The name of the target MongoDB DB.
 Type: `string`  
 Default: `""`  
 
-### `collection`
-
-The name of the target collection in the MongoDB DB.
-
-
-Type: `string`  
-Default: `""`  
-
 ### `username`
 
 The username to connect to the database.
@@ -139,6 +131,15 @@ The mongodb operation to perform.
 Type: `string`  
 Default: `"insert-one"`  
 Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`, `find-one`.
+
+### `collection`
+
+The name of the target collection in the MongoDB DB.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `write_concern`
 
