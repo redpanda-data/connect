@@ -126,15 +126,15 @@ func lintCliCommand() *cli.Command {
 		Name:  "lint",
 		Usage: "Parse Benthos configs and report any linting errors",
 		Description: `
-   Exits with a status code 1 if any linting errors are detected:
-   
-   benthos -c target.yaml lint
-   benthos lint ./configs/*.yaml
-   benthos lint ./foo.yaml ./bar.yaml
-   benthos lint ./configs/...
-   
-   If a path ends with '...' then Benthos will walk the target and lint any
-   files with the .yaml or .yml extension.`[4:],
+Exits with a status code 1 if any linting errors are detected:
+
+  benthos -c target.yaml lint
+  benthos lint ./configs/*.yaml
+  benthos lint ./foo.yaml ./bar.yaml
+  benthos lint ./configs/...
+
+If a path ends with '...' then Benthos will walk the target and lint any
+files with the .yaml or .yml extension.`[1:],
 		Action: func(c *cli.Context) error {
 			var targets []string
 			for _, p := range c.Args().Slice() {

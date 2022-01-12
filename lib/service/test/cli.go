@@ -15,15 +15,15 @@ func CliCommand(testSuffix string) *cli.Command {
 		Name:  "test",
 		Usage: "Execute Benthos unit tests",
 		Description: `
-   Execute any number of Benthos unit test definitions. If one or more tests
-   fail the process will report the errors and exit with a status code 1.
+Execute any number of Benthos unit test definitions. If one or more tests
+fail the process will report the errors and exit with a status code 1.
 
-   benthos test ./path/to/configs/...
-   benthos test ./foo_configs ./bar_configs
-   benthos test ./foo.yaml
+  benthos test ./path/to/configs/...
+  benthos test ./foo_configs ./bar_configs
+  benthos test ./foo.yaml
 
-   For more information check out the docs at:
-   https://benthos.dev/docs/configuration/unit_testing`[4:],
+For more information check out the docs at:
+https://benthos.dev/docs/configuration/unit_testing`[1:],
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "generate",
