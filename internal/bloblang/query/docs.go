@@ -62,7 +62,7 @@ type FunctionSpec struct {
 	Name string `json:"name"`
 
 	// Description of the functions purpose (in markdown).
-	Description string `json:"description"`
+	Description string `json:"description,omitempty"`
 
 	// Params defines the expected arguments of the function.
 	Params Params `json:"params"`
@@ -163,7 +163,7 @@ type MethodSpec struct {
 	Name string `json:"name"`
 
 	// Description of the method purpose (in markdown).
-	Description string `json:"description"`
+	Description string `json:"description,omitempty"`
 
 	// Params defines the expected arguments of the method.
 	Params Params `json:"params"`
@@ -172,7 +172,7 @@ type MethodSpec struct {
 	Examples []ExampleSpec `json:"examples,omitempty"`
 
 	// Categories that this method fits within.
-	Categories []MethodCatSpec `json:"categories"`
+	Categories []MethodCatSpec `json:"categories,omitempty"`
 
 	// Impure indicates that a method accesses or interacts with the outter
 	// environment, and is therefore unsafe to execute in shared environments.

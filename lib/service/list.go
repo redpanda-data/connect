@@ -87,11 +87,19 @@ func (f *fullSchema) scrub() {
 	for i := range f.BloblangFunctions {
 		f.BloblangFunctions[i].Description = ""
 		f.BloblangFunctions[i].Examples = nil
+		scrubParams(f.BloblangFunctions[i].Params.Definitions)
 	}
 	for i := range f.BloblangMethods {
 		f.BloblangMethods[i].Description = ""
 		f.BloblangMethods[i].Examples = nil
 		f.BloblangMethods[i].Categories = nil
+		scrubParams(f.BloblangMethods[i].Params.Definitions)
+	}
+}
+
+func scrubParams(p []query.ParamDefinition) {
+	for i := range p {
+		p[i].Description = ""
 	}
 }
 

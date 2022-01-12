@@ -12,7 +12,7 @@ import (
 // ParamDefinition describes a single parameter for a function or method.
 type ParamDefinition struct {
 	Name        string    `json:"name"`
-	Description string    `json:"description"`
+	Description string    `json:"description,omitempty"`
 	ValueType   ValueType `json:"type"`
 
 	castScalarsToLiteral bool
@@ -20,7 +20,7 @@ type ParamDefinition struct {
 	// IsOptional is implicit when there's a DefaultValue. However, there are
 	// times when a parameter is used to change behaviour without having a
 	// default.
-	IsOptional   bool         `json:"is_optional"`
+	IsOptional   bool         `json:"is_optional,omitempty"`
 	DefaultValue *interface{} `json:"default,omitempty"`
 }
 
@@ -164,7 +164,7 @@ func (d ParamDefinition) parseArgValue(v interface{}) (interface{}, error) {
 
 // Params defines the expected arguments of a function or method.
 type Params struct {
-	Variadic    bool              `json:"variadic"`
+	Variadic    bool              `json:"variadic,omitempty"`
 	Definitions []ParamDefinition `json:"named,omitempty"`
 
 	// Used by parsed param frames, we instantiate this here so that it's

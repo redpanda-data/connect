@@ -490,5 +490,5 @@ func TestSequenceEarlyTermination(t *testing.T) {
 	}
 
 	rdr.CloseAsync()
-	assert.NoError(t, rdr.WaitForClose(time.Millisecond*100))
+	assert.NoError(t, rdr.WaitForClose(time.Second*5))
 }
