@@ -82,20 +82,20 @@ func TestMethods(t *testing.T) {
 				method("format_json"),
 			),
 			output: []byte(`{
-  "doc": {
-    "foo": "bar"
-  }
-}`),
-		},
-		"check format_json with four spaces indentation": {
-			input: methods(
-				jsonFn(`{"doc":{"foo":"bar"}}`),
-				method("format_json", "    "),
-			),
-			output: []byte(`{
     "doc": {
         "foo": "bar"
     }
+}`),
+		},
+		"check format_json with two spaces indentation": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_json", "  "),
+			),
+			output: []byte(`{
+  "doc": {
+    "foo": "bar"
+  }
 }`),
 		},
 		"check format_json with one tab indentation": {

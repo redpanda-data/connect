@@ -1857,32 +1857,32 @@ Serializes a target value into a pretty-printed JSON byte array.
 
 #### Parameters
 
-**`indent`** &lt;(optional) string, default `"  "`&gt; Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+**`indent`** &lt;(optional) string, default `"    "`&gt; Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
 
 #### Examples
 
 
-Serialise the value into a pretty-printed multiline JSON with 2 spaces indentation (default).
+Serialise the value into a pretty-printed multiline JSON with 4 spaces indentation (default).
 
 ```coffee
 root = this.doc.format_json()
 
 # In:  {"doc":{"foo":"bar"}}
 # Out: {
-  "foo": "bar"
+    "foo": "bar"
 }
 ```
 
 Serialise the value into a pretty-printed multiline JSON with 4 spaces indentation.
 
 ```coffee
-root = this.format_json("    ")
+root = this.format_json("  ")
 
 # In:  {"doc":{"foo":"bar"}}
 # Out: {
-    "doc": {
-        "foo": "bar"
-    }
+  "doc": {
+    "foo": "bar"
+  }
 }
 ```
 
@@ -1905,7 +1905,7 @@ Use the `.string()` method in order to coerce the result into a string.
 root.doc = this.doc.format_json().string()
 
 # In:  {"doc":{"foo":"bar"}}
-# Out: {"doc":"{\n  \"foo\": \"bar\"\n}"}
+# Out: {"doc":"{\n    \"foo\": \"bar\"\n}"}
 ```
 
 ### `format_msgpack`
