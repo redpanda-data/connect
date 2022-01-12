@@ -76,6 +76,59 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check format_json with default indentation": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_json"),
+			),
+			output: []byte(`{
+  "doc": {
+    "foo": "bar"
+  }
+}`),
+		},
+		"check format_json with four spaces indentation": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_json", "    "),
+			),
+			output: []byte(`{
+    "doc": {
+        "foo": "bar"
+    }
+}`),
+		},
+		"check format_json with one tab indentation": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_json", "\t"),
+			),
+			output: []byte(`{
+	"doc": {
+		"foo": "bar"
+	}
+}`),
+		},
+		"check format_json with empty indentation": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_json", ""),
+			),
+			output: []byte(`{
+"doc": {
+"foo": "bar"
+}
+}`),
+		},
+		"check format_yaml": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_yaml"),
+			),
+			output: []byte(`doc:
+    foo: bar
+`),
+		},
 		"check parse csv 1": {
 			input: methods(
 				literalFn("foo,bar,baz\n1,2,3\n4,5,6"),
