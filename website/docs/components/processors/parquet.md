@@ -27,6 +27,8 @@ Introduced in version 3.62.0.
 label: ""
 parquet:
   operator: ""
+  compression: snappy
+  schema_file: ""
   schema: ""
 ```
 
@@ -74,9 +76,31 @@ Type: `string`
 | `to_json` | Expand a file into one or more JSON messages. |
 
 
+### `compression`
+
+The type of compression to use when writing parquet files, this field is ignored when consuming parquet files.
+
+
+Type: `string`  
+Default: `"snappy"`  
+Options: `uncompressed`, `snappy`, `gzip`, `lz4`, `zstd`.
+
+### `schema_file`
+
+A file path containing a schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified.
+
+
+Type: `string`  
+
+```yaml
+# Examples
+
+schema_file: schemas/foo.json
+```
+
 ### `schema`
 
-A schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json
+A schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified.
 
 
 Type: `string`  
