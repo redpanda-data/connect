@@ -5,7 +5,7 @@ import (
 )
 
 // CliCommand is a cli.Command definition for interacting with Benthos studio.
-func CliCommand() *cli.Command {
+func CliCommand(version, dateBuilt string) *cli.Command {
 	return &cli.Command{
 		Name:  "studio",
 		Usage: "Interact with Benthos studio (https://studio.benthos.dev)",
@@ -21,7 +21,7 @@ change outside of major version releases.`[1:],
 			},
 		},
 		Subcommands: []*cli.Command{
-			syncSchemaCommand(),
+			syncSchemaCommand(version, dateBuilt),
 		},
 	}
 }

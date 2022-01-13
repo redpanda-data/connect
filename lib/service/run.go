@@ -312,7 +312,7 @@ https://benthos.dev/docs/guides/streams_mode/about`[1:],
 			test.CliCommand(testSuffix),
 			clitemplate.CliCommand(),
 			blobl.CliCommand(),
-			studio.CliCommand(),
+			studio.CliCommand(Version, DateBuilt),
 		},
 	}
 

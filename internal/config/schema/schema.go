@@ -13,6 +13,8 @@ import (
 // Full represents the entirety of the Benthos instances configuration spec and
 // all plugins.
 type Full struct {
+	Version           string               `json:"version"`
+	Date              string               `json:"date"`
 	Config            docs.FieldSpecs      `json:"config,omitempty"`
 	Buffers           []docs.ComponentSpec `json:"buffers,omitempty"`
 	Caches            []docs.ComponentSpec `json:"caches,omitempty"`
@@ -29,8 +31,10 @@ type Full struct {
 
 // New walks all registered Benthos components and creates a full schema
 // definition of it.
-func New() Full {
+func New(version, date string) Full {
 	s := Full{
+		Version:           version,
+		Date:              date,
 		Config:            config.Spec(),
 		Buffers:           bundle.AllBuffers.Docs(),
 		Caches:            bundle.AllCaches.Docs(),

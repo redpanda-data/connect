@@ -42,7 +42,7 @@ func listComponents(c *cli.Context) {
 		ofTypes[k] = struct{}{}
 	}
 
-	schema := schema.New()
+	schema := schema.New(Version, DateBuilt)
 
 	switch c.String("format") {
 	case "text":
