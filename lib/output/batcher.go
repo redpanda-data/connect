@@ -99,14 +99,15 @@ func (m *Batcher) loop() {
 		select {
 		case tran, open := <-m.messagesIn:
 			if !open {
-				// Final flush of remaining documents.
-				m.shutSig.CloseAtLeisure()
-				flushBatch = true
+				if flushBatch = m.batcher.Count() > 0; !flushBatch {
+					return
+				}
+
 				// If we're waiting for a timed batch then we will respect it.
-				if nextTimedBatchChan != nil && m.batcher.Count() > 0 {
+				if nextTimedBatchChan != nil {
 					select {
 					case <-nextTimedBatchChan:
-					case <-m.shutSig.CloseNowChan():
+					case <-m.shutSig.CloseAtLeisureChan():
 					}
 				}
 			} else {
@@ -138,21 +139,21 @@ func (m *Batcher) loop() {
 		resChan := make(chan types.Response)
 		select {
 		case m.messagesOut <- types.NewTransaction(sendMsg, resChan):
-		case <-m.shutSig.CloseNowChan():
+		case <-m.shutSig.CloseAtLeisureChan():
 			return
 		}
 
 		go func(rChan chan types.Response, upstreamTrans []*transaction.Tracked) {
 			select {
-			case <-m.shutSig.CloseNowChan():
+			case <-m.shutSig.CloseAtLeisureChan():
 				return
 			case res, open := <-rChan:
 				if !open {
 					return
 				}
-				fullyCloseCtx, done := m.shutSig.CloseNowCtx(context.Background())
+				closeAtLeisureCtx, done := m.shutSig.CloseAtLeisureCtx(context.Background())
 				for _, t := range upstreamTrans {
-					if err := t.Ack(fullyCloseCtx, res.Error()); err != nil {
+					if err := t.Ack(closeAtLeisureCtx, res.Error()); err != nil {
 						done()
 						return
 					}
