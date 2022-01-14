@@ -91,6 +91,7 @@ require (
 	github.com/opencontainers/runc v1.0.3 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/ory/dockertest/v3 v3.8.1
+	github.com/oschwald/geoip2-golang v1.5.0
 	github.com/patrobinson/gokini v0.1.0
 	github.com/pebbe/zmq4 v1.2.7
 	github.com/pierrec/lz4/v4 v4.1.12
