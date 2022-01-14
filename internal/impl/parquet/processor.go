@@ -2,10 +2,13 @@ package parquet
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/xitongsys/parquet-go-source/buffer"
+	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/writer"
 )
@@ -49,8 +52,16 @@ The schema must be specified as a JSON string, containing an object that describ
 			"from_json": "Compress a batch of JSON documents into a file.",
 		}).
 			Description("Determines whether the processor converts messages into a parquet file or expands parquet files into messages. Converting into JSON allows subsequent processors and mappings to convert the data into any other format.")).
+		Field(service.NewStringEnumField("compression", "uncompressed", "snappy", "gzip", "lz4", "zstd" /*, "lzo", "brotli", "lz4_raw" */).
+			Description("The type of compression to use when writing parquet files, this field is ignored when consuming parquet files.").
+			Default("snappy")).
+		Field(service.NewStringField("schema_file").
+			Description("A file path containing a schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified.").
+			Optional().
+			Example(`schemas/foo.json`)).
 		Field(service.NewStringField("schema").
-			Description("A schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json").
+			Description("A schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified.").
+			Optional().
 			Example(`{
   "Tag": "name=root, repetitiontype=REQUIRED",
   "Fields": [
@@ -100,29 +111,66 @@ func init() {
 
 //------------------------------------------------------------------------------
 
+func getCompressionType(str string) (parquet.CompressionCodec, error) {
+	switch str {
+	case "uncompressed":
+		return parquet.CompressionCodec_UNCOMPRESSED, nil
+	case "snappy":
+		return parquet.CompressionCodec_SNAPPY, nil
+	case "gzip":
+		return parquet.CompressionCodec_GZIP, nil
+	case "lz4":
+		return parquet.CompressionCodec_LZ4, nil
+	case "zstd":
+		return parquet.CompressionCodec_ZSTD, nil
+	}
+	return parquet.CompressionCodec_UNCOMPRESSED, fmt.Errorf("unknown compression type: %v", str)
+
+}
+
 func newParquetProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*parquetProcessor, error) {
 	operator, err := conf.FieldString("operator")
 	if err != nil {
 		return nil, err
 	}
-	schema, err := conf.FieldString("schema")
+	var rawSchema string
+	if conf.Contains("schema") {
+		if rawSchema, err = conf.FieldString("schema"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("schema_file") {
+		schemaFile, err := conf.FieldString("schema_file")
+		if err != nil {
+			return nil, err
+		}
+		if schemaFile != "" {
+			rawSchemaBytes, err := os.ReadFile(schemaFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read schema file: %w", err)
+			}
+			rawSchema = string(rawSchemaBytes)
+		}
+	}
+	if rawSchema == "" {
+		return nil, errors.New("either a raw `schema` or a non-empty `schema_file` must be specified")
+	}
+
+	cCodec, err := conf.FieldString("compression")
 	if err != nil {
 		return nil, err
 	}
-	return newParquetProcessor(operator, schema, logger)
+	return newParquetProcessor(operator, cCodec, rawSchema, logger)
 }
 
 type parquetProcessor struct {
 	schema   string
 	operator func(context.Context, service.MessageBatch) ([]service.MessageBatch, error)
 	logger   *service.Logger
+	cCodec   parquet.CompressionCodec
 }
 
-func newParquetProcessor(
-	operator string,
-	schemaStr string,
-	logger *service.Logger,
-) (*parquetProcessor, error) {
+func newParquetProcessor(operator, compressionCodec, schemaStr string, logger *service.Logger) (*parquetProcessor, error) {
 	s := &parquetProcessor{
 		schema: schemaStr,
 		logger: logger,
@@ -130,6 +178,10 @@ func newParquetProcessor(
 	switch operator {
 	case "from_json":
 		s.operator = s.processBatchWriter
+		var err error
+		if s.cCodec, err = getCompressionType(compressionCodec); err != nil {
+			return nil, err
+		}
 	case "to_json":
 		s.operator = s.processBatchReader
 	default:
@@ -192,6 +244,7 @@ func (s *parquetProcessor) processBatchWriter(ctx context.Context, batch service
 	if err != nil {
 		return nil, fmt.Errorf("failed to create parquet writer: %w", err)
 	}
+	pw.CompressionType = s.cCodec
 
 	for _, m := range batch {
 		b, err := m.AsBytes()

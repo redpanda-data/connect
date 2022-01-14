@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/cli/studio"
 	clitemplate "github.com/Jeffail/benthos/v3/internal/cli/template"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
@@ -165,12 +166,12 @@ func Run() {
 		Name:  "benthos",
 		Usage: "A stream processor for mundane tasks - https://www.benthos.dev",
 		Description: `
-   Either run Benthos as a stream processor or choose a command:
+Either run Benthos as a stream processor or choose a command:
 
-   benthos list inputs
-   benthos create kafka//file > ./config.yaml
-   benthos -c ./config.yaml
-   benthos -r "./production/*.yaml" -c ./config.yaml`[4:],
+  benthos list inputs
+  benthos create kafka//file > ./config.yaml
+  benthos -c ./config.yaml
+  benthos -r "./production/*.yaml" -c ./config.yaml`[1:],
 		Flags: flags,
 		Before: func(c *cli.Context) error {
 			if dotEnvFile := c.String("env-file"); dotEnvFile != "" {
@@ -233,11 +234,11 @@ func Run() {
 				Name:  "echo",
 				Usage: "Parse a config file and echo back a normalised version",
 				Description: `
-   This simple command is useful for sanity checking a config if it isn't
-   behaving as expected, as it shows you a normalised version after environment
-   variables have been resolved:
+This simple command is useful for sanity checking a config if it isn't
+behaving as expected, as it shows you a normalised version after environment
+variables have been resolved:
 
-   benthos -c ./config.yaml echo | less`[4:],
+  benthos -c ./config.yaml echo | less`[1:],
 				Action: func(c *cli.Context) error {
 					confReader := readConfig(c.String("config"), false, c.StringSlice("resources"), nil, c.StringSlice("set"))
 					if _, err := confReader.Read(&conf); err != nil {
@@ -269,21 +270,21 @@ func Run() {
 				Name:  "streams",
 				Usage: "Run Benthos in streams mode",
 				Description: `
-   Run Benthos in streams mode, where multiple pipelines can be executed in a
-   single process and can be created, updated and removed via REST HTTP
-   endpoints.
+Run Benthos in streams mode, where multiple pipelines can be executed in a
+single process and can be created, updated and removed via REST HTTP
+endpoints.
 
-   benthos streams
-   benthos -c ./root_config.yaml streams
-   benthos streams ./path/to/stream/configs ./and/some/more
-   benthos -c ./root_config.yaml streams ./streams/*.yaml
+  benthos streams
+  benthos -c ./root_config.yaml streams
+  benthos streams ./path/to/stream/configs ./and/some/more
+  benthos -c ./root_config.yaml streams ./streams/*.yaml
 
-   In streams mode the stream fields of a root target config (input, buffer,
-   pipeline, output) will be ignored. Other fields will be shared across all
-   loaded streams (resources, metrics, etc).
+In streams mode the stream fields of a root target config (input, buffer,
+pipeline, output) will be ignored. Other fields will be shared across all
+loaded streams (resources, metrics, etc).
 
-   For more information check out the docs at:
-   https://benthos.dev/docs/guides/streams_mode/about`[4:],
+For more information check out the docs at:
+https://benthos.dev/docs/guides/streams_mode/about`[1:],
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "no-api",
@@ -311,6 +312,7 @@ func Run() {
 			test.CliCommand(testSuffix),
 			clitemplate.CliCommand(),
 			blobl.CliCommand(),
+			studio.CliCommand(Version, DateBuilt),
 		},
 	}
 
