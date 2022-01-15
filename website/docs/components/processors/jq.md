@@ -96,7 +96,7 @@ Default: `false`
 
 ### `output_raw`
 
-Whether to output raw strings instead of JSON texts.
+Whether to output raw text (unquoted) instead of JSON strings when the emitted values are string types.
 
 
 Type: `bool`  
