@@ -42,6 +42,7 @@ label: ""
 jq:
   query: .
   raw: false
+  output_raw: false
 ```
 
 </TabItem>
@@ -88,6 +89,14 @@ Default: `"."`
 ### `raw`
 
 Whether to process the input as a raw string instead of as JSON.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `output_raw`
+
+Whether to output raw strings instead of JSON texts.
 
 
 Type: `bool`  
