@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -288,7 +289,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 	defer done()
 
 	reqURL := *s.schemaRegistryBaseURL
-	reqURL.Path = fmt.Sprintf("%s/subjects/%s/versions/latest", reqURL.Path, subject)
+	reqURL.Path = path.Join(reqURL.Path, fmt.Sprintf("/subjects/%s/versions/latest", subject))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL.String(), http.NoBody)
 	if err != nil {
