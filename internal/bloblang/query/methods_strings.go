@@ -1102,15 +1102,15 @@ var _ = registerSimpleMethod(
 		"format_json", "",
 	).InCategory(
 		MethodCategoryParsing,
-		"Serializes a target value into a pretty-printed JSON byte array.",
-		NewExampleSpec("Serialise the value into a pretty-printed multiline JSON with 4 spaces indentation (default).",
+		"Serializes a target value into a pretty-printed JSON byte array (with 4 space indentation by default).",
+		NewExampleSpec("",
 			`root = this.doc.format_json()`,
 			`{"doc":{"foo":"bar"}}`,
 			`{
     "foo": "bar"
 }`,
 		),
-		NewExampleSpec("Serialise the value into a pretty-printed multiline JSON with 4 spaces indentation.",
+		NewExampleSpec("Provide an argument string in order to customise the indentation used.",
 			`root = this.format_json("  ")`,
 			`{"doc":{"foo":"bar"}}`,
 			`{
@@ -1119,21 +1119,17 @@ var _ = registerSimpleMethod(
   }
 }`,
 		),
-		NewExampleSpec("Serialise the value into a pretty-printed multiline JSON with one tab indentation.",
-			`root = this.format_json("\t")`,
-			`{"doc":{"foo":"bar"}}`,
-			`{
-	"doc": {
-		"foo": "bar"
-	}
-}`,
-		),
 		NewExampleSpec("Use the `.string()` method in order to coerce the result into a string.",
 			`root.doc = this.doc.format_json().string()`,
 			`{"doc":{"foo":"bar"}}`,
 			`{"doc":"{\n    \"foo\": \"bar\"\n}"}`,
 		),
-	).Beta().Param(ParamString("indent", "Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.").Optional().Default(strings.Repeat(" ", 4))),
+	).
+		Beta().
+		Param(ParamString(
+			"indent",
+			"Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.",
+		).Optional().Default(strings.Repeat(" ", 4))),
 	func(args *ParsedParams) (simpleMethod, error) {
 		indentOpt, err := args.FieldOptionalString("indent")
 		if err != nil {

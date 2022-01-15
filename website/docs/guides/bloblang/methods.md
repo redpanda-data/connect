@@ -1853,7 +1853,7 @@ root.body = this.body.bloblang(this.mapping)
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
-Serializes a target value into a pretty-printed JSON byte array.
+Serializes a target value into a pretty-printed JSON byte array (with 4 space indentation by default).
 
 #### Parameters
 
@@ -1862,41 +1862,26 @@ Serializes a target value into a pretty-printed JSON byte array.
 #### Examples
 
 
-Serialise the value into a pretty-printed multiline JSON with 4 spaces indentation (default).
-
 ```coffee
 root = this.doc.format_json()
 
 # In:  {"doc":{"foo":"bar"}}
 # Out: {
-    "foo": "bar"
-}
+#          "foo": "bar"
+#      }
 ```
 
-Serialise the value into a pretty-printed multiline JSON with 4 spaces indentation.
+Provide an argument string in order to customise the indentation used.
 
 ```coffee
 root = this.format_json("  ")
 
 # In:  {"doc":{"foo":"bar"}}
 # Out: {
-  "doc": {
-    "foo": "bar"
-  }
-}
-```
-
-Serialise the value into a pretty-printed multiline JSON with one tab indentation.
-
-```coffee
-root = this.format_json("\t")
-
-# In:  {"doc":{"foo":"bar"}}
-# Out: {
-	"doc": {
-		"foo": "bar"
-	}
-}
+#        "doc": {
+#          "foo": "bar"
+#        }
+#      }
 ```
 
 Use the `.string()` method in order to coerce the result into a string.
@@ -1941,7 +1926,6 @@ root = this.doc.format_yaml()
 
 # In:  {"doc":{"foo":"bar"}}
 # Out: foo: bar
-
 ```
 
 Use the `.string()` method in order to coerce the result into a string.
