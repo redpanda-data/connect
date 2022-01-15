@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Field `sync` added to the `gcp_pubsub` input.
 - New input, processor, and output config field types added to the plugin APIs.
 - Added new experimental `parquet` processor.
+- Field `collection` in `mongodb` processor and output now supports interpolation functions.
 - Field `output_raw` added to the `jq` processor.
 
 ### Fixed

@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
@@ -58,8 +57,6 @@ func TestProcessorIntegration(t *testing.T) {
 		url := "mongodb://localhost:" + resource.GetPort("27017/tcp")
 		conf := client.NewConfig()
 		conf.URL = url
-		conf.Database = "TestDB"
-		conf.Collection = "TestCollection"
 		conf.Username = "mongoadmin"
 		conf.Password = "secret"
 
@@ -74,7 +71,7 @@ func TestProcessorIntegration(t *testing.T) {
 			return err
 		}
 
-		return createCollection(resource, "TestCollection", "mongoadmin", "secret")
+		return mongoClient.Database("TestDB").CreateCollection(context.Background(), "TestCollection")
 	}))
 
 	port := resource.GetPort("27017/tcp")
@@ -459,6 +456,7 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 		name        string
 		message     string
 		marshalMode client.JSONMarshalMode
+		collection  string
 		expected    string
 		expectedErr error
 	}{
@@ -479,7 +477,18 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 			message:     `{"a":"notfound"}`,
 			expectedErr: mongo.ErrNoDocuments,
 		},
+		{
+			name:        "collection interpolation",
+			marshalMode: client.JSONMarshalModeCanonical,
+			collection:  `${!json("col")}`,
+			message:     `{"col":"TestCollection","a":"foo"}`,
+			expected:    `{"a":"foo","b":"bar","c":"baz","answer_to_everything":{"$numberInt":"42"}}`,
+		},
 	} {
+		if tt.collection != "" {
+			conf.MongoDB.MongoDB.Collection = tt.collection
+		}
+
 		conf.MongoDB.JSONMarshalMode = tt.marshalMode
 
 		m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
@@ -496,21 +505,4 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 		diff, explanation := jsondiff.Compare(resMsgs[0].Get(0).Get(), []byte(tt.expected), &jdopts)
 		assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
 	}
-}
-
-func createCollection(resource *dockertest.Resource, collectionName, username, password string) error {
-	_, err := resource.Exec([]string{
-		"mongo",
-		"-u", username,
-		"-p", password,
-		"--authenticationDatabase", "admin",
-		"--eval", "db.createCollection(\"" + collectionName + "\")",
-		"TestDB",
-	}, dockertest.ExecOptions{})
-	if err != nil {
-		return err
-	}
-
-	time.Sleep(time.Second * 1)
-	return nil
 }

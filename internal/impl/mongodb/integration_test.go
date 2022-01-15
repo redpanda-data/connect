@@ -52,8 +52,6 @@ func TestIntegrationMongoDB(t *testing.T) {
 		url := "mongodb://localhost:" + resource.GetPort("27017/tcp")
 		conf := client.NewConfig()
 		conf.URL = url
-		conf.Database = "TestDB"
-		conf.Collection = "TestCollection"
 		conf.Username = "mongoadmin"
 		conf.Password = "secret"
 
@@ -113,7 +111,7 @@ output:
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 				cName := generateCollectionName(testID)
 				vars.Var1 = cName
-				require.NoError(t, createCollection(resource, cName, "mongoadmin", "secret"))
+				require.NoError(t, mongoClient.Database("TestDB").CreateCollection(ctx, cName))
 			}),
 		)
 	})
@@ -144,7 +142,7 @@ cache_resources:
 			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
 				cName := generateCollectionName(testID)
 				vars.Var1 = cName
-				require.NoError(t, createCollection(resource, cName, "mongoadmin", "secret"))
+				require.NoError(t, mongoClient.Database("TestDB").CreateCollection(ctx, cName))
 			}),
 		)
 	})

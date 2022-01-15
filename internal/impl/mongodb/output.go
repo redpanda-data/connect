@@ -9,11 +9,13 @@ import (
 	"time"
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -43,6 +45,7 @@ func init() {
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
 				outputOperationDocs(client.OperationUpdateOne),
+				docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
 				docs.FieldCommon(
 					"write_concern",
 					"The write concern settings for the mongo connection.",
@@ -169,6 +172,10 @@ func NewWriter(
 	if db.wcTimeout, err = time.ParseDuration(conf.WriteConcern.WTimeout); err != nil {
 		return nil, fmt.Errorf("failed to parse write concern wtimeout string: %v", err)
 	}
+	if db.collection, err = interop.NewBloblangField(mgr, conf.MongoConfig.Collection); err != nil {
+		return nil, fmt.Errorf("failed to parse collection expression: %v", err)
+	}
+
 	return db, nil
 }
 
@@ -186,9 +193,11 @@ type Writer struct {
 	hintMap     *mapping.Executor
 	operation   client.Operation
 
-	mu         sync.Mutex
-	client     *mongo.Client
-	collection *mongo.Collection
+	mu                           sync.Mutex
+	client                       *mongo.Client
+	collection                   *field.Expression
+	database                     *mongo.Database
+	writeConcernCollectionOption *options.CollectionOptions
 
 	shutSig *shutdown.Signaller
 }
@@ -235,9 +244,9 @@ func (m *Writer) ConnectWithContext(ctx context.Context) error {
 		return fmt.Errorf("write_concern validation error: %w", err)
 	}
 
-	m.collection = client.
-		Database(m.conf.MongoConfig.Database).
-		Collection(m.conf.MongoConfig.Collection, options.Collection().SetWriteConcern(writeConcern))
+	m.database = client.Database(m.conf.MongoConfig.Database)
+	m.writeConcernCollectionOption = options.Collection().SetWriteConcern(writeConcern)
+
 	m.client = client
 	return nil
 }
@@ -252,7 +261,7 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		return types.ErrNotConnected
 	}
 
-	var writeModels []mongo.WriteModel
+	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
 	err := writer.IterateBatchedSend(msg, func(i int, _ types.Part) error {
 		var err error
 		var filterVal, documentVal types.Part
@@ -307,6 +316,7 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		}
 
 		var writeModel mongo.WriteModel
+		collection := m.database.Collection(collection.String(i, msg), m.writeConcernCollectionOption)
 
 		switch m.operation {
 		case client.OperationInsertOne:
@@ -340,11 +350,12 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		}
 
 		if writeModel != nil {
-			writeModels = append(writeModels, writeModel)
+			writeModelsMap[collection] = append(writeModelsMap[collection], writeModel)
 		}
 		return nil
 	})
 
+	// Check for fatal errors and exit immediately if we encounter one
 	var batchErr *ibatch.Error
 	if err != nil {
 		if !errors.As(err, &batchErr) {
@@ -352,12 +363,17 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		}
 	}
 
-	if len(writeModels) > 0 {
-		if _, err = collection.BulkWrite(ctx, writeModels); err != nil {
-			return err
+	// Dispatch any documents which IterateBatchedSend managed to process successfully
+	if len(writeModelsMap) > 0 {
+		for collection, writeModels := range writeModelsMap {
+			// We should have at least one write model in the slice
+			if _, err := collection.BulkWrite(context.Background(), writeModels); err != nil {
+				return err
+			}
 		}
 	}
 
+	// Return any errors produced by invalid messages from the batch
 	if batchErr != nil {
 		return batchErr
 	}
