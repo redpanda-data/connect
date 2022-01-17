@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 
 - The input codec `chunked` is no longer capped by the packet size of the incoming streams.
 - The `schema_registry_decode` and `schema_registry_encode` processors now honour trailing slashes in the `url` field.
+- Processors configured within `pipeline.processors` now share processors across threads rather than clone them.
 
 ## 3.61.0 - 2021-12-28
 
