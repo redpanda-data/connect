@@ -26,8 +26,6 @@ $ mkdir ./streams
 $ cat > ./streams/foo.yaml <<EOF
 input:
   http_server: {}
-buffer:
-  type: memory
 pipeline:
   threads: 4
   processors:

@@ -29,11 +29,13 @@ try: []
 
 For example, with the following config:
 
-``` yaml
+```yaml
 - try:
-  - type: foo
-  - type: bar
-  - type: baz
+  - foo:
+      foofield1: meow
+  - bar:
+      barfield1: woof
+  - baz: {}
 ```
 
 If the processor `foo` fails for a particular message, that message

@@ -96,7 +96,7 @@ output:
     cases:
       - check: '!errored()'
         output:
-          type: sync_response
+          sync_response: {}
       - output:
           reject: "processing failed due to: ${! error() }"
 ```
@@ -122,7 +122,7 @@ output:
         - todo:9092
         client_id: benthos_serverless
         topic: example_topic
-    - type: sync_response
+    - sync_response: {}
 ```
 
 ## Upload to AWS
