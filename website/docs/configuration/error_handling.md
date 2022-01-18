@@ -87,7 +87,7 @@ pipeline:
           max_loops: 0 # Set this greater than zero to cap the number of attempts
           check: errored()
           processors:
-            - type: catch # Wipe any previous error
+            - catch: [] # Wipe any previous error
             - resource: foo # Attempt this processor until success
 ```
 

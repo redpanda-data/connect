@@ -39,7 +39,7 @@ output:
     - kafka:
         addresses: [ TODO:9092 ]
         topic: foo_topic
-    - type: sync_response
+    - sync_response: {}
       processors:
       - text:
           operator: to_upper

@@ -157,12 +157,30 @@ root.values_two = range(0, this.max, 2)
 [methods.string]: /docs/guides/bloblang/methods#string
 `
 
+func prefixExamples(s []query.ExampleSpec) {
+	for _, spec := range s {
+		for i := range spec.Results {
+			spec.Results[i][0] = strings.ReplaceAll(
+				strings.TrimSuffix(spec.Results[i][0], "\n"),
+				"\n", "\n#      ",
+			)
+			spec.Results[i][1] = strings.ReplaceAll(
+				strings.TrimSuffix(spec.Results[i][1], "\n"),
+				"\n", "\n#      ",
+			)
+		}
+	}
+}
+
 // BloblangFunctionsMarkdown returns a markdown document for all Bloblang
 // functions.
 func BloblangFunctionsMarkdown() ([]byte, error) {
 	ctx := functionsContext{}
 
 	specs := query.FunctionDocs()
+	for _, s := range specs {
+		prefixExamples(s.Examples)
+	}
 
 	for _, cat := range []query.FunctionCategory{
 		query.FunctionCategoryGeneral,
@@ -314,6 +332,12 @@ func BloblangMethodsMarkdown() ([]byte, error) {
 	ctx := methodsContext{}
 
 	specs := query.MethodDocs()
+	for _, s := range specs {
+		prefixExamples(s.Examples)
+		for _, cat := range s.Categories {
+			prefixExamples(cat.Examples)
+		}
+	}
 
 	for _, cat := range []query.MethodCategory{
 		query.MethodCategoryStrings,

@@ -107,6 +107,7 @@ input:
     seed_brokers: [ localhost:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
+    checkpoint_limit: 100
 `
 
 	suite := integration.StreamTests(
@@ -117,6 +118,7 @@ input:
 		integration.StreamTestStreamParallel(1000),
 		integration.StreamTestStreamParallelLossy(1000),
 		integration.StreamTestSendBatchCount(10),
+		integration.StreamTestStreamSaturatedUnacked(200),
 	)
 
 	suite.Run(

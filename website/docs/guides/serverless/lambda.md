@@ -9,10 +9,22 @@ which runs Amazon Linux on the `x86_64` architecture.
 The `benthos-lambda-al2` distribution supports the `provided.al2` runtime,
 which runs Amazon Linux 2 on either the `x86_64` or `arm64` architecture.
 
-It uses the same configuration format as a regular Benthos instance, except it
-is read from the environment variable `BENTHOS_CONFIG` (YAML format). Also, the
-`http`, `input` and `buffer` sections are ignored as the service wide HTTP
-server is not used, and messages are inserted via function invocations.
+It uses the same configuration format as a regular Benthos instance, which can be
+provided in 1 of 2 ways:
+
+1. Inline via the `BENTHOS_CONFIG` environment variable (YAML format).
+2. Via the filesystem using a layer, extension, or container image. By default,
+   the `benthos-lambda` distribution will look for a valid configuration file in
+   the locations listed below. Alternatively, the configuration file path can be
+   set explicity by passing a `BENTHOS_CONFIG_PATH` environment variable.
+  - `./benthos.yaml`
+  - `./config.yaml`
+  - `/benthos.yaml`
+  - `/etc/benthos/config.yaml`
+  - `/etc/benthos.yaml`
+
+Also, the `http`, `input` and `buffer` sections are ignored as the service wide
+HTTP server is not used, and messages are inserted via function invocations.
 
 If the `output` section is omitted in your config then the result of the
 processing pipeline is returned back to the caller, otherwise the resulting data
@@ -84,7 +96,7 @@ output:
     cases:
       - check: '!errored()'
         output:
-          type: sync_response
+          sync_response: {}
       - output:
           reject: "processing failed due to: ${! error() }"
 ```
@@ -110,7 +122,7 @@ output:
         - todo:9092
         client_id: benthos_serverless
         topic: example_topic
-    - type: sync_response
+    - sync_response: {}
 ```
 
 ## Upload to AWS

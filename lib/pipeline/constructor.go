@@ -10,8 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
-
 // Config is a configuration struct for creating parallel processing pipelines.
 // The number of resuling parallel processing pipelines will match the number of
 // threads specified. Processors are executed on each message in the order that
@@ -66,31 +64,25 @@ func New(
 	stats metrics.Type,
 	processorCtors ...types.ProcessorConstructorFunc,
 ) (Type, error) {
-	procs := 0
-	procCtor := func(i *int) (types.Pipeline, error) {
-		processors := make([]types.Processor, len(conf.Processors)+len(processorCtors))
-		for j, procConf := range conf.Processors {
-			pMgr, pLog, pMetrics := interop.LabelChild(fmt.Sprintf("processor.%v", *i), mgr, log, stats)
-			var err error
-			processors[j], err = processor.New(procConf, pMgr, pLog, pMetrics)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
-			}
-			*i++
+	processors := make([]types.Processor, len(conf.Processors)+len(processorCtors))
+	for j, procConf := range conf.Processors {
+		pMgr, pLog, pMetrics := interop.LabelChild(fmt.Sprintf("processor.%v", j), mgr, log, stats)
+		var err error
+		processors[j], err = processor.New(procConf, pMgr, pLog, pMetrics)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 		}
-		for j, procCtor := range processorCtors {
-			var err error
-			processors[j+len(conf.Processors)], err = procCtor()
-			if err != nil {
-				return nil, fmt.Errorf("failed to create processor: %v", err)
-			}
+	}
+	for j, procCtor := range processorCtors {
+		var err error
+		processors[j+len(conf.Processors)], err = procCtor()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create processor: %v", err)
 		}
+	}
+
+	if conf.Threads == 1 {
 		return NewProcessor(log, stats, processors...), nil
 	}
-	if conf.Threads == 1 {
-		return procCtor(&procs)
-	}
-	return NewPool(procCtor, conf.Threads, log, stats)
+	return newPoolV2(conf.Threads, log, stats, processors...)
 }
-
-//------------------------------------------------------------------------------

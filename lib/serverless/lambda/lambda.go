@@ -28,6 +28,9 @@ func Run() {
 		"/etc/benthos/config.yaml",
 		"/etc/benthos.yaml",
 	}
+	if path := os.Getenv("BENTHOS_CONFIG_PATH"); path != "" {
+		defaultPaths = append([]string{path}, defaultPaths...)
+	}
 
 	conf := config.New()
 

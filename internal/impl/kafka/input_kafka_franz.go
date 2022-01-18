@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/checkpoint"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -306,25 +307,39 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			cl.Close()
 			f.storeMsgChan(nil)
 			close(msgChan)
-			f.shutSig.ShutdownComplete()
+			if f.shutSig.ShouldCloseAtLeisure() {
+				f.shutSig.ShutdownComplete()
+			}
 		}()
 
-		pollCtx, done := f.shutSig.CloseAtLeisureCtx(context.Background())
+		closeCtx, done := f.shutSig.CloseAtLeisureCtx(context.Background())
 		defer done()
 
 		for {
-			fetches := cl.PollFetches(pollCtx)
+			// Using a stall prevention context here because I've realised we
+			// might end up disabling literally all the partitions and topics
+			// we're allocated.
+			//
+			// In this case we don't want to actually resume any of them yet so
+			// I add a forced timeout to deal with it.
+			stallCtx, pollDone := context.WithTimeout(closeCtx, time.Second)
+			fetches := cl.PollFetches(stallCtx)
+			pollDone()
+
 			if errs := fetches.Errors(); len(errs) > 0 {
+				// TODO: The documentation from franz-go is top-tier, it should
+				// be straight forward to use some checks to determine whether
+				// restarting the client is actually necessary.
 				cl.Close()
 				for _, kerr := range errs {
-					if !errors.Is(kerr.Err, context.Canceled) {
+					if errors.Is(kerr.Err, context.Canceled) {
 						continue
 					}
 					f.log.Errorf("Kafka poll error on topic %v, partition %v: %v", kerr.Topic, kerr.Partition, kerr.Err)
 				}
 				return
 			}
-			if pollCtx.Err() != nil {
+			if closeCtx.Err() != nil {
 				return
 			}
 
@@ -363,11 +378,13 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 						}
 					},
 				}:
-				case <-pollCtx.Done():
+				case <-closeCtx.Done():
 					return
 				}
 			}
 
+			// Walk all the disabled topic partitions and check whether any of
+			// them can be resumed.
 			resumeTopicPartitions := map[string][]int32{}
 			for pausedTopic, pausedPartitions := range cl.PauseFetchPartitions(pauseTopicPartitions) {
 				for _, pausedPartition := range pausedPartitions {

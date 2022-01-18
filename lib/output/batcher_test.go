@@ -54,16 +54,12 @@ func TestBatcherBasic(t *testing.T) {
 	policyConf := batch.NewPolicyConfig()
 	policyConf.Count = 4
 	batcher, err := batch.NewPolicy(policyConf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	out := &mockOutput{}
 
 	b := NewBatcher(batcher, out, log.Noop(), metrics.Noop())
-	if err := b.Consume(tInChan); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, b.Consume(tInChan))
 
 	tOutChan := out.ts
 
@@ -97,15 +93,11 @@ func TestBatcherBasic(t *testing.T) {
 			}
 		}
 		for range firstBatchExpected {
-			var act error
 			select {
 			case actRes := <-resChan:
-				act = actRes.Error()
+				assert.Equal(t, firstErr, actRes.Error())
 			case <-time.After(time.Second):
 				t.Error("timed out")
-			}
-			if exp := firstErr; exp != act {
-				t.Errorf("Unexpected response: %v != %v", act, exp)
 			}
 		}
 		for _, batch := range secondBatchExpected {
@@ -116,15 +108,11 @@ func TestBatcherBasic(t *testing.T) {
 			}
 		}
 		for range secondBatchExpected {
-			var act error
 			select {
 			case actRes := <-resChan:
-				act = actRes.Error()
+				assert.Equal(t, secondErr, actRes.Error())
 			case <-time.After(time.Second):
 				t.Error("timed out")
-			}
-			if exp := secondErr; exp != act {
-				t.Errorf("Unexpected response: %v != %v", act, exp)
 			}
 		}
 		for _, batch := range finalBatchExpected {
@@ -134,19 +122,25 @@ func TestBatcherBasic(t *testing.T) {
 				t.Error("timed out")
 			}
 		}
+		close(tInChan)
 		for range finalBatchExpected {
-			var act error
 			select {
 			case actRes := <-resChan:
-				act = actRes.Error()
+				assert.Equal(t, finalErr, actRes.Error())
 			case <-time.After(time.Second):
 				t.Error("timed out")
 			}
-			if exp := finalErr; exp != act {
-				t.Errorf("Unexpected response: %v != %v", act, exp)
-			}
 		}
 	}()
+
+	sendResponse := func(rChan chan<- types.Response, err error) {
+		defer wg.Done()
+		select {
+		case rChan <- response.NewError(err):
+		case <-time.After(time.Second):
+			t.Error("timed out")
+		}
+	}
 
 	// Receive first batch on output
 	var outTr types.Transaction
@@ -159,14 +153,7 @@ func TestBatcherBasic(t *testing.T) {
 		t.Errorf("Wrong result from batch: %s != %s", act, exp)
 	}
 	wg.Add(1)
-	go func(rChan chan<- types.Response, err error) {
-		defer wg.Done()
-		select {
-		case rChan <- response.NewError(err):
-		case <-time.After(time.Second):
-			t.Error("timed out")
-		}
-	}(outTr.ResponseChan, firstErr)
+	go sendResponse(outTr.ResponseChan, firstErr)
 
 	// Receive second batch on output
 	select {
@@ -178,23 +165,7 @@ func TestBatcherBasic(t *testing.T) {
 		t.Errorf("Wrong result from batch: %s != %s", act, exp)
 	}
 	wg.Add(1)
-	go func(rChan chan<- types.Response, err error) {
-		defer wg.Done()
-		select {
-		case rChan <- response.NewError(err):
-		case <-time.After(time.Second):
-			t.Error("timed out")
-		}
-	}(outTr.ResponseChan, secondErr)
-
-	// Check for empty buffer
-	select {
-	case <-tOutChan:
-		t.Error("Unexpected batch")
-	case <-time.After(time.Millisecond * 100):
-	}
-
-	b.CloseAsync()
+	go sendResponse(outTr.ResponseChan, secondErr)
 
 	// Receive final batch on output
 	select {
@@ -206,18 +177,9 @@ func TestBatcherBasic(t *testing.T) {
 		t.Errorf("Wrong result from batch: %s != %s", act, exp)
 	}
 	wg.Add(1)
-	go func(rChan chan<- types.Response, err error) {
-		defer wg.Done()
-		select {
-		case rChan <- response.NewError(err):
-		case <-time.After(time.Second):
-			t.Error("timed out")
-		}
-	}(outTr.ResponseChan, finalErr)
+	go sendResponse(outTr.ResponseChan, finalErr)
 
-	if err = b.WaitForClose(time.Second * 10); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, b.WaitForClose(time.Second*10))
 	wg.Wait()
 }
 
@@ -295,6 +257,7 @@ func TestBatcherBatchError(t *testing.T) {
 		}
 	}
 
+	close(tInChan)
 	b.CloseAsync()
 
 	if err = b.WaitForClose(time.Second * 5); err != nil {
@@ -346,13 +309,13 @@ func TestBatcherTimed(t *testing.T) {
 		t.Errorf("Wrong result from batch: %s != %s", act, exp)
 	}
 
+	close(tInChan)
 	b.CloseAsync()
 	if err = b.WaitForClose(time.Second); err != nil {
 		t.Error(err)
 	}
 
 	close(resChan)
-	close(tInChan)
 }
 
 //------------------------------------------------------------------------------

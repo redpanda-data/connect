@@ -119,7 +119,6 @@ func ConfigDocs() docs.FieldSpecs {
 			"mongodb://localhost:27017",
 		),
 		docs.FieldCommon("database", "The name of the target MongoDB DB."),
-		docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB."),
 		docs.FieldCommon("username", "The username to connect to the database."),
 		docs.FieldCommon("password", "The password to connect to the database."),
 	}

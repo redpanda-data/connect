@@ -116,7 +116,7 @@ behavior is false, which will drop the message.`,
 		).Linter(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
 			gObj := gabs.Wrap(value)
 			retry, exists := gObj.S("retry_until_success").Data().(bool)
-			// TODO V4: Is retry_until_success going to be false by default now?
+			// TODO: V4 Is retry_until_success going to be false by default now?
 			if exists && !retry {
 				return nil
 			}

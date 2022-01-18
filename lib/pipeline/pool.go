@@ -32,6 +32,7 @@ type Pool struct {
 }
 
 // NewPool returns a new pipeline pool that utilises multiple processor threads.
+// TODO: V4 Remove this
 func NewPool(
 	constructor types.PipelineConstructorFunc,
 	threads int,
@@ -58,6 +59,33 @@ func NewPool(
 		if p.workers[i], err = constructor(&procs); err != nil {
 			return nil, err
 		}
+	}
+
+	return p, nil
+}
+
+func newPoolV2(
+	threads int,
+	log log.Modular,
+	stats metrics.Type,
+	msgProcessors ...types.Processor,
+) (*Pool, error) {
+	if threads <= 0 {
+		threads = runtime.NumCPU()
+	}
+
+	p := &Pool{
+		running:     1,
+		workers:     make([]types.Pipeline, threads),
+		log:         log,
+		stats:       stats,
+		messagesOut: make(chan types.Transaction),
+		closeChan:   make(chan struct{}),
+		closed:      make(chan struct{}),
+	}
+
+	for i := range p.workers {
+		p.workers[i] = NewProcessor(log, stats, msgProcessors...)
 	}
 
 	return p, nil

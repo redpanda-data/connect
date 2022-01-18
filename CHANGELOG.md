@@ -10,10 +10,16 @@ All notable changes to this project will be documented in this file.
 - Field `sync` added to the `gcp_pubsub` input.
 - New input, processor, and output config field types added to the plugin APIs.
 - Added new experimental `parquet` processor.
+- New Bloblang method `format_json`.
+- Field `collection` in `mongodb` processor and output now supports interpolation functions.
+- Field `output_raw` added to the `jq` processor.
+- The lambda distribution now supports a `BENTHOS_CONFIG_PATH` environment variable for specifying a custom config path.
 
 ### Fixed
 
 - The input codec `chunked` is no longer capped by the packet size of the incoming streams.
+- The `schema_registry_decode` and `schema_registry_encode` processors now honour trailing slashes in the `url` field.
+- Processors configured within `pipeline.processors` now share processors across threads rather than clone them.
 
 ## 3.61.0 - 2021-12-28
 
