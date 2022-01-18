@@ -1,6 +1,7 @@
 package query
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/oschwald/geoip2-golang"
@@ -8,10 +9,10 @@ import (
 
 var _ = registerSimpleMethod(
 	NewMethodSpec(
-		"geoip_city", "",
+		"geoip_city",
+		"Takes an IP address as a string and returns a geoip2 City struct and/or an error. ",
 	).Param(ParamString("path", "Path to city mmdb file")),
 	func(args *ParsedParams) (simpleMethod, error) {
-		// TODO: Ensure path is a static. Unsure how to accomplish this
 		path, err := args.FieldString("path")
 		if err != nil {
 			return nil, err
@@ -20,8 +21,6 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-
-		// TODO db.Close(), finalizer?
 
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var ip net.IP
@@ -33,26 +32,305 @@ var _ = registerSimpleMethod(
 			case string:
 				ip = net.ParseIP(t)
 			default:
-				return nil, NewTypeError(v, ValueString)
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
 			}
 
-			// TODO: ip will be 'nil' if not a valid v4/v6 address. How to handle?
-			// It currently winds up reporting this when invalid:
-			//    "failed assignment (line 2): field `this.ip`: IP passed to Lookup cannot be nil"
-			// should we add context? IE what the lookup value is?
-			geoip_city, err := db.City(ip)
+			if ip == nil {
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			geoipCity, err := db.City(ip)
 			if err != nil {
 				return nil, err
 			}
-			return geoip_city, nil
+			return geoipCity, nil
 		}, nil
 	},
 )
 
-// TODO: geoip_country
-// TODO: geoip_asn
-// TODO: geoip_enterprise
-// TODO: geoip_anonymous_ip
-// TODO: geoip_connection_type
-// TODO: geoip_domain
-// TODO: geoip_isp
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"geoip_country",
+		"Takes an IP address as a string and returns a geoip2 Country struct and/or an error. ",
+	).Param(ParamString("path", "Path to city mmdb file")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		path, err := args.FieldString("path")
+		if err != nil {
+			return nil, err
+		}
+		db, err := geoip2.Open(path)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			var ip net.IP
+
+			// Cast to string type
+			switch t := v.(type) {
+			case []byte:
+				ip = net.ParseIP(string(t))
+			case string:
+				ip = net.ParseIP(t)
+			default:
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			if ip == nil {
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			geoipCountry, err := db.Country(ip)
+			if err != nil {
+				return nil, err
+			}
+			return geoipCountry, nil
+		}, nil
+	},
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"geoip_asn",
+		"Takes an IP address as a string and returns a geoip2 ASN struct and/or an error. ",
+	).Param(ParamString("path", "Path to city mmdb file")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		path, err := args.FieldString("path")
+		if err != nil {
+			return nil, err
+		}
+		db, err := geoip2.Open(path)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			var ip net.IP
+
+			// Cast to string type
+			switch t := v.(type) {
+			case []byte:
+				ip = net.ParseIP(string(t))
+			case string:
+				ip = net.ParseIP(t)
+			default:
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			if ip == nil {
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			geoipASN, err := db.ASN(ip)
+			if err != nil {
+				return nil, err
+			}
+			return geoipASN, nil
+		}, nil
+	},
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"geoip_enterprise",
+		"Takes an IP address as a string and returns a geoip2 Enterprise struct and/or an error. ",
+	).Param(ParamString("path", "Path to city mmdb file")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		path, err := args.FieldString("path")
+		if err != nil {
+			return nil, err
+		}
+		db, err := geoip2.Open(path)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			var ip net.IP
+
+			// Cast to string type
+			switch t := v.(type) {
+			case []byte:
+				ip = net.ParseIP(string(t))
+			case string:
+				ip = net.ParseIP(t)
+			default:
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			if ip == nil {
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			geoipEnterprise, err := db.Enterprise(ip)
+			if err != nil {
+				return nil, err
+			}
+			return geoipEnterprise, nil
+		}, nil
+	},
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"geoip_anonymous_ip",
+		"Takes an IP address as a string and returns a geoip2 AnonymousIP struct and/or an error. ",
+	).Param(ParamString("path", "Path to city mmdb file")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		path, err := args.FieldString("path")
+		if err != nil {
+			return nil, err
+		}
+		db, err := geoip2.Open(path)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			var ip net.IP
+
+			// Cast to string type
+			switch t := v.(type) {
+			case []byte:
+				ip = net.ParseIP(string(t))
+			case string:
+				ip = net.ParseIP(t)
+			default:
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			if ip == nil {
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			geoipAnonymousIP, err := db.AnonymousIP(ip)
+			if err != nil {
+				return nil, err
+			}
+			return geoipAnonymousIP, nil
+		}, nil
+	},
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"geoip_connection_type",
+		"Takes an IP address as a string and returns a geoip2 ConnectionType struct and/or an error. ",
+	).Param(ParamString("path", "Path to city mmdb file")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		path, err := args.FieldString("path")
+		if err != nil {
+			return nil, err
+		}
+		db, err := geoip2.Open(path)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			var ip net.IP
+
+			// Cast to string type
+			switch t := v.(type) {
+			case []byte:
+				ip = net.ParseIP(string(t))
+			case string:
+				ip = net.ParseIP(t)
+			default:
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			if ip == nil {
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			geoipConnectionType, err := db.ConnectionType(ip)
+			if err != nil {
+				return nil, err
+			}
+			return geoipConnectionType, nil
+		}, nil
+	},
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"geoip_domain",
+		"Takes an IP address as a string and returns a geoip2 Domain struct and/or an error. ",
+	).Param(ParamString("path", "Path to city mmdb file")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		path, err := args.FieldString("path")
+		if err != nil {
+			return nil, err
+		}
+		db, err := geoip2.Open(path)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			var ip net.IP
+
+			// Cast to string type
+			switch t := v.(type) {
+			case []byte:
+				ip = net.ParseIP(string(t))
+			case string:
+				ip = net.ParseIP(t)
+			default:
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			if ip == nil {
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			geoipDomain, err := db.Domain(ip)
+			if err != nil {
+				return nil, err
+			}
+			return geoipDomain, nil
+		}, nil
+	},
+)
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"geoip_isp",
+		"Takes an IP address as a string and returns a geoip2 ISP struct and/or an error. ",
+	).Param(ParamString("path", "Path to city mmdb file")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		path, err := args.FieldString("path")
+		if err != nil {
+			return nil, err
+		}
+		db, err := geoip2.Open(path)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			var ip net.IP
+
+			// Cast to string type
+			switch t := v.(type) {
+			case []byte:
+				ip = net.ParseIP(string(t))
+			case string:
+				ip = net.ParseIP(t)
+			default:
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			if ip == nil {
+				return nil, fmt.Errorf("value %v does not appear to be a valid v4 or v6 IP address", v)
+			}
+
+			geoipISP, err := db.ISP(ip)
+			if err != nil {
+				return nil, err
+			}
+			return geoipISP, nil
+		}, nil
+	},
+)
