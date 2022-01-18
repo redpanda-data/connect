@@ -1969,6 +1969,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
+// TODO: V4 Rename this to `re_replace_all`
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"re_replace", "",
