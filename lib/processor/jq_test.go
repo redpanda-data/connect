@@ -122,6 +122,18 @@ func TestJQ(t *testing.T) {
 			output: `true`,
 		},
 		{
+			name:   "null result",
+			path:   ".baz.qux",
+			input:  `{"foo":{"bar":true}}`,
+			output: `null`,
+		},
+		{
+			name:   "empty string",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":""}}`,
+			output: `""`,
+		},
+		{
 			name:   "convert to csv",
 			path:   "[.ts,.id,.msg] | @csv",
 			input:  `{"id":"1054fe28","msg":"sample \"log\"","ts":1641393111}`,
@@ -199,6 +211,18 @@ func TestJQ_OutputRaw(t *testing.T) {
 			path:   ".foo.bar",
 			input:  `{"foo":{"bar":true}}`,
 			output: `true`,
+		},
+		{
+			name:   "null result",
+			path:   ".baz.qux",
+			input:  `{"foo":{"bar":true}}`,
+			output: `null`,
+		},
+		{
+			name:   "empty string",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":""}}`,
+			output: ``,
 		},
 		{
 			name:   "convert to csv",

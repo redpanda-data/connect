@@ -240,7 +240,11 @@ func (j *JQ) ProcessMessage(msg types.Message) ([]types.Message, types.Response)
 				return false, err
 			}
 
-			if len(raw) == 0 {
+			// Sometimes the query result is an empty string. Example:
+			//    echo '{ "foo": "" }' | jq .foo
+			// In that case we want pass on the empty string instead of treating it as
+			// an empty message and dropping it
+			if len(raw) == 0 && len(emitted) == 0 {
 				j.mDroppedParts.Incr(1)
 				return false, nil
 			}
