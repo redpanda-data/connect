@@ -126,6 +126,8 @@ Default: `""`
 
 Specify the subscription type for this consumer.
 
+> NOTE: Using `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages using pulsar-client-go sets [non-zero nack delivery delay](https://github.com/apache/pulsar-client-go/blob/6385727f1a5e40e144f3239794135b5399a5a49e/pulsar/consumer.go#L141-L143) - this can cause consumers getting stuck. See [Pulsar documentation](https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement) and [this Github issue](https://github.com/apache/pulsar/issues/12208) for more details.
+
 
 Type: `string`  
 Default: `"shared"`  

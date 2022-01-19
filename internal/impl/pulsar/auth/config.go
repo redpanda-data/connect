@@ -78,6 +78,17 @@ func (c *OAuth2Config) Validate() error {
 	return nil
 }
 
+// ToMap returns OAuth2Config as a map representing OAuth2 client credentails.
+func (c *OAuth2Config) ToMap() map[string]string {
+	// Pulsar docs: https://pulsar.apache.org/docs/en/2.8.0/security-oauth2/#go-client
+	return map[string]string{
+		"type":       "client_credentials",
+		"issuerUrl":  c.IssuerURL,
+		"audience":   c.Audience,
+		"privateKey": c.PrivateKeyFile,
+	}
+}
+
 // Validate checks whether TokenConfig is valid.
 func (c *TokenConfig) Validate() error {
 	if c.Token == "" {

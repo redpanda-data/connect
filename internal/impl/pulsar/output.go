@@ -119,10 +119,19 @@ func (p *pulsarWriter) ConnectWithContext(ctx context.Context) error {
 		err      error
 	)
 
-	if client, err = pulsar.NewClient(pulsar.ClientOptions{
-		URL:    p.conf.URL,
-		Logger: DefaultLogger(p.log),
-	}); err != nil {
+	opts := pulsar.ClientOptions{
+		Logger:            DefaultLogger(p.log),
+		ConnectionTimeout: time.Second * 3,
+		URL:               p.conf.URL,
+	}
+
+	if p.conf.Auth.OAuth2.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationOAuth2(p.conf.Auth.OAuth2.ToMap())
+	} else if p.conf.Auth.Token.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationToken(p.conf.Auth.Token.Token)
+	}
+
+	if client, err = pulsar.NewClient(opts); err != nil {
 		return err
 	}
 
