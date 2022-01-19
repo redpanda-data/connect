@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 
@@ -43,7 +44,13 @@ var _ = registerSimpleMethod(
 			if err != nil {
 				return nil, err
 			}
-			return geoipCity, nil
+			tmp, err := json.Marshal(geoipCity)
+			if err != nil {
+				return nil, err
+			}
+			var p map[string]interface{}
+			err = json.Unmarshal(tmp, &p)
+			return p, nil
 		}, nil
 	},
 )
@@ -81,10 +88,13 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipCountry, err := db.Country(ip)
+			tmp, err := json.Marshal(geoipCountry)
 			if err != nil {
 				return nil, err
 			}
-			return geoipCountry, nil
+			var p map[string]interface{}
+			err = json.Unmarshal(tmp, &p)
+			return p, nil
 		}, nil
 	},
 )
@@ -122,10 +132,13 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipASN, err := db.ASN(ip)
+			tmp, err := json.Marshal(geoipASN)
 			if err != nil {
 				return nil, err
 			}
-			return geoipASN, nil
+			var p map[string]interface{}
+			err = json.Unmarshal(tmp, &p)
+			return p, nil
 		}, nil
 	},
 )
@@ -163,10 +176,13 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipEnterprise, err := db.Enterprise(ip)
+			tmp, err := json.Marshal(geoipEnterprise)
 			if err != nil {
 				return nil, err
 			}
-			return geoipEnterprise, nil
+			var p map[string]interface{}
+			err = json.Unmarshal(tmp, &p)
+			return p, nil
 		}, nil
 	},
 )
@@ -204,10 +220,13 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipAnonymousIP, err := db.AnonymousIP(ip)
+			tmp, err := json.Marshal(geoipAnonymousIP)
 			if err != nil {
 				return nil, err
 			}
-			return geoipAnonymousIP, nil
+			var p map[string]interface{}
+			err = json.Unmarshal(tmp, &p)
+			return p, nil
 		}, nil
 	},
 )
@@ -245,10 +264,13 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipConnectionType, err := db.ConnectionType(ip)
+			tmp, err := json.Marshal(geoipConnectionType)
 			if err != nil {
 				return nil, err
 			}
-			return geoipConnectionType, nil
+			var p map[string]interface{}
+			err = json.Unmarshal(tmp, &p)
+			return p, nil
 		}, nil
 	},
 )
@@ -286,10 +308,13 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipDomain, err := db.Domain(ip)
+			tmp, err := json.Marshal(geoipDomain)
 			if err != nil {
 				return nil, err
 			}
-			return geoipDomain, nil
+			var p map[string]interface{}
+			err = json.Unmarshal(tmp, &p)
+			return p, nil
 		}, nil
 	},
 )
@@ -327,10 +352,13 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipISP, err := db.ISP(ip)
+			tmp, err := json.Marshal(geoipISP)
 			if err != nil {
 				return nil, err
 			}
-			return geoipISP, nil
+			var p map[string]interface{}
+			err = json.Unmarshal(tmp, &p)
+			return p, nil
 		}, nil
 	},
 )
