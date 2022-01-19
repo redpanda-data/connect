@@ -91,6 +91,9 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipCountry, err := db.Country(ip)
+			if err != nil {
+				return nil, err
+			}
 			tmp, err := json.Marshal(geoipCountry)
 			if err != nil {
 				return nil, err
@@ -138,6 +141,9 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipASN, err := db.ASN(ip)
+			if err != nil {
+				return nil, err
+			}
 			tmp, err := json.Marshal(geoipASN)
 			if err != nil {
 				return nil, err
@@ -185,6 +191,9 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipEnterprise, err := db.Enterprise(ip)
+			if err != nil {
+				return nil, err
+			}
 			tmp, err := json.Marshal(geoipEnterprise)
 			if err != nil {
 				return nil, err
@@ -232,6 +241,9 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipAnonymousIP, err := db.AnonymousIP(ip)
+			if err != nil {
+				return nil, err
+			}
 			tmp, err := json.Marshal(geoipAnonymousIP)
 			if err != nil {
 				return nil, err
@@ -279,6 +291,9 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipConnectionType, err := db.ConnectionType(ip)
+			if err != nil {
+				return nil, err
+			}
 			tmp, err := json.Marshal(geoipConnectionType)
 			if err != nil {
 				return nil, err
@@ -326,6 +341,9 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipDomain, err := db.Domain(ip)
+			if err != nil {
+				return nil, err
+			}
 			tmp, err := json.Marshal(geoipDomain)
 			if err != nil {
 				return nil, err
@@ -373,6 +391,9 @@ var _ = registerSimpleMethod(
 			}
 
 			geoipISP, err := db.ISP(ip)
+			if err != nil {
+				return nil, err
+			}
 			tmp, err := json.Marshal(geoipISP)
 			if err != nil {
 				return nil, err
