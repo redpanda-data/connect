@@ -1,6 +1,11 @@
 package writer
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+)
 
 func TestSQSHeaderCheck(t *testing.T) {
 	type testCase struct {
@@ -92,4 +97,13 @@ func TestSQSHeaderCheck(t *testing.T) {
 			t.Errorf("Unexpected result for test '%v': %v != %v", i, act, exp)
 		}
 	}
+}
+
+type mockSqs struct {
+	sqsiface.SQSAPI
+	fn func(*sqs.SendMessageBatchInput) (*sqs.SendMessageBatchOutput, error)
+}
+
+func (m *mockSqs) SendMessageBatch(input *sqs.SendMessageBatchInput) (*sqs.SendMessageBatchOutput, error) {
+	return m.fn(input)
 }

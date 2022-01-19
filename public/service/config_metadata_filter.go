@@ -20,7 +20,7 @@ func NewMetadataFilterField(name string) *ConfigField {
 // MetadataFilter provides a configured mechanism for filtering metadata
 // key/values from a message.
 type MetadataFilter struct {
-	f *metadata.Filter
+	f *metadata.IncludeFilter
 }
 
 // Walk iterates the filtered metadata key/value pairs from a message and
@@ -58,7 +58,7 @@ func (p *ParsedConfig) FieldMetadataFilter(path ...string) (f *MetadataFilter, e
 		return
 	}
 
-	var filter *metadata.Filter
+	var filter *metadata.IncludeFilter
 	if filter, err = conf.CreateFilter(); err != nil {
 		return
 	}

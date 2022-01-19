@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -24,10 +24,10 @@ import (
 
 // SNSConfig contains configuration fields for the output SNS type.
 type SNSConfig struct {
-	TopicArn               string          `json:"topic_arn" yaml:"topic_arn"`
-	MessageGroupID         string          `json:"message_group_id" yaml:"message_group_id"`
-	MessageDeduplicationID string          `json:"message_deduplication_id" yaml:"message_deduplication_id"`
-	Metadata               output.Metadata `json:"metadata" yaml:"metadata"`
+	TopicArn               string                       `json:"topic_arn" yaml:"topic_arn"`
+	MessageGroupID         string                       `json:"message_group_id" yaml:"message_group_id"`
+	MessageDeduplicationID string                       `json:"message_deduplication_id" yaml:"message_deduplication_id"`
+	Metadata               metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
 	sessionConfig          `json:",inline" yaml:",inline"`
 	Timeout                string `json:"timeout" yaml:"timeout"`
 	MaxInFlight            int    `json:"max_in_flight" yaml:"max_in_flight"`
@@ -42,7 +42,7 @@ func NewSNSConfig() SNSConfig {
 		TopicArn:               "",
 		MessageGroupID:         "",
 		MessageDeduplicationID: "",
-		Metadata:               output.NewMetadata(),
+		Metadata:               metadata.NewExcludeFilterConfig(),
 		Timeout:                "5s",
 		MaxInFlight:            1,
 	}
@@ -57,7 +57,7 @@ type SNS struct {
 
 	groupID    *field.Expression
 	dedupeID   *field.Expression
-	metaFilter *output.MetadataFilter
+	metaFilter *metadata.ExcludeFilter
 
 	session *session.Session
 	sns     *sns.SNS

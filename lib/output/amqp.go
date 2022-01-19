@@ -1,8 +1,8 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -43,7 +43,7 @@ Please use [` + "`amqp_0_9`" + `](/docs/components/outputs/amqp_0_9) instead.`,
 			docs.FieldCommon("type", "The type property to set for each message.").IsInterpolated(),
 			docs.FieldAdvanced("content_type", "The content type attribute to set for each message.").IsInterpolated(),
 			docs.FieldAdvanced("content_encoding", "The content encoding attribute to set for each message.").IsInterpolated(),
-			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(output.MetadataFields()...),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(metadata.ExcludeFilterFields()...),
 			docs.FieldAdvanced("priority", "Set the priority of each message with a dynamic interpolated expression.", "0", `${! meta("amqp_priority") }`, `${! json("doc.priority") }`).IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("persistent", "Whether message delivery should be persistent (transient by default)."),

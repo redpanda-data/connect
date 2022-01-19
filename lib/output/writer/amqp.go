@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -38,21 +38,21 @@ type AMQPExchangeDeclareConfig struct {
 
 // AMQPConfig contains configuration fields for the AMQP output type.
 type AMQPConfig struct {
-	URL             string                    `json:"url" yaml:"url"`
-	URLs            []string                  `json:"urls" yaml:"urls"`
-	MaxInFlight     int                       `json:"max_in_flight" yaml:"max_in_flight"`
-	Exchange        string                    `json:"exchange" yaml:"exchange"`
-	ExchangeDeclare AMQPExchangeDeclareConfig `json:"exchange_declare" yaml:"exchange_declare"`
-	BindingKey      string                    `json:"key" yaml:"key"`
-	Type            string                    `json:"type" yaml:"type"`
-	ContentType     string                    `json:"content_type" yaml:"content_type"`
-	ContentEncoding string                    `json:"content_encoding" yaml:"content_encoding"`
-	Metadata        output.Metadata           `json:"metadata" yaml:"metadata"`
-	Priority        string                    `json:"priority" yaml:"priority"`
-	Persistent      bool                      `json:"persistent" yaml:"persistent"`
-	Mandatory       bool                      `json:"mandatory" yaml:"mandatory"`
-	Immediate       bool                      `json:"immediate" yaml:"immediate"`
-	TLS             btls.Config               `json:"tls" yaml:"tls"`
+	URL             string                       `json:"url" yaml:"url"`
+	URLs            []string                     `json:"urls" yaml:"urls"`
+	MaxInFlight     int                          `json:"max_in_flight" yaml:"max_in_flight"`
+	Exchange        string                       `json:"exchange" yaml:"exchange"`
+	ExchangeDeclare AMQPExchangeDeclareConfig    `json:"exchange_declare" yaml:"exchange_declare"`
+	BindingKey      string                       `json:"key" yaml:"key"`
+	Type            string                       `json:"type" yaml:"type"`
+	ContentType     string                       `json:"content_type" yaml:"content_type"`
+	ContentEncoding string                       `json:"content_encoding" yaml:"content_encoding"`
+	Metadata        metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
+	Priority        string                       `json:"priority" yaml:"priority"`
+	Persistent      bool                         `json:"persistent" yaml:"persistent"`
+	Mandatory       bool                         `json:"mandatory" yaml:"mandatory"`
+	Immediate       bool                         `json:"immediate" yaml:"immediate"`
+	TLS             btls.Config                  `json:"tls" yaml:"tls"`
 }
 
 // NewAMQPConfig creates a new AMQPConfig with default values.
@@ -71,7 +71,7 @@ func NewAMQPConfig() AMQPConfig {
 		Type:            "",
 		ContentType:     "application/octet-stream",
 		ContentEncoding: "",
-		Metadata:        output.NewMetadata(),
+		Metadata:        metadata.NewExcludeFilterConfig(),
 		Priority:        "",
 		Persistent:      false,
 		Mandatory:       false,
@@ -89,7 +89,7 @@ type AMQP struct {
 	contentType     *field.Expression
 	contentEncoding *field.Expression
 	priority        *field.Expression
-	metaFilter      *output.MetadataFilter
+	metaFilter      *metadata.ExcludeFilter
 
 	log   log.Modular
 	stats metrics.Type

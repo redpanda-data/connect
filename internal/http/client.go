@@ -39,7 +39,7 @@ type Client struct {
 	url        *field.Expression
 	headers    map[string]*field.Expression
 	host       *field.Expression
-	metaFilter *metadata.Filter
+	metaFilter *metadata.IncludeFilter
 
 	conf          client.Config
 	retryThrottle *throttle.Type
