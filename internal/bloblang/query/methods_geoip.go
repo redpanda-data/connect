@@ -50,6 +50,9 @@ var _ = registerSimpleMethod(
 			}
 			var p map[string]interface{}
 			err = json.Unmarshal(tmp, &p)
+			if err != nil {
+				return nil, err
+			}
 			return p, nil
 		}, nil
 	},
@@ -94,6 +97,9 @@ var _ = registerSimpleMethod(
 			}
 			var p map[string]interface{}
 			err = json.Unmarshal(tmp, &p)
+			if err != nil {
+				return nil, err
+			}
 			return p, nil
 		}, nil
 	},
@@ -138,6 +144,9 @@ var _ = registerSimpleMethod(
 			}
 			var p map[string]interface{}
 			err = json.Unmarshal(tmp, &p)
+			if err != nil {
+				return nil, err
+			}
 			return p, nil
 		}, nil
 	},
@@ -182,6 +191,9 @@ var _ = registerSimpleMethod(
 			}
 			var p map[string]interface{}
 			err = json.Unmarshal(tmp, &p)
+			if err != nil {
+				return nil, err
+			}
 			return p, nil
 		}, nil
 	},
@@ -226,6 +238,9 @@ var _ = registerSimpleMethod(
 			}
 			var p map[string]interface{}
 			err = json.Unmarshal(tmp, &p)
+			if err != nil {
+				return nil, err
+			}
 			return p, nil
 		}, nil
 	},
@@ -270,6 +285,9 @@ var _ = registerSimpleMethod(
 			}
 			var p map[string]interface{}
 			err = json.Unmarshal(tmp, &p)
+			if err != nil {
+				return nil, err
+			}
 			return p, nil
 		}, nil
 	},
@@ -314,6 +332,9 @@ var _ = registerSimpleMethod(
 			}
 			var p map[string]interface{}
 			err = json.Unmarshal(tmp, &p)
+			if err != nil {
+				return nil, err
+			}
 			return p, nil
 		}, nil
 	},
@@ -358,6 +379,9 @@ var _ = registerSimpleMethod(
 			}
 			var p map[string]interface{}
 			err = json.Unmarshal(tmp, &p)
+			if err != nil {
+				return nil, err
+			}
 			return p, nil
 		}, nil
 	},
