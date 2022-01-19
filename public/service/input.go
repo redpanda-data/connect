@@ -138,9 +138,9 @@ func (a *airGapReader) ReadWithContext(ctx context.Context) (types.Message, read
 
 func (a *airGapReader) CloseAsync() {
 	go func() {
-		if err := a.r.Close(context.Background()); err == nil {
-			a.sig.ShutdownComplete()
-		}
+		// TODO: Determine whether to continue trying or log/exit.
+		_ = a.r.Close(context.Background())
+		a.sig.ShutdownComplete()
 	}()
 }
 

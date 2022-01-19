@@ -98,9 +98,9 @@ func (a *airGapWriter) WriteWithContext(ctx context.Context, msg types.Message) 
 
 func (a *airGapWriter) CloseAsync() {
 	go func() {
-		if err := a.w.Close(context.Background()); err == nil {
-			a.sig.ShutdownComplete()
-		}
+		// TODO: Determine whether to continue trying or log/exit.
+		_ = a.w.Close(context.Background())
+		a.sig.ShutdownComplete()
 	}()
 }
 
