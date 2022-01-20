@@ -40,6 +40,18 @@ grep "Jeffail/benthos/v3" . -Rl | grep -e "\.go$" | xargs -I{} sed -i 's/Jeffail
 
 All components, features and configuration fields that were marked as deprecated in the latest release of V3 have been removed in V4.
 
+### Old Style Interpolation Functions Removed
+
+The original style of interpolation functions, where you specify a function name followed by a colon and then any arguments (`${!json:foo,1}`) has been deprecated (and undocumented) for a while now. What we've had instead is a subset of Bloblang allowing you to use functions directly (`${! json("foo").from(1) }`), but with the old style still supported for backwards compatibility.
+
+However, supporting the old style means our parsing capabilities are weakened and so it is now removed in order to allow more powerful interpolations in the future.
+
+### Env Var Docker Configuration
+
+Docker builds will no longer come with a default config that contains generated environment variables. This system doesn't scale at all for complex configuration files and was becoming a challenge to maintain (and also huge). Instead, the new `-s` flag has been the preferred way to configure Benthos through arguments and will need to be used exclusively in V4.
+
+It's worth noting that this does not prevent you from defining your own env var based configuration and adding that to your docker image. It's entirely possible to copy the config from V3 and have that work, it just won't be present by default any more.
+
 ### Old Plugin APIs Removed
 
 Any packages from within the `lib` directory have been removed. Please use only the APIs within the `public` directory, the API docs count be found on [pkg.go.dev][plugins.docs], and examples can be found in the [`benthos-plugin-example` repository][plugins.repo]. These new APIs can be found in V3 so if you have many components you can migrate them incrementally by sticking with V3 until completion.
