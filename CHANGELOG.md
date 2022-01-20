@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - Processors configured within `pipeline.processors` now share processors across threads rather than clone them.
 - Go API: Errors returned from input/output plugin `Close` methods no longer cause shutdown to block.
 - The `pulsar` output should now follow authentication configuration.
+- Fixed an issue where the `aws_sqs` output might occasionally retry a failed message send with an invalid empty message body.
 
 ## 3.61.0 - 2021-12-28
 

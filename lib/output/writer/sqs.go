@@ -159,6 +159,7 @@ type sqsAttributes struct {
 	attrMap  map[string]*sqs.MessageAttributeValue
 	groupID  *string
 	dedupeID *string
+	content  *string
 }
 
 var sqsAttributeKeyInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(^aws\.)|(^amazon\.)|(\.$)|([^a-z0-9_\-.]+)`)
@@ -206,6 +207,7 @@ func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
 		attrMap:  values,
 		groupID:  groupID,
 		dedupeID: dedupeID,
+		content:  aws.String(string(p.Get())),
 	}
 }
 
@@ -225,13 +227,13 @@ func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg types.Message) err
 	entries := []*sqs.SendMessageBatchRequestEntry{}
 	attrMap := map[string]sqsAttributes{}
 	msg.Iter(func(i int, p types.Part) error {
-		id := strconv.FormatInt(int64(i), 10)
+		id := strconv.Itoa(i)
 		attrs := a.getSQSAttributes(msg, i)
 		attrMap[id] = attrs
 
 		entries = append(entries, &sqs.SendMessageBatchRequestEntry{
 			Id:                     aws.String(id),
-			MessageBody:            aws.String(string(p.Get())),
+			MessageBody:            attrs.content,
 			MessageAttributes:      attrs.attrMap,
 			MessageGroupId:         attrs.groupID,
 			MessageDeduplicationId: attrs.dedupeID,
@@ -283,7 +285,7 @@ func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg types.Message) err
 				aMap := attrMap[*v.Id]
 				input.Entries = append(input.Entries, &sqs.SendMessageBatchRequestEntry{
 					Id:                     v.Id,
-					MessageBody:            v.Message,
+					MessageBody:            aMap.content,
 					MessageAttributes:      aMap.attrMap,
 					MessageGroupId:         aMap.groupID,
 					MessageDeduplicationId: aMap.dedupeID,

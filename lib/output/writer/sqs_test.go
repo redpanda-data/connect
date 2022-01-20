@@ -1,10 +1,20 @@
 package writer
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSQSHeaderCheck(t *testing.T) {
@@ -106,4 +116,134 @@ type mockSqs struct {
 
 func (m *mockSqs) SendMessageBatch(input *sqs.SendMessageBatchInput) (*sqs.SendMessageBatchOutput, error) {
 	return m.fn(input)
+}
+
+type inMsg struct {
+	id      string
+	content string
+}
+type inEntries []inMsg
+
+func TestSQSRetries(t *testing.T) {
+	tCtx := context.Background()
+
+	conf := NewAmazonSQSConfig()
+	w, err := NewAmazonSQSV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	var in []inEntries
+	var out []*sqs.SendMessageBatchOutput
+	w.sqs = &mockSqs{
+		fn: func(smbi *sqs.SendMessageBatchInput) (*sqs.SendMessageBatchOutput, error) {
+			var e inEntries
+			for _, entry := range smbi.Entries {
+				e = append(e, inMsg{
+					id:      *entry.Id,
+					content: *entry.MessageBody,
+				})
+			}
+			in = append(in, e)
+
+			if len(out) == 0 {
+				return nil, errors.New("ran out of mock outputs")
+			}
+			outBatch := out[0]
+			out = out[1:]
+			return outBatch, nil
+		},
+	}
+
+	out = []*sqs.SendMessageBatchOutput{
+		{
+			Failed: []*sqs.BatchResultErrorEntry{
+				{
+					Code:        aws.String("xx"),
+					Id:          aws.String("1"),
+					Message:     aws.String("test error"),
+					SenderFault: aws.Bool(false),
+				},
+			},
+		},
+		{},
+	}
+
+	inMsg := message.New([][]byte{
+		[]byte("hello world 1"),
+		[]byte("hello world 2"),
+		[]byte("hello world 3"),
+	})
+	require.NoError(t, w.WriteWithContext(tCtx, inMsg))
+
+	assert.Equal(t, []inEntries{
+		{
+			{id: "0", content: "hello world 1"},
+			{id: "1", content: "hello world 2"},
+			{id: "2", content: "hello world 3"},
+		},
+		{
+			{id: "1", content: "hello world 2"},
+		},
+	}, in)
+}
+
+func TestSQSSendLimit(t *testing.T) {
+	tCtx := context.Background()
+
+	conf := NewAmazonSQSConfig()
+	w, err := NewAmazonSQSV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	var in []inEntries
+	var out []*sqs.SendMessageBatchOutput
+	w.sqs = &mockSqs{
+		fn: func(smbi *sqs.SendMessageBatchInput) (*sqs.SendMessageBatchOutput, error) {
+			var e inEntries
+			for _, entry := range smbi.Entries {
+				e = append(e, inMsg{
+					id:      *entry.Id,
+					content: *entry.MessageBody,
+				})
+			}
+			in = append(in, e)
+
+			if len(out) == 0 {
+				return nil, errors.New("ran out of mock outputs")
+			}
+			outBatch := out[0]
+			out = out[1:]
+			return outBatch, nil
+		},
+	}
+
+	out = []*sqs.SendMessageBatchOutput{
+		{}, {},
+	}
+
+	inMsg := message.New(nil)
+	for i := 0; i < 15; i++ {
+		inMsg.Append(message.NewPart([]byte(fmt.Sprintf("hello world %v", i+1))))
+	}
+	require.NoError(t, w.WriteWithContext(tCtx, inMsg))
+
+	assert.Equal(t, []inEntries{
+		{
+			{id: "0", content: "hello world 1"},
+			{id: "1", content: "hello world 2"},
+			{id: "2", content: "hello world 3"},
+			{id: "3", content: "hello world 4"},
+			{id: "4", content: "hello world 5"},
+			{id: "5", content: "hello world 6"},
+			{id: "6", content: "hello world 7"},
+			{id: "7", content: "hello world 8"},
+			{id: "8", content: "hello world 9"},
+			{id: "9", content: "hello world 10"},
+		},
+		{
+			{id: "10", content: "hello world 11"},
+			{id: "11", content: "hello world 12"},
+			{id: "12", content: "hello world 13"},
+			{id: "13", content: "hello world 14"},
+			{id: "14", content: "hello world 15"},
+		},
+	}, in)
 }
