@@ -227,10 +227,9 @@ func TestCommandRunHappy(t *testing.T) {
 	testDir, err := initTestFiles(map[string]string{
 		"foo.yaml": `
 pipeline:
+  meow: woof
   processors:
-  - text:
-      ignored: this field is ignored
-      operator: to_upper`,
+  - bloblang: 'root = content().uppercase()'`,
 		"foo_benthos_test.yaml": `
 tests:
   - name: example test
@@ -244,8 +243,7 @@ tests:
 		"bar.yaml": `
 pipeline:
   processors:
-  - text:
-      operator: to_upper`,
+  - bloblang: 'root = content().uppercase()'`,
 		"bar_benthos_test.yaml": `
 tests:
   - name: example test

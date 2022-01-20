@@ -31,9 +31,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
-			"text": {
-				"value": "foo"
-			},
+			"bloblang": "root = this",
 			"jmespath": {
 				"query": "foo"
 			}
@@ -44,9 +42,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
-			"text": {
-				"value": "foo"
-			}
+			"bloblang": "root = this"
 		}
 	]`), &conf); err != nil {
 		t.Error(err)
@@ -56,14 +52,8 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 		t.Errorf("Wrong number of config parts: %v != %v", act, exp)
 		return
 	}
-	if exp, act := processor.TypeText, conf[0].Type; exp != act {
+	if exp, act := processor.TypeBloblang, conf[0].Type; exp != act {
 		t.Errorf("Wrong inferred type: %v != %v", act, exp)
-	}
-	if exp, act := "trim_space", conf[0].Text.Operator; exp != act {
-		t.Errorf("Wrong default operator: %v != %v", act, exp)
-	}
-	if exp, act := "foo", conf[0].Text.Value; exp != act {
-		t.Errorf("Wrong value: %v != %v", act, exp)
 	}
 }
 

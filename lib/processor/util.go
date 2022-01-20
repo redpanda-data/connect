@@ -2,11 +2,8 @@ package processor
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/tracing"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -196,48 +193,6 @@ func IteratePartsWithSpanV2(
 			span.LogKV(
 				"event", "error",
 				"type", err.Error(),
-			)
-		}
-		span.Finish()
-	}
-	if len(parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			exec(i)
-		}
-	} else {
-		for _, i := range parts {
-			exec(i)
-		}
-	}
-}
-
-// IteratePartsWithSpan iterates the parts of a message according to a slice of
-// indexes (if empty all parts are iterated) and calls a func for each part
-// along with a tracing span for that part. If an error is returned the part is
-// flagged as failed and the span has the error logged.
-//
-// Deprecated: use IteratePartsWithSpanV2 instead.
-func IteratePartsWithSpan(
-	operationName string, parts []int, msg types.Message,
-	iter func(int, opentracing.Span, types.Part) error,
-) {
-	exec := func(i int) {
-		part := msg.Get(i)
-		span := opentracing.SpanFromContext(message.GetContext(part))
-		if span == nil {
-			span = opentracing.StartSpan(operationName)
-		} else {
-			span = opentracing.StartSpan(
-				operationName,
-				opentracing.ChildOf(span.Context()),
-			)
-		}
-		if err := iter(i, span, part); err != nil {
-			FlagErr(part, err)
-			span.SetTag("error", true)
-			span.LogFields(
-				olog.String("event", "error"),
-				olog.String("type", err.Error()),
 			)
 		}
 		span.Finish()

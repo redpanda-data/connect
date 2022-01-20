@@ -211,52 +211,36 @@ type Config struct {
 	Avro         AvroConfig         `json:"avro" yaml:"avro"`
 	AWK          AWKConfig          `json:"awk" yaml:"awk"`
 	AWSLambda    LambdaConfig       `json:"aws_lambda" yaml:"aws_lambda"`
-	Batch        BatchConfig        `json:"batch" yaml:"batch"`
 	Bloblang     BloblangConfig     `json:"bloblang" yaml:"bloblang"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
 	Branch       BranchConfig       `json:"branch" yaml:"branch"`
 	Cache        CacheConfig        `json:"cache" yaml:"cache"`
 	Catch        CatchConfig        `json:"catch" yaml:"catch"`
 	Compress     CompressConfig     `json:"compress" yaml:"compress"`
-	Conditional  ConditionalConfig  `json:"conditional" yaml:"conditional"`
-	Decode       DecodeConfig       `json:"decode" yaml:"decode"`
 	Decompress   DecompressConfig   `json:"decompress" yaml:"decompress"`
 	Dedupe       DedupeConfig       `json:"dedupe" yaml:"dedupe"`
-	Encode       EncodeConfig       `json:"encode" yaml:"encode"`
-	Filter       FilterConfig       `json:"filter" yaml:"filter"`
-	FilterParts  FilterPartsConfig  `json:"filter_parts" yaml:"filter_parts"`
 	ForEach      ForEachConfig      `json:"for_each" yaml:"for_each"`
 	Grok         GrokConfig         `json:"grok" yaml:"grok"`
 	GroupBy      GroupByConfig      `json:"group_by" yaml:"group_by"`
 	GroupByValue GroupByValueConfig `json:"group_by_value" yaml:"group_by_value"`
-	Hash         HashConfig         `json:"hash" yaml:"hash"`
-	HashSample   HashSampleConfig   `json:"hash_sample" yaml:"hash_sample"`
 	HTTP         HTTPConfig         `json:"http" yaml:"http"`
 	InsertPart   InsertPartConfig   `json:"insert_part" yaml:"insert_part"`
 	JMESPath     JMESPathConfig     `json:"jmespath" yaml:"jmespath"`
 	JQ           JQConfig           `json:"jq" yaml:"jq"`
-	JSON         JSONConfig         `json:"json" yaml:"json"`
 	JSONSchema   JSONSchemaConfig   `json:"json_schema" yaml:"json_schema"`
 	Lambda       LambdaConfig       `json:"lambda" yaml:"lambda"`
 	Log          LogConfig          `json:"log" yaml:"log"`
-	MergeJSON    MergeJSONConfig    `json:"merge_json" yaml:"merge_json"`
-	Metadata     MetadataConfig     `json:"metadata" yaml:"metadata"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	MongoDB      MongoDBConfig      `json:"mongodb" yaml:"mongodb"`
 	Noop         NoopConfig         `json:"noop" yaml:"noop"`
-	Number       NumberConfig       `json:"number" yaml:"number"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
 	ParseLog     ParseLogConfig     `json:"parse_log" yaml:"parse_log"`
 	ProcessBatch ForEachConfig      `json:"process_batch" yaml:"process_batch"`
-	ProcessDAG   ProcessDAGConfig   `json:"process_dag" yaml:"process_dag"`
-	ProcessField ProcessFieldConfig `json:"process_field" yaml:"process_field"`
-	ProcessMap   ProcessMapConfig   `json:"process_map" yaml:"process_map"`
 	Protobuf     ProtobufConfig     `json:"protobuf" yaml:"protobuf"`
 	RateLimit    RateLimitConfig    `json:"rate_limit" yaml:"rate_limit"`
 	Redis        RedisConfig        `json:"redis" yaml:"redis"`
 	Resource     string             `json:"resource" yaml:"resource"`
-	Sample       SampleConfig       `json:"sample" yaml:"sample"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Sleep        SleepConfig        `json:"sleep" yaml:"sleep"`
 	Split        SplitConfig        `json:"split" yaml:"split"`
@@ -264,7 +248,6 @@ type Config struct {
 	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
 	Switch       SwitchConfig       `json:"switch" yaml:"switch"`
 	SyncResponse SyncResponseConfig `json:"sync_response" yaml:"sync_response"`
-	Text         TextConfig         `json:"text" yaml:"text"`
 	Try          TryConfig          `json:"try" yaml:"try"`
 	Throttle     ThrottleConfig     `json:"throttle" yaml:"throttle"`
 	Unarchive    UnarchiveConfig    `json:"unarchive" yaml:"unarchive"`
@@ -284,52 +267,36 @@ func NewConfig() Config {
 		Avro:         NewAvroConfig(),
 		AWK:          NewAWKConfig(),
 		AWSLambda:    NewLambdaConfig(),
-		Batch:        NewBatchConfig(),
 		Bloblang:     NewBloblangConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),
 		Branch:       NewBranchConfig(),
 		Cache:        NewCacheConfig(),
 		Catch:        NewCatchConfig(),
 		Compress:     NewCompressConfig(),
-		Conditional:  NewConditionalConfig(),
-		Decode:       NewDecodeConfig(),
 		Decompress:   NewDecompressConfig(),
 		Dedupe:       NewDedupeConfig(),
-		Encode:       NewEncodeConfig(),
-		Filter:       NewFilterConfig(),
-		FilterParts:  NewFilterPartsConfig(),
 		ForEach:      NewForEachConfig(),
 		Grok:         NewGrokConfig(),
 		GroupBy:      NewGroupByConfig(),
 		GroupByValue: NewGroupByValueConfig(),
-		Hash:         NewHashConfig(),
-		HashSample:   NewHashSampleConfig(),
 		HTTP:         NewHTTPConfig(),
 		InsertPart:   NewInsertPartConfig(),
 		JMESPath:     NewJMESPathConfig(),
 		JQ:           NewJQConfig(),
-		JSON:         NewJSONConfig(),
 		JSONSchema:   NewJSONSchemaConfig(),
 		Lambda:       NewLambdaConfig(),
 		Log:          NewLogConfig(),
-		MergeJSON:    NewMergeJSONConfig(),
-		Metadata:     NewMetadataConfig(),
 		Metric:       NewMetricConfig(),
 		MongoDB:      NewMongoDBConfig(),
 		Noop:         NewNoopConfig(),
-		Number:       NewNumberConfig(),
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),
 		ParseLog:     NewParseLogConfig(),
 		ProcessBatch: NewForEachConfig(),
-		ProcessDAG:   NewProcessDAGConfig(),
-		ProcessField: NewProcessFieldConfig(),
-		ProcessMap:   NewProcessMapConfig(),
 		Protobuf:     NewProtobufConfig(),
 		RateLimit:    NewRateLimitConfig(),
 		Redis:        NewRedisConfig(),
 		Resource:     "",
-		Sample:       NewSampleConfig(),
 		SelectParts:  NewSelectPartsConfig(),
 		Sleep:        NewSleepConfig(),
 		Split:        NewSplitConfig(),
@@ -337,7 +304,6 @@ func NewConfig() Config {
 		Subprocess:   NewSubprocessConfig(),
 		Switch:       NewSwitchConfig(),
 		SyncResponse: NewSyncResponseConfig(),
-		Text:         NewTextConfig(),
 		Try:          NewTryConfig(),
 		Throttle:     NewThrottleConfig(),
 		Unarchive:    NewUnarchiveConfig(),

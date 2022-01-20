@@ -9,7 +9,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -364,49 +363,6 @@ func TestHTTPClientParallelError(t *testing.T) {
 		if exp, act := "200", msgs[0].Get(i).Metadata().Get("http_status_code"); exp != act {
 			t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 		}
-	}
-}
-
-func TestHTTPClientParallelCapped(t *testing.T) {
-	var reqs int64
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if req := atomic.AddInt64(&reqs, 1); req > 5 {
-			t.Errorf("Beyond parallelism cap: %v", req)
-		}
-		<-time.After(time.Millisecond * 10)
-		w.Write([]byte("foobar"))
-		atomic.AddInt64(&reqs, -1)
-	}))
-	defer ts.Close()
-
-	conf := NewConfig()
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
-	conf.HTTP.Parallel = true
-	conf.HTTP.MaxParallel = 5
-
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	msgs, res := h.ProcessMessage(message.New([][]byte{
-		[]byte("foo"),
-		[]byte("bar"),
-		[]byte("baz"),
-		[]byte("qux"),
-		[]byte("quz"),
-		[]byte("foo2"),
-		[]byte("bar2"),
-		[]byte("baz2"),
-		[]byte("qux2"),
-		[]byte("quz2"),
-	}))
-	if res != nil {
-		t.Error(res.Error())
-	} else if expC, actC := 10, msgs[0].Len(); actC != expC {
-		t.Errorf("Wrong result count: %v != %v", actC, expC)
-	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
-		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
 

@@ -42,9 +42,8 @@ func (f *fakeProcMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}
 
 func TestResourceProc(t *testing.T) {
 	conf := NewConfig()
-	conf.Type = "text"
-	conf.Text.Operator = "prepend"
-	conf.Text.Value = "foo: "
+	conf.Type = TypeBloblang
+	conf.Bloblang = `root = "foo: " + content()`
 
 	resProc, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {

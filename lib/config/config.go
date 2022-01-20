@@ -4,7 +4,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
@@ -171,7 +170,7 @@ func (c Type) sanitised(skipDeprecated bool) (*SanitisedConfig, error) {
 // this function will create a configuration that reads from Kafka and writes
 // over AMQP.
 func AddExamples(conf *Type, examples ...string) {
-	var inputType, bufferType, conditionType, outputType string
+	var inputType, bufferType, outputType string
 	var processorTypes []string
 	for _, e := range examples {
 		if _, exists := input.Constructors[e]; exists && inputType == "" {
@@ -182,9 +181,6 @@ func AddExamples(conf *Type, examples ...string) {
 		}
 		if _, exists := processor.Constructors[e]; exists {
 			processorTypes = append(processorTypes, e)
-		}
-		if _, exists := condition.Constructors[e]; exists {
-			conditionType = e
 		}
 		if _, exists := output.Constructors[e]; exists {
 			outputType = e
@@ -202,14 +198,6 @@ func AddExamples(conf *Type, examples ...string) {
 			procConf.Type = procType
 			conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
 		}
-	}
-	if len(conditionType) > 0 {
-		condConf := condition.NewConfig()
-		condConf.Type = conditionType
-		procConf := processor.NewConfig()
-		procConf.Type = "filter_parts"
-		procConf.FilterParts.Type = conditionType
-		conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
 	}
 	if len(outputType) > 0 {
 		conf.Output.Type = outputType

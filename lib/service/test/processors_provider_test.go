@@ -44,7 +44,7 @@ this isnt valid yaml
 		"config2.yaml": `
 pipeline:
   processors:
-  - type: text`,
+  - bloblang: 'root = this'`,
 		"config3.yaml": `
 pipeline:
   processors:
@@ -81,21 +81,17 @@ resources:
 
 pipeline:
   processors:
-  - metadata:
-      operator: set
-      key: foo
-      value: ${FOO_VAR:defaultvalue}
+  - bloblang: 'meta foo = env("FOO_VAR").not_empty().catch("defaultvalue")'
   - cache:
-      cache: foocache
+      resource: foocache
       operator: set
       key: defaultkey
       value: ${! meta("foo") }
   - cache:
-      cache: foocache
+      resource: foocache
       operator: get
       key: defaultkey
-  - text:
-      operator: to_upper`,
+  - bloblang: 'root = content().uppercase()'`,
 
 		"config2.yaml": `
 resources:
@@ -198,17 +194,17 @@ resources:
 pipeline:
   processors:
   - cache:
-      cache: foocache
+      resource: foocache
       operator: set
       key: defaultkey
       value: foo
   - cache:
-      cache: barcache
+      resource: barcache
       operator: set
       key: defaultkey
       value: bar
   - cache:
-      cache: bazcache
+      resource: bazcache
       operator: set
       key: defaultkey
       value: bar
@@ -254,12 +250,12 @@ resources:
 pipeline:
   processors:
   - cache:
-      cache: foocache
+      resource: foocache
       operator: set
       key: defaultkey
       value: foo
   - cache:
-      cache: barcache
+      resource: barcache
       operator: set
       key: defaultkey
       value: bar
@@ -290,21 +286,17 @@ cache_resources:
 
 pipeline:
   processors:
-  - metadata:
-      operator: set
-      key: foo
-      value: ${BAR_VAR:defaultvalue}
+  - bloblang: 'meta foo = env("BAR_VAR").not_empty().catch("defaultvalue")'
   - cache:
-      cache: foocache
+      resource: foocache
       operator: set
       key: defaultkey
       value: ${! meta("foo") }
   - cache:
-      cache: foocache
+      resource: foocache
       operator: get
       key: defaultkey
-  - text:
-      operator: to_upper`,
+  - bloblang: 'root = content().uppercase()'`,
 
 		"config2.yaml": `
 cache_resources:
@@ -542,17 +534,17 @@ cache_resources:
 pipeline:
   processors:
   - cache:
-      cache: foocache
+      resource: foocache
       operator: set
       key: defaultkey
       value: foo
   - cache:
-      cache: barcache
+      resource: barcache
       operator: set
       key: defaultkey
       value: bar
   - cache:
-      cache: bazcache
+      resource: bazcache
       operator: set
       key: defaultkey
       value: bar
@@ -595,12 +587,12 @@ cache_resources:
 pipeline:
   processors:
   - cache:
-      cache: foocache
+      resource: foocache
       operator: set
       key: defaultkey
       value: foo
   - cache:
-      cache: barcache
+      resource: barcache
       operator: set
       key: defaultkey
       value: bar

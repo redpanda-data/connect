@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"sync"
 	"time"
@@ -93,6 +94,8 @@ func (w *workflowBranchMap) WaitForClose(timeout time.Duration) error {
 }
 
 //------------------------------------------------------------------------------
+
+var processDAGStageName = regexp.MustCompile("[a-zA-Z0-9-_]+")
 
 func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*workflowBranchMap, error) {
 	dynamicBranches, staticBranches := map[string]workflowBranch{}, map[string]*Branch{}
