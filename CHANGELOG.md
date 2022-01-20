@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Field `collection` in `mongodb` processor and output now supports interpolation functions.
 - Field `output_raw` added to the `jq` processor.
 - The lambda distribution now supports a `BENTHOS_CONFIG_PATH` environment variable for specifying a custom config path.
+- Field `metadata` added to `http` and `http_client` components.
 
 ### Fixed
 

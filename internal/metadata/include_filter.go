@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // IncludeFilterDocs returns a docs spec for a metadata filter where keys are
@@ -83,4 +84,15 @@ func (f *IncludeFilter) Match(str string) bool {
 		}
 	}
 	return false
+}
+
+// Iter applies a function to each metadata key value pair that passes the
+// filter.
+func (f *IncludeFilter) Iter(m types.Metadata, fn func(k, v string) error) error {
+	return m.Iter(func(k, v string) error {
+		if !f.Match(k) {
+			return nil
+		}
+		return fn(k, v)
+	})
 }

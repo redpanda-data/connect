@@ -18,6 +18,8 @@ func FieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.FieldSpec {
 		}).IsInterpolated().Map().HasDefault(map[string]interface{}{
 			"Content-Type": "application/octet-stream",
 		}),
+		docs.FieldAdvanced("metadata", "Specify optional matching rules to determine which metadata keys should be added to the HTTP request as headers.").
+			WithChildren(metadata.IncludeFilterDocs()...),
 	}
 
 	extractHeadersDesc := "Specify which response headers should be added to resulting messages as metadata. Header keys are lowercased before matching, so ensure that your patterns target lowercased versions of the header keys that you expect."
