@@ -318,7 +318,7 @@ func TestHTTPClientReceive(t *testing.T) {
 func TestHTTPClientSendMetaFilter(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf(`
+		fmt.Fprintf(w, `
 foo_a: %v
 bar_a: %v
 foo_b: %v
@@ -328,7 +328,7 @@ bar_b: %v
 			r.Header.Get("bar_a"),
 			r.Header.Get("foo_b"),
 			r.Header.Get("bar_b"),
-		)))
+		)
 	}))
 	defer ts.Close()
 
