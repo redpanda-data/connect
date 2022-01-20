@@ -10,13 +10,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/google/go-cmp/cmp"
-	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -44,17 +41,6 @@ If following a loop execution the number of messages in a batch is reduced to ze
 				`errored()`,
 				`this.urls.unprocessed.length() > 0`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
-				defaultBytes, err := yaml.Marshal(condition.NewConfig())
-				if err != nil {
-					return "", false
-				}
-				var iDefault interface{}
-				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
-					return "", false
-				}
-				return "field condition is deprecated in favour of check", cmp.Equal(v, iDefault)
-			}),
 			docs.FieldCommon("processors", "A list of child processors to execute on each loop.").Array().HasType(docs.FieldTypeProcessor),
 		},
 	}
@@ -65,11 +51,10 @@ If following a loop execution the number of messages in a batch is reduced to ze
 // WhileConfig is a config struct containing fields for the While
 // processor.
 type WhileConfig struct {
-	AtLeastOnce bool             `json:"at_least_once" yaml:"at_least_once"`
-	MaxLoops    int              `json:"max_loops" yaml:"max_loops"`
-	Check       string           `json:"check" yaml:"check"`
-	Condition   condition.Config `json:"condition" yaml:"condition"`
-	Processors  []Config         `json:"processors" yaml:"processors"`
+	AtLeastOnce bool     `json:"at_least_once" yaml:"at_least_once"`
+	MaxLoops    int      `json:"max_loops" yaml:"max_loops"`
+	Check       string   `json:"check" yaml:"check"`
+	Processors  []Config `json:"processors" yaml:"processors"`
 }
 
 // NewWhileConfig returns a default WhileConfig.
@@ -78,7 +63,6 @@ func NewWhileConfig() WhileConfig {
 		AtLeastOnce: false,
 		MaxLoops:    0,
 		Check:       "",
-		Condition:   condition.NewConfig(),
 		Processors:  []Config{},
 	}
 }
@@ -91,7 +75,6 @@ type While struct {
 	running     int32
 	maxLoops    int
 	atLeastOnce bool
-	cond        condition.Type
 	check       *mapping.Executor
 	children    []types.Processor
 
@@ -108,28 +91,15 @@ type While struct {
 func NewWhile(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	var cond condition.Type
 	var check *mapping.Executor
 	var err error
 
-	if !isDefaultGroupCond(conf.While.Condition) {
-		cMgr, cLog, cStats := interop.LabelChild("condition", mgr, log, stats)
-		if cond, err = condition.New(conf.While.Condition, cMgr, cLog, cStats); err != nil {
-			return nil, err
-		}
-	}
 	if len(conf.While.Check) > 0 {
 		if check, err = interop.NewBloblangMapping(mgr, conf.While.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
-	}
-
-	if cond == nil && check == nil {
+	} else {
 		return nil, errors.New("a check query is required")
-	}
-
-	if cond != nil && check != nil {
-		return nil, errors.New("cannot specify both a condition and a check query")
 	}
 
 	var children []types.Processor
@@ -146,7 +116,6 @@ func NewWhile(
 		running:     1,
 		maxLoops:    conf.While.MaxLoops,
 		atLeastOnce: conf.While.AtLeastOnce,
-		cond:        cond,
 		check:       check,
 		children:    children,
 
@@ -163,9 +132,6 @@ func NewWhile(
 //------------------------------------------------------------------------------
 
 func (w *While) checkMsg(msg types.Message) bool {
-	if w.cond != nil {
-		return w.cond.Check(msg)
-	}
 	c, err := w.check.QueryPart(0, msg)
 	if err != nil {
 		c = false

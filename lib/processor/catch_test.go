@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -46,8 +45,8 @@ func TestCatchEmpty(t *testing.T) {
 
 func TestCatchBasic(t *testing.T) {
 	encodeConf := NewConfig()
-	encodeConf.Type = "encode"
-	encodeConf.Encode.Parts = []int{0}
+	encodeConf.Type = TypeBloblang
+	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
 	conf := NewConfig()
 	conf.Type = TypeCatch
@@ -94,14 +93,9 @@ func TestCatchBasic(t *testing.T) {
 }
 
 func TestCatchFilterSome(t *testing.T) {
-	cond := condition.NewConfig()
-	cond.Type = "text"
-	cond.Text.Arg = "foo"
-	cond.Text.Operator = "contains"
-
 	filterConf := NewConfig()
-	filterConf.Type = "filter"
-	filterConf.Filter.Config = cond
+	filterConf.Type = TypeBloblang
+	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
 	conf := NewConfig()
 	conf.Type = TypeCatch
@@ -147,17 +141,12 @@ func TestCatchFilterSome(t *testing.T) {
 
 func TestCatchMultiProcs(t *testing.T) {
 	encodeConf := NewConfig()
-	encodeConf.Type = "encode"
-	encodeConf.Encode.Parts = []int{0}
-
-	cond := condition.NewConfig()
-	cond.Type = "text"
-	cond.Text.Arg = "foo"
-	cond.Text.Operator = "contains"
+	encodeConf.Type = TypeBloblang
+	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
 	filterConf := NewConfig()
-	filterConf.Type = "filter"
-	filterConf.Filter.Config = cond
+	filterConf.Type = TypeBloblang
+	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
 	conf := NewConfig()
 	conf.Type = TypeCatch
@@ -203,8 +192,8 @@ func TestCatchMultiProcs(t *testing.T) {
 
 func TestCatchNotFails(t *testing.T) {
 	encodeConf := NewConfig()
-	encodeConf.Type = "encode"
-	encodeConf.Encode.Parts = []int{0}
+	encodeConf.Type = TypeBloblang
+	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
 	conf := NewConfig()
 	conf.Type = TypeCatch
@@ -248,14 +237,9 @@ func TestCatchNotFails(t *testing.T) {
 }
 
 func TestCatchFilterAll(t *testing.T) {
-	cond := condition.NewConfig()
-	cond.Type = "text"
-	cond.Text.Arg = "foo"
-	cond.Text.Operator = "contains"
-
 	filterConf := NewConfig()
-	filterConf.Type = "filter"
-	filterConf.Filter.Config = cond
+	filterConf.Type = TypeBloblang
+	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
 	conf := NewConfig()
 	conf.Type = TypeCatch

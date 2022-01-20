@@ -41,8 +41,6 @@ This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regul
 			docs.FieldAdvanced("named_captures_only", "Whether to only capture values from named patterns."),
 			docs.FieldAdvanced("use_default_patterns", "Whether to use a [default set of patterns](#default-patterns)."),
 			docs.FieldAdvanced("remove_empty_values", "Whether to remove values that are empty from the resulting structure."),
-			docs.FieldDeprecated("patterns").Array(),
-			docs.FieldDeprecated("output_format"),
 			PartsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
@@ -89,12 +87,8 @@ type GrokConfig struct {
 	RemoveEmpty        bool              `json:"remove_empty_values" yaml:"remove_empty_values"`
 	NamedOnly          bool              `json:"named_captures_only" yaml:"named_captures_only"`
 	UseDefaults        bool              `json:"use_default_patterns" yaml:"use_default_patterns"`
-	To                 string            `json:"output_format" yaml:"output_format"`
 	PatternPaths       []string          `json:"pattern_paths" yaml:"pattern_paths"`
 	PatternDefinitions map[string]string `json:"pattern_definitions" yaml:"pattern_definitions"`
-
-	// TODO: V4 Remove this
-	Patterns []string `json:"patterns" yaml:"patterns"`
 }
 
 // NewGrokConfig returns a GrokConfig with default values.
@@ -105,11 +99,8 @@ func NewGrokConfig() GrokConfig {
 		RemoveEmpty:        true,
 		NamedOnly:          true,
 		UseDefaults:        true,
-		To:                 "json",
 		PatternPaths:       []string{},
 		PatternDefinitions: make(map[string]string),
-
-		Patterns: []string{},
 	}
 }
 
@@ -137,10 +128,6 @@ type Grok struct {
 func NewGrok(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	if len(conf.Grok.Expressions) > 0 && len(conf.Grok.Patterns) > 0 {
-		return nil, errors.New("cannot specify grok expressions in both the field `expressions` and the deprecated field `patterns`")
-	}
-
 	grokConf := grok.Config{
 		RemoveEmptyValues:   conf.Grok.RemoveEmpty,
 		NamedCapturesOnly:   conf.Grok.NamedOnly,
@@ -160,13 +147,6 @@ func NewGrok(
 	}
 
 	var compiled []*grok.CompiledGrok
-	for _, pattern := range conf.Grok.Patterns {
-		var gcompiled *grok.CompiledGrok
-		if gcompiled, err = gcompiler.Compile(pattern); err != nil {
-			return nil, fmt.Errorf("failed to compile Grok pattern '%v': %v", pattern, err)
-		}
-		compiled = append(compiled, gcompiled)
-	}
 	for _, pattern := range conf.Grok.Expressions {
 		var gcompiled *grok.CompiledGrok
 		if gcompiled, err = gcompiler.Compile(pattern); err != nil {

@@ -237,7 +237,6 @@ processor_resources:
 		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldString("meta_path", "A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution."),
-			docs.FieldDeprecated("stages").Map(),
 			docs.FieldString(
 				"order",
 				"An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources).",
@@ -261,11 +260,10 @@ processor_resources:
 // WorkflowConfig is a config struct containing fields for the Workflow
 // processor.
 type WorkflowConfig struct {
-	MetaPath        string                         `json:"meta_path" yaml:"meta_path"`
-	Order           [][]string                     `json:"order" yaml:"order"`
-	BranchResources []string                       `json:"branch_resources" yaml:"branch_resources"`
-	Branches        map[string]BranchConfig        `json:"branches" yaml:"branches"`
-	Stages          map[string]DepProcessMapConfig `json:"stages" yaml:"stages"`
+	MetaPath        string                  `json:"meta_path" yaml:"meta_path"`
+	Order           [][]string              `json:"order" yaml:"order"`
+	BranchResources []string                `json:"branch_resources" yaml:"branch_resources"`
+	Branches        map[string]BranchConfig `json:"branches" yaml:"branches"`
 }
 
 // NewWorkflowConfig returns a default WorkflowConfig.
@@ -275,7 +273,6 @@ func NewWorkflowConfig() WorkflowConfig {
 		Order:           [][]string{},
 		BranchResources: []string{},
 		Branches:        map[string]BranchConfig{},
-		Stages:          map[string]DepProcessMapConfig{},
 	}
 }
 
@@ -309,16 +306,6 @@ type Workflow struct {
 func NewWorkflow(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	if len(conf.Workflow.Stages) > 0 {
-		if len(conf.Workflow.Branches) > 0 {
-			return nil, fmt.Errorf("cannot combine both workflow branches and stages in the same processor")
-		}
-		if len(conf.Workflow.Order) > 0 {
-			return nil, fmt.Errorf("cannot combine both manual ordering and stages in the same processor")
-		}
-		return newWorkflowDeprecated(conf, mgr, log, stats)
-	}
-
 	w := &Workflow{
 		log:         log,
 		stats:       stats,

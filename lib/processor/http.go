@@ -14,11 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -77,18 +73,6 @@ can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](/docs/configuration/error_handling).`,
 		config: client.FieldSpec(
 			docs.FieldCommon("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request."),
-			docs.FieldDeprecated("max_parallel"),
-			docs.FieldDeprecated("request").OmitWhen(func(v, _ interface{}) (string, bool) {
-				defaultBytes, err := yaml.Marshal(client.NewConfig())
-				if err != nil {
-					return "", false
-				}
-				var iDefault interface{}
-				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
-					return "", false
-				}
-				return "field request is deprecated", cmp.Equal(v, iDefault)
-			}),
 		),
 		Examples: []docs.AnnotatedExample{
 			{
@@ -115,19 +99,15 @@ pipeline:
 
 // HTTPConfig contains configuration fields for the HTTP processor.
 type HTTPConfig struct {
-	Parallel      bool          `json:"parallel" yaml:"parallel"`
-	MaxParallel   int           `json:"max_parallel" yaml:"max_parallel"`
-	Client        client.Config `json:"request" yaml:"request"`
+	Parallel      bool `json:"parallel" yaml:"parallel"`
 	client.Config `json:",inline" yaml:",inline"`
 }
 
 // NewHTTPConfig returns a HTTPConfig with default values.
 func NewHTTPConfig() HTTPConfig {
 	return HTTPConfig{
-		Client:      client.NewConfig(),
-		Parallel:    false,
-		MaxParallel: 0,
-		Config:      client.NewConfig(),
+		Parallel: false,
+		Config:   client.NewConfig(),
 	}
 }
 
@@ -136,10 +116,8 @@ func NewHTTPConfig() HTTPConfig {
 // HTTP is a processor that performs an HTTP request using the message as the
 // request body, and returns the response.
 type HTTP struct {
-	client *http.Client
-
+	client   *http.Client
 	parallel bool
-	max      int
 
 	conf  Config
 	log   log.Modular
@@ -156,20 +134,12 @@ type HTTP struct {
 func NewHTTP(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	if !cmp.Equal(conf.HTTP.Client, client.NewConfig(), cmpopts.IgnoreUnexported(auth.JWTConfig{})) {
-		if !cmp.Equal(conf.HTTP.Config, client.NewConfig(), cmpopts.IgnoreUnexported(auth.JWTConfig{})) {
-			return nil, fmt.Errorf("detected a mix of both deprecated http.request and standard http config fields")
-		}
-		log.Warnln("Using deprecated http.request fields. All fields under the path http.request should now be written directly within http.")
-		conf.HTTP.Config = conf.HTTP.Client
-	}
 	g := &HTTP{
 		conf:  conf,
 		log:   log,
 		stats: stats,
 
 		parallel: conf.HTTP.Parallel,
-		max:      conf.HTTP.MaxParallel,
 
 		mCount:     stats.GetCounter("count"),
 		mErrHTTP:   stats.GetCounter("error.http"),
@@ -181,8 +151,7 @@ func NewHTTP(
 	if g.client, err = http.NewClient(
 		conf.HTTP.Config,
 		http.OptSetLogger(g.log),
-		// TODO: V4 Remove this
-		http.OptSetStats(metrics.Namespaced(g.stats, "client")),
+		http.OptSetStats(g.stats),
 		http.OptSetManager(mgr),
 	); err != nil {
 		return nil, err
@@ -245,12 +214,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		})
 		reqChan, resChan := make(chan int), make(chan error)
 
-		max := h.max
-		if max == 0 || msg.Len() < max {
-			max = msg.Len()
-		}
-
-		for i := 0; i < max; i++ {
+		for i := 0; i < msg.Len(); i++ {
 			go func() {
 				for index := range reqChan {
 					tmpMsg := message.Lock(msg, index)

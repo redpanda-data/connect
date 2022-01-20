@@ -2,7 +2,6 @@ package processor
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -108,7 +107,6 @@ pipeline:
 				"foouser:foopassword@tcp(localhost:3306)/foodb",
 				"postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable",
 			),
-			docs.FieldDeprecated("dsn", ""),
 			docs.FieldCommon(
 				"query", "The query to run against the database.",
 				"INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);",
@@ -117,10 +115,6 @@ pipeline:
 				"unsafe_dynamic_query",
 				"Whether to enable dynamic queries that support interpolation functions. WARNING: This feature opens up the possibility of SQL injection attacks and is considered unsafe.",
 			).Advanced().HasDefault(false),
-			docs.FieldDeprecated(
-				"args",
-				"A list of arguments for the query to be resolved for each message.",
-			).IsInterpolated().Array(),
 			docs.FieldBloblang(
 				"args_mapping",
 				"A [Bloblang mapping](/docs/guides/bloblang/about) that produces the arguments for the query. The mapping must return an array containing the number of arguments in the query.",
@@ -155,14 +149,12 @@ columns value in the row.`,
 
 // SQLConfig contains configuration fields for the SQL processor.
 type SQLConfig struct {
-	Driver             string   `json:"driver" yaml:"driver"`
-	DataSourceName     string   `json:"data_source_name" yaml:"data_source_name"`
-	DSN                string   `json:"dsn" yaml:"dsn"`
-	Query              string   `json:"query" yaml:"query"`
-	UnsafeDynamicQuery bool     `json:"unsafe_dynamic_query" yaml:"unsafe_dynamic_query"`
-	Args               []string `json:"args" yaml:"args"`
-	ArgsMapping        string   `json:"args_mapping" yaml:"args_mapping"`
-	ResultCodec        string   `json:"result_codec" yaml:"result_codec"`
+	Driver             string `json:"driver" yaml:"driver"`
+	DataSourceName     string `json:"data_source_name" yaml:"data_source_name"`
+	Query              string `json:"query" yaml:"query"`
+	UnsafeDynamicQuery bool   `json:"unsafe_dynamic_query" yaml:"unsafe_dynamic_query"`
+	ArgsMapping        string `json:"args_mapping" yaml:"args_mapping"`
+	ResultCodec        string `json:"result_codec" yaml:"result_codec"`
 }
 
 // NewSQLConfig returns a SQLConfig with default values.
@@ -170,10 +162,8 @@ func NewSQLConfig() SQLConfig {
 	return SQLConfig{
 		Driver:             "mysql",
 		DataSourceName:     "",
-		DSN:                "",
 		Query:              "",
 		UnsafeDynamicQuery: false,
-		Args:               []string{},
 		ArgsMapping:        "",
 		ResultCodec:        "none",
 	}
@@ -200,13 +190,8 @@ type SQL struct {
 	conf        SQLConfig
 	db          *sql.DB
 	dbMux       sync.RWMutex
-	args        []*field.Expression
 	argsMapping *mapping.Executor
 	resCodec    sqlResultCodec
-
-	// TODO: V4 Remove this
-	deprecated         bool
-	resCodecDeprecated sqlResultCodecDeprecated
 
 	queryStr string
 	dynQuery *field.Expression
@@ -226,39 +211,15 @@ type SQL struct {
 func NewSQL(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	deprecated := false
 	dsn := conf.SQL.DataSourceName
-	if len(conf.SQL.DSN) > 0 {
-		if len(dsn) > 0 {
-			return nil, errors.New("specified both a deprecated `dsn` as well as a `data_source_name`")
-		}
-		dsn = conf.SQL.DSN
-		deprecated = true
-	}
-
-	if len(conf.SQL.Args) > 0 && conf.SQL.ArgsMapping != "" {
-		return nil, errors.New("cannot specify both `args` and an `args_mapping` in the same processor")
-	}
 
 	var argsMapping *mapping.Executor
 	if conf.SQL.ArgsMapping != "" {
-		if deprecated {
-			return nil, errors.New("the field `args_mapping` cannot be used when running the `sql` processor in deprecated mode (using the `dsn` field), use the `data_source_name` field instead")
-		}
 		log.Warnln("using unsafe_dynamic_query leaves you vulnerable to SQL injection attacks")
 		var err error
 		if argsMapping, err = interop.NewBloblangMapping(mgr, conf.SQL.ArgsMapping); err != nil {
 			return nil, fmt.Errorf("failed to parse `args_mapping`: %w", err)
 		}
-	}
-
-	var args []*field.Expression
-	for i, v := range conf.SQL.Args {
-		expr, err := interop.NewBloblangField(mgr, v)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse arg %v expression: %v", i, err)
-		}
-		args = append(args, expr)
 	}
 
 	if conf.SQL.Driver == "mssql" {
@@ -272,12 +233,10 @@ func NewSQL(
 		log:         log,
 		stats:       stats,
 		conf:        conf.SQL,
-		args:        args,
 		argsMapping: argsMapping,
 
 		queryStr: conf.SQL.Query,
 
-		deprecated: deprecated,
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
 		mCount:     stats.GetCounter("count"),
@@ -287,15 +246,7 @@ func NewSQL(
 	}
 
 	var err error
-	if deprecated {
-		s.log.Warnln("Using deprecated SQL functionality due to use of field 'dsn'. To switch to the new processor use the field 'data_source_name' instead. The new processor is not backwards compatible due to differences in how message batches are processed. For more information check out the docs at https://www.benthos.dev/docs/components/processors/sql.")
-		if conf.SQL.Driver != "mysql" && conf.SQL.Driver != "postgres" && conf.SQL.Driver != "mssql" {
-			return nil, fmt.Errorf("driver '%v' is not supported with deprecated SQL features (using field 'dsn')", conf.SQL.Driver)
-		}
-		if s.resCodecDeprecated, err = strToSQLResultCodecDeprecated(conf.SQL.ResultCodec); err != nil {
-			return nil, err
-		}
-	} else if s.resCodec, err = strToSQLResultCodec(conf.SQL.ResultCodec); err != nil {
+	if s.resCodec, err = strToSQLResultCodec(conf.SQL.ResultCodec); err != nil {
 		return nil, err
 	}
 
@@ -304,15 +255,12 @@ func NewSQL(
 	}
 
 	if conf.SQL.UnsafeDynamicQuery {
-		if deprecated {
-			return nil, errors.New("cannot use dynamic queries when running in deprecated mode")
-		}
 		if s.dynQuery, err = interop.NewBloblangField(mgr, s.queryStr); err != nil {
 			return nil, fmt.Errorf("failed to parse dynamic query expression: %v", err)
 		}
 	}
 
-	isSelectQuery := s.resCodecDeprecated != nil || s.resCodec != nil
+	isSelectQuery := s.resCodec != nil
 
 	// Some drivers only support transactional prepared inserts.
 	if s.dynQuery == nil && (isSelectQuery || !insertRequiresTransactionPrepare(conf.SQL.Driver)) {
@@ -440,14 +388,6 @@ func (s *SQL) doExecute(argSets [][]interface{}) (errs []error) {
 }
 
 func (s *SQL) getArgs(index int, msg types.Message) ([]interface{}, error) {
-	if len(s.args) > 0 {
-		args := make([]interface{}, len(s.args))
-		for i, v := range s.args {
-			args[i] = v.String(index, msg)
-		}
-		return args, nil
-	}
-
 	if s.argsMapping == nil {
 		return nil, nil
 	}
@@ -473,10 +413,6 @@ func (s *SQL) getArgs(index int, msg types.Message) ([]interface{}, error) {
 func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.dbMux.RLock()
 	defer s.dbMux.RUnlock()
-
-	if s.deprecated {
-		return s.processMessageDeprecated(msg)
-	}
 
 	s.mCount.Incr(1)
 	newMsg := msg.Copy()

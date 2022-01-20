@@ -36,7 +36,6 @@ Custom metrics such as these are emitted along with Benthos internal metrics, wh
 				"gauge",
 				"timing",
 			),
-			docs.FieldDeprecated("path"),
 			docs.FieldCommon("name", "The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics."),
 			docs.FieldString(
 				"labels", "A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.",
@@ -148,7 +147,6 @@ Equivalent to ` + "`gauge`" + ` where instead the metric is a timing.`,
 type MetricConfig struct {
 	Parts  []int             `json:"parts" yaml:"parts"`
 	Type   string            `json:"type" yaml:"type"`
-	Path   string            `json:"path" yaml:"path"`
 	Name   string            `json:"name" yaml:"name"`
 	Labels map[string]string `json:"labels" yaml:"labels"`
 	Value  string            `json:"value" yaml:"value"`
@@ -159,7 +157,6 @@ func NewMetricConfig() MetricConfig {
 	return MetricConfig{
 		Parts:  []int{},
 		Type:   "counter",
-		Path:   "",
 		Name:   "",
 		Labels: map[string]string{},
 		Value:  "",
@@ -245,23 +242,12 @@ func NewMetric(
 	}
 
 	name := conf.Metric.Name
-	if len(conf.Metric.Path) > 0 {
-		if len(conf.Metric.Name) > 0 {
-			return nil, errors.New("cannot combine deprecated path field with name field")
-		}
-		if len(conf.Metric.Parts) > 0 {
-			return nil, errors.New("cannot combine deprecated path field with parts field")
-		}
-		m.deprecated = true
-		name = conf.Metric.Path
-	}
 	if name == "" {
 		return nil, errors.New("metric name must not be empty")
 	}
-	if !m.deprecated {
-		// Remove any namespaces from the metric type.
-		stats = unwrapMetric(stats)
-	}
+
+	// Remove any namespaces from the metric type.
+	stats = unwrapMetric(stats)
 
 	labelNames := make([]string, 0, len(conf.Metric.Labels))
 	for n := range conf.Metric.Labels {
@@ -288,13 +274,6 @@ func NewMetric(
 			m.mCounter = stats.GetCounter(name)
 		}
 		m.handler = m.handleCounter
-	case "counter_parts":
-		if len(m.labels) > 0 {
-			m.mCounterVec = stats.GetCounterVec(name, m.labels.names())
-		} else {
-			m.mCounter = stats.GetCounter(name)
-		}
-		m.handler = m.handleCounterParts
 	case "counter_by":
 		if len(m.labels) > 0 {
 			m.mCounterVec = stats.GetCounterVec(name, m.labels.names())
@@ -328,19 +307,6 @@ func (m *Metric) handleCounter(val string, index int, msg types.Message) error {
 		m.mCounterVec.With(m.labels.values(index, msg)...).Incr(1)
 	} else {
 		m.mCounter.Incr(1)
-	}
-	return nil
-}
-
-// TODO: V4 Remove this
-func (m *Metric) handleCounterParts(val string, index int, msg types.Message) error {
-	if msg.Len() == 0 {
-		return nil
-	}
-	if len(m.labels) > 0 {
-		m.mCounterVec.With(m.labels.values(index, msg)...).Incr(int64(msg.Len()))
-	} else {
-		m.mCounter.Incr(int64(msg.Len()))
 	}
 	return nil
 }

@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -55,17 +54,16 @@ func TestCase(t *testing.T) {
 	provider["/pipeline/processors"] = []types.Processor{proc}
 
 	procConf = processor.NewConfig()
-	procConf.Type = processor.TypeText
-	procConf.Text.Operator = "to_upper"
+	procConf.Type = processor.TypeBloblang
+	procConf.Bloblang = `root = content().uppercase()`
 	if proc, err = processor.New(procConf, nil, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
 	provider["/input/broker/inputs/0/processors"] = []types.Processor{proc}
 
 	procConf = processor.NewConfig()
-	procConf.Type = processor.TypeFilter
-	procConf.Filter.Type = condition.TypeStatic
-	procConf.Filter.Static = false
+	procConf.Type = processor.TypeBloblang
+	procConf.Bloblang = `root = deleted()`
 	if proc, err = processor.New(procConf, nil, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
