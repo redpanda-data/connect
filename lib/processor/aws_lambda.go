@@ -93,64 +93,6 @@ pipeline:
 			},
 		},
 	}
-
-	Constructors[TypeLambda] = TypeSpec{
-		constructor: NewLambda,
-		Status:      docs.StatusDeprecated,
-		Categories: []Category{
-			CategoryIntegration,
-		},
-		Summary: `
-Invokes an AWS lambda for each message. The contents of the message is the
-payload of the request, and the result of the invocation will become the new
-contents of the message.`,
-		Description: `
-## Alternatives
-
-This processor has been renamed to ` + "[`aws_lambda`](/docs/components/processors/aws_lambda)" + `.
-
-It is possible to perform requests per message of a batch in parallel by setting
-the ` + "`parallel`" + ` flag to ` + "`true`" + `. The ` + "`rate_limit`" + `
-field can be used to specify a rate limit [resource](/docs/components/rate_limits/about)
-to cap the rate of requests across parallel components service wide.
-
-In order to map or encode the payload to a specific request body, and map the
-response back into the original payload instead of replacing it entirely, you
-can use the ` + "[`branch` processor](/docs/components/processors/branch)" + `.
-
-### Error Handling
-
-When all retry attempts for a message are exhausted the processor cancels the
-attempt. These failed messages will continue through the pipeline unchanged, but
-can be dropped or placed in a dead letter queue according to your config, you
-can read about these patterns [here](/docs/configuration/error_handling).
-
-### Credentials
-
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("parallel", "Whether messages of a batch should be dispatched in parallel."),
-		}.Merge(client.FieldSpecs()),
-		Examples: []docs.AnnotatedExample{
-			{
-				Title: "Branched Invoke",
-				Summary: `
-This example uses a ` + "[`branch` processor](/docs/components/processors/branch/)" + ` to map a new payload for triggering a lambda function with an ID and username from the original message, and the result of the lambda is discarded, meaning the original message is unchanged.`,
-				Config: `
-pipeline:
-  processors:
-    - branch:
-        request_map: '{"id":this.doc.id,"username":this.user.name}'
-        processors:
-          - lambda:
-              function: trigger_user_update
-`,
-			},
-		},
-	}
 }
 
 //------------------------------------------------------------------------------

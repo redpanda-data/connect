@@ -16,7 +16,7 @@ import (
 func TestGrokAllParts(t *testing.T) {
 	conf := NewConfig()
 	conf.Grok.Parts = []int{}
-	conf.Grok.Patterns = []string{
+	conf.Grok.Expressions = []string{
 		"%{WORD:first},%{INT:second:int}",
 	}
 
@@ -91,7 +91,7 @@ func TestGrok(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			conf := NewConfig()
 			conf.Grok.Parts = []int{0}
-			conf.Grok.Patterns = []string{test.pattern}
+			conf.Grok.Expressions = []string{test.pattern}
 			conf.Grok.PatternDefinitions = test.definitions
 
 			gSet, err := NewGrok(conf, nil, tLog, tStats)

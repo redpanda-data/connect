@@ -59,7 +59,6 @@ Attempts to create a target protobuf message from a generic JSON structure.`,
 			docs.FieldCommon("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
 			docs.FieldCommon("message", "The fully qualified name of the protobuf message to convert to/from."),
 			docs.FieldString("import_paths", "A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").Array(),
-			docs.FieldDeprecated("import_path"),
 			PartsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
@@ -161,7 +160,6 @@ type ProtobufConfig struct {
 	Operator    string   `json:"operator" yaml:"operator"`
 	Message     string   `json:"message" yaml:"message"`
 	ImportPaths []string `json:"import_paths" yaml:"import_paths"`
-	ImportPath  string   `json:"import_path" yaml:"import_path"`
 }
 
 // NewProtobufConfig returns a ProtobufConfig with default values.
@@ -171,7 +169,6 @@ func NewProtobufConfig() ProtobufConfig {
 		Operator:    "to_json",
 		Message:     "",
 		ImportPaths: []string{},
-		ImportPath:  "",
 	}
 }
 
@@ -316,9 +313,6 @@ func NewProtobuf(
 	}
 
 	importPaths := conf.Protobuf.ImportPaths
-	if len(conf.Protobuf.ImportPath) > 0 {
-		importPaths = append(importPaths, conf.Protobuf.ImportPath)
-	}
 
 	var err error
 	if p.operator, err = strToProtobufOperator(conf.Protobuf.Operator, conf.Protobuf.Message, importPaths); err != nil {

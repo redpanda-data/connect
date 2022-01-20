@@ -29,7 +29,6 @@ Performs operations against a [cache resource](/docs/components/caches/about) fo
 This processor will interpolate functions within the ` + "`key` and `value`" + ` fields individually for each message. This allows you to specify dynamic keys and values based on the contents of the message payloads and metadata. You can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("resource", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),
-			docs.FieldDeprecated("cache"),
 			docs.FieldCommon("operator", "The [operation](#operators) to perform with the cache.").HasOptions("set", "add", "get", "delete"),
 			docs.FieldCommon("key", "A key to use with the cache.").IsInterpolated(),
 			docs.FieldCommon("value", "A value to use with the cache (when applicable).").IsInterpolated(),
@@ -121,7 +120,6 @@ action is a no-op and will not fail with an error.`,
 
 // CacheConfig contains configuration fields for the Cache processor.
 type CacheConfig struct {
-	Cache    string `json:"cache" yaml:"cache"`
 	Resource string `json:"resource" yaml:"resource"`
 	Parts    []int  `json:"parts" yaml:"parts"`
 	Operator string `json:"operator" yaml:"operator"`
@@ -133,7 +131,6 @@ type CacheConfig struct {
 // NewCacheConfig returns a CacheConfig with default values.
 func NewCacheConfig() CacheConfig {
 	return CacheConfig{
-		Cache:    "",
 		Resource: "",
 		Parts:    []int{},
 		Operator: "set",
@@ -174,9 +171,6 @@ func NewCache(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
 	cacheName := conf.Cache.Resource
-	if cacheName == "" {
-		cacheName = conf.Cache.Cache
-	}
 	if cacheName == "" {
 		return nil, errors.New("cache name must be specified")
 	}

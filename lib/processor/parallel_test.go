@@ -26,7 +26,7 @@ func TestParallelBasic(t *testing.T) {
 
 	httpConf := NewConfig()
 	httpConf.Type = TypeHTTP
-	httpConf.HTTP.Client.URL = ts.URL + "/testpost"
+	httpConf.HTTP.URL = ts.URL + "/testpost"
 	conf := NewConfig()
 	conf.Parallel.Processors = []Config{httpConf}
 
@@ -71,8 +71,8 @@ func TestParallelError(t *testing.T) {
 
 	httpConf := NewConfig()
 	httpConf.Type = TypeHTTP
-	httpConf.HTTP.Client.URL = ts.URL + "/testpost"
-	httpConf.HTTP.Client.NumRetries = 0
+	httpConf.HTTP.URL = ts.URL + "/testpost"
+	httpConf.HTTP.NumRetries = 0
 
 	conf := NewConfig()
 	conf.Parallel.Processors = []Config{httpConf}
@@ -111,37 +111,6 @@ func TestParallelError(t *testing.T) {
 	}
 }
 
-func TestParallelUnack(t *testing.T) {
-	batchConf := NewConfig()
-	batchConf.Type = TypeBatch
-	batchConf.Batch.Count = 1000
-
-	conf := NewConfig()
-	conf.Parallel.Processors = []Config{batchConf}
-
-	h, err := NewParallel(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	msgs, res := h.ProcessMessage(message.New([][]byte{
-		[]byte("foo"),
-		[]byte("bar"),
-		[]byte("baz"),
-		[]byte("qux"),
-		[]byte("quz"),
-	}))
-	if res == nil {
-		t.Error("Expected non-nil response")
-	}
-	if len(msgs) != 0 {
-		t.Error("Expected empty msgs response")
-	}
-	if !res.SkipAck() {
-		t.Errorf("Expected unack response, received: %v", res)
-	}
-}
-
 func TestParallelCapped(t *testing.T) {
 	var reqs int64
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -156,7 +125,7 @@ func TestParallelCapped(t *testing.T) {
 
 	httpConf := NewConfig()
 	httpConf.Type = TypeHTTP
-	httpConf.HTTP.Client.URL = ts.URL + "/testpost"
+	httpConf.HTTP.URL = ts.URL + "/testpost"
 
 	conf := NewConfig()
 	conf.Parallel.Processors = []Config{httpConf}

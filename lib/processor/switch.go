@@ -2,7 +2,6 @@ package processor
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -12,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -39,13 +37,6 @@ When a switch processor executes on a [batch of messages](/docs/configuration/ba
 
 At the end of switch processing the resulting batch will follow the same ordering as the batch was received. If any child processors have split or otherwise grouped messages this grouping will be lost as the result of a switch is always a single batch. In order to perform conditional grouping and/or splitting use the [` + "`group_by`" + ` processor](/docs/components/processors/group_by/).`,
 		config: docs.FieldComponent().Array().WithChildren(
-			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
-				m, ok := v.(map[string]interface{})
-				if !ok {
-					return "", false
-				}
-				return "field condition is deprecated in favour of check", m["type"] == "static" && m["static"] == true
-			}),
 			docs.FieldBloblang(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should have the processors of this case executed on it. If left empty the case always passes. If the check mapping throws an error the message will be flagged [as having failed](/docs/configuration/error_handling) and will not be tested against any other cases.",
@@ -95,19 +86,14 @@ pipeline:
 // SwitchCaseConfig contains a condition, processors and other fields for an
 // individual case in the Switch processor.
 type SwitchCaseConfig struct {
-	Condition   condition.Config `json:"condition" yaml:"condition"`
-	Check       string           `json:"check" yaml:"check"`
-	Processors  []Config         `json:"processors" yaml:"processors"`
-	Fallthrough bool             `json:"fallthrough" yaml:"fallthrough"`
+	Check       string   `json:"check" yaml:"check"`
+	Processors  []Config `json:"processors" yaml:"processors"`
+	Fallthrough bool     `json:"fallthrough" yaml:"fallthrough"`
 }
 
 // NewSwitchCaseConfig returns a new SwitchCaseConfig with default values.
 func NewSwitchCaseConfig() SwitchCaseConfig {
-	cond := condition.NewConfig()
-	cond.Type = condition.TypeStatic
-	cond.Static = true
 	return SwitchCaseConfig{
-		Condition:   cond,
 		Check:       "",
 		Processors:  []Config{},
 		Fallthrough: false,
@@ -172,29 +158,10 @@ type Switch struct {
 	mSent  metrics.StatCounter
 }
 
-func isDefaultCaseCond(cond condition.Config) bool {
-	return cond.Type == condition.TypeStatic && cond.Static
-}
-
 // NewSwitch returns a Switch processor.
 func NewSwitch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	deprecated := false
-	for _, caseConf := range conf.Switch {
-		if deprecated || !isDefaultCaseCond(caseConf.Condition) {
-			deprecated = true
-		}
-		if deprecated {
-			if len(caseConf.Check) > 0 {
-				return nil, errors.New("cannot use both deprecated condition field in combination with field check")
-			}
-		}
-	}
-	if deprecated {
-		return newSwitchDeprecated(conf, mgr, log, stats)
-	}
-
 	var cases []switchCase
 	for i, caseConf := range conf.Switch {
 		prefix := strconv.Itoa(i)

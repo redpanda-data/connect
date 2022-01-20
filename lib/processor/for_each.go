@@ -34,14 +34,6 @@ Please note that most processors already process per message of a batch, and
 this processor is not needed in those cases.`,
 		config: docs.FieldComponent().Array().HasType(docs.FieldTypeProcessor),
 	}
-	Constructors[TypeProcessBatch] = TypeSpec{
-		constructor: NewProcessBatch,
-		Description: `
-Alias for the ` + "[`for_each`](/docs/components/processors/for_each)" + ` processor, which should be used
-instead.`,
-		Status: docs.StatusDeprecated,
-		config: docs.FieldComponent().Array().HasType(docs.FieldTypeProcessor),
-	}
 }
 
 //------------------------------------------------------------------------------

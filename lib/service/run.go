@@ -332,32 +332,9 @@ https://benthos.dev/docs/guides/streams_mode/about`[1:],
 	}
 
 	app.OnUsageError = func(context *cli.Context, err error, isSubcommand bool) error {
-		flags, notDeprecated := checkDeprecatedFlags(os.Args[1:])
-		if !notDeprecated {
-			fmt.Printf("Usage error: %v\n", err)
-			cli.ShowAppHelp(context)
-			return err
-		}
-
-		showVersion := flags.Bool(
-			"version", false, "Display version info, then exit",
-		)
-		configPath := flags.String(
-			"c", "", "Path to a configuration file",
-		)
-
-		flags.Usage = func() {
-			cli.ShowAppHelp(context)
-		}
-
-		flags.Parse(os.Args[1:])
-		if *showVersion {
-			cmdVersion()
-		}
-
-		deprecatedExecute(*configPath, testSuffix)
-		os.Exit(cmdService(*configPath, nil, nil, "", false, false, false, false, nil))
-		return nil
+		fmt.Printf("Usage error: %v\n", err)
+		cli.ShowAppHelp(context)
+		return err
 	}
 
 	app.Run(os.Args)

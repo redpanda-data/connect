@@ -10,14 +10,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/google/go-cmp/cmp"
-	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -71,17 +68,6 @@ output:
 				`this.contents.urls.contains("https://benthos.dev/")`,
 				`true`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
-				defaultBytes, err := yaml.Marshal(condition.NewConfig())
-				if err != nil {
-					return "", false
-				}
-				var iDefault interface{}
-				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
-					return "", false
-				}
-				return "field condition is deprecated in favour of check", cmp.Equal(v, iDefault)
-			}),
 			docs.FieldCommon(
 				"processors",
 				"A list of [processors](/docs/components/processors/about/) to execute on the newly formed group.",
@@ -93,19 +79,11 @@ output:
 
 //------------------------------------------------------------------------------
 
-func isDefaultGroupCond(cond condition.Config) bool {
-	if cond.Type == "" {
-		return true
-	}
-	return cmp.Equal(cond, condition.NewConfig())
-}
-
 // GroupByElement represents a group determined by a condition and a list of
 // group specific processors.
 type GroupByElement struct {
-	Condition  condition.Config `json:"condition" yaml:"condition"`
-	Check      string           `json:"check" yaml:"check"`
-	Processors []Config         `json:"processors" yaml:"processors"`
+	Check      string   `json:"check" yaml:"check"`
+	Processors []Config `json:"processors" yaml:"processors"`
 }
 
 //------------------------------------------------------------------------------
@@ -123,7 +101,6 @@ func NewGroupByConfig() GroupByConfig {
 //------------------------------------------------------------------------------
 
 type group struct {
-	Condition  condition.Type
 	Check      *mapping.Executor
 	Processors []types.Processor
 }
@@ -153,25 +130,12 @@ func NewGroupBy(
 	for i, gConf := range conf.GroupBy {
 		groupPrefix := fmt.Sprintf("groups.%v", i)
 
-		if !isDefaultGroupCond(gConf.Condition) {
-			cMgr, cLog, cStats := interop.LabelChild(groupPrefix+".condition", mgr, log, stats)
-			if groups[i].Condition, err = condition.New(gConf.Condition, cMgr, cLog, cStats); err != nil {
-				return nil, fmt.Errorf("failed to create condition for group '%v': %v", i, err)
-			}
-		}
-
 		if len(gConf.Check) > 0 {
 			if groups[i].Check, err = interop.NewBloblangMapping(mgr, gConf.Check); err != nil {
 				return nil, fmt.Errorf("failed to parse check for group '%v': %v", i, err)
 			}
-		}
-
-		if groups[i].Check == nil && groups[i].Condition == nil {
+		} else {
 			return nil, errors.New("a group definition must have a check query")
-		}
-
-		if groups[i].Check != nil && groups[i].Condition != nil {
-			return nil, errors.New("cannot specify both a condition and a check in a group")
 		}
 
 		for j, pConf := range gConf.Processors {
@@ -221,35 +185,21 @@ func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 
 	msg.Iter(func(i int, p types.Part) error {
 		for j, group := range g.groups {
-			if group.Condition != nil {
-				if group.Condition.Check(message.Lock(msg, i)) {
-					groupStr := strconv.Itoa(j)
-					spans[i].LogKV(
-						"event", "grouped",
-						"type", groupStr,
-					)
-					spans[i].SetTag("group", groupStr)
-					groups[j].Append(p.Copy())
-					g.mGroupPass[j].Incr(1)
-					return nil
-				}
-			} else if group.Check != nil {
-				res, err := group.Check.QueryPart(i, msg)
-				if err != nil {
-					res = false
-					g.log.Errorf("Failed to test group %v: %v\n", j, err)
-				}
-				if res {
-					groupStr := strconv.Itoa(j)
-					spans[i].LogKV(
-						"event", "grouped",
-						"type", groupStr,
-					)
-					spans[i].SetTag("group", groupStr)
-					groups[j].Append(p.Copy())
-					g.mGroupPass[j].Incr(1)
-					return nil
-				}
+			res, err := group.Check.QueryPart(i, msg)
+			if err != nil {
+				res = false
+				g.log.Errorf("Failed to test group %v: %v\n", j, err)
+			}
+			if res {
+				groupStr := strconv.Itoa(j)
+				spans[i].LogKV(
+					"event", "grouped",
+					"type", groupStr,
+				)
+				spans[i].SetTag("group", groupStr)
+				groups[j].Append(p.Copy())
+				g.mGroupPass[j].Incr(1)
+				return nil
 			}
 		}
 
