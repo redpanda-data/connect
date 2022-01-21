@@ -52,6 +52,6 @@ func (r *Resources) AccessRateLimit(ctx context.Context, name string, fn func(r 
 }
 
 // RegisterEndpoint registers an endpoint on Benthos' built-in HTTP server
-func (r *Resources) RegisterEndpoint(path string, description string, handler http.HandlerFunc) {
+func (r *Resources) RegisterEndpoint(path, description string, handler http.HandlerFunc) {
 	r.mgr.RegisterEndpoint(path, description, handler)
 }
