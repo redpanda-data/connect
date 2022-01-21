@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.62.0 - 2022-01-21
+
 ### Added
 
 - Field `sync` added to the `gcp_pubsub` input.
