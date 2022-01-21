@@ -155,67 +155,67 @@ root.foo_summed = json("foo").from_all().sum()
 
 ### `geoip_anonymous_ip`
 
-Takes an IP address as a string and returns a geoip2 AnonymousIP struct and/or an error.
+Takes an IP address as a string and returns a map[string]interface{} from a geoip2 AnonymousIP struct and/or an error.
 
 #### Parameters
 
-**`path`** &lt;string&gt; Path to city mmdb file  
+**`path`** &lt;string&gt; Path to mmdb file  
 
 ### `geoip_asn`
 
-Takes an IP address as a string and returns a geoip2 ASN struct and/or an error.
+Takes an IP address as a string and returns a map[string]interface{} from a geoip2 ASN struct and/or an error.
 
 #### Parameters
 
-**`path`** &lt;string&gt; Path to city mmdb file  
+**`path`** &lt;string&gt; Path to mmdb file  
 
 ### `geoip_city`
 
-Takes an IP address as a string and returns a geoip2 City struct and/or an error.
+Takes an IP address as a string and returns a map[string]interface{} from a geoip2 City struct and/or an error.
 
 #### Parameters
 
-**`path`** &lt;string&gt; Path to city mmdb file  
+**`path`** &lt;string&gt; Path to mmdb file  
 
 ### `geoip_connection_type`
 
-Takes an IP address as a string and returns a geoip2 ConnectionType struct and/or an error.
+Takes an IP address as a string and returns a map[string]interface{} from a geoip2 ConnectionType struct and/or an error.
 
 #### Parameters
 
-**`path`** &lt;string&gt; Path to city mmdb file  
+**`path`** &lt;string&gt; Path to mmdb file  
 
 ### `geoip_country`
 
-Takes an IP address as a string and returns a geoip2 Country struct and/or an error.
+Takes an IP address as a string and returns a map[string]interface{} from a geoip2 Country struct and/or an error.
 
 #### Parameters
 
-**`path`** &lt;string&gt; Path to city mmdb file  
+**`path`** &lt;string&gt; Path to mmdb file  
 
 ### `geoip_domain`
 
-Takes an IP address as a string and returns a geoip2 Domain struct and/or an error.
+Takes an IP address as a string and returns a map[string]interface{} from a geoip2 Domain struct and/or an error.
 
 #### Parameters
 
-**`path`** &lt;string&gt; Path to city mmdb file  
+**`path`** &lt;string&gt; Path to mmdb file  
 
 ### `geoip_enterprise`
 
-Takes an IP address as a string and returns a geoip2 Enterprise struct and/or an error.
+Takes an IP address as a string and returns a map[string]interface{} from a geoip2 Enterprise struct and/or an error.
 
 #### Parameters
 
-**`path`** &lt;string&gt; Path to city mmdb file  
+**`path`** &lt;string&gt; Path to mmdb file  
 
 ### `geoip_isp`
 
-Takes an IP address as a string and returns a geoip2 ISP struct and/or an error.
+Takes an IP address as a string and returns a map[string]interface{} from a geoip2 IP struct and/or an error.
 
 #### Parameters
 
-**`path`** &lt;string&gt; Path to city mmdb file  
+**`path`** &lt;string&gt; Path to mmdb file  
 
 ### `or`
 
