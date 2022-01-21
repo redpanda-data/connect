@@ -51,9 +51,9 @@ output:
     topic: ""
     max_in_flight: 1
     publish_timeout: 60s
+    ordering_key: ""
     metadata:
       exclude_prefixes: []
-    ordering_key: ""
 ```
 
 </TabItem>
@@ -113,6 +113,15 @@ publish_timeout: 5m
 publish_timeout: 60m
 ```
 
+### `ordering_key`
+
+The ordering key to use for publishing messages.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
 ### `metadata`
 
 Specify criteria for which metadata values are sent as attributes.
@@ -127,14 +136,5 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 
 Type: `array`  
 Default: `[]`  
-
-### `ordering_key`
-
-The ordering key to use for publishing messages.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-Default: `""`  
 
 

@@ -25,7 +25,7 @@ type GCPPubSubConfig struct {
 	MaxInFlight    int                          `json:"max_in_flight" yaml:"max_in_flight"`
 	PublishTimeout string                       `json:"publish_timeout" yaml:"publish_timeout"`
 	Metadata       metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
-  OrderingKey    string                       `json:"ordering_key" yaml:"ordering_key"`
+	OrderingKey    string                       `json:"ordering_key" yaml:"ordering_key"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
@@ -36,7 +36,7 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 		MaxInFlight:    1,
 		PublishTimeout: "60s",
 		Metadata:       metadata.NewExcludeFilterConfig(),
-    OrderingKey:    "",
+		OrderingKey:    "",
 	}
 }
 
