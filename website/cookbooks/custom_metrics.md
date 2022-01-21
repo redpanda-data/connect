@@ -24,7 +24,7 @@ import TabItem from '@theme/TabItem';
 
 ```yaml
 input:
-  bloblang:
+  generate:
     interval: 60s
     mapping: root = ""
 
@@ -78,7 +78,7 @@ http:
   address: 0.0.0.0:4195
 
 input:
-  bloblang:
+  generate:
     interval: 60s
     mapping: root = ""
 
@@ -160,7 +160,7 @@ http:
   address: 0.0.0.0:4195
 
 input:
-  bloblang:
+  generate:
     interval: 60s
     mapping: root = ""
 
@@ -240,7 +240,7 @@ http:
   address: 0.0.0.0:4195
 
 input:
-  bloblang:
+  generate:
     interval: 60s
     mapping: root = ""
 
@@ -290,7 +290,7 @@ http:
   address: 0.0.0.0:4195
 
 input:
-  bloblang:
+  generate:
     interval: 60s
     mapping: root = {}
 

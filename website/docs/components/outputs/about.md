@@ -11,13 +11,13 @@ An output config section looks like this:
 output:
   label: my_s3_output
 
-  s3:
+  aws_s3:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 
   # Optional list of processing steps
   processors:
-   - bloblang: '{"message":this,"meta":{"link_count":this.links.length()}}'
+    - bloblang: '{"message":this,"meta":{"link_count":this.links.length()}}'
 ```
 
 ## Back Pressure
@@ -37,7 +37,7 @@ It's possible to create fallback outputs for when an output target fails using a
 ```yaml
 output:
   fallback:
-    - sqs:
+    - aws_sqs:
         url: https://sqs.us-west-2.amazonaws.com/TODO/TODO
         max_in_flight: 20
 

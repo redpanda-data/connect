@@ -14,7 +14,7 @@ import (
 
 func sqlInsertProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Stable().
 		Categories("Integration").
 		Summary("Inserts rows into an SQL database for each message, and leaves the message unchanged.").
 		Description(`

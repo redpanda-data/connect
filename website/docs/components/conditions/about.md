@@ -16,7 +16,7 @@ condition:
 
 And is usually found as the child of a processor:
 
-```yaml
+```yml
 pipeline:
   processors:
     - switch:

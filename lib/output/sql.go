@@ -47,7 +47,7 @@ func init() {
 			}
 			return NewBatcherFromConfig(conf.SQL.Batching, w, mgr, log, stats)
 		}),
-		Status:  docs.StatusBeta,
+		Status:  docs.StatusDeprecated,
 		Batches: true,
 		Async:   true,
 		Version: "3.33.0",

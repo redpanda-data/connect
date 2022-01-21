@@ -10,7 +10,6 @@ The configuration for this server lives under the `http` namespace, with the fol
 http:
   address: 0.0.0.0:4195
   enabled: true
-  read_timeout: 5s
   root_path: /benthos
   debug_endpoints: false
   cert_file: ""

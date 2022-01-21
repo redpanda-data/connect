@@ -1,7 +1,7 @@
 ---
 title: sql_insert
 type: processor
-status: experimental
+status: stable
 categories: ["Integration"]
 ---
 
@@ -15,9 +15,6 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
-:::
 Inserts rows into an SQL database for each message, and leaves the message unchanged.
 
 Introduced in version 3.59.0.

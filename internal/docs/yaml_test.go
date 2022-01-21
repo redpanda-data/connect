@@ -614,12 +614,21 @@ func TestYAMLComponentLinting(t *testing.T) {
 				).Optional(),
 			),
 		})
+		docs.RegisterDocs(docs.ComponentSpec{
+			Name:   fmt.Sprintf("testlintbar%v", string(t)),
+			Type:   t,
+			Status: docs.StatusDeprecated,
+			Config: docs.FieldComponent().WithChildren(
+				docs.FieldString("bar1", "").Optional(),
+			),
+		})
 	}
 
 	type testCase struct {
-		name      string
-		inputType docs.Type
-		inputConf string
+		name             string
+		inputType        docs.Type
+		inputConf        string
+		rejectDeprecated bool
 
 		res []docs.Lint
 	}
@@ -632,6 +641,44 @@ func TestYAMLComponentLinting(t *testing.T) {
 testlintfooinput:
   # comment here
   foo1: hello world # And what's this?`,
+		},
+		{
+			name:      "no problem with deprecated component",
+			inputType: docs.TypeInput,
+			inputConf: `
+testlintbarinput:
+  bar1: hello world`,
+		},
+		{
+			name:      "no problem with deprecated fields",
+			inputType: docs.TypeInput,
+			inputConf: `
+testlintfooinput:
+  foo1: hello world
+  foo6: hello world`,
+		},
+		{
+			name:      "reject deprecated component",
+			inputType: docs.TypeInput,
+			inputConf: `
+testlintbarinput:
+  bar1: hello world`,
+			rejectDeprecated: true,
+			res: []docs.Lint{
+				docs.NewLintError(2, "component testlintbarinput is deprecated"),
+			},
+		},
+		{
+			name:      "reject deprecated fields",
+			inputType: docs.TypeInput,
+			inputConf: `
+testlintfooinput:
+  foo1: hello world
+  foo6: hello world`,
+			rejectDeprecated: true,
+			res: []docs.Lint{
+				docs.NewLintError(4, "field foo6 is deprecated"),
+			},
 		},
 		{
 			name:      "allows anchors",
@@ -869,9 +916,12 @@ testlintfooinput:
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
+			lintCtx := docs.NewLintContext()
+			lintCtx.RejectDeprecated = test.rejectDeprecated
+
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
-			lints := docs.LintYAML(docs.NewLintContext(), test.inputType, &node)
+			lints := docs.LintYAML(lintCtx, test.inputType, &node)
 			assert.Equal(t, test.res, lints)
 		})
 	}

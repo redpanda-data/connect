@@ -219,7 +219,7 @@ However, a user often only needs to get their hands on a short, runnable example
 ```yaml
 input:
   amqp_0_9:
-    url: amqp://guest:guest@localhost:5672/
+    urls: [ amqp://guest:guest@localhost:5672/ ]
     consumer_tag: benthos-consumer
     queue: benthos-queue
     prefetch_count: 10

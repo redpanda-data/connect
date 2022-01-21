@@ -14,7 +14,7 @@ import (
 
 func sqlInsertOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Stable().
 		Categories("Integration").
 		Summary("Inserts a row into an SQL database for each message.").
 		Description(``).

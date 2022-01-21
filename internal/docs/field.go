@@ -503,14 +503,20 @@ type LintContext struct {
 
 	// Provides an isolated context for Bloblang parsing.
 	BloblangEnv *bloblang.Environment
+
+	// Config fields
+
+	// Reject any deprecated components or fields as linting errors.
+	RejectDeprecated bool
 }
 
 // NewLintContext creates a new linting context.
 func NewLintContext() LintContext {
 	return LintContext{
-		LabelsToLine: map[string]int{},
-		DocsProvider: globalProvider,
-		BloblangEnv:  bloblang.GlobalEnvironment().Deactivated(),
+		LabelsToLine:     map[string]int{},
+		DocsProvider:     globalProvider,
+		BloblangEnv:      bloblang.GlobalEnvironment().Deactivated(),
+		RejectDeprecated: false,
 	}
 }
 

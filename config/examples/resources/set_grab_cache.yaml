@@ -1,12 +1,12 @@
 pipeline:
   processors:
     - cache:
-        cache: foocache
+        resource: foocache
         operator: set
         key: foo
         value: "static value"
     - cache:
-        cache: foocache
+        resource: foocache
         operator: get
         key: foo
 

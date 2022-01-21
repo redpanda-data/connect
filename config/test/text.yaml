@@ -1,5 +1,0 @@
-pipeline:
-  processors:
-    - text:
-        operator: set
-        value: 'total: ${! json("a").number() + json("b").number()}, matches: ${!json("a").number() == json("b").number() }'

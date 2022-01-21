@@ -43,8 +43,11 @@ func LintBloblangField(ctx LintContext, line, col int, v interface{}) []Lint {
 	if str == "" {
 		return nil
 	}
-	_, err := ctx.BloblangEnv.NewField(str)
+	e, err := ctx.BloblangEnv.NewField(str)
 	if err == nil {
+		if ctx.RejectDeprecated && e.ContainsDeprecated {
+			return []Lint{NewLintError(line, `interpolation string contains deprecated syntax, use the new bloblang syntax instead, e.g. ${!meta("foo")} instead of ${!metadata:foo}`)}
+		}
 		return nil
 	}
 	if mErr, ok := err.(*parser.Error); ok {

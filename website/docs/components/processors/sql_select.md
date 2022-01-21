@@ -1,7 +1,7 @@
 ---
 title: sql_select
 type: processor
-status: experimental
+status: stable
 categories: ["Integration"]
 ---
 
@@ -15,9 +15,6 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
-:::
 Runs an SQL select query against a database and returns the result as an array of objects, one for each row returned, containing a key for each column queried and its value.
 
 Introduced in version 3.59.0.

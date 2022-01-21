@@ -7,21 +7,21 @@ pipeline:
       - protobuf:
           operator: from_json
           message: testing.House
-          import_path: config/test/protobuf/schema
+          import_paths: [ config/test/protobuf/schema ]
       - protobuf:
           operator: to_json
           message: testing.House
-          import_path: config/test/protobuf/schema
+          import_paths: [ config/test/protobuf/schema ]
       - bloblang: |
           root = this.people.index(0) | {"first_name":"unknown"}
       - protobuf:
           operator: from_json
           message: testing.Person
-          import_path: config/test/protobuf/schema
+          import_paths: [ config/test/protobuf/schema ]
       - protobuf:
           operator: to_json
           message: testing.Person
-          import_path: config/test/protobuf/schema
+          import_paths: [ config/test/protobuf/schema ]
     - catch:
       - bloblang: 'root = "error: %v".format(error())'
 

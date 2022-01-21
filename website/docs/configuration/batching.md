@@ -31,7 +31,7 @@ However, a small number of inputs such as [`kafka`][input_kafka] must be consume
 input:
   kafka:
     addresses: [ todo:9092 ]
-    topic: benthos_input_stream
+    topics: [ benthos_input_stream ]
     batching:
       count: 10
       period: 100ms
@@ -71,7 +71,7 @@ pipeline:
         parts: [ 0 ]
         operator: to_json
         message: header.Message
-        import_path: /tmp/protos
+        import_paths: [ /tmp/protos ]
 ```
 
 And some processors such as [`sleep`][processor.sleep] are executed once per batch, you can avoid this behaviour with the [`for_each` processor][proc_for_each]:

@@ -103,7 +103,7 @@ clean:
 
 docs: $(APPS) $(TOOLS)
 	@$(PATHINSTTOOLS)/benthos_docs_gen $(DOCS_FLAGS)
-	@$(PATHINSTBIN)/benthos lint ./config/... \
+	@$(PATHINSTBIN)/benthos lint --deprecated ./config/... \
 		$(WEBSITE_DIR)/cookbooks/*.md \
 		$(WEBSITE_DIR)/docs/components/**/about.md \
 		$(WEBSITE_DIR)/docs/guides/*.md \

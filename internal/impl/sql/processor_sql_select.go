@@ -14,7 +14,7 @@ import (
 
 func sqlSelectProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Stable().
 		Categories("Integration").
 		Summary("Runs an SQL select query against a database and returns the result as an array of objects, one for each row returned, containing a key for each column queried and its value.").
 		Description(`

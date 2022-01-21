@@ -252,7 +252,8 @@ not this`,
 
 			var res Result
 			if test.deprecated {
-				res = ParseDeprecatedQuery(GlobalContext())([]rune(test.input))
+				var isDep bool
+				res = ParseDeprecatedQuery(GlobalContext(), &isDep)([]rune(test.input))
 			} else {
 				res = queryParser(Context{
 					Functions: query.AllFunctions,

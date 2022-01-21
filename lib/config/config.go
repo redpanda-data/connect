@@ -223,6 +223,14 @@ func AddExamples(conf *Type, examples ...string) {
 //
 // TODO: V4 Remove this and force everything through internal/config
 func Read(path string, replaceEnvs bool, config *Type) ([]string, error) {
+	return ReadV2(path, replaceEnvs, false, config)
+}
+
+// ReadV2 will attempt to read a configuration file path into a structure.
+// Returns an array of lint messages or an error.
+//
+// TODO: V4 Remove this and force everything through internal/config
+func ReadV2(path string, replaceEnvs, rejectDeprecated bool, config *Type) ([]string, error) {
 	configBytes, lints, err := ReadWithJSONPointersLinted(path, replaceEnvs)
 	if err != nil {
 		return nil, err
@@ -232,12 +240,12 @@ func Read(path string, replaceEnvs bool, config *Type) ([]string, error) {
 		return nil, err
 	}
 
-	newLints, err := Lint(configBytes, *config)
+	lintCtx := docs.NewLintContext()
+	lintCtx.RejectDeprecated = rejectDeprecated
+	newLints, err := LintV2(lintCtx, configBytes)
 	if err != nil {
 		return nil, err
 	}
 	lints = append(lints, newLints...)
 	return lints, nil
 }
-
-//------------------------------------------------------------------------------

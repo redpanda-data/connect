@@ -32,6 +32,21 @@ var (
 	DateBuilt string
 )
 
+func init() {
+	if Version == "" {
+		if info, ok := debug.ReadBuildInfo(); ok {
+			for _, mod := range info.Deps {
+				if mod.Path == "github.com/Jeffail/benthos/v3" {
+					Version = mod.Version
+				}
+			}
+		}
+	}
+	if DateBuilt == "" {
+		DateBuilt = "unknown"
+	}
+}
+
 // OptSetVersionStamp creates an opt func for setting the version and date built
 // stamps that Benthos returns via --version and the /version endpoint. The
 // traditional way of setting these values is via the build flags:

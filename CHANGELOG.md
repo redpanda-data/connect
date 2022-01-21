@@ -17,6 +17,11 @@ All notable changes to this project will be documented in this file.
 - Field `metadata` added to `http` and `http_client` components.
 - Field `ordering_key` added to the `gcp_pubsub` output.
 - A suite of new experimental `geoip_` methods have been added.
+- Added flag `--deprecated` to the `benthos lint` subcommand for detecting deprecated fields.
+
+### Changed
+
+- The `sql` processor and output have been marked deprecated in favour of the newer `sql_insert`, `sql_select` alternatives.
 
 ### Fixed
 

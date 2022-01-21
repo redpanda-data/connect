@@ -53,14 +53,17 @@ pipeline:
   - switch:
     - check: meta("doc_type") == "nested"
       processors:
-        - sql:
+        - sql_insert:
             driver: mysql
             dsn: foouser:foopassword@tcp(localhost:3306)/foodb
-            query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-            args:
-            - ${! json("document.foo") }
-            - ${! json("document.bar") }
-            - ${! meta("kafka_topic") }
+            table: footable
+            columns: [ foo, bar, baz ]
+            args_mapping: |
+              root = [
+                this.document.foo,
+                this.document.bar,
+                meta("kafka_topic"),
+              ]
 ```
 
 ## Restricting Metadata

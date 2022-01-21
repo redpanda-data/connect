@@ -1,7 +1,7 @@
 ---
 title: sql
 type: processor
-status: stable
+status: deprecated
 categories: ["Integration"]
 ---
 
@@ -15,6 +15,9 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
+:::
 
 Runs an SQL prepared query against a target database for each message and, for
 queries that return rows, replaces it with the result according to a

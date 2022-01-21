@@ -31,6 +31,7 @@ func init() {
 		Categories: []Category{
 			CategoryIntegration,
 		},
+		Status: docs.StatusDeprecated,
 		Summary: `
 Runs an SQL prepared query against a target database for each message and, for
 queries that return rows, replaces it with the result according to a
