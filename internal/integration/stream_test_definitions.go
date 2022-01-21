@@ -544,6 +544,51 @@ func StreamTestStreamParallel(n int) StreamTestDefinition {
 	)
 }
 
+// StreamTestStreamSaturatedUnacked writes N messages as a backlog, then
+// consumes half of those messages without acking them, and then after a pause
+// acknowledges them all and resumes consuming.
+//
+// The purpose of this test is to ensure that after a period of back pressure is
+// applied the input correctly resumes.
+func StreamTestStreamSaturatedUnacked(n int) StreamTestDefinition {
+	return namedStreamTest(
+		"can consume data without acking and resume",
+		func(t *testing.T, env *streamTestEnvironment) {
+			t.Parallel()
+
+			tranChan := make(chan types.Transaction, n)
+			input, output := initConnectors(t, tranChan, env)
+			t.Cleanup(func() {
+				closeConnectors(t, input, output)
+			})
+
+			set := map[string][]string{}
+			for i := 0; i < n*2; i++ {
+				payload := fmt.Sprintf("hello world: %v", i)
+				set[payload] = nil
+				require.NoError(t, sendMessage(env.ctx, t, tranChan, payload))
+			}
+
+			resChans := make([]chan<- types.Response, n/2)
+			for i := range resChans {
+				var b types.Part
+				b, resChans[i] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+				messageInSet(t, true, env.allowDuplicateMessages, b, set)
+			}
+
+			<-time.After(time.Second * 5)
+			for _, rChan := range resChans {
+				sendResponse(env.ctx, t, rChan, nil)
+			}
+
+			// Consume all remaining messages
+			for len(set) > 0 {
+				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+			}
+		},
+	)
+}
+
 // StreamTestAtLeastOnceDelivery ensures data is delivered through nacks and
 // restarts.
 func StreamTestAtLeastOnceDelivery() StreamTestDefinition {

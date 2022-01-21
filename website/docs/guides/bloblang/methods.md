@@ -1849,6 +1849,50 @@ root.body = this.body.bloblang(this.mapping)
 # Out: {"body":{"foo":"Hello World 2"}}
 ```
 
+### `format_json`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Serializes a target value into a pretty-printed JSON byte array (with 4 space indentation by default).
+
+#### Parameters
+
+**`indent`** &lt;(optional) string, default `"    "`&gt; Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+
+#### Examples
+
+
+```coffee
+root = this.doc.format_json()
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {
+#          "foo": "bar"
+#      }
+```
+
+Provide an argument string in order to customise the indentation used.
+
+```coffee
+root = this.format_json("  ")
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {
+#        "doc": {
+#          "foo": "bar"
+#        }
+#      }
+```
+
+Use the `.string()` method in order to coerce the result into a string.
+
+```coffee
+root.doc = this.doc.format_json().string()
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {"doc":"{\n    \"foo\": \"bar\"\n}"}
+```
+
 ### `format_msgpack`
 
 Formats data as a [MessagePack](https://msgpack.org/) message in bytes format.
@@ -1882,7 +1926,6 @@ root = this.doc.format_yaml()
 
 # In:  {"doc":{"foo":"bar"}}
 # Out: foo: bar
-
 ```
 
 Use the `.string()` method in order to coerce the result into a string.

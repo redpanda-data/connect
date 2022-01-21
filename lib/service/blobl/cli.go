@@ -26,13 +26,13 @@ func CliCommand() *cli.Command {
 		Name:  "blobl",
 		Usage: "Execute a Bloblang mapping on documents consumed via stdin",
 		Description: `
-   Provides a convenient tool for mapping JSON documents over the command line:
+Provides a convenient tool for mapping JSON documents over the command line:
 
-   cat documents.jsonl | benthos blobl 'foo.bar.map_each(this.uppercase())'
+  cat documents.jsonl | benthos blobl 'foo.bar.map_each(this.uppercase())'
 
-   echo '{"foo":"bar"}' | benthos blobl -f ./mapping.blobl
+  echo '{"foo":"bar"}' | benthos blobl -f ./mapping.blobl
 
-   Find out more about Bloblang at: https://benthos.dev/docs/guides/bloblang/about`[4:],
+Find out more about Bloblang at: https://benthos.dev/docs/guides/bloblang/about`[1:],
 		Flags: []cli.Flag{
 			&cli.IntFlag{
 				Name:    "threads",

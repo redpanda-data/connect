@@ -206,7 +206,7 @@ type HTTPServer struct {
 
 	responseStatus  *field.Expression
 	responseHeaders map[string]*field.Expression
-	metaFilter      *imetadata.Filter
+	metaFilter      *imetadata.IncludeFilter
 
 	handlerWG    sync.WaitGroup
 	transactions chan types.Transaction

@@ -84,30 +84,30 @@ type FieldSpec struct {
 	Kind FieldKind `json:"kind"`
 
 	// Description of the field purpose (in markdown).
-	Description string `json:"description"`
+	Description string `json:"description,omitempty"`
 
 	// IsAdvanced is true for optional fields that will not be present in most
 	// configs.
-	IsAdvanced bool `json:"is_advanced"`
+	IsAdvanced bool `json:"is_advanced,omitempty"`
 
 	// IsDeprecated is true for fields that are deprecated and only exist
 	// for backwards compatibility reasons.
-	IsDeprecated bool `json:"is_deprecated"`
+	IsDeprecated bool `json:"is_deprecated,omitempty"`
 
 	// IsOptional is a boolean flag indicating that a field is optional, even
 	// if there is no default. This prevents linting errors when the field
 	// is missing.
-	IsOptional bool `json:"is_optional"`
+	IsOptional bool `json:"is_optional,omitempty"`
 
 	// Default value of the field.
 	Default *interface{} `json:"default,omitempty"`
 
 	// Interpolation indicates that the field supports interpolation
 	// functions.
-	Interpolated bool `json:"interpolated"`
+	Interpolated bool `json:"interpolated,omitempty"`
 
 	// Bloblang indicates that a string field is a Bloblang mapping.
-	Bloblang bool `json:"bloblang"`
+	Bloblang bool `json:"bloblang,omitempty"`
 
 	// Examples is a slice of optional example values for a field.
 	Examples []interface{} `json:"examples,omitempty"`

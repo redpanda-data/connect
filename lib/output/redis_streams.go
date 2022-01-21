@@ -1,9 +1,9 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/redis"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -35,7 +35,7 @@ a metadata item and the body then the body takes precedence.`,
 			docs.FieldCommon("body_key", "A key to set the raw body of the message to."),
 			docs.FieldCommon("max_length", "When greater than zero enforces a rough cap on the length of the target stream."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldCommon("metadata", "Specify criteria for which metadata values are included in the message body.").WithChildren(output.MetadataFields()...),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are included in the message body.").WithChildren(metadata.ExcludeFilterFields()...),
 			batch.FieldSpec(),
 		),
 		Categories: []Category{

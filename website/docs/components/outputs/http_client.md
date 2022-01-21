@@ -57,6 +57,9 @@ output:
     verb: POST
     headers:
       Content-Type: application/octet-stream
+    metadata:
+      include_prefixes: []
+      include_patterns: []
     oauth:
       enabled: false
       consumer_key: ""
@@ -185,6 +188,53 @@ Default: `{"Content-Type":"application/octet-stream"}`
 
 headers:
   Content-Type: application/octet-stream
+```
+
+### `metadata`
+
+Specify optional matching rules to determine which metadata keys should be added to the HTTP request as headers.
+
+
+Type: `object`  
+
+### `metadata.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_prefixes:
+  - foo_
+  - bar_
+
+include_prefixes:
+  - kafka_
+
+include_prefixes:
+  - content-
+```
+
+### `metadata.include_patterns`
+
+Provide a list of explicit metadata key regular expression (re2) patterns to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_patterns:
+  - .*
+
+include_patterns:
+  - _timestamp_unix$
 ```
 
 ### `oauth`
@@ -477,7 +527,7 @@ Default: `""`
 
 ### `extract_headers`
 
-Specify which response headers should be added to resulting messages as metadata. Header keys are lowercased before matching, so ensure that your patterns target lowercased versions of the header keys that you expect.
+Specify which response headers should be added to resulting synchronous response messages as metadata. Header keys are lowercased before matching, so ensure that your patterns target lowercased versions of the header keys that you expect. This field is not applicable unless `propagate_response` is set to `true`.
 
 
 Type: `object`  

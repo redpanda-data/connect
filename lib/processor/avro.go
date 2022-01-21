@@ -27,6 +27,8 @@ func init() {
 Performs Avro based operations on messages based on a schema.`,
 		Status: docs.StatusBeta,
 		Description: `
+WARNING: If you are consuming or generating messages using a schema registry service then it is likely this processor will fail as those services require messages to be prefixed with the identifier of the schema version being used. Instead, try the ` + "[`schema_registry_encode`](/docs/components/processors/schema_registry_encode) and [`schema_registry_decode`](/docs/components/processors/schema_registry_decode)" + ` processors.
+
 ## Operators
 
 ### ` + "`to_json`" + `

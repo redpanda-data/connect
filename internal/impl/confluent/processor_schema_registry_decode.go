@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -245,7 +246,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	defer done()
 
 	reqURL := *s.schemaRegistryBaseURL
-	reqURL.Path = fmt.Sprintf("%s/schemas/ids/%v", reqURL.Path, id)
+	reqURL.Path = path.Join(reqURL.Path, fmt.Sprintf("/schemas/ids/%v", id))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL.String(), http.NoBody)
 	if err != nil {

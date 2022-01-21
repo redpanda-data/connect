@@ -315,6 +315,49 @@ func TestHTTPClientReceive(t *testing.T) {
 	}
 }
 
+func TestHTTPClientSendMetaFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `
+foo_a: %v
+bar_a: %v
+foo_b: %v
+bar_b: %v
+`,
+			r.Header.Get("foo_a"),
+			r.Header.Get("bar_a"),
+			r.Header.Get("foo_b"),
+			r.Header.Get("bar_b"),
+		)
+	}))
+	defer ts.Close()
+
+	conf := client.NewConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.Metadata.IncludePrefixes = []string{"foo_"}
+
+	h, err := NewClient(conf)
+	require.NoError(t, err)
+
+	sendMsg := message.New([][]byte{[]byte("hello world")})
+	meta := sendMsg.Get(0).Metadata()
+	meta.Set("foo_a", "foo a value")
+	meta.Set("foo_b", "foo b value")
+	meta.Set("bar_a", "bar a value")
+	meta.Set("bar_b", "bar b value")
+
+	resMsg, err := h.Send(context.Background(), sendMsg, sendMsg)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, resMsg.Len())
+	assert.Equal(t, `
+foo_a: foo a value
+bar_a: 
+foo_b: foo b value
+bar_b: 
+`, string(resMsg.Get(0).Get()))
+}
+
 func TestHTTPClientReceiveHeaders(t *testing.T) {
 	nTestLoops := 1000
 
@@ -412,7 +455,7 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 			}
 		} else if exp, act := "baz", resMsg.Get(0).Metadata().Get("foobar"); exp != act {
 			t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
-		} else if tt.copyResponseHeaders && h.metaFilter.IsSet() {
+		} else if tt.copyResponseHeaders && h.metaExtractFilter.IsSet() {
 			if metadataCount < 3 {
 				t.Errorf("%s: wrong number of metadata items: %d", tt.name, metadataCount)
 			}

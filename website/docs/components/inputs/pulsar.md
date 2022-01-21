@@ -126,6 +126,8 @@ Default: `""`
 
 Specify the subscription type for this consumer.
 
+> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See [Pulsar documentation](https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement) and [this Github issue](https://github.com/apache/pulsar/issues/12208) for more details.
+
 
 Type: `string`  
 Default: `"shared"`  

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -20,8 +20,8 @@ import (
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 	"github.com/cenkalti/backoff/v4"
 )
 
@@ -36,11 +36,11 @@ const (
 // AmazonSQSConfig contains configuration fields for the output AmazonSQS type.
 type AmazonSQSConfig struct {
 	sessionConfig          `json:",inline" yaml:",inline"`
-	URL                    string          `json:"url" yaml:"url"`
-	MessageGroupID         string          `json:"message_group_id" yaml:"message_group_id"`
-	MessageDeduplicationID string          `json:"message_deduplication_id" yaml:"message_deduplication_id"`
-	Metadata               output.Metadata `json:"metadata" yaml:"metadata"`
-	MaxInFlight            int             `json:"max_in_flight" yaml:"max_in_flight"`
+	URL                    string                       `json:"url" yaml:"url"`
+	MessageGroupID         string                       `json:"message_group_id" yaml:"message_group_id"`
+	MessageDeduplicationID string                       `json:"message_deduplication_id" yaml:"message_deduplication_id"`
+	Metadata               metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
+	MaxInFlight            int                          `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config         `json:",inline" yaml:",inline"`
 	Batching               batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
@@ -59,7 +59,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 		URL:                    "",
 		MessageGroupID:         "",
 		MessageDeduplicationID: "",
-		Metadata:               output.NewMetadata(),
+		Metadata:               metadata.NewExcludeFilterConfig(),
 		MaxInFlight:            1,
 		Config:                 rConf,
 		Batching:               batch.NewPolicyConfig(),
@@ -72,15 +72,13 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 // Amazon SQS queue.
 type AmazonSQS struct {
 	conf AmazonSQSConfig
-
-	session *session.Session
-	sqs     *sqs.SQS
+	sqs  sqsiface.SQSAPI
 
 	backoffCtor func() backoff.BackOff
 
 	groupID    *field.Expression
 	dedupeID   *field.Expression
-	metaFilter *output.MetadataFilter
+	metaFilter *metadata.ExcludeFilter
 
 	closer    sync.Once
 	closeChan chan struct{}
@@ -143,7 +141,7 @@ func (a *AmazonSQS) ConnectWithContext(ctx context.Context) error {
 
 // Connect attempts to establish a connection to the target SQS queue.
 func (a *AmazonSQS) Connect() error {
-	if a.session != nil {
+	if a.sqs != nil {
 		return nil
 	}
 
@@ -152,9 +150,7 @@ func (a *AmazonSQS) Connect() error {
 		return err
 	}
 
-	a.session = sess
 	a.sqs = sqs.New(sess)
-
 	a.log.Infof("Sending messages to Amazon SQS URL: %v\n", a.conf.URL)
 	return nil
 }
@@ -163,6 +159,7 @@ type sqsAttributes struct {
 	attrMap  map[string]*sqs.MessageAttributeValue
 	groupID  *string
 	dedupeID *string
+	content  *string
 }
 
 var sqsAttributeKeyInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(^aws\.)|(^amazon\.)|(\.$)|([^a-z0-9_\-.]+)`)
@@ -210,6 +207,7 @@ func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
 		attrMap:  values,
 		groupID:  groupID,
 		dedupeID: dedupeID,
+		content:  aws.String(string(p.Get())),
 	}
 }
 
@@ -220,7 +218,7 @@ func (a *AmazonSQS) Write(msg types.Message) error {
 
 // WriteWithContext attempts to write message contents to a target SQS.
 func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg types.Message) error {
-	if a.session == nil {
+	if a.sqs == nil {
 		return types.ErrNotConnected
 	}
 
@@ -229,13 +227,13 @@ func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg types.Message) err
 	entries := []*sqs.SendMessageBatchRequestEntry{}
 	attrMap := map[string]sqsAttributes{}
 	msg.Iter(func(i int, p types.Part) error {
-		id := strconv.FormatInt(int64(i), 10)
+		id := strconv.Itoa(i)
 		attrs := a.getSQSAttributes(msg, i)
 		attrMap[id] = attrs
 
 		entries = append(entries, &sqs.SendMessageBatchRequestEntry{
 			Id:                     aws.String(id),
-			MessageBody:            aws.String(string(p.Get())),
+			MessageBody:            attrs.content,
 			MessageAttributes:      attrs.attrMap,
 			MessageGroupId:         attrs.groupID,
 			MessageDeduplicationId: attrs.dedupeID,
@@ -287,7 +285,7 @@ func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg types.Message) err
 				aMap := attrMap[*v.Id]
 				input.Entries = append(input.Entries, &sqs.SendMessageBatchRequestEntry{
 					Id:                     v.Id,
-					MessageBody:            v.Message,
+					MessageBody:            aMap.content,
 					MessageAttributes:      aMap.attrMap,
 					MessageGroupId:         aMap.groupID,
 					MessageDeduplicationId: aMap.dedupeID,

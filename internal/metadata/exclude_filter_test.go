@@ -1,4 +1,4 @@
-package output
+package metadata
 
 import (
 	"testing"
@@ -8,12 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMetadataFilter(t *testing.T) {
+func TestExcludeFilter(t *testing.T) {
 	tests := []struct {
 		name       string
 		inputMeta  map[string]string
 		outputMeta map[string]string
-		conf       Metadata
+		conf       ExcludeFilterConfig
 	}{
 		{
 			name: "no filter",
@@ -27,7 +27,7 @@ func TestMetadataFilter(t *testing.T) {
 				"bar": "bar1",
 				"baz": "baz1",
 			},
-			conf: NewMetadata(),
+			conf: NewExcludeFilterConfig(),
 		},
 		{
 			name: "foo filter",
@@ -40,7 +40,7 @@ func TestMetadataFilter(t *testing.T) {
 				"bar": "bar1",
 				"baz": "baz1",
 			},
-			conf: Metadata{
+			conf: ExcludeFilterConfig{
 				ExcludePrefixes: []string{"f"},
 			},
 		},
@@ -52,7 +52,7 @@ func TestMetadataFilter(t *testing.T) {
 				"baz": "baz1",
 			},
 			outputMeta: map[string]string{},
-			conf: Metadata{
+			conf: ExcludeFilterConfig{
 				ExcludePrefixes: []string{""},
 			},
 		},

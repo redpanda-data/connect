@@ -1097,6 +1097,63 @@ var _ = registerSimpleMethod(
 	},
 )
 
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"format_json", "",
+	).InCategory(
+		MethodCategoryParsing,
+		"Serializes a target value into a pretty-printed JSON byte array (with 4 space indentation by default).",
+		NewExampleSpec("",
+			`root = this.doc.format_json()`,
+			`{"doc":{"foo":"bar"}}`,
+			`{
+    "foo": "bar"
+}`,
+		),
+		NewExampleSpec("Provide an argument string in order to customise the indentation used.",
+			`root = this.format_json("  ")`,
+			`{"doc":{"foo":"bar"}}`,
+			`{
+  "doc": {
+    "foo": "bar"
+  }
+}`,
+		),
+		NewExampleSpec("Use the `.string()` method in order to coerce the result into a string.",
+			`root.doc = this.doc.format_json().string()`,
+			`{"doc":{"foo":"bar"}}`,
+			`{"doc":"{\n    \"foo\": \"bar\"\n}"}`,
+		),
+	).
+		Beta().
+		Param(ParamString(
+			"indent",
+			"Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.",
+		).Optional().Default(strings.Repeat(" ", 4))),
+	func(args *ParsedParams) (simpleMethod, error) {
+		indentOpt, err := args.FieldOptionalString("indent")
+		if err != nil {
+			return nil, err
+		}
+		indent := ""
+		if indentOpt != nil {
+			indent = *indentOpt
+		}
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return nil, err
+			}
+
+			var out bytes.Buffer
+			if err := json.Indent(&out, b, "", indent); err != nil {
+				return nil, err
+			}
+			return out.Bytes(), nil
+		}, nil
+	},
+)
+
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
@@ -1912,6 +1969,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
+// TODO: V4 Rename this to `re_replace_all`
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"re_replace", "",

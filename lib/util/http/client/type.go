@@ -36,6 +36,7 @@ type Config struct {
 	URL                 string                       `json:"url" yaml:"url"`
 	Verb                string                       `json:"verb" yaml:"verb"`
 	Headers             map[string]string            `json:"headers" yaml:"headers"`
+	Metadata            metadata.IncludeFilterConfig `json:"metadata" yaml:"metadata"`
 	CopyResponseHeaders bool                         `json:"copy_response_headers" yaml:"copy_response_headers"`
 	ExtractMetadata     metadata.IncludeFilterConfig `json:"extract_headers" yaml:"extract_headers"`
 	RateLimit           string                       `json:"rate_limit" yaml:"rate_limit"`

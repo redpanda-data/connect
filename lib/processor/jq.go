@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -90,6 +92,7 @@ pipeline:
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("query", "The jq query to filter and transform messages with."),
 			docs.FieldAdvanced("raw", "Whether to process the input as a raw string instead of as JSON."),
+			docs.FieldAdvanced("output_raw", "Whether to output raw text (unquoted) instead of JSON strings when the emitted values are string types."),
 		},
 	}
 }
@@ -98,8 +101,9 @@ pipeline:
 
 // JQConfig contains configuration fields for the JQ processor.
 type JQConfig struct {
-	Query string `json:"query" yaml:"query"`
-	Raw   bool   `json:"raw" yaml:"raw"`
+	Query     string `json:"query" yaml:"query"`
+	Raw       bool   `json:"raw" yaml:"raw"`
+	OutputRaw bool   `json:"output_raw" yaml:"output_raw"`
 }
 
 // NewJQConfig returns a JQConfig with default values.
@@ -218,7 +222,7 @@ func (j *JQ) ProcessMessage(msg types.Message) ([]types.Message, types.Response)
 			}
 
 			if err, ok := out.(error); ok {
-				j.log.Debugf("Failed to query part: %v\n", err)
+				j.log.Debugf(err.Error())
 				j.mErr.Incr(1)
 				j.mErrQuery.Incr(1)
 				return false, err
@@ -228,7 +232,26 @@ func (j *JQ) ProcessMessage(msg types.Message) ([]types.Message, types.Response)
 			emitted = append(emitted, out)
 		}
 
-		if len(emitted) > 1 {
+		if j.conf.OutputRaw {
+			raw, err := j.marshalRaw(emitted)
+			if err != nil {
+				j.log.Debugf("Failed to marshal raw text: %s", err)
+				j.mErr.Incr(1)
+				return false, err
+			}
+
+			// Sometimes the query result is an empty string. Example:
+			//    echo '{ "foo": "" }' | jq .foo
+			// In that case we want pass on the empty string instead of treating it as
+			// an empty message and dropping it
+			if len(raw) == 0 && len(emitted) == 0 {
+				j.mDroppedParts.Incr(1)
+				return false, nil
+			}
+
+			part.Set(raw)
+			return true, nil
+		} else if len(emitted) > 1 {
 			if err = part.SetJSON(emitted); err != nil {
 				j.log.Debugf("Failed to set part JSON: %v\n", err)
 				j.mErr.Incr(1)
@@ -268,4 +291,31 @@ func (*JQ) CloseAsync() {
 // WaitForClose blocks until the processor has closed down.
 func (*JQ) WaitForClose(timeout time.Duration) error {
 	return nil
+}
+
+func (j *JQ) marshalRaw(values []interface{}) ([]byte, error) {
+	buf := bytes.NewBufferString("")
+
+	for index, el := range values {
+		var rawResult []byte
+
+		val, isString := el.(string)
+		if isString {
+			rawResult = []byte(val)
+		} else {
+			marshalled, err := json.Marshal(el)
+			if err != nil {
+				return nil, fmt.Errorf("failed marshal JQ result at index %d: %w", index, err)
+			}
+
+			rawResult = marshalled
+		}
+
+		if _, err := buf.Write(rawResult); err != nil {
+			return nil, fmt.Errorf("failed to write JQ result at index %d: %w", index, err)
+		}
+	}
+
+	bs := buf.Bytes()
+	return bs, nil
 }

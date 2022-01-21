@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Azure/go-amqp"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -20,12 +20,12 @@ import (
 
 // AMQP1Config contains configuration fields for the AMQP1 output type.
 type AMQP1Config struct {
-	URL           string          `json:"url" yaml:"url"`
-	TargetAddress string          `json:"target_address" yaml:"target_address"`
-	MaxInFlight   int             `json:"max_in_flight" yaml:"max_in_flight"`
-	TLS           btls.Config     `json:"tls" yaml:"tls"`
-	SASL          sasl.Config     `json:"sasl" yaml:"sasl"`
-	Metadata      output.Metadata `json:"metadata" yaml:"metadata"`
+	URL           string                       `json:"url" yaml:"url"`
+	TargetAddress string                       `json:"target_address" yaml:"target_address"`
+	MaxInFlight   int                          `json:"max_in_flight" yaml:"max_in_flight"`
+	TLS           btls.Config                  `json:"tls" yaml:"tls"`
+	SASL          sasl.Config                  `json:"sasl" yaml:"sasl"`
+	Metadata      metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
 }
 
 // NewAMQP1Config creates a new AMQP1Config with default values.
@@ -36,7 +36,7 @@ func NewAMQP1Config() AMQP1Config {
 		MaxInFlight:   1,
 		TLS:           btls.NewConfig(),
 		SASL:          sasl.NewConfig(),
-		Metadata:      output.NewMetadata(),
+		Metadata:      metadata.NewExcludeFilterConfig(),
 	}
 }
 
@@ -48,7 +48,7 @@ type AMQP1 struct {
 	session *amqp.Session
 	sender  *amqp.Sender
 
-	metaFilter *output.MetadataFilter
+	metaFilter *metadata.ExcludeFilter
 
 	log   log.Modular
 	stats metrics.Type

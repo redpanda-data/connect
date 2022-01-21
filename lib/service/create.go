@@ -105,15 +105,15 @@ func createCliCommand() *cli.Command {
 		Name:  "create",
 		Usage: "Create a new Benthos config",
 		Description: `
-   Prints a new Benthos config to stdout containing specified components
-   according to an expression. The expression must take the form of three
-   comma-separated lists of inputs, processors and outputs, divided by
-   forward slashes:
+Prints a new Benthos config to stdout containing specified components
+according to an expression. The expression must take the form of three
+comma-separated lists of inputs, processors and outputs, divided by
+forward slashes:
 
-   benthos create stdin/bloblang,awk/nats
-   benthos create file,http_server/protobuf/http_client
+  benthos create stdin/bloblang,awk/nats
+  benthos create file,http_server/protobuf/http_client
 
-   If the expression is omitted a default config is created.`[4:],
+If the expression is omitted a default config is created.`[1:],
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "small",

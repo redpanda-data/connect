@@ -9,8 +9,8 @@ import (
 	"cloud.google.com/go/pubsub"
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -20,12 +20,12 @@ import (
 
 // GCPPubSubConfig contains configuration fields for the output GCPPubSub type.
 type GCPPubSubConfig struct {
-	ProjectID      string          `json:"project" yaml:"project"`
-	TopicID        string          `json:"topic" yaml:"topic"`
-	MaxInFlight    int             `json:"max_in_flight" yaml:"max_in_flight"`
-	PublishTimeout string          `json:"publish_timeout" yaml:"publish_timeout"`
-	Metadata       output.Metadata `json:"metadata" yaml:"metadata"`
-	OrderingKey    string          `json:"ordering_key" yaml:"ordering_key"`
+	ProjectID      string                       `json:"project" yaml:"project"`
+	TopicID        string                       `json:"topic" yaml:"topic"`
+	MaxInFlight    int                          `json:"max_in_flight" yaml:"max_in_flight"`
+	PublishTimeout string                       `json:"publish_timeout" yaml:"publish_timeout"`
+	Metadata       metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
+  OrderingKey    string                       `json:"ordering_key" yaml:"ordering_key"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
@@ -35,8 +35,8 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 		TopicID:        "",
 		MaxInFlight:    1,
 		PublishTimeout: "60s",
-		Metadata:       output.NewMetadata(),
-		OrderingKey:    "",
+		Metadata:       metadata.NewExcludeFilterConfig(),
+    OrderingKey:    "",
 	}
 }
 
@@ -49,7 +49,7 @@ type GCPPubSub struct {
 
 	client         *pubsub.Client
 	publishTimeout time.Duration
-	metaFilter     *output.MetadataFilter
+	metaFilter     *metadata.ExcludeFilter
 
 	orderingEnabled bool
 	orderingKey     *field.Expression

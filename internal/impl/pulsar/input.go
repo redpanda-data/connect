@@ -70,7 +70,7 @@ You can access these metadata fields using
 			),
 			docs.FieldString("topics", "A list of topics to subscribe to.").Array(),
 			docs.FieldCommon("subscription_name", "Specify the subscription name for this consumer."),
-			docs.FieldCommon("subscription_type", "Specify the subscription type for this consumer.").
+			docs.FieldCommon("subscription_type", "Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See [Pulsar documentation](https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement) and [this Github issue](https://github.com/apache/pulsar/issues/12208) for more details.").
 				HasOptions("shared", "key_shared", "failover", "exclusive").
 				HasDefault(defaultSubscriptionType),
 			auth.FieldSpec(),
@@ -161,14 +161,7 @@ func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
 	}
 
 	if p.conf.Auth.OAuth2.Enabled {
-		a := p.conf.Auth.OAuth2
-		// Pulsar docs: https://pulsar.apache.org/docs/en/2.8.0/security-oauth2/#authentication-types
-		opts.Authentication = pulsar.NewAuthenticationOAuth2(map[string]string{
-			"type":       "client_credentials",
-			"issuerUrl":  a.IssuerURL,
-			"audience":   a.Audience,
-			"privateKey": a.PrivateKeyFile,
-		})
+		opts.Authentication = pulsar.NewAuthenticationOAuth2(p.conf.Auth.OAuth2.ToMap())
 	} else if p.conf.Auth.Token.Enabled {
 		opts.Authentication = pulsar.NewAuthenticationToken(p.conf.Auth.Token.Token)
 	}
@@ -185,6 +178,9 @@ func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
 		Topics:           p.conf.Topics,
 		SubscriptionName: p.conf.SubscriptionName,
 		Type:             subType,
+		KeySharedPolicy: &pulsar.KeySharedPolicy{
+			AllowOutOfOrderDelivery: true,
+		},
 	}); err != nil {
 		client.Close()
 		return err

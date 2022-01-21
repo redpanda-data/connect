@@ -38,6 +38,26 @@ func (n noopCloser) Close() error {
 	return nil
 }
 
+type microReader struct {
+	io.Reader
+}
+
+func (n microReader) Read(p []byte) (int, error) {
+	// Only a max of 5 bytes at a time
+	if len(p) < 5 {
+		return n.Reader.Read(p)
+	}
+
+	micro := make([]byte, 5)
+	byteCount, err := n.Reader.Read(micro)
+	if err != nil {
+		return byteCount, err
+	}
+
+	_ = copy(p, micro)
+	return byteCount, nil
+}
+
 func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...string) {
 	t.Run("close before reading", func(t *testing.T) {
 		buf := noopCloser{bytes.NewReader(data), false}
@@ -77,6 +97,42 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 			if i == len(expected)-1 {
 				buf.returnEOFOnRead = true
 			}
+			p, ackFn, err := r.Next(context.Background())
+			require.NoError(t, err)
+			require.NoError(t, ackFn(context.Background(), nil))
+			require.Len(t, p, 1)
+			assert.Equal(t, exp, string(p[0].Get()))
+			allReads[string(p[0].Get())] = p[0].Get()
+		}
+
+		_, _, err = r.Next(context.Background())
+		assert.EqualError(t, err, "EOF")
+
+		assert.NoError(t, r.Close(context.Background()))
+		assert.NoError(t, ack)
+
+		for k, v := range allReads {
+			assert.Equal(t, k, string(v), "Must not corrupt previous reads")
+		}
+	})
+
+	t.Run("can consume micro flushes", func(t *testing.T) {
+		buf := noopCloser{microReader{bytes.NewReader(data)}, false}
+
+		ctor, err := GetReader(codec, NewReaderConfig())
+		require.NoError(t, err)
+
+		ack := errors.New("default err")
+
+		r, err := ctor(path, buf, func(ctx context.Context, err error) error {
+			ack = err
+			return nil
+		})
+		require.NoError(t, err)
+
+		allReads := map[string][]byte{}
+
+		for _, exp := range expected {
 			p, ackFn, err := r.Next(context.Background())
 			require.NoError(t, err)
 			require.NoError(t, ackFn(context.Background(), nil))
@@ -357,14 +413,29 @@ func TestDelimReader(t *testing.T) {
 }
 
 func TestChunkerReader(t *testing.T) {
-	data := []byte("foobarbaz")
-	testReaderSuite(t, "chunker:3", "", data, "foo", "bar", "baz")
+	t.Run("with exact chunks", func(t *testing.T) {
+		data := []byte("foobarbaz")
+		testReaderSuite(t, "chunker:3", "", data, "foo", "bar", "baz")
+	})
 
-	data = []byte("fooxbarybaz")
-	testReaderSuite(t, "chunker:3", "", data, "foo", "xba", "ryb", "az")
+	t.Run("with remainder", func(t *testing.T) {
+		data := []byte("fooxbarybaz")
+		testReaderSuite(t, "chunker:3", "", data, "foo", "xba", "ryb", "az")
+	})
 
-	data = []byte("")
-	testReaderSuite(t, "chunker:1", "", data)
+	t.Run("tiny chunks", func(t *testing.T) {
+		data := []byte("")
+		testReaderSuite(t, "chunker:1", "", data)
+	})
+
+	t.Run("larger chunks", func(t *testing.T) {
+		data := []byte("hell1worldhell2worldhell3worldhell4worldhell5worldhell6world")
+		testReaderSuite(
+			t, "chunker:10", "", data,
+			"hell1world", "hell2world", "hell3world",
+			"hell4world", "hell5world", "hell6world",
+		)
+	})
 }
 
 func TestTarReader(t *testing.T) {

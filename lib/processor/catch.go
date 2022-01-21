@@ -31,11 +31,13 @@ the catch.
 
 For example, with the following config:
 
-` + "``` yaml" + `
-- type: foo
+` + "```yaml" + `
+- foo:
+    foofield1: meow
 - catch:
-  - type: bar
-  - type: baz
+  - bar:
+      barfield1: woof
+  - baz: {}
 ` + "```" + `
 
 If the processor ` + "`foo`" + ` fails for a particular message, that message

@@ -11,8 +11,8 @@ import (
 
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -45,11 +45,11 @@ type KafkaConfig struct {
 	SASL             sasl.Config `json:"sasl" yaml:"sasl"`
 	MaxInFlight      int         `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config   `json:",inline" yaml:",inline"`
-	RetryAsBatch     bool               `json:"retry_as_batch" yaml:"retry_as_batch"`
-	Batching         batch.PolicyConfig `json:"batching" yaml:"batching"`
-	StaticHeaders    map[string]string  `json:"static_headers" yaml:"static_headers"`
-	Metadata         output.Metadata    `json:"metadata" yaml:"metadata"`
-	InjectTracingMap string             `json:"inject_tracing_map" yaml:"inject_tracing_map"`
+	RetryAsBatch     bool                         `json:"retry_as_batch" yaml:"retry_as_batch"`
+	Batching         batch.PolicyConfig           `json:"batching" yaml:"batching"`
+	StaticHeaders    map[string]string            `json:"static_headers" yaml:"static_headers"`
+	Metadata         metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
+	InjectTracingMap string                       `json:"inject_tracing_map" yaml:"inject_tracing_map"`
 
 	// TODO: V4 remove this.
 	RoundRobinPartitions bool `json:"round_robin_partitions" yaml:"round_robin_partitions"`
@@ -77,7 +77,7 @@ func NewKafkaConfig() KafkaConfig {
 		AckReplicas:          false,
 		TargetVersion:        sarama.V1_0_0_0.String(),
 		StaticHeaders:        map[string]string{},
-		Metadata:             output.NewMetadata(),
+		Metadata:             metadata.NewExcludeFilterConfig(),
 		TLS:                  btls.NewConfig(),
 		SASL:                 sasl.NewConfig(),
 		MaxInFlight:          1,
@@ -113,7 +113,7 @@ type Kafka struct {
 	partitioner sarama.PartitionerConstructor
 
 	staticHeaders map[string]string
-	metaFilter    *output.MetadataFilter
+	metaFilter    *metadata.ExcludeFilter
 
 	connMut sync.RWMutex
 }

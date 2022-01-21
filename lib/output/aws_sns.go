@@ -1,8 +1,8 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -18,7 +18,7 @@ func init() {
 		docs.FieldCommon("message_group_id", "An optional group ID to set for messages.").IsInterpolated().AtVersion("3.60.0"),
 		docs.FieldCommon("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated().AtVersion("3.60.0"),
 		docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(output.MetadataFields()...).AtVersion("3.60.0"),
+		docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(metadata.ExcludeFilterFields()...).AtVersion("3.60.0"),
 		docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
 	}.Merge(session.FieldSpecs())
 

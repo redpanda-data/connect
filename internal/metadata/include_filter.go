@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // IncludeFilterDocs returns a docs spec for a metadata filter where keys are
@@ -43,7 +44,7 @@ func NewIncludeFilterConfig() IncludeFilterConfig {
 }
 
 // CreateFilter attempts to construct a filter object.
-func (c IncludeFilterConfig) CreateFilter() (*Filter, error) {
+func (c IncludeFilterConfig) CreateFilter() (*IncludeFilter, error) {
 	var includePatterns []*regexp.Regexp
 	for _, pattern := range c.IncludePatterns {
 		compiledPattern, err := regexp.Compile(pattern)
@@ -52,26 +53,26 @@ func (c IncludeFilterConfig) CreateFilter() (*Filter, error) {
 		}
 		includePatterns = append(includePatterns, compiledPattern)
 	}
-	return &Filter{
+	return &IncludeFilter{
 		includePrefixes: c.IncludePrefixes,
 		includePatterns: includePatterns,
 	}, nil
 }
 
-// Filter provides a way to filter keys based on a Config.
-type Filter struct {
+// IncludeFilter provides a way to filter keys based on a Config.
+type IncludeFilter struct {
 	includePrefixes []string
 	includePatterns []*regexp.Regexp
 }
 
 // IsSet returns true if there are any rules configured for matching keys.
-func (f *Filter) IsSet() bool {
+func (f *IncludeFilter) IsSet() bool {
 	return len(f.includePrefixes) > 0 || len(f.includePatterns) > 0
 }
 
 // Match returns true if the provided string matches the configured filters and
 // false otherwise. It also returns false if no filters are configured.
-func (f *Filter) Match(str string) bool {
+func (f *IncludeFilter) Match(str string) bool {
 	for _, prefix := range f.includePrefixes {
 		if strings.HasPrefix(str, prefix) {
 			return true
@@ -83,4 +84,15 @@ func (f *Filter) Match(str string) bool {
 		}
 	}
 	return false
+}
+
+// Iter applies a function to each metadata key value pair that passes the
+// filter.
+func (f *IncludeFilter) Iter(m types.Metadata, fn func(k, v string) error) error {
+	return m.Iter(func(k, v string) error {
+		if !f.Match(k) {
+			return nil
+		}
+		return fn(k, v)
+	})
 }

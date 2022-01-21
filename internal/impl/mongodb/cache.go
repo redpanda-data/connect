@@ -34,6 +34,7 @@ func init() {
 		Description: icache.Description(false, ""),
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
+				docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
 				docs.FieldCommon("key_field", "The field in the document that is used as the key."),
 				docs.FieldCommon("value_field", "The field in the document that is used as the value."),
 			)...,

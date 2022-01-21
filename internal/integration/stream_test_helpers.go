@@ -496,12 +496,10 @@ func initOutput(t testing.TB, trans <-chan types.Transaction, env *streamTestEnv
 
 func closeConnectors(t testing.TB, input types.Input, output types.Output) {
 	if output != nil {
-		t.Log("closing output")
 		output.CloseAsync()
 		require.NoError(t, output.WaitForClose(time.Second*10))
 	}
 	if input != nil {
-		t.Log("closing input")
 		input.CloseAsync()
 		require.NoError(t, input.WaitForClose(time.Second*10))
 	}

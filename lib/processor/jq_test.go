@@ -121,12 +121,122 @@ func TestJQ(t *testing.T) {
 			input:  `{"foo":{"bar":true}}`,
 			output: `true`,
 		},
+		{
+			name:   "null result",
+			path:   ".baz.qux",
+			input:  `{"foo":{"bar":true}}`,
+			output: `null`,
+		},
+		{
+			name:   "empty string",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":""}}`,
+			output: `""`,
+		},
+		{
+			name:   "convert to csv",
+			path:   "[.ts,.id,.msg] | @csv",
+			input:  `{"id":"1054fe28","msg":"sample \"log\"","ts":1641393111}`,
+			output: `"1641393111,\"1054fe28\",\"sample \"\"log\"\"\""`,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			conf := NewConfig()
 			conf.JQ.Query = test.path
+
+			jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
+			require.NoError(t, err)
+
+			inMsg := message.New(
+				[][]byte{
+					[]byte(test.input),
+				},
+			)
+			msgs, _ := jSet.ProcessMessage(inMsg)
+			require.Len(t, msgs, 1)
+			assert.Equal(t, test.output, string(message.GetAllBytes(msgs[0])[0]))
+		})
+	}
+}
+
+func TestJQ_OutputRaw(t *testing.T) {
+	type jTest struct {
+		name   string
+		path   string
+		input  string
+		output string
+	}
+
+	tests := []jTest{
+		{
+			name:   "select obj",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":{"baz":1}}}`,
+			output: `{"baz":1}`,
+		},
+		{
+			name:   "select array",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":["baz","qux"]}}`,
+			output: `["baz","qux"]`,
+		},
+		{
+			name:   "select obj as str",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":"{\"baz\":1}"}}`,
+			output: `{"baz":1}`,
+		},
+		{
+			name:   "select str",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":"hello world"}}`,
+			output: `hello world`,
+		},
+		{
+			name:   "select float",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":0.123}}`,
+			output: `0.123`,
+		},
+		{
+			name:   "select int",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":123}}`,
+			output: `123`,
+		},
+		{
+			name:   "select bool",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":true}}`,
+			output: `true`,
+		},
+		{
+			name:   "null result",
+			path:   ".baz.qux",
+			input:  `{"foo":{"bar":true}}`,
+			output: `null`,
+		},
+		{
+			name:   "empty string",
+			path:   ".foo.bar",
+			input:  `{"foo":{"bar":""}}`,
+			output: ``,
+		},
+		{
+			name:   "convert to csv",
+			path:   "[.ts,.id,.msg] | @csv",
+			input:  `{"id":"1054fe28","msg":"sample \"log\"","ts":1641393111}`,
+			output: `1641393111,"1054fe28","sample ""log"""`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			conf := NewConfig()
+			conf.JQ.Query = test.path
+			conf.JQ.OutputRaw = true
 
 			jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
 			require.NoError(t, err)

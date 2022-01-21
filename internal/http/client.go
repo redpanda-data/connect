@@ -36,10 +36,11 @@ type Client struct {
 	dropOn    map[int]struct{}
 	successOn map[int]struct{}
 
-	url        *field.Expression
-	headers    map[string]*field.Expression
-	host       *field.Expression
-	metaFilter *metadata.Filter
+	url               *field.Expression
+	headers           map[string]*field.Expression
+	host              *field.Expression
+	metaInsertFilter  *metadata.IncludeFilter
+	metaExtractFilter *metadata.IncludeFilter
 
 	conf          client.Config
 	retryThrottle *throttle.Type
@@ -156,8 +157,12 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 		}
 	}
 
-	if h.metaFilter, err = h.conf.ExtractMetadata.CreateFilter(); err != nil {
+	if h.metaInsertFilter, err = h.conf.Metadata.CreateFilter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
+	}
+
+	if h.metaExtractFilter, err = h.conf.ExtractMetadata.CreateFilter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata extract filter: %w", err)
 	}
 
 	h.mCount = h.stats.GetCounter("count")
@@ -304,10 +309,17 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 			if v, exists := h.headers["Content-Type"]; exists {
 				contentType = v.String(i, refMsg)
 			}
-			var part io.Writer
-			if part, err = writer.CreatePart(textproto.MIMEHeader{
+
+			headers := textproto.MIMEHeader{
 				"Content-Type": []string{contentType},
-			}); err != nil {
+			}
+			_ = h.metaInsertFilter.Iter(sendMsg.Get(i).Metadata(), func(k, v string) error {
+				headers[k] = append(headers[k], v)
+				return nil
+			})
+
+			var part io.Writer
+			if part, err = writer.CreatePart(headers); err != nil {
 				return
 			}
 			if _, err = io.Copy(part, bytes.NewReader(sendMsg.Get(i).Get())); err != nil {
@@ -329,6 +341,13 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 	for k, v := range h.headers {
 		req.Header.Add(k, v.String(0, refMsg))
 	}
+	if sendMsg != nil && sendMsg.Len() == 1 {
+		_ = h.metaInsertFilter.Iter(sendMsg.Get(0).Metadata(), func(k, v string) error {
+			req.Header.Add(k, v)
+			return nil
+		})
+	}
+
 	if h.host != nil {
 		req.Host = h.host.String(0, refMsg)
 	}
@@ -383,11 +402,11 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 				index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
 				bufferIndex += bytesRead
 
-				if h.conf.CopyResponseHeaders || h.metaFilter.IsSet() {
+				if h.conf.CopyResponseHeaders || h.metaExtractFilter.IsSet() {
 					meta := resMsg.Get(index).Metadata()
 					for k, values := range p.Header {
 						normalisedHeader := strings.ToLower(k)
-						if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaFilter.Match(normalisedHeader)) {
+						if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaExtractFilter.Match(normalisedHeader)) {
 							meta.Set(normalisedHeader, values[0])
 						}
 					}
@@ -406,11 +425,11 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 			} else {
 				resMsg.Append(message.NewPart(nil))
 			}
-			if h.conf.CopyResponseHeaders || h.metaFilter.IsSet() {
+			if h.conf.CopyResponseHeaders || h.metaExtractFilter.IsSet() {
 				meta := resMsg.Get(0).Metadata()
 				for k, values := range res.Header {
 					normalisedHeader := strings.ToLower(k)
-					if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaFilter.Match(normalisedHeader)) {
+					if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaExtractFilter.Match(normalisedHeader)) {
 						meta.Set(normalisedHeader, values[0])
 					}
 				}

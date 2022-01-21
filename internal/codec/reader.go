@@ -242,7 +242,7 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		}, true, nil
 	}
 	if strings.HasPrefix(codec, "chunker:") {
-		chunkSize, err := strconv.ParseUint(strings.TrimPrefix(codec, "chunker:"), 10, 64)
+		chunkSize, err := strconv.ParseInt(strings.TrimPrefix(codec, "chunker:"), 10, 64)
 		if err != nil {
 			return nil, false, fmt.Errorf("invalid chunk size for chunker codec: %w", err)
 		}
@@ -595,8 +595,8 @@ func (a *customDelimReader) Close(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 type chunkerReader struct {
-	chunkSize uint64
-	buf       []byte
+	chunkSize int64
+	buf       *bytes.Buffer
 	r         io.ReadCloser
 	sourceAck ReaderAckFn
 
@@ -605,10 +605,10 @@ type chunkerReader struct {
 	pending  int32
 }
 
-func newChunkerReader(conf ReaderConfig, r io.ReadCloser, chunkSize uint64, ackFn ReaderAckFn) (Reader, error) {
+func newChunkerReader(conf ReaderConfig, r io.ReadCloser, chunkSize int64, ackFn ReaderAckFn) (Reader, error) {
 	return &chunkerReader{
 		chunkSize: chunkSize,
-		buf:       make([]byte, chunkSize),
+		buf:       bytes.NewBuffer(make([]byte, 0, chunkSize)),
 		r:         r,
 		sourceAck: ackOnce(ackFn),
 	}, nil
@@ -634,7 +634,7 @@ func (a *chunkerReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, er
 		return nil, nil, io.EOF
 	}
 
-	n, err := a.r.Read(a.buf)
+	_, err := io.CopyN(a.buf, a.r, a.chunkSize)
 
 	a.mut.Lock()
 	defer a.mut.Unlock()
@@ -648,11 +648,13 @@ func (a *chunkerReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, er
 		}
 	}
 
-	if n > 0 {
+	if a.buf.Len() > 0 {
 		a.pending++
 
-		bytesCopy := make([]byte, n)
-		copy(bytesCopy, a.buf)
+		bytesCopy := make([]byte, a.buf.Len())
+		copy(bytesCopy, a.buf.Bytes())
+
+		a.buf.Reset()
 		return []types.Part{message.NewPart(bytesCopy)}, a.ack, nil
 	}
 
