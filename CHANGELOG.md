@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - The lambda distribution now supports a `BENTHOS_CONFIG_PATH` environment variable for specifying a custom config path.
 - Field `metadata` added to `http` and `http_client` components.
 - Field `ordering_key` added to the `gcp_pubsub` output.
+- A suite of new experimental `geoip_` methods have been added.
 
 ### Fixed
 

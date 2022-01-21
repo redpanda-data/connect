@@ -153,70 +153,6 @@ root = this
 root.foo_summed = json("foo").from_all().sum()
 ```
 
-### `geoip_anonymous_ip`
-
-Takes an IP address as a string and returns a map[string]interface{} from a geoip2 AnonymousIP struct and/or an error.
-
-#### Parameters
-
-**`path`** &lt;string&gt; Path to mmdb file  
-
-### `geoip_asn`
-
-Takes an IP address as a string and returns a map[string]interface{} from a geoip2 ASN struct and/or an error.
-
-#### Parameters
-
-**`path`** &lt;string&gt; Path to mmdb file  
-
-### `geoip_city`
-
-Takes an IP address as a string and returns a map[string]interface{} from a geoip2 City struct and/or an error.
-
-#### Parameters
-
-**`path`** &lt;string&gt; Path to mmdb file  
-
-### `geoip_connection_type`
-
-Takes an IP address as a string and returns a map[string]interface{} from a geoip2 ConnectionType struct and/or an error.
-
-#### Parameters
-
-**`path`** &lt;string&gt; Path to mmdb file  
-
-### `geoip_country`
-
-Takes an IP address as a string and returns a map[string]interface{} from a geoip2 Country struct and/or an error.
-
-#### Parameters
-
-**`path`** &lt;string&gt; Path to mmdb file  
-
-### `geoip_domain`
-
-Takes an IP address as a string and returns a map[string]interface{} from a geoip2 Domain struct and/or an error.
-
-#### Parameters
-
-**`path`** &lt;string&gt; Path to mmdb file  
-
-### `geoip_enterprise`
-
-Takes an IP address as a string and returns a map[string]interface{} from a geoip2 Enterprise struct and/or an error.
-
-#### Parameters
-
-**`path`** &lt;string&gt; Path to mmdb file  
-
-### `geoip_isp`
-
-Takes an IP address as a string and returns a map[string]interface{} from a geoip2 IP struct and/or an error.
-
-#### Parameters
-
-**`path`** &lt;string&gt; Path to mmdb file  
-
 ### `or`
 
 If the result of the target query fails or resolves to `null`, returns the argument instead. This is an explicit method alternative to the coalesce pipe operator `|`.
@@ -2206,6 +2142,72 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")
 # In:  {"value":"hello world"}
 # Out: {"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}
 ```
+
+## GeoIP
+
+### `geoip_anonymous_ip`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the anonymous IP associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_asn`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ASN associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_city`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the city associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_connection_type`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the connection type associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_country`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the country associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_domain`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the domain associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_enterprise`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the enterprise associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_isp`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ISP associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
 
 ## Deprecated
 

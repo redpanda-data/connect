@@ -142,6 +142,7 @@ var (
 	MethodCategoryCoercion       MethodCategory = "Type Coercion"
 	MethodCategoryParsing        MethodCategory = "Parsing"
 	MethodCategoryObjectAndArray MethodCategory = "Object & Array Manipulation"
+	MethodCategoryGeoIP          MethodCategory = "GeoIP"
 	MethodCategoryDeprecated     MethodCategory = "Deprecated"
 	MethodCategoryPlugin         MethodCategory = "Plugin"
 )
