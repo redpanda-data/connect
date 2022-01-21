@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -48,4 +49,9 @@ func (r *Resources) AccessRateLimit(ctx context.Context, name string, fn func(r 
 	return r.mgr.AccessRateLimit(ctx, name, func(r types.RateLimit) {
 		fn(newReverseAirGapRateLimit(r))
 	})
+}
+
+// RegisterEndpoint registers an endpoint on Benthos' built-in HTTP server
+func (r *Resources) RegisterEndpoint(path string, description string, handler http.HandlerFunc) {
+	r.mgr.RegisterEndpoint(path, description, handler)
 }
