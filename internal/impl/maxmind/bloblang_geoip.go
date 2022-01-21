@@ -11,8 +11,8 @@ import (
 	"github.com/oschwald/geoip2-golang"
 )
 
-func registerMaxmindMethodSpec(name, entity string, fn func(*geoip2.Reader, net.IP) (interface{}, error)) error {
-	return bloblang.RegisterMethodV2(name,
+func registerMaxmindMethodSpec(name, entity string, fn func(*geoip2.Reader, net.IP) (interface{}, error)) {
+	if err := bloblang.RegisterMethodV2(name,
 		bloblang.NewPluginSpec().
 			Category(string(query.MethodCategoryGeoIP)).
 			Description(fmt.Sprintf("EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the %v associated with it.", entity)).
@@ -45,7 +45,9 @@ func registerMaxmindMethodSpec(name, entity string, fn func(*geoip2.Reader, net.
 				err = dec.Decode(&gV)
 				return gV, err
 			}), nil
-		})
+		}); err != nil {
+		panic(err)
+	}
 }
 
 func init() {
