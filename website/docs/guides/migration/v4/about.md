@@ -38,7 +38,13 @@ grep "Jeffail/benthos/v3" . -Rl | grep -e "\.go$" | xargs -I{} sed -i 's/Jeffail
 
 ### Deprecated Components Removed
 
-All components, features and configuration fields that were marked as deprecated in the latest release of V3 have been removed in V4.
+All components, features and configuration fields that were marked as deprecated in the latest release of V3 have been removed in V4. In order to detect deprecated components or fields within your V3 configuration files you can run the linter from a V3 Benthos with the `--deprecated` flag:
+
+```sh
+benthos lint --deprecated ./configs/*.yaml
+```
+
+This should report all remaining deprecated components.
 
 ### Old Style Interpolation Functions Removed
 

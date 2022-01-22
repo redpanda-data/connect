@@ -72,7 +72,9 @@ output:
 </TabItem>
 </Tabs>
 
-Query arguments are set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the `args` field.
+## Alternatives
+
+Use either the [`sql_insert`](/docs/components/outputs/sql_insert) or the [`sql_query`](/docs/components/outputs/sql_query) processor instead.
 
 ## Drivers
 
