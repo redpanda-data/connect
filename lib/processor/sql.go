@@ -37,6 +37,10 @@ Runs an SQL prepared query against a target database for each message and, for
 queries that return rows, replaces it with the result according to a
 [codec](#result-codecs).`,
 		Description: `
+## Alternatives
+
+Use either the ` + "[`sql_insert`](/docs/components/processors/sql_insert)" + ` or the ` + "[`sql_select`](/docs/components/processors/sql_select)" + ` processor instead.
+
 If a query contains arguments they can be set as an array of strings supporting
 [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in
 the ` + "`args`" + ` field.

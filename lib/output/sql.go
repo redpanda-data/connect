@@ -59,7 +59,7 @@ Runs an SQL prepared query against a target database for each message.`,
 		Description: `
 ## Alternatives
 
-Use either the ` + "[`sql_insert`](/docs/components/outputs/sql_insert)" + ` or the ` + "[`sql_query`](/docs/components/outputs/sql_query)" + ` processor instead.
+Use the ` + "[`sql_insert`](/docs/components/outputs/sql_insert)" + ` output instead.
 
 ## Drivers
 
