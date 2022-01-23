@@ -10,7 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -86,10 +85,9 @@ func NewReadUntilConfig() ReadUntilConfig {
 //------------------------------------------------------------------------------
 
 type dummyReadUntilConfig struct {
-	Input     interface{}      `json:"input" yaml:"input"`
-	Restart   bool             `json:"restart_input" yaml:"restart_input"`
-	Condition condition.Config `json:"condition" yaml:"condition"`
-	Check     string           `json:"check" yaml:"check"`
+	Input   interface{} `json:"input" yaml:"input"`
+	Restart bool        `json:"restart_input" yaml:"restart_input"`
+	Check   string      `json:"check" yaml:"check"`
 }
 
 // MarshalJSON prints an empty object instead of nil.

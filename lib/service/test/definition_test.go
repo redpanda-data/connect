@@ -16,8 +16,8 @@ func TestDefinitionFail(t *testing.T) {
 		"config1.yaml": `
 pipeline:
   processors:
-  - text:
-      operator: to_upper`,
+  - bloblang: 'root = content().uppercase()'
+`,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -88,8 +88,8 @@ func TestDefinitionParallel(t *testing.T) {
 		"config1.yaml": `
 pipeline:
   processors:
-  - text:
-      operator: to_upper`,
+  - bloblang: 'root = content().uppercase()'
+`,
 	})
 	if err != nil {
 		t.Fatal(err)

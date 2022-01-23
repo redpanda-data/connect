@@ -69,14 +69,14 @@ tests:
     inputs:
     - type: stdin
       kafka: {}
-    - type: amqp
+    - type: amqp_0_9
       stdin:
-        multipart: true
+        codec: lines
     - type: stdin
       stdin: {}`,
 			lints: []string{
 				"line 6: field kafka is invalid when the component type is stdin (input)",
-				"line 8: field stdin is invalid when the component type is amqp (input)",
+				"line 8: field stdin is invalid when the component type is amqp_0_9 (input)",
 			},
 		},
 		{
@@ -88,7 +88,7 @@ tests:
     - type: stdin
       stdin:
         thisismadeup: true
-        multipart: true`,
+        codec: lines`,
 			lints: []string{
 				"line 7: field thisismadeup not recognised",
 			},
