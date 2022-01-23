@@ -22,36 +22,34 @@ import (
 
 // MQTTConfig contains configuration fields for the MQTT input type.
 type MQTTConfig struct {
-	URLs                   []string      `json:"urls" yaml:"urls"`
-	QoS                    uint8         `json:"qos" yaml:"qos"`
-	Topics                 []string      `json:"topics" yaml:"topics"`
-	ClientID               string        `json:"client_id" yaml:"client_id"`
-	DynamicClientIDSuffix  string        `json:"dynamic_client_id_suffix" yaml:"dynamic_client_id_suffix"`
-	Will                   mqttconf.Will `json:"will" yaml:"will"`
-	CleanSession           bool          `json:"clean_session" yaml:"clean_session"`
-	User                   string        `json:"user" yaml:"user"`
-	Password               string        `json:"password" yaml:"password"`
-	ConnectTimeout         string        `json:"connect_timeout" yaml:"connect_timeout"`
-	StaleConnectionTimeout string        `json:"stale_connection_timeout" yaml:"stale_connection_timeout"`
-	KeepAlive              int64         `json:"keepalive" yaml:"keepalive"`
-	TLS                    tls.Config    `json:"tls" yaml:"tls"`
+	URLs                  []string      `json:"urls" yaml:"urls"`
+	QoS                   uint8         `json:"qos" yaml:"qos"`
+	Topics                []string      `json:"topics" yaml:"topics"`
+	ClientID              string        `json:"client_id" yaml:"client_id"`
+	DynamicClientIDSuffix string        `json:"dynamic_client_id_suffix" yaml:"dynamic_client_id_suffix"`
+	Will                  mqttconf.Will `json:"will" yaml:"will"`
+	CleanSession          bool          `json:"clean_session" yaml:"clean_session"`
+	User                  string        `json:"user" yaml:"user"`
+	Password              string        `json:"password" yaml:"password"`
+	ConnectTimeout        string        `json:"connect_timeout" yaml:"connect_timeout"`
+	KeepAlive             int64         `json:"keepalive" yaml:"keepalive"`
+	TLS                   tls.Config    `json:"tls" yaml:"tls"`
 }
 
 // NewMQTTConfig creates a new MQTTConfig with default values.
 func NewMQTTConfig() MQTTConfig {
 	return MQTTConfig{
-		URLs:                   []string{"tcp://localhost:1883"},
-		QoS:                    1,
-		Topics:                 []string{"benthos_topic"},
-		ClientID:               "benthos_input",
-		Will:                   mqttconf.EmptyWill(),
-		CleanSession:           true,
-		User:                   "",
-		Password:               "",
-		ConnectTimeout:         "30s",
-		StaleConnectionTimeout: "",
-		KeepAlive:              30,
-		TLS:                    tls.NewConfig(),
+		URLs:           []string{"tcp://localhost:1883"},
+		QoS:            1,
+		Topics:         []string{"benthos_topic"},
+		ClientID:       "benthos_input",
+		Will:           mqttconf.EmptyWill(),
+		CleanSession:   true,
+		User:           "",
+		Password:       "",
+		ConnectTimeout: "30s",
+		KeepAlive:      30,
+		TLS:            tls.NewConfig(),
 	}
 }
 
@@ -63,10 +61,8 @@ type MQTT struct {
 	msgChan chan mqtt.Message
 	cMut    sync.Mutex
 
-	connectTimeout         time.Duration
-	staleConnectionTimeout time.Duration
-
-	conf MQTTConfig
+	connectTimeout time.Duration
+	conf           MQTTConfig
 
 	interruptChan chan struct{}
 
@@ -90,11 +86,6 @@ func NewMQTT(
 	var err error
 	if m.connectTimeout, err = time.ParseDuration(conf.ConnectTimeout); err != nil {
 		return nil, fmt.Errorf("unable to parse connect timeout duration string: %w", err)
-	}
-	if len(conf.StaleConnectionTimeout) > 0 {
-		if m.staleConnectionTimeout, err = time.ParseDuration(conf.StaleConnectionTimeout); err != nil {
-			return nil, fmt.Errorf("unable to parse stale connection timeout duration string: %w", err)
-		}
 	}
 
 	switch m.conf.DynamicClientIDSuffix {
@@ -222,24 +213,21 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 	}
 
 	m.log.Infof("Receiving MQTT messages from topics: %v\n", m.conf.Topics)
-
-	if m.staleConnectionTimeout == 0 {
-		go func() {
-			for {
-				select {
-				case <-time.After(time.Second):
-					if !client.IsConnected() {
-						if closeMsgChan() {
-							m.log.Errorln("Connection lost for unknown reasons.")
-						}
-						return
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Second):
+				if !client.IsConnected() {
+					if closeMsgChan() {
+						m.log.Errorln("Connection lost for unknown reasons.")
 					}
-				case <-m.interruptChan:
 					return
 				}
+			case <-m.interruptChan:
+				return
 			}
-		}()
-	}
+		}
+	}()
 
 	m.client = client
 	m.msgChan = msgChan
@@ -256,23 +244,7 @@ func (m *MQTT) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 		return nil, nil, types.ErrNotConnected
 	}
 
-	var staleTimer *time.Timer
-	var staleChan <-chan time.Time
-	if m.staleConnectionTimeout > 0 {
-		staleTimer = time.NewTimer(m.staleConnectionTimeout)
-		staleChan = staleTimer.C
-		defer staleTimer.Stop()
-	}
-
 	select {
-	case <-staleChan:
-		m.log.Errorln("Stale connection timeout triggered, re-establishing connection to broker.")
-		m.cMut.Lock()
-		m.client.Disconnect(0)
-		m.msgChan = nil
-		m.client = nil
-		m.cMut.Unlock()
-		return nil, nil, types.ErrNotConnected
 	case msg, open := <-msgChan:
 		if !open {
 			m.cMut.Lock()

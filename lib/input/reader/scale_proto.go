@@ -29,7 +29,6 @@ type ScaleProtoConfig struct {
 	SocketType  string   `json:"socket_type" yaml:"socket_type"`
 	SubFilters  []string `json:"sub_filters" yaml:"sub_filters"`
 	PollTimeout string   `json:"poll_timeout" yaml:"poll_timeout"`
-	RepTimeout  string   `json:"reply_timeout" yaml:"reply_timeout"`
 }
 
 // NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
@@ -40,7 +39,6 @@ func NewScaleProtoConfig() ScaleProtoConfig {
 		SocketType:  "PULL",
 		SubFilters:  []string{},
 		PollTimeout: "5s",
-		RepTimeout:  "5s",
 	}
 }
 
@@ -63,9 +61,10 @@ type ScaleProto struct {
 // NewScaleProto creates a new ScaleProto input type.
 func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (*ScaleProto, error) {
 	s := ScaleProto{
-		conf:  conf,
-		stats: stats,
-		log:   log,
+		conf:       conf,
+		stats:      stats,
+		log:        log,
+		repTimeout: time.Second * 5,
 	}
 
 	for _, u := range conf.URLs {
@@ -84,12 +83,6 @@ func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (
 		var err error
 		if s.pollTimeout, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse poll timeout string: %v", err)
-		}
-	}
-	if tout := conf.RepTimeout; len(tout) > 0 {
-		var err error
-		if s.repTimeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse reply timeout string: %v", err)
 		}
 	}
 

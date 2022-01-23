@@ -32,8 +32,6 @@ The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to alloc
 			docs.FieldCommon("address", "The address to listen from.", "/tmp/benthos.sock", "0.0.0.0:6000"),
 			codec.ReaderDocs.AtVersion("3.42.0"),
 			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
-			docs.FieldDeprecated("multipart"),
-			docs.FieldDeprecated("delimiter"),
 		},
 		Categories: []Category{
 			CategoryNetwork,

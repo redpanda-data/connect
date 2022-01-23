@@ -4,7 +4,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -18,11 +17,6 @@ func init() {
 		Summary: `
 Subscribe to an NSQ instance topic and channel.`,
 		FieldSpecs: docs.FieldSpecs{
-			func() docs.FieldSpec {
-				b := batch.FieldSpec()
-				b.IsDeprecated = true
-				return b
-			}(),
 			docs.FieldCommon("nsqd_tcp_addresses", "A list of nsqd addresses to connect to.").Array(),
 			docs.FieldCommon("lookupd_http_addresses", "A list of nsqlookupd addresses to connect to.").Array(),
 			tls.FieldSpec(),
@@ -44,9 +38,6 @@ func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type)
 	var n reader.Async
 	var err error
 	if n, err = reader.NewNSQ(conf.NSQ, log, stats); err != nil {
-		return nil, err
-	}
-	if n, err = reader.NewAsyncBatcher(conf.NSQ.Batching, n, mgr, log, stats); err != nil {
 		return nil, err
 	}
 	return NewAsyncReader(TypeNSQ, true, n, log, stats)
