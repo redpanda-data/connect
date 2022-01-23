@@ -89,7 +89,7 @@ func TestTypeProcsAndPipes(t *testing.T) {
 
 	conf := harmlessConf()
 	conf.Input.Type = "file"
-	conf.Input.File.Path = "./package.go"
+	conf.Input.File.Paths = []string{"./package.go"}
 
 	if err := mgr.Create("foo", conf); err != nil {
 		t.Fatal(err)
