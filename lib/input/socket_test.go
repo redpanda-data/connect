@@ -231,7 +231,7 @@ func TestSocketMultipart(t *testing.T) {
 	defer ln.Close()
 
 	conf := NewConfig()
-	conf.Socket.Multipart = true
+	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
@@ -322,8 +322,7 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 	defer ln.Close()
 
 	conf := NewConfig()
-	conf.Socket.Multipart = true
-	conf.Socket.Delim = "@"
+	conf.Socket.Codec = "delim:@/multipart"
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
@@ -414,7 +413,7 @@ func TestSocketMultipartShutdown(t *testing.T) {
 	defer ln.Close()
 
 	conf := NewConfig()
-	conf.Socket.Multipart = true
+	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
@@ -690,7 +689,7 @@ func TestTCPSocketMultipart(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Socket.Network = "tcp"
-	conf.Socket.Multipart = true
+	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Address = ln.Addr().String()
 
 	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
@@ -777,8 +776,7 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Socket.Network = "tcp"
-	conf.Socket.Multipart = true
-	conf.Socket.Delim = "@"
+	conf.Socket.Codec = "delim:@/multipart"
 	conf.Socket.Address = ln.Addr().String()
 
 	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
@@ -865,7 +863,7 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Socket.Network = "tcp"
-	conf.Socket.Multipart = true
+	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Address = ln.Addr().String()
 
 	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())

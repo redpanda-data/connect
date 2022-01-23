@@ -46,7 +46,7 @@ func TestSequenceHappy(t *testing.T) {
 	for _, k := range []string{"f1", "f2", "f3"} {
 		inConf := NewConfig()
 		inConf.Type = TypeFile
-		inConf.File.Path = filepath.Join(tmpDir, k)
+		inConf.File.Paths = []string{filepath.Join(tmpDir, k)}
 		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
 	}
 
@@ -116,7 +116,7 @@ func TestSequenceJoins(t *testing.T) {
 	for _, k := range []string{"ndjson1"} {
 		inConf := NewConfig()
 		inConf.Type = TypeFile
-		inConf.File.Path = filepath.Join(tmpDir, k)
+		inConf.File.Paths = []string{filepath.Join(tmpDir, k)}
 		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
 	}
 
@@ -392,7 +392,7 @@ func TestSequenceSad(t *testing.T) {
 	for _, k := range []string{"f1", "f2", "f3"} {
 		inConf := NewConfig()
 		inConf.Type = TypeFile
-		inConf.File.Path = filepath.Join(tmpDir, k)
+		inConf.File.Paths = []string{filepath.Join(tmpDir, k)}
 		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
 	}
 
@@ -472,7 +472,7 @@ func TestSequenceEarlyTermination(t *testing.T) {
 
 	inConf := NewConfig()
 	inConf.Type = TypeFile
-	inConf.File.Path = filepath.Join(tmpDir, "f1")
+	inConf.File.Paths = []string{filepath.Join(tmpDir, "f1")}
 	conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
 
 	rdr, err := New(conf, types.NoopMgr(), log.Noop(), metrics.Noop())

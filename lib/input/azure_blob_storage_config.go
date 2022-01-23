@@ -19,9 +19,7 @@ func init() {
 			return NewAsyncReader(
 				TypeAzureBlobStorage,
 				true,
-				reader.NewAsyncBundleUnacks(
-					reader.NewAsyncPreserver(r),
-				),
+				reader.NewAsyncPreserver(r),
 				log, stats,
 			)
 		}),

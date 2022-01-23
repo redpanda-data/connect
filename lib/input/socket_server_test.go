@@ -301,7 +301,7 @@ func TestSocketServerMultipart(t *testing.T) {
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
 	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
-	conf.SocketServer.Multipart = true
+	conf.SocketServer.Codec = "lines/multipart"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -373,8 +373,7 @@ func TestSocketServerMultipartCustomDelim(t *testing.T) {
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
 	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
-	conf.SocketServer.Multipart = true
-	conf.SocketServer.Delim = "@"
+	conf.SocketServer.Codec = "delim:@/multipart"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -446,7 +445,7 @@ func TestSocketServerMultipartShutdown(t *testing.T) {
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
 	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
-	conf.SocketServer.Multipart = true
+	conf.SocketServer.Codec = "lines/multipart"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -765,7 +764,7 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 	conf := NewConfig()
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
-	conf.SocketServer.Delim = "@"
+	conf.SocketServer.Codec = "delim:@"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -1063,7 +1062,7 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 	conf := NewConfig()
 	conf.SocketServer.Network = "tcp"
 	conf.SocketServer.Address = "127.0.0.1:0"
-	conf.SocketServer.Multipart = true
+	conf.SocketServer.Codec = "lines/multipart"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -1131,8 +1130,7 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 	conf := NewConfig()
 	conf.SocketServer.Network = "tcp"
 	conf.SocketServer.Address = "127.0.0.1:0"
-	conf.SocketServer.Multipart = true
-	conf.SocketServer.Delim = "@"
+	conf.SocketServer.Codec = "delim:@/multipart"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -1200,7 +1198,7 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 	conf := NewConfig()
 	conf.SocketServer.Network = "tcp"
 	conf.SocketServer.Address = "127.0.0.1:0"
-	conf.SocketServer.Multipart = true
+	conf.SocketServer.Codec = "lines/multipart"
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)

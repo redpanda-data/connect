@@ -244,7 +244,6 @@ type Config struct {
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Sleep        SleepConfig        `json:"sleep" yaml:"sleep"`
 	Split        SplitConfig        `json:"split" yaml:"split"`
-	SQL          SQLConfig          `json:"sql" yaml:"sql"`
 	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
 	Switch       SwitchConfig       `json:"switch" yaml:"switch"`
 	SyncResponse SyncResponseConfig `json:"sync_response" yaml:"sync_response"`
@@ -300,7 +299,6 @@ func NewConfig() Config {
 		SelectParts:  NewSelectPartsConfig(),
 		Sleep:        NewSleepConfig(),
 		Split:        NewSplitConfig(),
-		SQL:          NewSQLConfig(),
 		Subprocess:   NewSubprocessConfig(),
 		Switch:       NewSwitchConfig(),
 		SyncResponse: NewSyncResponseConfig(),

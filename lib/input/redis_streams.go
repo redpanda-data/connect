@@ -53,10 +53,7 @@ func NewRedisStreams(conf Config, mgr types.Manager, log log.Modular, stats metr
 	if c, err = reader.NewRedisStreams(conf.RedisStreams, log, stats); err != nil {
 		return nil, err
 	}
-	if c, err = reader.NewAsyncBatcher(conf.RedisStreams.Batching, c, mgr, log, stats); err != nil {
-		return nil, err
-	}
-	c = reader.NewAsyncBundleUnacks(reader.NewAsyncPreserver(c))
+	c = reader.NewAsyncPreserver(c)
 	return NewAsyncReader(TypeRedisStreams, true, c, log, stats)
 }
 

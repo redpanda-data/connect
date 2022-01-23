@@ -46,35 +46,6 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),
 		}.Merge(sess.FieldSpecs()),
 	}
-
-	Constructors[TypeS3] = TypeSpec{
-		constructor: NewS3,
-		Status:      docs.StatusDeprecated,
-		Summary: `
-Stores each item in an S3 bucket as a file, where an item ID is the path of the
-item within the bucket.`,
-		Description: `
-## Alternatives
-
-This cache has been renamed to ` + "[`aws_s3`](/docs/components/caches/aws_s3)" + `.
-
-It is not possible to atomically upload S3 objects exclusively when the target
-does not already exist, therefore this cache is not suitable for deduplication.
-
-### Credentials
-
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("bucket", "The S3 bucket to store items in."),
-			docs.FieldCommon("content_type", "The content type to set for each item."),
-			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."),
-			docs.FieldAdvanced("timeout", "The maximum period to wait on requests before abandoning it."),
-			docs.FieldAdvanced("retries", "The maximum number of retry attempts to make before abandoning a request."),
-		}.Merge(sess.FieldSpecs()),
-	}
 }
 
 //------------------------------------------------------------------------------

@@ -10,7 +10,6 @@ import (
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -32,9 +31,6 @@ type RedisStreamsConfig struct {
 	StartFromOldest bool     `json:"start_from_oldest" yaml:"start_from_oldest"`
 	CommitPeriod    string   `json:"commit_period" yaml:"commit_period"`
 	Timeout         string   `json:"timeout" yaml:"timeout"`
-
-	// TODO: V4 remove this.
-	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.
@@ -47,7 +43,6 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		ConsumerGroup:   "benthos_group",
 		ClientID:        "benthos_consumer",
 		Limit:           10,
-		Batching:        batch.NewPolicyConfig(),
 		StartFromOldest: true,
 		CommitPeriod:    "1s",
 		Timeout:         "1s",

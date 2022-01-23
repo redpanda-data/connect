@@ -9,13 +9,10 @@ import (
 	"cloud.google.com/go/pubsub"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
-
-//------------------------------------------------------------------------------
 
 // GCPPubSubConfig contains configuration values for the input type.
 type GCPPubSubConfig struct {
@@ -24,9 +21,6 @@ type GCPPubSubConfig struct {
 	MaxOutstandingMessages int    `json:"max_outstanding_messages" yaml:"max_outstanding_messages"`
 	MaxOutstandingBytes    int    `json:"max_outstanding_bytes" yaml:"max_outstanding_bytes"`
 	Sync                   bool   `json:"sync" yaml:"sync"`
-	// TODO: V4 Remove these.
-	MaxBatchCount int                `json:"max_batch_count" yaml:"max_batch_count"`
-	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
@@ -37,8 +31,6 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 		MaxOutstandingMessages: pubsub.DefaultReceiveSettings.MaxOutstandingMessages,
 		MaxOutstandingBytes:    pubsub.DefaultReceiveSettings.MaxOutstandingBytes,
 		Sync:                   false,
-		MaxBatchCount:          1,
-		Batching:               batch.NewPolicyConfig(),
 	}
 }
 
@@ -54,8 +46,7 @@ type GCPPubSub struct {
 	closeFunc    context.CancelFunc
 	subMut       sync.Mutex
 
-	client      *pubsub.Client
-	pendingMsgs []*pubsub.Message
+	client *pubsub.Client
 
 	log   log.Modular
 	stats metrics.Type
@@ -99,7 +90,7 @@ func (c *GCPPubSub) ConnectWithContext(ignored context.Context) error {
 	sub.ReceiveSettings.Synchronous = c.conf.Sync
 
 	subCtx, cancel := context.WithCancel(context.Background())
-	msgsChan := make(chan *pubsub.Message, c.conf.MaxBatchCount)
+	msgsChan := make(chan *pubsub.Message, 1)
 
 	c.subscription = sub
 	c.msgsChan = msgsChan
@@ -167,62 +158,6 @@ func (c *GCPPubSub) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 	}, nil
 }
 
-// Read attempts to read a new message from the target subscription.
-func (c *GCPPubSub) Read() (types.Message, error) {
-	c.subMut.Lock()
-	msgsChan := c.msgsChan
-	c.subMut.Unlock()
-	if msgsChan == nil {
-		return nil, types.ErrNotConnected
-	}
-
-	msg := message.New(nil)
-
-	gmsg, open := <-msgsChan
-	if !open {
-		return nil, types.ErrNotConnected
-	}
-	c.pendingMsgs = append(c.pendingMsgs, gmsg)
-	part := message.NewPart(gmsg.Data)
-	part.SetMetadata(metadata.New(gmsg.Attributes))
-	part.Metadata().Set("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
-	msg.Append(part)
-
-batchLoop:
-	for msg.Len() < c.conf.MaxBatchCount {
-		select {
-		case gmsg, open = <-msgsChan:
-		default:
-			// Drained the buffer
-			break batchLoop
-		}
-		if !open {
-			return nil, types.ErrNotConnected
-		}
-		c.pendingMsgs = append(c.pendingMsgs, gmsg)
-		part := message.NewPart(gmsg.Data)
-		part.SetMetadata(metadata.New(gmsg.Attributes))
-		part.Metadata().Set("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
-		msg.Append(part)
-	}
-
-	return msg, nil
-}
-
-// Acknowledge confirms whether or not our unacknowledged messages have been
-// successfully propagated or not.
-func (c *GCPPubSub) Acknowledge(err error) error {
-	for _, msg := range c.pendingMsgs {
-		if err == nil {
-			msg.Ack()
-		} else {
-			msg.Nack()
-		}
-	}
-	c.pendingMsgs = nil
-	return nil
-}
-
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
 func (c *GCPPubSub) CloseAsync() {
 	c.subMut.Lock()
@@ -238,5 +173,3 @@ func (c *GCPPubSub) CloseAsync() {
 func (c *GCPPubSub) WaitForClose(time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

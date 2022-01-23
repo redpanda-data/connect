@@ -12,14 +12,11 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
-
-const defaultDeprecatedAMQP09URL = "amqp://guest:guest@localhost:5672/"
 
 var errAMQP09Connect = errors.New("AMQP 0.9 Connect")
 
@@ -40,7 +37,6 @@ type AMQP09BindingConfig struct {
 
 // AMQP09Config contains configuration for the AMQP09 input type.
 type AMQP09Config struct {
-	URL             string                   `json:"url" yaml:"url"`
 	URLs            []string                 `json:"urls" yaml:"urls"`
 	Queue           string                   `json:"queue" yaml:"queue"`
 	QueueDeclare    AMQP09QueueDeclareConfig `json:"queue_declare" yaml:"queue_declare"`
@@ -50,15 +46,11 @@ type AMQP09Config struct {
 	PrefetchCount   int                      `json:"prefetch_count" yaml:"prefetch_count"`
 	PrefetchSize    int                      `json:"prefetch_size" yaml:"prefetch_size"`
 	TLS             btls.Config              `json:"tls" yaml:"tls"`
-
-	// TODO: V4 remove this (maybe in V5 to allow a grace period)
-	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewAMQP09Config creates a new AMQP09Config with default values.
 func NewAMQP09Config() AMQP09Config {
 	return AMQP09Config{
-		URL:   defaultDeprecatedAMQP09URL,
 		URLs:  []string{},
 		Queue: "benthos-queue",
 		QueueDeclare: AMQP09QueueDeclareConfig{
@@ -70,7 +62,6 @@ func NewAMQP09Config() AMQP09Config {
 		PrefetchCount:   10,
 		PrefetchSize:    0,
 		TLS:             btls.NewConfig(),
-		Batching:        batch.NewPolicyConfig(),
 		BindingsDeclare: []AMQP09BindingConfig{},
 	}
 }
@@ -101,12 +92,8 @@ func NewAMQP09(conf AMQP09Config, log log.Modular, stats metrics.Type) (*AMQP09,
 		log:   log,
 	}
 
-	if conf.URL != defaultDeprecatedAMQP09URL && len(conf.URLs) > 0 {
-		return nil, errors.New("cannot mix both the field `url` and `urls`")
-	}
-
 	if len(conf.URLs) == 0 {
-		a.urls = append(a.urls, conf.URL)
+		return nil, errors.New("must specify at least one URL")
 	}
 
 	for _, u := range conf.URLs {

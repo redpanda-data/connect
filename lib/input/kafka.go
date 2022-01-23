@@ -124,37 +124,17 @@ Unfortunately this error message will appear for a wide range of connection prob
 
 // NewKafka creates a new Kafka input type.
 func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	if !conf.Kafka.IsDeprecated() || len(conf.Kafka.Topics) > 0 {
-		var rdr reader.Async
-		var err error
-		if rdr, err = newKafkaReader(conf.Kafka, mgr, log, stats); err != nil {
-			return nil, err
-		}
-		if conf.Kafka.ExtractTracingMap != "" {
-			if rdr, err = input.NewSpanReader(TypeKafka, conf.Kafka.ExtractTracingMap, rdr, mgr, log); err != nil {
-				return nil, err
-			}
-		}
-		return NewAsyncReader(TypeKafka, false, reader.NewAsyncPreserver(rdr), log, stats)
-	}
-
-	// TODO: V4 Remove this.
-	if conf.Kafka.MaxBatchCount > 1 {
-		log.Warnf("Field '%v.max_batch_count' is deprecated, use '%v.batching.count' instead.\n", conf.Type, conf.Type)
-		conf.Kafka.Batching.Count = conf.Kafka.MaxBatchCount
-	}
-	log.Warnln("The kafka input has been revamped, falling back to the deprecated version. In order to use the new version use the field `topics`.")
-	k, err := reader.NewKafka(conf.Kafka, mgr, log, stats)
-	if err != nil {
+	var rdr reader.Async
+	var err error
+	if rdr, err = newKafkaReader(conf.Kafka, mgr, log, stats); err != nil {
 		return nil, err
 	}
-	var kb reader.Type = k
-	if !conf.Kafka.Batching.IsNoop() {
-		if kb, err = reader.NewSyncBatcher(conf.Kafka.Batching, k, mgr, log, stats); err != nil {
+	if conf.Kafka.ExtractTracingMap != "" {
+		if rdr, err = input.NewSpanReader(TypeKafka, conf.Kafka.ExtractTracingMap, rdr, mgr, log); err != nil {
 			return nil, err
 		}
 	}
-	return NewReader(TypeKafka, reader.NewPreserver(kb), log, stats)
+	return NewAsyncReader(TypeKafka, false, reader.NewAsyncPreserver(rdr), log, stats)
 }
 
 //------------------------------------------------------------------------------
