@@ -30,13 +30,10 @@ func TestFallbackOutputBasic(t *testing.T) {
 	outThree.File.Path = "/dev/null"
 
 	procOne, procTwo, procThree := processor.NewConfig(), processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type, procThree.Type = processor.TypeText, processor.TypeText, processor.TypeText
-	procOne.Text.Operator = "prepend"
-	procOne.Text.Value = "this-should-never-appear ${!count(\"fallbacktofoo\")}"
-	procTwo.Text.Operator = "prepend"
-	procTwo.Text.Value = "two-"
-	procThree.Text.Operator = "prepend"
-	procThree.Text.Value = "this-should-never-appear ${!count(\"fallbacktobar\")}"
+	procOne.Type, procTwo.Type, procThree.Type = processor.TypeBloblang, processor.TypeBloblang, processor.TypeBloblang
+	procOne.Bloblang = `root = "this-should-never-appear %v".format(count("fallbacktofoo")) + content()`
+	procTwo.Bloblang = `root = "two-" + content()`
+	procThree.Bloblang = `root = "this-should-never-appear %v".format(count("fallbacktobar")) + content()`
 
 	outOne.Processors = append(outOne.Processors, procOne)
 	outTwo.Processors = append(outTwo.Processors, procTwo)
