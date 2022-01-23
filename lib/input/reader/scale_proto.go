@@ -71,8 +71,7 @@ func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (
 	for _, u := range conf.URLs {
 		for _, splitU := range strings.Split(u, ",") {
 			if len(splitU) > 0 {
-				// TODO: V4 Remove this work around
-				s.urls = append(s.urls, strings.Replace(splitU, "//*:", "//0.0.0.0:", 1))
+				s.urls = append(s.urls, splitU)
 			}
 		}
 	}

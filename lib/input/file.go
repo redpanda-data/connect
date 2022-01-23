@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -30,9 +29,6 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 			docs.FieldString("paths", "A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star).").Array(),
 			codec.ReaderDocs,
 			docs.FieldAdvanced("max_buffer", "The largest token size expected when consuming delimited files."),
-			docs.FieldDeprecated("path"),
-			docs.FieldDeprecated("delimiter"),
-			docs.FieldDeprecated("multipart"),
 			docs.FieldAdvanced("delete_on_finish", "Whether to delete consumed files from the disk once they are fully consumed."),
 		},
 		Description: `
@@ -68,25 +64,18 @@ input:
 
 // FileConfig contains configuration values for the File input type.
 type FileConfig struct {
-	Path           string   `json:"path" yaml:"path"`
 	Paths          []string `json:"paths" yaml:"paths"`
 	Codec          string   `json:"codec" yaml:"codec"`
-	Multipart      bool     `json:"multipart" yaml:"multipart"`
 	MaxBuffer      int      `json:"max_buffer" yaml:"max_buffer"`
-	Delim          string   `json:"delimiter" yaml:"delimiter"`
 	DeleteOnFinish bool     `json:"delete_on_finish" yaml:"delete_on_finish"`
 }
 
 // NewFileConfig creates a new FileConfig with default values.
 func NewFileConfig() FileConfig {
 	return FileConfig{
-		Path:  "",
-		Paths: []string{},
-		// TODO: V4 change this default
+		Paths:          []string{},
 		Codec:          "lines",
-		Multipart:      false,
 		MaxBuffer:      1000000,
-		Delim:          "",
 		DeleteOnFinish: false,
 	}
 }
@@ -95,15 +84,6 @@ func NewFileConfig() FileConfig {
 
 // NewFile creates a new File input type.
 func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	if len(conf.File.Path) > 0 {
-		conf.File.Paths = append(conf.File.Paths, conf.File.Path)
-	}
-	if len(conf.File.Delim) > 0 {
-		conf.File.Codec = "delim:" + conf.File.Delim
-	}
-	if conf.File.Multipart && !strings.HasSuffix(conf.File.Codec, "/multipart") {
-		conf.File.Codec += "/multipart"
-	}
 	rdr, err := newFileConsumer(conf.File, log)
 	if err != nil {
 		return nil, err

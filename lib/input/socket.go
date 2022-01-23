@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -32,8 +31,6 @@ Connects to a tcp or unix socket and consumes a continuous stream of messages.`,
 			),
 			docs.FieldCommon("address", "The address to connect to.", "/tmp/benthos.sock", "127.0.0.1:6000"),
 			codec.ReaderDocs.AtVersion("3.42.0"),
-			docs.FieldDeprecated("delimiter"),
-			docs.FieldDeprecated("multipart"),
 			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
 		},
 		Categories: []Category{
@@ -50,9 +47,6 @@ type SocketConfig struct {
 	Address   string `json:"address" yaml:"address"`
 	Codec     string `json:"codec" yaml:"codec"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
-	// TODO: V4 remove these fields.
-	Multipart bool   `json:"multipart" yaml:"multipart"`
-	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewSocketConfig creates a new SocketConfig with default values.
@@ -61,9 +55,7 @@ func NewSocketConfig() SocketConfig {
 		Network:   "unix",
 		Address:   "/tmp/benthos.sock",
 		Codec:     "lines",
-		Multipart: false,
 		MaxBuffer: 1000000,
-		Delim:     "",
 	}
 }
 
@@ -99,13 +91,6 @@ func newSocketClient(conf SocketConfig, logger log.Modular) (*socketClient, erro
 	case "tcp", "unix":
 	default:
 		return nil, fmt.Errorf("socket network '%v' is not supported by this input", conf.Network)
-	}
-
-	if len(conf.Delim) > 0 {
-		conf.Codec = "delim:" + conf.Delim
-	}
-	if conf.Multipart && !strings.HasSuffix(conf.Codec, "/multipart") {
-		conf.Codec += "/multipart"
 	}
 
 	codecConf := codec.NewReaderConfig()

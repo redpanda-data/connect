@@ -30,8 +30,6 @@ func httpClientSpec() docs.FieldSpec {
 		docs.FieldBool("reconnect", "Sets whether to re-establish the connection once it is lost."),
 		codecDocs,
 		docs.FieldInt("max_buffer", "Must be larger than the largest line of the stream.").Advanced(),
-		docs.FieldDeprecated("multipart"),
-		docs.FieldDeprecated("delimiter"),
 	}
 
 	return client.FieldSpec(
@@ -101,9 +99,7 @@ type StreamConfig struct {
 	Enabled   bool   `json:"enabled" yaml:"enabled"`
 	Reconnect bool   `json:"reconnect" yaml:"reconnect"`
 	Codec     string `json:"codec" yaml:"codec"`
-	Multipart bool   `json:"multipart" yaml:"multipart"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
-	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
 // HTTPClientConfig contains configuration for the HTTPClient output type.
@@ -127,9 +123,7 @@ func NewHTTPClientConfig() HTTPClientConfig {
 			Enabled:   false,
 			Reconnect: true,
 			Codec:     "lines",
-			Multipart: false,
 			MaxBuffer: 1000000,
-			Delim:     "",
 		},
 	}
 }
@@ -166,12 +160,6 @@ func newHTTPClient(conf HTTPClientConfig, mgr types.Manager, log log.Modular, st
 	if conf.Stream.Enabled {
 		// Timeout should be left at zero if we are streaming.
 		conf.Timeout = ""
-		if len(conf.Stream.Delim) > 0 {
-			conf.Stream.Codec = "delim:" + conf.Stream.Delim
-		}
-		if conf.Stream.Multipart && !strings.HasSuffix(conf.Stream.Codec, "/multipart") {
-			conf.Stream.Codec += "/multipart"
-		}
 		codecConf := codec.NewReaderConfig()
 		codecConf.MaxScanTokenSize = conf.Stream.MaxBuffer
 

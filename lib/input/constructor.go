@@ -262,60 +262,54 @@ const (
 // Deprecated: Do not add new components here. Instead, use the public plugin
 // APIs. Examples can be found in: ./internal/impl
 type Config struct {
-	Label             string                       `json:"label" yaml:"label"`
-	Type              string                       `json:"type" yaml:"type"`
-	AMQP              reader.AMQPConfig            `json:"amqp" yaml:"amqp"`
-	AMQP09            reader.AMQP09Config          `json:"amqp_0_9" yaml:"amqp_0_9"`
-	AMQP1             reader.AMQP1Config           `json:"amqp_1" yaml:"amqp_1"`
-	AWSKinesis        AWSKinesisConfig             `json:"aws_kinesis" yaml:"aws_kinesis"`
-	AWSS3             AWSS3Config                  `json:"aws_s3" yaml:"aws_s3"`
-	AWSSQS            AWSSQSConfig                 `json:"aws_sqs" yaml:"aws_sqs"`
-	AzureBlobStorage  AzureBlobStorageConfig       `json:"azure_blob_storage" yaml:"azure_blob_storage"`
-	AzureQueueStorage AzureQueueStorageConfig      `json:"azure_queue_storage" yaml:"azure_queue_storage"`
-	Bloblang          BloblangConfig               `json:"bloblang" yaml:"bloblang"`
-	Broker            BrokerConfig                 `json:"broker" yaml:"broker"`
-	CSVFile           CSVFileConfig                `json:"csv" yaml:"csv"`
-	Dynamic           DynamicConfig                `json:"dynamic" yaml:"dynamic"`
-	File              FileConfig                   `json:"file" yaml:"file"`
-	Files             reader.FilesConfig           `json:"files" yaml:"files"`
-	GCPCloudStorage   GCPCloudStorageConfig        `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
-	GCPPubSub         reader.GCPPubSubConfig       `json:"gcp_pubsub" yaml:"gcp_pubsub"`
-	Generate          BloblangConfig               `json:"generate" yaml:"generate"`
-	HDFS              reader.HDFSConfig            `json:"hdfs" yaml:"hdfs"`
-	HTTPClient        HTTPClientConfig             `json:"http_client" yaml:"http_client"`
-	HTTPServer        HTTPServerConfig             `json:"http_server" yaml:"http_server"`
-	Inproc            InprocConfig                 `json:"inproc" yaml:"inproc"`
-	Kafka             reader.KafkaConfig           `json:"kafka" yaml:"kafka"`
-	KafkaBalanced     reader.KafkaBalancedConfig   `json:"kafka_balanced" yaml:"kafka_balanced"`
-	Kinesis           reader.KinesisConfig         `json:"kinesis" yaml:"kinesis"`
-	KinesisBalanced   reader.KinesisBalancedConfig `json:"kinesis_balanced" yaml:"kinesis_balanced"`
-	MQTT              reader.MQTTConfig            `json:"mqtt" yaml:"mqtt"`
-	Nanomsg           reader.ScaleProtoConfig      `json:"nanomsg" yaml:"nanomsg"`
-	NATS              reader.NATSConfig            `json:"nats" yaml:"nats"`
-	NATSJetStream     NATSJetStreamConfig          `json:"nats_jetstream" yaml:"nats_jetstream"`
-	NATSStream        reader.NATSStreamConfig      `json:"nats_stream" yaml:"nats_stream"`
-	NSQ               reader.NSQConfig             `json:"nsq" yaml:"nsq"`
-	Plugin            interface{}                  `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	Pulsar            PulsarConfig                 `json:"pulsar" yaml:"pulsar"`
-	ReadUntil         ReadUntilConfig              `json:"read_until" yaml:"read_until"`
-	RedisList         reader.RedisListConfig       `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub       reader.RedisPubSubConfig     `json:"redis_pubsub" yaml:"redis_pubsub"`
-	RedisStreams      reader.RedisStreamsConfig    `json:"redis_streams" yaml:"redis_streams"`
-	Resource          string                       `json:"resource" yaml:"resource"`
-	S3                reader.AmazonS3Config        `json:"s3" yaml:"s3"`
-	Sequence          SequenceConfig               `json:"sequence" yaml:"sequence"`
-	SFTP              SFTPConfig                   `json:"sftp" yaml:"sftp"`
-	Socket            SocketConfig                 `json:"socket" yaml:"socket"`
-	SocketServer      SocketServerConfig           `json:"socket_server" yaml:"socket_server"`
-	SQS               reader.AmazonSQSConfig       `json:"sqs" yaml:"sqs"`
-	STDIN             STDINConfig                  `json:"stdin" yaml:"stdin"`
-	Subprocess        SubprocessConfig             `json:"subprocess" yaml:"subprocess"`
-	TCP               TCPConfig                    `json:"tcp" yaml:"tcp"`
-	TCPServer         TCPServerConfig              `json:"tcp_server" yaml:"tcp_server"`
-	UDPServer         UDPServerConfig              `json:"udp_server" yaml:"udp_server"`
-	Websocket         reader.WebsocketConfig       `json:"websocket" yaml:"websocket"`
-	ZMQ4              *reader.ZMQ4Config           `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
-	Processors        []processor.Config           `json:"processors" yaml:"processors"`
+	Label             string                    `json:"label" yaml:"label"`
+	Type              string                    `json:"type" yaml:"type"`
+	AMQP              reader.AMQPConfig         `json:"amqp" yaml:"amqp"`
+	AMQP09            reader.AMQP09Config       `json:"amqp_0_9" yaml:"amqp_0_9"`
+	AMQP1             reader.AMQP1Config        `json:"amqp_1" yaml:"amqp_1"`
+	AWSKinesis        AWSKinesisConfig          `json:"aws_kinesis" yaml:"aws_kinesis"`
+	AWSS3             AWSS3Config               `json:"aws_s3" yaml:"aws_s3"`
+	AWSSQS            AWSSQSConfig              `json:"aws_sqs" yaml:"aws_sqs"`
+	AzureBlobStorage  AzureBlobStorageConfig    `json:"azure_blob_storage" yaml:"azure_blob_storage"`
+	AzureQueueStorage AzureQueueStorageConfig   `json:"azure_queue_storage" yaml:"azure_queue_storage"`
+	Bloblang          BloblangConfig            `json:"bloblang" yaml:"bloblang"`
+	Broker            BrokerConfig              `json:"broker" yaml:"broker"`
+	CSVFile           CSVFileConfig             `json:"csv" yaml:"csv"`
+	Dynamic           DynamicConfig             `json:"dynamic" yaml:"dynamic"`
+	File              FileConfig                `json:"file" yaml:"file"`
+	Files             reader.FilesConfig        `json:"files" yaml:"files"`
+	GCPCloudStorage   GCPCloudStorageConfig     `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
+	GCPPubSub         reader.GCPPubSubConfig    `json:"gcp_pubsub" yaml:"gcp_pubsub"`
+	Generate          BloblangConfig            `json:"generate" yaml:"generate"`
+	HDFS              reader.HDFSConfig         `json:"hdfs" yaml:"hdfs"`
+	HTTPClient        HTTPClientConfig          `json:"http_client" yaml:"http_client"`
+	HTTPServer        HTTPServerConfig          `json:"http_server" yaml:"http_server"`
+	Inproc            InprocConfig              `json:"inproc" yaml:"inproc"`
+	Kafka             reader.KafkaConfig        `json:"kafka" yaml:"kafka"`
+	MQTT              reader.MQTTConfig         `json:"mqtt" yaml:"mqtt"`
+	Nanomsg           reader.ScaleProtoConfig   `json:"nanomsg" yaml:"nanomsg"`
+	NATS              reader.NATSConfig         `json:"nats" yaml:"nats"`
+	NATSJetStream     NATSJetStreamConfig       `json:"nats_jetstream" yaml:"nats_jetstream"`
+	NATSStream        reader.NATSStreamConfig   `json:"nats_stream" yaml:"nats_stream"`
+	NSQ               reader.NSQConfig          `json:"nsq" yaml:"nsq"`
+	Plugin            interface{}               `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Pulsar            PulsarConfig              `json:"pulsar" yaml:"pulsar"`
+	ReadUntil         ReadUntilConfig           `json:"read_until" yaml:"read_until"`
+	RedisList         reader.RedisListConfig    `json:"redis_list" yaml:"redis_list"`
+	RedisPubSub       reader.RedisPubSubConfig  `json:"redis_pubsub" yaml:"redis_pubsub"`
+	RedisStreams      reader.RedisStreamsConfig `json:"redis_streams" yaml:"redis_streams"`
+	Resource          string                    `json:"resource" yaml:"resource"`
+	S3                reader.AmazonS3Config     `json:"s3" yaml:"s3"`
+	Sequence          SequenceConfig            `json:"sequence" yaml:"sequence"`
+	SFTP              SFTPConfig                `json:"sftp" yaml:"sftp"`
+	Socket            SocketConfig              `json:"socket" yaml:"socket"`
+	SocketServer      SocketServerConfig        `json:"socket_server" yaml:"socket_server"`
+	SQS               reader.AmazonSQSConfig    `json:"sqs" yaml:"sqs"`
+	STDIN             STDINConfig               `json:"stdin" yaml:"stdin"`
+	Subprocess        SubprocessConfig          `json:"subprocess" yaml:"subprocess"`
+	Websocket         reader.WebsocketConfig    `json:"websocket" yaml:"websocket"`
+	ZMQ4              *reader.ZMQ4Config        `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
+	Processors        []processor.Config        `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -347,9 +341,6 @@ func NewConfig() Config {
 		HTTPServer:        NewHTTPServerConfig(),
 		Inproc:            NewInprocConfig(),
 		Kafka:             reader.NewKafkaConfig(),
-		KafkaBalanced:     reader.NewKafkaBalancedConfig(),
-		Kinesis:           reader.NewKinesisConfig(),
-		KinesisBalanced:   reader.NewKinesisBalancedConfig(),
 		MQTT:              reader.NewMQTTConfig(),
 		Nanomsg:           reader.NewScaleProtoConfig(),
 		NATS:              reader.NewNATSConfig(),
@@ -371,9 +362,6 @@ func NewConfig() Config {
 		SQS:               reader.NewAmazonSQSConfig(),
 		STDIN:             NewSTDINConfig(),
 		Subprocess:        NewSubprocessConfig(),
-		TCP:               NewTCPConfig(),
-		TCPServer:         NewTCPServerConfig(),
-		UDPServer:         NewUDPServerConfig(),
 		Websocket:         reader.NewWebsocketConfig(),
 		ZMQ4:              reader.NewZMQ4Config(),
 		Processors:        []processor.Config{},

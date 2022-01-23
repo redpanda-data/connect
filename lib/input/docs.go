@@ -7,35 +7,8 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/util/config"
-	"gopkg.in/yaml.v3"
 )
-
-//------------------------------------------------------------------------------
-
-func sanitiseWithBatch(
-	componentConfig interface{},
-	batchConfig batch.PolicyConfig,
-) (map[string]interface{}, error) {
-	batchSanit, err := batch.SanitisePolicyConfig(batchConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	cBytes, err := yaml.Marshal(componentConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	hashMap := map[string]interface{}{}
-	if err := yaml.Unmarshal(cBytes, &hashMap); err != nil {
-		return nil, err
-	}
-
-	hashMap["batching"] = batchSanit
-	return hashMap, nil
-}
 
 //------------------------------------------------------------------------------
 
