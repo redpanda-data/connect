@@ -139,7 +139,7 @@ pipeline:
           bar:
             request_map: 'root = this.body'
             processors:
-              - lambda:
+              - aws_lambda:
                   function: TODO
             result_map: 'root.bar = this'
 
@@ -180,7 +180,7 @@ pipeline:
                   deleted()
               }
             processors:
-              - lambda:
+              - aws_lambda:
                   function: TODO
             result_map: 'root.tmp.result = this'
 
@@ -208,7 +208,7 @@ pipeline:
           bar:
             request_map: 'root = this.body'
             processors:
-              - lambda:
+              - aws_lambda:
                   function: TODO
             result_map: 'root.bar = this'
 

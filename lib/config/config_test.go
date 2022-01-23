@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -19,13 +20,15 @@ import (
 )
 
 func TestComponentExamples(t *testing.T) {
-	testComponent := func(componentType, typeName, title, conf string) {
+	testComponent := func(componentType, typeName, title, conf string, deprecated bool) {
 		s := config.New()
 		dec := yaml.NewDecoder(bytes.NewReader([]byte(conf)))
 		dec.KnownFields(true)
 		assert.NoError(t, dec.Decode(&s), "%v:%v:%v", componentType, typeName, title)
 
-		lints, err := config.Lint([]byte(conf), s)
+		lintCtx := docs.NewLintContext()
+		lintCtx.RejectDeprecated = !deprecated
+		lints, err := config.LintV2(lintCtx, []byte(conf))
 		assert.NoError(t, err, "%v:%v:%v", componentType, typeName, title)
 		for _, lint := range lints {
 			t.Errorf("%v %v:%v:%v", lint, componentType, typeName, title)
@@ -40,17 +43,17 @@ func TestComponentExamples(t *testing.T) {
 
 	for typeName, ctor := range input.Constructors {
 		for _, example := range ctor.Examples {
-			testComponent("input", typeName, example.Title, example.Config)
+			testComponent("input", typeName, example.Title, example.Config, ctor.Status == docs.StatusDeprecated)
 		}
 	}
 	for typeName, ctor := range processor.Constructors {
 		for _, example := range ctor.Examples {
-			testComponent("processor", typeName, example.Title, example.Config)
+			testComponent("processor", typeName, example.Title, example.Config, ctor.Status == docs.StatusDeprecated)
 		}
 	}
 	for typeName, ctor := range output.Constructors {
 		for _, example := range ctor.Examples {
-			testComponent("output", typeName, example.Title, example.Config)
+			testComponent("output", typeName, example.Title, example.Config, ctor.Status == docs.StatusDeprecated)
 		}
 	}
 }

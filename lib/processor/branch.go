@@ -146,7 +146,7 @@ pipeline:
     - branch:
         request_map: '{"id":this.doc.id,"username":this.user.name}'
         processors:
-          - lambda:
+          - aws_lambda:
               function: trigger_user_update
 
 # Example input: {"doc":{"id":"foo","body":"hello world"},"user":{"name":"fooey"}}

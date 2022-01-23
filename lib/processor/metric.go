@@ -64,7 +64,7 @@ pipeline:
           type: ${! json("document.type").or("unknown") }
 
 metrics:
-  cloudwatch:
+  aws_cloudwatch:
     namespace: ProdConsumer
     region: eu-west-1
     path_mapping: |
