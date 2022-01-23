@@ -29,7 +29,7 @@ func TestFromPathHappy(t *testing.T) {
 	ignorePath := filepath.Join(barDir, "test_benthos_test.yaml")
 
 	fooConf := stream.NewConfig()
-	fooConf.Input.Type = "bloblang"
+	fooConf.Input.Type = "generate"
 
 	barConf := stream.NewConfig()
 	barConf.Input.Type = "nanomsg"
@@ -82,7 +82,7 @@ func TestFromPathHappy(t *testing.T) {
 		t.Errorf("Wrong keys in loaded set: %v != %v", actKeys, expKeys)
 	}
 
-	if exp, act := "bloblang", actConfs["foo"].Input.Type; exp != act {
+	if exp, act := "generate", actConfs["foo"].Input.Type; exp != act {
 		t.Errorf("Wrong value in loaded set: %v != %v", act, exp)
 	}
 	if exp, act := "nanomsg", actConfs["bar_test"].Input.Type; exp != act {
