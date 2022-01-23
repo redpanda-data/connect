@@ -5,7 +5,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/impl/redis"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -23,11 +22,6 @@ Redis stream entries are key/value pairs, as such it is necessary to specify the
 key that contains the body of the message. All other keys/value pairs are saved
 as metadata fields.`,
 		FieldSpecs: redis.ConfigDocs().Add(
-			func() docs.FieldSpec {
-				b := batch.FieldSpec()
-				b.IsDeprecated = true
-				return b
-			}(),
 			docs.FieldCommon("body_key", "The field key to extract the raw message from. All other keys will be stored in the message as metadata."),
 			docs.FieldCommon("streams", "A list of streams to consume from.").Array(),
 			docs.FieldCommon("limit", "The maximum number of messages to consume from a single request."),

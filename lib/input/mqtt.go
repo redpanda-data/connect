@@ -47,7 +47,6 @@ You can access these metadata fields using
 			docs.FieldAdvanced("password", "A password to provide for the connection."),
 			docs.FieldAdvanced("keepalive", "Max seconds of inactivity before a keepalive message is sent."),
 			tls.FieldSpec().AtVersion("3.45.0"),
-			docs.FieldDeprecated("stale_connection_timeout"),
 		},
 		Categories: []Category{
 			CategoryServices,

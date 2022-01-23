@@ -21,7 +21,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/Jeffail/gabs/v2"
 	"github.com/Shopify/sarama"
 )
 
@@ -102,17 +101,6 @@ Unfortunately this error message will appear for a wide range of connection prob
 				b.IsAdvanced = true
 				return b
 			}(),
-
-			// TODO: Remove V4
-			docs.FieldDeprecated("max_batch_count"),
-			docs.FieldDeprecated("topic").OmitWhen(func(field, parent interface{}) (string, bool) {
-				return "field topic is deprecated and should be omitted when topics is used",
-					len(gabs.Wrap(parent).S("topics").Children()) > 0
-			}),
-			docs.FieldDeprecated("partition").OmitWhen(func(field, parent interface{}) (string, bool) {
-				return "field partition is deprecated and should be omitted when topics is used",
-					len(gabs.Wrap(parent).S("topics").Children()) > 0
-			}),
 		},
 		Categories: []Category{
 			CategoryServices,

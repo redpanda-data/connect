@@ -11,7 +11,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -22,14 +21,13 @@ import (
 
 // NSQConfig contains configuration fields for the NSQ input type.
 type NSQConfig struct {
-	Addresses       []string           `json:"nsqd_tcp_addresses" yaml:"nsqd_tcp_addresses"`
-	LookupAddresses []string           `json:"lookupd_http_addresses" yaml:"lookupd_http_addresses"`
-	Topic           string             `json:"topic" yaml:"topic"`
-	Channel         string             `json:"channel" yaml:"channel"`
-	UserAgent       string             `json:"user_agent" yaml:"user_agent"`
-	TLS             btls.Config        `json:"tls" yaml:"tls"`
-	MaxInFlight     int                `json:"max_in_flight" yaml:"max_in_flight"`
-	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
+	Addresses       []string    `json:"nsqd_tcp_addresses" yaml:"nsqd_tcp_addresses"`
+	LookupAddresses []string    `json:"lookupd_http_addresses" yaml:"lookupd_http_addresses"`
+	Topic           string      `json:"topic" yaml:"topic"`
+	Channel         string      `json:"channel" yaml:"channel"`
+	UserAgent       string      `json:"user_agent" yaml:"user_agent"`
+	TLS             btls.Config `json:"tls" yaml:"tls"`
+	MaxInFlight     int         `json:"max_in_flight" yaml:"max_in_flight"`
 }
 
 // NewNSQConfig creates a new NSQConfig with default values.
@@ -42,7 +40,6 @@ func NewNSQConfig() NSQConfig {
 		UserAgent:       "benthos_consumer",
 		TLS:             btls.NewConfig(),
 		MaxInFlight:     100,
-		Batching:        batch.NewPolicyConfig(),
 	}
 }
 

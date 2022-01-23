@@ -5,7 +5,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -43,11 +42,6 @@ You can access these metadata fields using
 
 ` + auth.Description(),
 		FieldSpecs: docs.FieldSpecs{
-			func() docs.FieldSpec {
-				b := batch.FieldSpec()
-				b.IsDeprecated = true
-				return b
-			}(),
 			docs.FieldCommon(
 				"urls",
 				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",

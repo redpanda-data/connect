@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
@@ -32,8 +31,6 @@ If the delimiter field is left empty then line feed (\n) is used.`,
 		FieldSpecs: docs.FieldSpecs{
 			codec.ReaderDocs.AtVersion("3.42.0"),
 			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
-			docs.FieldDeprecated("delimiter"),
-			docs.FieldDeprecated("multipart"),
 		},
 		Categories: []Category{
 			CategoryLocal,
@@ -46,18 +43,14 @@ If the delimiter field is left empty then line feed (\n) is used.`,
 // STDINConfig contains config fields for the STDIN input type.
 type STDINConfig struct {
 	Codec     string `json:"codec" yaml:"codec"`
-	Multipart bool   `json:"multipart" yaml:"multipart"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
-	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewSTDINConfig creates a STDINConfig populated with default values.
 func NewSTDINConfig() STDINConfig {
 	return STDINConfig{
 		Codec:     "lines",
-		Multipart: false,
 		MaxBuffer: 1000000,
-		Delim:     "",
 	}
 }
 
@@ -83,13 +76,6 @@ type stdinConsumer struct {
 }
 
 func newStdinConsumer(conf STDINConfig) (*stdinConsumer, error) {
-	if len(conf.Delim) > 0 {
-		conf.Codec = "delim:" + conf.Delim
-	}
-	if conf.Multipart && !strings.HasSuffix(conf.Codec, "/multipart") {
-		conf.Codec += "/multipart"
-	}
-
 	codecConf := codec.NewReaderConfig()
 	codecConf.MaxScanTokenSize = conf.MaxBuffer
 	ctor, err := codec.GetReader(conf.Codec, codecConf)
