@@ -23,7 +23,6 @@ Currently only PULL and SUB sockets are supported.`,
 			docs.FieldCommon("socket_type", "The socket type to use.").HasOptions("PULL", "SUB"),
 			docs.FieldString("sub_filters", "A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.").Array(),
 			docs.FieldAdvanced("poll_timeout", "The period to wait until a poll is abandoned and reattempted."),
-			docs.FieldDeprecated("reply_timeout"),
 		},
 		Categories: []Category{
 			CategoryNetwork,

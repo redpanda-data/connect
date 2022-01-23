@@ -29,7 +29,7 @@ require (
 	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-lambda-go v1.28.0
 	github.com/aws/aws-sdk-go v1.42.31
-	github.com/benhoyt/goawk v1.13.0
+	github.com/benhoyt/goawk v1.13.1-0.20220123120908-f9c293546b6d
 	github.com/bradfitz/gomemcache v0.0.0-20220106215444-fb4bf637b56d
 	github.com/cenkalti/backoff/v4 v4.1.2
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
@@ -92,7 +92,6 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/ory/dockertest/v3 v3.8.1
 	github.com/oschwald/geoip2-golang v1.5.0
-	github.com/patrobinson/gokini v0.1.0
 	github.com/pebbe/zmq4 v1.2.7
 	github.com/pierrec/lz4/v4 v4.1.12
 	github.com/pkg/sftp v1.13.4

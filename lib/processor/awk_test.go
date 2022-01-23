@@ -165,7 +165,7 @@ func TestAWK(t *testing.T) {
 			codec:   "none",
 			program: `{ }`,
 			input:   `hello world`,
-			output:  `hello world`,
+			output:  ` `,
 		},
 		{
 			name:    "empty print 1",

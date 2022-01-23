@@ -15,8 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/google/go-cmp/cmp"
-	"gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
@@ -59,17 +57,6 @@ input:
 				`this.type == "foo"`,
 				`count("messages") >= 100`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(field, _ interface{}) (string, bool) {
-				defaultBytes, err := yaml.Marshal(condition.NewConfig())
-				if err != nil {
-					return "", false
-				}
-				var iDefault interface{}
-				if err = yaml.Unmarshal(defaultBytes, &iDefault); err != nil {
-					return "", false
-				}
-				return "the condition field is deprecated in favour of check", cmp.Equal(field, iDefault)
-			}),
 			docs.FieldCommon("restart_input", "Whether the input should be reopened if it closes itself before the condition has resolved to true."),
 		},
 		Categories: []Category{
@@ -78,27 +65,21 @@ input:
 	}
 }
 
-func isDefaultCond(cond condition.Config) bool {
-	return cmp.Equal(cond, condition.NewConfig())
-}
-
 //------------------------------------------------------------------------------
 
 // ReadUntilConfig contains configuration values for the ReadUntil input type.
 type ReadUntilConfig struct {
-	Input     *Config          `json:"input" yaml:"input"`
-	Restart   bool             `json:"restart_input" yaml:"restart_input"`
-	Condition condition.Config `json:"condition" yaml:"condition"`
-	Check     string           `json:"check" yaml:"check"`
+	Input   *Config `json:"input" yaml:"input"`
+	Restart bool    `json:"restart_input" yaml:"restart_input"`
+	Check   string  `json:"check" yaml:"check"`
 }
 
 // NewReadUntilConfig creates a new ReadUntilConfig with default values.
 func NewReadUntilConfig() ReadUntilConfig {
 	return ReadUntilConfig{
-		Input:     nil,
-		Restart:   false,
-		Condition: condition.NewConfig(),
-		Check:     "",
+		Input:   nil,
+		Restart: false,
+		Check:   "",
 	}
 }
 
@@ -114,10 +95,9 @@ type dummyReadUntilConfig struct {
 // MarshalJSON prints an empty object instead of nil.
 func (r ReadUntilConfig) MarshalJSON() ([]byte, error) {
 	dummy := dummyReadUntilConfig{
-		Input:     r.Input,
-		Restart:   r.Restart,
-		Condition: r.Condition,
-		Check:     r.Check,
+		Input:   r.Input,
+		Restart: r.Restart,
+		Check:   r.Check,
 	}
 	if r.Input == nil {
 		dummy.Input = struct{}{}
@@ -128,10 +108,9 @@ func (r ReadUntilConfig) MarshalJSON() ([]byte, error) {
 // MarshalYAML prints an empty object instead of nil.
 func (r ReadUntilConfig) MarshalYAML() (interface{}, error) {
 	dummy := dummyReadUntilConfig{
-		Input:     r.Input,
-		Restart:   r.Restart,
-		Condition: r.Condition,
-		Check:     r.Check,
+		Input:   r.Input,
+		Restart: r.Restart,
+		Check:   r.Check,
 	}
 	if r.Input == nil {
 		dummy.Input = struct{}{}
@@ -148,7 +127,6 @@ type ReadUntil struct {
 	conf    ReadUntilConfig
 
 	wrapped Type
-	cond    condition.Type
 	check   *mapping.Executor
 
 	wrapperMgr   types.Manager
@@ -182,14 +160,6 @@ func NewReadUntil(
 		return nil, fmt.Errorf("failed to create input '%v': %v", conf.ReadUntil.Input.Type, err)
 	}
 
-	var cond condition.Type
-	if !isDefaultCond(conf.ReadUntil.Condition) {
-		cMgr, cLog, cStats := interop.LabelChild("read_until.condition", mgr, log, stats)
-		if cond, err = condition.New(conf.ReadUntil.Condition, cMgr, cLog, cStats); err != nil {
-			return nil, fmt.Errorf("failed to create condition '%v': %v", conf.ReadUntil.Condition.Type, err)
-		}
-	}
-
 	var check *mapping.Executor
 	if len(conf.ReadUntil.Check) > 0 {
 		if check, err = interop.NewBloblangMapping(mgr, conf.ReadUntil.Check); err != nil {
@@ -197,12 +167,8 @@ func NewReadUntil(
 		}
 	}
 
-	if cond == nil && check == nil {
+	if check == nil {
 		return nil, errors.New("a check query is required")
-	}
-
-	if cond != nil && check != nil {
-		return nil, errors.New("cannot specify both a condition and a check query")
 	}
 
 	_, rLog, rStats := interop.LabelChild("read_until", mgr, log, stats)
@@ -217,7 +183,6 @@ func NewReadUntil(
 		log:          rLog,
 		stats:        rStats,
 		wrapped:      wrapped,
-		cond:         cond,
 		check:        check,
 		transactions: make(chan types.Transaction),
 		closeChan:    make(chan struct{}),
@@ -305,15 +270,10 @@ runLoop:
 		}
 		mCount.Incr(1)
 
-		var check bool
-		if r.cond != nil {
-			check = r.cond.Check(tran.Payload)
-		} else {
-			var err error
-			if check, err = r.check.QueryPart(0, tran.Payload); err != nil {
-				check = false
-				r.log.Errorf("Failed to execute check query: %v\n", err)
-			}
+		check, err := r.check.QueryPart(0, tran.Payload)
+		if err != nil {
+			check = false
+			r.log.Errorf("Failed to execute check query: %v\n", err)
 		}
 		if !check {
 			select {
