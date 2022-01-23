@@ -46,6 +46,10 @@ benthos lint --deprecated ./configs/*.yaml
 
 This should report all remaining deprecated components.
 
+### Broker Ditto Macro Gone
+
+The hidden macro `ditto` for broker configs is removed.
+
 ### Old Style Interpolation Functions Removed
 
 The original style of interpolation functions, where you specify a function name followed by a colon and then any arguments (`${!json:foo,1}`) has been deprecated (and undocumented) for a while now. What we've had instead is a subset of Bloblang allowing you to use functions directly (`${! json("foo").from(1) }`), but with the old style still supported for backwards compatibility.

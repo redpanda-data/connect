@@ -5,147 +5,14 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strconv"
 	"testing"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestFileSinglePartDeprecated(t *testing.T) {
-	tmpfile, err := os.CreateTemp("", "benthos_file_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.Remove(tmpfile.Name())
-	})
-
-	messages := []string{
-		"first message",
-		"second message",
-		"third message",
-	}
-
-	for _, msg := range messages {
-		_, _ = tmpfile.WriteString(msg)
-		_, _ = tmpfile.WriteString("\n")
-		_, _ = tmpfile.WriteString("\n") // Try some empty messages
-	}
-
-	conf := NewConfig()
-	conf.File.Path = tmpfile.Name()
-
-	f, err := NewFile(conf, nil, log.Noop(), metrics.Noop())
-	require.NoError(t, err)
-
-	defer func() {
-		f.CloseAsync()
-		assert.NoError(t, f.WaitForClose(time.Second))
-	}()
-
-	for _, exp := range messages {
-		var ts types.Transaction
-		var open bool
-		select {
-		case ts, open = <-f.TransactionChan():
-			require.True(t, open)
-			assert.Equal(t, exp, string(ts.Payload.Get(0).Get()))
-			assert.Equal(t, tmpfile.Name(), ts.Payload.Get(0).Metadata().Get("path"))
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for message")
-		}
-		select {
-		case ts.ResponseChan <- response.NewAck():
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
-	}
-
-	select {
-	case _, open := <-f.TransactionChan():
-		require.False(t, open)
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for channel close")
-	}
-}
-
-func TestFileMultiPartDeprecated(t *testing.T) {
-	tmpfile, err := os.CreateTemp("", "benthos_file_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.Remove(tmpfile.Name())
-	})
-
-	messages := [][]string{
-		{
-			"first message",
-			"1",
-			"2",
-		},
-		{
-			"second message",
-			"1",
-			"2",
-		},
-		{
-			"third message",
-			"1",
-			"2",
-		},
-	}
-
-	for _, msg := range messages {
-		for _, part := range msg {
-			_, _ = tmpfile.WriteString(part)
-			_, _ = tmpfile.WriteString("\n")
-		}
-		_, _ = tmpfile.WriteString("\n")
-	}
-
-	conf := NewConfig()
-	conf.File.Path = tmpfile.Name()
-	conf.File.Multipart = true
-
-	f, err := NewFile(conf, nil, log.Noop(), metrics.Noop())
-	require.NoError(t, err)
-
-	defer func() {
-		f.CloseAsync()
-		assert.NoError(t, f.WaitForClose(time.Second))
-	}()
-
-	for _, msg := range messages {
-		var ts types.Transaction
-		var open bool
-		select {
-		case ts, open = <-f.TransactionChan():
-			require.True(t, open)
-			for i, exp := range msg {
-				assert.Equal(t, exp, string(ts.Payload.Get(i).Get()), strconv.Itoa(i))
-			}
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for message")
-		}
-		select {
-		case ts.ResponseChan <- response.NewAck():
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
-	}
-
-	select {
-	case _, open := <-f.TransactionChan():
-		require.False(t, open)
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for channel close")
-	}
-}
 
 func TestFileDirectory(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "benthos_file_input_test")

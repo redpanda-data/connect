@@ -55,20 +55,11 @@ You can access these metadata fields using
 
 // NewGCPPubSub creates a new GCP Cloud Pub/Sub input type.
 func NewGCPPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	// TODO: V4 Remove this.
-	if conf.GCPPubSub.MaxBatchCount > 1 {
-		log.Warnf("Field '%v.max_batch_count' is deprecated, use '%v.batching.count' instead.\n", conf.Type, conf.Type)
-		conf.GCPPubSub.Batching.Count = conf.GCPPubSub.MaxBatchCount
-	}
 	var c reader.Async
 	var err error
 	if c, err = reader.NewGCPPubSub(conf.GCPPubSub, log, stats); err != nil {
 		return nil, err
 	}
-	if c, err = reader.NewAsyncBatcher(conf.GCPPubSub.Batching, c, mgr, log, stats); err != nil {
-		return nil, err
-	}
-	c = reader.NewAsyncBundleUnacks(c)
 	return NewAsyncReader(TypeGCPPubSub, true, c, log, stats)
 }
 

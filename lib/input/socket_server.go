@@ -49,8 +49,6 @@ type SocketServerConfig struct {
 	Address   string `json:"address" yaml:"address"`
 	Codec     string `json:"codec" yaml:"codec"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
-	Multipart bool   `json:"multipart" yaml:"multipart"`
-	Delim     string `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewSocketServerConfig creates a new SocketServerConfig with default values.
@@ -60,10 +58,6 @@ func NewSocketServerConfig() SocketServerConfig {
 		Address:   "/tmp/benthos.sock",
 		Codec:     "lines",
 		MaxBuffer: 1000000,
-
-		// TODO: V4 Remove these fields
-		Multipart: false,
-		Delim:     "",
 	}
 }
 
@@ -106,12 +100,6 @@ func NewSocketServer(conf Config, mgr types.Manager, log log.Modular, stats metr
 	var err error
 
 	sconf := conf.SocketServer
-	if len(sconf.Delim) > 0 {
-		sconf.Codec = "delim:" + sconf.Delim
-	}
-	if sconf.Multipart && !strings.HasSuffix(sconf.Codec, "/multipart") {
-		sconf.Codec += "/multipart"
-	}
 
 	codecConf := codec.NewReaderConfig()
 	codecConf.MaxScanTokenSize = sconf.MaxBuffer

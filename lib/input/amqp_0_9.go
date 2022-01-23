@@ -4,14 +4,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Jeffail/gabs/v2"
 )
-
-//------------------------------------------------------------------------------
 
 func init() {
 	Constructors[TypeAMQP09] = TypeSpec{
@@ -89,11 +86,6 @@ then the declaration passively verifies that they match the target fields.`,
 			docs.FieldCommon("prefetch_count", "The maximum number of pending messages to have consumed at a time."),
 			docs.FieldAdvanced("prefetch_size", "The maximum amount of pending messages measured in bytes to have consumed at a time."),
 			tls.FieldSpec(),
-			func() docs.FieldSpec {
-				b := batch.FieldSpec()
-				b.IsDeprecated = true
-				return b
-			}(),
 		},
 	}
 }
@@ -107,11 +99,5 @@ func NewAMQP09(conf Config, mgr types.Manager, log log.Modular, stats metrics.Ty
 	if a, err = reader.NewAMQP09(conf.AMQP09, log, stats); err != nil {
 		return nil, err
 	}
-	if a, err = reader.NewAsyncBatcher(conf.AMQP09.Batching, a, mgr, log, stats); err != nil {
-		return nil, err
-	}
-	a = reader.NewAsyncBundleUnacks(a)
 	return NewAsyncReader(TypeAMQP09, true, a, log, stats)
 }
-
-//------------------------------------------------------------------------------

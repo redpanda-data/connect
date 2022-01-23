@@ -55,8 +55,7 @@ baz`)
 
 	inconf := NewConfig()
 	inconf.Type = "file"
-	inconf.File.Path = tmpfile.Name()
-	inconf.File.Multipart = false
+	inconf.File.Paths = []string{tmpfile.Name()}
 
 	t.Run("ReadUntilBasic", func(te *testing.T) {
 		testReadUntilBasic(inconf, te)

@@ -15,7 +15,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gofrs/uuid"
@@ -38,9 +37,6 @@ type NATSStreamConfig struct {
 	AckWait         string      `json:"ack_wait" yaml:"ack_wait"`
 	TLS             btls.Config `json:"tls" yaml:"tls"`
 	Auth            auth.Config `json:"auth" yaml:"auth"`
-
-	// TODO: V4 remove this.
-	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
@@ -56,7 +52,6 @@ func NewNATSStreamConfig() NATSStreamConfig {
 		Subject:         "benthos_messages",
 		MaxInflight:     1024,
 		AckWait:         "30s",
-		Batching:        batch.NewPolicyConfig(),
 		TLS:             btls.NewConfig(),
 		Auth:            auth.New(),
 	}

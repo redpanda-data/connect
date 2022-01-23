@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -160,38 +158,15 @@ func (b *brokerInputList) UnmarshalYAML(unmarshal func(interface{}) error) error
 // json.RawMessage, but our config files can contain a range of different
 // formats that we do not know at this stage, therefore we use the more hacky
 // method as performance is not an issue at this stage.
+//
+// TODO: V4 Pretty sure we can get rid of all of this.
 func parseInputConfsWithDefaults(rawInputs []interface{}) ([]Config, error) {
 	inputConfs := []Config{}
 
 	// NOTE: Use yaml here as it supports more types than JSON
 	// (map[interface{}]interface{}).
-	for i, boxedConfig := range rawInputs {
+	for _, boxedConfig := range rawInputs {
 		newConfigs := make([]Config, 1)
-		label := broker.GetGenericType(boxedConfig)
-
-		// TODO: V4 Remove ditto
-		if i > 0 && strings.Index(label, "ditto") == 0 {
-			broker.RemoveGenericType(boxedConfig)
-
-			// Check if there is a ditto multiplier.
-			if len(label) > 5 && label[5] == '_' {
-				if label[6:] == "0" {
-					// This is a special case where we are expressing that
-					// we want to end up with zero duplicates.
-					newConfigs = nil
-				} else {
-					n, err := strconv.Atoi(label[6:])
-					if err != nil {
-						return nil, fmt.Errorf("failed to parse ditto multiplier: %v", err)
-					}
-					newConfigs = make([]Config, n)
-				}
-			} else {
-				newConfigs = make([]Config, 1)
-			}
-
-			broker.ComplementGenericConfig(boxedConfig, rawInputs[i-1])
-		}
 
 		for _, conf := range newConfigs {
 			rawBytes, err := yaml.Marshal(boxedConfig)

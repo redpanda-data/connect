@@ -49,7 +49,6 @@ func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type)
 	if n, err = reader.NewAsyncBatcher(conf.NSQ.Batching, n, mgr, log, stats); err != nil {
 		return nil, err
 	}
-	n = reader.NewAsyncBundleUnacks(n)
 	return NewAsyncReader(TypeNSQ, true, n, log, stats)
 }
 

@@ -578,8 +578,8 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 	conf := NewConfig()
 	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
+	conf.HTTPClient.Stream.Codec = "lines/multipart"
 	conf.HTTPClient.Stream.Enabled = true
-	conf.HTTPClient.Stream.Multipart = true
 
 	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -650,7 +650,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 	conf.HTTPClient.Stream.Enabled = true
-	conf.HTTPClient.Stream.Multipart = true
+	conf.HTTPClient.Stream.Codec = "lines/multipart"
 
 	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -716,7 +716,6 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 	conf.HTTPClient.Stream.Enabled = true
-	conf.HTTPClient.Stream.Multipart = false
 
 	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -788,7 +787,6 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 	conf.HTTPClient.URL = tserve.URL + `/testpost?token=${!json("token")}`
 	conf.HTTPClient.Retry = "1ms"
 	conf.HTTPClient.Stream.Enabled = true
-	conf.HTTPClient.Stream.Multipart = false
 
 	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
