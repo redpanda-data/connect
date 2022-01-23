@@ -26,11 +26,9 @@ func TestFanOutBroker(t *testing.T) {
 	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("2s")}.txt`)
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = processor.TypeText, processor.TypeText
-	procOne.Text.Operator = "prepend"
-	procOne.Text.Value = "one-"
-	procTwo.Text.Operator = "prepend"
-	procTwo.Text.Value = "two-"
+	procOne.Type, procTwo.Type = processor.TypeBloblang, processor.TypeBloblang
+	procOne.Bloblang = `root = "one-" + content()`
+	procTwo.Bloblang = `root = "two-" + content()`
 
 	outOne.Processors = append(outOne.Processors, procOne)
 	outTwo.Processors = append(outTwo.Processors, procTwo)
@@ -116,11 +114,9 @@ func TestRoundRobinBroker(t *testing.T) {
 	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("rrbar")}.txt`)
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = processor.TypeText, processor.TypeText
-	procOne.Text.Operator = "prepend"
-	procOne.Text.Value = "one-"
-	procTwo.Text.Operator = "prepend"
-	procTwo.Text.Value = "two-"
+	procOne.Type, procTwo.Type = processor.TypeBloblang, processor.TypeBloblang
+	procOne.Bloblang = `root = "one-" + content()`
+	procTwo.Bloblang = `root = "two-" + content()`
 
 	outOne.Processors = append(outOne.Processors, procOne)
 	outTwo.Processors = append(outTwo.Processors, procTwo)
@@ -202,11 +198,9 @@ func TestGreedyBroker(t *testing.T) {
 	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("gbar")}.txt`)
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = processor.TypeText, processor.TypeText
-	procOne.Text.Operator = "prepend"
-	procOne.Text.Value = "one-"
-	procTwo.Text.Operator = "prepend"
-	procTwo.Text.Value = "two-"
+	procOne.Type, procTwo.Type = processor.TypeBloblang, processor.TypeBloblang
+	procOne.Bloblang = `root = "one-" + content()`
+	procTwo.Bloblang = `root = "two-" + content()`
 
 	outOne.Processors = append(outOne.Processors, procOne)
 	outTwo.Processors = append(outTwo.Processors, procTwo)
@@ -299,13 +293,11 @@ func TestTryBroker(t *testing.T) {
 	outThree.File.Path = "/dev/null"
 
 	procOne, procTwo, procThree := processor.NewConfig(), processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type, procThree.Type = processor.TypeText, processor.TypeText, processor.TypeText
-	procOne.Text.Operator = "prepend"
-	procOne.Text.Value = "this-should-never-appear ${!count(\"tfoo\")}"
-	procTwo.Text.Operator = "prepend"
-	procTwo.Text.Value = "two-"
-	procThree.Text.Operator = "prepend"
-	procThree.Text.Value = "this-should-never-appear ${!count(\"tbar\")}"
+
+	procOne.Type, procTwo.Type, procThree.Type = processor.TypeBloblang, processor.TypeBloblang, processor.TypeBloblang
+	procOne.Bloblang = `root = "this-should-never-appear %v".format(count("tfoo")) + content()`
+	procTwo.Bloblang = `root = "two-" + content()`
+	procThree.Bloblang = `root = "this-should-never-appear %v".format(count("tbar")) + content()`
 
 	outOne.Processors = append(outOne.Processors, procOne)
 	outTwo.Processors = append(outTwo.Processors, procTwo)
