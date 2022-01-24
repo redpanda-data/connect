@@ -45,7 +45,6 @@ Prints messages to stdout as a continuous stream of data, dividing messages acco
 		Description: multipartCodecDoc,
 		FieldSpecs: docs.FieldSpecs{
 			codec.WriterDocs.AtVersion("3.46.0"),
-			docs.FieldDeprecated("delimiter"),
 		},
 		Categories: []Category{
 			CategoryLocal,
@@ -58,14 +57,12 @@ Prints messages to stdout as a continuous stream of data, dividing messages acco
 // STDOUTConfig contains configuration fields for the stdout based output type.
 type STDOUTConfig struct {
 	Codec string `json:"codec" yaml:"codec"`
-	Delim string `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewSTDOUTConfig creates a new STDOUTConfig with default values.
 func NewSTDOUTConfig() STDOUTConfig {
 	return STDOUTConfig{
 		Codec: "lines",
-		Delim: "",
 	}
 }
 
@@ -73,9 +70,6 @@ func NewSTDOUTConfig() STDOUTConfig {
 
 // NewSTDOUT creates a new STDOUT output type.
 func NewSTDOUT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	if len(conf.STDOUT.Delim) > 0 {
-		conf.STDOUT.Codec = "delim:" + conf.STDOUT.Delim
-	}
 	f, err := newStdoutWriter(conf.STDOUT.Codec, log, stats)
 	if err != nil {
 		return nil, err

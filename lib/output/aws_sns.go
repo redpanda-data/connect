@@ -23,35 +23,13 @@ func init() {
 	}.Merge(session.FieldSpecs())
 
 	Constructors[TypeAWSSNS] = TypeSpec{
-		constructor: fromSimpleConstructor(NewAWSSNS),
-		Version:     "3.36.0",
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+			return newAmazonSNS(TypeAWSSNS, conf.AWSSNS, mgr, log, stats)
+		}),
+		Version: "3.36.0",
 		Summary: `
 Sends messages to an AWS SNS topic.`,
 		Description: `
-### Credentials
-
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).`,
-		Async:      true,
-		FieldSpecs: fields,
-		Categories: []Category{
-			CategoryServices,
-			CategoryAWS,
-		},
-	}
-
-	Constructors[TypeSNS] = TypeSpec{
-		constructor: fromSimpleConstructor(NewAmazonSNS),
-		Status:      docs.StatusDeprecated,
-		Summary: `
-Sends messages to an AWS SNS topic.`,
-		Description: `
-## Alternatives
-
-This output has been renamed to ` + "[`aws_sns`](/docs/components/outputs/aws_sns)" + `.
-
 ### Credentials
 
 By default Benthos will use a shared credentials file when connecting to AWS
@@ -68,16 +46,6 @@ allowing you to transfer data across accounts. You can find out more
 }
 
 //------------------------------------------------------------------------------
-
-// NewAWSSNS creates a new AmazonSNS output type.
-func NewAWSSNS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	return newAmazonSNS(TypeAWSSNS, conf.AWSSNS, mgr, log, stats)
-}
-
-// NewAmazonSNS creates a new AmazonSNS output type.
-func NewAmazonSNS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	return newAmazonSNS(TypeSNS, conf.SNS, mgr, log, stats)
-}
 
 func newAmazonSNS(name string, conf writer.SNSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
 	s, err := writer.NewSNSV2(conf, mgr, log, stats)

@@ -62,17 +62,6 @@ type GCPPubSub struct {
 	stats metrics.Type
 }
 
-// NewGCPPubSub creates a new GCP Cloud Pub/Sub writer.Type.
-//
-// Deprecated: use the V2 API instead.
-func NewGCPPubSub(
-	conf GCPPubSubConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*GCPPubSub, error) {
-	return NewGCPPubSubV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewGCPPubSubV2 creates a new GCP Cloud Pub/Sub writer.Type.
 func NewGCPPubSubV2(
 	conf GCPPubSubConfig,

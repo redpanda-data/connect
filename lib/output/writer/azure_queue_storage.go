@@ -30,17 +30,6 @@ type AzureQueueStorage struct {
 	stats metrics.Type
 }
 
-// NewAzureQueueStorage creates a new Azure Queue Storage writer type.
-//
-// Deprecated: use the V2 API instead.
-func NewAzureQueueStorage(
-	conf AzureQueueStorageConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*AzureQueueStorage, error) {
-	return NewAzureQueueStorageV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewAzureQueueStorageV2 creates a new Azure Queue Storage writer type.
 func NewAzureQueueStorageV2(
 	conf AzureQueueStorageConfig,

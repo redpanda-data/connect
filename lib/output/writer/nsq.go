@@ -55,13 +55,6 @@ type NSQ struct {
 	conf NSQConfig
 }
 
-// NewNSQ creates a new NSQ output type.
-//
-// Deprecated: use the V2 API instead.
-func NewNSQ(conf NSQConfig, log log.Modular, stats metrics.Type) (*NSQ, error) {
-	return NewNSQV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewNSQV2 creates a new NSQ output type.
 func NewNSQV2(conf NSQConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*NSQ, error) {
 	n := NSQ{

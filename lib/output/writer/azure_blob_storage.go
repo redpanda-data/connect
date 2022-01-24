@@ -36,16 +36,6 @@ type AzureBlobStorage struct {
 	stats       metrics.Type
 }
 
-// NewAzureBlobStorage creates a new AzureBlobStorage writer.Type.
-// Deprecated
-func NewAzureBlobStorage(
-	conf AzureBlobStorageConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*AzureBlobStorage, error) {
-	return NewAzureBlobStorageV2(types.NoopMgr(), conf, log, stats)
-}
-
 // NewAzureBlobStorageV2 creates a new AzureBlobStorage writer.Type.
 func NewAzureBlobStorageV2(
 	mgr types.Manager,

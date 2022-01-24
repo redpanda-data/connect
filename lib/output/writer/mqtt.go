@@ -77,17 +77,6 @@ type MQTT struct {
 	connMut sync.RWMutex
 }
 
-// NewMQTT creates a new MQTT output type.
-//
-// Deprecated: use the V2 API instead.
-func NewMQTT(
-	conf MQTTConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*MQTT, error) {
-	return NewMQTTV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewMQTTV2 creates a new MQTT output type.
 func NewMQTTV2(
 	conf MQTTConfig,

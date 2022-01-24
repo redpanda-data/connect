@@ -82,17 +82,6 @@ type DynamoDB struct {
 	jsonMapColumns map[string]string
 }
 
-// NewDynamoDB creates a new Amazon SQS writer.Type.
-//
-// Deprecated: use the V2 API instead.
-func NewDynamoDB(
-	conf DynamoDBConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*DynamoDB, error) {
-	return NewDynamoDBV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewDynamoDBV2 creates a new Amazon SQS writer.Type.
 func NewDynamoDBV2(
 	conf DynamoDBConfig,

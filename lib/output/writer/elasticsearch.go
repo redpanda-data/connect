@@ -114,13 +114,6 @@ type Elasticsearch struct {
 	client *elastic.Client
 }
 
-// NewElasticsearch creates a new Elasticsearch writer type.
-//
-// Deprecated: use the V2 API instead.
-func NewElasticsearch(conf ElasticsearchConfig, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
-	return NewElasticsearchV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewElasticsearchV2 creates a new Elasticsearch writer type.
 func NewElasticsearchV2(conf ElasticsearchConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
 	e := Elasticsearch{

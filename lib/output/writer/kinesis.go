@@ -86,17 +86,6 @@ type Kinesis struct {
 	mPartsThrottledF metrics.StatCounter
 }
 
-// NewKinesis creates a new Amazon Kinesis writer.Type.
-//
-// Deprecated: use the V2 API instead.
-func NewKinesis(
-	conf KinesisConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*Kinesis, error) {
-	return NewKinesisV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewKinesisV2 creates a new Amazon Kinesis writer.Type.
 func NewKinesisV2(
 	conf KinesisConfig,
