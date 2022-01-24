@@ -16,8 +16,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeKafka] = TypeSpec{
 		constructor: fromSimpleConstructor(NewKafka),
@@ -48,7 +46,6 @@ Unfortunately this error message will appear for a wide range of connection prob
 		Async:   true,
 		Batches: true,
 		FieldSpecs: append(docs.FieldSpecs{
-			docs.FieldDeprecated("round_robin_partitions"),
 			docs.FieldCommon("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}).Array(),
 			tls.FieldSpec(),
 			sasl.FieldSpec(),
@@ -103,5 +100,3 @@ func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 
 	return NewBatcherFromConfig(conf.Kafka.Batching, w, mgr, log, stats)
 }
-
-//------------------------------------------------------------------------------

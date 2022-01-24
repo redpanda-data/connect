@@ -52,17 +52,6 @@ type RedisPubSub struct {
 	connMut sync.RWMutex
 }
 
-// NewRedisPubSub creates a new RedisPubSub output type.
-//
-// Deprecated: use the V2 API instead.
-func NewRedisPubSub(
-	conf RedisPubSubConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*RedisPubSub, error) {
-	return NewRedisPubSubV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewRedisPubSubV2 creates a new RedisPubSub output type.
 func NewRedisPubSubV2(
 	conf RedisPubSubConfig,

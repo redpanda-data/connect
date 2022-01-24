@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -24,8 +23,6 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"golang.org/x/sync/errgroup"
 )
-
-//------------------------------------------------------------------------------
 
 var (
 	// ErrSwitchNoConditionMet is returned when a message does not match any
@@ -105,14 +102,6 @@ behavior is false, which will drop the message.`,
 					"Indicates whether, if this case passes for a message, the next case should also be tested.",
 				).HasDefault(false).HasType(docs.FieldTypeBool),
 			),
-			docs.FieldDeprecated("outputs").Array().WithChildren(
-				docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition),
-				docs.FieldDeprecated("fallthrough"),
-				docs.FieldDeprecated("output").HasType(docs.FieldTypeOutput),
-			).OmitWhen(func(v, _ interface{}) (string, bool) {
-				arr, ok := v.([]interface{})
-				return "field outputs is deprecated in favour of cases", ok && len(arr) == 0
-			}),
 		).Linter(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
 			gObj := gabs.Wrap(value)
 			retry, exists := gObj.S("retry_until_success").Data().(bool)
@@ -199,11 +188,10 @@ output:
 
 // SwitchConfig contains configuration fields for the Switch output type.
 type SwitchConfig struct {
-	RetryUntilSuccess bool                 `json:"retry_until_success" yaml:"retry_until_success"`
-	StrictMode        bool                 `json:"strict_mode" yaml:"strict_mode"`
-	MaxInFlight       int                  `json:"max_in_flight" yaml:"max_in_flight"`
-	Cases             []SwitchConfigCase   `json:"cases" yaml:"cases"`
-	Outputs           []SwitchConfigOutput `json:"outputs" yaml:"outputs"`
+	RetryUntilSuccess bool               `json:"retry_until_success" yaml:"retry_until_success"`
+	StrictMode        bool               `json:"strict_mode" yaml:"strict_mode"`
+	MaxInFlight       int                `json:"max_in_flight" yaml:"max_in_flight"`
+	Cases             []SwitchConfigCase `json:"cases" yaml:"cases"`
 }
 
 // NewSwitchConfig creates a new SwitchConfig with default values.
@@ -214,7 +202,6 @@ func NewSwitchConfig() SwitchConfig {
 		StrictMode:  false,
 		MaxInFlight: 1,
 		Cases:       []SwitchConfigCase{},
-		Outputs:     []SwitchConfigOutput{},
 	}
 }
 
@@ -253,7 +240,6 @@ type Switch struct {
 	outputTSChans     []chan types.Transaction
 	outputs           []types.Output
 	checks            []*mapping.Executor
-	conditions        []types.Condition
 	continues         []bool
 	fallthroughs      []bool
 
@@ -287,39 +273,17 @@ func NewSwitch(
 	}
 
 	lCases := len(conf.Switch.Cases)
-	lOutputs := len(conf.Switch.Outputs)
-	if lCases < 2 && lOutputs < 2 {
+	if lCases < 2 {
 		return nil, ErrSwitchNoOutputs
 	}
 	if lCases > 0 {
-		if lOutputs > 0 {
-			return nil, errors.New("combining switch cases with deprecated outputs is not supported")
-		}
 		o.outputs = make([]types.Output, lCases)
 		o.checks = make([]*mapping.Executor, lCases)
 		o.continues = make([]bool, lCases)
 		o.fallthroughs = make([]bool, lCases)
-	} else {
-		o.outputs = make([]types.Output, lOutputs)
-		o.conditions = make([]types.Condition, lOutputs)
-		o.fallthroughs = make([]bool, lOutputs)
 	}
 
 	var err error
-	for i, oConf := range conf.Switch.Outputs {
-		ns := fmt.Sprintf("switch.%v", i)
-		oMgr, oLog, oStats := interop.LabelChild(ns+".output", mgr, logger, stats)
-		oStats = metrics.Combine(stats, oStats)
-		if o.outputs[i], err = New(oConf.Output, oMgr, oLog, oStats); err != nil {
-			return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Output.Type, err)
-		}
-		cMgr, cLog, cStats := interop.LabelChild(ns+".condition", mgr, logger, stats)
-		if o.conditions[i], err = condition.New(oConf.Condition, cMgr, cLog, cStats); err != nil {
-			return nil, fmt.Errorf("failed to create output '%v' condition '%v': %v", i, oConf.Condition.Type, err)
-		}
-		o.fallthroughs[i] = oConf.Fallthrough
-	}
-
 	for i, cConf := range conf.Switch.Cases {
 		oMgr, oLog, oStats := interop.LabelChild(fmt.Sprintf("switch.%v.output", i), mgr, logger, stats)
 		oStats = metrics.Combine(stats, oStats)
@@ -356,12 +320,7 @@ func (o *Switch) Consume(transactions <-chan types.Transaction) error {
 	}
 	o.transactions = transactions
 
-	if len(o.conditions) > 0 {
-		o.logger.Warnf("Using deprecated field `outputs` which will be removed in the next major release of Benthos. For more information check out the docs at https://www.benthos.dev/docs/components/outputs/switch.")
-		go o.loopDeprecated()
-	} else {
-		go o.loop()
-	}
+	go o.loop()
 	return nil
 }
 
@@ -625,5 +584,3 @@ func (o *Switch) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

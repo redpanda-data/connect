@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
@@ -37,7 +38,7 @@ func TestDynamoDBHappy(t *testing.T) {
 	}
 	conf.Table = "FooTable"
 
-	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
+	db, err := NewDynamoDBV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var request map[string][]*dynamodb.WriteRequest
@@ -101,7 +102,7 @@ func TestDynamoDBSadToGood(t *testing.T) {
 	conf.Backoff.MaxElapsedTime = "100ms"
 	conf.Table = "FooTable"
 
-	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
+	db, err := NewDynamoDBV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var batchRequest []*dynamodb.WriteRequest
@@ -200,7 +201,7 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 	}
 	conf.Table = "FooTable"
 
-	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
+	db, err := NewDynamoDBV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var requests [][]*dynamodb.WriteRequest
@@ -298,7 +299,7 @@ func TestDynamoDBSad(t *testing.T) {
 	}
 	conf.Table = "FooTable"
 
-	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
+	db, err := NewDynamoDBV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var batchRequest []*dynamodb.WriteRequest
@@ -408,7 +409,7 @@ func TestDynamoDBSadBatch(t *testing.T) {
 	}
 	conf.Table = "FooTable"
 
-	db, err := NewDynamoDB(conf, log.Noop(), metrics.Noop())
+	db, err := NewDynamoDBV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var requests [][]*dynamodb.WriteRequest

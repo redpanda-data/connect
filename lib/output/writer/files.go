@@ -41,17 +41,6 @@ type Files struct {
 	stats metrics.Type
 }
 
-// NewFiles creates a new file based writer.Type.
-//
-// Deprecated: use the V2 API instead.
-func NewFiles(
-	conf FilesConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*Files, error) {
-	return NewFilesV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewFilesV2 creates a new file based writer.Type.
 func NewFilesV2(
 	conf FilesConfig,

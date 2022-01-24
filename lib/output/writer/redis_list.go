@@ -52,17 +52,6 @@ type RedisList struct {
 	connMut sync.RWMutex
 }
 
-// NewRedisList creates a new RedisList output type.
-//
-// Deprecated: use the V2 API instead.
-func NewRedisList(
-	conf RedisListConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*RedisList, error) {
-	return NewRedisListV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewRedisListV2 creates a new RedisList output type.
 func NewRedisListV2(
 	conf RedisListConfig,

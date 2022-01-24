@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/olivere/elastic/v7"
 	"github.com/ory/dockertest/v3"
 )
@@ -130,7 +131,7 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 	conf.Backoff.MaxElapsedTime = "1s"
 	conf.Sniff = false
 
-	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	m, err := NewElasticsearchV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +183,7 @@ func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing
 	conf.Backoff.MaxElapsedTime = "1s"
 	conf.Sniff = false
 
-	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	m, err := NewElasticsearchV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +253,7 @@ func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.
 	conf.Backoff.MaxInterval = "1s"
 	conf.Sniff = false
 
-	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	m, err := NewElasticsearchV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +286,7 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 	conf.Type = "_doc"
 	conf.Sniff = false
 
-	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	m, err := NewElasticsearchV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +348,7 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 	conf.Type = "_doc"
 	conf.Sniff = false
 
-	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	m, err := NewElasticsearchV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +412,7 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 	conf.Sniff = false
 	conf.Type = "_doc"
 
-	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	m, err := NewElasticsearchV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,7 +477,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 	conf.Sniff = false
 	conf.Type = "_doc"
 
-	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	m, err := NewElasticsearchV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

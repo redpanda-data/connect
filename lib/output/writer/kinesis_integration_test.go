@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -94,7 +95,7 @@ func TestKinesisIntegration(t *testing.T) {
 func testKinesisConnect(t *testing.T, c KinesisConfig, client *kinesis.Kinesis) {
 	met := metrics.Noop()
 	log := log.Noop()
-	r, err := NewKinesis(c, log, met)
+	r, err := NewKinesisV2(c, types.NoopMgr(), log, met)
 	if err != nil {
 		t.Fatal(err)
 	}

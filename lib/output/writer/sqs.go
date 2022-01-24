@@ -87,17 +87,6 @@ type AmazonSQS struct {
 	stats metrics.Type
 }
 
-// NewAmazonSQS creates a new Amazon SQS writer.Type.
-//
-// Deprecated: use the V2 API instead.
-func NewAmazonSQS(
-	conf AmazonSQSConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*AmazonSQS, error) {
-	return NewAmazonSQSV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewAmazonSQSV2 creates a new Amazon SQS writer.Type.
 func NewAmazonSQSV2(
 	conf AmazonSQSConfig,

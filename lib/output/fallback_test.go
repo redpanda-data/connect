@@ -22,11 +22,12 @@ func TestFallbackOutputBasic(t *testing.T) {
 	})
 
 	outOne, outTwo, outThree := NewConfig(), NewConfig(), NewConfig()
-	outOne.Type, outTwo.Type, outThree.Type = TypeHTTPClient, TypeFiles, TypeFile
+	outOne.Type, outTwo.Type, outThree.Type = TypeHTTPClient, TypeFile, TypeFile
 	outOne.HTTPClient.URL = "http://localhost:11111111/badurl"
 	outOne.HTTPClient.NumRetries = 1
 	outOne.HTTPClient.Retry = "1ms"
-	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("fallbacktofoo")}-${!count("fallbacktobar")}.txt`)
+	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("fallbacktofoo")}-${!count("fallbacktobar")}.txt`)
+	outTwo.File.Codec = "all-bytes"
 	outThree.File.Path = "/dev/null"
 
 	procOne, procTwo, procThree := processor.NewConfig(), processor.NewConfig(), processor.NewConfig()
