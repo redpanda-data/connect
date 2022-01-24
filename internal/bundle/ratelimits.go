@@ -64,10 +64,6 @@ func (s *RateLimitSet) Add(constructor RateLimitConstructor, spec docs.Component
 func (s *RateLimitSet) Init(conf ratelimit.Config, mgr NewManagement) (types.RateLimit, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		// TODO: V4 Remove this
-		if ctor, exists := ratelimit.GetDeprecatedPlugin(conf.Type); exists {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
-		}
 		return nil, types.ErrInvalidRateLimitType
 	}
 	return spec.constructor(conf, mgr)

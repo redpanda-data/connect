@@ -36,7 +36,6 @@ please [raise an issue](https://github.com/Jeffail/benthos/issues).`,
 			docs.FieldCommon("tag_format", "Metrics tagging is supported in a variety of formats. The format 'legacy' is a special case that forces Benthos to use a deprecated library for backwards compatibility.").HasOptions(
 				"none", "datadog", "influxdb", "legacy",
 			),
-			docs.FieldDeprecated("network"),
 		},
 	}
 }
@@ -59,7 +58,6 @@ type StatsdConfig struct {
 	PathMapping string `json:"path_mapping" yaml:"path_mapping"`
 	Address     string `json:"address" yaml:"address"`
 	FlushPeriod string `json:"flush_period" yaml:"flush_period"`
-	Network     string `json:"network" yaml:"network"`
 	TagFormat   string `json:"tag_format" yaml:"tag_format"`
 }
 
@@ -70,7 +68,6 @@ func NewStatsdConfig() StatsdConfig {
 		PathMapping: "",
 		Address:     "localhost:4040",
 		FlushPeriod: "100ms",
-		Network:     "udp",
 		TagFormat:   TagFormatLegacy,
 	}
 }
@@ -130,10 +127,6 @@ type Statsd struct {
 
 // NewStatsd creates and returns a new Statsd object.
 func NewStatsd(config Config, opts ...func(Type)) (Type, error) {
-	if config.Statsd.Network != "udp" || config.Statsd.TagFormat == TagFormatLegacy {
-		return NewStatsdLegacy(config, opts...)
-	}
-
 	flushPeriod, err := time.ParseDuration(config.Statsd.FlushPeriod)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse flush period: %s", err)

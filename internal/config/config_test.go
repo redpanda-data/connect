@@ -1,17 +1,12 @@
 package config_test
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	iconfig "github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -217,31 +212,4 @@ cache_resources:
 	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
 	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
 	assert.Equal(t, 13, conf.ResourceCaches[1].Memory.TTL)
-}
-
-func TestLintsOfOldPlugins(t *testing.T) {
-	dir := t.TempDir()
-
-	fullPath := filepath.Join(dir, "main.yaml")
-	require.NoError(t, os.WriteFile(fullPath, []byte(`
-input:
-  type: custom_plugin_for_config_old_plugins_test
-  plugin:
-    addresses: [ foobar.com, barbaz.com ]
-    topics: [ meow1, meow2 ]
-`), 0o644))
-
-	input.RegisterPlugin("custom_plugin_for_config_old_plugins_test", func() interface{} {
-		v := struct{}{}
-		return &v
-	}, func(config interface{}, manager types.Manager, logger log.Modular, metrics metrics.Type) (types.Input, error) {
-		return nil, errors.New("nope")
-	})
-
-	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, nil)
-
-	lints, err := rdr.Read(&conf)
-	require.NoError(t, err)
-	require.Len(t, lints, 0)
 }

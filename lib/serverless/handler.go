@@ -20,27 +20,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
-
 // ServerlessResponseType is an output type that redirects pipeline outputs back
 // to the handler.
-const ServerlessResponseType = "serverless_response"
-
-func init() {
-	output.RegisterPlugin(
-		ServerlessResponseType,
-		func() interface{} {
-			s := struct{}{}
-			return &s
-		},
-		func(_ interface{}, _ types.Manager, logger log.Modular, stats metrics.Type) (types.Output, error) {
-			return output.NewWriter(ServerlessResponseType, roundtrip.Writer{}, logger, stats)
-		},
-	)
-	output.DocumentPlugin(ServerlessResponseType, "", func(conf interface{}) interface{} { return nil })
-}
-
-//------------------------------------------------------------------------------
+const ServerlessResponseType = "sync_response"
 
 // Handler contains a live Benthos pipeline and wraps it within an invoke
 // handler.

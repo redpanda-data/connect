@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -443,7 +444,7 @@ func initInput(t testing.TB, env *streamTestEnvironment) types.Input {
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.Lint(confBytes, s)
+	lints, err := config.LintV2(docs.NewLintContext(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -472,7 +473,7 @@ func initOutput(t testing.TB, trans <-chan types.Transaction, env *streamTestEnv
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.Lint(confBytes, s)
+	lints, err := config.LintV2(docs.NewLintContext(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 

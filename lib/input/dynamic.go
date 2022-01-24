@@ -1,7 +1,6 @@
 package input
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"sync"
@@ -114,12 +113,10 @@ func NewDynamic(
 			if !exists {
 				return
 			}
-			sConf, bErr := SanitiseConfig(uConf)
-			if bErr != nil {
-				log.Errorf("Failed to sanitise config: %v\n", bErr)
-			}
+			_ = uConf
 
-			confBytes, _ := json.Marshal(sConf)
+			// TODO: V4
+			var confBytes []byte
 			dynAPI.Started(l, confBytes)
 			delete(inputConfigs, l)
 		}),

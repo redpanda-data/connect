@@ -1,7 +1,6 @@
 package output
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"sync"
@@ -16,8 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"gopkg.in/yaml.v3"
 )
-
-//------------------------------------------------------------------------------
 
 func init() {
 	Constructors[TypeDynamic] = TypeSpec{
@@ -112,12 +109,10 @@ func NewDynamic(
 			if !exists {
 				return
 			}
-			sConf, bErr := SanitiseConfig(uConf)
-			if bErr != nil {
-				log.Errorf("Failed to sanitise config: %v\n", bErr)
-			}
+			_ = uConf
 
-			confBytes, _ := json.Marshal(sConf)
+			// TODO: V4 Implement this
+			var confBytes []byte
 			dynAPI.Started(l, confBytes)
 			delete(outputConfigs, l)
 		}),

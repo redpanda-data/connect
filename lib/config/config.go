@@ -1,6 +1,9 @@
 package config
 
 import (
+	"os"
+	"unicode/utf8"
+
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
@@ -12,10 +15,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
+	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"gopkg.in/yaml.v3"
 )
-
-//------------------------------------------------------------------------------
 
 // Type is the Benthos service configuration struct.
 type Type struct {
@@ -41,124 +43,6 @@ func New() Type {
 		SystemCloseTimeout: "20s",
 		Tests:              nil,
 	}
-}
-
-// SanitisedConfig is deprecated and will be removed in V4.
-//
-// TODO: V4 Remove this
-type SanitisedConfig struct {
-	HTTP               interface{} `json:"http" yaml:"http"`
-	Input              interface{} `json:"input" yaml:"input"`
-	Buffer             interface{} `json:"buffer" yaml:"buffer"`
-	Pipeline           interface{} `json:"pipeline" yaml:"pipeline"`
-	Output             interface{} `json:"output" yaml:"output"`
-	Manager            interface{} `json:"resources" yaml:"resources"`
-	Logger             interface{} `json:"logger" yaml:"logger"`
-	Metrics            interface{} `json:"metrics" yaml:"metrics"`
-	Tracer             interface{} `json:"tracer" yaml:"tracer"`
-	SystemCloseTimeout interface{} `json:"shutdown_timeout" yaml:"shutdown_timeout"`
-	Tests              interface{} `json:"tests,omitempty" yaml:"tests,omitempty"`
-}
-
-// SanitisedV2Config describes custom options for how a config is sanitised
-// using the V2 API.
-type SanitisedV2Config struct {
-	RemoveTypeField        bool
-	RemoveDeprecatedFields bool
-}
-
-// SanitisedV2 returns a sanitised version of the config as a yaml.Node.
-func (c Type) SanitisedV2(conf SanitisedV2Config) (yaml.Node, error) {
-	var node yaml.Node
-	if err := node.Encode(c); err != nil {
-		return node, err
-	}
-
-	if err := Spec().SanitiseYAML(&node, docs.SanitiseConfig{
-		RemoveTypeField:  conf.RemoveTypeField,
-		RemoveDeprecated: conf.RemoveDeprecatedFields,
-	}); err != nil {
-		return node, err
-	}
-
-	return node, nil
-}
-
-// Sanitised is deprecated and will be removed in V4.
-//
-// TODO: V4 Remove this
-func (c Type) Sanitised() (*SanitisedConfig, error) {
-	return c.sanitised(false)
-}
-
-// SanitisedNoDeprecated is deprecated and will be removed in V4.
-//
-// TODO: V4 Remove this
-func (c Type) SanitisedNoDeprecated() (*SanitisedConfig, error) {
-	return c.sanitised(true)
-}
-
-func (c Type) sanitised(skipDeprecated bool) (*SanitisedConfig, error) {
-	inConf, err := c.Input.Sanitised(skipDeprecated)
-	if err != nil {
-		return nil, err
-	}
-
-	var pipeConf interface{}
-	pipeConf, err = c.Pipeline.Sanitised(skipDeprecated)
-	if err != nil {
-		return nil, err
-	}
-
-	var outConf interface{}
-	outConf, err = c.Output.Sanitised(skipDeprecated)
-	if err != nil {
-		return nil, err
-	}
-
-	var bufConf interface{}
-	bufConf, err = c.Buffer.Sanitised(skipDeprecated)
-	if err != nil {
-		return nil, err
-	}
-
-	var mgrConf interface{}
-	mgrConf, err = c.Manager.Sanitised(skipDeprecated)
-	if err != nil {
-		return nil, err
-	}
-
-	var metConf interface{}
-	metConf, err = c.Metrics.Sanitised(skipDeprecated)
-	if err != nil {
-		return nil, err
-	}
-
-	var tracConf interface{}
-	tracConf, err = c.Tracer.Sanitised(skipDeprecated)
-	if err != nil {
-		return nil, err
-	}
-
-	var logConf interface{}
-	logConf, err = c.Logger.Sanitised(skipDeprecated)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SanitisedConfig{
-		HTTP:               c.HTTP,
-		Input:              inConf,
-		Buffer:             bufConf,
-		Pipeline:           pipeConf,
-		Output:             outConf,
-		Manager:            mgrConf,
-		Logger:             logConf,
-		Metrics:            metConf,
-		Tracer:             tracConf,
-		SystemCloseTimeout: c.SystemCloseTimeout,
-		Tests:              c.Tests,
-	}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -206,20 +90,12 @@ func AddExamples(conf *Type, examples ...string) {
 
 //------------------------------------------------------------------------------
 
-// Read will attempt to read a configuration file path into a structure. Returns
-// an array of lint messages or an error.
-//
-// TODO: V4 Remove this and force everything through internal/config
-func Read(path string, replaceEnvs bool, config *Type) ([]string, error) {
-	return ReadV2(path, replaceEnvs, false, config)
-}
-
 // ReadV2 will attempt to read a configuration file path into a structure.
 // Returns an array of lint messages or an error.
 //
 // TODO: V4 Remove this and force everything through internal/config
 func ReadV2(path string, replaceEnvs, rejectDeprecated bool, config *Type) ([]string, error) {
-	configBytes, lints, err := ReadWithJSONPointersLinted(path, replaceEnvs)
+	configBytes, lints, err := ReadBytes(path, replaceEnvs)
 	if err != nil {
 		return nil, err
 	}
@@ -236,4 +112,27 @@ func ReadV2(path string, replaceEnvs, rejectDeprecated bool, config *Type) ([]st
 	}
 	lints = append(lints, newLints...)
 	return lints, nil
+}
+
+// ReadBytes takes a config file path, reads the contents,
+// performs a generic parse, resolves any JSON Pointers, marshals the result
+// back into bytes and returns it so that it can be unmarshalled into a typed
+// structure.
+//
+// If any non-fatal errors occur lints are returned along with the result.
+func ReadBytes(path string, replaceEnvs bool) (configBytes []byte, lints []string, err error) {
+	configBytes, err = os.ReadFile(path)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !utf8.Valid(configBytes) {
+		lints = append(lints, "Detected invalid utf-8 encoding in config, this may result in interpolation functions not working as expected")
+	}
+
+	if replaceEnvs {
+		configBytes = text.ReplaceEnvVariables(configBytes)
+	}
+
+	return configBytes, lints, nil
 }

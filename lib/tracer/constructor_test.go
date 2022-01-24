@@ -1,33 +1,13 @@
 package tracer_test
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/tracer"
-	"github.com/Jeffail/benthos/v3/lib/util/config"
 	yaml "gopkg.in/yaml.v3"
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
-
-func TestSanitise(t *testing.T) {
-	exp := config.Sanitised{
-		"type": "none",
-		"none": map[string]interface{}{},
-	}
-
-	conf := tracer.NewConfig()
-	conf.Type = tracer.TypeNone
-
-	act, err := tracer.SanitiseConfig(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
-	}
-}
 
 func TestConstructorConfigYAMLInference(t *testing.T) {
 	conf := []tracer.Config{}

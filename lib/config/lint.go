@@ -8,14 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Lint attempts to report errors within a user config. Returns a slice of lint
-// results.
-//
-// TODO: V4 remove this
-func Lint(rawBytes []byte, _ Type) ([]string, error) {
-	return LintV2(docs.NewLintContext(), rawBytes)
-}
-
 // LintV2 attempts to report errors within a user config. Returns a slice of
 // lint results.
 func LintV2(ctx docs.LintContext, rawBytes []byte) ([]string, error) {

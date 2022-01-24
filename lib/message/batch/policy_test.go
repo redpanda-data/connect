@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -20,10 +19,6 @@ func TestPolicyNoop(t *testing.T) {
 
 	conf = NewPolicyConfig()
 	conf.Count = 2
-	assert.False(t, conf.IsNoop())
-
-	conf = NewPolicyConfig()
-	conf.Condition = condition.NewConfig()
 	assert.False(t, conf.IsNoop())
 
 	conf = NewPolicyConfig()
@@ -213,44 +208,6 @@ func TestPolicyCheckAdvanced(t *testing.T) {
 		t.Error("Expected batch")
 	}
 	if !pol.Add(message.NewPart(exp[2])) {
-		t.Error("Expected batch")
-	}
-
-	msg := pol.Flush()
-	if !reflect.DeepEqual(exp, message.GetAllBytes(msg)) {
-		t.Errorf("Wrong result: %s != %s", message.GetAllBytes(msg), exp)
-	}
-
-	if msg = pol.Flush(); msg != nil {
-		t.Error("Non-nil empty flush")
-	}
-}
-
-func TestPolicyCondition(t *testing.T) {
-	cond := condition.NewConfig()
-	cond.Type = condition.TypeText
-	cond.Text.Operator = "equals"
-	cond.Text.Arg = "bar"
-
-	conf := NewPolicyConfig()
-	conf.Condition = cond
-
-	pol, err := NewPolicy(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Cleanup(func() {
-		pol.CloseAsync()
-		require.NoError(t, pol.WaitForClose(time.Second))
-	})
-
-	exp := [][]byte{[]byte("foo"), []byte("bar")}
-
-	if pol.Add(message.NewPart(exp[0])) {
-		t.Error("Unexpected batch")
-	}
-	if !pol.Add(message.NewPart(exp[1])) {
 		t.Error("Expected batch")
 	}
 

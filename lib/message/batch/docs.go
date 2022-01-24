@@ -44,13 +44,6 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.",
 				`this.type == "end_of_transaction"`,
 			).HasDefault(""),
-			docs.FieldDeprecated("condition").HasType(docs.FieldTypeCondition).OmitWhen(func(v, _ interface{}) (string, bool) {
-				m, ok := v.(map[string]interface{})
-				if !ok {
-					return "", false
-				}
-				return "field condition is deprecated in favour of check", m["type"] == "static" && m["static"] == false
-			}),
 			docs.FieldAdvanced(
 				"processors",
 				"A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.",

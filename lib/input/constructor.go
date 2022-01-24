@@ -11,11 +11,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/config"
 	yaml "gopkg.in/yaml.v3"
 )
-
-//------------------------------------------------------------------------------
 
 // Category describes the general category of an input.
 type Category string
@@ -79,16 +76,6 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 		}
 		fn(v.constructor, spec)
 	}
-	for k, v := range pluginSpecs {
-		spec := docs.ComponentSpec{
-			Type:   docs.TypeInput,
-			Name:   k,
-			Status: docs.StatusExperimental,
-			Plugin: true,
-			Config: docs.FieldComponent().Unlinted(),
-		}
-		fn(v.constructor, spec)
-	}
 }
 
 // AppendProcessorsFromConfig takes a variant arg of pipeline constructor
@@ -133,11 +120,6 @@ func appendProcessorsFromConfigBatchAware(
 	pipelines ...types.PipelineConstructorFunc,
 ) (bool, []types.PipelineConstructorFunc) {
 	if len(conf.Processors) > 0 {
-		for _, procConf := range conf.Processors {
-			if procConf.Type == processor.TypeBatch {
-				hasBatchProc = true
-			}
-		}
 		pipelines = append([]types.PipelineConstructorFunc{func(i *int) (types.Pipeline, error) {
 			if i == nil {
 				procs := 0
@@ -177,24 +159,6 @@ func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.T
 	}
 }
 
-func fromBatchAwareConstructor(fn func(bool, Config, types.Manager, log.Modular, metrics.Type) (Type, error)) ConstructorFunc {
-	return func(
-		hasBatchProc bool,
-		conf Config,
-		mgr types.Manager,
-		log log.Modular,
-		stats metrics.Type,
-		pipelines ...types.PipelineConstructorFunc,
-	) (Type, error) {
-		input, err := fn(hasBatchProc, conf, mgr, log, stats)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create input '%v': %w", conf.Type, err)
-		}
-		pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
-		return WrapWithPipelines(input, pipelines...)
-	}
-}
-
 // Constructors is a map of all input types with their specs.
 var Constructors = map[string]TypeSpec{}
 
@@ -204,7 +168,6 @@ var Constructors = map[string]TypeSpec{}
 // Deprecated: Do not add new components here. Instead, use the public plugin
 // APIs. Examples can be found in: ./internal/impl
 const (
-	TypeAMQP              = "amqp"
 	TypeAMQP09            = "amqp_0_9"
 	TypeAMQP1             = "amqp_1"
 	TypeAWSKinesis        = "aws_kinesis"
@@ -212,12 +175,10 @@ const (
 	TypeAWSSQS            = "aws_sqs"
 	TypeAzureBlobStorage  = "azure_blob_storage"
 	TypeAzureQueueStorage = "azure_queue_storage"
-	TypeBloblang          = "bloblang"
 	TypeBroker            = "broker"
 	TypeCSVFile           = "csv"
 	TypeDynamic           = "dynamic"
 	TypeFile              = "file"
-	TypeFiles             = "files"
 	TypeGCPCloudStorage   = "gcp_cloud_storage"
 	TypeGCPPubSub         = "gcp_pubsub"
 	TypeGenerate          = "generate"
@@ -226,9 +187,7 @@ const (
 	TypeHTTPServer        = "http_server"
 	TypeInproc            = "inproc"
 	TypeKafka             = "kafka"
-	TypeKafkaBalanced     = "kafka_balanced"
 	TypeKinesis           = "kinesis"
-	TypeKinesisBalanced   = "kinesis_balanced"
 	TypeMQTT              = "mqtt"
 	TypeNanomsg           = "nanomsg"
 	TypeNATS              = "nats"
@@ -241,17 +200,12 @@ const (
 	TypeRedisPubSub       = "redis_pubsub"
 	TypeRedisStreams      = "redis_streams"
 	TypeResource          = "resource"
-	TypeS3                = "s3"
 	TypeSequence          = "sequence"
 	TypeSFTP              = "sftp"
 	TypeSocket            = "socket"
 	TypeSocketServer      = "socket_server"
-	TypeSQS               = "sqs"
 	TypeSTDIN             = "stdin"
 	TypeSubprocess        = "subprocess"
-	TypeTCP               = "tcp"
-	TypeTCPServer         = "tcp_server"
-	TypeUDPServer         = "udp_server"
 	TypeWebsocket         = "websocket"
 	TypeZMQ4              = "zmq4"
 )
@@ -264,7 +218,6 @@ const (
 type Config struct {
 	Label             string                    `json:"label" yaml:"label"`
 	Type              string                    `json:"type" yaml:"type"`
-	AMQP              reader.AMQPConfig         `json:"amqp" yaml:"amqp"`
 	AMQP09            reader.AMQP09Config       `json:"amqp_0_9" yaml:"amqp_0_9"`
 	AMQP1             reader.AMQP1Config        `json:"amqp_1" yaml:"amqp_1"`
 	AWSKinesis        AWSKinesisConfig          `json:"aws_kinesis" yaml:"aws_kinesis"`
@@ -272,12 +225,10 @@ type Config struct {
 	AWSSQS            AWSSQSConfig              `json:"aws_sqs" yaml:"aws_sqs"`
 	AzureBlobStorage  AzureBlobStorageConfig    `json:"azure_blob_storage" yaml:"azure_blob_storage"`
 	AzureQueueStorage AzureQueueStorageConfig   `json:"azure_queue_storage" yaml:"azure_queue_storage"`
-	Bloblang          BloblangConfig            `json:"bloblang" yaml:"bloblang"`
 	Broker            BrokerConfig              `json:"broker" yaml:"broker"`
 	CSVFile           CSVFileConfig             `json:"csv" yaml:"csv"`
 	Dynamic           DynamicConfig             `json:"dynamic" yaml:"dynamic"`
 	File              FileConfig                `json:"file" yaml:"file"`
-	Files             reader.FilesConfig        `json:"files" yaml:"files"`
 	GCPCloudStorage   GCPCloudStorageConfig     `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
 	GCPPubSub         reader.GCPPubSubConfig    `json:"gcp_pubsub" yaml:"gcp_pubsub"`
 	Generate          BloblangConfig            `json:"generate" yaml:"generate"`
@@ -299,12 +250,10 @@ type Config struct {
 	RedisPubSub       reader.RedisPubSubConfig  `json:"redis_pubsub" yaml:"redis_pubsub"`
 	RedisStreams      reader.RedisStreamsConfig `json:"redis_streams" yaml:"redis_streams"`
 	Resource          string                    `json:"resource" yaml:"resource"`
-	S3                reader.AmazonS3Config     `json:"s3" yaml:"s3"`
 	Sequence          SequenceConfig            `json:"sequence" yaml:"sequence"`
 	SFTP              SFTPConfig                `json:"sftp" yaml:"sftp"`
 	Socket            SocketConfig              `json:"socket" yaml:"socket"`
 	SocketServer      SocketServerConfig        `json:"socket_server" yaml:"socket_server"`
-	SQS               reader.AmazonSQSConfig    `json:"sqs" yaml:"sqs"`
 	STDIN             STDINConfig               `json:"stdin" yaml:"stdin"`
 	Subprocess        SubprocessConfig          `json:"subprocess" yaml:"subprocess"`
 	Websocket         reader.WebsocketConfig    `json:"websocket" yaml:"websocket"`
@@ -319,7 +268,6 @@ func NewConfig() Config {
 	return Config{
 		Label:             "",
 		Type:              "stdin",
-		AMQP:              reader.NewAMQPConfig(),
 		AMQP09:            reader.NewAMQP09Config(),
 		AMQP1:             reader.NewAMQP1Config(),
 		AWSKinesis:        NewAWSKinesisConfig(),
@@ -327,12 +275,10 @@ func NewConfig() Config {
 		AWSSQS:            NewAWSSQSConfig(),
 		AzureBlobStorage:  NewAzureBlobStorageConfig(),
 		AzureQueueStorage: NewAzureQueueStorageConfig(),
-		Bloblang:          NewBloblangConfig(),
 		Broker:            NewBrokerConfig(),
 		CSVFile:           NewCSVFileConfig(),
 		Dynamic:           NewDynamicConfig(),
 		File:              NewFileConfig(),
-		Files:             reader.NewFilesConfig(),
 		GCPCloudStorage:   NewGCPCloudStorageConfig(),
 		GCPPubSub:         reader.NewGCPPubSubConfig(),
 		Generate:          NewBloblangConfig(),
@@ -354,47 +300,16 @@ func NewConfig() Config {
 		RedisPubSub:       reader.NewRedisPubSubConfig(),
 		RedisStreams:      reader.NewRedisStreamsConfig(),
 		Resource:          "",
-		S3:                reader.NewAmazonS3Config(),
 		Sequence:          NewSequenceConfig(),
 		SFTP:              NewSFTPConfig(),
 		Socket:            NewSocketConfig(),
 		SocketServer:      NewSocketServerConfig(),
-		SQS:               reader.NewAmazonSQSConfig(),
 		STDIN:             NewSTDINConfig(),
 		Subprocess:        NewSubprocessConfig(),
 		Websocket:         reader.NewWebsocketConfig(),
 		ZMQ4:              reader.NewZMQ4Config(),
 		Processors:        []processor.Config{},
 	}
-}
-
-// SanitiseConfig returns a sanitised version of the Config, meaning sections
-// that aren't relevant to behaviour are removed.
-func SanitiseConfig(conf Config) (interface{}, error) {
-	return conf.Sanitised(false)
-}
-
-// Sanitised returns a sanitised version of the config, meaning sections that
-// aren't relevant to behaviour are removed. Also optionally removes deprecated
-// fields.
-func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
-	outputMap, err := config.SanitizeComponent(conf)
-	if err != nil {
-		return nil, err
-	}
-	if spec, exists := pluginSpecs[conf.Type]; exists {
-		if spec.confSanitiser != nil {
-			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
-		}
-	}
-	if err := docs.SanitiseComponentConfig(
-		docs.TypeInput,
-		map[string]interface{}(outputMap),
-		docs.ShouldDropDeprecated(removeDeprecated),
-	); err != nil {
-		return nil, err
-	}
-	return outputMap, nil
 }
 
 //------------------------------------------------------------------------------
@@ -420,15 +335,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		if err != nil {
 			return fmt.Errorf("line %v: %v", value.Line, err)
 		}
-		if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
-			conf := spec.confConstructor()
-			if err = pluginNode.Decode(conf); err != nil {
-				return fmt.Errorf("line %v: %v", value.Line, err)
-			}
-			aliased.Plugin = conf
-		} else {
-			aliased.Plugin = &pluginNode
-		}
+		aliased.Plugin = &pluginNode
 	} else {
 		aliased.Plugin = nil
 	}
@@ -468,10 +375,5 @@ func newHasBatchProcessor(
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(hasBatchProc, conf, mgr, log, stats, pipelines...)
 	}
-	if c, ok := pluginSpecs[conf.Type]; ok {
-		return c.constructor(hasBatchProc, conf, mgr, log, stats, pipelines...)
-	}
 	return nil, types.ErrInvalidInputType
 }
-
-//------------------------------------------------------------------------------

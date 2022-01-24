@@ -172,8 +172,6 @@ The second argument is a function that creates our config structure, this will b
 
 The third argument is the generic function that constructs our processor. In this case we've already constructed it as our configuration type and so we can simply cast it and return it.
 
-You can download the full file here: [`main.go`][full-example]
-
 Now you're going to build your custom Benthos with:
 
 ```sh
@@ -304,6 +302,5 @@ I'm sure you'll make great use of Benthos plugins with your extremely important 
 [http-proc]: https://benthos.dev/docs/components/processors/http
 [lambda-proc]: https://benthos.dev/docs/components/processors/lambda
 [process-field-proc]: https://benthos.dev/docs/components/processors/process_field
-[full-example]: /snippets/write-a-benthos-plugin/main.go
 [types-processor]: https://godoc.org/github.com/Jeffail/benthos/lib/types#Processor
 [proc-register-plugin]: https://godoc.org/github.com/Jeffail/benthos/lib/processor#RegisterPlugin

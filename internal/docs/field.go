@@ -23,7 +23,6 @@ var (
 	FieldTypeInput     FieldType = "input"
 	FieldTypeBuffer    FieldType = "buffer"
 	FieldTypeCache     FieldType = "cache"
-	FieldTypeCondition FieldType = "condition"
 	FieldTypeProcessor FieldType = "processor"
 	FieldTypeRateLimit FieldType = "rate_limit"
 	FieldTypeOutput    FieldType = "output"
@@ -40,9 +39,6 @@ func (t FieldType) IsCoreComponent() (Type, bool) {
 		return TypeBuffer, true
 	case FieldTypeCache:
 		return TypeCache, true
-	case FieldTypeCondition:
-		// TODO: V4 Remove this
-		return "condition", true
 	case FieldTypeProcessor:
 		return TypeProcessor, true
 	case FieldTypeRateLimit:
@@ -310,13 +306,6 @@ func (f FieldSpec) GetLintFunc() LintFunc {
 	return nil
 }
 
-func (f FieldSpec) shouldOmit(field, parent interface{}) (string, bool) {
-	if f.omitWhenFn == nil {
-		return "", false
-	}
-	return f.omitWhenFn(field, parent)
-}
-
 // FieldObject returns a field spec for an object typed field.
 func FieldObject(name, description string, examples ...interface{}) FieldSpec {
 	return FieldCommon(name, description, examples...).HasType(FieldTypeObject)
@@ -396,44 +385,6 @@ func FieldDeprecated(name string, description ...string) FieldSpec {
 	}
 }
 
-func (f FieldSpec) sanitise(s interface{}, filter FieldFilter) {
-	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
-		switch f.Kind {
-		case KindArray:
-			if arr, ok := s.([]interface{}); ok {
-				for _, ele := range arr {
-					_ = SanitiseComponentConfig(coreType, ele, filter)
-				}
-			}
-		case KindMap:
-			if obj, ok := s.(map[string]interface{}); ok {
-				for _, v := range obj {
-					_ = SanitiseComponentConfig(coreType, v, filter)
-				}
-			}
-		default:
-			_ = SanitiseComponentConfig(coreType, s, filter)
-		}
-	} else if len(f.Children) > 0 {
-		switch f.Kind {
-		case KindArray:
-			if arr, ok := s.([]interface{}); ok {
-				for _, ele := range arr {
-					f.Children.sanitise(ele, filter)
-				}
-			}
-		case KindMap:
-			if obj, ok := s.(map[string]interface{}); ok {
-				for _, v := range obj {
-					f.Children.sanitise(v, filter)
-				}
-			}
-		default:
-			f.Children.sanitise(s, filter)
-		}
-	}
-}
-
 //------------------------------------------------------------------------------
 
 // FieldSpecs is a slice of field specs for a component.
@@ -468,25 +419,6 @@ func ShouldDropDeprecated(b bool) FieldFilter {
 	}
 	return func(spec FieldSpec) bool {
 		return !spec.IsDeprecated
-	}
-}
-
-func (f FieldSpecs) sanitise(s interface{}, filter FieldFilter) {
-	m, ok := s.(map[string]interface{})
-	if !ok {
-		return
-	}
-	for _, spec := range f {
-		if filter.shouldDrop(spec) {
-			delete(m, spec.Name)
-			continue
-		}
-		v := m[spec.Name]
-		if _, omit := spec.shouldOmit(v, m); omit {
-			delete(m, spec.Name)
-		} else {
-			spec.sanitise(v, filter)
-		}
 	}
 }
 

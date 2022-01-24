@@ -45,7 +45,7 @@ func ReadStreamFile(path string) (conf stream.Config, lints []string, err error)
 	conf = stream.NewConfig()
 
 	var confBytes []byte
-	if confBytes, lints, err = config.ReadWithJSONPointersLinted(path, true); err != nil {
+	if confBytes, lints, err = config.ReadBytes(path, true); err != nil {
 		return
 	}
 

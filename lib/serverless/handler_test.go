@@ -10,11 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/output"
-
-	"github.com/Jeffail/benthos/v3/lib/processor"
-
 	"github.com/Jeffail/benthos/v3/lib/config"
+	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/processor"
 )
 
 func TestHandlerAsync(t *testing.T) {
