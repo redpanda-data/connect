@@ -103,7 +103,7 @@ pipeline:
     - bloblang: root = if errored() { deleted() }
 ```
 
-This will remove any failed messages from a batch.
+This will remove any failed messages from a batch. Furthermore, dropping a message will propagate an acknowledgement (also known as "ack") upstream to the pipeline's input.
 
 ## Route to a Dead-Letter Queue
 
