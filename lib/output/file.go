@@ -19,8 +19,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeFile] = TypeSpec{
 		constructor: fromSimpleConstructor(NewFile),
@@ -38,7 +36,6 @@ Messages can be written to different files by using [interpolation functions](/d
 				`/tmp/${! json("document.id") }.json`,
 			).IsInterpolated().AtVersion("3.33.0"),
 			codec.WriterDocs.AtVersion("3.33.0"),
-			docs.FieldDeprecated("delimiter"),
 		},
 		Categories: []Category{
 			CategoryLocal,
@@ -52,7 +49,6 @@ Messages can be written to different files by using [interpolation functions](/d
 type FileConfig struct {
 	Path  string `json:"path" yaml:"path"`
 	Codec string `json:"codec" yaml:"codec"`
-	Delim string `json:"delimiter" yaml:"delimiter"`
 }
 
 // NewFileConfig creates a new FileConfig with default values.
@@ -60,7 +56,6 @@ func NewFileConfig() FileConfig {
 	return FileConfig{
 		Path:  "",
 		Codec: "lines",
-		Delim: "",
 	}
 }
 
@@ -68,9 +63,6 @@ func NewFileConfig() FileConfig {
 
 // NewFile creates a new File output type.
 func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	if len(conf.File.Delim) > 0 {
-		conf.File.Codec = "delim:" + conf.File.Delim
-	}
 	f, err := newFileWriter(conf.File.Path, conf.File.Codec, mgr, log, stats)
 	if err != nil {
 		return nil, err

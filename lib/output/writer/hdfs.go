@@ -55,17 +55,6 @@ type HDFS struct {
 	stats metrics.Type
 }
 
-// NewHDFS creates a new HDFS writer.Type.
-//
-// Deprecated: use the V2 API instead.
-func NewHDFS(
-	conf HDFSConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*HDFS, error) {
-	return NewHDFSV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewHDFSV2 creates a new HDFS writer.Type.
 func NewHDFSV2(
 	conf HDFSConfig,

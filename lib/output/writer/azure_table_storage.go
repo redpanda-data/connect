@@ -35,17 +35,6 @@ type AzureTableStorage struct {
 	stats        metrics.Type
 }
 
-// NewAzureTableStorage creates a new Azure Table Storage writer Type.
-//
-// Deprecated: use the V2 API instead.
-func NewAzureTableStorage(
-	conf AzureTableStorageConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*AzureTableStorage, error) {
-	return NewAzureTableStorageV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewAzureTableStorageV2 creates a new Azure Table Storage writer Type.
 func NewAzureTableStorageV2(
 	conf AzureTableStorageConfig,

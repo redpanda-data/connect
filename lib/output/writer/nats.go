@@ -58,13 +58,6 @@ type NATS struct {
 	tlsConf    *tls.Config
 }
 
-// NewNATS creates a new NATS output type.
-//
-// Deprecated: use the V2 API instead.
-func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error) {
-	return NewNATSV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewNATSV2 creates a new NATS output type.
 func NewNATSV2(conf NATSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*NATS, error) {
 	n := NATS{

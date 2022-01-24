@@ -21,9 +21,11 @@ func TestFanOutBroker(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	outOne, outTwo := NewConfig(), NewConfig()
-	outOne.Type, outTwo.Type = TypeFiles, TypeFiles
-	outOne.Files.Path = filepath.Join(dir, "one", `foo-${!count("1s")}.txt`)
-	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("2s")}.txt`)
+	outOne.Type, outTwo.Type = TypeFile, TypeFile
+	outOne.File.Path = filepath.Join(dir, "one", `foo-${!count("1s")}.txt`)
+	outOne.File.Codec = "all-bytes"
+	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("2s")}.txt`)
+	outTwo.File.Codec = "all-bytes"
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
 	procOne.Type, procTwo.Type = processor.TypeBloblang, processor.TypeBloblang
@@ -109,9 +111,11 @@ func TestRoundRobinBroker(t *testing.T) {
 	})
 
 	outOne, outTwo := NewConfig(), NewConfig()
-	outOne.Type, outTwo.Type = TypeFiles, TypeFiles
-	outOne.Files.Path = filepath.Join(dir, "one", `foo-${!count("rrfoo")}.txt`)
-	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("rrbar")}.txt`)
+	outOne.Type, outTwo.Type = TypeFile, TypeFile
+	outOne.File.Path = filepath.Join(dir, "one", `foo-${!count("rrfoo")}.txt`)
+	outOne.File.Codec = "all-bytes"
+	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("rrbar")}.txt`)
+	outTwo.File.Codec = "all-bytes"
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
 	procOne.Type, procTwo.Type = processor.TypeBloblang, processor.TypeBloblang
@@ -193,9 +197,11 @@ func TestGreedyBroker(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	outOne, outTwo := NewConfig(), NewConfig()
-	outOne.Type, outTwo.Type = TypeFiles, TypeFiles
-	outOne.Files.Path = filepath.Join(dir, "one", `foo-${!count("gfoo")}.txt`)
-	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("gbar")}.txt`)
+	outOne.Type, outTwo.Type = TypeFile, TypeFile
+	outOne.File.Path = filepath.Join(dir, "one", `foo-${!count("gfoo")}.txt`)
+	outOne.File.Codec = "all-bytes"
+	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("gbar")}.txt`)
+	outTwo.File.Codec = "all-bytes"
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
 	procOne.Type, procTwo.Type = processor.TypeBloblang, processor.TypeBloblang
@@ -285,11 +291,12 @@ func TestTryBroker(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	outOne, outTwo, outThree := NewConfig(), NewConfig(), NewConfig()
-	outOne.Type, outTwo.Type, outThree.Type = TypeHTTPClient, TypeFiles, TypeFile
+	outOne.Type, outTwo.Type, outThree.Type = TypeHTTPClient, TypeFile, TypeFile
 	outOne.HTTPClient.URL = "http://localhost:11111111/badurl"
 	outOne.HTTPClient.NumRetries = 1
 	outOne.HTTPClient.Retry = "1ms"
-	outTwo.Files.Path = filepath.Join(dir, "two", `bar-${!count("tfoo")}-${!count("tbar")}.txt`)
+	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("tfoo")}-${!count("tbar")}.txt`)
+	outTwo.File.Codec = "all-bytes"
 	outThree.File.Path = "/dev/null"
 
 	procOne, procTwo, procThree := processor.NewConfig(), processor.NewConfig(), processor.NewConfig()

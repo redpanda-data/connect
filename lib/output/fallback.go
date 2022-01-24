@@ -12,7 +12,13 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-//------------------------------------------------------------------------------
+// TryConfig contains configuration fields for the Try output type.
+type TryConfig brokerOutputList
+
+// NewTryConfig creates a new BrokerConfig with default values.
+func NewTryConfig() TryConfig {
+	return TryConfig{}
+}
 
 func init() {
 	Constructors[TypeFallback] = TypeSpec{

@@ -57,17 +57,6 @@ type RedisHash struct {
 	connMut sync.RWMutex
 }
 
-// NewRedisHash creates a new RedisHash output type.
-//
-// Deprecated: use the V2 API instead.
-func NewRedisHash(
-	conf RedisHashConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*RedisHash, error) {
-	return NewRedisHashV2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewRedisHashV2 creates a new RedisHash output type.
 func NewRedisHashV2(
 	conf RedisHashConfig,

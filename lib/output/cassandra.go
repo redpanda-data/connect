@@ -108,10 +108,6 @@ output:
 				"If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.",
 			),
 			docs.FieldCommon("query", "A query to execute for each message."),
-			docs.FieldDeprecated(
-				"args",
-				"A list of arguments for the query to be resolved for each message.",
-			).IsInterpolated().Array().HasType(docs.FieldTypeString),
 			docs.FieldBloblang(
 				"args_mapping",
 				"A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.").AtVersion("3.55.0"),
@@ -151,7 +147,6 @@ type CassandraConfig struct {
 	PasswordAuthenticator    PasswordAuthenticator `json:"password_authenticator" yaml:"password_authenticator"`
 	DisableInitialHostLookup bool                  `json:"disable_initial_host_lookup" yaml:"disable_initial_host_lookup"`
 	Query                    string                `json:"query" yaml:"query"`
-	Args                     []string              `json:"args" yaml:"args"`
 	ArgsMapping              string                `json:"args_mapping" yaml:"args_mapping"`
 	Consistency              string                `json:"consistency" yaml:"consistency"`
 	// TODO: V4 Remove this and replace with explicit values.
@@ -178,7 +173,6 @@ func NewCassandraConfig() CassandraConfig {
 		},
 		DisableInitialHostLookup: false,
 		Query:                    "",
-		Args:                     []string{},
 		ArgsMapping:              "",
 		Consistency:              gocql.Quorum.String(),
 		Config:                   rConf,
@@ -232,28 +226,12 @@ func newCassandraWriter(conf CassandraConfig, mgr types.Manager, log log.Modular
 }
 
 func (c *cassandraWriter) parseArgs(mgr types.Manager) error {
-	// Allow only args or args_mapping for now.
-	if len(c.conf.Args) > 0 && c.conf.ArgsMapping != "" {
-		return fmt.Errorf("can only specify one of [args, args_mapping]")
-	}
-
-	if len(c.conf.Args) > 0 {
-		for i, v := range c.conf.Args {
-			expr, err := interop.NewBloblangField(mgr, v)
-			if err != nil {
-				return fmt.Errorf("failed to parse arg %v expression: %v", i, err)
-			}
-			c.args = append(c.args, expr)
-		}
-	}
-
 	if c.conf.ArgsMapping != "" {
 		var err error
 		if c.argsMapping, err = interop.NewBloblangMapping(mgr, c.conf.ArgsMapping); err != nil {
 			return fmt.Errorf("parsing args_mapping: %w", err)
 		}
 	}
-
 	return nil
 }
 

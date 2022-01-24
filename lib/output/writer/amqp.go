@@ -21,8 +21,6 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-const defaultDeprecatedAMQP09URL = "amqp://guest:guest@localhost:5672/"
-
 var errAMQP09Connect = errors.New("AMQP 0.9 Connect")
 
 //------------------------------------------------------------------------------
@@ -38,7 +36,6 @@ type AMQPExchangeDeclareConfig struct {
 
 // AMQPConfig contains configuration fields for the AMQP output type.
 type AMQPConfig struct {
-	URL             string                       `json:"url" yaml:"url"`
 	URLs            []string                     `json:"urls" yaml:"urls"`
 	MaxInFlight     int                          `json:"max_in_flight" yaml:"max_in_flight"`
 	Exchange        string                       `json:"exchange" yaml:"exchange"`
@@ -58,7 +55,6 @@ type AMQPConfig struct {
 // NewAMQPConfig creates a new AMQPConfig with default values.
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
-		URL:         defaultDeprecatedAMQP09URL,
 		URLs:        []string{},
 		MaxInFlight: 1,
 		Exchange:    "benthos-exchange",
@@ -108,13 +104,6 @@ type AMQP struct {
 	connLock sync.RWMutex
 }
 
-// NewAMQP creates a new AMQP writer type.
-//
-// Deprecated: use the V2 API instead.
-func NewAMQP(conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
-	return NewAMQPV2(types.NoopMgr(), conf, log, stats)
-}
-
 // NewAMQPV2 creates a new AMQP writer type.
 func NewAMQPV2(mgr types.Manager, conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
 	a := AMQP{
@@ -146,20 +135,15 @@ func NewAMQPV2(mgr types.Manager, conf AMQPConfig, log log.Modular, stats metric
 		a.deliveryMode = amqp.Persistent
 	}
 
-	if conf.URL != defaultDeprecatedAMQP09URL && len(conf.URLs) > 0 {
-		return nil, errors.New("cannot mix both the field `url` and `urls`")
-	}
-
-	if len(conf.URLs) == 0 {
-		a.urls = append(a.urls, conf.URL)
-	}
-
 	for _, u := range conf.URLs {
 		for _, splitURL := range strings.Split(u, ",") {
 			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
 				a.urls = append(a.urls, trimmed)
 			}
 		}
+	}
+	if len(a.urls) == 0 {
+		return nil, errors.New("must specify at least one url")
 	}
 
 	if conf.TLS.Enabled {

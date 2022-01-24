@@ -101,17 +101,6 @@ type AmazonS3 struct {
 	stats metrics.Type
 }
 
-// NewAmazonS3 creates a new Amazon S3 bucket writer.Type.
-//
-// Deprecated: use the V2 API instead.
-func NewAmazonS3(
-	conf AmazonS3Config,
-	log log.Modular,
-	stats metrics.Type,
-) (*AmazonS3, error) {
-	return NewAmazonS3V2(conf, types.NoopMgr(), log, stats)
-}
-
 // NewAmazonS3V2 creates a new Amazon S3 bucket writer.Type.
 func NewAmazonS3V2(
 	conf AmazonS3Config,

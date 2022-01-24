@@ -50,9 +50,6 @@ type KafkaConfig struct {
 	StaticHeaders    map[string]string            `json:"static_headers" yaml:"static_headers"`
 	Metadata         metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
 	InjectTracingMap string                       `json:"inject_tracing_map" yaml:"inject_tracing_map"`
-
-	// TODO: V4 remove this.
-	RoundRobinPartitions bool `json:"round_robin_partitions" yaml:"round_robin_partitions"`
 }
 
 // NewKafkaConfig creates a new KafkaConfig with default values.
@@ -63,27 +60,26 @@ func NewKafkaConfig() KafkaConfig {
 	rConf.Backoff.MaxElapsedTime = "30s"
 
 	return KafkaConfig{
-		Addresses:            []string{"localhost:9092"},
-		ClientID:             "benthos_kafka_output",
-		RackID:               "",
-		Key:                  "",
-		RoundRobinPartitions: false,
-		Partitioner:          "fnv1a_hash",
-		Partition:            "",
-		Topic:                "benthos_stream",
-		Compression:          "none",
-		MaxMsgBytes:          1000000,
-		Timeout:              "5s",
-		AckReplicas:          false,
-		TargetVersion:        sarama.V1_0_0_0.String(),
-		StaticHeaders:        map[string]string{},
-		Metadata:             metadata.NewExcludeFilterConfig(),
-		TLS:                  btls.NewConfig(),
-		SASL:                 sasl.NewConfig(),
-		MaxInFlight:          1,
-		Config:               rConf,
-		RetryAsBatch:         false,
-		Batching:             batch.NewPolicyConfig(),
+		Addresses:     []string{"localhost:9092"},
+		ClientID:      "benthos_kafka_output",
+		RackID:        "",
+		Key:           "",
+		Partitioner:   "fnv1a_hash",
+		Partition:     "",
+		Topic:         "benthos_stream",
+		Compression:   "none",
+		MaxMsgBytes:   1000000,
+		Timeout:       "5s",
+		AckReplicas:   false,
+		TargetVersion: sarama.V1_0_0_0.String(),
+		StaticHeaders: map[string]string{},
+		Metadata:      metadata.NewExcludeFilterConfig(),
+		TLS:           btls.NewConfig(),
+		SASL:          sasl.NewConfig(),
+		MaxInFlight:   1,
+		Config:        rConf,
+		RetryAsBatch:  false,
+		Batching:      batch.NewPolicyConfig(),
 	}
 }
 
@@ -123,12 +119,6 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 	compression, err := strToCompressionCodec(conf.Compression)
 	if err != nil {
 		return nil, err
-	}
-
-	// for backward compatitility
-	if conf.RoundRobinPartitions {
-		conf.Partitioner = "round_robin"
-		log.Warnln("The field 'round_robin_partitions' is deprecated, please use the 'partitioner' field (set to 'round_robin') instead.")
 	}
 
 	if conf.Partition == "" && conf.Partitioner == "manual" {
