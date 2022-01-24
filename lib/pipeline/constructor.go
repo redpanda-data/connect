@@ -31,29 +31,6 @@ func NewConfig() Config {
 	}
 }
 
-// SanitiseConfig returns a sanitised version of the Config, meaning sections
-// that aren't relevant to behaviour are removed.
-func SanitiseConfig(conf Config) (interface{}, error) {
-	return conf.Sanitised(false)
-}
-
-// Sanitised returns a sanitised version of the config, meaning sections that
-// aren't relevant to behaviour are removed. Also optionally removes deprecated
-// fields.
-func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
-	procConfs := make([]interface{}, len(conf.Processors))
-	for i, pConf := range conf.Processors {
-		var err error
-		if procConfs[i], err = pConf.Sanitised(removeDeprecated); err != nil {
-			return nil, err
-		}
-	}
-	return map[string]interface{}{
-		"threads":    conf.Threads,
-		"processors": procConfs,
-	}, nil
-}
-
 //------------------------------------------------------------------------------
 
 // New creates an input type based on an input configuration.

@@ -39,7 +39,6 @@ func RegisterDocs(spec ComponentSpec) {
 // GetDocs attempts to locate a documentation spec for a component identified by
 // a unique name and type combination.
 func GetDocs(prov Provider, name string, ctype Type) (ComponentSpec, bool) {
-	refreshOldPlugins()
 	if prov == nil {
 		prov = globalProvider
 	}

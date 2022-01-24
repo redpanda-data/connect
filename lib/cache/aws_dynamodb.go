@@ -53,41 +53,6 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
 		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
 	}
-
-	Constructors[TypeDynamoDB] = TypeSpec{
-		constructor: NewDynamoDB,
-		Status:      docs.StatusDeprecated,
-		Summary: `
-Stores key/value pairs as a single document in a DynamoDB table. The key is
-stored as a string value and used as the table hash key. The value is stored as
-a binary value using the ` + "`data_key`" + ` field name.`,
-		Description: `
-## Alternatives
-
-This cache has been renamed to ` + "[`aws_dynamodb`](/docs/components/caches/aws_dynamodb)" + `.
-
-A prefix can be specified to allow multiple cache types to share a single
-DynamoDB table. An optional TTL duration (` + "`ttl`" + `) and field
-(` + "`ttl_key`" + `) can be specified if the backing table has TTL enabled.
-
-Strong read consistency can be enabled using the ` + "`consistent_read`" + `
-configuration field.
-
-### Credentials
-
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("table", "The table to store items in."),
-			docs.FieldCommon("hash_key", "The key of the table column to store item keys within."),
-			docs.FieldCommon("data_key", "The key of the table column to store item values within."),
-			docs.FieldAdvanced("consistent_read", "Whether to use strongly consistent reads on Get commands."),
-			docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the item is cached."),
-			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
-		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
-	}
 }
 
 //------------------------------------------------------------------------------

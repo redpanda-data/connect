@@ -7,7 +7,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -15,44 +14,10 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-// SanitisePolicyConfig returns a policy config structure ready to be marshalled
-// with irrelevant fields omitted.
-func SanitisePolicyConfig(policy PolicyConfig) (interface{}, error) {
-	procConfs := make([]interface{}, len(policy.Processors))
-	for i, pConf := range policy.Processors {
-		var err error
-		if procConfs[i], err = processor.SanitiseConfig(pConf); err != nil {
-			return nil, err
-		}
-	}
-	bSanit := map[string]interface{}{
-		"byte_size":  policy.ByteSize,
-		"count":      policy.Count,
-		"check":      policy.Check,
-		"period":     policy.Period,
-		"processors": procConfs,
-	}
-	if !isNoopCondition(policy.Condition) {
-		condSanit, err := condition.SanitiseConfig(policy.Condition)
-		if err != nil {
-			return nil, err
-		}
-		bSanit["condition"] = condSanit
-	}
-	return bSanit, nil
-}
-
-//------------------------------------------------------------------------------
-
-func isNoopCondition(conf condition.Config) bool {
-	return conf.Type == condition.TypeStatic && !conf.Static
-}
-
 // PolicyConfig contains configuration parameters for a batch policy.
 type PolicyConfig struct {
 	ByteSize   int                `json:"byte_size" yaml:"byte_size"`
 	Count      int                `json:"count" yaml:"count"`
-	Condition  condition.Config   `json:"condition" yaml:"condition"`
 	Check      string             `json:"check" yaml:"check"`
 	Period     string             `json:"period" yaml:"period"`
 	Processors []processor.Config `json:"processors" yaml:"processors"`
@@ -60,13 +25,9 @@ type PolicyConfig struct {
 
 // NewPolicyConfig creates a default PolicyConfig.
 func NewPolicyConfig() PolicyConfig {
-	cond := condition.NewConfig()
-	cond.Type = "static"
-	cond.Static = false
 	return PolicyConfig{
 		ByteSize:   0,
 		Count:      0,
-		Condition:  cond,
 		Check:      "",
 		Period:     "",
 		Processors: []processor.Config{},
@@ -79,9 +40,6 @@ func (p PolicyConfig) IsNoop() bool {
 		return false
 	}
 	if p.Count > 1 {
-		return false
-	}
-	if !isNoopCondition(p.Condition) {
 		return false
 	}
 	if len(p.Check) > 0 {
@@ -104,9 +62,6 @@ func (p PolicyConfig) isLimited() bool {
 		return true
 	}
 	if len(p.Period) > 0 {
-		return true
-	}
-	if !isNoopCondition(p.Condition) {
 		return true
 	}
 	if len(p.Check) > 0 {
@@ -138,7 +93,6 @@ type Policy struct {
 	byteSize  int
 	count     int
 	period    time.Duration
-	cond      condition.Type
 	check     *mapping.Executor
 	procs     []types.Processor
 	sizeTally int
@@ -167,14 +121,7 @@ func NewPolicy(
 	if !conf.isHardLimited() {
 		log.Warnln("Batch policy should have at least one of count, period or byte_size set in order to provide a hard batch ceiling.")
 	}
-	var cond types.Condition
 	var err error
-	if !isNoopCondition(conf.Condition) {
-		cMgr, cLog, cStats := interop.LabelChild("condition", mgr, log, stats)
-		if cond, err = condition.New(conf.Condition, cMgr, cLog, cStats); err != nil {
-			return nil, fmt.Errorf("failed to create condition: %v", err)
-		}
-	}
 	var check *mapping.Executor
 	if len(conf.Check) > 0 {
 		if check, err = interop.NewBloblangMapping(mgr, conf.Check); err != nil {
@@ -202,7 +149,6 @@ func NewPolicy(
 		byteSize: conf.ByteSize,
 		count:    conf.Count,
 		period:   period,
-		cond:     cond,
 		check:    check,
 		procs:    procs,
 
@@ -234,15 +180,10 @@ func (p *Policy) Add(part types.Part) bool {
 		p.mSizeBatch.Incr(1)
 		p.log.Traceln("Batching based on byte_size")
 	}
-	tmpMsg := message.New(nil)
-	tmpMsg.Append(part)
-	if p.cond != nil && !p.triggered && p.cond.Check(tmpMsg) {
-		p.triggered = true
-		p.mCondBatch.Incr(1)
-		p.log.Traceln("Batching based on condition")
-	}
-	tmpMsg.SetAll(p.parts)
 	if p.check != nil && !p.triggered {
+		tmpMsg := message.New(nil)
+		tmpMsg.SetAll(p.parts)
+
 		test, err := p.check.QueryPart(tmpMsg.Len()-1, tmpMsg)
 		if err != nil {
 			test = false
@@ -350,5 +291,3 @@ func (p *Policy) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

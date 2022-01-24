@@ -200,23 +200,6 @@ func NewBranchConfig() BranchConfig {
 	}
 }
 
-// Sanitise the configuration into a minimal structure that can be printed
-// without changing the intent.
-func (b BranchConfig) Sanitise() (map[string]interface{}, error) {
-	var err error
-	procConfs := make([]interface{}, len(b.Processors))
-	for i, pConf := range b.Processors {
-		if procConfs[i], err = SanitiseConfig(pConf); err != nil {
-			return nil, err
-		}
-	}
-	return map[string]interface{}{
-		"request_map": b.RequestMap,
-		"processors":  procConfs,
-		"result_map":  b.ResultMap,
-	}, nil
-}
-
 //------------------------------------------------------------------------------
 
 // Branch contains conditions and maps for transforming a batch of messages into

@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/interop/plugins"
 	"github.com/Jeffail/gabs/v2"
 )
 
@@ -86,18 +85,6 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 	return m
 }
 
-// TODO: V4 remove this as it's not needed.
-func refreshOldPlugins() {
-	plugins.FlushNameTypes(func(nt [2]string) {
-		RegisterDocs(ComponentSpec{
-			Name:   nt[0],
-			Type:   Type(nt[1]),
-			Plugin: true,
-			Status: StatusExperimental,
-		})
-	})
-}
-
 // GetInferenceCandidate checks a generic config structure for a component and
 // returns either the inferred type name or an error if one cannot be inferred.
 func GetInferenceCandidate(docProvider Provider, t Type, defaultType string, raw interface{}) (string, ComponentSpec, error) {
@@ -159,69 +146,6 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, defaultType str
 		return "", ComponentSpec{}, fmt.Errorf("unable to infer %v type, candidates were: %v", string(t), candidates)
 	}
 	return inferred, inferredSpec, nil
-}
-
-// TODO: V4 Remove this.
-func sanitiseConditionConfig(raw interface{}, removeDeprecated bool) error {
-	// This is a nasty hack until Benthos v4.
-	m, ok := raw.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("expected object configuration type, found: %T", raw)
-	}
-	typeStr, ok := m["type"]
-	if !ok {
-		return nil
-	}
-	for k := range m {
-		if k == typeStr || k == "type" || k == "plugin" {
-			continue
-		}
-		delete(m, k)
-	}
-	return nil
-}
-
-// SanitiseComponentConfig reduces a raw component configuration into only the
-// fields for the component name configured.
-//
-// TODO: V4 Remove this
-func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFilter) error {
-	if componentType == "condition" {
-		return sanitiseConditionConfig(raw, false)
-	}
-
-	name, spec, err := GetInferenceCandidate(globalProvider, componentType, "", raw)
-	if err != nil {
-		return err
-	}
-
-	m, ok := raw.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("expected object configuration type, found: %T", raw)
-	}
-
-	if componentConfRaw, exists := m[name]; exists {
-		spec.Config.sanitise(componentConfRaw, filter)
-	}
-
-	reservedFields := reservedFieldsByType(componentType)
-	for k, v := range m {
-		if k == name {
-			continue
-		}
-		spec, exists := reservedFields[k]
-		if !exists {
-			delete(m, k)
-		}
-		if _, omit := spec.shouldOmit(v, m); omit {
-			delete(m, k)
-		}
-	}
-
-	for name, fieldSpec := range reservedFields {
-		fieldSpec.sanitise(m[name], filter)
-	}
-	return nil
 }
 
 // SanitiseConfig contains fields describing the desired behaviour of the config

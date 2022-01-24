@@ -6,7 +6,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/config"
 )
 
@@ -46,9 +45,6 @@ func New(version, date string) Full {
 		Tracers:           bundle.AllTracers.Docs(),
 		BloblangFunctions: query.FunctionDocs(),
 		BloblangMethods:   query.MethodDocs(),
-	}
-	for t := range condition.Constructors {
-		s.conditions = append(s.conditions, t)
 	}
 	sort.Strings(s.conditions)
 	return s

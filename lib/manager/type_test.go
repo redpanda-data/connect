@@ -6,7 +6,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
@@ -222,29 +221,6 @@ func TestManagerBadRateLimit(t *testing.T) {
 	}
 }
 
-func TestManagerCondition(t *testing.T) {
-	testLog := log.Noop()
-
-	conf := manager.NewConfig()
-	conf.Conditions["foo"] = condition.NewConfig()
-	conf.Conditions["bar"] = condition.NewConfig()
-
-	mgr, err := manager.New(conf, nil, testLog, metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := mgr.GetCondition("foo"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := mgr.GetCondition("bar"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := mgr.GetCondition("baz"); err != types.ErrConditionNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, types.ErrConditionNotFound)
-	}
-}
-
 func TestManagerProcessor(t *testing.T) {
 	conf := manager.NewConfig()
 	conf.Processors["foo"] = processor.NewConfig()
@@ -400,41 +376,6 @@ func TestManagerOutputListErrors(t *testing.T) {
 
 	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.EqualError(t, err, "output resource has an empty label")
-}
-
-func TestManagerConditionRecursion(t *testing.T) {
-	t.Skip("Not yet implemented")
-
-	testLog := log.Noop()
-
-	conf := manager.NewConfig()
-
-	fooConf := condition.NewConfig()
-	fooConf.Type = "resource"
-	fooConf.Resource = "bar"
-	conf.Conditions["foo"] = fooConf
-
-	barConf := condition.NewConfig()
-	barConf.Type = "resource"
-	barConf.Resource = "foo"
-	conf.Conditions["bar"] = barConf
-
-	if _, err := manager.New(conf, nil, testLog, metrics.Noop()); err == nil {
-		t.Error("Expected error from recursive conditions")
-	}
-}
-
-func TestManagerBadCondition(t *testing.T) {
-	testLog := log.Noop()
-
-	conf := manager.NewConfig()
-	badConf := condition.NewConfig()
-	badConf.Type = "notexist"
-	conf.Conditions["bad"] = badConf
-
-	if _, err := manager.New(conf, nil, testLog, metrics.Noop()); err == nil {
-		t.Fatal("Expected error from bad condition")
-	}
 }
 
 func TestManagerPipeErrors(t *testing.T) {

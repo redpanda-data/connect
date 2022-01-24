@@ -124,7 +124,7 @@ func GetTestTargets(targetPath, testSuffix string, recurse bool) (map[string]Def
 func lintTarget(path, testSuffix string) ([]string, error) {
 	confPath, _ := GetPathPair(path, testSuffix)
 	dummyConf := config.New()
-	lints, err := config.Read(confPath, true, &dummyConf)
+	lints, err := config.ReadV2(confPath, true, false, &dummyConf)
 	if err != nil {
 		return nil, err
 	}

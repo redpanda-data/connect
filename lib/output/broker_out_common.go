@@ -2,11 +2,6 @@ package output
 
 import (
 	"encoding/json"
-	"fmt"
-	"strconv"
-	"strings"
-
-	"github.com/Jeffail/benthos/v3/lib/broker"
 
 	"gopkg.in/yaml.v3"
 )
@@ -63,36 +58,13 @@ func (b *brokerOutputList) UnmarshalYAML(unmarshal func(interface{}) error) erro
 // json.RawMessage, but our config files can contain a range of different
 // formats that we do not know at this stage (JSON, YAML, etc), therefore we use
 // the more hacky method as performance is not an issue at this stage.
+//
+// TODO: V4 Remove this?
 func parseOutputConfsWithDefaults(outConfs []interface{}) ([]Config, error) {
 	outputConfs := []Config{}
 
-	for i, boxedConfig := range outConfs {
+	for _, boxedConfig := range outConfs {
 		newConfs := make([]Config, 1)
-		label := broker.GetGenericType(boxedConfig)
-
-		if i > 0 && strings.Index(label, "ditto") == 0 {
-			broker.RemoveGenericType(boxedConfig)
-
-			// Check if there is a ditto multiplier.
-			if len(label) > 5 && label[5] == '_' {
-				if label[6:] == "0" {
-					// This is a special case where we are expressing that
-					// we want to end up with zero duplicates.
-					newConfs = nil
-				} else {
-					n, err := strconv.Atoi(label[6:])
-					if err != nil {
-						return nil, fmt.Errorf("failed to parse ditto multiplier: %v", err)
-					}
-					newConfs = make([]Config, n)
-				}
-			} else {
-				newConfs = make([]Config, 1)
-			}
-
-			broker.ComplementGenericConfig(boxedConfig, outConfs[i-1])
-		}
-
 		for _, conf := range newConfs {
 			rawBytes, err := yaml.Marshal(boxedConfig)
 			if err != nil {

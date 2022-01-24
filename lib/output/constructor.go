@@ -12,11 +12,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/config"
 	"gopkg.in/yaml.v3"
 )
-
-//------------------------------------------------------------------------------
 
 // Category describes the general category of an output.
 type Category string
@@ -134,16 +131,6 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			}
 		}
 		spec.Description = output.Description(v.Async, v.Batches, spec.Description)
-		fn(v.constructor, spec)
-	}
-	for k, v := range pluginSpecs {
-		spec := docs.ComponentSpec{
-			Type:   docs.TypeOutput,
-			Name:   k,
-			Status: docs.StatusExperimental,
-			Plugin: true,
-			Config: docs.FieldComponent().Unlinted(),
-		}
 		fn(v.constructor, spec)
 	}
 }
@@ -336,37 +323,6 @@ func NewConfig() Config {
 
 //------------------------------------------------------------------------------
 
-// SanitiseConfig returns a sanitised version of the Config, meaning sections
-// that aren't relevant to behaviour are removed.
-func SanitiseConfig(conf Config) (interface{}, error) {
-	return conf.Sanitised(false)
-}
-
-// Sanitised returns a sanitised version of the config, meaning sections that
-// aren't relevant to behaviour are removed. Also optionally removes deprecated
-// fields.
-func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
-	outputMap, err := config.SanitizeComponent(conf)
-	if err != nil {
-		return nil, err
-	}
-	if spec, exists := pluginSpecs[conf.Type]; exists {
-		if spec.confSanitiser != nil {
-			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
-		}
-	}
-	if err := docs.SanitiseComponentConfig(
-		docs.TypeOutput,
-		map[string]interface{}(outputMap),
-		docs.ShouldDropDeprecated(removeDeprecated),
-	); err != nil {
-		return nil, err
-	}
-	return outputMap, nil
-}
-
-//------------------------------------------------------------------------------
-
 // UnmarshalYAML ensures that when parsing configs that are in a map or slice
 // the default values are still applied.
 func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
@@ -388,15 +344,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		if err != nil {
 			return fmt.Errorf("line %v: %v", value.Line, err)
 		}
-		if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
-			conf := spec.confConstructor()
-			if err = pluginNode.Decode(conf); err != nil {
-				return fmt.Errorf("line %v: %v", value.Line, err)
-			}
-			aliased.Plugin = conf
-		} else {
-			aliased.Plugin = &pluginNode
-		}
+		aliased.Plugin = &pluginNode
 	} else {
 		aliased.Plugin = nil
 	}
@@ -423,10 +371,5 @@ func New(
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats, pipelines...)
 	}
-	if c, ok := pluginSpecs[conf.Type]; ok {
-		return c.constructor(conf, mgr, log, stats, pipelines...)
-	}
 	return nil, types.ErrInvalidOutputType
 }
-
-//------------------------------------------------------------------------------

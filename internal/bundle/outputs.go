@@ -88,10 +88,6 @@ func (s *OutputSet) Init(
 ) (types.Output, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		// TODO: V4 Remove this
-		if ctor, exists := output.GetDeprecatedPlugin(conf.Type); exists {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics(), pipelines...)
-		}
 		return nil, types.ErrInvalidOutputType
 	}
 	return spec.constructor(conf, mgr, pipelines...)

@@ -211,7 +211,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		remainingMocks[k] = v
 	}
 
-	configBytes, err := config.ReadWithJSONPointers(targetPath, true)
+	configBytes, _, err := config.ReadBytes(targetPath, true)
 	if err != nil {
 		return confs, fmt.Errorf("failed to parse config file '%v': %v", targetPath, err)
 	}
@@ -222,7 +222,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 	}
 
 	for _, path := range p.resourcesPaths {
-		resourceBytes, err := config.ReadWithJSONPointers(path, true)
+		resourceBytes, _, err := config.ReadBytes(path, true)
 		if err != nil {
 			return confs, fmt.Errorf("failed to parse resources config file '%v': %v", path, err)
 		}

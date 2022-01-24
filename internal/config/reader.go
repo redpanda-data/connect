@@ -327,7 +327,7 @@ func (r *Reader) readMain(conf *config.Type) (lints []string, err error) {
 	var rawNode yaml.Node
 	var confBytes []byte
 	if r.mainPath != "" {
-		if confBytes, lints, err = config.ReadWithJSONPointersLinted(r.mainPath, true); err != nil {
+		if confBytes, lints, err = config.ReadBytes(r.mainPath, true); err != nil {
 			return
 		}
 		if err = yaml.Unmarshal(confBytes, &rawNode); err != nil {

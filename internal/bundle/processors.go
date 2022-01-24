@@ -66,10 +66,6 @@ func (s *ProcessorSet) Add(constructor ProcessorConstructor, spec docs.Component
 func (s *ProcessorSet) Init(conf processor.Config, mgr NewManagement) (types.Processor, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		// TODO: V4 Remove this
-		if ctor, exists := processor.GetDeprecatedPlugin(conf.Type); exists {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
-		}
 		return nil, types.ErrInvalidProcessorType
 	}
 	return spec.constructor(conf, mgr)

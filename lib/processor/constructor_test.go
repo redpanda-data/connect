@@ -11,12 +11,6 @@ import (
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
-func TestConstructorDescription(t *testing.T) {
-	if processor.Descriptions() == "" {
-		t.Error("package descriptions were empty")
-	}
-}
-
 func TestConstructorBadType(t *testing.T) {
 	conf := processor.NewConfig()
 	conf.Type = "not_exist"

@@ -11,12 +11,6 @@ import (
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
-func TestConstructorDescription(t *testing.T) {
-	if ratelimit.Descriptions() == "" {
-		t.Error("package descriptions were empty")
-	}
-}
-
 func TestConstructorBadType(t *testing.T) {
 	conf := ratelimit.NewConfig()
 	conf.Type = "not_exist"

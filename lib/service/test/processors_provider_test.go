@@ -71,106 +71,6 @@ pipeline:
 	}
 }
 
-func TestProcessorsProviderDeprecated(t *testing.T) {
-	files := map[string]string{
-		"config1.yaml": `
-resources:
-  caches:
-    foocache:
-      memory: {}
-
-pipeline:
-  processors:
-  - bloblang: 'meta foo = env("FOO_VAR").not_empty().catch("defaultvalue")'
-  - cache:
-      resource: foocache
-      operator: set
-      key: defaultkey
-      value: ${! meta("foo") }
-  - cache:
-      resource: foocache
-      operator: get
-      key: defaultkey
-  - bloblang: 'root = content().uppercase()'`,
-
-		"config2.yaml": `
-resources:
-  caches:
-    foocache:
-      memory: {}
-
-pipeline:
-  processors:
-    $ref: ./config1.yaml#/pipeline/processors`,
-	}
-
-	testDir, err := initTestFiles(files)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(testDir)
-
-	provider := test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
-	procs, err := provider.Provide("/pipeline/processors", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := 4, len(procs); exp != act {
-		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
-	}
-	msgs, res := processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")}))
-	if res != nil {
-		t.Fatal(res.Error())
-	}
-	if exp, act := "DEFAULTVALUE", string(msgs[0].Get(0).Get()); exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
-
-	if procs, err = provider.Provide("/pipeline/processors", map[string]string{
-		"FOO_VAR": "newvalue",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := 4, len(procs); exp != act {
-		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
-	}
-	if msgs, res = processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")})); res != nil {
-		t.Fatal(res.Error())
-	}
-	if exp, act := "NEWVALUE", string(msgs[0].Get(0).Get()); exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
-
-	provider = test.NewProcessorsProvider(filepath.Join(testDir, "config2.yaml"))
-	if procs, err = provider.Provide("/pipeline/processors", map[string]string{
-		"FOO_VAR": "thirdvalue",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := 4, len(procs); exp != act {
-		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
-	}
-	if msgs, res = processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")})); res != nil {
-		t.Fatal(res.Error())
-	}
-	if exp, act := "THIRDVALUE", string(msgs[0].Get(0).Get()); exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
-
-	if procs, err = provider.Provide("/pipeline/processors/3", nil); err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := 1, len(procs); exp != act {
-		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
-	}
-	if msgs, res = processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")})); res != nil {
-		t.Fatal(res.Error())
-	}
-	if exp, act := "HELLO WORLD", string(msgs[0].Get(0).Get()); exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
-}
-
 func TestProcessorsExtraResourcesDeprecated(t *testing.T) {
 	files := map[string]string{
 		"resources1.yaml": `
@@ -297,15 +197,6 @@ pipeline:
       operator: get
       key: defaultkey
   - bloblang: 'root = content().uppercase()'`,
-
-		"config2.yaml": `
-cache_resources:
-  - label: foocache
-    memory: {}
-
-pipeline:
-  processors:
-    $ref: ./config1.yaml#/pipeline/processors`,
 	}
 
 	testDir, err := initTestFiles(files)
@@ -342,35 +233,6 @@ pipeline:
 		t.Fatal(res.Error())
 	}
 	if exp, act := "NEWVALUE", string(msgs[0].Get(0).Get()); exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
-
-	provider = test.NewProcessorsProvider(filepath.Join(testDir, "config2.yaml"))
-	if procs, err = provider.Provide("/pipeline/processors", map[string]string{
-		"BAR_VAR": "thirdvalue",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := 4, len(procs); exp != act {
-		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
-	}
-	if msgs, res = processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")})); res != nil {
-		t.Fatal(res.Error())
-	}
-	if exp, act := "THIRDVALUE", string(msgs[0].Get(0).Get()); exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
-
-	if procs, err = provider.Provide("/pipeline/processors/3", nil); err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := 1, len(procs); exp != act {
-		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
-	}
-	if msgs, res = processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")})); res != nil {
-		t.Fatal(res.Error())
-	}
-	if exp, act := "HELLO WORLD", string(msgs[0].Get(0).Get()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 }

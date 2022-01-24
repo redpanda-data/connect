@@ -89,10 +89,6 @@ func (s *InputSet) Init(
 ) (types.Input, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		// TODO: V4 Remove this
-		if ctor, exists := input.GetDeprecatedPlugin(conf.Type); exists {
-			return ctor(hasBatchProc, conf, mgr, mgr.Logger(), mgr.Metrics(), pipelines...)
-		}
 		return nil, types.ErrInvalidInputType
 	}
 	return spec.constructor(hasBatchProc, conf, mgr, pipelines...)

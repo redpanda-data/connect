@@ -10,11 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
-
-//------------------------------------------------------------------------------
 
 // Logger level constants
 const (
@@ -99,29 +95,6 @@ func NewConfig() Config {
 			"@service": "benthos",
 		},
 	}
-}
-
-// Sanitised returns a sanitised version of the config, meaning sections that
-// aren't relevant to behaviour are removed. Also optionally removes deprecated
-// fields.
-func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
-	cBytes, err := yaml.Marshal(conf)
-	if err != nil {
-		return nil, err
-	}
-
-	hashMap := map[string]interface{}{}
-	if err := yaml.Unmarshal(cBytes, &hashMap); err != nil {
-		return nil, err
-	}
-
-	if removeDeprecated {
-		if conf.JSONFormat {
-			delete(hashMap, "json_format")
-		}
-	}
-
-	return hashMap, nil
 }
 
 //------------------------------------------------------------------------------
