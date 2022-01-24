@@ -23,15 +23,10 @@ func Spec() docs.FieldSpecs {
 			"resources", "A map of components identified by unique names that can be referenced throughout a Benthos config.",
 		).WithChildren(
 			docs.FieldCommon("inputs", "A map of inputs.").Map().HasType(docs.FieldTypeInput),
-			docs.FieldCommon("conditions", "A map of conditions.").Map().HasType(docs.FieldTypeCondition),
 			docs.FieldCommon("processors", "A map of processors.").Map().HasType(docs.FieldTypeProcessor),
 			docs.FieldCommon("outputs", "A map of outputs.").Map().HasType(docs.FieldTypeOutput),
 			docs.FieldCommon("caches", "A map of caches.").Map().HasType(docs.FieldTypeCache),
 			docs.FieldCommon("rate_limits", "A map of rate limits.").Map().HasType(docs.FieldTypeRateLimit),
-			docs.FieldAdvanced("plugins", "A map of resource plugins.").Map().WithChildren(
-				docs.FieldString("type", "The type of the plugin.").HasDefault(""),
-				docs.FieldCommon("plugin", "The config fields of the plugin type.").HasType(docs.FieldTypeUnknown).HasDefault(nil),
-			),
 		).OmitWhen(func(field, parent interface{}) (string, bool) {
 			if len(gabs.Wrap(field).ChildrenMap()) == 0 {
 				return "resources should be omitted when empty", true

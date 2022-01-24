@@ -1,8 +1,6 @@
 package buffer_test
 
 import (
-	"encoding/json"
-	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/buffer"
@@ -12,12 +10,6 @@ import (
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
-
-func TestConstructorDescription(t *testing.T) {
-	if buffer.Descriptions() == "" {
-		t.Error("package descriptions were empty")
-	}
-}
 
 func TestConstructorBadType(t *testing.T) {
 	conf := buffer.NewConfig()
@@ -63,52 +55,5 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 	}
 	if exp, act := 10, conf[0].Memory.Limit; exp != act {
 		t.Errorf("Wrong default operator: %v != %v", act, exp)
-	}
-}
-
-func TestSanitise(t *testing.T) {
-	var actObj interface{}
-	var act []byte
-	var err error
-
-	exp := `{` +
-		`"type":"none",` +
-		`"none":{}` +
-		`}`
-
-	conf := buffer.NewConfig()
-	conf.Type = "none"
-	conf.Memory.Limit = 10
-
-	if actObj, err = buffer.SanitiseConfig(conf); err != nil {
-		t.Fatal(err)
-	}
-	if act, err = json.Marshal(actObj); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(string(act), exp) {
-		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
-	}
-
-	exp = `{` +
-		`"type":"memory",` +
-		`"memory":{` +
-		`"batch_policy":{"byte_size":0,"check":"","count":0,"enabled":false,"period":"","processors":[]},` +
-		`"limit":20` +
-		`}` +
-		`}`
-
-	conf = buffer.NewConfig()
-	conf.Type = "memory"
-	conf.Memory.Limit = 20
-
-	if actObj, err = buffer.SanitiseConfig(conf); err != nil {
-		t.Fatal(err)
-	}
-	if act, err = json.Marshal(actObj); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(string(act), exp) {
-		t.Errorf("Wrong sanitised output: %s != %v", act, exp)
 	}
 }

@@ -45,37 +45,6 @@ metrics:
 			pathMappingDocs(true, false),
 		}, session.FieldSpecs()...),
 	}
-
-	Constructors[TypeCloudWatch] = TypeSpec{
-		constructor: NewCloudWatch,
-		Status:      docs.StatusDeprecated,
-		Summary: `
-Send metrics to AWS CloudWatch using the PutMetricData endpoint.`,
-		Description: `
-## Alternatives
-
-This metrics type has been renamed to ` + "[`aws_cloudwatch`](/docs/components/metrics/aws_cloudwatch)" + `.
-
-It is STRONGLY recommended that you reduce the metrics that are exposed with a
-` + "`path_mapping`" + ` like this:
-
-` + "```yaml" + `
-metrics:
-  aws_cloudwatch:
-    namespace: Foo
-    path_mapping: |
-      if ![
-        "input.received",
-        "input.latency",
-        "output.sent",
-      ].contains(this) { deleted() }
-` + "```" + ``,
-		FieldSpecs: append(docs.FieldSpecs{
-			docs.FieldCommon("namespace", "The namespace used to distinguish metrics from other services."),
-			docs.FieldAdvanced("flush_period", "The period of time between PutMetricData requests."),
-			pathMappingDocs(true, false),
-		}, session.FieldSpecs()...),
-	}
 }
 
 //------------------------------------------------------------------------------
@@ -290,11 +259,6 @@ type CloudWatch struct {
 // NewAWSCloudWatch creates and returns a new CloudWatch object.
 func NewAWSCloudWatch(config Config, opts ...func(Type)) (Type, error) {
 	return newCloudWatch(config.AWSCloudWatch, opts...)
-}
-
-// NewCloudWatch creates and returns a new CloudWatch object.
-func NewCloudWatch(config Config, opts ...func(Type)) (Type, error) {
-	return newCloudWatch(config.CloudWatch, opts...)
 }
 
 func newCloudWatch(config CloudWatchConfig, opts ...func(Type)) (Type, error) {

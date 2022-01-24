@@ -1,22 +1,16 @@
 package cache
 
 import (
-	"bytes"
 	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/config"
 
 	"gopkg.in/yaml.v3"
 )
-
-//------------------------------------------------------------------------------
 
 type cacheConstructor func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (types.Cache, error)
 
@@ -58,16 +52,6 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 			Version:     v.Version,
 		}
 		spec.Description = cache.Description(v.SupportsPerKeyTTL, spec.Description)
-		fn(ConstructorFunc(v.constructor), spec)
-	}
-	for k, v := range pluginSpecs {
-		spec := docs.ComponentSpec{
-			Type:   docs.TypeCache,
-			Name:   k,
-			Status: docs.StatusExperimental,
-			Plugin: true,
-			Config: docs.FieldComponent().Unlinted(),
-		}
 		fn(ConstructorFunc(v.constructor), spec)
 	}
 }
@@ -138,36 +122,6 @@ func NewConfig() Config {
 
 //------------------------------------------------------------------------------
 
-// SanitiseConfig creates a sanitised version of a config.
-func SanitiseConfig(conf Config) (interface{}, error) {
-	return conf.Sanitised(false)
-}
-
-// Sanitised returns a sanitised version of the config, meaning sections that
-// aren't relevant to behaviour are removed. Also optionally removes deprecated
-// fields.
-func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
-	outputMap, err := config.SanitizeComponent(conf)
-	if err != nil {
-		return nil, err
-	}
-	if spec, exists := pluginSpecs[conf.Type]; exists {
-		if spec.confSanitiser != nil {
-			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
-		}
-	}
-	if err := docs.SanitiseComponentConfig(
-		docs.TypeCache,
-		map[string]interface{}(outputMap),
-		docs.ShouldDropDeprecated(removeDeprecated),
-	); err != nil {
-		return nil, err
-	}
-	return outputMap, nil
-}
-
-//------------------------------------------------------------------------------
-
 // UnmarshalYAML ensures that when parsing configs that are in a map or slice
 // the default values are still applied.
 func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
@@ -189,102 +143,13 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		if err != nil {
 			return fmt.Errorf("line %v: %v", value.Line, err)
 		}
-		if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
-			conf := spec.confConstructor()
-			if err = pluginNode.Decode(conf); err != nil {
-				return fmt.Errorf("line %v: %v", value.Line, err)
-			}
-			aliased.Plugin = conf
-		} else {
-			aliased.Plugin = &pluginNode
-		}
+		aliased.Plugin = &pluginNode
 	} else {
 		aliased.Plugin = nil
 	}
 
 	*conf = Config(aliased)
 	return nil
-}
-
-//------------------------------------------------------------------------------
-
-var header = "This document was generated with `benthos --list-caches`" + `
-
-A cache is a key/value store which can be used by certain processors for
-applications such as deduplication. Caches are listed with unique labels which
-are referred to by processors that may share them.
-
-Caches are configured as resources:
-
-` + "```yaml" + `
-resources:
-  caches:
-    foobar:
-      memcached:
-        addresses:
-          - localhost:11211
-        ttl: 60
-` + "```" + `
-
-And any components that use caches have a field used to refer to a cache
-resource:
-
-` + "```yaml" + `
-pipeline:
-  processors:
-    - dedupe:
-        cache: foobar
-        hash: xxhash
-` + "```" + ``
-
-// Descriptions returns a formatted string of descriptions for each type.
-func Descriptions() string {
-	// Order our cache types alphabetically
-	names := []string{}
-	for name := range Constructors {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	buf := bytes.Buffer{}
-	buf.WriteString("Caches\n")
-	buf.WriteString(strings.Repeat("=", 6))
-	buf.WriteString("\n\n")
-	buf.WriteString(header)
-	buf.WriteString("\n\n")
-
-	buf.WriteString("### Contents\n\n")
-	for i, name := range names {
-		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i+1, name, name))
-	}
-	buf.WriteString("\n")
-
-	// Append each description
-	for i, name := range names {
-		var confBytes []byte
-
-		conf := NewConfig()
-		conf.Type = name
-		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = config.MarshalYAML(confSanit)
-		}
-
-		buf.WriteString("## ")
-		buf.WriteString("`" + name + "`")
-		buf.WriteString("\n")
-		if confBytes != nil {
-			buf.WriteString("\n``` yaml\n")
-			buf.Write(confBytes)
-			buf.WriteString("```\n")
-		}
-		buf.WriteString(Constructors[name].Description)
-		buf.WriteString("\n")
-		if i != (len(names) - 1) {
-			buf.WriteString("\n")
-			buf.WriteString("---\n")
-		}
-	}
-	return buf.String()
 }
 
 // New creates a cache type based on an cache configuration.
@@ -306,14 +171,5 @@ func New(
 		}
 		return cache, nil
 	}
-	if c, ok := pluginSpecs[conf.Type]; ok {
-		rl, err := c.constructor(conf, mgr, log, stats)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create cache '%v': %v", conf.Type, err)
-		}
-		return rl, nil
-	}
 	return nil, types.ErrInvalidCacheType
 }
-
-//------------------------------------------------------------------------------

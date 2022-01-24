@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -152,9 +151,6 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 	for k := range conf.Manager.Caches {
 		t.caches[k] = nil
 	}
-	for k := range conf.Manager.Conditions {
-		t.conditions[k] = nil
-	}
 	for k := range conf.Manager.Processors {
 		t.processors[k] = nil
 	}
@@ -163,12 +159,6 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 	}
 	for k := range conf.Manager.RateLimits {
 		t.rateLimits[k] = nil
-	}
-	for k, conf := range conf.Manager.Plugins {
-		if _, exists := pluginSpecs[conf.Type]; !exists {
-			continue
-		}
-		t.plugins[k] = nil
 	}
 
 	for k, conf := range conf.Manager.RateLimits {
@@ -181,20 +171,6 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		if err := t.StoreCache(context.Background(), k, conf); err != nil {
 			return nil, err
 		}
-	}
-
-	// TODO: Prevent recursive conditions.
-	for k, newConf := range conf.Manager.Conditions {
-		cMgr := t.forChildComponent("resource.condition." + k)
-		newCond, err := condition.New(newConf, cMgr, cMgr.Logger(), cMgr.Metrics())
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to create condition resource '%v' of type '%v': %v",
-				k, newConf.Type, err,
-			)
-		}
-
-		t.conditions[k] = newCond
 	}
 
 	// TODO: Prevent recursive processors.
@@ -214,22 +190,6 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		if err := t.StoreOutput(context.Background(), k, conf); err != nil {
 			return nil, err
 		}
-	}
-
-	for k, conf := range conf.Manager.Plugins {
-		spec, exists := pluginSpecs[conf.Type]
-		if !exists {
-			return nil, fmt.Errorf("unrecognised plugin type '%v'", conf.Type)
-		}
-		pMgr := t.forChildComponent("resource.plugin." + k)
-		newP, err := spec.constructor(conf.Plugin, pMgr, pMgr.Logger(), pMgr.Metrics())
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to create plugin resource '%v' of type '%v': %v",
-				k, conf.Type, err,
-			)
-		}
-		t.plugins[k] = newP
 	}
 
 	return t, nil

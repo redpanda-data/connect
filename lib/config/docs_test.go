@@ -17,10 +17,10 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
-	uconfig "github.com/Jeffail/benthos/v3/lib/util/config"
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func walkSpecWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, conf interface{}) {
@@ -220,6 +220,21 @@ func walkTypeWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, v refl
 	}
 }
 
+func getGenericConf(t *testing.T, cType docs.Type, c interface{}) map[string]interface{} {
+	t.Helper()
+
+	var newNode yaml.Node
+	require.NoError(t, newNode.Encode(c))
+	require.NoError(t, docs.SanitiseYAML(cType, &newNode, docs.SanitiseConfig{
+		RemoveTypeField: true,
+	}))
+
+	var gen map[string]interface{}
+	require.NoError(t, newNode.Decode(&gen))
+
+	return gen
+}
+
 func TestDocumentationCoverage(t *testing.T) {
 	t.Run("root", func(t *testing.T) {
 		conf := config.New()
@@ -237,9 +252,8 @@ func TestDocumentationCoverage(t *testing.T) {
 				continue
 			}
 			conf.Type = v.Name
-			confSanit, err := conf.Sanitised(false)
-			require.NoError(t, err)
-			walkSpecWithConfig(t, "buffer."+v.Name, v.Config, confSanit.(uconfig.Sanitised)[v.Name])
+			gen := getGenericConf(t, docs.TypeBuffer, conf)
+			walkSpecWithConfig(t, "buffer."+v.Name, v.Config, gen[v.Name])
 
 			cConf, ok := getFieldByYAMLTag(tConf, v.Name)
 			if v.Status != docs.StatusDeprecated && assert.True(t, ok, v.Name) {
@@ -256,9 +270,8 @@ func TestDocumentationCoverage(t *testing.T) {
 				continue
 			}
 			conf.Type = v.Name
-			confSanit, err := conf.Sanitised(false)
-			require.NoError(t, err)
-			walkSpecWithConfig(t, "cache."+v.Name, v.Config, confSanit.(uconfig.Sanitised)[v.Name])
+			gen := getGenericConf(t, docs.TypeCache, conf)
+			walkSpecWithConfig(t, "cache."+v.Name, v.Config, gen[v.Name])
 
 			cConf, ok := getFieldByYAMLTag(tConf, v.Name)
 			if v.Status != docs.StatusDeprecated && assert.True(t, ok, v.Name) {
@@ -275,9 +288,8 @@ func TestDocumentationCoverage(t *testing.T) {
 				continue
 			}
 			conf.Type = v.Name
-			confSanit, err := conf.Sanitised(false)
-			require.NoError(t, err)
-			walkSpecWithConfig(t, "input."+v.Name, v.Config, confSanit.(uconfig.Sanitised)[v.Name])
+			gen := getGenericConf(t, docs.TypeInput, conf)
+			walkSpecWithConfig(t, "input."+v.Name, v.Config, gen[v.Name])
 
 			cConf, ok := getFieldByYAMLTag(tConf, v.Name)
 			if v.Status != docs.StatusDeprecated && assert.True(t, ok, v.Name) {
@@ -294,9 +306,8 @@ func TestDocumentationCoverage(t *testing.T) {
 				continue
 			}
 			conf.Type = v.Name
-			confSanit, err := conf.Sanitised(false)
-			require.NoError(t, err)
-			walkSpecWithConfig(t, "metrics."+v.Name, v.Config, confSanit.(uconfig.Sanitised)[v.Name])
+			gen := getGenericConf(t, docs.TypeMetrics, conf)
+			walkSpecWithConfig(t, "metrics."+v.Name, v.Config, gen[v.Name])
 
 			cConf, ok := getFieldByYAMLTag(tConf, v.Name)
 			if v.Status != docs.StatusDeprecated && assert.True(t, ok, v.Name) {
@@ -313,9 +324,8 @@ func TestDocumentationCoverage(t *testing.T) {
 				continue
 			}
 			conf.Type = v.Name
-			confSanit, err := conf.Sanitised(false)
-			require.NoError(t, err)
-			walkSpecWithConfig(t, "output."+v.Name, v.Config, confSanit.(uconfig.Sanitised)[v.Name])
+			gen := getGenericConf(t, docs.TypeOutput, conf)
+			walkSpecWithConfig(t, "outputs."+v.Name, v.Config, gen[v.Name])
 
 			cConf, ok := getFieldByYAMLTag(tConf, v.Name)
 			if v.Status != docs.StatusDeprecated && assert.True(t, ok, v.Name) {
@@ -332,9 +342,8 @@ func TestDocumentationCoverage(t *testing.T) {
 				continue
 			}
 			conf.Type = v.Name
-			confSanit, err := conf.Sanitised(false)
-			require.NoError(t, err)
-			walkSpecWithConfig(t, "processor."+v.Name, v.Config, confSanit.(uconfig.Sanitised)[v.Name])
+			gen := getGenericConf(t, docs.TypeProcessor, conf)
+			walkSpecWithConfig(t, "processor."+v.Name, v.Config, gen[v.Name])
 
 			cConf, ok := getFieldByYAMLTag(tConf, v.Name)
 			if v.Status != docs.StatusDeprecated && assert.True(t, ok, v.Name) {
@@ -351,9 +360,8 @@ func TestDocumentationCoverage(t *testing.T) {
 				continue
 			}
 			conf.Type = v.Name
-			confSanit, err := conf.Sanitised(false)
-			require.NoError(t, err)
-			walkSpecWithConfig(t, "rate_limit."+v.Name, v.Config, confSanit.(uconfig.Sanitised)[v.Name])
+			gen := getGenericConf(t, docs.TypeRateLimit, conf)
+			walkSpecWithConfig(t, "rate_limit."+v.Name, v.Config, gen[v.Name])
 
 			cConf, ok := getFieldByYAMLTag(tConf, v.Name)
 			if v.Status != docs.StatusDeprecated && assert.True(t, ok, v.Name) {
@@ -367,9 +375,8 @@ func TestDocumentationCoverage(t *testing.T) {
 		tConf := reflect.TypeOf(conf)
 		for _, v := range bundle.AllTracers.Docs() {
 			conf.Type = v.Name
-			confSanit, err := conf.Sanitised(false)
-			require.NoError(t, err)
-			walkSpecWithConfig(t, "tracer."+v.Name, v.Config, confSanit.(uconfig.Sanitised)[v.Name])
+			gen := getGenericConf(t, docs.TypeTracer, conf)
+			walkSpecWithConfig(t, "tracer."+v.Name, v.Config, gen[v.Name])
 
 			cConf, ok := getFieldByYAMLTag(tConf, v.Name)
 			if v.Status != docs.StatusDeprecated && assert.True(t, ok, v.Name) {

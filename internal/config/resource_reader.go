@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/manager"
@@ -27,7 +26,6 @@ type resourceFileInfo struct {
 	// Need to track the resource that came from the previous read as their
 	// absence in an update means they need to be removed.
 	inputs     map[string]*input.Config
-	conditions map[string]*condition.Config
 	processors map[string]*processor.Config
 	outputs    map[string]*output.Config
 	caches     map[string]*cache.Config
@@ -37,7 +35,6 @@ type resourceFileInfo struct {
 func resInfoFromConfig(conf *manager.ResourceConfig) resourceFileInfo {
 	resInfo := resourceFileInfo{
 		inputs:     map[string]*input.Config{},
-		conditions: map[string]*condition.Config{},
 		processors: map[string]*processor.Config{},
 		outputs:    map[string]*output.Config{},
 		caches:     map[string]*cache.Config{},
@@ -50,9 +47,6 @@ func resInfoFromConfig(conf *manager.ResourceConfig) resourceFileInfo {
 	// Old style
 	for k, v := range conf.Manager.Inputs {
 		resInfo.inputs[k] = &v
-	}
-	for k, v := range conf.Manager.Conditions {
-		resInfo.conditions[k] = &v
 	}
 	for k, v := range conf.Manager.Processors {
 		resInfo.processors[k] = &v
@@ -117,7 +111,7 @@ func readResource(path string, conf *manager.ResourceConfig) (lints []string, er
 	}()
 
 	var confBytes []byte
-	if confBytes, lints, err = config.ReadWithJSONPointersLinted(path, true); err != nil {
+	if confBytes, lints, err = config.ReadBytes(path, true); err != nil {
 		return
 	}
 

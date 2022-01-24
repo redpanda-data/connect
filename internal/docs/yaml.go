@@ -185,44 +185,11 @@ func (f FieldSpec) shouldOmitYAML(parentFields FieldSpecs, fieldNode, parentNode
 	return f.omitWhenFn(field, parent)
 }
 
-// TODO: V4 Remove this.
-func sanitiseConditionConfigYAML(node *yaml.Node) error {
-	// This is a nasty hack until Benthos v4.
-	newNodes := []*yaml.Node{}
-
-	var name string
-	for i := 0; i < len(node.Content)-1; i += 2 {
-		if node.Content[i].Value == "type" {
-			name = node.Content[i+1].Value
-			newNodes = append(newNodes, node.Content[i], node.Content[i+1])
-			break
-		}
-	}
-
-	if name == "" {
-		return nil
-	}
-
-	for i := 0; i < len(node.Content)-1; i += 2 {
-		if node.Content[i].Value == name {
-			newNodes = append(newNodes, node.Content[i], node.Content[i+1])
-			break
-		}
-	}
-
-	node.Content = newNodes
-	return nil
-}
-
 // SanitiseYAML takes a yaml.Node and a config spec and sorts the fields of the
 // node according to the spec. Also optionally removes the `type` field from
 // this and all nested components.
 func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	node = unwrapDocumentNode(node)
-
-	if cType == "condition" {
-		return sanitiseConditionConfigYAML(node)
-	}
 
 	newNodes := []*yaml.Node{}
 

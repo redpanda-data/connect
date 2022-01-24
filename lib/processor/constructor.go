@@ -1,20 +1,15 @@
 package processor
 
 import (
-	"bytes"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/config"
 	yaml "gopkg.in/yaml.v3"
 )
-
-//------------------------------------------------------------------------------
 
 // Category describes the general purpose of a processor.
 type Category string
@@ -89,16 +84,6 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 		}
 		fn(ConstructorFunc(v.constructor), spec)
 	}
-	for k, v := range pluginSpecs {
-		spec := docs.ComponentSpec{
-			Type:   docs.TypeProcessor,
-			Name:   k,
-			Status: docs.StatusExperimental,
-			Plugin: true,
-			Config: docs.FieldComponent().Unlinted(),
-		}
-		fn(ConstructorFunc(v.constructor), spec)
-	}
 }
 
 // Constructors is a map of all processor types with their specs.
@@ -138,59 +123,39 @@ const (
 	TypeAvro         = "avro"
 	TypeAWK          = "awk"
 	TypeAWSLambda    = "aws_lambda"
-	TypeBatch        = "batch"
 	TypeBloblang     = "bloblang"
 	TypeBoundsCheck  = "bounds_check"
 	TypeBranch       = "branch"
 	TypeCache        = "cache"
 	TypeCatch        = "catch"
 	TypeCompress     = "compress"
-	TypeConditional  = "conditional"
-	TypeDecode       = "decode"
 	TypeDecompress   = "decompress"
 	TypeDedupe       = "dedupe"
-	TypeEncode       = "encode"
-	TypeFilter       = "filter"
-	TypeFilterParts  = "filter_parts"
 	TypeForEach      = "for_each"
 	TypeGrok         = "grok"
 	TypeGroupBy      = "group_by"
 	TypeGroupByValue = "group_by_value"
-	TypeHash         = "hash"
-	TypeHashSample   = "hash_sample"
 	TypeHTTP         = "http"
 	TypeInsertPart   = "insert_part"
 	TypeJMESPath     = "jmespath"
 	TypeJQ           = "jq"
-	TypeJSON         = "json"
 	TypeJSONSchema   = "json_schema"
-	TypeLambda       = "lambda"
 	TypeLog          = "log"
-	TypeMergeJSON    = "merge_json"
-	TypeMetadata     = "metadata"
 	TypeMetric       = "metric"
 	TypeMongoDB      = "mongodb"
 	TypeNoop         = "noop"
-	TypeNumber       = "number"
 	TypeParallel     = "parallel"
 	TypeParseLog     = "parse_log"
-	TypeProcessBatch = "process_batch"
-	TypeProcessDAG   = "process_dag"
-	TypeProcessField = "process_field"
-	TypeProcessMap   = "process_map"
 	TypeProtobuf     = "protobuf"
 	TypeRateLimit    = "rate_limit"
 	TypeRedis        = "redis"
 	TypeResource     = "resource"
-	TypeSample       = "sample"
 	TypeSelectParts  = "select_parts"
 	TypeSleep        = "sleep"
 	TypeSplit        = "split"
-	TypeSQL          = "sql"
 	TypeSubprocess   = "subprocess"
 	TypeSwitch       = "switch"
 	TypeSyncResponse = "sync_response"
-	TypeText         = "text"
 	TypeTry          = "try"
 	TypeThrottle     = "throttle"
 	TypeUnarchive    = "unarchive"
@@ -228,7 +193,6 @@ type Config struct {
 	JMESPath     JMESPathConfig     `json:"jmespath" yaml:"jmespath"`
 	JQ           JQConfig           `json:"jq" yaml:"jq"`
 	JSONSchema   JSONSchemaConfig   `json:"json_schema" yaml:"json_schema"`
-	Lambda       LambdaConfig       `json:"lambda" yaml:"lambda"`
 	Log          LogConfig          `json:"log" yaml:"log"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	MongoDB      MongoDBConfig      `json:"mongodb" yaml:"mongodb"`
@@ -283,7 +247,6 @@ func NewConfig() Config {
 		JMESPath:     NewJMESPathConfig(),
 		JQ:           NewJQConfig(),
 		JSONSchema:   NewJSONSchemaConfig(),
-		Lambda:       NewLambdaConfig(),
 		Log:          NewLogConfig(),
 		Metric:       NewMetricConfig(),
 		MongoDB:      NewMongoDBConfig(),
@@ -309,35 +272,6 @@ func NewConfig() Config {
 		Workflow:     NewWorkflowConfig(),
 		XML:          NewXMLConfig(),
 	}
-}
-
-// SanitiseConfig returns a sanitised version of the Config, meaning sections
-// that aren't relevant to behaviour are removed.
-func SanitiseConfig(conf Config) (interface{}, error) {
-	return conf.Sanitised(false)
-}
-
-// Sanitised returns a sanitised version of the config, meaning sections that
-// aren't relevant to behaviour are removed. Also optionally removes deprecated
-// fields.
-func (conf Config) Sanitised(removeDeprecated bool) (interface{}, error) {
-	outputMap, err := config.SanitizeComponent(conf)
-	if err != nil {
-		return nil, err
-	}
-	if spec, exists := pluginSpecs[conf.Type]; exists {
-		if spec.confSanitiser != nil {
-			outputMap["plugin"] = spec.confSanitiser(conf.Plugin)
-		}
-	}
-	if err := docs.SanitiseComponentConfig(
-		docs.TypeProcessor,
-		map[string]interface{}(outputMap),
-		docs.ShouldDropDeprecated(removeDeprecated),
-	); err != nil {
-		return nil, err
-	}
-	return outputMap, nil
 }
 
 //------------------------------------------------------------------------------
@@ -366,15 +300,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		if err != nil {
 			return fmt.Errorf("line %v: %v", value.Line, err)
 		}
-		if spec, exists := pluginSpecs[aliased.Type]; exists && spec.confConstructor != nil {
-			conf := spec.confConstructor()
-			if err = pluginNode.Decode(conf); err != nil {
-				return fmt.Errorf("line %v: %v", value.Line, err)
-			}
-			aliased.Plugin = conf
-		} else {
-			aliased.Plugin = &pluginNode
-		}
+		aliased.Plugin = &pluginNode
 	} else {
 		aliased.Plugin = nil
 	}
@@ -384,125 +310,6 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 }
 
 //------------------------------------------------------------------------------
-
-var header = "This document was generated with `benthos --list-processors`." + `
-
-Benthos processors are functions applied to messages passing through a pipeline.
-The function signature allows a processor to mutate or drop messages depending
-on the content of the message.
-
-Processors are set via config, and depending on where in the config they are
-placed they will be run either immediately after a specific input (set in the
-input section), on all messages (set in the pipeline section) or before a
-specific output (set in the output section). Most processors apply to all
-messages and can be placed in the pipeline section:
-
-` + "``` yaml" + `
-pipeline:
-  threads: 1
-  processors:
-   - jmespath:
-       query: '{ message: @, meta: { link_count: length(links) } }'
-` + "```" + `
-
-The ` + "`threads`" + ` field in the pipeline section determines how many
-parallel processing threads are created. You can read more about parallel
-processing in the [pipeline guide][1].
-
-By organising processors you can configure complex behaviours in your pipeline.
-You can [find some examples here][0].
-
-### Error Handling
-
-Some processors have conditions whereby they might fail. Benthos has mechanisms
-for detecting and recovering from these failures which can be read about
-[here](/docs/configuration/error_handling).
-
-### Batching and Multiple Part Messages
-
-All Benthos processors support multiple part messages, which are synonymous with
-batches. Some processors such as [split](/docs/components/processors/split) are able to create, expand and
-break down batches.
-
-Many processors are able to perform their behaviours on specific parts of a
-message batch, or on all parts, and have a field ` + "`parts`" + ` for
-specifying an array of part indexes they should apply to. If the list of target
-parts is empty these processors will be applied to all message parts.
-
-Part indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1. E.g. if part = -1 then the selected part
-will be the last part of the message, if part = -2 then the part before the last
-element will be selected, and so on.
-
-Some processors such as ` + "[`filter`](/docs/components/processors/filter) and [`dedupe`](/docs/components/processors/dedupe)" + `
-act across an entire batch, when instead we'd like to perform them on individual
-messages of a batch. In this case the ` + "[`for_each`](/docs/components/processors/for_each)" + `
-processor can be used.`
-
-var footer = `
-[0]: /cookbooks
-[1]: /docs/configuration/processing_pipelines`
-
-// Descriptions returns a formatted string of collated descriptions of each
-// type.
-func Descriptions() string {
-	// Order our buffer types alphabetically
-	names := []string{}
-	for name := range Constructors {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	buf := bytes.Buffer{}
-	buf.WriteString("Processors\n")
-	buf.WriteString(strings.Repeat("=", 10))
-	buf.WriteString("\n\n")
-	buf.WriteString(header)
-	buf.WriteString("\n\n")
-
-	buf.WriteString("### Contents\n\n")
-	i := 0
-	for _, name := range names {
-		if Constructors[name].Status == docs.StatusDeprecated {
-			continue
-		}
-		i++
-		buf.WriteString(fmt.Sprintf("%v. [`%v`](#%v)\n", i, name, name))
-	}
-	buf.WriteString("\n")
-
-	// Append each description
-	for i, name := range names {
-		def := Constructors[name]
-		if def.Status == docs.StatusDeprecated {
-			continue
-		}
-
-		var confBytes []byte
-
-		conf := NewConfig()
-		conf.Type = name
-		if confSanit, err := SanitiseConfig(conf); err == nil {
-			confBytes, _ = config.MarshalYAML(confSanit)
-		}
-
-		buf.WriteString("## ")
-		buf.WriteString("`" + name + "`")
-		buf.WriteString("\n")
-		if confBytes != nil {
-			buf.WriteString("\n``` yaml\n")
-			buf.Write(confBytes)
-			buf.WriteString("```\n")
-		}
-		buf.WriteString(def.Description)
-		buf.WriteString("\n")
-		if i != (len(names) - 1) {
-			buf.WriteString("\n---\n")
-		}
-	}
-	buf.WriteString(footer)
-	return buf.String()
-}
 
 // New creates a processor type based on a processor configuration.
 func New(
@@ -519,10 +326,5 @@ func New(
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats)
 	}
-	if c, ok := pluginSpecs[conf.Type]; ok {
-		return c.constructor(conf, mgr, log, stats)
-	}
 	return nil, types.ErrInvalidProcessorType
 }
-
-//------------------------------------------------------------------------------

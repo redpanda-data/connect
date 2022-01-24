@@ -11,12 +11,6 @@ import (
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
-func TestConstructorDescription(t *testing.T) {
-	if cache.Descriptions() == "" {
-		t.Error("package descriptions were empty")
-	}
-}
-
 func TestConstructorBadType(t *testing.T) {
 	conf := cache.NewConfig()
 	conf.Type = "not_exist"
@@ -31,7 +25,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
-			"dynamodb": {
+			"aws_dynamodb": {
 				"value": "foo"
 			},
 			"file": {

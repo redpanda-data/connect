@@ -138,13 +138,6 @@ func NewAWSLambda(
 	return newLambda(conf.AWSLambda, mgr, log, stats)
 }
 
-// NewLambda returns a Lambda processor.
-func NewLambda(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
-	return newLambda(conf.Lambda, mgr, log, stats)
-}
-
 func newLambda(
 	conf LambdaConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {

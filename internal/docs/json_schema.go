@@ -50,8 +50,6 @@ func (f FieldSpec) JSONSchema() interface{} {
 			spec["$ref"] = "#/$defs/buffer"
 		case FieldTypeCache:
 			spec["$ref"] = "#/$defs/cache"
-		case FieldTypeCondition:
-			return true
 		case FieldTypeProcessor:
 			spec["$ref"] = "#/$defs/processor"
 		case FieldTypeRateLimit:

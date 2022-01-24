@@ -1,60 +1,13 @@
 package metrics_test
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/config"
 	yaml "gopkg.in/yaml.v3"
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
-
-func TestSanitise(t *testing.T) {
-	exp := config.Sanitised{
-		"type": "http_server",
-		"http_server": map[string]interface{}{
-			"prefix":       "benthos",
-			"path_mapping": "",
-		},
-	}
-
-	conf := metrics.NewConfig()
-	conf.Type = "http_server"
-
-	act, err := metrics.SanitiseConfig(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
-	}
-
-	exp = config.Sanitised{
-		"type": "statsd",
-		"statsd": map[string]interface{}{
-			"address":      "foo",
-			"prefix":       "benthos",
-			"path_mapping": "",
-			"flush_period": "100ms",
-			"network":      "udp",
-			"tag_format":   "legacy",
-		},
-	}
-
-	conf = metrics.NewConfig()
-	conf.Type = "statsd"
-	conf.Statsd.Address = "foo"
-
-	act, err = metrics.SanitiseConfig(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong sanitised output: %v != %v", act, exp)
-	}
-}
 
 func TestConstructorConfigYAMLInference(t *testing.T) {
 	conf := []metrics.Config{}

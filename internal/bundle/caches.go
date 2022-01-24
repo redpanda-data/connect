@@ -64,10 +64,6 @@ func (s *CacheSet) Add(constructor CacheConstructor, spec docs.ComponentSpec) er
 func (s *CacheSet) Init(conf cache.Config, mgr NewManagement) (types.Cache, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		// TODO: V4 Remove this
-		if ctor, exists := cache.GetDeprecatedPlugin(conf.Type); exists {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
-		}
 		return nil, types.ErrInvalidCacheType
 	}
 	return spec.constructor(conf, mgr)
