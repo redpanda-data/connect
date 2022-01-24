@@ -56,7 +56,7 @@ root.id = count("bloblang_function_example")
 
 ### `deleted`
 
-A function that returns a result indicating that the mapping target should be deleted.
+A function that returns a result indicating that the mapping target should be deleted. Deleting, also known as dropping, messages will result in them being acknowledged as successfully processed to inputs in a Benthos pipeline. For more information about error handling patterns read [here][error_handling].
 
 #### Examples
 
