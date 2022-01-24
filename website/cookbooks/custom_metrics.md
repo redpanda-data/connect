@@ -46,12 +46,11 @@ input:
     verb: GET
     rate_limit: brewlimit
 
-resources:
-  rate_limits:
-    brewlimit:
-      local:
-        count: 1
-        interval: 60s
+rate_limit_resources:
+  - label: brewlimit
+    local:
+      count: 1
+      interval: 60s
 ```
 
 </TabItem>

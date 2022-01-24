@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- The old map-style resource config fields (`resources.processors.<name>`, etc) are now marked as deprecated. Use the newer list based fields (`processor_resources`, etc) instead.
+
 ## 3.62.0 - 2022-01-21
 
 ### Added
