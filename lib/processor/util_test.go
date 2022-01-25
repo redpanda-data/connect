@@ -123,51 +123,6 @@ func TestExecuteAllMulti(t *testing.T) {
 	}
 }
 
-type dropped struct {
-	called int
-}
-
-func (p *dropped) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	p.called++
-	return nil, response.NewUnack()
-}
-
-// CloseAsync shuts down the processor and stops processing requests.
-func (p *dropped) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (p *dropped) WaitForClose(timeout time.Duration) error {
-	return nil
-}
-
-func TestExecuteAllBuffered(t *testing.T) {
-	procs := []types.Processor{
-		&passthrough{},
-		&dropped{},
-		&passthrough{},
-	}
-
-	msg1 := message.New([][]byte{[]byte("test message 1")})
-	msg2 := message.New([][]byte{[]byte("test message 2")})
-	msgs, res := ExecuteAll(procs, msg1, msg2)
-	if len(msgs) > 0 {
-		t.Fatal("received messages after drop")
-	}
-	if res == nil || !res.SkipAck() {
-		t.Fatal("received non unack response")
-	}
-	if exp, act := 2, procs[0].(*passthrough).called; exp != act {
-		t.Errorf("Wrong call count from processor: %v != %v", act, exp)
-	}
-	if exp, act := 2, procs[1].(*dropped).called; exp != act {
-		t.Errorf("Wrong call count from processor: %v != %v", act, exp)
-	}
-	if exp, act := 0, procs[2].(*passthrough).called; exp != act {
-		t.Errorf("Wrong call count from processor: %v != %v", act, exp)
-	}
-}
-
 type errored struct {
 	called int
 }

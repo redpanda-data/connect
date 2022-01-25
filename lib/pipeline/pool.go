@@ -31,9 +31,8 @@ type Pool struct {
 	closed    chan struct{}
 }
 
-// NewPool returns a new pipeline pool that utilises multiple processor threads.
 // TODO: V4 Remove this
-func NewPool(
+func newTestPool(
 	constructor types.PipelineConstructorFunc,
 	threads int,
 	log log.Modular,

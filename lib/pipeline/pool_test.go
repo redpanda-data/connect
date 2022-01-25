@@ -29,7 +29,7 @@ func TestPoolBasic(t *testing.T) {
 		), nil
 	}
 
-	proc, err := NewPool(
+	proc, err := newTestPool(
 		constr, 1,
 		log.Noop(),
 		metrics.Noop(),
@@ -143,7 +143,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 		), nil
 	}
 
-	proc, err := NewPool(
+	proc, err := newTestPool(
 		constr, 1,
 		log.Noop(),
 		metrics.Noop(),

@@ -191,13 +191,9 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 //------------------------------------------------------------------------------
 
 type mockProc struct {
-	value string
 }
 
 func (m mockProc) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	if string(msg.Get(0).Get()) == m.value {
-		return nil, response.NewUnack()
-	}
 	msgs := [1]types.Message{msg}
 	return msgs[:], nil
 }
@@ -221,8 +217,8 @@ func TestBasicWrapProcessors(t *testing.T) {
 	l := log.Noop()
 	s := metrics.Noop()
 
-	pipe1 := pipeline.NewProcessor(l, s, mockProc{value: "foo"})
-	pipe2 := pipeline.NewProcessor(l, s, mockProc{value: "bar"})
+	pipe1 := pipeline.NewProcessor(l, s, mockProc{})
+	pipe2 := pipeline.NewProcessor(l, s, mockProc{})
 
 	newInput, err := WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
 		return pipe1, nil
@@ -235,49 +231,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 
 	resChan := make(chan types.Response)
 
-	msg := message.New([][]byte{[]byte("foo")})
-
-	select {
-	case mockIn.ts <- types.NewTransaction(msg, resChan):
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	// Message should be discarded
-	select {
-	case res, open := <-resChan:
-		if !open {
-			t.Error("Channel was closed")
-		}
-		if !res.SkipAck() {
-			t.Error("expected skip ack")
-		}
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	msg = message.New([][]byte{[]byte("bar")})
-
-	select {
-	case mockIn.ts <- types.NewTransaction(msg, resChan):
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	// Message should also be discarded
-	select {
-	case res, open := <-resChan:
-		if !open {
-			t.Error("Channel was closed")
-		}
-		if !res.SkipAck() {
-			t.Error("expected skip ack")
-		}
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	msg = message.New([][]byte{[]byte("baz")})
+	msg := message.New([][]byte{[]byte("baz")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):
@@ -340,7 +294,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 	l := log.Noop()
 	s := metrics.Noop()
 
-	pipe1 := pipeline.NewProcessor(l, s, mockProc{value: "foo"}, mockProc{value: "bar"})
+	pipe1 := pipeline.NewProcessor(l, s, mockProc{}, mockProc{})
 
 	newInput, err := WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
 		return pipe1, nil
@@ -351,49 +305,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 
 	resChan := make(chan types.Response)
 
-	msg := message.New([][]byte{[]byte("foo")})
-
-	select {
-	case mockIn.ts <- types.NewTransaction(msg, resChan):
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	// Message should be discarded
-	select {
-	case res, open := <-resChan:
-		if !open {
-			t.Error("Channel was closed")
-		}
-		if !res.SkipAck() {
-			t.Error("expected skip ack")
-		}
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	msg = message.New([][]byte{[]byte("bar")})
-
-	select {
-	case mockIn.ts <- types.NewTransaction(msg, resChan):
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	// Message should also be discarded
-	select {
-	case res, open := <-resChan:
-		if !open {
-			t.Error("Channel was closed")
-		}
-		if !res.SkipAck() {
-			t.Error("expected skip ack")
-		}
-	case <-time.After(time.Second):
-		t.Error("action timed out")
-	}
-
-	msg = message.New([][]byte{[]byte("baz")})
+	msg := message.New([][]byte{[]byte("baz")})
 
 	select {
 	case mockIn.ts <- types.NewTransaction(msg, resChan):

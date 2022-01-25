@@ -20,9 +20,7 @@ import (
 // either propagate a new message or drop it.
 type Processor struct {
 	running int32
-
-	log   log.Modular
-	stats metrics.Type
+	stats   metrics.Type
 
 	msgProcessors []types.Processor
 
@@ -81,8 +79,7 @@ func (p *Processor) loop() {
 		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
 			if resultRes == nil {
-				resultRes = response.NewUnack()
-				p.log.Warnln("Nil response returned with zero messages from processors")
+				resultRes = response.NewAck()
 			}
 			select {
 			case tran.ResponseChan <- resultRes:
@@ -109,7 +106,6 @@ func (p *Processor) loop() {
 func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- types.Response) {
 	throt := throttle.New(throttle.OptCloseChan(p.closeChan))
 
-	var skipAcks int64
 	sendMsg := func(m types.Message) {
 		resChan := make(chan types.Response)
 		transac := types.NewTransaction(m, resChan)
@@ -121,8 +117,8 @@ func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- type
 				return
 			}
 
-			var res types.Response
 			var open bool
+			var res types.Response
 			select {
 			case res, open = <-resChan:
 				if !open {
@@ -132,10 +128,7 @@ func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- type
 				return
 			}
 
-			if skipAck := res.SkipAck(); res.Error() == nil || skipAck {
-				if skipAck {
-					atomic.AddInt64(&skipAcks, 1)
-				}
+			if res.Error() == nil {
 				return
 			}
 			if !throt.Retry() {
@@ -155,17 +148,12 @@ func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- type
 	}
 
 	wg.Wait()
+
+	// TODO: V4 Exit before ack if closing
 	throt.Reset()
 
-	var res types.Response
-	if skipAcks == int64(len(msgs)) {
-		res = response.NewUnack()
-	} else {
-		res = response.NewAck()
-	}
-
 	select {
-	case ogResChan <- res:
+	case ogResChan <- response.NewAck():
 	case <-p.closeChan:
 		return
 	}

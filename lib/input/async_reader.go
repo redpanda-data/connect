@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/cenkalti/backoff/v4"
 )
@@ -200,11 +199,6 @@ func (r *AsyncReader) loop() {
 			}
 			if !open {
 				return
-			}
-			if res.SkipAck() && !r.allowSkipAcks {
-				r.log.Errorf("Detected downstream batch processor which is not permitted with this input, please refer to the documentation for more information. This input will now shut down.")
-				res = response.NewNoack()
-				r.CloseAsync()
 			}
 			mLatency.Timing(time.Since(m.CreatedAt()).Nanoseconds())
 			tracing.FinishSpans(m)

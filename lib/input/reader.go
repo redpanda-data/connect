@@ -182,13 +182,12 @@ func (r *Reader) loop() {
 		if !open {
 			return
 		}
-		if res.Error() != nil || !res.SkipAck() {
-			if err = r.reader.Acknowledge(res.Error()); err != nil {
-				r.log.Errorf("Failed to acknowledge message: %v\n", err)
-			}
-			tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
-			mLatency.Timing(tTaken)
+
+		if err = r.reader.Acknowledge(res.Error()); err != nil {
+			r.log.Errorf("Failed to acknowledge message: %v\n", err)
 		}
+		tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
+		mLatency.Timing(tTaken)
 		tracing.FinishSpans(msg)
 	}
 }
