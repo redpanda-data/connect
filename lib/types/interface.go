@@ -248,14 +248,6 @@ type Response interface {
 	// Error returns a non-nil error if the message failed to reach its
 	// destination.
 	Error() error
-
-	// SkipAck indicates that even though there may not have been an error in
-	// processing a message, it should not be acknowledged. If SkipAck is false
-	// and Error is nil then all unacknowledged messages should be acknowledged
-	// also.
-	//
-	// TODO: V4 Remove this.
-	SkipAck() bool
 }
 
 //------------------------------------------------------------------------------
