@@ -38,14 +38,3 @@ func TestAck(t *testing.T) {
 		t.Error("Should not have received skip ack on ack response")
 	}
 }
-
-func TestUnack(t *testing.T) {
-	res := NewUnack()
-
-	if res.Error() != nil {
-		t.Error(res.Error())
-	}
-	if !res.SkipAck() {
-		t.Error("Should have received skip ack on unack response")
-	}
-}

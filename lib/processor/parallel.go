@@ -3,7 +3,6 @@ package processor
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -11,7 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -121,14 +119,11 @@ func (p *Parallel) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	wg := sync.WaitGroup{}
 	wg.Add(max)
 
-	var unAcks int32
 	for i := 0; i < max; i++ {
 		go func() {
+			// TODO: V4 Handle processor errors when we migrate to service APIs
 			for index := range reqChan {
-				resMsgs, res := ExecuteAll(p.children, resultMsgs[index])
-				if res != nil && res.SkipAck() {
-					atomic.AddInt32(&unAcks, 1)
-				}
+				resMsgs, _ := ExecuteAll(p.children, resultMsgs[index])
 				resultParts := []types.Part{}
 				for _, m := range resMsgs {
 					m.Iter(func(i int, p types.Part) error {
@@ -153,9 +148,6 @@ func (p *Parallel) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			resMsg.Append(p)
 			return nil
 		})
-	}
-	if resMsg.Len() == 0 && unAcks == int32(msg.Len()) {
-		return nil, response.NewUnack()
 	}
 
 	p.mBatchSent.Incr(1)

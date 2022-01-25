@@ -32,7 +32,7 @@ func ExecuteAll(procs []types.Processor, msgs ...types.Message) ([]types.Message
 
 	if len(resultMsgs) == 0 {
 		if resultRes == nil {
-			resultRes = response.NewUnack()
+			resultRes = response.NewAck()
 		}
 		return nil, resultRes
 	}
@@ -70,7 +70,7 @@ func ExecuteTryAll(procs []types.Processor, msgs ...types.Message) ([]types.Mess
 
 	if len(resultMsgs) == 0 {
 		if resultRes == nil {
-			resultRes = response.NewUnack()
+			resultRes = response.NewAck()
 		}
 		return nil, resultRes
 	}
@@ -125,7 +125,7 @@ func ExecuteCatchAll(procs []types.Processor, msgs ...types.Message) ([]types.Me
 
 	if len(resultBatches) == 0 {
 		if resultRes == nil {
-			resultRes = response.NewUnack()
+			resultRes = response.NewAck()
 		}
 		return nil, resultRes
 	}

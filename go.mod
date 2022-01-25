@@ -26,7 +26,6 @@ require (
 	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20220210221528-5daa17b02bff // indirect
 	github.com/apache/thrift v0.15.0 // indirect
 	github.com/armon/go-metrics v0.3.4 // indirect
-	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-lambda-go v1.28.0
 	github.com/aws/aws-sdk-go v1.42.31
 	github.com/benhoyt/goawk v1.13.1-0.20220123120908-f9c293546b6d
@@ -44,7 +43,6 @@ require (
 	github.com/docker/docker v20.10.12+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.3.5
-	github.com/edsrzf/mmap-go v1.1.0
 	github.com/fatih/color v1.13.0
 	github.com/felixge/httpsnoop v1.0.2 // indirect
 	github.com/fsnotify/fsnotify v1.5.1
@@ -95,14 +93,12 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
-	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
 	github.com/rabbitmq/amqp091-go v1.2.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/rickb777/date v1.17.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/segmentio/ksuid v1.0.4
 	github.com/smira/go-statsd v1.3.2
-	github.com/spf13/cast v1.4.1
 	github.com/stretchr/testify v1.7.0
 	github.com/tilinna/z85 v1.0.0
 	github.com/twmb/franz-go v1.3.1
