@@ -147,7 +147,7 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 		opt(p)
 	}
 
-	// TODO: Maybe disable this with a config flag.
+	// TODO: V4 Maybe disable this with a config flag.
 	if err := p.reg.Register(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{})); err != nil {
 		return nil, err
 	}

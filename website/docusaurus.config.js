@@ -129,6 +129,7 @@ module.exports = {
     ],
   ],
   plugins: [
+    path.resolve(__dirname, './src/plugins/analytics'),
     path.resolve(__dirname, './src/plugins/cookbooks'),
     path.resolve(__dirname, './src/plugins/redirects'),
   ],
