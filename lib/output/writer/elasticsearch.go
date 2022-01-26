@@ -355,6 +355,7 @@ func (e *Elasticsearch) WaitForClose(timeout time.Duration) error {
 
 // Build a bulkable request for a given pending bulk index item.
 func (e *Elasticsearch) buildBulkableRequest(id string, p *pendingBulkIndex) (elastic.BulkableRequest, error) {
+	// TODO: V4 the type field should be optional and not used
 	switch p.Action {
 	case "update":
 		return elastic.NewBulkUpdateRequest().

@@ -16,9 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
-2.0 is supported when using TLS, which is enabled when key and cert files are
-specified.
+Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP 2.0 is supported when using TLS, which is enabled when key and cert files are specified.
 
 
 <Tabs defaultValue="common" values={[
@@ -58,24 +56,19 @@ output:
     timeout: 5s
     cert_file: ""
     key_file: ""
+    cors:
+      enabled: false
+      allowed_origins: []
 ```
 
 </TabItem>
 </Tabs>
 
-Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
-You can leave the `address` config field blank in order to use the
-default service wide server address, but this will ignore TLS options.
+Sets up an HTTP server that will send messages over HTTP(S) GET requests. If the `address` config field is left blank the [service-wide HTTP server](/docs/components/http/about) will be used.
 
-Three endpoints will be registered at the paths specified by the fields
-`path`, `stream_path` and `ws_path`. Which allow you to consume a
-single message batch, a continuous stream of line delimited messages, or a
-websocket of messages for each request respectively.
+Three endpoints will be registered at the paths specified by the fields `path`, `stream_path` and `ws_path`. Which allow you to consume a single message batch, a continuous stream of line delimited messages, or a websocket of messages for each request respectively.
 
-When messages are batched the `path` endpoint encodes the batch
-according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
-This behaviour can be overridden by
-[archiving your batches](/docs/configuration/batching#post-batch-processing).
+When messages are batched the `path` endpoint encodes the batch according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This behaviour can be overridden by [archiving your batches](/docs/configuration/batching#post-batch-processing).
 
 ## Fields
 
@@ -142,5 +135,28 @@ An optional certificate key file to use for TLS connections. Only applicable whe
 
 Type: `string`  
 Default: `""`  
+
+### `cors`
+
+Adds Cross-Origin Resource Sharing headers. Only valid with a custom `address`.
+
+
+Type: `object`  
+
+### `cors.enabled`
+
+Whether to allow CORS requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `cors.allowed_origins`
+
+An explicit list of origins that are allowed for CORS requests.
+
+
+Type: `array`  
+Default: `[]`  
 
 

@@ -8,5 +8,5 @@ import (
 // FieldSpec returns the field spec for an HTTP type.
 // TODO: V4 Remove this
 func FieldSpec(extraChildren ...docs.FieldSpec) docs.FieldSpec {
-	return ihttpdocs.FieldSpec(false, extraChildren...)
+	return ihttpdocs.ClientFieldSpec(false, extraChildren...)
 }

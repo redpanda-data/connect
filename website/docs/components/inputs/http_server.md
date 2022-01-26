@@ -16,8 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
-which is enabled when key and cert files are specified.
+Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS, which is enabled when key and cert files are specified.
 
 
 <Tabs defaultValue="common" values={[
@@ -60,6 +59,9 @@ input:
     rate_limit: ""
     cert_file: ""
     key_file: ""
+    cors:
+      enabled: false
+      allowed_origins: []
     sync_response:
       status: "200"
       headers:
@@ -72,24 +74,15 @@ input:
 </TabItem>
 </Tabs>
 
-You can leave the 'address' config field blank in order to use the instance wide
-HTTP server.
+If the `address` config field is left blank the [service-wide HTTP server](/docs/components/http/about) will be used.
 
-The field `rate_limit` allows you to specify an optional
-[`rate_limit` resource](/docs/components/rate_limits/about), which
-will be applied to each HTTP request made and each websocket payload received.
+The field `rate_limit` allows you to specify an optional [`rate_limit` resource](/docs/components/rate_limits/about), which will be applied to each HTTP request made and each websocket payload received.
 
-When the rate limit is breached HTTP requests will have a 429 response returned
-with a Retry-After header. Websocket payloads will be dropped and an optional
-response payload will be sent as per `ws_rate_limit_message`.
+When the rate limit is breached HTTP requests will have a 429 response returned with a Retry-After header. Websocket payloads will be dropped and an optional response payload will be sent as per `ws_rate_limit_message`.
 
 ### Responses
 
-It's possible to return a response for each message received using
-[synchronous responses](/docs/guides/sync_responses). When doing so you can
-customise headers with the `sync_response` field `headers`, which can
-also use [function interpolation](/docs/configuration/interpolation#bloblang-queries)
-in the value based on the response message contents.
+It's possible to return a response for each message received using [synchronous responses](/docs/guides/sync_responses). When doing so you can customise headers with the `sync_response` field `headers`, which can also use [function interpolation](/docs/configuration/interpolation#bloblang-queries) in the value based on the response message contents.
 
 ### Endpoints
 
@@ -97,25 +90,17 @@ The following fields specify endpoints that are registered for sending messages,
 
 #### `path` (defaults to `/post`)
 
-This endpoint expects POST requests where the entire request body is consumed as
-a single message.
+This endpoint expects POST requests where the entire request body is consumed as a single message.
 
-If the request contains a multipart `content-type` header as per
-[rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the
-multiple parts are consumed as a batch of messages, where each body part is a
-message of the batch.
+If the request contains a multipart `content-type` header as per [rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the multiple parts are consumed as a batch of messages, where each body part is a message of the batch.
 
 #### `ws_path` (defaults to `/post/ws`)
 
-Creates a websocket connection, where payloads received on the socket are passed
-through the pipeline as a batch of one message.
+Creates a websocket connection, where payloads received on the socket are passed through the pipeline as a batch of one message.
 
-You may specify an optional `ws_welcome_message`, which is a static
-payload to be sent to all clients once a websocket connection is first
-established.
+You may specify an optional `ws_welcome_message`, which is a static payload to be sent to all clients once a websocket connection is first established.
 
-It's also possible to specify a `ws_rate_limit_message`, which is a
-static payload to be sent to clients that have triggered the servers rate limit.
+It's also possible to specify a `ws_rate_limit_message`, which is a static payload to be sent to clients that have triggered the servers rate limit.
 
 ### Metadata
 
@@ -131,8 +116,7 @@ This input adds the following metadata fields to each message:
 - All cookies
 ```
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
 
 ## Fields
 
@@ -203,7 +187,7 @@ Default: `""`
 
 ### `cert_file`
 
-Only valid with a custom `address`.
+Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.
 
 
 Type: `string`  
@@ -211,11 +195,34 @@ Default: `""`
 
 ### `key_file`
 
-Only valid with a custom `address`.
+Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.
 
 
 Type: `string`  
 Default: `""`  
+
+### `cors`
+
+Adds Cross-Origin Resource Sharing headers. Only valid with a custom `address`.
+
+
+Type: `object`  
+
+### `cors.enabled`
+
+Whether to allow CORS requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `cors.allowed_origins`
+
+An explicit list of origins that are allowed for CORS requests.
+
+
+Type: `array`  
+Default: `[]`  
 
 ### `sync_response`
 

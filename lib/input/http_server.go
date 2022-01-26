@@ -17,6 +17,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	httpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	imetadata "github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -36,30 +37,23 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
+	corsSpec := httpdocs.ServerCORSFieldSpec()
+	corsSpec.Description += " Only valid with a custom `address`."
+
 	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: fromSimpleConstructor(NewHTTPServer),
 		Summary: `
-Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
-which is enabled when key and cert files are specified.`,
+Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS, which is enabled when key and cert files are specified.`,
 		Description: `
-You can leave the 'address' config field blank in order to use the instance wide
-HTTP server.
+If the ` + "`address`" + ` config field is left blank the [service-wide HTTP server](/docs/components/http/about) will be used.
 
-The field ` + "`rate_limit`" + ` allows you to specify an optional
-` + "[`rate_limit` resource](/docs/components/rate_limits/about)" + `, which
-will be applied to each HTTP request made and each websocket payload received.
+The field ` + "`rate_limit`" + ` allows you to specify an optional ` + "[`rate_limit` resource](/docs/components/rate_limits/about)" + `, which will be applied to each HTTP request made and each websocket payload received.
 
-When the rate limit is breached HTTP requests will have a 429 response returned
-with a Retry-After header. Websocket payloads will be dropped and an optional
-response payload will be sent as per ` + "`ws_rate_limit_message`" + `.
+When the rate limit is breached HTTP requests will have a 429 response returned with a Retry-After header. Websocket payloads will be dropped and an optional response payload will be sent as per ` + "`ws_rate_limit_message`" + `.
 
 ### Responses
 
-It's possible to return a response for each message received using
-[synchronous responses](/docs/guides/sync_responses). When doing so you can
-customise headers with the ` + "`sync_response` field `headers`" + `, which can
-also use [function interpolation](/docs/configuration/interpolation#bloblang-queries)
-in the value based on the response message contents.
+It's possible to return a response for each message received using [synchronous responses](/docs/guides/sync_responses). When doing so you can customise headers with the ` + "`sync_response` field `headers`" + `, which can also use [function interpolation](/docs/configuration/interpolation#bloblang-queries) in the value based on the response message contents.
 
 ### Endpoints
 
@@ -67,25 +61,17 @@ The following fields specify endpoints that are registered for sending messages,
 
 #### ` + "`path` (defaults to `/post`)" + `
 
-This endpoint expects POST requests where the entire request body is consumed as
-a single message.
+This endpoint expects POST requests where the entire request body is consumed as a single message.
 
-If the request contains a multipart ` + "`content-type`" + ` header as per
-[rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the
-multiple parts are consumed as a batch of messages, where each body part is a
-message of the batch.
+If the request contains a multipart ` + "`content-type`" + ` header as per [rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the multiple parts are consumed as a batch of messages, where each body part is a message of the batch.
 
 #### ` + "`ws_path` (defaults to `/post/ws`)" + `
 
-Creates a websocket connection, where payloads received on the socket are passed
-through the pipeline as a batch of one message.
+Creates a websocket connection, where payloads received on the socket are passed through the pipeline as a batch of one message.
 
-You may specify an optional ` + "`ws_welcome_message`" + `, which is a static
-payload to be sent to all clients once a websocket connection is first
-established.
+You may specify an optional ` + "`ws_welcome_message`" + `, which is a static payload to be sent to all clients once a websocket connection is first established.
 
-It's also possible to specify a ` + "`ws_rate_limit_message`" + `, which is a
-static payload to be sent to clients that have triggered the servers rate limit.
+It's also possible to specify a ` + "`ws_rate_limit_message`" + `, which is a static payload to be sent to clients that have triggered the servers rate limit.
 
 ### Metadata
 
@@ -101,8 +87,7 @@ This input adds the following metadata fields to each message:
 - All cookies
 ` + "```" + `
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("address", "An alternative address to host from. If left empty the service wide address is used."),
 			docs.FieldCommon("path", "The endpoint path to listen for POST requests."),
@@ -112,8 +97,9 @@ You can access these metadata fields using
 			docs.FieldCommon("allowed_verbs", "An array of verbs that are allowed for the `path` endpoint.").AtVersion("3.33.0").Array(),
 			docs.FieldCommon("timeout", "Timeout for requests. If a consumed messages takes longer than this to be delivered the connection is closed, but the message may still be delivered."),
 			docs.FieldCommon("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
-			docs.FieldAdvanced("cert_file", "Only valid with a custom `address`."),
-			docs.FieldAdvanced("key_file", "Only valid with a custom `address`."),
+			docs.FieldAdvanced("cert_file", "Enable TLS by specifying a certificate and key file. Only valid with a custom `address`."),
+			docs.FieldAdvanced("key_file", "Enable TLS by specifying a certificate and key file. Only valid with a custom `address`."),
+			corsSpec,
 			docs.FieldAdvanced("sync_response", "Customise messages returned via [synchronous responses](/docs/guides/sync_responses).").WithChildren(
 				docs.FieldCommon(
 					"status",
@@ -165,6 +151,7 @@ type HTTPServerConfig struct {
 	RateLimit          string                   `json:"rate_limit" yaml:"rate_limit"`
 	CertFile           string                   `json:"cert_file" yaml:"cert_file"`
 	KeyFile            string                   `json:"key_file" yaml:"key_file"`
+	CORS               httpdocs.ServerCORS      `json:"cors" yaml:"cors"`
 	Response           HTTPServerResponseConfig `json:"sync_response" yaml:"sync_response"`
 }
 
@@ -183,6 +170,7 @@ func NewHTTPServerConfig() HTTPServerConfig {
 		RateLimit: "",
 		CertFile:  "",
 		KeyFile:   "",
+		CORS:      httpdocs.NewServerCORS(),
 		Response:  NewHTTPServerResponseConfig(),
 	}
 }
@@ -237,14 +225,17 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	var mux *http.ServeMux
 	var server *http.Server
 
+	var err error
 	if len(conf.HTTPServer.Address) > 0 {
 		mux = http.NewServeMux()
-		server = &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
+		server = &http.Server{Addr: conf.HTTPServer.Address}
+		if server.Handler, err = conf.HTTPServer.CORS.WrapHandler(mux); err != nil {
+			return nil, fmt.Errorf("bad CORS configuration: %w", err)
+		}
 	}
 
 	var timeout time.Duration
 	if len(conf.HTTPServer.Timeout) > 0 {
-		var err error
 		if timeout, err = time.ParseDuration(conf.HTTPServer.Timeout); err != nil {
 			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
 		}
@@ -288,7 +279,6 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mAsyncSucc:     stats.GetCounter("send.async_success"),
 	}
 
-	var err error
 	if h.responseStatus, err = interop.NewBloblangField(mgr, h.conf.Response.Status); err != nil {
 		return nil, fmt.Errorf("failed to parse response status expression: %v", err)
 	}

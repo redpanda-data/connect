@@ -1,4 +1,4 @@
-package http
+package docs
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -8,8 +8,8 @@ import (
 	"github.com/Jeffail/gabs/v2"
 )
 
-// FieldSpec returns a documentation field spec for an http client component.
-func FieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.FieldSpec {
+// ClientFieldSpec returns a field spec for an http client component.
+func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.FieldSpec {
 	httpSpecs := docs.FieldSpecs{
 		docs.FieldCommon("url", "The URL to connect to.").HasType("string").IsInterpolated(),
 		docs.FieldCommon("verb", "A verb to connect with", "POST", "GET", "DELETE").HasType("string"),

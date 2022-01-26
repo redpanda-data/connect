@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `cors` added to the `http_server` input and output, for supporting CORS requests when custom servers are used.
+
 ### Changed
 
 - The old map-style resource config fields (`resources.processors.<name>`, etc) are now marked as deprecated. Use the newer list based fields (`processor_resources`, etc) instead.
