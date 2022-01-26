@@ -41,6 +41,7 @@ type AmazonS3Config struct {
 	StorageClass            string                       `json:"storage_class" yaml:"storage_class"`
 	Timeout                 string                       `json:"timeout" yaml:"timeout"`
 	KMSKeyID                string                       `json:"kms_key_id" yaml:"kms_key_id"`
+	ServerSideEncryption    string                       `json:"server_side_encryption" yaml:"server_side_encryption"`
 	MaxInFlight             int                          `json:"max_in_flight" yaml:"max_in_flight"`
 	Batching                batch.PolicyConfig           `json:"batching" yaml:"batching"`
 }
@@ -63,6 +64,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		StorageClass:            "STANDARD",
 		Timeout:                 "5s",
 		KMSKeyID:                "",
+		ServerSideEncryption:    "",
 		MaxInFlight:             1,
 		Batching:                batch.NewPolicyConfig(),
 	}
@@ -275,6 +277,13 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 		if a.conf.KMSKeyID != "" {
 			uploadInput.ServerSideEncryption = aws.String("aws:kms")
 			uploadInput.SSEKMSKeyId = &a.conf.KMSKeyID
+		}
+
+		// NOTE: This overrides the ServerSideEncryption set above. We need this to preserve
+		// backwards compatibility, where it is allowed to only set kms_key_id in the config and
+		// the ServerSideEncryption value of "aws:kms" is implied.
+		if a.conf.ServerSideEncryption != "" {
+			uploadInput.ServerSideEncryption = &a.conf.ServerSideEncryption
 		}
 
 		if _, err := a.uploader.UploadWithContext(ctx, uploadInput); err != nil {
