@@ -164,10 +164,7 @@ input:
 
 func TestCork_InitiallyUncorked(t *testing.T) {
 	socketFile := createSignalSocket(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+	ctx := context.Background()
 	spec := newCorkConfigSpec()
 
 	cfg, err := spec.ParseYAML(`
@@ -196,4 +193,55 @@ input:
 	require.NoError(t, err)
 
 	testRealRead(t, cork, "testing")
+}
+
+func TestCork_SignalInputError(t *testing.T) {
+	socketFile := createSignalSocket(t)
+	ctx := context.Background()
+	spec := newCorkConfigSpec()
+
+	cfg, err := spec.ParseYAML(`
+signal:
+  socket_server:
+    network: unix
+    address: `+socketFile+`
+    codec: lines
+  processors:
+    - bloblang: root = throw("test error")
+input:
+  generate:
+    mapping: root = "testing"
+    count: 10
+    interval: ""
+`, nil)
+	require.NoError(t, err)
+
+	cork, err := newCorkFromConfig(cfg, nil)
+	require.NoError(t, err)
+	defer func() {
+		err := cork.Close(ctx)
+		require.NoError(t, err)
+	}()
+
+	err = cork.Connect(ctx)
+	require.NoError(t, err)
+
+	conn, err := net.Dial("unix", socketFile)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, conn.Close())
+	})
+
+	err = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	require.NoError(t, err)
+
+	bs := []byte("uncork\n")
+	n, err := conn.Write(bs)
+	require.NoError(t, err)
+	require.Equal(t, len(bs), n)
+
+	time.Sleep(500 * time.Millisecond)
+
+	// ensure that the input remains corked after the failed uncork
+	testNilRead(t, cork)
 }
