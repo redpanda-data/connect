@@ -1,7 +1,6 @@
 package test_test
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -66,112 +65,6 @@ pipeline:
 	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "config3.yaml")).Provide("/pipeline/processors", nil); err == nil {
 		t.Error("Expected error from bad processor type")
 	}
-}
-
-func TestProcessorsExtraResourcesDeprecated(t *testing.T) {
-	files := map[string]string{
-		"resources1.yaml": `
-resources:
-  caches:
-    barcache:
-      memory: {}
-`,
-		"resources2.yaml": `
-resources:
-  caches:
-    bazcache:
-      memory: {}
-`,
-		"config1.yaml": `
-resources:
-  caches:
-    foocache:
-      memory: {}
-
-pipeline:
-  processors:
-  - cache:
-      resource: foocache
-      operator: set
-      key: defaultkey
-      value: foo
-  - cache:
-      resource: barcache
-      operator: set
-      key: defaultkey
-      value: bar
-  - cache:
-      resource: bazcache
-      operator: set
-      key: defaultkey
-      value: bar
-`,
-	}
-
-	testDir, err := initTestFiles(t, files)
-	require.NoError(t, err)
-	defer os.RemoveAll(testDir)
-
-	provider := test.NewProcessorsProvider(
-		filepath.Join(testDir, "config1.yaml"),
-		test.OptAddResourcesPaths([]string{
-			filepath.Join(testDir, "resources1.yaml"),
-			filepath.Join(testDir, "resources2.yaml"),
-		}),
-	)
-	procs, err := provider.Provide("/pipeline/processors", nil)
-	require.NoError(t, err)
-	assert.Len(t, procs, 3)
-}
-
-func TestProcessorsExtraResourcesErrorDeprecated(t *testing.T) {
-	files := map[string]string{
-		"resources1.yaml": `
-resources:
-  caches:
-    barcache:
-      memory: {}
-`,
-		"resources2.yaml": `
-resources:
-  caches:
-    barcache:
-      memory: {}
-`,
-		"config1.yaml": `
-resources:
-  caches:
-    foocache:
-      memory: {}
-
-pipeline:
-  processors:
-  - cache:
-      resource: foocache
-      operator: set
-      key: defaultkey
-      value: foo
-  - cache:
-      resource: barcache
-      operator: set
-      key: defaultkey
-      value: bar
-`,
-	}
-
-	testDir, err := initTestFiles(t, files)
-	require.NoError(t, err)
-	defer os.RemoveAll(testDir)
-
-	provider := test.NewProcessorsProvider(
-		filepath.Join(testDir, "config1.yaml"),
-		test.OptAddResourcesPaths([]string{
-			filepath.Join(testDir, "resources1.yaml"),
-			filepath.Join(testDir, "resources2.yaml"),
-		}),
-	)
-	_, err = provider.Provide("/pipeline/processors", nil)
-	require.EqualError(t, err, fmt.Sprintf("failed to merge resources from '%v/resources2.yaml': resource cache name collision: barcache", testDir))
 }
 
 func TestProcessorsProvider(t *testing.T) {

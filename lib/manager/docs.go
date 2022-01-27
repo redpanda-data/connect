@@ -22,21 +22,6 @@ func lintResource(ctx docs.LintContext, line, col int, v interface{}) []docs.Lin
 // Spec returns a field spec for the manager configuration.
 func Spec() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldDeprecated(
-			"resources", "A map of components identified by unique names that can be referenced throughout a Benthos config.",
-		).WithChildren(
-			docs.FieldCommon("inputs", "A map of inputs.").Map().HasType(docs.FieldTypeInput),
-			docs.FieldCommon("processors", "A map of processors.").Map().HasType(docs.FieldTypeProcessor),
-			docs.FieldCommon("outputs", "A map of outputs.").Map().HasType(docs.FieldTypeOutput),
-			docs.FieldCommon("caches", "A map of caches.").Map().HasType(docs.FieldTypeCache),
-			docs.FieldCommon("rate_limits", "A map of rate limits.").Map().HasType(docs.FieldTypeRateLimit),
-		).OmitWhen(func(field, parent interface{}) (string, bool) {
-			if len(gabs.Wrap(field).ChildrenMap()) == 0 {
-				return "resources should be omitted when empty", true
-			}
-			return "", false
-		}),
-
 		docs.FieldCommon(
 			"input_resources", "A list of input resources, each must have a unique label.",
 		).Array().HasType(docs.FieldTypeInput).Linter(lintResource),

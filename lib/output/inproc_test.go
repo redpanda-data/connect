@@ -16,7 +16,7 @@ import (
 //------------------------------------------------------------------------------
 
 func TestInproc(t *testing.T) {
-	mgr, err := manager.New(manager.NewConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

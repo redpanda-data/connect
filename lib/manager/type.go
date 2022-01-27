@@ -74,15 +74,6 @@ type Type struct {
 
 	pipes    map[string]<-chan types.Transaction
 	pipeLock *sync.RWMutex
-
-	// TODO: V4 Remove this
-	conditions map[string]types.Condition
-}
-
-// New returns an instance of manager.Type, which can be shared amongst
-// components and logical threads of a Benthos service.
-func New(conf Config, apiReg APIReg, log log.Modular, stats metrics.Type) (*Type, error) {
-	return NewV2(ResourceConfig{Manager: conf}, apiReg, log, stats)
 }
 
 // OptFunc is an opt setting for a manager type.
@@ -127,17 +118,23 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 
 		pipes:    map[string]<-chan types.Transaction{},
 		pipeLock: &sync.RWMutex{},
-
-		conditions: map[string]types.Condition{},
 	}
 
 	for _, opt := range opts {
 		opt(t)
 	}
 
-	conf, err := conf.collapsed()
-	if err != nil {
-		return nil, err
+	seen := map[string]struct{}{}
+
+	checkLabel := func(typeStr, label string) error {
+		if label == "" {
+			return fmt.Errorf("%v resource has an empty label", typeStr)
+		}
+		if _, exists := seen[label]; exists {
+			return fmt.Errorf("%v resource label '%v' collides with a previously defined resource", typeStr, label)
+		}
+		seen[label] = struct{}{}
+		return nil
 	}
 
 	// Sometimes resources of a type might refer to other resources of the same
@@ -145,49 +142,65 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 	// ensure the resource they point to is valid, but not keep the reference.
 	// Since we cannot guarantee an order of initialisation we create
 	// placeholders during construction.
-	for k := range conf.Manager.Inputs {
-		t.inputs[k] = nil
+	for _, c := range conf.ResourceInputs {
+		if err := checkLabel("input", c.Label); err != nil {
+			return nil, err
+		}
+		t.inputs[c.Label] = nil
 	}
-	for k := range conf.Manager.Caches {
-		t.caches[k] = nil
+	for _, c := range conf.ResourceCaches {
+		if err := checkLabel("cache", c.Label); err != nil {
+			return nil, err
+		}
+		t.caches[c.Label] = nil
 	}
-	for k := range conf.Manager.Processors {
-		t.processors[k] = nil
+	for _, c := range conf.ResourceProcessors {
+		if err := checkLabel("processor", c.Label); err != nil {
+			return nil, err
+		}
+		t.processors[c.Label] = nil
 	}
-	for k := range conf.Manager.Outputs {
-		t.outputs[k] = nil
+	for _, c := range conf.ResourceOutputs {
+		if err := checkLabel("output", c.Label); err != nil {
+			return nil, err
+		}
+		t.outputs[c.Label] = nil
 	}
-	for k := range conf.Manager.RateLimits {
-		t.rateLimits[k] = nil
+	for _, c := range conf.ResourceRateLimits {
+		if err := checkLabel("rate limit", c.Label); err != nil {
+			return nil, err
+		}
+		t.rateLimits[c.Label] = nil
 	}
 
-	for k, conf := range conf.Manager.RateLimits {
-		if err := t.StoreRateLimit(context.Background(), k, conf); err != nil {
+	// Labels validated, begin construction
+	for _, conf := range conf.ResourceRateLimits {
+		if err := t.StoreRateLimit(context.Background(), conf.Label, conf); err != nil {
 			return nil, err
 		}
 	}
 
-	for k, conf := range conf.Manager.Caches {
-		if err := t.StoreCache(context.Background(), k, conf); err != nil {
+	for _, conf := range conf.ResourceCaches {
+		if err := t.StoreCache(context.Background(), conf.Label, conf); err != nil {
 			return nil, err
 		}
 	}
 
 	// TODO: Prevent recursive processors.
-	for k, conf := range conf.Manager.Processors {
-		if err := t.StoreProcessor(context.Background(), k, conf); err != nil {
+	for _, conf := range conf.ResourceProcessors {
+		if err := t.StoreProcessor(context.Background(), conf.Label, conf); err != nil {
 			return nil, err
 		}
 	}
 
-	for k, conf := range conf.Manager.Inputs {
-		if err := t.StoreInput(context.Background(), k, conf); err != nil {
+	for _, conf := range conf.ResourceInputs {
+		if err := t.StoreInput(context.Background(), conf.Label, conf); err != nil {
 			return nil, err
 		}
 	}
 
-	for k, conf := range conf.Manager.Outputs {
-		if err := t.StoreOutput(context.Background(), k, conf); err != nil {
+	for _, conf := range conf.ResourceOutputs {
+		if err := t.StoreOutput(context.Background(), conf.Label, conf); err != nil {
 			return nil, err
 		}
 	}
@@ -704,11 +717,6 @@ func (t *Type) CloseAsync() {
 	for _, c := range t.caches {
 		c.CloseAsync()
 	}
-	for _, c := range t.conditions {
-		if closer, ok := c.(types.Closable); ok {
-			closer.CloseAsync()
-		}
-	}
 	for _, p := range t.processors {
 		p.CloseAsync()
 	}
@@ -803,14 +811,6 @@ func (t *Type) GetCache(name string) (types.Cache, error) {
 		return c, nil
 	}
 	return nil, types.ErrCacheNotFound
-}
-
-// GetCondition attempts to find a service wide condition by its name.
-func (t *Type) GetCondition(name string) (types.Condition, error) {
-	if c, exists := t.conditions[name]; exists {
-		return c, nil
-	}
-	return nil, types.ErrConditionNotFound
 }
 
 // GetProcessor attempts to find a service wide processor by its name.
