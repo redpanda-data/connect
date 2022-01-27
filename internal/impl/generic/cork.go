@@ -3,7 +3,7 @@ package generic
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
+	"sync"
 
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -24,10 +24,11 @@ type CorkConfig struct {
 }
 
 type corkInput struct {
+	mut    sync.Mutex
 	logger *service.Logger
 
 	closedCorkC chan struct{}
-	readyCVal   atomic.Value
+	readyC      chan struct{}
 
 	input *service.OwnedInput
 
@@ -41,19 +42,18 @@ func newCorkInput(cfg *CorkConfig) *corkInput {
 	closedCorkC := make(chan struct{})
 	close(closedCorkC)
 
-	readyC := make(chan struct{})
-	var readyCVal atomic.Value
-	readyCVal.Store(readyC)
-
-	if !cfg.InitiallyCorked {
-		close(readyC)
+	var readyC chan struct{}
+	if cfg.InitiallyCorked {
+		readyC = make(chan struct{})
+	} else {
+		readyC = closedCorkC
 	}
 
 	signalCtx, signalCtxCancel := context.WithCancel(context.Background())
 
 	inp := corkInput{
 		logger:          cfg.Logger,
-		readyCVal:       readyCVal,
+		readyC:          readyC,
 		closedCorkC:     closedCorkC,
 		input:           cfg.Input,
 		signal:          cfg.Signal,
@@ -81,7 +81,10 @@ func (ci *corkInput) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 
 	// Placing the wait call in a go routine and using a channel for coordination
 	// so that we do not block the benthos process from terminating gracefully
-	ready := ci.readyCVal.Load().(chan struct{})
+	var ready chan struct{}
+	ci.mut.Lock()
+	ready = ci.readyC
+	ci.mut.Unlock()
 	select {
 	case <-ready:
 	default:
@@ -180,19 +183,29 @@ func (ci *corkInput) signalLoop() {
 // Corked returns the point-in-time status of the input. This is mostly useful
 // in sequencing test code.
 func (ci *corkInput) Corked() bool {
-	return ci.readyCVal.Load().(chan struct{}) != ci.closedCorkC
+	ci.mut.Lock()
+	defer ci.mut.Unlock()
+	return ci.readyC != ci.closedCorkC
 }
 
 func (ci *corkInput) cork() {
-	if ci.readyCVal.CompareAndSwap(ci.closedCorkC, make(chan struct{})) {
+	ci.mut.Lock()
+	defer ci.mut.Unlock()
+
+	if ci.readyC == ci.closedCorkC {
 		ci.logger.Debug("corking input")
+		ci.readyC = make(chan struct{})
 	}
 }
 
 func (ci *corkInput) uncork() {
-	if old := ci.readyCVal.Swap(ci.closedCorkC); old != ci.closedCorkC {
+	ci.mut.Lock()
+	defer ci.mut.Unlock()
+
+	if ci.readyC != ci.closedCorkC {
 		ci.logger.Debug("uncorking input")
-		close(old.(chan struct{}))
+		close(ci.readyC)
+		ci.readyC = ci.closedCorkC
 	}
 }
 
