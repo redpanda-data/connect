@@ -44,6 +44,14 @@ func TestBloblangInterval(t *testing.T) {
 	b.CloseAsync()
 }
 
+func TestBloblangZeroInterval(t *testing.T) {
+	conf := NewBloblangConfig()
+	conf.Mapping = `root = "hello world"`
+	conf.Interval = "0s"
+	_, err := newBloblang(types.NoopMgr(), conf)
+	require.NoError(t, err)
+}
+
 func TestBloblangCron(t *testing.T) {
 	t.Skip()
 

@@ -186,7 +186,9 @@ func newBloblang(mgr types.Manager, conf BloblangConfig) (*Bloblang, error) {
 			firstIsFree = false
 			duration = getDurationTillNextSchedule(*schedule, location)
 		}
-		timer = time.NewTicker(duration)
+		if duration > 0 {
+			timer = time.NewTicker(duration)
+		}
 	}
 	exec, err := interop.NewBloblangMapping(mgr, conf.Mapping)
 	if err != nil {
