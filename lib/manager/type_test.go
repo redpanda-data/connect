@@ -38,7 +38,7 @@ func TestManagerProcessorLabels(t *testing.T) {
 		conf.Bloblang = "root = this"
 		conf.Label = l
 
-		mgr, err := manager.New(manager.NewConfig(), nil, log.Noop(), metrics.Noop())
+		mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 		require.NoError(t, err)
 
 		_, err = mgr.NewProcessor(conf)
@@ -57,7 +57,7 @@ func TestManagerProcessorLabels(t *testing.T) {
 		conf.Bloblang = "root = this"
 		conf.Label = l
 
-		mgr, err := manager.New(manager.NewConfig(), nil, log.Noop(), metrics.Noop())
+		mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 		require.NoError(t, err)
 
 		_, err = mgr.NewProcessor(conf)
@@ -68,11 +68,17 @@ func TestManagerProcessorLabels(t *testing.T) {
 func TestManagerCache(t *testing.T) {
 	testLog := log.Noop()
 
-	conf := manager.NewConfig()
-	conf.Caches["foo"] = cache.NewConfig()
-	conf.Caches["bar"] = cache.NewConfig()
+	conf := manager.NewResourceConfig()
 
-	mgr, err := manager.New(conf, nil, testLog, metrics.Noop())
+	fooCache := cache.NewConfig()
+	fooCache.Label = "foo"
+	conf.ResourceCaches = append(conf.ResourceCaches, fooCache)
+
+	barCache := cache.NewConfig()
+	barCache.Label = "bar"
+	conf.ResourceCaches = append(conf.ResourceCaches, barCache)
+
+	mgr, err := manager.NewV2(conf, nil, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,22 +141,30 @@ func TestManagerCacheListErrors(t *testing.T) {
 func TestManagerBadCache(t *testing.T) {
 	testLog := log.Noop()
 
-	conf := manager.NewConfig()
-	badConf := cache.NewConfig()
-	badConf.Type = "notexist"
-	conf.Caches["bad"] = badConf
+	conf := manager.NewResourceConfig()
 
-	if _, err := manager.New(conf, nil, testLog, metrics.Noop()); err == nil {
+	badConf := cache.NewConfig()
+	badConf.Label = "bad"
+	badConf.Type = "notexist"
+	conf.ResourceCaches = append(conf.ResourceCaches, badConf)
+
+	if _, err := manager.NewV2(conf, nil, testLog, metrics.Noop()); err == nil {
 		t.Fatal("Expected error from bad cache")
 	}
 }
 
 func TestManagerRateLimit(t *testing.T) {
-	conf := manager.NewConfig()
-	conf.RateLimits["foo"] = ratelimit.NewConfig()
-	conf.RateLimits["bar"] = ratelimit.NewConfig()
+	conf := manager.NewResourceConfig()
 
-	mgr, err := manager.New(conf, nil, log.Noop(), metrics.Noop())
+	fooRL := ratelimit.NewConfig()
+	fooRL.Label = "foo"
+	conf.ResourceRateLimits = append(conf.ResourceRateLimits, fooRL)
+
+	barRL := ratelimit.NewConfig()
+	barRL.Label = "bar"
+	conf.ResourceRateLimits = append(conf.ResourceRateLimits, barRL)
+
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,22 +225,29 @@ func TestManagerRateLimitListErrors(t *testing.T) {
 }
 
 func TestManagerBadRateLimit(t *testing.T) {
-	conf := manager.NewConfig()
+	conf := manager.NewResourceConfig()
 	badConf := ratelimit.NewConfig()
 	badConf.Type = "notexist"
-	conf.RateLimits["bad"] = badConf
+	badConf.Label = "bad"
+	conf.ResourceRateLimits = append(conf.ResourceRateLimits, badConf)
 
-	if _, err := manager.New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop()); err == nil {
 		t.Fatal("Expected error from bad rate limit")
 	}
 }
 
 func TestManagerProcessor(t *testing.T) {
-	conf := manager.NewConfig()
-	conf.Processors["foo"] = processor.NewConfig()
-	conf.Processors["bar"] = processor.NewConfig()
+	conf := manager.NewResourceConfig()
 
-	mgr, err := manager.New(conf, nil, log.Noop(), metrics.Noop())
+	fooProc := processor.NewConfig()
+	fooProc.Label = "foo"
+	conf.ResourceProcessors = append(conf.ResourceProcessors, fooProc)
+
+	barProc := processor.NewConfig()
+	barProc.Label = "bar"
+	conf.ResourceProcessors = append(conf.ResourceProcessors, barProc)
+
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,8 +400,8 @@ func TestManagerOutputListErrors(t *testing.T) {
 }
 
 func TestManagerPipeErrors(t *testing.T) {
-	conf := manager.NewConfig()
-	mgr, err := manager.New(conf, nil, log.Noop(), metrics.Noop())
+	conf := manager.NewResourceConfig()
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,8 +412,8 @@ func TestManagerPipeErrors(t *testing.T) {
 }
 
 func TestManagerPipeGetSet(t *testing.T) {
-	conf := manager.NewConfig()
-	mgr, err := manager.New(conf, nil, log.Noop(), metrics.Noop())
+	conf := manager.NewResourceConfig()
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

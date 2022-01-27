@@ -16,7 +16,7 @@ import (
 func TestInprocDryRun(t *testing.T) {
 	t.Parallel()
 
-	mgr, err := manager.New(manager.NewConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestInprocDryRun(t *testing.T) {
 func TestInprocDryRunNoConn(t *testing.T) {
 	t.Parallel()
 
-	mgr, err := manager.New(manager.NewConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

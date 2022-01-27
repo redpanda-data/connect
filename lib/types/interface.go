@@ -119,9 +119,6 @@ type Manager interface {
 	// GetCache attempts to find a service wide cache by its name.
 	GetCache(name string) (Cache, error)
 
-	// GetCondition attempts to find a service wide condition by its name.
-	GetCondition(name string) (Condition, error)
-
 	// GetProcessor attempts to find a service wide processor by its name.
 	// TODO: V4 Add this
 	// GetProcessor(name string) (Processor, error)
