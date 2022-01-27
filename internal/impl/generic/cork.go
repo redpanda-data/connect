@@ -144,10 +144,18 @@ func (ci *corkInput) signalLoop() {
 			continue
 		}
 
-		bs, err := message.AsBytes()
-		if err != nil {
-			if err := ack(ctx, nil); err != nil {
-				ci.signalErrC <- fmt.Errorf("failed to ack cork signal: %w", err)
+		if mErr := message.GetError(); mErr != nil {
+			if err := ack(ctx, mErr); err != nil {
+				ci.signalErrC <- fmt.Errorf("failed to nack cork signal: %w", err)
+				return
+			}
+			continue
+		}
+
+		bs, bErr := message.AsBytes()
+		if bErr != nil {
+			if err := ack(ctx, bErr); err != nil {
+				ci.signalErrC <- fmt.Errorf("failed to nack cork signal: %w", err)
 				return
 			}
 			continue
