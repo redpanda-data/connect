@@ -81,13 +81,11 @@ func (ci *corkInput) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 
 	// Placing the wait call in a go routine and using a channel for coordination
 	// so that we do not block the benthos process from terminating gracefully
-	ready := ci.readyCVal.Load()
-	if ready != ci.closedCorkC {
-		select {
-		case <-ready.(chan struct{}):
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		}
+	ready := ci.readyCVal.Load().(chan struct{})
+	select {
+	case <-ready:
+	default:
+		return nil, nilAck, nil
 	}
 
 	return ci.input.ReadBatch(ctx)
