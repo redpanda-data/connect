@@ -42,6 +42,7 @@ metrics:
   prometheus:
     prefix: benthos
     path_mapping: ""
+    use_histogram_timing: false
     push_url: ""
     push_interval: ""
     push_job_name: benthos_push
@@ -90,6 +91,14 @@ path_mapping: |-
   meta processor = $matches.0.1 | deleted()
   root = $matches.0.2 | deleted()
 ```
+
+### `use_histogram_timing`
+
+Whether to export timing metrics as a histogram, if `false` a summary is used instead. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `push_url`
 

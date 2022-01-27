@@ -94,6 +94,18 @@ func (p *PromTimingVec) With(labelValues ...string) StatTimer {
 	}
 }
 
+// PromTimingHistVec creates StatTimers with dynamic labels.
+type PromTimingHistVec struct {
+	sum *prometheus.HistogramVec
+}
+
+// With returns a StatTimer with a set of label values.
+func (p *PromTimingHistVec) With(labelValues ...string) StatTimer {
+	return &PromTiming{
+		sum: p.sum.WithLabelValues(labelValues...),
+	}
+}
+
 // PromGaugeVec creates StatGauges with dynamic labels.
 type PromGaugeVec struct {
 	ctr *prometheus.GaugeVec
@@ -115,16 +127,18 @@ type Prometheus struct {
 	closedChan chan struct{}
 	running    int32
 
-	config      PrometheusConfig
-	pathMapping *pathMapping
-	prefix      string
+	config             PrometheusConfig
+	pathMapping        *pathMapping
+	prefix             string
+	useHistogramTiming bool
 
 	pusher *push.Pusher
 	reg    *prometheus.Registry
 
-	counters map[string]*prometheus.CounterVec
-	gauges   map[string]*prometheus.GaugeVec
-	timers   map[string]*prometheus.SummaryVec
+	counters   map[string]*prometheus.CounterVec
+	gauges     map[string]*prometheus.GaugeVec
+	timers     map[string]*prometheus.SummaryVec
+	timersHist map[string]*prometheus.HistogramVec
 
 	mut sync.Mutex
 }
@@ -132,15 +146,17 @@ type Prometheus struct {
 // NewPrometheus creates and returns a new Prometheus object.
 func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 	p := &Prometheus{
-		log:        log.Noop(),
-		running:    1,
-		closedChan: make(chan struct{}),
-		config:     config.Prometheus,
-		prefix:     config.Prometheus.Prefix,
-		reg:        prometheus.NewRegistry(),
-		counters:   map[string]*prometheus.CounterVec{},
-		gauges:     map[string]*prometheus.GaugeVec{},
-		timers:     map[string]*prometheus.SummaryVec{},
+		log:                log.Noop(),
+		running:            1,
+		closedChan:         make(chan struct{}),
+		config:             config.Prometheus,
+		prefix:             config.Prometheus.Prefix,
+		useHistogramTiming: config.Prometheus.UseHistogramTiming,
+		reg:                prometheus.NewRegistry(),
+		counters:           map[string]*prometheus.CounterVec{},
+		gauges:             map[string]*prometheus.GaugeVec{},
+		timers:             map[string]*prometheus.SummaryVec{},
+		timersHist:         map[string]*prometheus.HistogramVec{},
 	}
 
 	for _, opt := range opts {
@@ -236,6 +252,10 @@ func (p *Prometheus) GetCounter(path string) StatCounter {
 
 // GetTimer returns a stat timer object for a path.
 func (p *Prometheus) GetTimer(path string) StatTimer {
+	if p.useHistogramTiming {
+		return p.getTimerHist(path)
+	}
+
 	stat, labels, values := p.toPromName(path)
 	if stat == "" {
 		return DudStat{}
@@ -254,6 +274,33 @@ func (p *Prometheus) GetTimer(path string) StatTimer {
 		}, labels)
 		p.reg.MustRegister(tmr)
 		p.timers[stat] = tmr
+	}
+	p.mut.Unlock()
+
+	return &PromTiming{
+		sum: tmr.WithLabelValues(values...),
+	}
+}
+
+func (p *Prometheus) getTimerHist(path string) StatTimer {
+	stat, labels, values := p.toPromName(path)
+	if stat == "" {
+		return DudStat{}
+	}
+
+	var tmr *prometheus.HistogramVec
+
+	p.mut.Lock()
+	var exists bool
+	if tmr, exists = p.timersHist[stat]; !exists {
+		tmr = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: p.prefix,
+			Name:      stat,
+			Help:      "Benthos Timing metric",
+			Buckets:   prometheus.DefBuckets,
+		}, labels)
+		p.reg.MustRegister(tmr)
+		p.timersHist[stat] = tmr
 	}
 	p.mut.Unlock()
 
@@ -336,6 +383,10 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 // these labels must be consistent with any other metrics registered on the same
 // path.
 func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec {
+	if p.useHistogramTiming {
+		return p.getTimerHistVec(path, labelNames)
+	}
+
 	stat, labels, values := p.toPromName(path)
 	if stat == "" {
 		return fakeTimerVec(func([]string) StatTimer {
@@ -372,6 +423,47 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 		})
 	}
 	return &PromTimingVec{
+		sum: tmr,
+	}
+}
+
+func (p *Prometheus) getTimerHistVec(path string, labelNames []string) StatTimerVec {
+	stat, labels, values := p.toPromName(path)
+	if stat == "" {
+		return fakeTimerVec(func([]string) StatTimer {
+			return DudStat{}
+		})
+	}
+	if len(labels) > 0 {
+		labelNames = append(labels, labelNames...)
+	}
+
+	var tmr *prometheus.HistogramVec
+
+	p.mut.Lock()
+	var exists bool
+	if tmr, exists = p.timersHist[stat]; !exists {
+		tmr = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: p.prefix,
+			Name:      stat,
+			Help:      "Benthos Timing metric",
+			Buckets:   prometheus.DefBuckets,
+		}, labelNames)
+		p.reg.MustRegister(tmr)
+		p.timersHist[stat] = tmr
+	}
+	p.mut.Unlock()
+
+	if len(labels) > 0 {
+		return fakeTimerVec(func(vs []string) StatTimer {
+			fvs := append([]string{}, values...)
+			fvs = append(fvs, vs...)
+			return (&PromTimingHistVec{
+				sum: tmr,
+			}).With(fvs...)
+		})
+	}
+	return &PromTimingHistVec{
 		sum: tmr,
 	}
 }

@@ -14,6 +14,7 @@ Metrics paths will differ from [the standard list](/docs/components/metrics/abou
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
 			pathMappingDocs(true, true),
+			docs.FieldBool("use_histogram_timing", "Whether to export timing metrics as a histogram, if `false` a summary is used instead. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").HasDefault(false).Advanced(),
 			docs.FieldAdvanced("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to."),
 			docs.FieldAdvanced("push_interval", "The period of time between each push when sending metrics to a Push Gateway."),
 			docs.FieldAdvanced("push_job_name", "An identifier for push jobs."),
@@ -42,12 +43,13 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 
 // PrometheusConfig is config for the Prometheus metrics type.
 type PrometheusConfig struct {
-	Prefix        string                        `json:"prefix" yaml:"prefix"`
-	PathMapping   string                        `json:"path_mapping" yaml:"path_mapping"`
-	PushURL       string                        `json:"push_url" yaml:"push_url"`
-	PushBasicAuth PrometheusPushBasicAuthConfig `json:"push_basic_auth" yaml:"push_basic_auth"`
-	PushInterval  string                        `json:"push_interval" yaml:"push_interval"`
-	PushJobName   string                        `json:"push_job_name" yaml:"push_job_name"`
+	Prefix             string                        `json:"prefix" yaml:"prefix"`
+	PathMapping        string                        `json:"path_mapping" yaml:"path_mapping"`
+	UseHistogramTiming bool                          `json:"use_histogram_timing" yaml:"use_histogram_timing"`
+	PushURL            string                        `json:"push_url" yaml:"push_url"`
+	PushBasicAuth      PrometheusPushBasicAuthConfig `json:"push_basic_auth" yaml:"push_basic_auth"`
+	PushInterval       string                        `json:"push_interval" yaml:"push_interval"`
+	PushJobName        string                        `json:"push_job_name" yaml:"push_job_name"`
 }
 
 // PrometheusPushBasicAuthConfig contains parameters for establishing basic
@@ -68,12 +70,13 @@ func NewPrometheusPushBasicAuthConfig() PrometheusPushBasicAuthConfig {
 // NewPrometheusConfig creates an PrometheusConfig struct with default values.
 func NewPrometheusConfig() PrometheusConfig {
 	return PrometheusConfig{
-		Prefix:        "benthos",
-		PathMapping:   "",
-		PushURL:       "",
-		PushBasicAuth: NewPrometheusPushBasicAuthConfig(),
-		PushInterval:  "",
-		PushJobName:   "benthos_push",
+		Prefix:             "benthos",
+		PathMapping:        "",
+		UseHistogramTiming: false,
+		PushURL:            "",
+		PushBasicAuth:      NewPrometheusPushBasicAuthConfig(),
+		PushInterval:       "",
+		PushJobName:        "benthos_push",
 	}
 }
 
