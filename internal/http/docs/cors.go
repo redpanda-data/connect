@@ -42,5 +42,5 @@ func ServerCORSFieldSpec() docs.FieldSpec {
 	return docs.FieldAdvanced("cors", "Adds Cross-Origin Resource Sharing headers.").WithChildren(
 		docs.FieldBool("enabled", "Whether to allow CORS requests.").HasDefault(false),
 		docs.FieldString("allowed_origins", "An explicit list of origins that are allowed for CORS requests.").Array().HasDefault([]string{}),
-	)
+	).AtVersion("3.63.0")
 }

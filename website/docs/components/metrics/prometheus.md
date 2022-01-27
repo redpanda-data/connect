@@ -99,6 +99,7 @@ Whether to export timing metrics as a histogram, if `false` a summary is used in
 
 Type: `bool`  
 Default: `false`  
+Requires version 3.63.0 or newer  
 
 ### `push_url`
 

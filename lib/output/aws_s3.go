@@ -118,7 +118,7 @@ output:
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
 			).IsInterpolated(),
 			docs.FieldAdvanced("kms_key_id", "An optional server side encryption key."),
-			docs.FieldAdvanced("server_side_encryption", "An optional server side encryption algorithm."),
+			docs.FieldAdvanced("server_side_encryption", "An optional server side encryption algorithm.").AtVersion("3.63.0"),
 			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),

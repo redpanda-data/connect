@@ -14,7 +14,7 @@ Metrics paths will differ from [the standard list](/docs/components/metrics/abou
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
 			pathMappingDocs(true, true),
-			docs.FieldBool("use_histogram_timing", "Whether to export timing metrics as a histogram, if `false` a summary is used instead. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").HasDefault(false).Advanced(),
+			docs.FieldBool("use_histogram_timing", "Whether to export timing metrics as a histogram, if `false` a summary is used instead. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").HasDefault(false).Advanced().AtVersion("3.63.0"),
 			docs.FieldAdvanced("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to."),
 			docs.FieldAdvanced("push_interval", "The period of time between each push when sending metrics to a Push Gateway."),
 			docs.FieldAdvanced("push_job_name", "An identifier for push jobs."),

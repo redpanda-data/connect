@@ -311,6 +311,7 @@ An optional server side encryption algorithm.
 
 Type: `string`  
 Default: `""`  
+Requires version 3.63.0 or newer  
 
 ### `force_path_style_urls`
 
