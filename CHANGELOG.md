@@ -8,10 +8,15 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `cors` added to the `http_server` input and output, for supporting CORS requests when custom servers are used.
+- Field `server_side_encryption` added to the `aws_s3` output.
 
 ### Changed
 
 - The old map-style resource config fields (`resources.processors.<name>`, etc) are now marked as deprecated. Use the newer list based fields (`processor_resources`, etc) instead.
+
+### Fixed
+
+- The `generate` input now supports zeroed duration strings (`0s`, etc) for unbounded document creation.
 
 ## 3.62.0 - 2022-01-21
 
