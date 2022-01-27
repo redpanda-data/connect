@@ -44,23 +44,6 @@ func resInfoFromConfig(conf *manager.ResourceConfig) resourceFileInfo {
 	// This is an unlikely race condition, see readMain for more info.
 	resInfo.updatedAt = time.Now()
 
-	// Old style
-	for k, v := range conf.Manager.Inputs {
-		resInfo.inputs[k] = &v
-	}
-	for k, v := range conf.Manager.Processors {
-		resInfo.processors[k] = &v
-	}
-	for k, v := range conf.Manager.Outputs {
-		resInfo.outputs[k] = &v
-	}
-	for k, v := range conf.Manager.Caches {
-		resInfo.caches[k] = &v
-	}
-	for k, v := range conf.Manager.RateLimits {
-		resInfo.rateLimits[k] = &v
-	}
-
 	// New style
 	for _, c := range conf.ResourceInputs {
 		resInfo.inputs[c.Label] = &c

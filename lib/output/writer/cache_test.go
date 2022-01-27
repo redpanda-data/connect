@@ -1,17 +1,23 @@
-package writer
+package writer_test
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestCacheSingle(t *testing.T) {
@@ -25,11 +31,11 @@ func TestCacheSingle(t *testing.T) {
 		},
 	}
 
-	conf := NewCacheConfig()
+	conf := writer.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 
-	w, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	require.NoError(t, w.Write(message.New([][]byte{
@@ -52,11 +58,11 @@ func TestCacheBatch(t *testing.T) {
 		},
 	}
 
-	conf := NewCacheConfig()
+	conf := writer.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 
-	w, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	require.NoError(t, w.Write(message.New([][]byte{
@@ -85,12 +91,12 @@ func TestCacheSingleTTL(t *testing.T) {
 		},
 	}
 
-	conf := NewCacheConfig()
+	conf := writer.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 	conf.TTL = "2s"
 
-	w, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	require.NoError(t, w.Write(message.New([][]byte{
@@ -118,12 +124,12 @@ func TestCacheBatchTTL(t *testing.T) {
 		},
 	}
 
-	conf := NewCacheConfig()
+	conf := writer.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 	conf.TTL = "2s"
 
-	w, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	require.NoError(t, w.Write(message.New([][]byte{
@@ -289,4 +295,102 @@ func (t *ttlCache) CloseAsync() {}
 
 func (t *ttlCache) WaitForClose(time.Duration) error {
 	return nil
+}
+
+func TestCacheBasic(t *testing.T) {
+	mgrConf := manager.NewResourceConfig()
+
+	fooCache := cache.NewConfig()
+	fooCache.Label = "foo"
+
+	mgrConf.ResourceCaches = append(mgrConf.ResourceCaches, fooCache)
+
+	mgr, err := manager.NewV2(mgrConf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cacheConf := writer.NewCacheConfig()
+	cacheConf.Target = "foo"
+	cacheConf.Key = "${!json(\"key\")}"
+
+	c, err := writer.NewCache(cacheConf, mgr, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := map[string]string{}
+	for i := 0; i < 100; i++ {
+		key := fmt.Sprintf("key%v", i)
+		value := fmt.Sprintf(`{"key":"%v","test":"hello world"}`, key)
+		exp[key] = value
+		if err := c.Write(message.New([][]byte{[]byte(value)})); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	memCache, err := mgr.GetCache("foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range exp {
+		res, err := memCache.Get(k)
+		if err != nil {
+			t.Errorf("Missing key '%v': %v", k, err)
+		}
+		if exp, act := v, string(res); exp != act {
+			t.Errorf("Wrong result: %v != %v", act, exp)
+		}
+	}
+}
+
+func TestCacheBatches(t *testing.T) {
+	mgrConf := manager.NewResourceConfig()
+
+	fooCache := cache.NewConfig()
+	fooCache.Label = "foo"
+
+	mgrConf.ResourceCaches = append(mgrConf.ResourceCaches, fooCache)
+
+	mgr, err := manager.NewV2(mgrConf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cacheConf := writer.NewCacheConfig()
+	cacheConf.Target = "foo"
+	cacheConf.Key = "${!json(\"key\")}"
+
+	c, err := writer.NewCache(cacheConf, mgr, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := map[string]string{}
+	for i := 0; i < 10; i++ {
+		msg := message.New(nil)
+		for j := 0; j < 10; j++ {
+			key := fmt.Sprintf("key%v", i*10+j)
+			value := fmt.Sprintf(`{"key":"%v","test":"hello world"}`, key)
+			exp[key] = value
+			msg.Append(message.NewPart([]byte(value)))
+		}
+		if err := c.Write(msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	memCache, err := mgr.GetCache("foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range exp {
+		res, err := memCache.Get(k)
+		if err != nil {
+			t.Errorf("Missing key '%v': %v", k, err)
+		}
+		if exp, act := v, string(res); exp != act {
+			t.Errorf("Wrong result: %v != %v", act, exp)
+		}
+	}
 }
