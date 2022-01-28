@@ -33,7 +33,7 @@ func NewBackOffField(name string, allowUnbounded bool) *ConfigField {
 	)
 }
 
-// FieldBackoff accesses a field from a parsed config that was defined with
+// FieldBackOff accesses a field from a parsed config that was defined with
 // NewBackoffField and returns a *tls.Config, or an error if the configuration was
 // invalid.
 func (p *ParsedConfig) FieldBackOff(path ...string) (*backoff.ExponentialBackOff, error) {
