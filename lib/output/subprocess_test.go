@@ -1,4 +1,4 @@
-package output
+package output_test
 
 import (
 	"fmt"
@@ -7,9 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,7 +57,7 @@ func sendMsg(t *testing.T, msg string, tChan chan types.Transaction) {
 }
 
 func TestSubprocessBasic(t *testing.T) {
-	t.Skip("Skipping tests for now as they fail on CI")
+	integration.CheckSkip(t)
 
 	t.Parallel()
 
@@ -95,12 +97,12 @@ func main() {
 }
 `, dir))
 
-	conf := NewConfig()
-	conf.Type = TypeSubprocess
+	conf := output.NewConfig()
+	conf.Type = output.TypeSubprocess
 	conf.Subprocess.Name = "go"
 	conf.Subprocess.Args = []string{"run", filePath}
 
-	o, err := New(conf, nil, log.Noop(), metrics.Noop())
+	o, err := output.New(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	tranChan := make(chan types.Transaction)
@@ -125,7 +127,7 @@ func main() {
 }
 
 func TestSubprocessEarlyExit(t *testing.T) {
-	t.Skip("Skipping tests for now as they fail on CI")
+	integration.CheckSkip(t)
 
 	t.Parallel()
 
@@ -159,12 +161,12 @@ func main() {
 }
 `, dir))
 
-	conf := NewConfig()
-	conf.Type = TypeSubprocess
+	conf := output.NewConfig()
+	conf.Type = output.TypeSubprocess
 	conf.Subprocess.Name = "go"
 	conf.Subprocess.Args = []string{"run", filePath}
 
-	o, err := New(conf, nil, log.Noop(), metrics.Noop())
+	o, err := output.New(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	tranChan := make(chan types.Transaction)

@@ -113,7 +113,7 @@ type Type struct {
 func New(opts ...func(*Type)) *Type {
 	t := &Type{
 		streams:    map[string]*StreamStatus{},
-		manager:    types.DudMgr{},
+		manager:    types.NoopMgr(),
 		stats:      metrics.Noop(),
 		apiTimeout: time.Second * 5,
 		logger:     log.Noop(),

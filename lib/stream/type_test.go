@@ -29,13 +29,9 @@ func TestTypeConstruction(t *testing.T) {
 
 	assert.NoError(t, strm.Stop(time.Minute))
 
-	newStats := metrics.DudType{
-		ID: 1,
-	}
+	newStats := metrics.Noop()
 	newLogger := log.Noop()
-	newMgr := types.DudMgr{
-		ID: 2,
-	}
+	newMgr := types.NoopMgr()
 
 	strm, err = New(conf, OptSetLogger(newLogger), OptSetStats(newStats), OptSetManager(newMgr))
 	require.NoError(t, err)
