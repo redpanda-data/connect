@@ -34,7 +34,7 @@ linters:
   disable-all: true
   enable:
     # Default linters reported by `golangci-lint help linters` in v1.41.1
-    # - deadcode
+    - deadcode
     - errcheck
     - gosimple
     - govet
@@ -42,7 +42,7 @@ linters:
     - staticcheck
     - structcheck
     - typecheck
-    # - unused
+    - unused
     - varcheck
     # Extra linters:
     - gofmt

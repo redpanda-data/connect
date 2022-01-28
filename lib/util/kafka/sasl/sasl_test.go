@@ -1,43 +1,24 @@
-package sasl
+package sasl_test
 
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/cache"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	"github.com/Shopify/sarama"
+	"github.com/stretchr/testify/require"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
-
-//------------------------------------------------------------------------------
-
-type mockMgr struct {
-	cache mockCache
-	types.DudMgr
-}
-
-type mockCache struct {
-	entries map[string]string
-	types.Cache
-}
-
-func (m mockMgr) GetCache(name string) (types.Cache, error) {
-	return m.cache, nil
-}
-
-func (c mockCache) Get(key string) ([]byte, error) {
-	v, ok := c.entries[key]
-	if !ok {
-		return nil, types.ErrKeyNotFound
-	}
-
-	return []byte(v), nil
-}
-
-//------------------------------------------------------------------------------
 
 func TestApplyPlaintext(t *testing.T) {
 	conf := &sarama.Config{}
 
-	saslConf := Config{
+	saslConf := sasl.Config{
 		Mechanism: string(sarama.SASLTypePlaintext),
 		User:      "foo",
 		Password:  "bar",
@@ -68,7 +49,7 @@ func TestApplyPlaintext(t *testing.T) {
 func TestApplyPlaintextDeprecated(t *testing.T) {
 	conf := &sarama.Config{}
 
-	saslConf := Config{
+	saslConf := sasl.Config{
 		Enabled:   true,
 		Mechanism: "",
 		User:      "foo",
@@ -100,7 +81,7 @@ func TestApplyPlaintextDeprecated(t *testing.T) {
 func TestApplyOAuthBearerStaticProvider(t *testing.T) {
 	conf := &sarama.Config{}
 
-	saslConf := Config{
+	saslConf := sasl.Config{
 		Mechanism:   string(sarama.SASLTypeOAuth),
 		AccessToken: "foo",
 	}
@@ -131,19 +112,25 @@ func TestApplyOAuthBearerStaticProvider(t *testing.T) {
 func TestApplyOAuthBearerCacheProvider(t *testing.T) {
 	conf := &sarama.Config{}
 
-	saslConf := Config{
+	saslConf := sasl.Config{
 		Mechanism:  string(sarama.SASLTypeOAuth),
 		TokenCache: "token_provider",
 		TokenKey:   "jwt",
 	}
 
-	cache := mockCache{
-		entries: map[string]string{"jwt": "foo"},
+	cacheConf := cache.NewConfig()
+	cacheConf.Label = "token_provider"
+	cacheConf.Type = cache.TypeMemory
+	cacheConf.Memory.InitValues = map[string]string{
+		"jwt": "foo",
 	}
-	err := saslConf.Apply(mockMgr{cache: cache}, conf)
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	resConf := manager.NewResourceConfig()
+	resConf.ResourceCaches = append(resConf.ResourceCaches, cacheConf)
+	mgr, err := manager.NewV2(resConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	require.NoError(t, saslConf.Apply(mgr, conf))
 
 	if !conf.Net.SASL.Enable {
 		t.Errorf("SASL not enabled")
@@ -164,7 +151,7 @@ func TestApplyOAuthBearerCacheProvider(t *testing.T) {
 
 	// Test with missing key
 	saslConf.TokenKey = "bar"
-	err = saslConf.Apply(mockMgr{cache: cache}, conf)
+	err = saslConf.Apply(mgr, conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,13 +164,13 @@ func TestApplyOAuthBearerCacheProvider(t *testing.T) {
 func TestApplyUnknownMechanism(t *testing.T) {
 	conf := &sarama.Config{}
 
-	saslConf := Config{
+	saslConf := sasl.Config{
 		Mechanism: "foo",
 	}
 
 	err := saslConf.Apply(types.NoopMgr(), conf)
-	if err != ErrUnsupportedSASLMechanism {
-		t.Errorf("Err %v != %v", err, ErrUnsupportedSASLMechanism)
+	if err != sasl.ErrUnsupportedSASLMechanism {
+		t.Errorf("Err %v != %v", err, sasl.ErrUnsupportedSASLMechanism)
 	}
 }
 

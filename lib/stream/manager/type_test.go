@@ -53,7 +53,7 @@ func TestTypeProcsAndPipes(t *testing.T) {
 	mgr := New(
 		OptSetLogger(logger),
 		OptSetStats(stats),
-		OptSetManager(types.DudMgr{}),
+		OptSetManager(types.NoopMgr()),
 		OptAddProcessors(func(id string) (types.Processor, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
@@ -112,7 +112,7 @@ func TestTypeBasicOperations(t *testing.T) {
 	mgr := New(
 		OptSetLogger(log.Noop()),
 		OptSetStats(metrics.Noop()),
-		OptSetManager(types.DudMgr{}),
+		OptSetManager(types.NoopMgr()),
 	)
 
 	if err := mgr.Update("foo", harmlessConf(), time.Second); err == nil {
@@ -172,7 +172,7 @@ func TestTypeBasicClose(t *testing.T) {
 	mgr := New(
 		OptSetLogger(log.Noop()),
 		OptSetStats(metrics.Noop()),
-		OptSetManager(types.DudMgr{}),
+		OptSetManager(types.NoopMgr()),
 	)
 
 	conf := harmlessConf()

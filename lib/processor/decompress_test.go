@@ -136,7 +136,7 @@ func TestDecompressZLIB(t *testing.T) {
 		var buf bytes.Buffer
 
 		zw := zlib.NewWriter(&buf)
-		zw.Write(input[i])
+		_, _ = zw.Write(input[i])
 		zw.Close()
 
 		input[i] = buf.Bytes()

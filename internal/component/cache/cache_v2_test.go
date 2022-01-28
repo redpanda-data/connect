@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -274,88 +273,4 @@ func TestCacheAirGapDelete(t *testing.T) {
 	err := agrl.Delete("foo")
 	assert.NoError(t, err)
 	assert.Equal(t, map[string]testCacheItem{}, rl.m)
-}
-
-type closableCacheType struct {
-	m      map[string]testCacheItem
-	err    error
-	closed bool
-}
-
-func (c *closableCacheType) Get(key string) ([]byte, error) {
-	if c.err != nil {
-		return nil, c.err
-	}
-	i, ok := c.m[key]
-	if !ok {
-		return nil, types.ErrKeyNotFound
-	}
-	return i.b, nil
-}
-
-func (c *closableCacheType) Set(key string, value []byte) error {
-	if c.err != nil {
-		return c.err
-	}
-	c.m[key] = testCacheItem{b: value}
-	return nil
-}
-func (c *closableCacheType) SetWithTTL(key string, value []byte, ttl *time.Duration) error {
-	if c.err != nil {
-		return c.err
-	}
-	c.m[key] = testCacheItem{
-		b: value, ttl: ttl,
-	}
-	return nil
-}
-
-func (c *closableCacheType) SetMulti(map[string][]byte) error {
-	return errors.New("not implemented")
-}
-
-func (c *closableCacheType) SetMultiWithTTL(items map[string]types.CacheTTLItem) error {
-	return errors.New("not implemented")
-}
-
-func (c *closableCacheType) Add(key string, value []byte) error {
-	if c.err != nil {
-		return c.err
-	}
-	if _, ok := c.m[key]; ok {
-		return types.ErrKeyAlreadyExists
-	}
-	c.m[key] = testCacheItem{b: value}
-	return nil
-
-}
-
-func (c *closableCacheType) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
-	if c.err != nil {
-		return c.err
-	}
-	if _, ok := c.m[key]; ok {
-		return types.ErrKeyAlreadyExists
-	}
-	c.m[key] = testCacheItem{
-		b: value, ttl: ttl,
-	}
-	return nil
-
-}
-
-func (c *closableCacheType) Delete(key string) error {
-	if c.err != nil {
-		return c.err
-	}
-	delete(c.m, key)
-	return nil
-}
-
-func (c *closableCacheType) CloseAsync() {
-	c.closed = true
-}
-
-func (c *closableCacheType) WaitForClose(t time.Duration) error {
-	return nil
 }
