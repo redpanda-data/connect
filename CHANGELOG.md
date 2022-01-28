@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `server_side_encryption` added to the `aws_s3` output.
 - Field `use_histogram_timing` added to the `prometheus` metrics exporter.
 - New duration string and back off field types added to plugin config builders.
+- Experimental field `multipart` added to the `http_client` output.
 
 ### Changed
 
