@@ -111,6 +111,7 @@ output:
       period: ""
       check: ""
       processors: []
+    multipart: []
 ```
 
 </TabItem>
@@ -762,6 +763,60 @@ processors:
 
 processors:
   - merge_json: {}
+```
+
+### `multipart`
+
+EXPERIMENTAL: Create explicit multipart HTTP requests by specifying an array of parts to add to the request, each part specified consists of content headers and a data field that can be populated dynamically. If this field is populated it will override the default request creation behaviour.
+
+
+Type: `array`  
+Default: `[]`  
+Requires version 3.63.0 or newer  
+
+### `multipart[].content_type`
+
+The content type of the individual message part.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+content_type: application/bin
+```
+
+### `multipart[].content_disposition`
+
+The content disposition of the individual message part.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+content_disposition: form-data; name="bin"; filename='${! meta("AttachmentName") }
+```
+
+### `multipart[].body`
+
+The body of the individual message part.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+body: ${! json("data.part1") }
 ```
 
 
