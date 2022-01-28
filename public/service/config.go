@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
@@ -24,6 +25,15 @@ type ConfigField struct {
 
 // NewStringField describes a new string type config field.
 func NewStringField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldString(name, ""),
+	}
+}
+
+// NewDurationField describes a new duration string type config field, allowing
+// users to define a time interval with strings of the form 60s, 3m, etc.
+func NewDurationField(name string) *ConfigField {
+	// TODO: Add linting rule for duration
 	return &ConfigField{
 		field: docs.FieldString(name, ""),
 	}
@@ -500,6 +510,28 @@ func (p *ParsedConfig) FieldString(path ...string) (string, error) {
 		return "", fmt.Errorf("expected field '%v' to be a string, got %T", p.fullDotPath(path...), v)
 	}
 	return str, nil
+}
+
+// FieldDuration accesses a duration string field from the parsed config by its
+// name. If the field is not found or is not a valid duration string an error is
+// returned.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldDuration(path ...string) (time.Duration, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	str, ok := v.(string)
+	if !ok {
+		return 0, fmt.Errorf("expected field '%v' to be a string, got %T", p.fullDotPath(path...), v)
+	}
+	d, err := time.ParseDuration(str)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse '%v' as a duration string: %w", p.fullDotPath(path...), err)
+	}
+	return d, nil
 }
 
 // FieldStringList accesses a field that is a list of strings from the parsed
