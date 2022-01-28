@@ -19,9 +19,6 @@ func (f *fakeProcMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 func (f *fakeProcMgr) GetCache(name string) (types.Cache, error) {
 	return nil, types.ErrCacheNotFound
 }
-func (f *fakeProcMgr) GetCondition(name string) (types.Condition, error) {
-	return nil, types.ErrConditionNotFound
-}
 func (f *fakeProcMgr) GetProcessor(name string) (types.Processor, error) {
 	if p, exists := f.procs[name]; exists {
 		return p, nil

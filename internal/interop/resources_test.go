@@ -106,10 +106,6 @@ func (o *oldMgr) GetCache(name string) (types.Cache, error) {
 	return nil, types.ErrCacheNotFound
 }
 
-func (o *oldMgr) GetCondition(name string) (types.Condition, error) {
-	return nil, types.ErrConditionNotFound
-}
-
 func (o *oldMgr) GetRateLimit(name string) (types.RateLimit, error) {
 	if c, ok := o.ratelimits[name]; ok {
 		return c, nil

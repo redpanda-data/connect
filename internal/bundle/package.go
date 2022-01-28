@@ -34,7 +34,6 @@ type NewManagement interface {
 
 	Metrics() metrics.Type
 	Logger() log.Modular
-	Environment() *Environment
 	BloblEnvironment() *bloblang.Environment
 
 	NewBuffer(conf buffer.Config) (buffer.Type, error)

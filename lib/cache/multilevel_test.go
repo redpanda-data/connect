@@ -24,9 +24,6 @@ func (f *fakeMgr) GetCache(name string) (types.Cache, error) {
 	}
 	return nil, types.ErrCacheNotFound
 }
-func (f *fakeMgr) GetCondition(name string) (types.Condition, error) {
-	return nil, types.ErrConditionNotFound
-}
 func (f *fakeMgr) GetRateLimit(name string) (types.RateLimit, error) {
 	return nil, types.ErrRateLimitNotFound
 }

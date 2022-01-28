@@ -115,7 +115,6 @@ func parseGetBody(t *testing.T, data *bytes.Buffer) getBody {
 
 type endpointReg struct {
 	endpoints map[string]http.HandlerFunc
-	types.DudMgr
 }
 
 func (f *endpointReg) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
@@ -124,10 +123,13 @@ func (f *endpointReg) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 
 func TestTypeAPIDisabled(t *testing.T) {
 	r := &endpointReg{endpoints: map[string]http.HandlerFunc{}}
+	rMgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), r, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	_ = manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(r),
+		manager.OptSetManager(rMgr),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 		manager.OptAPIEnabled(true),
 	)
@@ -137,7 +139,7 @@ func TestTypeAPIDisabled(t *testing.T) {
 	_ = manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(r),
+		manager.OptSetManager(rMgr),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 		manager.OptAPIEnabled(false),
 	)
@@ -148,7 +150,7 @@ func TestTypeAPIBadMethods(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetManager(types.NoopMgr()),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -296,7 +298,7 @@ func TestTypeAPIPatch(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetManager(types.NoopMgr()),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -427,7 +429,7 @@ func TestTypeAPIList(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetManager(types.NoopMgr()),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -464,7 +466,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetManager(types.NoopMgr()),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -538,7 +540,7 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetManager(types.NoopMgr()),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -572,7 +574,7 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetManager(types.NoopMgr()),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -621,7 +623,7 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetManager(types.NoopMgr()),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -653,7 +655,7 @@ func TestTypeAPILinting(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.DudMgr{}),
+		manager.OptSetManager(types.NoopMgr()),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -752,7 +754,7 @@ func TestResourceAPILinting(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.DudMgr{}, log.Noop(), metrics.Noop())
+			bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			mgr := manager.New(
@@ -794,7 +796,7 @@ func TestResourceAPILinting(t *testing.T) {
 }
 
 func TestTypeAPIGetStats(t *testing.T) {
-	mgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.DudMgr{}, log.Noop(), metrics.Noop())
+	mgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	smgr := manager.New(
@@ -833,7 +835,7 @@ func TestTypeAPIGetStats(t *testing.T) {
 }
 
 func TestTypeAPISetResources(t *testing.T) {
-	bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.DudMgr{}, log.Noop(), metrics.Noop())
+	bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	tChan := make(chan types.Transaction)

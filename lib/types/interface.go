@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-//------------------------------------------------------------------------------
-
 // Cache is a key/value store that can be shared across components and executing
 // threads of a Benthos service.
 type Cache interface {
@@ -75,14 +73,6 @@ type RateLimit interface {
 
 //------------------------------------------------------------------------------
 
-// Condition reads a message, calculates a condition and returns a boolean.
-type Condition interface {
-	// Check tests a message against a configured condition.
-	Check(msg Message) bool
-}
-
-//------------------------------------------------------------------------------
-
 // Processor reads a message, performs some form of data processing to the
 // message, and returns either a slice of >= 1 resulting messages or a response
 // to return to the message origin.
@@ -129,9 +119,6 @@ type Manager interface {
 	// GetOutput attempts to find a service wide output by its name.
 	// TODO: V4 Add this
 	// GetOutput(name string) (OutputWriter, error)
-
-	// GetPlugin attempts to find a service wide resource plugin by its name.
-	GetPlugin(name string) (interface{}, error)
 
 	// GetPipe attempts to find a service wide transaction chan by its name.
 	GetPipe(name string) (<-chan Transaction, error)
