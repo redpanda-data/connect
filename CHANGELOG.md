@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Field `use_histogram_timing` added to the `prometheus` metrics exporter.
 - New duration string and back off field types added to plugin config builders.
 - Experimental field `multipart` added to the `http_client` output.
+- Codec `regex` added to inputs.
 
 ### Changed
 
