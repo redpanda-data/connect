@@ -28,10 +28,14 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
-type part struct {
-	contentDisposition *field.Expression
-	contentType        *field.Expression
-	data               *field.Expression
+// MultipartExpressions represents three dynamic expressions that define a
+// multipart message part in an HTTP request. Specifying one or more of these
+// can be used as a way of creating HTTP requests that overrides the default
+// behaviour.
+type MultipartExpressions struct {
+	ContentDisposition *field.Expression
+	ContentType        *field.Expression
+	Body               *field.Expression
 }
 
 // Client is a component able to send and receive Benthos messages over HTTP.
@@ -44,7 +48,7 @@ type Client struct {
 
 	url        *field.Expression
 	headers    map[string]*field.Expression
-	multipart  []part
+	multipart  []MultipartExpressions
 	host       *field.Expression
 	metaFilter *metadata.Filter
 
@@ -217,21 +221,9 @@ func OptSetLogger(log log.Modular) func(*Client) {
 }
 
 // OptSetMultiPart sets the multipart to request.
-func OptSetMultiPart(multipart []client.Part) func(*Client) {
+func OptSetMultiPart(multipart []MultipartExpressions) func(*Client) {
 	return func(t *Client) {
-		if len(multipart) > 0 {
-			for _, v := range multipart {
-				data, _ := interop.NewBloblangField(t.mgr, v.Data)
-				contentDisposition, _ := interop.NewBloblangField(t.mgr, v.ContentDisposition)
-				contentType, _ := interop.NewBloblangField(t.mgr, v.ContentType)
-				c := part{
-					contentDisposition: contentDisposition,
-					contentType:        contentType,
-					data:               data,
-				}
-				t.multipart = append(t.multipart, c)
-			}
-		}
+		t.multipart = multipart
 	}
 }
 
@@ -321,12 +313,12 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 		for _, v := range h.multipart {
 			var part io.Writer
 			mh := make(textproto.MIMEHeader)
-			mh.Set("Content-Type", v.contentType.String(0, refMsg))
-			mh.Set("Content-Disposition", v.contentDisposition.String(0, refMsg))
+			mh.Set("Content-Type", v.ContentType.String(0, refMsg))
+			mh.Set("Content-Disposition", v.ContentDisposition.String(0, refMsg))
 			if part, err = writer.CreatePart(mh); err != nil {
 				return
 			}
-			if _, err = io.Copy(part, bytes.NewReader([]byte(v.data.String(0, refMsg)))); err != nil {
+			if _, err = io.Copy(part, bytes.NewReader([]byte(v.Body.String(0, refMsg)))); err != nil {
 				return
 			}
 		}
@@ -535,7 +527,6 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 	}()
 
 	startedAt := time.Now()
-
 	if !h.waitForAccess(ctx) {
 		return nil, types.ErrTypeClosed
 	}

@@ -42,12 +42,12 @@ these propagated responses.`,
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 			docs.FieldAdvanced(
-				"multipart", "A array of parts to add to the request.",
-			).Array().HasType(docs.FieldTypeObject).HasDefault([]client.Part{}).WithChildren(
-				docs.FieldString("content_type", "content type of a single part of the request.").HasDefault(""),
-				docs.FieldString("content_disposition", "content disposition of a single part of the request.").HasDefault(""),
-				docs.FieldString("data", "data of a single part of the request.").HasDefault(""),
-			),
+				"multipart", "EXPERIMENTAL: Create explicit multipart HTTP requests by specifying an array of parts to add to the request, each part specified consists of content headers and a data field that can be populated dynamically. If this field is populated it will override the default request creation behaviour.",
+			).Array().HasType(docs.FieldTypeObject).HasDefault([]interface{}{}).WithChildren(
+				docs.FieldInterpolatedString("content_type", "The content type of the individual message part.", "application/bin").HasDefault(""),
+				docs.FieldInterpolatedString("content_disposition", "The content disposition of the individual message part.", `form-data; name="bin"; filename='${! meta("AttachmentName") }`).HasDefault(""),
+				docs.FieldInterpolatedString("body", "The body of the individual message part.", `${! json("data.part1") }`).HasDefault(""),
+			).AtVersion("3.63.0"),
 		),
 		Categories: []Category{
 			CategoryNetwork,
