@@ -28,6 +28,16 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
+// MultipartExpressions represents three dynamic expressions that define a
+// multipart message part in an HTTP request. Specifying one or more of these
+// can be used as a way of creating HTTP requests that overrides the default
+// behaviour.
+type MultipartExpressions struct {
+	ContentDisposition *field.Expression
+	ContentType        *field.Expression
+	Body               *field.Expression
+}
+
 // Client is a component able to send and receive Benthos messages over HTTP.
 type Client struct {
 	client *http.Client
@@ -38,6 +48,7 @@ type Client struct {
 
 	url               *field.Expression
 	headers           map[string]*field.Expression
+	multipart         []MultipartExpressions
 	host              *field.Expression
 	metaInsertFilter  *metadata.IncludeFilter
 	metaExtractFilter *metadata.IncludeFilter
@@ -215,6 +226,13 @@ func OptSetLogger(log log.Modular) func(*Client) {
 	}
 }
 
+// OptSetMultiPart sets the multipart to request.
+func OptSetMultiPart(multipart []MultipartExpressions) func(*Client) {
+	return func(t *Client) {
+		t.multipart = multipart
+	}
+}
+
 // OptSetStats sets the metrics aggregator to use.
 func OptSetStats(stats metrics.Type) func(*Client) {
 	return func(t *Client) {
@@ -295,8 +313,25 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request, err error) {
 	var overrideContentType string
 	var body io.Reader
-
-	if sendMsg != nil && sendMsg.Len() == 1 {
+	if len(h.multipart) > 0 {
+		buf := &bytes.Buffer{}
+		writer := multipart.NewWriter(buf)
+		for _, v := range h.multipart {
+			var part io.Writer
+			mh := make(textproto.MIMEHeader)
+			mh.Set("Content-Type", v.ContentType.String(0, refMsg))
+			mh.Set("Content-Disposition", v.ContentDisposition.String(0, refMsg))
+			if part, err = writer.CreatePart(mh); err != nil {
+				return
+			}
+			if _, err = io.Copy(part, bytes.NewReader([]byte(v.Body.String(0, refMsg)))); err != nil {
+				return
+			}
+		}
+		writer.Close()
+		overrideContentType = writer.FormDataContentType()
+		body = buf
+	} else if sendMsg != nil && sendMsg.Len() == 1 {
 		if msgBytes := sendMsg.Get(0).Get(); len(msgBytes) > 0 {
 			body = bytes.NewBuffer(msgBytes)
 		}
