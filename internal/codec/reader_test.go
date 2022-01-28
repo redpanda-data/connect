@@ -742,3 +742,30 @@ func TestMultipartLinesReader(t *testing.T) {
 	data = []byte("")
 	testReaderSuite(t, "lines/multipart", "", data)
 }
+
+func TestRegexpSplitReader(t *testing.T) {
+	data := []byte("foo\nbar\nbaz")
+	testReaderSuite(t, "regex:(?m)^", "", data, "foo\n", "bar\n", "baz")
+
+	data = []byte("foo\nbar\nsplit\nbaz\nsplitsplit")
+	testReaderSuite(t, "regex:split", "", data, "foo\nbar\n", "split\nbaz\n", "split", "split")
+
+	data = []byte("split")
+	testReaderSuite(t, "regex:\\n", "", data, "split")
+	testReaderSuite(t, "regex:split", "", data, "split")
+
+	data = []byte("foo\nbar\nsplit\nbaz\nsplitsplit")
+	testReaderSuite(t, "regex:\\n", "", data, "foo", "\nbar", "\nsplit", "\nbaz", "\nsplitsplit")
+
+	data = []byte("foo\nbar\nsplit\nbaz")
+	testReaderSuite(t, "regex:\\n", "", data, "foo", "\nbar", "\nsplit", "\nbaz")
+
+	data = []byte("20:20:22 ERROR\nCode\n20:20:21 INFO\n20:20:21 INFO\n20:20:22 ERROR\nCode\n")
+	testReaderSuite(t, "regex:\\n\\d", "", data, "20:20:22 ERROR\nCode", "\n20:20:21 INFO", "\n20:20:21 INFO", "\n20:20:22 ERROR\nCode\n")
+
+	data = []byte("20:20:22 ERROR\nCode\n20:20:21 INFO\n20:20:21 INFO\n20:20\n20:20:22 ERROR\nCode\n2022")
+	testReaderSuite(t, "regex:(?m)^\\d\\d:\\d\\d:\\d\\d", "", data, "20:20:22 ERROR\nCode\n", "20:20:21 INFO\n", "20:20:21 INFO\n20:20\n", "20:20:22 ERROR\nCode\n2022")
+
+	data = []byte("")
+	testReaderSuite(t, "regex:split", "", data)
+}

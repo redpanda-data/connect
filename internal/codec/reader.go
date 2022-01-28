@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +34,7 @@ var ReaderDocs = docs.FieldCommon(
 	"gzip", "Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc.",
 	"lines", "Consume the file in segments divided by linebreaks.",
 	"multipart", "Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch.",
+	"regex:(?m)^\\d\\d:\\d\\d:\\d\\d", "Consume the file in segments divided by regular expression.",
 	"tar", "Parse the file as a tar archive, and consume each file of the archive as a message.",
 )
 
@@ -230,11 +232,11 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 	if strings.HasPrefix(codec, "csv:") {
 		by := strings.TrimPrefix(codec, "csv:")
 		if by == "" {
-			return nil, false, errors.New("custom delimiter codec requires a non-empty delimiter")
+			return nil, false, errors.New("csv codec requires a non-empty delimiter")
 		}
 		byRunes := []rune(by)
 		if len(byRunes) != 1 {
-			return nil, false, errors.New("custom delimiter codec requires a single character delimiter")
+			return nil, false, errors.New("csv codec requires a single character delimiter")
 		}
 		byRune := byRunes[0]
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
@@ -248,6 +250,15 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		}
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newChunkerReader(conf, r, chunkSize, fn)
+		}, true, nil
+	}
+	if strings.HasPrefix(codec, "regex:") {
+		by := strings.TrimPrefix(codec, "regex:")
+		if by == "" {
+			return nil, false, errors.New("regex codec requires a non-empty delimiter")
+		}
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newRexExpSplitReader(conf, r, by, fn)
 		}, true, nil
 	}
 	return nil, false, nil
@@ -802,4 +813,114 @@ func (m *multipartReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, 
 
 func (m *multipartReader) Close(ctx context.Context) error {
 	return m.child.Close(ctx)
+}
+
+//------------------------------------------------------------------------------
+
+type regexReader struct {
+	buf       *bufio.Scanner
+	r         io.ReadCloser
+	sourceAck ReaderAckFn
+
+	mut      sync.Mutex
+	finished bool
+	pending  int32
+}
+
+func newRexExpSplitReader(conf ReaderConfig, r io.ReadCloser, regex string, ackFn ReaderAckFn) (Reader, error) {
+	scanner := bufio.NewScanner(r)
+	if conf.MaxScanTokenSize != bufio.MaxScanTokenSize {
+		scanner.Buffer([]byte{}, conf.MaxScanTokenSize)
+	}
+
+	compiled, err := regexp.Compile(regex)
+
+	if err != nil {
+		return nil, err
+	}
+
+	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+
+		loc := compiled.FindAllIndex(data, 2)
+		if loc == nil {
+			if atEOF {
+				return len(data), data, nil
+			}
+			return 0, nil, nil
+		}
+
+		if len(loc) == 1 {
+			if atEOF {
+				if loc[0][0] == 0 {
+					return len(data), data, nil
+				}
+				return loc[0][0], data[0:loc[0][0]], nil
+			}
+			return 0, nil, nil
+		}
+		if loc[0][0] == 0 {
+			return loc[1][0], data[0:loc[1][0]], nil
+		}
+		return loc[0][0], data[0:loc[0][0]], nil
+	})
+
+	return &regexReader{
+		buf:       scanner,
+		r:         r,
+		sourceAck: ackOnce(ackFn),
+	}, nil
+}
+
+func (a *regexReader) ack(ctx context.Context, err error) error {
+	a.mut.Lock()
+	a.pending--
+	doAck := a.pending == 0 && a.finished
+	a.mut.Unlock()
+
+	if err != nil {
+		return a.sourceAck(ctx, err)
+	}
+	if doAck {
+		return a.sourceAck(ctx, nil)
+	}
+	return nil
+}
+
+func (a *regexReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+	scanned := a.buf.Scan()
+
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if scanned {
+		a.pending++
+
+		bytesCopy := make([]byte, len(a.buf.Bytes()))
+		copy(bytesCopy, a.buf.Bytes())
+		return []types.Part{message.NewPart(bytesCopy)}, a.ack, nil
+	}
+	err := a.buf.Err()
+	if err == nil {
+		err = io.EOF
+		a.finished = true
+	} else {
+		_ = a.sourceAck(ctx, err)
+	}
+	return nil, nil, err
+}
+
+func (a *regexReader) Close(ctx context.Context) error {
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if !a.finished {
+		_ = a.sourceAck(ctx, errors.New("service shutting down"))
+	}
+	if a.pending == 0 {
+		_ = a.sourceAck(ctx, nil)
+	}
+	return a.r.Close()
 }
