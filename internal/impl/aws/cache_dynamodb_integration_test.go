@@ -1,4 +1,4 @@
-package cache
+package aws
 
 import (
 	"context"
@@ -69,7 +69,8 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 	})
 }
 
-var _ = registerIntegrationTest("dynamodb", func(t *testing.T) {
+func TestIntegrationDynamoDBCache(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -120,4 +121,4 @@ cache_resources:
 			require.NoError(t, createTable(ctx, t, resource.GetPort("8000/tcp"), testID))
 		}),
 	)
-})
+}
