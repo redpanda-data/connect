@@ -55,16 +55,13 @@ output:
 
 Caches are configured as [resources](/docs/components/caches/about) and can target any of the following types:
 
-- [`aws_dynamodb`](/docs/components/caches/aws_dynamodb)
 - [`aws_s3`](/docs/components/caches/aws_s3)
-- [`dynamodb`](/docs/components/caches/dynamodb)
 - [`file`](/docs/components/caches/file)
 - [`memcached`](/docs/components/caches/memcached)
 - [`memory`](/docs/components/caches/memory)
 - [`multilevel`](/docs/components/caches/multilevel)
 - [`redis`](/docs/components/caches/redis)
 - [`ristretto`](/docs/components/caches/ristretto)
-- [`s3`](/docs/components/caches/s3)
 
 The `target` field must point to a configured cache like follows:
 

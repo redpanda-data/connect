@@ -34,7 +34,7 @@ input:
     addresses:
       - localhost:9092
     topics: []
-    target_version: 1.0.0
+    target_version: 2.0.0
     consumer_group: benthos_consumer_group
     client_id: benthos_kafka_input
     checkpoint_limit: 1
@@ -51,7 +51,7 @@ input:
     addresses:
       - localhost:9092
     topics: []
-    target_version: 1.0.0
+    target_version: 2.0.0
     tls:
       enabled: false
       skip_cert_verify: false
@@ -183,7 +183,7 @@ The version of the Kafka protocol to use. This limits the capabilities used by t
 
 
 Type: `string`  
-Default: `"1.0.0"`  
+Default: `"2.0.0"`  
 
 ### `tls`
 
