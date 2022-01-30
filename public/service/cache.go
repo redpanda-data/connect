@@ -74,8 +74,8 @@ func newAirGapCache(c Cache, stats metrics.Type) types.Cache {
 
 func (a *airGapCache) Get(ctx context.Context, key string) ([]byte, error) {
 	b, err := a.c.Get(ctx, key)
-	if errors.Is(err, types.ErrKeyNotFound) {
-		err = ErrKeyNotFound
+	if errors.Is(err, ErrKeyNotFound) {
+		err = types.ErrKeyNotFound
 	}
 	return b, err
 }
@@ -106,8 +106,8 @@ func (a *airGapCache) SetMulti(ctx context.Context, keyValues map[string]types.C
 
 func (a *airGapCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	err := a.c.Add(ctx, key, value, ttl)
-	if errors.Is(err, types.ErrKeyAlreadyExists) {
-		err = ErrKeyAlreadyExists
+	if errors.Is(err, ErrKeyAlreadyExists) {
+		err = types.ErrKeyAlreadyExists
 	}
 	return err
 }
