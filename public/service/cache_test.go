@@ -70,6 +70,25 @@ func (c *closableCache) Close(ctx context.Context) error {
 	return nil
 }
 
+type closableCacheMulti struct {
+	*closableCache
+
+	multiItems map[string]testCacheItem
+}
+
+func (c *closableCacheMulti) SetMulti(ctx context.Context, keyValues ...CacheItem) error {
+	if c.closableCache.err != nil {
+		return c.closableCache.err
+	}
+	for _, kv := range keyValues {
+		c.multiItems[kv.Key] = testCacheItem{
+			b:   kv.Value,
+			ttl: kv.TTL,
+		}
+	}
+	return nil
+}
+
 func TestCacheAirGapShutdown(t *testing.T) {
 	rl := &closableCache{}
 	agrl := newAirGapCache(rl, metrics.Noop())
@@ -180,6 +199,41 @@ func TestCacheAirGapSetMultiWithTTL(t *testing.T) {
 			ttl: &ttl2,
 		},
 	}, rl.m)
+}
+
+func TestCacheAirGapSetMultiWithTTLPassthrough(t *testing.T) {
+	rl := &closableCacheMulti{
+		closableCache: &closableCache{
+			m: map[string]testCacheItem{},
+		},
+		multiItems: map[string]testCacheItem{},
+	}
+	agrl := newAirGapCache(rl, metrics.Noop()).(types.CacheWithTTL)
+
+	ttl1, ttl2 := time.Second, time.Millisecond
+
+	err := agrl.SetMultiWithTTL(map[string]types.CacheTTLItem{
+		"first": {
+			Value: []byte("bar"),
+			TTL:   &ttl1,
+		},
+		"second": {
+			Value: []byte("baz"),
+			TTL:   &ttl2,
+		},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, map[string]testCacheItem{}, rl.m)
+	assert.Equal(t, map[string]testCacheItem{
+		"first": {
+			b:   []byte("bar"),
+			ttl: &ttl1,
+		},
+		"second": {
+			b:   []byte("baz"),
+			ttl: &ttl2,
+		},
+	}, rl.multiItems)
 }
 
 func TestCacheAirGapSetWithTTL(t *testing.T) {

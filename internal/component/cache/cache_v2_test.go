@@ -43,6 +43,18 @@ func (c *closableCache) Set(ctx context.Context, key string, value []byte, ttl *
 	return nil
 }
 
+func (c *closableCache) SetMulti(ctx context.Context, keyValues map[string]types.CacheTTLItem) error {
+	if c.err != nil {
+		return c.err
+	}
+	for k, v := range keyValues {
+		c.m[k] = testCacheItem{
+			b: v.Value, ttl: v.TTL,
+		}
+	}
+	return nil
+}
+
 func (c *closableCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	if c.err != nil {
 		return c.err

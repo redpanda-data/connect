@@ -67,6 +67,15 @@ func (f *fileV2) Set(_ context.Context, key string, value []byte, _ *time.Durati
 	return os.WriteFile(filepath.Join(f.dir, key), value, 0o644)
 }
 
+func (f *fileV2) SetMulti(ctx context.Context, keyValues map[string]types.CacheTTLItem) error {
+	for k, v := range keyValues {
+		if err := f.Set(ctx, k, v.Value, v.TTL); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (f *fileV2) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
 	file, err := os.OpenFile(filepath.Join(f.dir, key), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {

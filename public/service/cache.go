@@ -40,17 +40,36 @@ type Cache interface {
 	Closer
 }
 
+// CacheItem represents an individual cache item.
+type CacheItem struct {
+	Key   string
+	Value []byte
+	TTL   *time.Duration
+}
+
+// batchedCache represents a cache where the underlying implementation is able
+// to benefit from batched set requests. This interface is optional for caches
+// and when implemented will automatically be utilised where possible.
+type batchedCache interface {
+	// SetMulti attempts to set multiple cache items in as few requests as
+	// possible.
+	SetMulti(ctx context.Context, keyValues ...CacheItem) error
+}
+
 //------------------------------------------------------------------------------
 
 // Implements types.Cache
 type airGapCache struct {
-	c Cache
+	c  Cache
+	cm batchedCache
 
 	sig *shutdown.Signaller
 }
 
 func newAirGapCache(c Cache, stats metrics.Type) types.Cache {
-	return cache.NewV2ToV1Cache(&airGapCache{c, shutdown.NewSignaller()}, stats)
+	ag := &airGapCache{c, nil, shutdown.NewSignaller()}
+	ag.cm, _ = c.(batchedCache)
+	return cache.NewV2ToV1Cache(ag, stats)
 }
 
 func (a *airGapCache) Get(ctx context.Context, key string) ([]byte, error) {
@@ -63,6 +82,26 @@ func (a *airGapCache) Get(ctx context.Context, key string) ([]byte, error) {
 
 func (a *airGapCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	return a.c.Set(ctx, key, value, ttl)
+}
+
+func (a *airGapCache) SetMulti(ctx context.Context, keyValues map[string]types.CacheTTLItem) error {
+	if a.cm != nil {
+		items := make([]CacheItem, 0, len(keyValues))
+		for k, v := range keyValues {
+			items = append(items, CacheItem{
+				Key:   k,
+				Value: v.Value,
+				TTL:   v.TTL,
+			})
+		}
+		return a.cm.SetMulti(ctx, items...)
+	}
+	for k, v := range keyValues {
+		if err := a.c.Set(ctx, k, v.Value, v.TTL); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *airGapCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {

@@ -218,6 +218,15 @@ func (m *memoryV2) Set(_ context.Context, key string, value []byte, _ *time.Dura
 	return nil
 }
 
+func (m *memoryV2) SetMulti(ctx context.Context, keyValues map[string]types.CacheTTLItem) error {
+	for k, v := range keyValues {
+		if err := m.Set(ctx, k, v.Value, v.TTL); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *memoryV2) Add(_ context.Context, key string, value []byte, _ *time.Duration) error {
 	shard := m.getShard(key)
 	shard.Lock()
