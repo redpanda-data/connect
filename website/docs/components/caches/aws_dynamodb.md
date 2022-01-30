@@ -14,9 +14,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Stores key/value pairs as a single document in a DynamoDB table. The key is
-stored as a string value and used as the table hash key. The value is stored as
+Stores key/value pairs as a single document in a DynamoDB table. The key is stored as a string value and used as the table hash key. The value is stored as
 a binary value using the `data_key` field name.
 
 Introduced in version 3.36.0.
@@ -36,7 +34,9 @@ aws_dynamodb:
   table: ""
   hash_key: ""
   data_key: ""
-  region: eu-west-1
+  region: ""
+  credentials:
+    profile: ""
 ```
 
 </TabItem>
@@ -52,7 +52,11 @@ aws_dynamodb:
   consistent_read: false
   ttl: ""
   ttl_key: ""
-  region: eu-west-1
+  retries:
+    initial_interval: 500ms
+    max_interval: 60s
+    max_elapsed_time: 15m
+  region: ""
   endpoint: ""
   credentials:
     profile: ""
@@ -61,29 +65,15 @@ aws_dynamodb:
     token: ""
     role: ""
     role_external_id: ""
-  max_retries: 3
-  backoff:
-    initial_interval: 1s
-    max_interval: 5s
-    max_elapsed_time: 30s
 ```
 
 </TabItem>
 </Tabs>
 
-A prefix can be specified to allow multiple cache types to share a single
-DynamoDB table. An optional TTL duration (`ttl`) and field
+A prefix can be specified to allow multiple cache types to share a single DynamoDB table. An optional TTL duration (`ttl`) and field
 (`ttl_key`) can be specified if the backing table has TTL enabled.
 
-Strong read consistency can be enabled using the `consistent_read`
-configuration field.
-
-### Credentials
-
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).
+Strong read consistency can be enabled using the `consistent_read` configuration field.
 
 ## Fields
 
@@ -93,7 +83,6 @@ The table to store items in.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `hash_key`
 
@@ -101,7 +90,6 @@ The key of the table column to store item keys within.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `data_key`
 
@@ -109,7 +97,6 @@ The key of the table column to store item values within.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `consistent_read`
 
@@ -125,7 +112,6 @@ An optional TTL to set for items, calculated from the moment the item is cached.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `ttl_key`
 
@@ -133,7 +119,61 @@ The column key to place the TTL value within.
 
 
 Type: `string`  
-Default: `""`  
+
+### `retries`
+
+Determine time intervals between retry attempts.
+
+
+Type: `object`  
+
+### `retries.initial_interval`
+
+The initial period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"500ms"`  
+
+```yaml
+# Examples
+
+initial_interval: 50ms
+
+initial_interval: 1s
+```
+
+### `retries.max_interval`
+
+The maximum period to wait between retry attempts
+
+
+Type: `string`  
+Default: `"60s"`  
+
+```yaml
+# Examples
+
+max_interval: 5s
+
+max_interval: 1m
+```
+
+### `retries.max_elapsed_time`
+
+The maximum overall period of time to spend on retry attempts before the request is aborted.
+
+
+Type: `string`  
+Default: `"15m"`  
+
+```yaml
+# Examples
+
+max_elapsed_time: 1m
+
+max_elapsed_time: 1h
+```
 
 ### `region`
 
@@ -141,7 +181,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 
@@ -205,44 +245,5 @@ An external ID to provide when assuming a role.
 
 Type: `string`  
 Default: `""`  
-
-### `max_retries`
-
-The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
-
-
-Type: `int`  
-Default: `3`  
-
-### `backoff`
-
-Control time intervals between retry attempts.
-
-
-Type: `object`  
-
-### `backoff.initial_interval`
-
-The initial period to wait between retry attempts.
-
-
-Type: `string`  
-Default: `"1s"`  
-
-### `backoff.max_interval`
-
-The maximum period to wait between retry attempts.
-
-
-Type: `string`  
-Default: `"5s"`  
-
-### `backoff.max_elapsed_time`
-
-The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
-
-
-Type: `string`  
-Default: `"30s"`  
 
 
