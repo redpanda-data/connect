@@ -1,4 +1,4 @@
-package cache
+package memcached
 
 import (
 	"fmt"
@@ -6,15 +6,14 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/integration"
-	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var _ = registerIntegrationTest("memcached", func(t *testing.T) {
+func TestIntegrationMemcachedCache(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -30,20 +29,16 @@ var _ = registerIntegrationTest("memcached", func(t *testing.T) {
 
 	resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		addrs := []string{fmt.Sprintf("localhost:%v", resource.GetPort("11211/tcp"))}
-
-		conf := cache.NewConfig()
-		conf.Memcached.Addresses = addrs
-
-		mCache, cErr := cache.NewMemcached(conf, nil, log.Noop(), metrics.Noop())
+		client := memcache.New(fmt.Sprintf("localhost:%v", resource.GetPort("11211/tcp")))
+		cErr := client.Set(&memcache.Item{
+			Key:        "testkey",
+			Value:      []byte("testvalue"),
+			Expiration: 30,
+		})
 		if cErr != nil {
 			return cErr
 		}
-
-		if cErr = mCache.Set("testkey", []byte("testvalue")); cErr != nil {
-			return cErr
-		}
-		if _, cErr = mCache.Get("testkey"); cErr != nil {
+		if _, cErr = client.Get("testkey"); cErr != nil {
 			return cErr
 		}
 		return nil
@@ -67,4 +62,4 @@ cache_resources:
 		t, template,
 		integration.CacheTestOptPort(resource.GetPort("11211/tcp")),
 	)
-})
+}

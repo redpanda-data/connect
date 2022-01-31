@@ -17,6 +17,11 @@ import (
 )
 
 func dynCacheConfig() *service.ConfigSpec {
+	retriesDefaults := backoff.NewExponentialBackOff()
+	retriesDefaults.InitialInterval = time.Second
+	retriesDefaults.MaxInterval = time.Second * 5
+	retriesDefaults.MaxElapsedTime = time.Second * 30
+
 	spec := service.NewConfigSpec().
 		Stable().
 		Version("3.36.0").
@@ -36,16 +41,15 @@ Strong read consistency can be enabled using the ` + "`consistent_read`" + ` con
 			Description("Whether to use strongly consistent reads on Get commands.").
 			Advanced().
 			Default(false)).
-		Field(service.NewStringField("ttl").
-			Description("An optional TTL to set for items, calculated from the moment the item is cached.").
+		Field(service.NewDurationField("default_ttl").
+			Description("An optional default TTL to set for items, calculated from the moment the item is cached. A `ttl_key` must be specified in order to set item TTLs.").
 			Optional().
 			Advanced()).
 		Field(service.NewStringField("ttl_key").
 			Description("The column key to place the TTL value within.").
 			Optional().
 			Advanced()).
-		Field(service.NewBackOffField("retries", false).
-			Description("Determine time intervals between retry attempts.").
+		Field(service.NewBackOffField("retries", false, retriesDefaults).
 			Advanced())
 
 	for _, f := range sessionFields() {
@@ -91,8 +95,8 @@ func newDynamodbCacheFromConfig(conf *service.ParsedConfig) (*dynamodbCache, err
 		return nil, err
 	}
 	var ttl *time.Duration
-	if conf.Contains("ttl") {
-		ttlTmp, err := conf.FieldDuration("ttl")
+	if conf.Contains("default_ttl") {
+		ttlTmp, err := conf.FieldDuration("default_ttl")
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +120,7 @@ func newDynamodbCacheFromConfig(conf *service.ParsedConfig) (*dynamodbCache, err
 	if err != nil {
 		return nil, err
 	}
-	return newDynamodbCache(client, table, hashKey, dataKey, consistentRead, ttlKey, ttl, backOff)
+	return newDynamodbCache(client, table, hashKey, dataKey, consistentRead, ttlKey, ttl, backOff), nil
 }
 
 //------------------------------------------------------------------------------
@@ -140,7 +144,7 @@ func newDynamodbCache(
 	consistentRead bool,
 	ttlKey *string, ttl *time.Duration,
 	backOff *backoff.ExponentialBackOff,
-) (*dynamodbCache, error) {
+) *dynamodbCache {
 	return &dynamodbCache{
 		client:         client,
 		table:          aws.String(table),
@@ -156,7 +160,7 @@ func newDynamodbCache(
 				return &bo
 			},
 		},
-	}, nil
+	}
 }
 
 func (d *dynamodbCache) verify() error {
@@ -193,7 +197,7 @@ func (d *dynamodbCache) Get(ctx context.Context, key string) ([]byte, error) {
 		select {
 		case <-time.After(wait):
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, err
 		}
 		result, err = d.get(key)
 	}
@@ -238,7 +242,7 @@ func (d *dynamodbCache) Set(ctx context.Context, key string, value []byte, ttl *
 		select {
 		case <-time.After(wait):
 		case <-ctx.Done():
-			return ctx.Err()
+			return err
 		}
 		_, err = d.client.PutItem(d.putItemInput(key, value, ttl))
 	}
@@ -286,7 +290,7 @@ func (d *dynamodbCache) SetMulti(ctx context.Context, items ...service.CacheItem
 			select {
 			case <-time.After(wait):
 			case <-ctx.Done():
-				return ctx.Err()
+				return err
 			}
 		}
 	}
@@ -310,7 +314,7 @@ func (d *dynamodbCache) Add(ctx context.Context, key string, value []byte, ttl *
 		select {
 		case <-time.After(wait):
 		case <-ctx.Done():
-			return ctx.Err()
+			return err
 		}
 		err = d.add(key, value, ttl)
 	}
@@ -357,7 +361,7 @@ func (d *dynamodbCache) Delete(ctx context.Context, key string) error {
 		select {
 		case <-time.After(wait):
 		case <-ctx.Done():
-			return ctx.Err()
+			return err
 		}
 		err = d.delete(key)
 	}

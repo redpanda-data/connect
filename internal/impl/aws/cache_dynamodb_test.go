@@ -53,7 +53,7 @@ table: foo
 hash_key: bar
 data_key: baz
 consistent_read: true
-ttl: 1s
+default_ttl: 1s
 ttl_key: buz
 `,
 			exp: &dynamodbCache{

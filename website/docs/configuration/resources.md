@@ -34,7 +34,7 @@ processor_resources:
 cache_resources:
   - label: baz
     memory:
-      ttl: 300
+      default_ttl: 300s
 
 output_resources:
   - label: buz

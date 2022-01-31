@@ -65,15 +65,9 @@ var Constructors = map[string]TypeSpec{}
 // Deprecated: Do not add new components here. Instead, use the public plugin
 // APIs. Examples can be found in: ./internal/impl
 const (
-	TypeAWSS3      = "aws_s3"
-	TypeFile       = "file"
-	TypeMemcached  = "memcached"
-	TypeMemory     = "memory"
-	TypeMongoDB    = "mongodb"
-	TypeMultilevel = "multilevel"
-	TypeRedis      = "redis"
-	TypeRistretto  = "ristretto"
-	TypeS3         = "s3"
+	TypeMongoDB   = "mongodb"
+	TypeRedis     = "redis"
+	TypeRistretto = "ristretto"
 )
 
 //------------------------------------------------------------------------------
@@ -82,35 +76,23 @@ const (
 // Deprecated: Do not add new components here. Instead, use the public plugin
 // APIs. Examples can be found in: ./internal/impl
 type Config struct {
-	Label      string           `json:"label" yaml:"label"`
-	Type       string           `json:"type" yaml:"type"`
-	AWSS3      S3Config         `json:"aws_s3" yaml:"aws_s3"`
-	File       FileConfig       `json:"file" yaml:"file"`
-	Memcached  MemcachedConfig  `json:"memcached" yaml:"memcached"`
-	Memory     MemoryConfig     `json:"memory" yaml:"memory"`
-	MongoDB    MongoDBConfig    `json:"mongodb" yaml:"mongodb"`
-	Multilevel MultilevelConfig `json:"multilevel" yaml:"multilevel"`
-	Plugin     interface{}      `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	Redis      RedisConfig      `json:"redis" yaml:"redis"`
-	Ristretto  RistrettoConfig  `json:"ristretto" yaml:"ristretto"`
-	S3         S3Config         `json:"s3" yaml:"s3"`
+	Label     string          `json:"label" yaml:"label"`
+	Type      string          `json:"type" yaml:"type"`
+	MongoDB   MongoDBConfig   `json:"mongodb" yaml:"mongodb"`
+	Plugin    interface{}     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Redis     RedisConfig     `json:"redis" yaml:"redis"`
+	Ristretto RistrettoConfig `json:"ristretto" yaml:"ristretto"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Label:      "",
-		Type:       "memory",
-		AWSS3:      NewS3Config(),
-		File:       NewFileConfig(),
-		Memcached:  NewMemcachedConfig(),
-		Memory:     NewMemoryConfig(),
-		MongoDB:    NewMongoDBConfig(),
-		Multilevel: NewMultilevelConfig(),
-		Plugin:     nil,
-		Redis:      NewRedisConfig(),
-		Ristretto:  NewRistrettoConfig(),
-		S3:         NewS3Config(),
+		Label:     "",
+		Type:      "memory",
+		MongoDB:   NewMongoDBConfig(),
+		Plugin:    nil,
+		Redis:     NewRedisConfig(),
+		Ristretto: NewRistrettoConfig(),
 	}
 }
 

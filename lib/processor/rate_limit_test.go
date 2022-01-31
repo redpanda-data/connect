@@ -8,20 +8,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
-
-type fakeRateLimit struct {
-	resFn func() (time.Duration, error)
-}
-
-func (f fakeRateLimit) Access() (time.Duration, error) {
-	return f.resFn()
-}
-func (f fakeRateLimit) CloseAsync()                      {}
-func (f fakeRateLimit) WaitForClose(time.Duration) error { return nil }
 
 func TestRateLimitBasic(t *testing.T) {
 	var hits int32
@@ -30,11 +21,8 @@ func TestRateLimitBasic(t *testing.T) {
 		return 0, nil
 	}
 
-	mgr := &fakeMgr{
-		ratelimits: map[string]types.RateLimit{
-			"foo": fakeRateLimit{resFn: rlFn},
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.RateLimits["foo"] = rlFn
 
 	conf := NewConfig()
 	conf.RateLimit.Resource = "foo"
@@ -76,11 +64,8 @@ func TestRateLimitClosed(t *testing.T) {
 		return 0, nil
 	}
 
-	mgr := &fakeMgr{
-		ratelimits: map[string]types.RateLimit{
-			"foo": fakeRateLimit{resFn: rlFn},
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.RateLimits["foo"] = rlFn
 
 	conf := NewConfig()
 	conf.RateLimit.Resource = "foo"
@@ -118,11 +103,8 @@ func TestRateLimitErroredOut(t *testing.T) {
 		return 0, errors.New("omg foo")
 	}
 
-	mgr := &fakeMgr{
-		ratelimits: map[string]types.RateLimit{
-			"foo": fakeRateLimit{resFn: rlFn},
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.RateLimits["foo"] = rlFn
 
 	conf := NewConfig()
 	conf.RateLimit.Resource = "foo"
@@ -167,11 +149,8 @@ func TestRateLimitBlocked(t *testing.T) {
 		return time.Second * 10, nil
 	}
 
-	mgr := &fakeMgr{
-		ratelimits: map[string]types.RateLimit{
-			"foo": fakeRateLimit{resFn: rlFn},
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.RateLimits["foo"] = rlFn
 
 	conf := NewConfig()
 	conf.RateLimit.Resource = "foo"

@@ -50,12 +50,12 @@ aws_dynamodb:
   hash_key: ""
   data_key: ""
   consistent_read: false
-  ttl: ""
+  default_ttl: ""
   ttl_key: ""
   retries:
-    initial_interval: 500ms
-    max_interval: 60s
-    max_elapsed_time: 15m
+    initial_interval: 1s
+    max_interval: 5s
+    max_elapsed_time: 30s
   region: ""
   endpoint: ""
   credentials:
@@ -106,9 +106,9 @@ Whether to use strongly consistent reads on Get commands.
 Type: `bool`  
 Default: `false`  
 
-### `ttl`
+### `default_ttl`
 
-An optional TTL to set for items, calculated from the moment the item is cached.
+An optional default TTL to set for items, calculated from the moment the item is cached. A `ttl_key` must be specified in order to set item TTLs.
 
 
 Type: `string`  
@@ -122,7 +122,7 @@ Type: `string`
 
 ### `retries`
 
-Determine time intervals between retry attempts.
+Determine time intervals and cut offs for retry attempts.
 
 
 Type: `object`  
@@ -133,7 +133,7 @@ The initial period to wait between retry attempts.
 
 
 Type: `string`  
-Default: `"500ms"`  
+Default: `"1s"`  
 
 ```yaml
 # Examples
@@ -149,7 +149,7 @@ The maximum period to wait between retry attempts
 
 
 Type: `string`  
-Default: `"60s"`  
+Default: `"5s"`  
 
 ```yaml
 # Examples
@@ -165,7 +165,7 @@ The maximum overall period of time to spend on retry attempts before the request
 
 
 Type: `string`  
-Default: `"15m"`  
+Default: `"30s"`  
 
 ```yaml
 # Examples

@@ -14,6 +14,7 @@ import (
 	_ "github.com/Jeffail/benthos/v3/internal/impl/generic"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/kafka"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/maxmind"
+	_ "github.com/Jeffail/benthos/v3/internal/impl/memcached"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/mongodb"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/msgpack"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/nats"
