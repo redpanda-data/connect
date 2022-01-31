@@ -1,8 +1,6 @@
 package service
 
 import (
-	"fmt"
-
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"gopkg.in/yaml.v3"
 )
@@ -31,7 +29,8 @@ func extractConfig(
 
 	pluginNode, exists := componentsMap[componentName]
 	if !exists {
-		return nil, fmt.Errorf("component %v was not found in config", componentName)
+		pluginNode = yaml.Node{}
+		_ = pluginNode.Encode(nil)
 	}
 
 	return spec.configFromNode(nm, &pluginNode)

@@ -14,9 +14,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Combines multiple caches as levels, performing read-through and write-through
-operations across them.
+Combines multiple caches as levels, performing read-through and write-through operations across them.
 
 ```yaml
 # Config fields, showing default values
@@ -24,14 +22,15 @@ label: ""
 multilevel: []
 ```
 
-For the Add command this cache first checks all levels except the last for the
-key. If the key is not found it is added to the final cache level, if that
-succeeds all higher cache levels have the key set.
-
 ## Examples
 
-It's possible to use multilevel to create a warm cache in memory above a cold
-remote cache:
+<Tabs defaultValue="Hot and cold cache" values={[
+{ label: 'Hot and cold cache', value: 'Hot and cold cache', },
+]}>
+
+<TabItem value="Hot and cold cache">
+
+The multilevel cache is useful for reducing traffic against a remote cache by routing it through a local cache. In the following example requests will only go through to the memcached server if the local memory cache is missing the key.
 
 ```yaml
 pipeline:
@@ -52,14 +51,15 @@ cache_resources:
 
   - label: hot
     memory:
-      ttl: 300
+      ttl: 60s
 
   - label: cold
     memcached:
       addresses: [ TODO:11211 ]
-      ttl: 3600
+      ttl: 15m
 ```
 
-Using this config when a target key already exists in our local memory cache we
-won't bother hitting the remote memcached instance.
+</TabItem>
+</Tabs>
+
 

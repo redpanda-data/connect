@@ -4,23 +4,17 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCacheSet(t *testing.T) {
-	memCache, err := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
@@ -51,33 +45,18 @@ func TestCacheSet(t *testing.T) {
 		t.Errorf("Wrong result messages: %s != %s", act, exp)
 	}
 
-	actBytes, err := memCache.Get("1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := "foo 3", string(actBytes); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
+	actV, ok := mgr.Caches["foocache"]["1"]
+	require.True(t, ok)
+	assert.Equal(t, "foo 3", actV)
 
-	actBytes, err = memCache.Get("2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := "foo 2", string(actBytes); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
+	actV, ok = mgr.Caches["foocache"]["2"]
+	require.True(t, ok)
+	assert.Equal(t, "foo 2", actV)
 }
 
 func TestCacheSetParts(t *testing.T) {
-	memCache, err := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
@@ -109,33 +88,18 @@ func TestCacheSetParts(t *testing.T) {
 		t.Errorf("Wrong result messages: %s != %s", act, exp)
 	}
 
-	actBytes, err := memCache.Get("1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := "foo 1", string(actBytes); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
+	actV, ok := mgr.Caches["foocache"]["1"]
+	require.True(t, ok)
+	assert.Equal(t, "foo 1", actV)
 
-	actBytes, err = memCache.Get("2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := "foo 2", string(actBytes); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
+	actV, ok = mgr.Caches["foocache"]["2"]
+	require.True(t, ok)
+	assert.Equal(t, "foo 2", actV)
 }
 
 func TestCacheAdd(t *testing.T) {
-	memCache, err := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
@@ -177,36 +141,21 @@ func TestCacheAdd(t *testing.T) {
 		t.Errorf("Wrong fail flag: %v != %v", act, exp)
 	}
 
-	actBytes, err := memCache.Get("1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := "foo 1", string(actBytes); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
+	actV, ok := mgr.Caches["foocache"]["1"]
+	require.True(t, ok)
+	assert.Equal(t, "foo 1", actV)
 
-	actBytes, err = memCache.Get("2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := "foo 2", string(actBytes); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
+	actV, ok = mgr.Caches["foocache"]["2"]
+	require.True(t, ok)
+	assert.Equal(t, "foo 2", actV)
 }
 
 func TestCacheGet(t *testing.T) {
-	memCache, err := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{
+		"1": "foo 1",
+		"2": "foo 2",
 	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
-
-	memCache.Set("1", []byte("foo 1"))
-	memCache.Set("2", []byte("foo 2"))
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
@@ -254,19 +203,12 @@ func TestCacheGet(t *testing.T) {
 }
 
 func TestCacheDelete(t *testing.T) {
-	memCache, err := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{
+		"1": "foo 1",
+		"2": "foo 2",
+		"3": "foo 3",
 	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
-
-	memCache.Set("1", []byte("foo 1"))
-	memCache.Set("2", []byte("foo 2"))
-	memCache.Set("3", []byte("foo 3"))
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
@@ -307,21 +249,13 @@ func TestCacheDelete(t *testing.T) {
 		t.Errorf("Wrong fail flag: %v != %v", act, exp)
 	}
 
-	_, err = memCache.Get("1")
-	if err != types.ErrKeyNotFound {
-		t.Errorf("Wrong result: %v != %v", err, types.ErrKeyNotFound)
-	}
+	_, ok := mgr.Caches["foocache"]["1"]
+	require.False(t, ok)
 
-	actBytes, err := memCache.Get("2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if exp, act := "foo 2", string(actBytes); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
+	actV, ok := mgr.Caches["foocache"]["2"]
+	require.True(t, ok)
+	assert.Equal(t, "foo 2", actV)
 
-	_, err = memCache.Get("3")
-	if err != types.ErrKeyNotFound {
-		t.Errorf("Wrong result: %v != %v", err, types.ErrKeyNotFound)
-	}
+	_, ok = mgr.Caches["foocache"]["3"]
+	require.False(t, ok)
 }

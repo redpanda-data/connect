@@ -26,13 +26,10 @@ func init() {
 
 	Constructors[TypeCache] = TypeSpec{
 		constructor: fromSimpleConstructor(NewCache),
-		Summary: `
-Stores each message in a [cache](/docs/components/caches/about).`,
-		Description: `
-Caches are configured as [resources](/docs/components/caches/about) and can target any of the following types:
+		Summary:     `Stores each message in a [cache](/docs/components/caches/about).`,
+		Description: `Caches are configured as [resources](/docs/components/caches/about), where there's a wide variety to choose from.
 
-` + cachesList + `
-The ` + "`target`" + ` field must point to a configured cache like follows:
+The ` + "`target`" + ` field must reference a configured cache resource label like follows:
 
 ` + "```yaml" + `
 output:
@@ -48,9 +45,7 @@ cache_resources:
       ttl: 60
 ` + "```" + `
 
-In order to create a unique ` + "`key`" + ` value per item you should use
-function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
-When sending batched messages the interpolations are performed per message part.`,
+In order to create a unique ` + "`key`" + ` value per item you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("target", "The target cache to store messages in."),

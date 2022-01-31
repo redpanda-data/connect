@@ -14,9 +14,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Stores each item in a directory as a file, where an item ID is the path relative
-to the configured directory.
+Stores each item in a directory as a file, where an item ID is the path relative to the configured directory.
 
 ```yaml
 # Config fields, showing default values
@@ -25,8 +23,7 @@ file:
   directory: ""
 ```
 
-This type currently offers no form of item expiry or garbage collection, and is
-intended to be used for development and debugging purposes only.
+This type currently offers no form of item expiry or garbage collection, and is intended to be used for development and debugging purposes only.
 
 ## Fields
 
@@ -36,6 +33,5 @@ The directory within which to store items.
 
 
 Type: `string`  
-Default: `""`  
 
 

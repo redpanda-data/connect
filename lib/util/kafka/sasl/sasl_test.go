@@ -3,7 +3,6 @@ package sasl_test
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -11,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	"github.com/Shopify/sarama"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
@@ -118,15 +118,15 @@ func TestApplyOAuthBearerCacheProvider(t *testing.T) {
 		TokenKey:   "jwt",
 	}
 
-	cacheConf := cache.NewConfig()
-	cacheConf.Label = "token_provider"
-	cacheConf.Type = cache.TypeMemory
-	cacheConf.Memory.InitValues = map[string]string{
-		"jwt": "foo",
-	}
-
 	resConf := manager.NewResourceConfig()
-	resConf.ResourceCaches = append(resConf.ResourceCaches, cacheConf)
+	require.NoError(t, yaml.Unmarshal([]byte(`
+cache_resources:
+  - label: token_provider
+    memory:
+      init_values:
+        jwt: foo
+`), &resConf))
+
 	mgr, err := manager.NewV2(resConf, types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
