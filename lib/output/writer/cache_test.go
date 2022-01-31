@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -21,15 +22,8 @@ import (
 )
 
 func TestCacheSingle(t *testing.T) {
-	c := &basicCache{
-		values: map[string]string{},
-	}
-
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": c,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	conf := writer.NewCacheConfig()
 	conf.Key = `${!json("id")}`
@@ -44,19 +38,12 @@ func TestCacheSingle(t *testing.T) {
 
 	assert.Equal(t, map[string]string{
 		"1": `{"id":"1","value":"first"}`,
-	}, c.values)
+	}, mgr.Caches["foocache"])
 }
 
 func TestCacheBatch(t *testing.T) {
-	c := &basicCache{
-		values: map[string]string{},
-	}
-
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": c,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	conf := writer.NewCacheConfig()
 	conf.Key = `${!json("id")}`
@@ -77,7 +64,7 @@ func TestCacheBatch(t *testing.T) {
 		"2": `{"id":"2","value":"second"}`,
 		"3": `{"id":"3","value":"third"}`,
 		"4": `{"id":"4","value":"fourth"}`,
-	}, c.values)
+	}, mgr.Caches["foocache"])
 }
 
 func TestCacheSingleTTL(t *testing.T) {
@@ -190,42 +177,6 @@ func (f *fakeMgr) GetPipe(name string) (<-chan types.Transaction, error) {
 }
 func (f *fakeMgr) SetPipe(name string, prod <-chan types.Transaction)   {}
 func (f *fakeMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}
-
-//------------------------------------------------------------------------------
-
-type basicCache struct {
-	values map[string]string
-}
-
-func (b *basicCache) Get(key string) ([]byte, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (b *basicCache) Set(key string, value []byte) error {
-	b.values[key] = string(value)
-	return nil
-}
-
-func (b *basicCache) SetMulti(items map[string][]byte) error {
-	for k, v := range items {
-		b.values[k] = string(v)
-	}
-	return nil
-}
-
-func (b *basicCache) Add(key string, value []byte) error {
-	return errors.New("not implemented")
-}
-
-func (b *basicCache) Delete(key string) error {
-	return errors.New("not implemented")
-}
-
-func (b *basicCache) CloseAsync() {}
-
-func (b *basicCache) WaitForClose(time.Duration) error {
-	return nil
-}
 
 //------------------------------------------------------------------------------
 

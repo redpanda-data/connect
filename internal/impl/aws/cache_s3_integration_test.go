@@ -1,4 +1,4 @@
-package cache
+package aws
 
 import (
 	"context"
@@ -37,7 +37,8 @@ func createBucket(ctx context.Context, s3Port, bucket string) error {
 	})
 }
 
-var _ = registerIntegrationTest("s3", func(t *testing.T) {
+func TestIntegrationS3Cache(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -89,4 +90,4 @@ cache_resources:
 			require.NoError(t, createBucket(ctx, servicePort, testID))
 		}),
 	)
-})
+}

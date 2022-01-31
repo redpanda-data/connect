@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
@@ -64,11 +63,15 @@ func genYAMLRequest(verb, url string, payload interface{}) *http.Request {
 	var body io.Reader
 
 	if payload != nil {
-		bodyBytes, err := yaml.Marshal(payload)
-		if err != nil {
-			panic(err)
+		if s, ok := payload.(string); ok {
+			body = bytes.NewReader([]byte(s))
+		} else {
+			bodyBytes, err := yaml.Marshal(payload)
+			if err != nil {
+				panic(err)
+			}
+			body = bytes.NewReader(bodyBytes)
 		}
-		body = bytes.NewReader(bodyBytes)
 	}
 
 	req, err := http.NewRequest(verb, url, body)
@@ -704,7 +707,7 @@ func TestResourceAPILinting(t *testing.T) {
 			name:  "cache bad",
 			ctype: "cache",
 			config: `memory:
-  ttl: 123
+  default_ttl: 123s
   nope: nah
   compaction_interval: 1s`,
 			lints: []string{
@@ -791,7 +794,7 @@ func TestResourceAPILinting(t *testing.T) {
 
 			response = httptest.NewRecorder()
 			r.ServeHTTP(response, request)
-			assert.Equal(t, http.StatusOK, response.Code)
+			assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 		})
 	}
 }
@@ -859,11 +862,10 @@ func TestTypeAPISetResources(t *testing.T) {
 
 	r := router(mgr)
 
-	cacheConf := cache.NewConfig()
-	cacheConf.Type = cache.TypeFile
-	cacheConf.File.Directory = dir1
-
-	request := genYAMLRequest("POST", "/resources/cache/foocache?chilled=true", cacheConf)
+	request := genYAMLRequest("POST", "/resources/cache/foocache?chilled=true", fmt.Sprintf(`
+file:
+  directory: %v
+`, dir1))
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
@@ -892,9 +894,10 @@ func TestTypeAPISetResources(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	cacheConf.File.Directory = dir2
-
-	request = genYAMLRequest("POST", "/resources/cache/foocache?chilled=true", cacheConf)
+	request = genYAMLRequest("POST", "/resources/cache/foocache?chilled=true", fmt.Sprintf(`
+file:
+  directory: %v
+`, dir2))
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())

@@ -15,7 +15,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Stores each message in a [cache](/docs/components/caches/about).
 
 
@@ -53,17 +52,9 @@ output:
 </TabItem>
 </Tabs>
 
-Caches are configured as [resources](/docs/components/caches/about) and can target any of the following types:
+Caches are configured as [resources](/docs/components/caches/about), where there's a wide variety to choose from.
 
-- [`aws_s3`](/docs/components/caches/aws_s3)
-- [`file`](/docs/components/caches/file)
-- [`memcached`](/docs/components/caches/memcached)
-- [`memory`](/docs/components/caches/memory)
-- [`multilevel`](/docs/components/caches/multilevel)
-- [`redis`](/docs/components/caches/redis)
-- [`ristretto`](/docs/components/caches/ristretto)
-
-The `target` field must point to a configured cache like follows:
+The `target` field must reference a configured cache resource label like follows:
 
 ```yaml
 output:
@@ -79,9 +70,7 @@ cache_resources:
       ttl: 60
 ```
 
-In order to create a unique `key` value per item you should use
-function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
-When sending batched messages the interpolations are performed per message part.
+In order to create a unique `key` value per item you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Performance
 

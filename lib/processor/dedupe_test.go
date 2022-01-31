@@ -1,20 +1,17 @@
 package processor
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func init() {
@@ -22,34 +19,6 @@ func init() {
 }
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-type fakeMgr struct {
-	caches     map[string]types.Cache
-	ratelimits map[string]types.RateLimit
-}
-
-func (f *fakeMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
-}
-func (f *fakeMgr) GetCache(name string) (types.Cache, error) {
-	if c, exists := f.caches[name]; exists {
-		return c, nil
-	}
-	return nil, types.ErrCacheNotFound
-}
-func (f *fakeMgr) GetRateLimit(name string) (types.RateLimit, error) {
-	if r, exists := f.ratelimits[name]; exists {
-		return r, nil
-	}
-	return nil, types.ErrRateLimitNotFound
-}
-func (f *fakeMgr) GetPlugin(name string) (interface{}, error) {
-	return nil, types.ErrPluginNotFound
-}
-func (f *fakeMgr) GetPipe(name string) (<-chan types.Transaction, error) {
-	return nil, types.ErrPipeNotFound
-}
-func (f *fakeMgr) SetPipe(name string, prod <-chan types.Transaction)   {}
-func (f *fakeMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}
 
 func TestDedupe(t *testing.T) {
 	rndText1 := randStringRunes(20)
@@ -60,15 +29,8 @@ func TestDedupe(t *testing.T) {
 
 	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
-	if cacheErr != nil {
-		t.Fatal(cacheErr)
-	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
@@ -114,15 +76,8 @@ func TestDedupeInterpolation(t *testing.T) {
 	doc3 := []byte(fmt.Sprintf(`{"id":%q,"content":"foo"}`, rndText2))
 	doc4 := []byte(`{"content":"foo"}`)
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())
-	if cacheErr != nil {
-		t.Fatal(cacheErr)
-	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
@@ -180,15 +135,8 @@ func TestDedupeXXHash(t *testing.T) {
 
 	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
-	if cacheErr != nil {
-		t.Fatal(cacheErr)
-	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
@@ -237,15 +185,8 @@ func TestDedupePartSelection(t *testing.T) {
 
 	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
-	if cacheErr != nil {
-		t.Fatal(cacheErr)
-	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
@@ -290,44 +231,10 @@ func TestDedupeBadCache(t *testing.T) {
 
 	testLog := log.Noop()
 
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{},
-	}
+	mgr := mock.NewManager()
 	if _, err := NewDedupe(conf, mgr, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from missing cache")
 	}
-}
-
-type errCache struct{}
-
-func (e errCache) Get(key string) ([]byte, error) {
-	return nil, errors.New("test err")
-}
-func (e errCache) Set(key string, value []byte) error {
-	return errors.New("test err")
-}
-func (e errCache) SetWithTTL(key string, value []byte, ttl *time.Duration) error {
-	return errors.New("test err")
-}
-func (e errCache) SetMulti(items map[string][]byte) error {
-	return errors.New("test err")
-}
-func (e errCache) SetMultiWithTTL(items map[string][]byte, ttl *time.Duration) error {
-	return errors.New("test err")
-}
-func (e errCache) Add(key string, value []byte) error {
-	return errors.New("test err")
-}
-func (e errCache) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
-	return errors.New("test err")
-}
-func (e errCache) Delete(key string) error {
-	return errors.New("test err")
-}
-func (e errCache) CloseAsync() {
-}
-func (e errCache) WaitForClose(timeout time.Duration) error {
-	return nil
 }
 
 func TestDedupeCacheErrors(t *testing.T) {
@@ -336,16 +243,15 @@ func TestDedupeCacheErrors(t *testing.T) {
 
 	testLog := log.Noop()
 
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": errCache{},
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	proc, err := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	delete(mgr.Caches, "foocache")
 
 	msgs, res := proc.ProcessMessage(message.New([][]byte{[]byte("foo"), []byte("bar")}))
 	if exp := response.NewAck(); !reflect.DeepEqual(exp, res) || len(msgs) > 0 {
@@ -353,11 +259,14 @@ func TestDedupeCacheErrors(t *testing.T) {
 	}
 
 	conf.Dedupe.DropOnCacheErr = false
+	mgr.Caches["foocache"] = map[string]string{}
 
 	proc, err = NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	delete(mgr.Caches, "foocache")
 
 	msgs, res = proc.ProcessMessage(message.New([][]byte{[]byte("foo"), []byte("bar")}))
 	if res != nil || len(msgs) != 1 {
@@ -372,15 +281,9 @@ func TestDedupeBadHash(t *testing.T) {
 
 	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
-	if cacheErr != nil {
-		t.Fatal(cacheErr)
-	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
+
 	if _, err := NewDedupe(conf, mgr, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from bad hash")
 	}
@@ -393,15 +296,8 @@ func TestDedupeBoundsCheck(t *testing.T) {
 
 	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
-	if cacheErr != nil {
-		t.Fatal(cacheErr)
-	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err1 != nil {
@@ -426,15 +322,8 @@ func TestDedupeNegBoundsCheck(t *testing.T) {
 
 	testLog := log.Noop()
 
-	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, testLog, metrics.Noop())
-	if cacheErr != nil {
-		t.Fatal(cacheErr)
-	}
-	mgr := &fakeMgr{
-		caches: map[string]types.Cache{
-			"foocache": memCache,
-		},
-	}
+	mgr := mock.NewManager()
+	mgr.Caches["foocache"] = map[string]string{}
 
 	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err1 != nil {

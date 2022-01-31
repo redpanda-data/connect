@@ -11,7 +11,7 @@ cache_resources:
     memcached:
       addresses:
         - localhost:11211
-      ttl: 60
+      default_ttl: 60s
 ```
 
 > It's possible to layer caches with read-through and write-through behaviour using the [`multilevel` cache][cache.multilevel].

@@ -117,7 +117,7 @@ input:
 cache_resources:
   - label: foo
     memory:
-      ttl: 12
+      default_ttl: 12s
 
 tests:
   - name: huh
@@ -128,7 +128,7 @@ tests:
 cache_resources:
   - label: bar
     memory:
-      ttl: 13
+      default_ttl: 13s
 `), 0o644))
 
 	resourceThreePath := filepath.Join(dir, "res3.yaml")
@@ -152,11 +152,9 @@ tests:
 
 	assert.Equal(t, "foo", conf.ResourceCaches[0].Label)
 	assert.Equal(t, "memory", conf.ResourceCaches[0].Type)
-	assert.Equal(t, 12, conf.ResourceCaches[0].Memory.TTL)
 
 	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
 	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
-	assert.Equal(t, 13, conf.ResourceCaches[1].Memory.TTL)
 }
 
 func TestLints(t *testing.T) {
@@ -177,7 +175,7 @@ cache_resources:
   - label: foo
     memory:
       meow2: or this
-      ttl: 12
+      default_ttl: 12s
 `), 0o644))
 
 	resourceTwoPath := filepath.Join(dir, "res2.yaml")
@@ -186,7 +184,7 @@ cache_resources:
   - label: bar
     memory:
       meow3: or also this
-      ttl: 13
+      default_ttl: 13s
 `), 0o644))
 
 	conf := config.New()
@@ -207,9 +205,7 @@ cache_resources:
 
 	assert.Equal(t, "foo", conf.ResourceCaches[0].Label)
 	assert.Equal(t, "memory", conf.ResourceCaches[0].Type)
-	assert.Equal(t, 12, conf.ResourceCaches[0].Memory.TTL)
 
 	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
 	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
-	assert.Equal(t, 13, conf.ResourceCaches[1].Memory.TTL)
 }

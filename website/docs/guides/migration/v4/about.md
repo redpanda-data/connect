@@ -125,6 +125,19 @@ https://github.com/Jeffail/benthos/issues/872
 
 https://github.com/Jeffail/benthos/issues/589
 
+### Retry Field Changes
+
+In order to be more consistent a number of components have had their retry/backoff fields modified to contain a `retries` object of time based fields:
+
+#### Caches
+
+- `aws_dynamodb`
+- `aws_s3`
+
+### Cache TTL Changes
+
+Caches that support TTLs have had their `ttl` fields renamed to `default_ttl` in order to make it clearer that their purpose is to provide a fallback. All of these values are now duration string types, i.e. a cache with an integer seconds based field with a previous value of `60` should now be defined as `60s`.
+
 [blog.v4roadmap]: /blog/2021/01/04/v4-roadmap
 [v3.docs]: https://v3docs.benthos.dev
 [plugins.repo]: https://github.com/benthosdev/benthos-plugin-example
