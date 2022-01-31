@@ -43,6 +43,18 @@ metrics:
     prefix: benthos
     path_mapping: ""
     use_histogram_timing: false
+    histogram_buckets:
+      - 0.005
+      - 0.01
+      - 0.025
+      - 0.05
+      - 0.1
+      - 0.25
+      - 0.5
+      - 1
+      - 2.5
+      - 5
+      - 10
     push_url: ""
     push_interval: ""
     push_job_name: benthos_push
@@ -99,6 +111,15 @@ Whether to export timing metrics as a histogram, if `false` a summary is used in
 
 Type: `bool`  
 Default: `false`  
+Requires version 3.63.0 or newer  
+
+### `histogram_buckets`
+
+Timing metrics histogram buckets (in seconds). Defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)
+
+
+Type: `array`  
+Default: `"[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]"`  
 Requires version 3.63.0 or newer  
 
 ### `push_url`

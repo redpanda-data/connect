@@ -131,6 +131,7 @@ type Prometheus struct {
 	pathMapping        *pathMapping
 	prefix             string
 	useHistogramTiming bool
+	histogramBuckets   []float64
 
 	pusher *push.Pusher
 	reg    *prometheus.Registry
@@ -152,6 +153,7 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 		config:             config.Prometheus,
 		prefix:             config.Prometheus.Prefix,
 		useHistogramTiming: config.Prometheus.UseHistogramTiming,
+		histogramBuckets:   config.Prometheus.HistogramBuckets,
 		reg:                prometheus.NewRegistry(),
 		counters:           map[string]*prometheus.CounterVec{},
 		gauges:             map[string]*prometheus.GaugeVec{},
@@ -297,7 +299,7 @@ func (p *Prometheus) getTimerHist(path string) StatTimer {
 			Namespace: p.prefix,
 			Name:      stat,
 			Help:      "Benthos Timing metric",
-			Buckets:   prometheus.DefBuckets,
+			Buckets:   p.config.HistogramBuckets,
 		}, labels)
 		p.reg.MustRegister(tmr)
 		p.timersHist[stat] = tmr
@@ -447,7 +449,7 @@ func (p *Prometheus) getTimerHistVec(path string, labelNames []string) StatTimer
 			Namespace: p.prefix,
 			Name:      stat,
 			Help:      "Benthos Timing metric",
-			Buckets:   prometheus.DefBuckets,
+			Buckets:   p.config.HistogramBuckets,
 		}, labelNames)
 		p.reg.MustRegister(tmr)
 		p.timersHist[stat] = tmr
