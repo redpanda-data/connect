@@ -2,7 +2,7 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/impl/redis"
+	"github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -51,7 +51,7 @@ The order of hash field extraction is as follows:
 
 Where latter stages will overwrite matching field names of a former stage.`,
 		Async: true,
-		FieldSpecs: redis.ConfigDocs().Add(
+		FieldSpecs: old.ConfigDocs().Add(
 			docs.FieldCommon(
 				"key", "The key for each message, function interpolations should be used to create a unique key per message.",
 				"${!meta(\"kafka_key\")}", "${!json(\"doc.id\")}", "${!count(\"msgs\")}",

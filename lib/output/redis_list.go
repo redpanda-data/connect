@@ -2,7 +2,7 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/impl/redis"
+	"github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -24,7 +24,7 @@ The field ` + "`key`" + ` supports
 you to create a unique key for each message.`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: redis.ConfigDocs().Add(
+		FieldSpecs: old.ConfigDocs().Add(
 			docs.FieldCommon(
 				"key", "The key for each message, function interpolations can be optionally used to create a unique key per message.",
 				"benthos_list", "${!meta(\"kafka_key\")}", "${!json(\"doc.id\")}", "${!count(\"msgs\")}",

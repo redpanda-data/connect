@@ -1,10 +1,7 @@
 package output
 
 import (
-	"sort"
-
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -14,16 +11,6 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	var cachesList string
-	var cachesSlice []string
-	for k := range cache.Constructors {
-		cachesSlice = append(cachesSlice, k)
-	}
-	sort.Strings(cachesSlice)
-	for _, k := range cachesSlice {
-		cachesList = cachesList + "- [`" + k + "`](/docs/components/caches/" + k + ")\n"
-	}
-
 	Constructors[TypeCache] = TypeSpec{
 		constructor: fromSimpleConstructor(NewCache),
 		Summary:     `Stores each message in a [cache](/docs/components/caches/about).`,

@@ -31,7 +31,7 @@ Sets Redis hash objects using the HMSET command.
 output:
   label: ""
   redis_hash:
-    url: tcp://localhost:6379
+    url: ""
     key: ""
     walk_metadata: false
     walk_json_object: false
@@ -47,7 +47,7 @@ output:
 output:
   label: ""
   redis_hash:
-    url: tcp://localhost:6379
+    url: ""
     kind: simple
     master: ""
     tls:
@@ -115,7 +115,7 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 
 
 Type: `string`  
-Default: `"tcp://localhost:6379"`  
+Default: `""`  
 
 ```yaml
 # Examples

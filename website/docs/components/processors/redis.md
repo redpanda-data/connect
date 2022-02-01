@@ -33,7 +33,7 @@ result.
 # Common config fields, showing default values
 label: ""
 redis:
-  url: tcp://localhost:6379
+  url: ""
   operator: scard
   key: ""
 ```
@@ -45,7 +45,7 @@ redis:
 # All config fields, showing default values
 label: ""
 redis:
-  url: tcp://localhost:6379
+  url: ""
   kind: simple
   master: ""
   tls:
@@ -163,7 +163,7 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 
 
 Type: `string`  
-Default: `"tcp://localhost:6379"`  
+Default: `""`  
 
 ```yaml
 # Examples

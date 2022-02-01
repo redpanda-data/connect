@@ -26,9 +26,9 @@ Introduced in version 3.43.0.
 label: ""
 mongodb:
   url: ""
-  database: ""
   username: ""
   password: ""
+  database: ""
   collection: ""
   key_field: ""
   value_field: ""
@@ -38,25 +38,16 @@ mongodb:
 
 ### `url`
 
-The URL of the target MongoDB DB.
+The URL of the target MongoDB server.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yaml
 # Examples
 
 url: mongodb://localhost:27017
 ```
-
-### `database`
-
-The name of the target MongoDB DB.
-
-
-Type: `string`  
-Default: `""`  
 
 ### `username`
 
@@ -74,14 +65,19 @@ The password to connect to the database.
 Type: `string`  
 Default: `""`  
 
-### `collection`
+### `database`
 
-The name of the target collection in the MongoDB DB.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+The name of the target MongoDB database.
 
 
 Type: `string`  
-Default: `""`  
+
+### `collection`
+
+The name of the target collection.
+
+
+Type: `string`  
 
 ### `key_field`
 
@@ -89,7 +85,6 @@ The field in the document that is used as the key.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `value_field`
 
@@ -97,6 +92,5 @@ The field in the document that is used as the value.
 
 
 Type: `string`  
-Default: `""`  
 
 

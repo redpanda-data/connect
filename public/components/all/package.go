@@ -10,6 +10,7 @@ import (
 	// Import new service packages.
 	_ "github.com/Jeffail/benthos/v3/internal/impl/aws"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/confluent"
+	_ "github.com/Jeffail/benthos/v3/internal/impl/dgraph"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/gcp"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/generic"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/kafka"
@@ -20,6 +21,7 @@ import (
 	_ "github.com/Jeffail/benthos/v3/internal/impl/nats"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/parquet"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/pulsar"
+	_ "github.com/Jeffail/benthos/v3/internal/impl/redis"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/sql"
 	"github.com/Jeffail/benthos/v3/internal/template"
 

@@ -14,9 +14,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Use a Redis instance as a cache. The expiration can be set to zero or an empty
-string in order to set no expiration.
+Use a Redis instance as a cache. The expiration can be set to zero or an empty string in order to set no expiration.
 
 
 <Tabs defaultValue="common" values={[
@@ -30,9 +28,8 @@ string in order to set no expiration.
 # Common config fields, showing default values
 label: ""
 redis:
-  url: tcp://localhost:6379
+  url: ""
   prefix: ""
-  expiration: 24h
 ```
 
 </TabItem>
@@ -42,7 +39,7 @@ redis:
 # All config fields, showing default values
 label: ""
 redis:
-  url: tcp://localhost:6379
+  url: ""
   kind: simple
   master: ""
   tls:
@@ -53,28 +50,24 @@ redis:
     root_cas_file: ""
     client_certs: []
   prefix: ""
-  expiration: 24h
-  retries: 3
-  retry_period: 500ms
+  default_ttl: ""
+  retries:
+    initial_interval: 500ms
+    max_interval: 1s
+    max_elapsed_time: 5s
 ```
 
 </TabItem>
 </Tabs>
 
-
-This cache type supports setting the TTL individually per key by using the
-dynamic `ttl` field of a cache processor or output in order to
-override the general TTL configured at the cache resource level.
-
 ## Fields
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
+The URL of the target Redis server. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  
-Default: `"tcp://localhost:6379"`  
 
 ```yaml
 # Examples
@@ -99,16 +92,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 
 Type: `string`  
 Default: `"simple"`  
-
-```yaml
-# Examples
-
-kind: simple
-
-kind: cluster
-
-kind: failover
-```
+Options: `simple`, `cluster`, `failover`.
 
 ### `master`
 
@@ -197,7 +181,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yaml
 # Examples
@@ -249,30 +232,67 @@ An optional string to prefix item keys with in order to prevent collisions with 
 
 
 Type: `string`  
-Default: `""`  
 
-### `expiration`
+### `default_ttl`
 
-An optional period after which cached items will expire.
+An optional default TTL to set for items, calculated from the moment the item is cached.
 
 
 Type: `string`  
-Default: `"24h"`  
 
 ### `retries`
 
-The maximum number of retry attempts to make before abandoning a request.
+Determine time intervals and cut offs for retry attempts.
 
 
-Type: `int`  
-Default: `3`  
+Type: `object`  
 
-### `retry_period`
+### `retries.initial_interval`
 
-The duration to wait between retry attempts.
+The initial period to wait between retry attempts.
 
 
 Type: `string`  
 Default: `"500ms"`  
+
+```yaml
+# Examples
+
+initial_interval: 50ms
+
+initial_interval: 1s
+```
+
+### `retries.max_interval`
+
+The maximum period to wait between retry attempts
+
+
+Type: `string`  
+Default: `"1s"`  
+
+```yaml
+# Examples
+
+max_interval: 5s
+
+max_interval: 1m
+```
+
+### `retries.max_elapsed_time`
+
+The maximum overall period of time to spend on retry attempts before the request is aborted.
+
+
+Type: `string`  
+Default: `"5s"`  
+
+```yaml
+# Examples
+
+max_elapsed_time: 1m
+
+max_elapsed_time: 1h
+```
 
 
