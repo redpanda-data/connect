@@ -12,6 +12,7 @@ import (
 	"github.com/Masterminds/squirrel"
 )
 
+// SelectProcessorConfig returns a config spec for an sql_select processor.
 func SelectProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
@@ -96,6 +97,8 @@ type sqlSelectProcessor struct {
 	shutSig *shutdown.Signaller
 }
 
+// NewSQLSelectProcessorFromConfig returns an internal sql_select processor.
+// nolint:revive // Not bothered as this is internal anyway
 func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlSelectProcessor, error) {
 	s := &sqlSelectProcessor{
 		logger:  logger,

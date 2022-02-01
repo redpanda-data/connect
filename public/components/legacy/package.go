@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -54,13 +53,6 @@ func init() {
 	})
 	processor.WalkConstructors(func(ctor processor.ConstructorFunc, spec docs.ComponentSpec) {
 		if err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
-		}, spec); err != nil {
-			panic(err)
-		}
-	})
-	ratelimit.WalkConstructors(func(ctor ratelimit.ConstructorFunc, spec docs.ComponentSpec) {
-		if err := bundle.AllRateLimits.Add(func(conf ratelimit.Config, mgr bundle.NewManagement) (types.RateLimit, error) {
 			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
 		}, spec); err != nil {
 			panic(err)
