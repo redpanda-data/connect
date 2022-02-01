@@ -14,10 +14,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-The local rate limit is a simple X every Y type rate limit that can be shared
-across any number of components within the pipeline but does not support
-distributed rate limits across multiple running instances of Benthos.
+The local rate limit is a simple X every Y type rate limit that can be shared across any number of components within the pipeline but does not support distributed rate limits across multiple running instances of Benthos.
 
 ```yaml
 # Config fields, showing default values

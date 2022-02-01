@@ -12,6 +12,7 @@ import (
 	"github.com/Masterminds/squirrel"
 )
 
+// InsertProcessorConfig returns a config spec for an sql_insert processor.
 func InsertProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
@@ -87,6 +88,8 @@ type sqlInsertProcessor struct {
 	shutSig *shutdown.Signaller
 }
 
+// NewSQLInsertProcessorFromConfig returns an internal sql_insert processor.
+// nolint:revive // Not bothered as this is internal anyway
 func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlInsertProcessor, error) {
 	s := &sqlInsertProcessor{
 		logger:  logger,

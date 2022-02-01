@@ -24,13 +24,13 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
@@ -519,14 +519,14 @@ func TestHTTPRateLimit(t *testing.T) {
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 
-	rlConf := ratelimit.NewConfig()
-	rlConf.Label = "foorl"
-	rlConf.Type = ratelimit.TypeLocal
-	rlConf.Local.Count = 1
-	rlConf.Local.Interval = "60s"
-
 	mgrConf := manager.NewResourceConfig()
-	mgrConf.ResourceRateLimits = append(mgrConf.ResourceRateLimits, rlConf)
+	require.NoError(t, yaml.Unmarshal([]byte(`
+rate_limit_resources:
+  - label: foorl
+    local:
+      count: 1
+      interval: 60s
+`), &mgrConf))
 
 	mgr, err := manager.NewV2(mgrConf, reg, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -685,14 +685,14 @@ func TestHTTPServerWSRateLimit(t *testing.T) {
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 
-	rlConf := ratelimit.NewConfig()
-	rlConf.Label = "foorl"
-	rlConf.Type = ratelimit.TypeLocal
-	rlConf.Local.Count = 1
-	rlConf.Local.Interval = "60s"
-
 	mgrConf := manager.NewResourceConfig()
-	mgrConf.ResourceRateLimits = append(mgrConf.ResourceRateLimits, rlConf)
+	require.NoError(t, yaml.Unmarshal([]byte(`
+rate_limit_resources:
+  - label: foorl
+    local:
+      count: 1
+      interval: 60s
+`), &mgrConf))
 
 	mgr, err := manager.NewV2(mgrConf, reg, log.Noop(), metrics.Noop())
 	if err != nil {
