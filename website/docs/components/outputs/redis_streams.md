@@ -32,7 +32,7 @@ already exist) using the XADD command.
 output:
   label: ""
   redis_streams:
-    url: tcp://localhost:6379
+    url: ""
     stream: benthos_stream
     body_key: body
     max_length: 0
@@ -54,7 +54,7 @@ output:
 output:
   label: ""
   redis_streams:
-    url: tcp://localhost:6379
+    url: ""
     kind: simple
     master: ""
     tls:
@@ -108,7 +108,7 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 
 
 Type: `string`  
-Default: `"tcp://localhost:6379"`  
+Default: `""`  
 
 ```yaml
 # Examples

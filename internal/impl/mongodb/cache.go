@@ -2,19 +2,10 @@ package mongodb
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/public/service"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -22,181 +13,138 @@ import (
 
 const mongoDuplicateKeyErrCode = 11000
 
+func mongodbCacheConfig() *service.ConfigSpec {
+	spec := service.NewConfigSpec().
+		Version("3.43.0").
+		Summary(`Use a MongoDB instance as a cache.`)
+
+	for _, f := range clientFields() {
+		spec = spec.Field(f)
+	}
+
+	spec = spec.
+		Field(service.NewStringField("database").
+			Description("The name of the target MongoDB database.")).
+		Field(service.NewStringField("collection").
+			Description("The name of the target collection.")).
+		Field(service.NewStringField("key_field").
+			Description("The field in the document that is used as the key.")).
+		Field(service.NewStringField("value_field").
+			Description("The field in the document that is used as the value."))
+
+	return spec
+}
+
 func init() {
-	bundle.AllCaches.Add(func(c cache.Config, nm bundle.NewManagement) (types.Cache, error) {
-		return NewCache(c, nm, nm.Logger(), nm.Metrics())
-	}, docs.ComponentSpec{
-		Name:        cache.TypeMongoDB,
-		Type:        docs.TypeCache,
-		Status:      docs.StatusExperimental,
-		Version:     "3.43.0",
-		Summary:     `Use a MongoDB instance as a cache.`,
-		Description: icache.Description(false, ""),
-		Config: docs.FieldComponent().WithChildren(
-			client.ConfigDocs().Add(
-				docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
-				docs.FieldCommon("key_field", "The field in the document that is used as the key."),
-				docs.FieldCommon("value_field", "The field in the document that is used as the value."),
-			)...,
-		).ChildDefaultAndTypesFromStruct(cache.NewMongoDBConfig()),
-	})
+	err := service.RegisterCache(
+		"mongodb", mongodbCacheConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+			return newMongodbCacheFromConfig(conf)
+		})
+
+	if err != nil {
+		panic(err)
+	}
+}
+
+func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig) (*mongodbCache, error) {
+	client, err := getClient(parsedConf)
+	if err != nil {
+		return nil, err
+	}
+
+	database, err := parsedConf.FieldString("database")
+	if err != nil {
+		return nil, err
+	}
+
+	collectionName, err := parsedConf.FieldString("collection")
+	if err != nil {
+		return nil, err
+	}
+
+	keyField, err := parsedConf.FieldString("key_field")
+	if err != nil {
+		return nil, err
+	}
+
+	valueField, err := parsedConf.FieldString("value_field")
+	if err != nil {
+		return nil, err
+	}
+
+	return newMongodbCache(database, collectionName, keyField, valueField, client)
 }
 
 //------------------------------------------------------------------------------
 
-// Cache is a cache that connects to mongo databases.
-type Cache struct {
-	conf  cache.MongoDBConfig
-	log   log.Modular
-	stats metrics.Type
-
+type mongodbCache struct {
 	client     *mongo.Client
 	collection *mongo.Collection
 
-	shutSig *shutdown.Signaller
+	keyField   string
+	valueField string
 }
 
-// NewCache returns a MongoDB cache.
-func NewCache(
-	conf cache.Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (types.Cache, error) {
-	if conf.MongoDB.URL == "" {
-		return nil, errors.New("mongodb url must be specified")
-	}
-
-	if conf.MongoDB.Database == "" {
-		return nil, errors.New("mongodb database must be specified")
-	}
-
-	if conf.MongoDB.Collection == "" {
-		return nil, errors.New("mongodb collection must be specified")
-	}
-
-	if conf.MongoDB.KeyField == "" {
-		return nil, errors.New("mongodb key_field must be specified")
-	}
-
-	if conf.MongoDB.ValueField == "" {
-		return nil, errors.New("mongodb value_field must be specified")
-	}
-
-	client, err := conf.MongoDB.Client()
-	if err != nil {
-		return nil, err
-	}
-
+func newMongodbCache(database, collectionName, keyField, valueField string, client *mongo.Client) (*mongodbCache, error) {
 	if err := client.Connect(context.Background()); err != nil {
 		return nil, err
 	}
-
-	collection := client.Database(conf.MongoDB.Database).Collection(conf.MongoDB.Collection)
-
-	return &Cache{
-		conf:  conf.MongoDB,
-		log:   log,
-		stats: stats,
-
+	return &mongodbCache{
 		client:     client,
-		collection: collection,
-
-		shutSig: shutdown.NewSignaller(),
+		collection: client.Database(database).Collection(collectionName),
+		keyField:   keyField,
+		valueField: valueField,
 	}, nil
 }
 
-//------------------------------------------------------------------------------
-
-// Get attempts to locate and return a cached value by its key, returns an error
-// if the key does not exist or if the operation failed.
-func (m *Cache) Get(key string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	filter := bson.M{m.conf.KeyField: key}
+func (m *mongodbCache) Get(ctx context.Context, key string) ([]byte, error) {
+	filter := bson.M{m.keyField: key}
 	document, err := m.collection.FindOne(ctx, filter).DecodeBytes()
 	if err != nil {
-		m.log.Debugf("key not found: %s", key)
-		return nil, types.ErrKeyNotFound
+		return nil, service.ErrKeyNotFound
 	}
 
-	value, err := document.LookupErr(m.conf.ValueField)
+	value, err := document.LookupErr(m.valueField)
 	if err != nil {
-		return nil, fmt.Errorf("error getting field from document %s: %v", m.conf.ValueField, err)
+		return nil, fmt.Errorf("error getting field from document %s: %v", m.valueField, err)
 	}
 
 	valueStr := value.StringValue()
-
 	return []byte(valueStr), nil
 }
 
-// Set attempts to set the value of a key.
-func (m *Cache) Set(key string, value []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
+func (m *mongodbCache) Set(ctx context.Context, key string, value []byte, _ *time.Duration) error {
 	opts := options.Update().SetUpsert(true)
-	filter := bson.M{m.conf.KeyField: key}
-	update := bson.M{"$set": bson.M{m.conf.ValueField: string(value)}}
+	filter := bson.M{m.keyField: key}
+	update := bson.M{"$set": bson.M{m.valueField: string(value)}}
 
 	_, err := m.collection.UpdateOne(ctx, filter, update, opts)
 	return err
 }
 
-// SetMulti attempts to set the value of multiple keys, returns an error if any
-// keys fail.
-func (m *Cache) SetMulti(items map[string][]byte) error {
-	for k, v := range items {
-		if err := m.Set(k, v); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Add attempts to set the value of a key only if the key does not already exist
-// and returns an error if the key already exists or if the operation fails.
-func (m *Cache) Add(key string, value []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	document := bson.M{m.conf.KeyField: key, m.conf.ValueField: string(value)}
+func (m *mongodbCache) Add(ctx context.Context, key string, value []byte, _ *time.Duration) error {
+	document := bson.M{m.keyField: key, m.valueField: string(value)}
 	_, err := m.collection.InsertOne(ctx, document)
 	if err != nil {
-		if errCode := m.getMongoErrorCode(err); errCode == mongoDuplicateKeyErrCode {
-			err = types.ErrKeyAlreadyExists
+		if errCode := getMongoErrorCode(err); errCode == mongoDuplicateKeyErrCode {
+			err = service.ErrKeyAlreadyExists
 		}
 	}
 	return err
 }
 
-// Delete attempts to remove a key.
-func (m *Cache) Delete(key string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	filter := bson.M{m.conf.KeyField: key}
+func (m *mongodbCache) Delete(ctx context.Context, key string) error {
+	filter := bson.M{m.keyField: key}
 	_, err := m.collection.DeleteOne(ctx, filter)
 	return err
 }
 
-// CloseAsync shuts down the cache.
-func (m *Cache) CloseAsync() {
-	go func() {
-		m.client.Disconnect(context.Background())
-		m.shutSig.ShutdownComplete()
-	}()
+func (m *mongodbCache) Close(ctx context.Context) error {
+	return m.client.Disconnect(ctx)
 }
 
-// WaitForClose blocks until the cache has closed down.
-func (m *Cache) WaitForClose(timeout time.Duration) error {
-	select {
-	case <-time.After(timeout):
-		return types.ErrTimeout
-	case <-m.shutSig.HasClosedChan():
-	}
-	return nil
-}
-
-func (m *Cache) getMongoErrorCode(err error) int {
+func getMongoErrorCode(err error) int {
 	var errorCode int
 
 	switch e := err.(type) {

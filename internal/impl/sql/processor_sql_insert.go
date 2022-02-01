@@ -12,7 +12,7 @@ import (
 	"github.com/Masterminds/squirrel"
 )
 
-func sqlInsertProcessorConfig() *service.ConfigSpec {
+func InsertProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Integration").
@@ -63,9 +63,9 @@ pipeline:
 
 func init() {
 	err := service.RegisterBatchProcessor(
-		"sql_insert", sqlInsertProcessorConfig(),
+		"sql_insert", InsertProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return newSQLInsertProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLInsertProcessorFromConfig(conf, mgr.Logger())
 		})
 
 	if err != nil {
@@ -87,7 +87,7 @@ type sqlInsertProcessor struct {
 	shutSig *shutdown.Signaller
 }
 
-func newSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlInsertProcessor, error) {
+func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlInsertProcessor, error) {
 	s := &sqlInsertProcessor{
 		logger:  logger,
 		shutSig: shutdown.NewSignaller(),

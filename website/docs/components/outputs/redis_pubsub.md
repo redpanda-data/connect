@@ -32,7 +32,7 @@ guarantee that messages have been received.
 output:
   label: ""
   redis_pubsub:
-    url: tcp://localhost:6379
+    url: ""
     channel: benthos_chan
     max_in_flight: 1
     batching:
@@ -50,7 +50,7 @@ output:
 output:
   label: ""
   redis_pubsub:
-    url: tcp://localhost:6379
+    url: ""
     kind: simple
     master: ""
     tls:
@@ -94,7 +94,7 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 
 
 Type: `string`  
-Default: `"tcp://localhost:6379"`  
+Default: `""`  
 
 ```yaml
 # Examples

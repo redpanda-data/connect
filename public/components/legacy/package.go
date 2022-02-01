@@ -7,7 +7,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -20,13 +19,6 @@ import (
 func init() {
 	buffer.WalkConstructors(func(ctor buffer.ConstructorFunc, spec docs.ComponentSpec) {
 		if err := bundle.AllBuffers.Add(func(conf buffer.Config, mgr bundle.NewManagement) (buffer.Type, error) {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
-		}, spec); err != nil {
-			panic(err)
-		}
-	})
-	cache.WalkConstructors(func(ctor cache.ConstructorFunc, spec docs.ComponentSpec) {
-		if err := bundle.AllCaches.Add(func(conf cache.Config, mgr bundle.NewManagement) (types.Cache, error) {
 			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
 		}, spec); err != nil {
 			panic(err)

@@ -14,9 +14,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Stores key/value pairs in a map held in the memory-bound
-[Ristretto cache](https://github.com/dgraph-io/ristretto).
+Stores key/value pairs in a map held in the memory-bound [Ristretto cache](https://github.com/dgraph-io/ristretto).
 
 
 <Tabs defaultValue="common" values={[
@@ -30,7 +28,7 @@ Stores key/value pairs in a map held in the memory-bound
 # Common config fields, showing default values
 label: ""
 ristretto:
-  ttl: ""
+  default_ttl: ""
 ```
 
 </TabItem>
@@ -40,7 +38,7 @@ ristretto:
 # All config fields, showing default values
 label: ""
 ristretto:
-  ttl: ""
+  default_ttl: ""
   retries: 0
   retry_period: 50ms
 ```
@@ -50,15 +48,11 @@ ristretto:
 
 This cache is more efficient and appropriate for high-volume use cases than the standard memory cache. However, the add command is non-atomic, and therefore this cache is not suitable for deduplication.
 
-This cache type supports setting the TTL individually per key by using the
-dynamic `ttl` field of a cache processor or output in order to
-override the general TTL configured at the cache resource level.
-
 ## Fields
 
-### `ttl`
+### `default_ttl`
 
-The TTL of each item as a duration string. After this period an item will be eligible for removal during the next compaction.
+A default TTL to set for items, calculated from the moment the item is cached. Set to an empty string or zero duration to disable TTLs.
 
 
 Type: `string`  
@@ -67,16 +61,14 @@ Default: `""`
 ```yaml
 # Examples
 
-ttl: 60s
+default_ttl: 5m
 
-ttl: 5m
-
-ttl: 36h
+default_ttl: 60s
 ```
 
 ### `retries`
 
-The maximum number of retry attempts to make before abandoning a request.
+Optionally retries get operations when they fail because the key is not found.
 
 
 Type: `int`  

@@ -31,7 +31,7 @@ Pops messages from the beginning of a Redis list using the BLPop command.
 input:
   label: ""
   redis_list:
-    url: tcp://localhost:6379
+    url: ""
     key: benthos_list
 ```
 
@@ -43,7 +43,7 @@ input:
 input:
   label: ""
   redis_list:
-    url: tcp://localhost:6379
+    url: ""
     kind: simple
     master: ""
     tls:
@@ -68,7 +68,7 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 
 
 Type: `string`  
-Default: `"tcp://localhost:6379"`  
+Default: `""`  
 
 ```yaml
 # Examples

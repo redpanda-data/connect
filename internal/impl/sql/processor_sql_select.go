@@ -12,7 +12,7 @@ import (
 	"github.com/Masterminds/squirrel"
 )
 
-func sqlSelectProcessorConfig() *service.ConfigSpec {
+func SelectProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Integration").
@@ -72,9 +72,9 @@ pipeline:
 
 func init() {
 	err := service.RegisterBatchProcessor(
-		"sql_select", sqlSelectProcessorConfig(),
+		"sql_select", SelectProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return newSQLSelectProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLSelectProcessorFromConfig(conf, mgr.Logger())
 		})
 
 	if err != nil {
@@ -96,7 +96,7 @@ type sqlSelectProcessor struct {
 	shutSig *shutdown.Signaller
 }
 
-func newSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlSelectProcessor, error) {
+func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlSelectProcessor, error) {
 	s := &sqlSelectProcessor{
 		logger:  logger,
 		shutSig: shutdown.NewSignaller(),
