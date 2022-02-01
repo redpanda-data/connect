@@ -316,6 +316,13 @@ func (c *ConfigSpec) Beta() *ConfigSpec {
 	return c
 }
 
+// Deprecated sets a documentation label on the component indicating that it is
+// now deprecated. Plugins are considered experimental by default.
+func (c *ConfigSpec) Deprecated() *ConfigSpec {
+	c.component.Status = docs.StatusDeprecated
+	return c
+}
+
 // Categories adds one or more string tags to the component, these are used for
 // arbitrarily grouping components in documentation.
 func (c *ConfigSpec) Categories(categories ...string) *ConfigSpec {
