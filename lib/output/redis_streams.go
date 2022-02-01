@@ -2,7 +2,7 @@ package output
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/impl/redis"
+	"github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -30,7 +30,7 @@ will also be set as key/value pairs, if there is a key collision between
 a metadata item and the body then the body takes precedence.`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: redis.ConfigDocs().Add(
+		FieldSpecs: old.ConfigDocs().Add(
 			docs.FieldCommon("stream", "The stream to add messages to."),
 			docs.FieldCommon("body_key", "A key to set the raw body of the message to."),
 			docs.FieldCommon("max_length", "When greater than zero enforces a rough cap on the length of the target stream."),

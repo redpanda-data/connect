@@ -32,7 +32,7 @@ Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
 input:
   label: ""
   redis_streams:
-    url: tcp://localhost:6379
+    url: ""
     body_key: body
     streams:
       - benthos_stream
@@ -49,7 +49,7 @@ input:
 input:
   label: ""
   redis_streams:
-    url: tcp://localhost:6379
+    url: ""
     kind: simple
     master: ""
     tls:
@@ -86,7 +86,7 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 
 
 Type: `string`  
-Default: `"tcp://localhost:6379"`  
+Default: `""`  
 
 ```yaml
 # Examples

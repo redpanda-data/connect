@@ -1,4 +1,4 @@
-package redis
+package old
 
 import (
 	"crypto/tls"
@@ -22,7 +22,7 @@ type Config struct {
 // NewConfig returns a Config with default values.
 func NewConfig() Config {
 	return Config{
-		URL:  "tcp://localhost:6379",
+		URL:  "",
 		Kind: "simple",
 		TLS:  btls.NewConfig(),
 	}

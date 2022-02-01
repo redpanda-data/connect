@@ -1,4 +1,4 @@
-package sql
+package sql_test
 
 import (
 	"context"
@@ -11,11 +11,14 @@ import (
 	"testing"
 	"time"
 
+	isql "github.com/Jeffail/benthos/v3/internal/impl/sql"
 	"github.com/Jeffail/benthos/v3/public/service"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 type testFn func(t *testing.T, driver, dsn, table string)
@@ -40,20 +43,19 @@ where: foo = ?
 args_mapping: 'root = [ this.id ]'
 `, driver, dsn, table)
 
-			spec := sqlInsertProcessorConfig()
 			env := service.NewEnvironment()
 
-			insertConfig, err := spec.ParseYAML(insertConf, env)
+			insertConfig, err := isql.InsertProcessorConfig().ParseYAML(insertConf, env)
 			require.NoError(t, err)
 
-			selectConfig, err := spec.ParseYAML(queryConf, env)
+			selectConfig, err := isql.SelectProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := newSQLInsertProcessorFromConfig(insertConfig, nil)
+			insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, nil)
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := newSQLSelectProcessorFromConfig(selectConfig, nil)
+			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, nil)
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 

@@ -94,10 +94,8 @@ output:
 cache_resources:
   - label: hydration_cache
     redis:
-      expiration: 168h
-      retries: 3
-      retry_period: 500ms
       url: TODO
+      default_ttl: 168h
 ```
 
 ## Hydrating Comments
@@ -154,10 +152,8 @@ output:
 cache_resources:
   - label: hydration_cache
     redis:
-      expiration: 168h
-      retries: 3
-      retry_period: 500ms
       url: TODO
+      default_ttl: 168h
 ```
 
 This pipeline satisfies our basic needs but errors aren't handled at all, meaning intermittent cache connectivity problems that span beyond our cache retries will result in failed documents entering our `comments_hydrated` topic. This is also the case if a comment arrives in our pipeline before its parent.
@@ -224,7 +220,9 @@ output:
 
 cache_resources:
   - label: hydration_cache
-    redis: {} # Omitted
+    redis:
+      url: TODO
+      default_ttl: 168h
 ```
 
 You can find a full example [in the project repo][full-example], and with this config we can deploy as many instances of Benthos as we need as the partitions will be balanced across the consumers.
