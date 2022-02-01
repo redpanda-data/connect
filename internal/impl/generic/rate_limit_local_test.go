@@ -1,48 +1,47 @@
-package ratelimit
+package generic
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-//------------------------------------------------------------------------------
-
 func TestLocalRateLimitConfErrors(t *testing.T) {
-	conf := NewConfig()
-	conf.Local.Count = -1
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
-		t.Error("expected error from bad count")
-	}
+	conf, err := localRatelimitConfig().ParseYAML(`count: -1`, nil)
+	require.NoError(t, err)
 
-	conf = NewConfig()
-	conf.Local.Interval = "nope"
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
-		t.Error("expected error from bad interval")
-	}
+	_, err = newLocalRatelimitFromConfig(conf)
+	require.Error(t, err)
+
+	_, err = localRatelimitConfig().ParseYAML(`interval: nope`, nil)
+	require.NoError(t, err)
+
+	_, err = newLocalRatelimitFromConfig(conf)
+	require.Error(t, err)
 }
 
 func TestLocalRateLimitBasic(t *testing.T) {
-	conf := NewConfig()
-	conf.Local.Count = 10
-	conf.Local.Interval = "1s"
+	conf, err := localRatelimitConfig().ParseYAML(`
+count: 10
+interval: 1s
+`, nil)
+	require.NoError(t, err)
 
-	rl, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
+	rl, err := newLocalRatelimitFromConfig(conf)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	for i := 0; i < 10; i++ {
+		period, _ := rl.Access(ctx)
+		assert.LessOrEqual(t, period, time.Duration(0))
 	}
 
-	for i := 0; i < conf.Local.Count; i++ {
-		period, _ := rl.Access()
-		if period > 0 {
-			t.Errorf("Period above zero: %v", period)
-		}
-	}
-
-	if period, _ := rl.Access(); period == 0 {
+	if period, _ := rl.Access(ctx); period == 0 {
 		t.Error("Expected limit on final request")
 	} else if period > time.Second {
 		t.Errorf("Period beyond interval: %v", period)
@@ -50,23 +49,25 @@ func TestLocalRateLimitBasic(t *testing.T) {
 }
 
 func TestLocalRateLimitRefresh(t *testing.T) {
-	conf := NewConfig()
-	conf.Local.Count = 10
-	conf.Local.Interval = "10ms"
+	conf, err := localRatelimitConfig().ParseYAML(`
+count: 10
+interval: 10ms
+`, nil)
+	require.NoError(t, err)
 
-	rl, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rl, err := newLocalRatelimitFromConfig(conf)
+	require.NoError(t, err)
 
-	for i := 0; i < conf.Local.Count; i++ {
-		period, _ := rl.Access()
+	ctx := context.Background()
+
+	for i := 0; i < 10; i++ {
+		period, _ := rl.Access(ctx)
 		if period > 0 {
 			t.Errorf("Period above zero: %v", period)
 		}
 	}
 
-	if period, _ := rl.Access(); period == 0 {
+	if period, _ := rl.Access(ctx); period == 0 {
 		t.Error("Expected limit on final request")
 	} else if period > time.Second {
 		t.Errorf("Period beyond interval: %v", period)
@@ -74,14 +75,14 @@ func TestLocalRateLimitRefresh(t *testing.T) {
 
 	<-time.After(time.Millisecond * 15)
 
-	for i := 0; i < conf.Local.Count; i++ {
-		period, _ := rl.Access()
+	for i := 0; i < 10; i++ {
+		period, _ := rl.Access(ctx)
 		if period != 0 {
 			t.Errorf("Rate limited on get %v", i)
 		}
 	}
 
-	if period, _ := rl.Access(); period == 0 {
+	if period, _ := rl.Access(ctx); period == 0 {
 		t.Error("Expected limit on final request")
 	} else if period > time.Second {
 		t.Errorf("Period beyond interval: %v", period)
@@ -109,20 +110,22 @@ func BenchmarkRateLimit(b *testing.B) {
 	wg := sync.WaitGroup{}
 	wg.Add(nParallel)
 
-	conf := NewConfig()
-	conf.Local.Count = 1000
-	conf.Local.Interval = "1ns"
+	conf, err := localRatelimitConfig().ParseYAML(`
+count: 1000
+interval: 1ns
+`, nil)
+	require.NoError(b, err)
 
-	rl, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		b.Fatal(err)
-	}
+	rl, err := newLocalRatelimitFromConfig(conf)
+	require.NoError(b, err)
+
+	ctx := context.Background()
 
 	for i := 0; i < nParallel; i++ {
 		go func() {
 			<-startChan
 			for j := 0; j < b.N; j++ {
-				period, _ := rl.Access()
+				period, _ := rl.Access(ctx)
 				if period > 0 {
 					time.Sleep(period)
 				}
@@ -135,5 +138,3 @@ func BenchmarkRateLimit(b *testing.B) {
 	close(startChan)
 	wg.Wait()
 }
-
-//------------------------------------------------------------------------------
