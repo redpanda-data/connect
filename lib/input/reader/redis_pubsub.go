@@ -66,11 +66,6 @@ func NewRedisPubSub(
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to a RedisPubSub server.
-func (r *RedisPubSub) Connect() error {
-	return r.ConnectWithContext(context.Background())
-}
-
 // ConnectWithContext establishes a connection to an RedisPubSub server.
 func (r *RedisPubSub) ConnectWithContext(ctx context.Context) error {
 	r.cMut.Lock()
@@ -99,12 +94,6 @@ func (r *RedisPubSub) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// Read attempts to pop a message from a redis pubsub channel.
-func (r *RedisPubSub) Read() (types.Message, error) {
-	msg, _, err := r.ReadWithContext(context.Background())
-	return msg, err
-}
-
 // ReadWithContext attempts to pop a message from a redis pubsub channel.
 func (r *RedisPubSub) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	var pubsub *redis.PubSub
@@ -128,12 +117,6 @@ func (r *RedisPubSub) ReadWithContext(ctx context.Context) (types.Message, Async
 	}
 
 	return nil, nil, types.ErrTimeout
-}
-
-// Acknowledge is a noop since Redis pub/sub channels do not support
-// acknowledgements.
-func (r *RedisPubSub) Acknowledge(err error) error {
-	return nil
 }
 
 // disconnect safely closes a connection to an RedisPubSub server.

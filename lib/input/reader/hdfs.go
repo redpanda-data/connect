@@ -60,11 +60,6 @@ func NewHDFS(
 
 //------------------------------------------------------------------------------
 
-// Connect attempts to establish a connection to the target HDFS host.
-func (h *HDFS) Connect() error {
-	return h.ConnectWithContext(context.Background())
-}
-
 // ConnectWithContext attempts to establish a connection to the target HDFS
 // host.
 func (h *HDFS) ConnectWithContext(ctx context.Context) error {
@@ -100,17 +95,8 @@ func (h *HDFS) ConnectWithContext(ctx context.Context) error {
 
 // ReadWithContext reads a new HDFS message.
 func (h *HDFS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
-	msg, err := h.Read()
-	if err != nil {
-		return nil, nil, err
-	}
-	return msg, noopAsyncAckFn, nil
-}
-
-// Read a new HDFS message.
-func (h *HDFS) Read() (types.Message, error) {
 	if len(h.targets) == 0 {
-		return nil, types.ErrTypeClosed
+		return nil, nil, types.ErrTypeClosed
 	}
 
 	fileName := h.targets[0]
@@ -119,19 +105,13 @@ func (h *HDFS) Read() (types.Message, error) {
 	filePath := filepath.Join(h.conf.Directory, fileName)
 	msgBytes, readerr := h.client.ReadFile(filePath)
 	if readerr != nil {
-		return nil, readerr
+		return nil, nil, readerr
 	}
 
 	msg := message.New([][]byte{msgBytes})
 	msg.Get(0).Metadata().Set("hdfs_name", fileName)
 	msg.Get(0).Metadata().Set("hdfs_path", filePath)
-	return msg, nil
-}
-
-// Acknowledge instructs whether unacknowledged messages have been successfully
-// propagated.
-func (h *HDFS) Acknowledge(err error) error {
-	return nil
+	return msg, noopAsyncAckFn, nil
 }
 
 // CloseAsync shuts down the HDFS input and stops processing requests.

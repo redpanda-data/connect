@@ -52,17 +52,17 @@ func TestFilesDirectory(t *testing.T) {
 	conf := NewFilesConfig()
 	conf.Path = tmpDir
 
-	var f Type
+	var f Async
 	if f, err = NewFiles(conf); err != nil {
 		t.Fatal(err)
 	}
 
-	if err = f.Connect(); err != nil {
+	if err = f.ConnectWithContext(context.Background()); err != nil {
 		t.Error(err)
 	}
 
 	var msg types.Message
-	if msg, err = f.Read(); err != nil {
+	if msg, _, err = f.ReadWithContext(context.Background()); err != nil {
 		t.Error(err)
 	} else {
 		resStr := string(msg.Get(0).Get())
@@ -71,7 +71,7 @@ func TestFilesDirectory(t *testing.T) {
 		}
 		act[resStr] = struct{}{}
 	}
-	if msg, err = f.Read(); err != nil {
+	if msg, _, err = f.ReadWithContext(context.Background()); err != nil {
 		t.Error(err)
 	} else {
 		resStr := string(msg.Get(0).Get())
@@ -80,7 +80,7 @@ func TestFilesDirectory(t *testing.T) {
 		}
 		act[resStr] = struct{}{}
 	}
-	if _, err = f.Read(); err != types.ErrTypeClosed {
+	if _, _, err = f.ReadWithContext(context.Background()); err != types.ErrTypeClosed {
 		t.Error(err)
 	}
 
@@ -115,10 +115,6 @@ func TestFilesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = f.Connect(); err != nil {
-		t.Error(err)
-	}
-
 	var msg types.Message
 	var ackFn AsyncAckFn
 	if msg, ackFn, err = f.ReadWithContext(context.Background()); err != nil {
@@ -133,7 +129,7 @@ func TestFilesFile(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	if _, err = f.Read(); err != types.ErrTypeClosed {
+	if _, _, err = f.ReadWithContext(context.Background()); err != types.ErrTypeClosed {
 		t.Error(err)
 	}
 
@@ -174,17 +170,13 @@ func TestFilesDirectoryDelete(t *testing.T) {
 	conf.Path = tmpDir
 	conf.DeleteFiles = true
 
-	var f Type
+	var f Async
 	if f, err = NewFiles(conf); err != nil {
 		t.Fatal(err)
 	}
 
-	if err = f.Connect(); err != nil {
-		t.Error(err)
-	}
-
 	var msg types.Message
-	if msg, err = f.Read(); err != nil {
+	if msg, _, err = f.ReadWithContext(context.Background()); err != nil {
 		t.Error(err)
 	} else {
 		resStr := string(msg.Get(0).Get())
@@ -193,7 +185,7 @@ func TestFilesDirectoryDelete(t *testing.T) {
 		}
 		act[resStr] = struct{}{}
 	}
-	if _, err = f.Read(); err != types.ErrTypeClosed {
+	if _, _, err = f.ReadWithContext(context.Background()); err != types.ErrTypeClosed {
 		t.Error(err)
 	}
 

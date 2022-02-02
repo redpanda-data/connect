@@ -63,19 +63,10 @@ func NewFiles(conf FilesConfig) (*Files, error) {
 	return &f, err
 }
 
-//------------------------------------------------------------------------------
-
-// Connect establishes a connection.
-func (f *Files) Connect() (err error) {
-	return nil
-}
-
 // ConnectWithContext establishes a connection.
 func (f *Files) ConnectWithContext(ctx context.Context) (err error) {
 	return nil
 }
-
-//------------------------------------------------------------------------------
 
 // ReadWithContext a new Files message.
 func (f *Files) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
@@ -107,18 +98,6 @@ func (f *Files) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 		}
 		return nil
 	}, nil
-}
-
-// Read a new Files message.
-func (f *Files) Read() (types.Message, error) {
-	msg, _, err := f.ReadWithContext(context.Background())
-	return msg, err
-}
-
-// Acknowledge instructs whether unacknowledged messages have been successfully
-// propagated.
-func (f *Files) Acknowledge(err error) error {
-	return nil
 }
 
 // CloseAsync shuts down the Files input and stops processing requests.

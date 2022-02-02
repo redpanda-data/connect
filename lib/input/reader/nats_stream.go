@@ -138,11 +138,6 @@ func (n *NATSStream) disconnect() {
 	}
 }
 
-// Connect attempts to establish a connection to a NATS streaming server.
-func (n *NATSStream) Connect() error {
-	return n.ConnectWithContext(context.Background())
-}
-
 // ConnectWithContext attempts to establish a connection to a NATS streaming
 // server.
 func (n *NATSStream) ConnectWithContext(ctx context.Context) error {
@@ -277,33 +272,6 @@ func (n *NATSStream) ReadWithContext(ctx context.Context) (types.Message, AsyncA
 		}
 		return nil
 	}, nil
-}
-
-// Read attempts to read a new message from the NATS streaming server.
-func (n *NATSStream) Read() (types.Message, error) {
-	msg, err := n.read(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	n.unAckMsgs = append(n.unAckMsgs, msg)
-
-	bmsg := message.New([][]byte{msg.Data})
-	bmsg.Get(0).Metadata().Set("nats_stream_subject", msg.Subject)
-	bmsg.Get(0).Metadata().Set("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
-
-	return bmsg, nil
-}
-
-// Acknowledge instructs whether unacknowledged messages have been successfully
-// propagated.
-func (n *NATSStream) Acknowledge(err error) error {
-	if err == nil {
-		for _, m := range n.unAckMsgs {
-			m.Ack()
-		}
-	}
-	n.unAckMsgs = nil
-	return nil
 }
 
 // CloseAsync shuts down the NATSStream input and stops processing requests.

@@ -111,11 +111,6 @@ func (n *NSQ) HandleMessage(message *nsq.Message) error {
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to an NSQ server.
-func (n *NSQ) Connect() (err error) {
-	return n.ConnectWithContext(context.Background())
-}
-
 // ConnectWithContext establishes a connection to an NSQ server.
 func (n *NSQ) ConnectWithContext(ctx context.Context) (err error) {
 	n.cMut.Lock()
@@ -201,31 +196,6 @@ func (n *NSQ) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, e
 		msg.Finish()
 		return nil
 	}, nil
-}
-
-// Read attempts to read a new message from NSQ.
-func (n *NSQ) Read() (types.Message, error) {
-	msg, err := n.read(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	n.unAckMsgs = append(n.unAckMsgs, msg)
-	return message.New([][]byte{msg.Body}), nil
-}
-
-// Acknowledge instructs whether unacknowledged messages have been successfully
-// propagated.
-func (n *NSQ) Acknowledge(err error) error {
-	if err != nil {
-		for _, m := range n.unAckMsgs {
-			m.Requeue(-1)
-		}
-	}
-	for _, m := range n.unAckMsgs {
-		m.Finish()
-	}
-	n.unAckMsgs = nil
-	return nil
 }
 
 // CloseAsync shuts down the NSQ input and stops processing requests.

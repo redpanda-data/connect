@@ -53,9 +53,6 @@ func NewNATS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type
 	if err != nil {
 		return nil, err
 	}
-	if conf.NATS.MaxInFlight == 1 {
-		return NewWriter(TypeNATS, w, log, stats)
-	}
 	return NewAsyncWriter(TypeNATS, conf.NATS.MaxInFlight, w, log, stats)
 }
 

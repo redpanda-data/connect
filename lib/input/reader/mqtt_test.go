@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -90,7 +91,9 @@ func testMQTTConnect(urls []string, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	ctx := context.Background()
+
+	if err = m.ConnectWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -128,7 +131,7 @@ func testMQTTConnect(urls []string, t *testing.T) {
 	lMsgs := len(testMsgs)
 	for lMsgs > 0 {
 		var actM types.Message
-		actM, err = m.Read()
+		actM, _, err = m.ReadWithContext(ctx)
 		if err != nil {
 			t.Error(err)
 		} else {
@@ -155,7 +158,9 @@ func testMQTTDisconnect(urls []string, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	ctx := context.Background()
+
+	if err = m.ConnectWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -169,7 +174,7 @@ func testMQTTDisconnect(urls []string, t *testing.T) {
 		wg.Done()
 	}()
 
-	if _, err = m.Read(); err != types.ErrTypeClosed {
+	if _, _, err = m.ReadWithContext(ctx); err != types.ErrTypeClosed {
 		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
 	}
 

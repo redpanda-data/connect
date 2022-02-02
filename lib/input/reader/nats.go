@@ -84,11 +84,6 @@ func NewNATS(conf NATSConfig, log log.Modular, stats metrics.Type) (*NATS, error
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to a NATS server.
-func (n *NATS) Connect() error {
-	return n.ConnectWithContext(context.Background())
-}
-
 // ConnectWithContext establishes a connection to a NATS server.
 func (n *NATS) ConnectWithContext(ctx context.Context) error {
 	n.cMut.Lock()
@@ -190,22 +185,6 @@ func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 		}
 		return ackErr
 	}, nil
-}
-
-// Read attempts to read a new message from the NATS subject.
-//
-// Deprecated: Use ReadWithContext instead.
-func (n *NATS) Read() (types.Message, error) {
-	m, _, err := n.ReadWithContext(context.Background())
-	return m, err
-}
-
-// Acknowledge confirms whether or not our unacknowledged messages have been
-// successfully propagated or not.
-//
-// Deprecated: Use ReadWithContext instead.
-func (n *NATS) Acknowledge(err error) error {
-	return nil
 }
 
 // CloseAsync shuts down the NATS input and stops processing requests.
