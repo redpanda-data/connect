@@ -376,8 +376,15 @@ func rangeFunction(args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	if step < 0 && stop > start {
-		return nil, fmt.Errorf("with negative step arg stop (%v) must be <= to start (%v)", stop, start)
+	if step == 0 {
+		return nil, errors.New("step must be greater than or less than 0")
+	}
+	if step < 0 {
+		if stop > start {
+			return nil, fmt.Errorf("with negative step arg stop (%v) must be <= start (%v)", stop, start)
+		}
+	} else if start >= stop {
+		return nil, fmt.Errorf("with positive step arg start (%v) must be < stop (%v)", start, stop)
 	}
 	r := make([]interface{}, (stop-start)/step)
 	for i := 0; i < len(r); i++ {

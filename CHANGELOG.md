@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - The `generate` input now supports zeroed duration strings (`0s`, etc) for unbounded document creation.
 - The `aws_dynamodb_partiql` processor no longer ignores the `endpoint` field.
 - Corrected duplicate detection for custom cache implementations.
+- Fixed panic caused by invalid bounds in the `range` function.
 
 ## 3.62.0 - 2022-01-21
 
