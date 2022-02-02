@@ -1,6 +1,9 @@
 package metrics
 
-import "github.com/Jeffail/benthos/v3/internal/docs"
+import (
+	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 //------------------------------------------------------------------------------
 
@@ -15,6 +18,7 @@ Metrics paths will differ from [the standard list](/docs/components/metrics/abou
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
 			pathMappingDocs(true, true),
 			docs.FieldBool("use_histogram_timing", "Whether to export timing metrics as a histogram, if `false` a summary is used instead. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").HasDefault(false).Advanced().AtVersion("3.63.0"),
+			docs.FieldAdvanced("histogram_buckets", "Timing metrics histogram buckets (in seconds). Defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)").Array().HasDefault("[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]").Advanced().AtVersion("3.63.0"),
 			docs.FieldAdvanced("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to."),
 			docs.FieldAdvanced("push_interval", "The period of time between each push when sending metrics to a Push Gateway."),
 			docs.FieldAdvanced("push_job_name", "An identifier for push jobs."),
@@ -46,6 +50,7 @@ type PrometheusConfig struct {
 	Prefix             string                        `json:"prefix" yaml:"prefix"`
 	PathMapping        string                        `json:"path_mapping" yaml:"path_mapping"`
 	UseHistogramTiming bool                          `json:"use_histogram_timing" yaml:"use_histogram_timing"`
+	HistogramBuckets   []float64                     `json:"histogram_buckets" yaml:"histogram_buckets"`
 	PushURL            string                        `json:"push_url" yaml:"push_url"`
 	PushBasicAuth      PrometheusPushBasicAuthConfig `json:"push_basic_auth" yaml:"push_basic_auth"`
 	PushInterval       string                        `json:"push_interval" yaml:"push_interval"`
@@ -73,6 +78,7 @@ func NewPrometheusConfig() PrometheusConfig {
 		Prefix:             "benthos",
 		PathMapping:        "",
 		UseHistogramTiming: false,
+		HistogramBuckets:   prometheus.DefBuckets,
 		PushURL:            "",
 		PushBasicAuth:      NewPrometheusPushBasicAuthConfig(),
 		PushInterval:       "",
