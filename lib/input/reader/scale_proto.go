@@ -34,7 +34,7 @@ type ScaleProtoConfig struct {
 // NewScaleProtoConfig creates a new ScaleProtoConfig with default values.
 func NewScaleProtoConfig() ScaleProtoConfig {
 	return ScaleProtoConfig{
-		URLs:        []string{"tcp://*:5555"},
+		URLs:        []string{},
 		Bind:        true,
 		SocketType:  "PULL",
 		SubFilters:  []string{},
@@ -70,7 +70,7 @@ func NewScaleProto(conf ScaleProtoConfig, log log.Modular, stats metrics.Type) (
 	for _, u := range conf.URLs {
 		for _, splitU := range strings.Split(u, ",") {
 			if len(splitU) > 0 {
-				s.urls = append(s.urls, splitU)
+				s.urls = append(s.urls, strings.Replace(splitU, "//*:", "//0.0.0.0:", 1))
 			}
 		}
 	}
@@ -103,11 +103,6 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 }
 
 //------------------------------------------------------------------------------
-
-// Connect establishes a nanomsg socket.
-func (s *ScaleProto) Connect() error {
-	return s.ConnectWithContext(context.Background())
-}
 
 // ConnectWithContext establishes a nanomsg socket.
 func (s *ScaleProto) ConnectWithContext(ctx context.Context) error {
@@ -184,12 +179,6 @@ func (s *ScaleProto) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// Read attempts to read a new message from the nanomsg socket.
-func (s *ScaleProto) Read() (types.Message, error) {
-	msg, _, err := s.ReadWithContext(context.Background())
-	return msg, err
-}
-
 // ReadWithContext attempts to read a new message from the nanomsg socket.
 func (s *ScaleProto) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	s.cMut.Lock()
@@ -207,12 +196,6 @@ func (s *ScaleProto) ReadWithContext(ctx context.Context) (types.Message, AsyncA
 		return nil, nil, err
 	}
 	return message.New([][]byte{data}), noopAsyncAckFn, nil
-}
-
-// Acknowledge instructs whether the pending messages were propagated
-// successfully.
-func (s *ScaleProto) Acknowledge(err error) error {
-	return nil
 }
 
 // CloseAsync shuts down the ScaleProto input and stops processing requests.

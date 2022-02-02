@@ -13,7 +13,7 @@ import (
 func init() {
 	Constructors[TypeSyncResponse] = TypeSpec{
 		constructor: fromSimpleConstructor(func(_ Config, _ types.Manager, logger log.Modular, stats metrics.Type) (Type, error) {
-			return NewWriter(TypeSyncResponse, roundtrip.Writer{}, logger, stats)
+			return NewAsyncWriter(TypeSyncResponse, 1, roundtrip.Writer{}, logger, stats)
 		}),
 		Summary: `
 Returns the final message payload back to the input origin of the message, where

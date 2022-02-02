@@ -23,8 +23,7 @@ Send messages over a Nanomsg socket.
 output:
   label: ""
   nanomsg:
-    urls:
-      - tcp://localhost:5556
+    urls: []
     bind: false
     socket_type: PUSH
     poll_timeout: 5s
@@ -47,7 +46,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["tcp://localhost:5556"]`  
+Default: `[]`  
 
 ```yaml
 # Examples

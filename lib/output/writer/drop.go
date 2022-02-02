@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"context"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -37,14 +38,14 @@ func NewDrop(
 	}
 }
 
-// Connect is a noop.
-func (d *Drop) Connect() error {
+// ConnectWithContext is a noop.
+func (d *Drop) ConnectWithContext(ctx context.Context) error {
 	d.log.Infoln("Dropping messages.")
 	return nil
 }
 
-// Write does nothing.
-func (d *Drop) Write(msg types.Message) error {
+// WriteWithContext does nothing.
+func (d *Drop) WriteWithContext(ctx context.Context, msg types.Message) error {
 	return nil
 }
 

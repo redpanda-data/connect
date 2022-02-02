@@ -85,39 +85,4 @@ input:
 		integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
 		integration.StreamTestOptVarOne("false"),
 	)
-
-	backwardsCompatibilityTemplate := `
-output:
-  amqp_0_9:
-    url: amqp://guest:guest@localhost:$PORT/
-    max_in_flight: $MAX_IN_FLIGHT
-    exchange: exchange-$ID
-    key: benthos-key
-    exchange_declare:
-      enabled: true
-      type: direct
-      durable: true
-    metadata:
-      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
-
-input:
-  amqp_0_9:
-    url: amqp://guest:guest@localhost:$PORT/
-    auto_ack: $VAR1
-    queue: queue-$ID
-    queue_declare:
-      durable: true
-      enabled: true
-    bindings_declare:
-      - exchange: exchange-$ID
-        key: benthos-key
-`
-
-	suite.Run(
-		t, backwardsCompatibilityTemplate,
-		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
-		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-		integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
-		integration.StreamTestOptVarOne("false"),
-	)
 })

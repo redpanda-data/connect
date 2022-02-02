@@ -1,4 +1,4 @@
-package cache
+package generic
 
 import (
 	"testing"
@@ -6,7 +6,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/integration"
 )
 
-var _ = registerIntegrationTest("multilevel", func(t *testing.T) {
+func TestIntegrationMultilevelCache(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
 	t.Parallel()
 
 	template := `
@@ -26,4 +29,4 @@ cache_resources:
 		integration.CacheTestGetAndSet(50),
 	)
 	suite.Run(t, template)
-})
+}

@@ -117,11 +117,6 @@ func NewMQTT(
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to an MQTT server.
-func (m *MQTT) Connect() error {
-	return m.ConnectWithContext(context.Background())
-}
-
 // ConnectWithContext establishes a connection to an MQTT server.
 func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 	m.cMut.Lock()
@@ -274,17 +269,6 @@ func (m *MQTT) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 		return nil, nil, types.ErrTypeClosed
 	}
 	return nil, nil, types.ErrTimeout
-}
-
-// Read attempts to read a new message from an MQTT broker.
-func (m *MQTT) Read() (types.Message, error) {
-	msg, _, err := m.ReadWithContext(context.Background())
-	return msg, err
-}
-
-// Acknowledge instructs whether messages have been successfully propagated.
-func (m *MQTT) Acknowledge(err error) error {
-	return nil
 }
 
 // CloseAsync shuts down the MQTT input and stops processing requests.

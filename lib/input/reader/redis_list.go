@@ -71,11 +71,6 @@ func NewRedisList(
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to a Redis server.
-func (r *RedisList) Connect() error {
-	return r.ConnectWithContext(context.Background())
-}
-
 // ConnectWithContext establishes a connection to a Redis server.
 func (r *RedisList) ConnectWithContext(ctx context.Context) error {
 	r.cMut.Lock()
@@ -97,12 +92,6 @@ func (r *RedisList) ConnectWithContext(ctx context.Context) error {
 
 	r.client = client
 	return nil
-}
-
-// Read attempts to pop a message from a Redis list.
-func (r *RedisList) Read() (types.Message, error) {
-	msg, _, err := r.ReadWithContext(context.Background())
-	return msg, err
 }
 
 // ReadWithContext attempts to pop a message from a Redis list.
@@ -130,11 +119,6 @@ func (r *RedisList) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 	}
 
 	return message.New([][]byte{[]byte(res[1])}), noopAsyncAckFn, nil
-}
-
-// Acknowledge is a noop since Redis Lists do not support acknowledgements.
-func (r *RedisList) Acknowledge(err error) error {
-	return nil
 }
 
 // disconnect safely closes a connection to an RedisList server.

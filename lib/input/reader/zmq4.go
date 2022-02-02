@@ -79,11 +79,6 @@ func getZMQType(t string) (zmq4.Type, error) {
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a ZMQ4 socket.
-func (z *ZMQ4) Connect() error {
-	return z.ConnectWithContext(context.Background())
-}
-
 // ConnectWithContext establishes a ZMQ4 socket.
 func (z *ZMQ4) ConnectWithContext(ignored context.Context) error {
 	if z.socket != nil {
@@ -142,12 +137,6 @@ func (z *ZMQ4) ConnectWithContext(ignored context.Context) error {
 	return nil
 }
 
-// Read attempts to read a new message from the ZMQ socket.
-func (z *ZMQ4) Read() (types.Message, error) {
-	msg, _, err := z.ReadWithContext(context.Background())
-	return msg, err
-}
-
 // ReadWithContext attempts to read a new message from the ZMQ socket.
 func (z *ZMQ4) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	if z.socket == nil {
@@ -168,12 +157,6 @@ func (z *ZMQ4) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 	}
 
 	return message.New(data), noopAsyncAckFn, nil
-}
-
-// Acknowledge instructs whether the pending messages were propagated
-// successfully.
-func (z *ZMQ4) Acknowledge(err error) error {
-	return nil
 }
 
 // CloseAsync shuts down the ZMQ4 input and stops processing requests.
