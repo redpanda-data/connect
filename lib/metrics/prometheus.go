@@ -127,7 +127,6 @@ type Prometheus struct {
 	closedChan chan struct{}
 	running    int32
 
-	config             PrometheusConfig
 	pathMapping        *pathMapping
 	prefix             string
 	useHistogramTiming bool
@@ -146,14 +145,14 @@ type Prometheus struct {
 
 // NewPrometheus creates and returns a new Prometheus object.
 func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
+	promConf := config.Prometheus
 	p := &Prometheus{
 		log:                log.Noop(),
 		running:            1,
 		closedChan:         make(chan struct{}),
-		config:             config.Prometheus,
-		prefix:             config.Prometheus.Prefix,
-		useHistogramTiming: config.Prometheus.UseHistogramTiming,
-		histogramBuckets:   config.Prometheus.HistogramBuckets,
+		prefix:             promConf.Prefix,
+		useHistogramTiming: promConf.UseHistogramTiming,
+		histogramBuckets:   promConf.HistogramBuckets,
 		reg:                prometheus.NewRegistry(),
 		counters:           map[string]*prometheus.CounterVec{},
 		gauges:             map[string]*prometheus.GaugeVec{},
@@ -165,6 +164,10 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 		opt(p)
 	}
 
+	if len(p.histogramBuckets) == 0 {
+		p.histogramBuckets = prometheus.DefBuckets
+	}
+
 	// TODO: V4 Maybe disable this with a config flag.
 	if err := p.reg.Register(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{})); err != nil {
 		return nil, err
@@ -174,19 +177,19 @@ func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	var err error
-	if p.pathMapping, err = newPathMapping(p.config.PathMapping, p.log); err != nil {
+	if p.pathMapping, err = newPathMapping(promConf.PathMapping, p.log); err != nil {
 		return nil, fmt.Errorf("failed to init path mapping: %v", err)
 	}
 
-	if len(p.config.PushURL) > 0 {
-		p.pusher = push.New(p.config.PushURL, p.config.PushJobName).Gatherer(p.reg)
+	if len(promConf.PushURL) > 0 {
+		p.pusher = push.New(promConf.PushURL, promConf.PushJobName).Gatherer(p.reg)
 
-		if len(p.config.PushBasicAuth.Username) > 0 && len(p.config.PushBasicAuth.Password) > 0 {
-			p.pusher = p.pusher.BasicAuth(p.config.PushBasicAuth.Username, p.config.PushBasicAuth.Password)
+		if len(promConf.PushBasicAuth.Username) > 0 && len(promConf.PushBasicAuth.Password) > 0 {
+			p.pusher = p.pusher.BasicAuth(promConf.PushBasicAuth.Username, promConf.PushBasicAuth.Password)
 		}
 
-		if len(p.config.PushInterval) > 0 {
-			interval, err := time.ParseDuration(p.config.PushInterval)
+		if len(promConf.PushInterval) > 0 {
+			interval, err := time.ParseDuration(promConf.PushInterval)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse push interval: %v", err)
 			}
@@ -299,7 +302,7 @@ func (p *Prometheus) getTimerHist(path string) StatTimer {
 			Namespace: p.prefix,
 			Name:      stat,
 			Help:      "Benthos Timing metric",
-			Buckets:   p.config.HistogramBuckets,
+			Buckets:   p.histogramBuckets,
 		}, labels)
 		p.reg.MustRegister(tmr)
 		p.timersHist[stat] = tmr
@@ -449,7 +452,7 @@ func (p *Prometheus) getTimerHistVec(path string, labelNames []string) StatTimer
 			Namespace: p.prefix,
 			Name:      stat,
 			Help:      "Benthos Timing metric",
-			Buckets:   p.config.HistogramBuckets,
+			Buckets:   p.histogramBuckets,
 		}, labelNames)
 		p.reg.MustRegister(tmr)
 		p.timersHist[stat] = tmr

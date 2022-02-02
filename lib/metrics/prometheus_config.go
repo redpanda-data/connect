@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 //------------------------------------------------------------------------------
@@ -18,7 +17,7 @@ Metrics paths will differ from [the standard list](/docs/components/metrics/abou
 			docs.FieldCommon("prefix", "A string prefix to add to all metrics."),
 			pathMappingDocs(true, true),
 			docs.FieldBool("use_histogram_timing", "Whether to export timing metrics as a histogram, if `false` a summary is used instead. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.").HasDefault(false).Advanced().AtVersion("3.63.0"),
-			docs.FieldAdvanced("histogram_buckets", "Timing metrics histogram buckets (in seconds). Defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)").Array().HasDefault("[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]").Advanced().AtVersion("3.63.0"),
+			docs.FieldFloat("histogram_buckets", "Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)").Array().HasDefault([]interface{}{}).Advanced().AtVersion("3.63.0"),
 			docs.FieldAdvanced("push_url", "An optional [Push Gateway URL](#push-gateway) to push metrics to."),
 			docs.FieldAdvanced("push_interval", "The period of time between each push when sending metrics to a Push Gateway."),
 			docs.FieldAdvanced("push_job_name", "An identifier for push jobs."),
@@ -78,7 +77,7 @@ func NewPrometheusConfig() PrometheusConfig {
 		Prefix:             "benthos",
 		PathMapping:        "",
 		UseHistogramTiming: false,
-		HistogramBuckets:   prometheus.DefBuckets,
+		HistogramBuckets:   []float64{},
 		PushURL:            "",
 		PushBasicAuth:      NewPrometheusPushBasicAuthConfig(),
 		PushInterval:       "",
