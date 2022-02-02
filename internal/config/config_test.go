@@ -133,6 +133,9 @@ cache_resources:
   - label: foo
     memory:
       ttl: 12
+
+tests:
+  - name: huh
 `), 0o644))
 
 	resourceTwoPath := filepath.Join(dir, "res2.yaml")
@@ -143,8 +146,14 @@ cache_resources:
       ttl: 13
 `), 0o644))
 
+	resourceThreePath := filepath.Join(dir, "res3.yaml")
+	require.NoError(t, os.WriteFile(resourceThreePath, []byte(`
+tests:
+  - name: whut
+`), 0o644))
+
 	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
+	rdr := iconfig.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath, resourceThreePath})
 
 	lints, err := rdr.Read(&conf)
 	require.NoError(t, err)

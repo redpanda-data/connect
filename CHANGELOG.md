@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - The `aws_dynamodb_partiql` processor no longer ignores the `endpoint` field.
 - Corrected duplicate detection for custom cache implementations.
 - Fixed panic caused by invalid bounds in the `range` function.
+- Resource config files imported now allow (and ignore) a `tests` field.
 
 ## 3.62.0 - 2022-01-21
 

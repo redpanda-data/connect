@@ -126,7 +126,10 @@ func readResource(path string, conf *manager.ResourceConfig) (lints []string, er
 		return
 	}
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
-		for _, lint := range manager.Spec().LintYAML(docs.NewLintContext(), &rawNode) {
+		allowTest := append(docs.FieldSpecs{
+			config.TestsField,
+		}, manager.Spec()...)
+		for _, lint := range allowTest.LintYAML(docs.NewLintContext(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("resource file %v: line %v: %v", path, lint.Line, lint.What))
 		}
 	}
