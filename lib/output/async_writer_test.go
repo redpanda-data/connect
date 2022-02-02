@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,11 +13,12 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/require"
 )
 
-//------------------------------------------------------------------------------
-
 type mockAsyncWriter struct {
+	msgsTotal uint64
+	msgsRcvd  sync.Map
 	connChan  chan error
 	writeChan chan error
 }
@@ -31,10 +34,40 @@ func (w *mockAsyncWriter) ConnectWithContext(ctx context.Context) error {
 	return <-w.connChan
 }
 func (w *mockAsyncWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+	w.msgsRcvd.Store(atomic.AddUint64(&w.msgsTotal, 1), msg)
 	return <-w.writeChan
 }
 func (w *mockAsyncWriter) CloseAsync() {}
 func (w *mockAsyncWriter) WaitForClose(time.Duration) error {
+	return nil
+}
+
+type writerCantConnect struct{}
+
+func (w writerCantConnect) ConnectWithContext(ctx context.Context) error {
+	return types.ErrNotConnected
+}
+func (w writerCantConnect) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return types.ErrNotConnected
+}
+func (w writerCantConnect) CloseAsync() {}
+func (w writerCantConnect) WaitForClose(time.Duration) error {
+	return nil
+}
+
+type writerCantSend struct {
+	connected int
+}
+
+func (w *writerCantSend) ConnectWithContext(ctx context.Context) error {
+	w.connected++
+	return nil
+}
+func (w *writerCantSend) WriteWithContext(ctx context.Context, msg types.Message) error {
+	return types.ErrNotConnected
+}
+func (w *writerCantSend) CloseAsync() {}
+func (w *writerCantSend) WaitForClose(time.Duration) error {
 	return nil
 }
 
@@ -124,7 +157,7 @@ func TestAsyncWriterCantSendClosedChan(t *testing.T) {
 func TestAsyncWriterStartClosed(t *testing.T) {
 	t.Parallel()
 
-	writerImpl := newMockWriter()
+	writerImpl := newAsyncMockWriter()
 
 	w, err := NewAsyncWriter(
 		"foo", 1, writerImpl,
@@ -155,7 +188,7 @@ func TestAsyncWriterStartClosed(t *testing.T) {
 func TestAsyncWriterClosesOnReconn(t *testing.T) {
 	t.Parallel()
 
-	writerImpl := newMockWriter()
+	writerImpl := newAsyncMockWriter()
 
 	w, err := NewAsyncWriter(
 		"foo", 1, writerImpl,
@@ -206,7 +239,7 @@ func TestAsyncWriterClosesOnReconn(t *testing.T) {
 func TestAsyncWriterClosesOnResend(t *testing.T) {
 	t.Parallel()
 
-	writerImpl := newMockWriter()
+	writerImpl := newAsyncMockWriter()
 
 	w, err := NewAsyncWriter(
 		"foo", 1, writerImpl,
@@ -264,7 +297,7 @@ func TestAsyncWriterClosesOnResend(t *testing.T) {
 func TestAsyncWriterCanReconnect(t *testing.T) {
 	t.Parallel()
 
-	writerImpl := newMockWriter()
+	writerImpl := newAsyncMockWriter()
 
 	w, err := NewAsyncWriter(
 		"foo", 1, writerImpl,
@@ -440,7 +473,7 @@ func TestAsyncWriterCantReconnect(t *testing.T) {
 	t.Skip("Takes too long!")
 	t.Parallel()
 
-	writerImpl := newMockWriter()
+	writerImpl := newAsyncMockWriter()
 
 	w, err := NewAsyncWriter(
 		"foo", 1, writerImpl,
@@ -501,12 +534,9 @@ func TestAsyncWriterCantReconnect(t *testing.T) {
 func TestAsyncWriterHappyPath(t *testing.T) {
 	t.Parallel()
 
-	writerImpl := newMockWriter()
+	writerImpl := newAsyncMockWriter()
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
-	expErr := error(nil)
-
-	writerImpl.resToSnd = expErr
 
 	w, err := NewAsyncWriter(
 		"foo", 1, writerImpl,
@@ -538,19 +568,15 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 		t.Fatal("Timed out")
 	}
 	select {
-	case writerImpl.writeChan <- expErr:
+	case writerImpl.writeChan <- nil:
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
 
 	select {
 	case res, open := <-resChan:
-		if !open {
-			t.Fatal("Chan closed")
-		}
-		if actErr := res.Error(); expErr != actErr {
-			t.Errorf("Wrong response: %v != %v", actErr, expErr)
-		}
+		require.True(t, open)
+		require.NoError(t, res.Error())
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -561,7 +587,10 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 		t.Error(err)
 	}
 
-	if act := message.GetAllBytes(writerImpl.msgRcvd); !reflect.DeepEqual(exp, act) {
+	msgRcvd, exists := writerImpl.msgsRcvd.Load(uint64(1))
+	require.True(t, exists)
+
+	if act := message.GetAllBytes(msgRcvd.(types.Message)); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }
@@ -569,12 +598,10 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 func TestAsyncWriterSadPath(t *testing.T) {
 	t.Parallel()
 
-	writerImpl := newMockWriter()
+	writerImpl := newAsyncMockWriter()
 
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 	expErr := errors.New("message got lost or something")
-
-	writerImpl.resToSnd = expErr
 
 	w, err := NewAsyncWriter(
 		"foo", 1, writerImpl,
@@ -629,9 +656,10 @@ func TestAsyncWriterSadPath(t *testing.T) {
 		t.Error(err)
 	}
 
-	if act := message.GetAllBytes(writerImpl.msgRcvd); !reflect.DeepEqual(exp, act) {
+	msgRcvd, exists := writerImpl.msgsRcvd.Load(uint64(1))
+	require.True(t, exists)
+
+	if act := message.GetAllBytes(msgRcvd.(types.Message)); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }
-
-//------------------------------------------------------------------------------

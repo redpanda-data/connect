@@ -71,13 +71,12 @@ input:
       enabled: $VAR2
       minimum_age: 100ms
       poll_interval: 100ms
-      cache: files-memory
+      cache: files_memory
 
-resources:
-  caches:
-    files-memory:
-      memory:
-        ttl: 900
+cache_resources:
+  - label: files_memory
+    memory:
+      default_ttl: 900s
 `
 		suite := integration.StreamTests(
 			integration.StreamTestOpenCloseIsolated(),

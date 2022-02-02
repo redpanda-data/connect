@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -55,12 +56,12 @@ func TestWebsocketBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.ConnectWithContext(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	for _, msg := range expMsgs {
-		if err = m.Write(message.New([][]byte{[]byte(msg)})); err != nil {
+		if err = m.WriteWithContext(context.Background(), message.New([][]byte{[]byte(msg)})); err != nil {
 			t.Error(err)
 		}
 	}
@@ -98,7 +99,7 @@ func TestWebsocketClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.ConnectWithContext(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 

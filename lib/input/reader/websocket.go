@@ -83,11 +83,6 @@ func (w *Websocket) getWS() *websocket.Conn {
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to a Websocket server.
-func (w *Websocket) Connect() error {
-	return w.ConnectWithContext(context.Background())
-}
-
 // ConnectWithContext establishes a connection to a Websocket server.
 func (w *Websocket) ConnectWithContext(ctx context.Context) error {
 	w.lock.Lock()
@@ -137,12 +132,6 @@ func (w *Websocket) ConnectWithContext(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// Read attempts to read a new message from the websocket.
-func (w *Websocket) Read() (types.Message, error) {
-	msg, _, err := w.ReadWithContext(context.Background())
-	return msg, err
-}
-
 // ReadWithContext attempts to read a new message from the websocket.
 func (w *Websocket) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
 	client := w.getWS()
@@ -160,12 +149,6 @@ func (w *Websocket) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 	}
 
 	return message.New([][]byte{data}), noopAsyncAckFn, nil
-}
-
-// Acknowledge instructs whether the pending messages were propagated
-// successfully.
-func (w *Websocket) Acknowledge(err error) error {
-	return nil
 }
 
 // CloseAsync shuts down the Websocket input and stops reading messages.

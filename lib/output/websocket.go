@@ -35,7 +35,7 @@ func NewWebsocket(conf Config, mgr types.Manager, log log.Modular, stats metrics
 	if err != nil {
 		return nil, err
 	}
-	a, err := NewWriter(TypeWebsocket, w, log, stats)
+	a, err := NewAsyncWriter(TypeWebsocket, 1, w, log, stats)
 	if err != nil {
 		return nil, err
 	}

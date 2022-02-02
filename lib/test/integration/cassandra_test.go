@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,10 @@ import (
 )
 
 var _ = registerIntegrationTest("cassandra", func(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("skipping test on macos")
+	}
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

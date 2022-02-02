@@ -26,8 +26,8 @@ Drops all messages.`,
 
 // NewDrop creates a new Drop output type.
 func NewDrop(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-	return NewWriter(
-		TypeDrop, writer.NewDrop(conf.Drop, log, stats), log, stats,
+	return NewAsyncWriter(
+		TypeDrop, 1, writer.NewDrop(conf.Drop, log, stats), log, stats,
 	)
 }
 

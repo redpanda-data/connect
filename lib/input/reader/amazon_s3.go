@@ -150,12 +150,6 @@ func NewAmazonS3(
 	return s, nil
 }
 
-// Connect attempts to establish a connection to the target S3 bucket and any
-// relevant queues used to traverse the objects (SQS, etc).
-func (a *AmazonS3) Connect() error {
-	return a.ConnectWithContext(context.Background())
-}
-
 // ConnectWithContext attempts to establish a connection to the target S3 bucket
 // and any relevant queues used to traverse the objects (SQS, etc).
 func (a *AmazonS3) ConnectWithContext(ctx context.Context) error {
@@ -460,10 +454,6 @@ func (a *AmazonS3) readSQSEvents() error {
 	return nil
 }
 
-func (a *AmazonS3) pushReadKey(key objKey) {
-	a.readKeys = append(a.readKeys, key)
-}
-
 func (a *AmazonS3) popTargetKey() {
 	if len(a.targetKeys) == 0 {
 		return
@@ -521,55 +511,6 @@ func (a *AmazonS3) ReadWithContext(ctx context.Context) (types.Message, AsyncAck
 		}
 		return nil
 	}, nil
-}
-
-// Read attempts to read a new message from the target S3 bucket.
-func (a *AmazonS3) Read() (types.Message, error) {
-	a.targetKeysMut.Lock()
-	defer a.targetKeysMut.Unlock()
-
-	if a.session == nil {
-		return nil, types.ErrNotConnected
-	}
-
-	timeoutAt := time.Now().Add(a.timeout)
-
-	if len(a.targetKeys) == 0 {
-		if a.sqs != nil {
-			if err := a.readSQSEvents(); err != nil {
-				return nil, err
-			}
-		} else {
-			// If we aren't using SQS but exhausted our targets we are done.
-			return nil, types.ErrTypeClosed
-		}
-	}
-	if len(a.targetKeys) == 0 {
-		return nil, types.ErrTimeout
-	}
-
-	msg := message.New(nil)
-
-	for len(a.targetKeys) > 0 && msg.Len() < a.conf.MaxBatchCount && time.Until(timeoutAt) > 0 {
-		part, objKey, err := a.readMethod()
-		if err != nil {
-			if err == types.ErrTimeout {
-				break
-			}
-			a.log.Errorf("Error: %v\n", err)
-			if msg.Len() == 0 {
-				return nil, err
-			}
-		} else {
-			msg.Append(part)
-			a.pushReadKey(objKey)
-		}
-	}
-	if msg.Len() == 0 {
-		return nil, types.ErrTimeout
-	}
-
-	return msg, nil
 }
 
 func addS3Metadata(p types.Part, obj *s3.GetObjectOutput) {
@@ -669,24 +610,6 @@ func (a *AmazonS3) readFromMgr() (types.Part, objKey, error) {
 	return part, target, nil
 }
 
-// Acknowledge confirms whether or not our unacknowledged messages have been
-// successfully propagated or not.
-func (a *AmazonS3) Acknowledge(err error) error {
-	if err == nil {
-		a.deleteObjects(a.readKeys)
-	} else {
-		if a.sqs == nil {
-			a.targetKeysMut.Lock()
-			a.targetKeys = append(a.readKeys, a.targetKeys...)
-			a.targetKeysMut.Unlock()
-		} else {
-			a.rejectObjects(a.readKeys)
-		}
-	}
-	a.readKeys = nil
-	return nil
-}
-
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
 func (a *AmazonS3) CloseAsync() {
 	go func() {
@@ -702,5 +625,3 @@ func (a *AmazonS3) CloseAsync() {
 func (a *AmazonS3) WaitForClose(time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

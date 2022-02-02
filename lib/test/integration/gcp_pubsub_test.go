@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -15,6 +16,10 @@ import (
 )
 
 var _ = registerIntegrationTest("gcp_pubsub", func(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("skipping test on macos")
+	}
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

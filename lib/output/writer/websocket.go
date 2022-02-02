@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"context"
 	"crypto/tls"
 	"net/http"
 	"net/url"
@@ -79,8 +80,8 @@ func (w *Websocket) getWS() *websocket.Conn {
 
 //------------------------------------------------------------------------------
 
-// Connect establishes a connection to an Websocket server.
-func (w *Websocket) Connect() error {
+// ConnectWithContext establishes a connection to an Websocket server.
+func (w *Websocket) ConnectWithContext(ctx context.Context) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -130,8 +131,8 @@ func (w *Websocket) Connect() error {
 
 //------------------------------------------------------------------------------
 
-// Write attempts to write a message by pushing it to an Websocket broker.
-func (w *Websocket) Write(msg types.Message) error {
+// WriteWithContext attempts to write a message by pushing it to an Websocket broker.
+func (w *Websocket) WriteWithContext(ctx context.Context, msg types.Message) error {
 	client := w.getWS()
 	if client == nil {
 		return types.ErrNotConnected

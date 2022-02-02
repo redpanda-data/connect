@@ -31,8 +31,7 @@ Consumes messages via Nanomsg sockets (scalability protocols).
 input:
   label: ""
   nanomsg:
-    urls:
-      - tcp://*:5555
+    urls: []
     bind: true
     socket_type: PULL
     sub_filters: []
@@ -46,8 +45,7 @@ input:
 input:
   label: ""
   nanomsg:
-    urls:
-      - tcp://*:5555
+    urls: []
     bind: true
     socket_type: PULL
     sub_filters: []
@@ -67,7 +65,7 @@ A list of URLs to connect to (or as). If an item of the list contains commas it 
 
 
 Type: `array`  
-Default: `["tcp://*:5555"]`  
+Default: `[]`  
 
 ### `bind`
 

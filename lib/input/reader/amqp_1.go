@@ -224,16 +224,16 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 	part := message.NewPart(amqpMsg.GetData())
 
 	if amqpMsg.Properties != nil {
-		setMetadata(part, "amqp_content_type", amqpMsg.Properties.ContentType)
-		setMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
-		setMetadata(part, "amqp_creation_time", amqpMsg.Properties.CreationTime)
+		amqpSetMetadata(part, "amqp_content_type", amqpMsg.Properties.ContentType)
+		amqpSetMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
+		amqpSetMetadata(part, "amqp_creation_time", amqpMsg.Properties.CreationTime)
 	}
 	if amqpMsg.Annotations != nil {
 		for k, v := range amqpMsg.Annotations {
 			keyStr, keyIsStr := k.(string)
 			valStr, valIsStr := v.(string)
 			if keyIsStr && valIsStr {
-				setMetadata(part, keyStr, valStr)
+				amqpSetMetadata(part, keyStr, valStr)
 			}
 		}
 	}

@@ -13,7 +13,6 @@ module.exports = {
     components: {
       inputs: components("inputs"),
       processors: components("processors"),
-      conditions: components("conditions"),
       outputs: components("outputs"),
       caches: components("caches"),
       rate_limits: components("rate_limits"),

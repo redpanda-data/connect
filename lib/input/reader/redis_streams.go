@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
 )
@@ -73,8 +72,6 @@ type RedisStreams struct {
 
 	aMut    sync.Mutex
 	ackSend map[string][]string // Acks that can be sent
-
-	deprecatedAckFns []AsyncAckFn
 
 	stats metrics.Type
 	log   log.Modular
@@ -188,11 +185,6 @@ func (r *RedisStreams) sendAcks() {
 }
 
 //------------------------------------------------------------------------------
-
-// Connect establishes a connection to a Redis server.
-func (r *RedisStreams) Connect() error {
-	return r.ConnectWithContext(context.Background())
-}
 
 // ConnectWithContext establishes a connection to a Redis server.
 func (r *RedisStreams) ConnectWithContext(ctx context.Context) error {
@@ -360,26 +352,6 @@ func (r *RedisStreams) ReadWithContext(ctx context.Context) (types.Message, Asyn
 		}
 		return nil
 	}, nil
-}
-
-// Read attempts to pop a message from a Redis list.
-func (r *RedisStreams) Read() (types.Message, error) {
-	msg, ackFn, err := r.ReadWithContext(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	r.deprecatedAckFns = append(r.deprecatedAckFns, ackFn)
-	return msg, nil
-}
-
-// Acknowledge is a noop since Redis Lists do not support acknowledgements.
-func (r *RedisStreams) Acknowledge(err error) error {
-	res := response.NewError(err)
-	for _, p := range r.deprecatedAckFns {
-		_ = p(context.Background(), res)
-	}
-	r.deprecatedAckFns = nil
-	return nil
 }
 
 // disconnect safely closes a connection to an RedisStreams server.

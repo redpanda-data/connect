@@ -23,7 +23,7 @@ output:
 input:
   nanomsg:
     urls:
-      - tcp://*:$PORT
+      - tcp://0.0.0.0:$PORT
     bind: true
     socket_type: $VAR2
     sub_filters: [ $VAR3 ]

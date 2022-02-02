@@ -10,9 +10,11 @@ import (
 )
 
 func TestWriter(t *testing.T) {
+	wctx := context.Background()
+
 	impl := &resultStoreImpl{}
 	w := Writer{}
-	if err := w.Connect(); err != nil {
+	if err := w.ConnectWithContext(wctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -24,7 +26,7 @@ func TestWriter(t *testing.T) {
 	msg.Append(p)
 	msg.Append(message.NewPart([]byte("bar")))
 
-	if err := w.Write(msg); err != nil {
+	if err := w.WriteWithContext(wctx, msg); err != nil {
 		t.Fatal(err)
 	}
 

@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -52,19 +53,18 @@ func TestWebsocketBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	ctx := context.Background()
+
+	if err = m.ConnectWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 
 	for _, exp := range expMsgs {
 		var actMsg types.Message
-		if actMsg, err = m.Read(); err != nil {
+		if actMsg, _, err = m.ReadWithContext(ctx); err != nil {
 			t.Error(err)
 		} else if act := string(actMsg.Get(0).Get()); act != exp {
 			t.Errorf("Wrong result: %v != %v", act, exp)
-		}
-		if err = m.Acknowledge(nil); err != nil {
-			t.Error(err)
 		}
 	}
 
@@ -121,19 +121,18 @@ func TestWebsocketOpenMsg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	ctx := context.Background()
+
+	if err = m.ConnectWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 
 	for _, exp := range expMsgs {
 		var actMsg types.Message
-		if actMsg, err = m.Read(); err != nil {
+		if actMsg, _, err = m.ReadWithContext(ctx); err != nil {
 			t.Error(err)
 		} else if act := string(actMsg.Get(0).Get()); act != exp {
 			t.Errorf("Wrong result: %v != %v", act, exp)
-		}
-		if err = m.Acknowledge(nil); err != nil {
-			t.Error(err)
 		}
 	}
 
@@ -171,7 +170,9 @@ func TestWebsocketClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	ctx := context.Background()
+
+	if err = m.ConnectWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -185,7 +186,7 @@ func TestWebsocketClose(t *testing.T) {
 		wg.Done()
 	}()
 
-	if _, err = m.Read(); err != types.ErrTypeClosed && err != types.ErrNotConnected {
+	if _, _, err = m.ReadWithContext(ctx); err != types.ErrTypeClosed && err != types.ErrNotConnected {
 		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
 	}
 
