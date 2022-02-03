@@ -16,7 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   label: ""

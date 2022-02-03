@@ -25,7 +25,7 @@ Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 metrics:
   prometheus:
@@ -36,7 +36,7 @@ metrics:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 metrics:
   prometheus:
@@ -75,7 +75,7 @@ An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to r
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 path_mapping: this.replace("input", "source").replace("output", "sink")

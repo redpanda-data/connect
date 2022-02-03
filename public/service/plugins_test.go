@@ -148,7 +148,7 @@ test_input_plugin_with_config:
 	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	_, err = mgr.NewInput(inConf, false)
+	_, err = mgr.NewInput(inConf)
 	assert.EqualError(t, err, "failed to create input 'test_input_plugin_with_config': this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
@@ -187,7 +187,7 @@ test_input_plugin_without_config: null
 	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	_, err = mgr.NewInput(inConf, false)
+	_, err = mgr.NewInput(inConf)
 	assert.EqualError(t, err, "failed to create input 'test_input_plugin_without_config': this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }

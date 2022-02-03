@@ -26,7 +26,7 @@ where the values are
 batch. This allows you to populate string columns of an item by extracting
 fields within the document payload or metadata like follows:
 
-` + "```yaml" + `
+` + "```yml" + `
 string_columns:
   id: ${!json("id")}
   title: ${!json("body.title")}

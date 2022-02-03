@@ -22,7 +22,7 @@ Chops a stream of messages into tumbling or sliding windows of fixed temporal si
 
 Introduced in version 3.53.0.
 
-```yaml
+```yml
 # Config fields, showing default values
 buffer:
   system_window:
@@ -132,7 +132,7 @@ The timestamp value assigned to `root` must either be a numerical unix time in s
 Type: `string`  
 Default: `"root = now()"`  
 
-```yaml
+```yml
 # Examples
 
 timestamp_mapping: root = this.created_at
@@ -147,7 +147,7 @@ A duration string describing the size of each window. By default windows are ali
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 size: 30s
@@ -163,7 +163,7 @@ An optional duration string describing by how much time the beginning of each wi
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 slide: 30s
@@ -179,7 +179,7 @@ An optional duration string to offset the beginning of each window by, otherwise
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 offset: -6h
@@ -195,7 +195,7 @@ An optional duration string describing the length of time to wait after a window
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 allowed_lateness: 10s

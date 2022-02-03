@@ -28,7 +28,7 @@ be caught using error handling methods outlined [here](/docs/configuration/error
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 json_schema:
@@ -39,7 +39,7 @@ json_schema:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 json_schema:

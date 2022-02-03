@@ -26,7 +26,7 @@ While is a processor that checks a [Bloblang query](/docs/guides/bloblang/about/
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 while:
@@ -38,7 +38,7 @@ while:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 while:
@@ -83,7 +83,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: errored()

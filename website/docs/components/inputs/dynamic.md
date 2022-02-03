@@ -19,7 +19,7 @@ import TabItem from '@theme/TabItem';
 A special broker type where the inputs are identified by unique labels and can
 be created, changed and removed during runtime via a REST HTTP interface.
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   label: ""

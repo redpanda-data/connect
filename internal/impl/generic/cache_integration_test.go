@@ -8,7 +8,6 @@ import (
 
 func TestIntegrationMultilevelCache(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	t.Parallel()
 

@@ -27,7 +27,7 @@ decompression types are: gzip, zlib, bzip2, flate, snappy, lz4.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 decompress:
@@ -37,7 +37,7 @@ decompress:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 decompress:

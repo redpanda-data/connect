@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Resource is an output type that runs a resource output by its name.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   resource: ""

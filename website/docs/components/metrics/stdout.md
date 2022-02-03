@@ -20,7 +20,7 @@ This component is mostly stable but breaking changes could still be made outside
 
 Prints aggregated metrics as JSON objects to stdout.
 
-```yaml
+```yml
 # Config fields, showing default values
 metrics:
   stdout:
@@ -69,7 +69,7 @@ An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to r
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 path_mapping: this.replace("input", "source").replace("output", "sink")

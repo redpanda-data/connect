@@ -28,7 +28,7 @@ message contents and metadata.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 awk:
@@ -39,7 +39,7 @@ awk:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 awk:

@@ -26,7 +26,7 @@ Connects to Kafka brokers and consumes one or more topics.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -43,7 +43,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -132,7 +132,7 @@ A list of broker addresses to connect to. If an item of the list contains commas
 Type: `array`  
 Default: `["localhost:9092"]`  
 
-```yaml
+```yml
 # Examples
 
 addresses:
@@ -155,7 +155,7 @@ Type: `array`
 Default: `[]`  
 Requires version 3.33.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 topics:
@@ -225,7 +225,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -242,7 +242,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -256,7 +256,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -331,7 +331,7 @@ A `PLAIN` username. It is recommended that you use environment variables to popu
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 user: ${USER}
@@ -345,7 +345,7 @@ A `PLAIN` password. It is recommended that you use environment variables to popu
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 password: ${PASSWORD}
@@ -441,7 +441,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.45.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 extract_tracing_map: root = meta()
@@ -495,7 +495,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -537,7 +537,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -555,7 +555,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -569,7 +569,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

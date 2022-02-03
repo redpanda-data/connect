@@ -26,7 +26,7 @@ Executes a command as a subprocess and, for each message, will pipe its contents
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 subprocess:
@@ -37,7 +37,7 @@ subprocess:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 subprocess:
@@ -78,7 +78,7 @@ The command to execute as a subprocess.
 Type: `string`  
 Default: `"cat"`  
 
-```yaml
+```yml
 # Examples
 
 name: cat

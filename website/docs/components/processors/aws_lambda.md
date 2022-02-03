@@ -30,7 +30,7 @@ Introduced in version 3.36.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 aws_lambda:
@@ -42,7 +42,7 @@ aws_lambda:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 aws_lambda:

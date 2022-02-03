@@ -26,7 +26,7 @@ Consumes data from files on disk, emitting messages according to a chosen codec.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -38,7 +38,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -96,7 +96,7 @@ Default: `"lines"`
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines

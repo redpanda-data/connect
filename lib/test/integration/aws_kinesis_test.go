@@ -45,7 +45,10 @@ var _ = registerIntegrationTest("aws_kinesis", func(t *testing.T) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Minute * 2
+	if dline, ok := t.Deadline(); ok && time.Until(dline) < pool.MaxWait {
+		pool.MaxWait = time.Until(dline)
+	}
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "localstack/localstack",

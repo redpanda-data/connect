@@ -21,7 +21,7 @@ unchanged. The log message can be set using function interpolations described
 [here](/docs/configuration/interpolation#bloblang-queries) which allows you to log the
 contents and metadata of messages.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 log:
@@ -113,7 +113,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.40.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 fields_mapping: |-

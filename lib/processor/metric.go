@@ -131,7 +131,7 @@ pipeline:
   processors:
     - metric:
         type: gauge
-        path: GaugeCustomField
+        name: GaugeCustomField
         value: ${!json("field.some.value")}
 ` + "```" + `
 

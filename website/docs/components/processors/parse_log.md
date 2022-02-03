@@ -27,7 +27,7 @@ easier and often much faster than [`grok`](/docs/components/processors/grok).
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 parse_log:
@@ -38,7 +38,7 @@ parse_log:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 parse_log:

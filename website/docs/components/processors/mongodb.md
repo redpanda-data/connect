@@ -30,7 +30,7 @@ Introduced in version 3.43.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 mongodb:
@@ -53,7 +53,7 @@ mongodb:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 mongodb:
@@ -93,7 +93,7 @@ The URL of the target MongoDB DB.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 url: mongodb://localhost:27017
@@ -180,7 +180,7 @@ A bloblang map representing the records in the mongo db. Used to generate the do
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 document_map: |-
@@ -196,7 +196,7 @@ A bloblang map representing the filter for the mongo db command. The filter map 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 filter_map: |-
@@ -212,7 +212,7 @@ A bloblang map representing the hint for the mongo db command. This map is optio
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 hint_map: |-

@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Resource is an input type that runs a resource input by its name.
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   resource: ""

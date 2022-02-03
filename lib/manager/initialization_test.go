@@ -37,7 +37,7 @@ func TestInitialization(t *testing.T) {
 	}))
 
 	lenInputProcs := 0
-	require.NoError(t, env.InputAdd(func(b bool, c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
+	require.NoError(t, env.InputAdd(func(c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
 		lenInputProcs = len(p)
 		return nil, errors.New("not this input")
 	}, docs.ComponentSpec{
@@ -85,7 +85,7 @@ func TestInitialization(t *testing.T) {
 
 	iConf := input.NewConfig()
 	iConf.Type = "testinput"
-	_, err = mgr.NewInput(iConf, true, nil, nil)
+	_, err = mgr.NewInput(iConf, nil, nil)
 	assert.EqualError(t, err, "not this input")
 	assert.Equal(t, 2, lenInputProcs)
 
@@ -124,7 +124,7 @@ func TestInitializationOrdering(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	require.NoError(t, env.InputAdd(func(b bool, c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
+	require.NoError(t, env.InputAdd(func(c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
 		go func() {
 			defer wg.Done()
 			err := mgr.AccessRateLimit(context.Background(), "testratelimit", func(rl types.RateLimit) {})

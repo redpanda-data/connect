@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Conditionally processes messages based on their contents.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 switch: []
@@ -36,7 +36,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "foo"

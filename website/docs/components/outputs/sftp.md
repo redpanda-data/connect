@@ -22,7 +22,7 @@ Writes files to a server over SFTP.
 
 Introduced in version 3.39.0.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
@@ -100,7 +100,7 @@ Default: `"all-bytes"`
 | `delim:x` | Append each message to the output stream followed by a custom delimiter. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines

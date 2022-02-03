@@ -28,7 +28,7 @@ Automatically decodes and validates messages with schemas from a Confluent Schem
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 schema_registry_decode:
@@ -38,7 +38,7 @@ schema_registry_decode:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 schema_registry_decode:
@@ -112,7 +112,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -129,7 +129,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -142,7 +142,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:

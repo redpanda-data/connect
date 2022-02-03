@@ -34,7 +34,7 @@ func TestElasticIntegration(t *testing.T) {
 	}
 	pool.MaxWait = time.Second * 30
 
-	resource, err := pool.Run("elasticsearch", "7.5.1", []string{
+	resource, err := pool.Run("elasticsearch", "7.13.4", []string{
 		"discovery.type=single-node",
 	})
 	if err != nil {

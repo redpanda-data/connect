@@ -26,7 +26,7 @@ Performs operations against a [cache resource](/docs/components/caches/about) fo
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 cache:
@@ -39,7 +39,7 @@ cache:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 cache:
@@ -165,7 +165,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.33.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 ttl: 60s

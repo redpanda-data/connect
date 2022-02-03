@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Splits a [batch of messages](/docs/configuration/batching/) into N batches, where each resulting batch contains a group of messages determined by a [Bloblang query](/docs/guides/bloblang/about/).
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 group_by: []
@@ -39,7 +39,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "foo"

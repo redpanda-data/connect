@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Resource is a processor type that runs a processor resource identified by its label.
 
-```yaml
+```yml
 # Config fields, showing default values
 resource: ""
 ```

@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
 Supported tagging formats are 'legacy', 'none', 'datadog' and 'influxdb'.
 
-```yaml
+```yml
 # Config fields, showing default values
 metrics:
   statsd:
@@ -58,7 +58,7 @@ An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to r
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 path_mapping: this.replace("input", "source").replace("output", "sink")
