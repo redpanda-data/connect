@@ -132,7 +132,11 @@ func newReverseAirGapCache(c types.Cache) *reverseAirGapCache {
 }
 
 func (r *reverseAirGapCache) Get(ctx context.Context, key string) ([]byte, error) {
-	return r.c.Get(key)
+	b, err := r.c.Get(key)
+	if errors.Is(err, types.ErrKeyNotFound) {
+		err = ErrKeyNotFound
+	}
+	return b, err
 }
 
 func (r *reverseAirGapCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
@@ -142,11 +146,16 @@ func (r *reverseAirGapCache) Set(ctx context.Context, key string, value []byte, 
 	return r.c.Set(key, value)
 }
 
-func (r *reverseAirGapCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
+func (r *reverseAirGapCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) (err error) {
 	if cttl, ok := r.c.(types.CacheWithTTL); ok {
-		return cttl.AddWithTTL(key, value, ttl)
+		err = cttl.AddWithTTL(key, value, ttl)
+	} else {
+		err = r.c.Add(key, value)
 	}
-	return r.c.Add(key, value)
+	if errors.Is(err, types.ErrKeyAlreadyExists) {
+		err = ErrKeyAlreadyExists
+	}
+	return
 }
 
 func (r *reverseAirGapCache) Delete(ctx context.Context, key string) error {
