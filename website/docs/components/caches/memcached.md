@@ -24,7 +24,7 @@ Connects to a cluster of memcached services, a prefix can be specified to allow 
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 memcached:
@@ -36,7 +36,7 @@ memcached:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 memcached:
@@ -91,7 +91,7 @@ The initial period to wait between retry attempts.
 Type: `string`  
 Default: `"1s"`  
 
-```yaml
+```yml
 # Examples
 
 initial_interval: 50ms
@@ -107,7 +107,7 @@ The maximum period to wait between retry attempts
 Type: `string`  
 Default: `"5s"`  
 
-```yaml
+```yml
 # Examples
 
 max_interval: 5s
@@ -123,7 +123,7 @@ The maximum overall period of time to spend on retry attempts before the request
 Type: `string`  
 Default: `"30s"`  
 
-```yaml
+```yml
 # Examples
 
 max_elapsed_time: 1m

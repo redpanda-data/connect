@@ -115,7 +115,7 @@ type componentContext struct {
 	Version            string
 }
 
-var componentTemplate = FieldsTemplate(true) + `---
+var componentTemplate = FieldsTemplate(false) + `---
 title: {{.Name}}
 type: {{.Type}}
 status: {{.Status}}
@@ -159,7 +159,7 @@ This component is deprecated and will be removed in the next major version relea
 Introduced in version {{.Version}}.
 {{end}}
 {{if eq .CommonConfig .AdvancedConfig -}}
-` + "```yaml" + `
+` + "```yml" + `
 # Config fields, showing default values
 {{.CommonConfig -}}
 ` + "```" + `
@@ -171,7 +171,7 @@ Introduced in version {{.Version}}.
 
 <TabItem value="common">
 
-` + "```yaml" + `
+` + "```yml" + `
 # Common config fields, showing default values
 {{.CommonConfig -}}
 ` + "```" + `
@@ -179,7 +179,7 @@ Introduced in version {{.Version}}.
 </TabItem>
 <TabItem value="advanced">
 
-` + "```yaml" + `
+` + "```yml" + `
 # All config fields, showing default values
 {{.AdvancedConfig -}}
 ` + "```" + `

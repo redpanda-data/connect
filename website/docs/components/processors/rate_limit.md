@@ -21,7 +21,7 @@ Throttles the throughput of a pipeline according to a specified
 shared across components and therefore apply globally to all processing
 pipelines.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 rate_limit:

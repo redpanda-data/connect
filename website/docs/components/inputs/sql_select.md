@@ -30,7 +30,7 @@ Introduced in version 3.59.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -46,7 +46,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -125,7 +125,7 @@ can override this with the parameter `sslmode=disable` if required.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 dsn: tcp://host1:9000?username=user&password=qwerty&database=clicks&read_timeout=10&write_timeout=20&alt_hosts=host2:9000,host3:9000
@@ -142,7 +142,7 @@ The table to select from.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 table: foo
@@ -155,7 +155,7 @@ A list of columns to select.
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 columns:
@@ -174,7 +174,7 @@ An optional where clause to add. Placeholder arguments are populated with the `a
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 where: type = ? and created_at > ?
@@ -189,7 +189,7 @@ An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluat
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 args_mapping: root = [ "article", now().format_timestamp("2006-01-02") ]

@@ -26,7 +26,7 @@ Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS, whic
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -43,7 +43,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -241,7 +241,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"200"`  
 
-```yaml
+```yml
 # Examples
 
 status: "200"
@@ -275,7 +275,7 @@ Provide a list of explicit metadata key prefixes to match against.
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_prefixes:
@@ -297,7 +297,7 @@ Provide a list of explicit metadata key regular expression (re2) patterns to mat
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_patterns:

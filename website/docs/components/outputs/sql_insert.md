@@ -27,7 +27,7 @@ Introduced in version 3.59.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -48,7 +48,7 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -132,7 +132,7 @@ can override this with the parameter `sslmode=disable` if required.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 dsn: tcp://host1:9000?username=user&password=qwerty&database=clicks&read_timeout=10&write_timeout=20&alt_hosts=host2:9000,host3:9000
@@ -149,7 +149,7 @@ The table to insert to.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 table: foo
@@ -162,7 +162,7 @@ A list of columns to insert.
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 columns:
@@ -178,7 +178,7 @@ A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an ar
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ]
@@ -215,7 +215,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -257,7 +257,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -275,7 +275,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -288,7 +288,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 processors:

@@ -30,7 +30,7 @@ Introduced in version 3.46.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -46,7 +46,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -120,7 +120,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 urls:
@@ -144,7 +144,7 @@ A subject to consume from. Supports wildcards for consuming multiple subjects.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 subject: foo.bar.baz
@@ -225,7 +225,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -242,7 +242,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -255,7 +255,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -313,7 +313,7 @@ An optional file containing a NKey seed.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 nkey_file: ./seed.nk
@@ -326,7 +326,7 @@ An optional file containing user credentials which consist of an user JWT and co
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 user_credentials_file: ./user.creds

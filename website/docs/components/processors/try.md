@@ -21,7 +21,7 @@ list of child processors are applied to individual messages of a batch. However,
 if a processor fails for a message then that message will skip all following
 processors.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 try: []

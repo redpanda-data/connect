@@ -29,7 +29,7 @@ cache_resources:
     memcached:
       addresses:
         - localhost:11211
-      ttl: 60
+      default_ttl: 60s
 ` + "```" + `
 
 In order to create a unique ` + "`key`" + ` value per item you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`,

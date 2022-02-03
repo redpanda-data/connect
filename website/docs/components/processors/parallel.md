@@ -21,7 +21,7 @@ though they were each a batch of one message (similar to the
 [`for_each`](/docs/components/processors/for_each) processor), but where each message is
 processed in parallel.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 parallel:

@@ -174,7 +174,7 @@ func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
 }
 
 func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
-	return set.Add(func(b bool, c input.Config, nm bundle.NewManagement, pcf ...types.PipelineConstructorFunc) (input.Type, error) {
+	return set.Add(func(c input.Config, nm bundle.NewManagement, pcf ...types.PipelineConstructorFunc) (input.Type, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -191,7 +191,7 @@ func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
 		if tmpl.metricsMapping != nil {
 			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
 		}
-		return nm.NewInput(conf, b, pcf...)
+		return nm.NewInput(conf, pcf...)
 	}, tmpl.spec)
 }
 

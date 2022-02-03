@@ -26,7 +26,7 @@ Removes messages (and batches) that do not fit within certain size boundaries.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 bounds_check:
@@ -37,7 +37,7 @@ bounds_check:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 bounds_check:

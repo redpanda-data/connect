@@ -24,7 +24,7 @@ Stores key/value pairs in a map held in the memory-bound [Ristretto cache](https
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 ristretto:
@@ -34,7 +34,7 @@ ristretto:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 ristretto:
@@ -58,7 +58,7 @@ A default TTL to set for items, calculated from the moment the item is cached. S
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 default_ttl: 5m

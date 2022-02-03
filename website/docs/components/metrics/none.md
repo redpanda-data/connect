@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem';
 
 Disable metrics entirely.
 
-```yaml
+```yml
 # Config fields, showing default values
 metrics:
   none: {}

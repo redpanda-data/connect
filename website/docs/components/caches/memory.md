@@ -24,7 +24,7 @@ Stores key/value pairs in a map held in memory. This cache is therefore reset ev
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 memory:
@@ -36,7 +36,7 @@ memory:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 memory:
@@ -56,10 +56,12 @@ Item expiry can be disabled entirely by either setting the `compaction_interval`
 The field `init_values` can be used to prepopulate the memory cache with any number of key/value pairs which are exempt from TTLs:
 
 ```yaml
-memory:
-  ttl: 60s
-  init_values:
-    foo: bar
+cache_resources:
+  - label: foocache
+    memory:
+      default_ttl: 60s
+      init_values:
+        foo: bar
 ```
 
 These values can be overridden during execution, at which point the configured TTL is respected as usual.
@@ -90,7 +92,7 @@ A table of key/value pairs that should be present in the cache on initialization
 Type: `object`  
 Default: `{}`  
 
-```yaml
+```yml
 # Examples
 
 init_values:

@@ -20,7 +20,7 @@ Attempts to send each message to a child output, starting from the first output 
 
 Introduced in version 3.58.0.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""

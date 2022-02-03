@@ -92,7 +92,7 @@ test: $(APPS)
 
 test-integration:
 	$(warning WARNING! Running the integration tests in their entirety consumes a huge amount of computing resources and is likely to time out on most machines. It's recommended that you instead run the integration suite for connectors you are working selectively with `go test -run 'TestIntegration/kafka' ./...` and so on.)
-	@go test $(GO_FLAGS) -ldflags "$(LD_FLAGS)" -run "^Test.*Integration.*$$" -timeout 3m ./...
+	@go test $(GO_FLAGS) -ldflags "$(LD_FLAGS)" -run "^Test.*Integration.*$$" -timeout 5m ./...
 
 clean:
 	rm -rf $(PATHINSTBIN)
@@ -105,7 +105,7 @@ docs: $(APPS) $(TOOLS)
 	@$(PATHINSTTOOLS)/benthos_docs_gen $(DOCS_FLAGS)
 	@$(PATHINSTBIN)/benthos lint --deprecated ./config/... \
 		$(WEBSITE_DIR)/cookbooks/*.md \
-		$(WEBSITE_DIR)/docs/components/**/about.md \
+		$(WEBSITE_DIR)/docs/components/**/*.md \
 		$(WEBSITE_DIR)/docs/guides/*.md \
 		$(WEBSITE_DIR)/docs/guides/**/*.md \
 		$(WEBSITE_DIR)/docs/configuration/*.md

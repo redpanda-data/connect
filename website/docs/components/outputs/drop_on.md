@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Attempts to write messages to a child output and if the write fails for one of a list of configurable reasons the message is dropped instead of being reattempted.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
@@ -48,7 +48,7 @@ An optional duration string that determines the maximum length of time to wait f
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 back_pressure: 30s

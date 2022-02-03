@@ -27,7 +27,7 @@ multiple messages within a [batch](/docs/configuration/batching).
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 unarchive:
@@ -37,7 +37,7 @@ unarchive:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 unarchive:

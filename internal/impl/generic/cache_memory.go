@@ -20,10 +20,12 @@ Item expiry can be disabled entirely by either setting the ` + "`compaction_inte
 The field ` + "`init_values`" + ` can be used to prepopulate the memory cache with any number of key/value pairs which are exempt from TTLs:
 
 ` + "```yaml" + `
-memory:
-  ttl: 60s
-  init_values:
-    foo: bar
+cache_resources:
+  - label: foocache
+    memory:
+      default_ttl: 60s
+      init_values:
+        foo: bar
 ` + "```" + `
 
 These values can be overridden during execution, at which point the configured TTL is respected as usual.`).

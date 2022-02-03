@@ -27,7 +27,7 @@ performing them in parallel where possible.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 workflow:
@@ -39,7 +39,7 @@ workflow:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 workflow:
@@ -235,7 +235,7 @@ An explicit declaration of branch ordered tiers, which describes the order in wh
 Type: `two-dimensional array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 order:
@@ -274,7 +274,7 @@ A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 request_map: |-
@@ -307,7 +307,7 @@ A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulti
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 result_map: |-

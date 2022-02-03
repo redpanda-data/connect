@@ -27,7 +27,7 @@ Introduced in version 3.59.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 sql_insert:
@@ -41,7 +41,7 @@ sql_insert:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 sql_insert:
@@ -120,7 +120,7 @@ can override this with the parameter `sslmode=disable` if required.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 dsn: tcp://host1:9000?username=user&password=qwerty&database=clicks&read_timeout=10&write_timeout=20&alt_hosts=host2:9000,host3:9000
@@ -137,7 +137,7 @@ The table to insert to.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 table: foo
@@ -150,7 +150,7 @@ A list of columns to insert.
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 columns:
@@ -166,7 +166,7 @@ A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an ar
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ]

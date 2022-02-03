@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem';
 
 Noop is a processor that does nothing, the message passes through unchanged. Why? Sometimes doing nothing is the braver option.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 noop: {}

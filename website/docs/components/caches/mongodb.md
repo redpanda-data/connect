@@ -21,7 +21,7 @@ Use a MongoDB instance as a cache.
 
 Introduced in version 3.43.0.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 mongodb:
@@ -43,7 +43,7 @@ The URL of the target MongoDB server.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 url: mongodb://localhost:27017

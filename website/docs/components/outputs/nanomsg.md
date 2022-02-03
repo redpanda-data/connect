@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Send messages over a Nanomsg socket.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
@@ -48,7 +48,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 urls:

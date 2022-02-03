@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem';
 
 Stores each item in a directory as a file, where an item ID is the path relative to the configured directory.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 file:

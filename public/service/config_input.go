@@ -36,7 +36,7 @@ func (p *ParsedConfig) FieldInput(path ...string) (*OwnedInput, error) {
 		return nil, err
 	}
 
-	iproc, err := p.mgr.NewInput(conf, false)
+	iproc, err := p.mgr.NewInput(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (p *ParsedConfig) FieldInputList(path ...string) ([]*OwnedInput, error) {
 
 	ins := make([]*OwnedInput, len(configs))
 	for i, c := range configs {
-		iproc, err := p.mgr.NewInput(c, false)
+		iproc, err := p.mgr.NewInput(c)
 		if err != nil {
 			return nil, fmt.Errorf("input %v: %w", i, err)
 		}

@@ -29,7 +29,7 @@ Performs Avro based operations on messages based on a schema.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 avro:
@@ -42,7 +42,7 @@ avro:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 avro:
@@ -107,7 +107,7 @@ The path of a schema document to apply. Use either this or the `schema` field.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 schema_path: file://path/to/spec.avsc

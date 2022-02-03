@@ -29,7 +29,7 @@ Executes a command, runs it as a subprocess, and consumes messages from it over 
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -43,7 +43,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -74,7 +74,7 @@ The command to execute as a subprocess.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 name: cat

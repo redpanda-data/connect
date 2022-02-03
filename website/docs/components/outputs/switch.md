@@ -26,7 +26,7 @@ The switch output type allows you to route messages to different outputs based o
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -38,7 +38,7 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -164,7 +164,7 @@ A list of switch cases, outlining outputs that can be routed to.
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 cases:
@@ -188,7 +188,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "foo"

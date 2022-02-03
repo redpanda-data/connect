@@ -27,7 +27,7 @@ already exist) using the XADD command.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -49,7 +49,7 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -110,7 +110,7 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 url: :6397
@@ -134,7 +134,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 Type: `string`  
 Default: `"simple"`  
 
-```yaml
+```yml
 # Examples
 
 kind: simple
@@ -152,7 +152,7 @@ Name of the redis master when `kind` is `failover`
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 master: mymaster
@@ -202,7 +202,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -219,7 +219,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -233,7 +233,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -331,7 +331,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -373,7 +373,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -391,7 +391,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -405,7 +405,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Prints messages to stdout as a continuous stream of data, dividing messages according to the specified codec.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
@@ -65,7 +65,7 @@ Requires version 3.46.0 or newer
 | `delim:x` | Append each message to the output stream followed by a custom delimiter. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines

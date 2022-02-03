@@ -27,7 +27,7 @@ from messages are sent as attributes.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -42,7 +42,7 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -103,7 +103,7 @@ The maximum length of time to wait before abandoning a publish attempt for a mes
 Type: `string`  
 Default: `"60s"`  
 
-```yaml
+```yml
 # Examples
 
 publish_timeout: 10s

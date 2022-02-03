@@ -26,7 +26,7 @@ var (
 
 func init() {
 	Constructors[TypeBroker] = TypeSpec{
-		constructor: newBrokerHasBatchProcessor,
+		constructor: NewBroker,
 		Summary: `
 Allows you to combine multiple inputs into a single stream of data, where each input will be read in parallel.`,
 		Description: `
@@ -40,7 +40,8 @@ input:
     copies: 1
     inputs:
       - amqp_0_9:
-          url: amqp://guest:guest@localhost:5672/
+          urls:
+            - amqp://guest:guest@localhost:5672/
           consumer_tag: benthos-consumer
           queue: benthos-queue
 
@@ -193,20 +194,7 @@ func NewBroker(
 	stats metrics.Type,
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
-	return newBrokerHasBatchProcessor(false, conf, mgr, log, stats, pipelines...)
-}
-
-// Deprecated: This is a hack for until the batch processor is removed.
-// TODO: V4 Remove this.
-func newBrokerHasBatchProcessor(
-	hasBatchProc bool,
-	conf Config,
-	mgr types.Manager,
-	log log.Modular,
-	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (Type, error) {
-	hasBatchProc, pipelines = appendProcessorsFromConfigBatchAware(hasBatchProc, conf, mgr, log, stats, pipelines...)
+	pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
 
 	lInputs := len(conf.Broker.Inputs) * conf.Broker.Copies
 
@@ -217,7 +205,7 @@ func newBrokerHasBatchProcessor(
 	var err error
 	var b Type
 	if lInputs == 1 {
-		if b, err = newHasBatchProcessor(hasBatchProc, conf.Broker.Inputs[0], mgr, log, stats, pipelines...); err != nil {
+		if b, err = New(conf.Broker.Inputs[0], mgr, log, stats, pipelines...); err != nil {
 			return nil, err
 		}
 	} else {
@@ -227,10 +215,7 @@ func newBrokerHasBatchProcessor(
 			for i, iConf := range conf.Broker.Inputs {
 				iMgr, iLog, iStats := interop.LabelChild(fmt.Sprintf("broker.inputs.%v", i), mgr, log, stats)
 				iStats = metrics.Combine(stats, iStats)
-				inputs[len(conf.Broker.Inputs)*j+i], err = newHasBatchProcessor(
-					hasBatchProc, iConf, iMgr, iLog, iStats,
-					pipelines...,
-				)
+				inputs[len(conf.Broker.Inputs)*j+i], err = New(iConf, iMgr, iLog, iStats, pipelines...)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create input '%v' type '%v': %v", i, iConf.Type, err)
 				}

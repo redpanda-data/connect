@@ -21,7 +21,7 @@ This component is mostly stable but breaking changes could still be made outside
 
 Executes a command, runs it as a subprocess, and writes messages to it over stdin.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""

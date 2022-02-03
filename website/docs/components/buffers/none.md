@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Do not buffer messages. This is the default and most resilient configuration.
 
-```yaml
+```yml
 # Config fields, showing default values
 buffer:
   none: {}

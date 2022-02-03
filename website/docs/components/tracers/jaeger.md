@@ -25,7 +25,7 @@ Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collec
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 tracer:
   jaeger:
@@ -39,7 +39,7 @@ tracer:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 tracer:
   jaeger:
@@ -66,7 +66,7 @@ The address of a Jaeger agent to send tracing events to.
 Type: `string`  
 Default: `"localhost:6831"`  
 
-```yaml
+```yml
 # Examples
 
 agent_address: jaeger-agent:6831
@@ -81,7 +81,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.38.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 collector_url: https://jaeger-collector:14268/api/traces

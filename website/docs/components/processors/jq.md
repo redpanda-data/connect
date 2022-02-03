@@ -26,7 +26,7 @@ Transforms and filters messages using jq queries.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 jq:
@@ -36,7 +36,7 @@ jq:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 jq:

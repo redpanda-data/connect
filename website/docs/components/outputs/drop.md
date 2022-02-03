@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Drops all messages.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""

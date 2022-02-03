@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -274,6 +275,10 @@ func TestIntegration(t *testing.T) {
 }
 
 func clickhouseIntegration(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("skipping test on macos")
+	}
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -388,6 +393,10 @@ func postgresIntegration(t *testing.T) {
 }
 
 func mySQLIntegration(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("skipping test on macos")
+	}
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -448,6 +457,10 @@ func mySQLIntegration(t *testing.T) {
 }
 
 func msSQLIntegration(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("skipping test on macos")
+	}
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

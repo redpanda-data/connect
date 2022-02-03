@@ -43,7 +43,7 @@ func TestBundleInputTracing(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	in, err := mgr.NewInput(inConfig, false)
+	in, err := mgr.NewInput(inConfig)
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {

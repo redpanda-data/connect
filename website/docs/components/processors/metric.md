@@ -25,7 +25,7 @@ Emit custom metrics by extracting values from messages.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 metric:
@@ -38,7 +38,7 @@ metric:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 metric:
@@ -141,7 +141,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `object`  
 Default: `{}`  
 
-```yaml
+```yml
 # Examples
 
 labels:
@@ -208,7 +208,7 @@ pipeline:
   processors:
     - metric:
         type: gauge
-        path: GaugeCustomField
+        name: GaugeCustomField
         value: ${!json("field.some.value")}
 ```
 
