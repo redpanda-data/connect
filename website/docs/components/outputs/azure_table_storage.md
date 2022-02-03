@@ -104,7 +104,7 @@ The JSON message:
 ```
 
 Will store in the table the following properties:
-```yaml
+```yml
 foo: '55'
 bar: '{ "baz": "a", "bez": "b" }'
 diz: '["a", "b"]'
@@ -112,7 +112,7 @@ diz: '["a", "b"]'
 
 It's also possible to use function interpolations to get or transform the properties values, e.g.:
 
-```yaml
+```yml
 properties:
   device: '${! json("device") }'
   timestamp: '${! json("timestamp") }'

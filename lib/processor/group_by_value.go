@@ -42,14 +42,14 @@ could achieve that with the following:
 ` + "```yaml" + `
 pipeline:
   processors:
-  - group_by_value:
-      value: ${! meta("kafka_key") }
-  - archive:
-      format: tar
-  - compress:
-      algorithm: gzip
+    - group_by_value:
+        value: ${! meta("kafka_key") }
+    - archive:
+        format: tar
+    - compress:
+        algorithm: gzip
 output:
-  s3:
+  aws_s3:
     bucket: TODO
     path: docs/${! meta("kafka_key") }/${! count("files") }-${! timestamp_unix_nano() }.tar.gz
 ` + "```" + ``,

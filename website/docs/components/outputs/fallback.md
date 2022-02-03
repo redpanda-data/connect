@@ -41,9 +41,7 @@ output:
         retries: 3
         retry_period: 1s
       processors:
-      - text:
-          operator: prepend
-          value: 'failed to send this message to foo: '
+        - bloblang: 'root = "failed to send this message to foo: " + content()'
     - file:
         path: /usr/local/benthos/everything_failed.jsonl
 ```
@@ -55,7 +53,7 @@ When an output within a fallback sequence uses batching, like so:
 ```yaml
 output:
   fallback:
-    - dynamodb:
+    - aws_dynamodb:
         table: foo
         string_columns:
           id: ${!json("id")}

@@ -30,7 +30,7 @@ It is STRONGLY recommended that you reduce the metrics that are exposed with a
 
 ` + "```yaml" + `
 metrics:
-  cloudwatch:
+  aws_cloudwatch:
     namespace: Foo
     path_mapping: |
       if ![
@@ -61,7 +61,7 @@ It is STRONGLY recommended that you reduce the metrics that are exposed with a
 
 ` + "```yaml" + `
 metrics:
-  cloudwatch:
+  aws_cloudwatch:
     namespace: Foo
     path_mapping: |
       if ![

@@ -75,13 +75,14 @@ The field `fields` allows you to specify an explicit map of field
 names to interpolated values, also evaluated per message of a batch:
 
 ```yaml
-redis_hash:
-  url: tcp://localhost:6379
-  key: ${!json("id")}
-  fields:
-    topic: ${!meta("kafka_topic")}
-    partition: ${!meta("kafka_partition")}
-    content: ${!json("document.text")}
+output:
+  redis_hash:
+    url: tcp://localhost:6379
+    key: ${!json("id")}
+    fields:
+      topic: ${!meta("kafka_topic")}
+      partition: ${!meta("kafka_partition")}
+      content: ${!json("document.text")}
 ```
 
 If the field `walk_metadata` is set to `true` then Benthos

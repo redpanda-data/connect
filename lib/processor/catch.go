@@ -32,12 +32,12 @@ the catch.
 For example, with the following config:
 
 ` + "```yaml" + `
-- foo:
-    foofield1: meow
-- catch:
-  - bar:
-      barfield1: woof
-  - baz: {}
+pipeline:
+  processors:
+    - resource: foo
+    - catch:
+      - resource: bar
+      - resource: baz
 ` + "```" + `
 
 If the processor ` + "`foo`" + ` fails for a particular message, that message

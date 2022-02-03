@@ -58,6 +58,7 @@ pipeline:
           }
 output:
   switch:
+    retry_until_success: false
     cases:
       - check: errored()
         output:

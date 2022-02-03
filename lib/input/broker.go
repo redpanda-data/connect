@@ -41,24 +41,24 @@ input:
   broker:
     copies: 1
     inputs:
-    - amqp:
-        url: amqp://guest:guest@localhost:5672/
-        consumer_tag: benthos-consumer
-        queue: benthos-queue
+      - amqp_0_9:
+          url: amqp://guest:guest@localhost:5672/
+          consumer_tag: benthos-consumer
+          queue: benthos-queue
 
-      # Optional list of input specific processing steps
-      processors:
-        - bloblang: |
-            root.message = this
-            root.meta.link_count = this.links.length()
-            root.user.age = this.user.age.number()
+        # Optional list of input specific processing steps
+        processors:
+          - bloblang: |
+              root.message = this
+              root.meta.link_count = this.links.length()
+              root.user.age = this.user.age.number()
 
-    - kafka:
-        addresses:
-          - localhost:9092
-        client_id: benthos_kafka_input
-        consumer_group: benthos_consumer_group
-        topics: [ benthos_stream:0 ]
+      - kafka:
+          addresses:
+            - localhost:9092
+          client_id: benthos_kafka_input
+          consumer_group: benthos_consumer_group
+          topics: [ benthos_stream:0 ]
 ` + "```" + `
 
 If the number of copies is greater than zero the list will be copied that number

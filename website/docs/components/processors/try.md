@@ -30,12 +30,12 @@ try: []
 For example, with the following config:
 
 ```yaml
-- try:
-  - foo:
-      foofield1: meow
-  - bar:
-      barfield1: woof
-  - baz: {}
+pipeline:
+  processors:
+    - try:
+      - resource: foo
+      - resource: bar
+      - resource: baz
 ```
 
 If the processor `foo` fails for a particular message, that message

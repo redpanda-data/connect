@@ -95,9 +95,11 @@ unique IDs (with the extension ` + "`.json`" + `), our config might look like
 this:
 
 ` + "```yaml" + `
-archive:
-  format: tar
-  path: ${!json("doc.id")}.json
+pipeline:
+  processors:
+    - archive:
+        format: tar
+        path: ${!json("doc.id")}.json
 ` + "```" + ``,
 	}
 }

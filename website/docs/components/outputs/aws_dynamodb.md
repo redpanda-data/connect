@@ -104,7 +104,7 @@ converted into a map value. Both an empty path and the path `.` are
 interpreted as the root of the document. This allows you to populate map columns
 of an item like follows:
 
-```yaml
+```yml
 json_map_columns:
   user: path.to.user
   whole_document: .
@@ -112,7 +112,7 @@ json_map_columns:
 
 A column name can be empty:
 
-```yaml
+```yml
 json_map_columns:
   "": .
 ```
