@@ -45,7 +45,7 @@ type TypeSpec struct {
 }
 
 // ConstructorFunc is a func signature able to construct an input.
-type ConstructorFunc func(bool, Config, types.Manager, log.Modular, metrics.Type, ...types.PipelineConstructorFunc) (Type, error)
+type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type, ...types.PipelineConstructorFunc) (Type, error)
 
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
@@ -110,40 +110,8 @@ func AppendProcessorsFromConfig(
 	return pipelines
 }
 
-// TODO: V4 Remove this.
-func appendProcessorsFromConfigBatchAware(
-	hasBatchProc bool,
-	conf Config,
-	mgr types.Manager,
-	log log.Modular,
-	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (bool, []types.PipelineConstructorFunc) {
-	if len(conf.Processors) > 0 {
-		pipelines = append([]types.PipelineConstructorFunc{func(i *int) (types.Pipeline, error) {
-			if i == nil {
-				procs := 0
-				i = &procs
-			}
-			processors := make([]types.Processor, len(conf.Processors))
-			for j, procConf := range conf.Processors {
-				newMgr, newLog, newStats := interop.LabelChild(fmt.Sprintf("processor.%v", *i), mgr, log, stats)
-				var err error
-				processors[j], err = processor.New(procConf, newMgr, newLog, newStats)
-				if err != nil {
-					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
-				}
-				*i++
-			}
-			return pipeline.NewProcessor(log, stats, processors...), nil
-		}}, pipelines...)
-	}
-	return hasBatchProc, pipelines
-}
-
 func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)) ConstructorFunc {
 	return func(
-		hasBatchProc bool,
 		conf Config,
 		mgr types.Manager,
 		log log.Modular,
@@ -354,26 +322,13 @@ func New(
 	stats metrics.Type,
 	pipelines ...types.PipelineConstructorFunc,
 ) (Type, error) {
-	return newHasBatchProcessor(false, conf, mgr, log, stats, pipelines...)
-}
-
-// Deprecated: This is a hack for until the batch processor is removed.
-// TODO: V4 Remove this.
-func newHasBatchProcessor(
-	hasBatchProc bool,
-	conf Config,
-	mgr types.Manager,
-	log log.Modular,
-	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (Type, error) {
 	if mgrV2, ok := mgr.(interface {
-		NewInput(Config, bool, ...types.PipelineConstructorFunc) (types.Input, error)
+		NewInput(Config, ...types.PipelineConstructorFunc) (types.Input, error)
 	}); ok {
-		return mgrV2.NewInput(conf, hasBatchProc, pipelines...)
+		return mgrV2.NewInput(conf, pipelines...)
 	}
 	if c, ok := Constructors[conf.Type]; ok {
-		return c.constructor(hasBatchProc, conf, mgr, log, stats, pipelines...)
+		return c.constructor(conf, mgr, log, stats, pipelines...)
 	}
 	return nil, types.ErrInvalidInputType
 }

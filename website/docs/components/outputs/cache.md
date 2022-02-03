@@ -25,7 +25,7 @@ Stores each message in a [cache](/docs/components/caches/about).
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -38,7 +38,7 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -67,7 +67,7 @@ cache_resources:
     memcached:
       addresses:
         - localhost:11211
-      ttl: 60
+      default_ttl: 60s
 ```
 
 In order to create a unique `key` value per item you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
@@ -97,7 +97,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"${!count(\"items\")}-${!timestamp_unix_nano()}"`  
 
-```yaml
+```yml
 # Examples
 
 key: ${!count("items")}-${!timestamp_unix_nano()}
@@ -117,7 +117,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.33.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 ttl: 60s

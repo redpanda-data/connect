@@ -22,7 +22,7 @@ Converts batches of documents to or from [Parquet files](https://parquet.apache.
 
 Introduced in version 3.62.0.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 parquet:
@@ -92,7 +92,7 @@ A file path containing a schema used to describe the parquet files being generat
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 schema_file: schemas/foo.json
@@ -105,7 +105,7 @@ A schema used to describe the parquet files being generated or consumed, the for
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 schema: |-

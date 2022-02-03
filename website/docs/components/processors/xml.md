@@ -30,7 +30,7 @@ overwrites the previous contents with the new value.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 xml:
@@ -41,7 +41,7 @@ xml:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 xml:

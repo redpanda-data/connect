@@ -27,7 +27,7 @@ the message with the resulting document.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 jmespath:
@@ -37,7 +37,7 @@ jmespath:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 jmespath:

@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 
 Executes a list of child processors on messages only if no prior processors have failed (or the errors have been cleared).
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 try: []

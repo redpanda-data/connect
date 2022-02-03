@@ -27,7 +27,7 @@ message brokers, including RabbitMQ.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -41,7 +41,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -111,7 +111,7 @@ Type: `array`
 Default: `[]`  
 Requires version 3.58.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 urls:
@@ -165,7 +165,7 @@ Allows you to passively declare bindings for the target queue.
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 bindings_declare:
@@ -277,7 +277,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -294,7 +294,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -308,7 +308,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:

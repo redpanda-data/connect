@@ -19,9 +19,9 @@ func TestIntegrationPulsar(t *testing.T) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	if dline, exists := t.Deadline(); exists {
-		pool.MaxWait = time.Until(dline) / 2
+	pool.MaxWait = time.Minute * 2
+	if dline, ok := t.Deadline(); ok && time.Until(dline) < pool.MaxWait {
+		pool.MaxWait = time.Until(dline)
 	}
 
 	resource, err := pool.Run("apachepulsar/pulsar-standalone", "latest", nil)

@@ -35,12 +35,12 @@ cache_resources:
 
   - label: hot
     memory:
-      ttl: 60s
+      default_ttl: 60s
 
   - label: cold
     memcached:
       addresses: [ TODO:11211 ]
-      ttl: 15m
+      default_ttl: 60s
 `)
 	return spec
 }
@@ -95,10 +95,9 @@ func (l *multilevelCache) setUpToLevelPassive(ctx context.Context, i int, key st
 			break
 		}
 		var setErr error
-		err := l.mgr.AccessCache(ctx, name, func(c service.Cache) {
+		if err := l.mgr.AccessCache(ctx, name, func(c service.Cache) {
 			setErr = c.Set(ctx, key, value, nil)
-		})
-		if err != nil {
+		}); err != nil {
 			l.log.Errorf("Unable to passively set key '%v' for cache '%v': %v", key, name, err)
 		}
 		if setErr != nil {

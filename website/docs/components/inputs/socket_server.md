@@ -25,7 +25,7 @@ Creates a server that receives a stream of messages over a tcp, udp or unix sock
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -38,7 +38,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -73,7 +73,7 @@ The address to listen from.
 Type: `string`  
 Default: `"/tmp/benthos.sock"`  
 
-```yaml
+```yml
 # Examples
 
 address: /tmp/benthos.sock
@@ -105,7 +105,7 @@ Requires version 3.42.0 or newer
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines

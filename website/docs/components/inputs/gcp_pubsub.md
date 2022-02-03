@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Consumes messages from a GCP Cloud Pub/Sub subscription.
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   label: ""

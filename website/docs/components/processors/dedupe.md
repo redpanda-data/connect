@@ -27,7 +27,7 @@ messages, dropping batches that are already cached.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 dedupe:
@@ -40,7 +40,7 @@ dedupe:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 dedupe:

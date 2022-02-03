@@ -27,7 +27,7 @@ the number of messages are simply ignored.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 select_parts: {}
@@ -36,7 +36,7 @@ select_parts: {}
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 select_parts:

@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Connects to a (tcp/udp/unix) server and sends a continuous stream of data, dividing messages according to the specified codec.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
@@ -67,7 +67,7 @@ The address (or path) to connect to.
 Type: `string`  
 Default: `"/tmp/benthos.sock"`  
 
-```yaml
+```yml
 # Examples
 
 address: /tmp/benthos.sock
@@ -91,7 +91,7 @@ Default: `"lines"`
 | `delim:x` | Append each message to the output stream followed by a custom delimiter. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines

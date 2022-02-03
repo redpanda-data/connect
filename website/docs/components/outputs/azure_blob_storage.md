@@ -33,7 +33,7 @@ Introduced in version 3.36.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -50,7 +50,7 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -134,7 +134,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 container: messages-${!timestamp("2006")}
@@ -149,7 +149,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`  
 
-```yaml
+```yml
 # Examples
 
 path: ${!count("files")}-${!timestamp_unix_nano()}.json

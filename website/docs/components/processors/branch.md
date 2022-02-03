@@ -21,7 +21,7 @@ a [Bloblang mapping](/docs/guides/bloblang/about), execute a list of processors
 on the request messages, and, finally, map the result back into the source
 message using another mapping.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 branch:
@@ -66,7 +66,7 @@ A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 request_map: |-
@@ -99,7 +99,7 @@ A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulti
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 result_map: |-

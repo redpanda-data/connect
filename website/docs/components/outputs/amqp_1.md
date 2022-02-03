@@ -29,7 +29,7 @@ Sends messages to an AMQP (1.0) server.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -44,7 +44,7 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -90,7 +90,7 @@ A URL to connect to.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 url: amqp://localhost:5672/
@@ -106,7 +106,7 @@ The target address to write to.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 target_address: /foo
@@ -164,7 +164,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -181,7 +181,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -195,7 +195,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -268,7 +268,7 @@ A SASL plain text username. It is recommended that you use environment variables
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 user: ${USER}
@@ -282,7 +282,7 @@ A SASL plain text password. It is recommended that you use environment variables
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 password: ${PASSWORD}

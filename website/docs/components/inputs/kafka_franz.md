@@ -30,7 +30,7 @@ Introduced in version 3.61.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -43,7 +43,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -96,7 +96,7 @@ A list of broker addresses to connect to in order to establish connections. If a
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 seed_brokers:
@@ -172,7 +172,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -189,7 +189,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -202,7 +202,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -253,7 +253,7 @@ Specify one or more methods of SASL authentication. SASL is tried in order; if t
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 sasl:

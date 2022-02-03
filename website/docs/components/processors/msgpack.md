@@ -22,7 +22,7 @@ Converts messages to or from the [MessagePack](https://msgpack.org/) format.
 
 Introduced in version 3.59.0.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 msgpack:

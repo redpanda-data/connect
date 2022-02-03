@@ -21,7 +21,7 @@ group of messages determined by a
 [function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated
 per message.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 group_by_value:
@@ -46,7 +46,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"${! meta(\"example\") }"`  
 
-```yaml
+```yml
 # Examples
 
 value: ${! meta("kafka_key") }

@@ -27,7 +27,7 @@ Introduced in version 3.36.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 metrics:
   aws_cloudwatch:
@@ -39,7 +39,7 @@ metrics:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 metrics:
   aws_cloudwatch:
@@ -101,7 +101,7 @@ An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to r
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 path_mapping: this.replace("input", "source").replace("output", "sink")

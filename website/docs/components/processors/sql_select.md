@@ -27,7 +27,7 @@ Introduced in version 3.59.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 sql_select:
@@ -42,7 +42,7 @@ sql_select:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 sql_select:
@@ -124,7 +124,7 @@ can override this with the parameter `sslmode=disable` if required.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 dsn: tcp://host1:9000?username=user&password=qwerty&database=clicks&read_timeout=10&write_timeout=20&alt_hosts=host2:9000,host3:9000
@@ -141,7 +141,7 @@ The table to query.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 table: foo
@@ -154,7 +154,7 @@ A list of columns to query.
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 columns:
@@ -173,7 +173,7 @@ An optional where clause to add. Placeholder arguments are populated with the `a
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 where: meow = ? and woof = ?
@@ -188,7 +188,7 @@ An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluat
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ]

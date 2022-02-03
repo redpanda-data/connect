@@ -27,7 +27,7 @@ algorithms are: gzip, zlib, flate, snappy, lz4.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 compress:
@@ -38,7 +38,7 @@ compress:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 compress:

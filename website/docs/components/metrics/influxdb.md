@@ -30,7 +30,7 @@ Introduced in version 3.36.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 metrics:
   influxdb:
@@ -42,7 +42,7 @@ metrics:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 metrics:
   influxdb:
@@ -133,7 +133,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -150,7 +150,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -164,7 +164,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -239,7 +239,7 @@ A duration string indicating how often to poll and collect runtime metrics. Leav
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 runtime: 1m
@@ -253,7 +253,7 @@ A duration string indicating how often to poll and collect GC metrics. Leave emp
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 debug_gc: 1m
@@ -299,7 +299,7 @@ Global tags added to each metric.
 Type: `object`  
 Default: `{}`  
 
-```yaml
+```yml
 # Examples
 
 tags:
@@ -331,7 +331,7 @@ An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to r
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 path_mapping: this.replace("input", "source").replace("output", "sink")

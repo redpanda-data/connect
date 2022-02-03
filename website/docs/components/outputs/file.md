@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Writes messages to files on disk based on a chosen codec.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
@@ -61,7 +61,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.33.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 path: /tmp/data.txt
@@ -88,7 +88,7 @@ Requires version 3.33.0 or newer
 | `delim:x` | Append each message to the output stream followed by a custom delimiter. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines

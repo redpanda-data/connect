@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 Serves metrics as [JSON object](#object-format) with the service wide HTTP
 service at the endpoints `/stats` and `/metrics`.
 
-```yaml
+```yml
 # Config fields, showing default values
 metrics:
   http_server:
@@ -47,7 +47,7 @@ An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to r
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 path_mapping: this.replace("input", "source").replace("output", "sink")

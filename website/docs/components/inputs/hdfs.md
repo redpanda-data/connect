@@ -19,7 +19,7 @@ import TabItem from '@theme/TabItem';
 Reads files from a HDFS directory, where each discrete file will be consumed as
 a single message payload.
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   label: ""

@@ -24,12 +24,11 @@ func (e *Environment) InputAdd(constructor InputConstructor, spec docs.Component
 
 // InputInit attempts to initialise an input from a config.
 func (e *Environment) InputInit(
-	hasBatchProc bool,
 	conf input.Config,
 	mgr NewManagement,
 	pipelines ...types.PipelineConstructorFunc,
 ) (types.Input, error) {
-	return e.inputs.Init(hasBatchProc, conf, mgr, pipelines...)
+	return e.inputs.Init(conf, mgr, pipelines...)
 }
 
 // InputDocs returns a slice of input specs, which document each method.
@@ -42,7 +41,7 @@ func (e *Environment) InputDocs() []docs.ComponentSpec {
 // InputConstructorFromSimple provides a way to define an input constructor
 // without manually initializing processors of the config.
 func InputConstructorFromSimple(fn func(input.Config, NewManagement) (input.Type, error)) InputConstructor {
-	return func(b bool, c input.Config, nm NewManagement, pcf ...types.PipelineConstructorFunc) (input.Type, error) {
+	return func(c input.Config, nm NewManagement, pcf ...types.PipelineConstructorFunc) (input.Type, error) {
 		i, err := fn(c, nm)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create input '%v': %w", c.Type, err)
@@ -55,7 +54,7 @@ func InputConstructorFromSimple(fn func(input.Config, NewManagement) (input.Type
 //------------------------------------------------------------------------------
 
 // InputConstructor constructs an input component.
-type InputConstructor func(bool, input.Config, NewManagement, ...types.PipelineConstructorFunc) (input.Type, error)
+type InputConstructor func(input.Config, NewManagement, ...types.PipelineConstructorFunc) (input.Type, error)
 
 type inputSpec struct {
 	constructor InputConstructor
@@ -81,17 +80,12 @@ func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) er
 }
 
 // Init attempts to initialise an input from a config.
-func (s *InputSet) Init(
-	hasBatchProc bool,
-	conf input.Config,
-	mgr NewManagement,
-	pipelines ...types.PipelineConstructorFunc,
-) (types.Input, error) {
+func (s *InputSet) Init(conf input.Config, mgr NewManagement, pipelines ...types.PipelineConstructorFunc) (types.Input, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, types.ErrInvalidInputType
 	}
-	return spec.constructor(hasBatchProc, conf, mgr, pipelines...)
+	return spec.constructor(conf, mgr, pipelines...)
 }
 
 // Docs returns a slice of input specs, which document each method.

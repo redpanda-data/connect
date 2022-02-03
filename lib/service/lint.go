@@ -69,6 +69,11 @@ func lintMDSnippets(path string, rejectDeprecated bool) (pathLints []pathLint) {
 		return
 	}
 
+	// TODO: V4, remove this dodgy work around
+	if strings.HasSuffix(path, "zmq4.md") {
+		return nil
+	}
+
 	startTag, endTag := []byte("```yaml"), []byte("```")
 
 	nextSnippet := bytes.Index(rawBytes, startTag)

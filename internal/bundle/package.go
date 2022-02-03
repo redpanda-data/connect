@@ -38,7 +38,7 @@ type NewManagement interface {
 
 	NewBuffer(conf buffer.Config) (buffer.Type, error)
 	NewCache(conf cache.Config) (types.Cache, error)
-	NewInput(conf input.Config, hasBatchProc bool, pipelines ...types.PipelineConstructorFunc) (types.Input, error)
+	NewInput(conf input.Config, pipelines ...types.PipelineConstructorFunc) (types.Input, error)
 	NewProcessor(conf processor.Config) (types.Processor, error)
 	NewOutput(conf output.Config, pipelines ...types.PipelineConstructorFunc) (types.Output, error)
 	NewRateLimit(conf ratelimit.Config) (types.RateLimit, error)

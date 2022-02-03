@@ -25,7 +25,7 @@ Reads one or more CSV files as structured records following the format described
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -38,7 +38,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -86,7 +86,7 @@ A list of file paths to read from. Each file will be read sequentially until the
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 paths:

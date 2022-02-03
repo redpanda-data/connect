@@ -463,15 +463,13 @@ func (t *Type) AccessInput(ctx context.Context, name string, fn func(types.Input
 }
 
 // NewInput attempts to create a new input component from a config.
-//
-// TODO: V4 Remove the dumb batch field.
-func (t *Type) NewInput(conf input.Config, hasBatchProc bool, pipelines ...types.PipelineConstructorFunc) (types.Input, error) {
+func (t *Type) NewInput(conf input.Config, pipelines ...types.PipelineConstructorFunc) (types.Input, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.env.InputInit(hasBatchProc, conf, mgr, pipelines...)
+	return t.env.InputInit(conf, mgr, pipelines...)
 }
 
 // StoreInput attempts to store a new input resource. If an existing resource
@@ -495,7 +493,7 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 		return fmt.Errorf("label '%v' must be empty or match the resource name '%v'", conf.Label, name)
 	}
 
-	newInput, err := t.forComponent("resource.input."+name).NewInput(conf, false)
+	newInput, err := t.forComponent("resource.input." + name).NewInput(conf)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to create input resource '%v' of type '%v': %w",

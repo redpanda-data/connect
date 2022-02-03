@@ -26,7 +26,7 @@ Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix, e
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -45,7 +45,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -239,7 +239,7 @@ Default: `"all-bytes"`
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines
@@ -298,7 +298,7 @@ A [dot path](/docs/configuration/field_paths) of a field to extract an enveloped
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 envelope_path: Message
@@ -312,7 +312,7 @@ An optional period of time to wait from when a notification was originally sent 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 delay_period: 10s

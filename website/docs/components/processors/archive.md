@@ -19,7 +19,7 @@ import TabItem from '@theme/TabItem';
 Archives all the messages of a batch into a single message according to the
 selected archive [format](#formats).
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 archive:
@@ -60,7 +60,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`  
 
-```yaml
+```yml
 # Examples
 
 path: ${!count("files")}-${!timestamp_unix_nano()}.txt

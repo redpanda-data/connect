@@ -26,7 +26,7 @@ Parses messages into a structured format by attempting to apply a list of Grok e
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 grok:
@@ -38,7 +38,7 @@ grok:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 grok:

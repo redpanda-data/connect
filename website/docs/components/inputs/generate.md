@@ -22,7 +22,7 @@ testing your pipeline configs.
 
 Introduced in version 3.40.0.
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   label: ""
@@ -42,7 +42,7 @@ A [bloblang](/docs/guides/bloblang/about) mapping to use for generating messages
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 mapping: root = "hello world"
@@ -58,7 +58,7 @@ The time interval at which messages should be generated, expressed either as a d
 Type: `string`  
 Default: `"1s"`  
 
-```yaml
+```yml
 # Examples
 
 interval: 5s

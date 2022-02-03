@@ -30,7 +30,7 @@ Introduced in version 3.43.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -44,7 +44,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -96,7 +96,7 @@ A URL to connect to.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 url: pulsar://localhost:6650
@@ -156,7 +156,7 @@ Whether OAuth2 is enabled.
 Type: `bool`  
 Default: `false`  
 
-```yaml
+```yml
 # Examples
 
 enabled: true
@@ -201,7 +201,7 @@ Whether Token Auth is enabled.
 Type: `bool`  
 Default: `false`  
 
-```yaml
+```yml
 # Examples
 
 enabled: true

@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem';
 
 Combines multiple caches as levels, performing read-through and write-through operations across them.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 multilevel: []
@@ -51,12 +51,12 @@ cache_resources:
 
   - label: hot
     memory:
-      ttl: 60s
+      default_ttl: 60s
 
   - label: cold
     memcached:
       addresses: [ TODO:11211 ]
-      ttl: 15m
+      default_ttl: 60s
 ```
 
 </TabItem>

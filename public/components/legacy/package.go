@@ -25,12 +25,11 @@ func init() {
 	})
 	input.WalkConstructors(func(ctor input.ConstructorFunc, spec docs.ComponentSpec) {
 		if err := bundle.AllInputs.Add(func(
-			bProc bool,
 			conf input.Config,
 			mgr bundle.NewManagement,
 			pipes ...types.PipelineConstructorFunc,
 		) (input.Type, error) {
-			return ctor(bProc, conf, mgr, mgr.Logger(), mgr.Metrics(), pipes...)
+			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics(), pipes...)
 		}, spec); err != nil {
 			panic(err)
 		}

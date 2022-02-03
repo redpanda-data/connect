@@ -19,7 +19,7 @@ import TabItem from '@theme/TabItem';
 A processor that applies a list of child processors to messages of a batch as
 though they were each a batch of one message.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 for_each: []
