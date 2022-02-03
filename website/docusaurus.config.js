@@ -104,9 +104,11 @@ module.exports = {
       copyright: `Copyright © ${new Date().getFullYear()} Ashley Jeffs.`,
     },
     algolia: {
-      apiKey: '358e5d3135579871ceecd50c6cb7ce9e',
+      appId: 'WBY9Z65YR4',
+      apiKey: 'a6c476911e6ecef76049a55d9798a51b',
       indexName: 'benthos',
-    },
+      contextualSearch: false
+    }
   },
   presets: [
     [
