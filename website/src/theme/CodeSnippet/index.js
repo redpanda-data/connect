@@ -2,7 +2,7 @@ import React, {useEffect, useState, useRef} from 'react';
 import clsx from 'clsx';
 import Highlight, {defaultProps} from 'prism-react-renderer';
 import copy from 'copy-text-to-clipboard';
-import useThemeContext from '@theme/hooks/useThemeContext';
+import {useColorMode} from '@docusaurus/theme-common';
 import Translate, {translate} from '@docusaurus/Translate';
 import Link from '@docusaurus/Link';
 
@@ -31,7 +31,7 @@ function CodeSnippet(props) {
     setMounted(true);
   }, []);
 
-  const {isDarkTheme} = useThemeContext();
+  const {isDarkTheme} = useColorMode();
   const lightModeTheme = prism.theme || monokai;
   const darkModeTheme = prism.darkTheme || lightModeTheme;
   const prismTheme = isDarkTheme ? darkModeTheme : lightModeTheme;

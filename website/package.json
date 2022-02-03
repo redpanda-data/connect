@@ -12,13 +12,17 @@
     "deploy": "docusaurus deploy"
   },
   "dependencies": {
-    "@docusaurus/core": "^2.0.0-beta.14",
-    "@docusaurus/preset-classic": "^2.0.0-beta.14",
+    "@algolia/client-search": "^4.12.1",
+    "@docusaurus/core": "^2.0.0-beta.15",
+    "@docusaurus/preset-classic": "^2.0.0-beta.15",
+    "@types/react": "^17.0.38",
     "classnames": "^2.2.6",
+    "prism-react-renderer": "^1.2.1",
     "react": "^16.8.4",
     "react-dom": "^16.8.4",
     "react-player": "^2.7.2",
-    "reading-time": "^1.2.0"
+    "reading-time": "^1.2.0",
+    "typescript": "^4.5.5"
   },
   "browserslist": {
     "production": [
