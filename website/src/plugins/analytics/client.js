@@ -10,11 +10,16 @@ module.exports = (() => {
   }
 
   const host = window.location.hostname;
+  let path = window.location.pathname;
 
-  poke(host, window.location.pathname);
+  poke(host, path);
   return {
     onRouteUpdate({location}) {
-      poke(host, location.pathname);
+      if ( path === location.pathname ) {
+        return;
+      }
+      path = location.pathname;
+      poke(host, path);
     },
   };
 })();
