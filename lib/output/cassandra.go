@@ -127,6 +127,9 @@ output:
 				docs.FieldAdvanced("max_interval", "The maximum period to wait between retry attempts."),
 				docs.FieldDeprecated("max_elapsed_time"),
 			),
+			docs.FieldAdvanced(
+				"timeout",
+				"The client connection timeout."),
 		}.Merge(docs.FieldSpecs{
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
@@ -154,6 +157,7 @@ type CassandraConfig struct {
 	Args                     []string              `json:"args" yaml:"args"`
 	ArgsMapping              string                `json:"args_mapping" yaml:"args_mapping"`
 	Consistency              string                `json:"consistency" yaml:"consistency"`
+	Timeout                  string                `json:"timeout" yaml:"timeout"`
 	// TODO: V4 Remove this and replace with explicit values.
 	retries.Config `json:",inline" yaml:",inline"`
 	MaxInFlight    int                `json:"max_in_flight" yaml:"max_in_flight"`
@@ -181,6 +185,7 @@ func NewCassandraConfig() CassandraConfig {
 		Args:                     []string{},
 		ArgsMapping:              "",
 		Consistency:              gocql.Quorum.String(),
+		Timeout:                  "600ms",
 		Config:                   rConf,
 		MaxInFlight:              1,
 		Batching:                 batch.NewPolicyConfig(),
@@ -289,6 +294,12 @@ func (c *cassandraWriter) ConnectWithContext(ctx context.Context) error {
 		NumRetries: int(c.conf.Config.MaxRetries),
 		Min:        c.backoffMin,
 		Max:        c.backoffMax,
+	}
+	if tout := c.conf.Timeout; len(tout) > 0 {
+		var err error
+		if conn.Timeout, err = time.ParseDuration(tout); err != nil {
+			return fmt.Errorf("failed to parse timeout string: %v", err)
+		}
 	}
 	session, err := conn.CreateSession()
 	if err != nil {
