@@ -11,7 +11,7 @@ import (
 )
 
 func TestRistrettoCache(t *testing.T) {
-	c, err := newRistrettoCache(0, 0, 0)
+	c, err := newRistrettoCache(0, false, nil)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -35,7 +35,7 @@ func TestRistrettoCache(t *testing.T) {
 }
 
 func TestRistrettoCacheWithTTL(t *testing.T) {
-	c, err := newRistrettoCache(0, 0, 0)
+	c, err := newRistrettoCache(0, false, nil)
 	require.NoError(t, err)
 
 	ctx := context.Background()

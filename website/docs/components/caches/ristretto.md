@@ -39,8 +39,11 @@ ristretto:
 label: ""
 ristretto:
   default_ttl: ""
-  retries: 0
-  retry_period: 50ms
+  get_retries:
+    enabled: false
+    initial_interval: 1s
+    max_interval: 5s
+    max_elapsed_time: 30s
 ```
 
 </TabItem>
@@ -66,20 +69,67 @@ default_ttl: 5m
 default_ttl: 60s
 ```
 
-### `retries`
+### `get_retries`
 
-Optionally retries get operations when they fail because the key is not found.
+Determines how and whether get attempts should be retried if the key is not found. Ristretto is a concurrent cache that does not immediately reflect writes, and so it can sometimes be useful to enable retries at the cost of speed in cases where the key is expected to exist.
 
 
-Type: `int`  
-Default: `0`  
+Type: `object`  
 
-### `retry_period`
+### `get_retries.enabled`
 
-The duration to wait between retry attempts.
+Whether retries should be enabled.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `get_retries.initial_interval`
+
+The initial period to wait between retry attempts.
 
 
 Type: `string`  
-Default: `"50ms"`  
+Default: `"1s"`  
+
+```yml
+# Examples
+
+initial_interval: 50ms
+
+initial_interval: 1s
+```
+
+### `get_retries.max_interval`
+
+The maximum period to wait between retry attempts
+
+
+Type: `string`  
+Default: `"5s"`  
+
+```yml
+# Examples
+
+max_interval: 5s
+
+max_interval: 1m
+```
+
+### `get_retries.max_elapsed_time`
+
+The maximum overall period of time to spend on retry attempts before the request is aborted.
+
+
+Type: `string`  
+Default: `"30s"`  
+
+```yml
+# Examples
+
+max_elapsed_time: 1m
+
+max_elapsed_time: 1h
+```
 
 

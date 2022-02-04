@@ -203,7 +203,7 @@ func (p *Policy) Add(part types.Part) bool {
 func (p *Policy) Flush() types.Message {
 	var newMsg types.Message
 
-	resultMsgs := p.FlushAny()
+	resultMsgs := p.flushAny()
 	if len(resultMsgs) == 1 {
 		newMsg = resultMsgs[0]
 	} else if len(resultMsgs) > 1 {
@@ -220,10 +220,7 @@ func (p *Policy) Flush() types.Message {
 	return newMsg
 }
 
-// FlushAny clears all messages stored by this batch policy and returns any
-// number of discrete message batches. Returns nil if the policy is currently
-// empty.
-func (p *Policy) FlushAny() []types.Message {
+func (p *Policy) flushAny() []types.Message {
 	var newMsg types.Message
 	if len(p.parts) > 0 {
 		if !p.triggered && p.period > 0 && time.Since(p.lastBatch) > p.period {
