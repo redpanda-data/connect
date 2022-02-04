@@ -62,7 +62,8 @@ func NewTLSToggledField(name string) *ConfigField {
 }
 
 // FieldTLSToggled accesses a field from a parsed config that was defined with
-// NewTLSField and returns a *tls.Config, or an error if the configuration was
+// NewTLSFieldToggled and returns a *tls.Config and a boolean flag indicating
+// whether tls is explicitly enabled, or an error if the configuration was
 // invalid.
 func (p *ParsedConfig) FieldTLSToggled(path ...string) (tconf *tls.Config, enabled bool, err error) {
 	v, exists := p.field(path...)
