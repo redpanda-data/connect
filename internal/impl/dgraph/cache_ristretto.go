@@ -3,13 +3,20 @@ package dgraph
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/public/service"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/dgraph-io/ristretto"
 )
 
 func ristrettoCacheConfig() *service.ConfigSpec {
+	retriesDefaults := backoff.NewExponentialBackOff()
+	retriesDefaults.InitialInterval = time.Second
+	retriesDefaults.MaxInterval = time.Second * 5
+	retriesDefaults.MaxElapsedTime = time.Second * 30
+
 	spec := service.NewConfigSpec().
 		Stable().
 		Summary(`Stores key/value pairs in a map held in the memory-bound [Ristretto cache](https://github.com/dgraph-io/ristretto).`).
@@ -19,13 +26,8 @@ func ristrettoCacheConfig() *service.ConfigSpec {
 			Default("").
 			Example("5m").
 			Example("60s")).
-		Field(service.NewIntField("retries").
-			Description("Optionally retries get operations when they fail because the key is not found.").
-			Default(0).
-			Advanced()).
-		Field(service.NewDurationField("retry_period").
-			Description("The duration to wait between retry attempts.").
-			Default("50ms").
+		Field(service.NewBackOffToggledField("get_retries", false, retriesDefaults).
+			Description("Determines how and whether get attempts should be retried if the key is not found. Ristretto is a concurrent cache that does not immediately reflect writes, and so it can sometimes be useful to enable retries at the cost of speed in cases where the key is expected to exist.").
 			Advanced())
 
 	return spec
@@ -44,12 +46,7 @@ func init() {
 }
 
 func newRistrettoCacheFromConfig(conf *service.ParsedConfig) (*ristrettoCache, error) {
-	retries, err := conf.FieldInt("retries")
-	if err != nil {
-		return nil, err
-	}
-
-	retryPeriod, err := conf.FieldDuration("retry_period")
+	backOff, backOffEnabled, err := conf.FieldBackOffToggled("get_retries")
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +57,8 @@ func newRistrettoCacheFromConfig(conf *service.ParsedConfig) (*ristrettoCache, e
 			return nil, err
 		}
 	}
-	return newRistrettoCache(defaultTTL, retries, retryPeriod)
+
+	return newRistrettoCache(defaultTTL, backOffEnabled, backOff)
 }
 
 //------------------------------------------------------------------------------
@@ -68,11 +66,11 @@ type ristrettoCache struct {
 	defaultTTL time.Duration
 	cache      *ristretto.Cache
 
-	retries     int
-	retryPeriod time.Duration
+	retriesEnabled bool
+	boffPool       sync.Pool
 }
 
-func newRistrettoCache(defaultTTL time.Duration, retries int, retryPeriod time.Duration) (*ristrettoCache, error) {
+func newRistrettoCache(defaultTTL time.Duration, retriesEnabled bool, backOff *backoff.ExponentialBackOff) (*ristrettoCache, error) {
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1e7,     // number of keys to track frequency of (10M).
 		MaxCost:     1 << 30, // maximum cost of cache (1GB).
@@ -82,30 +80,47 @@ func newRistrettoCache(defaultTTL time.Duration, retries int, retryPeriod time.D
 		return nil, err
 	}
 	r := &ristrettoCache{
-		defaultTTL:  defaultTTL,
-		cache:       cache,
-		retries:     retries,
-		retryPeriod: retryPeriod,
+		defaultTTL:     defaultTTL,
+		cache:          cache,
+		retriesEnabled: retriesEnabled,
+		boffPool: sync.Pool{
+			New: func() interface{} {
+				bo := *backOff
+				bo.Reset()
+				return &bo
+			},
+		},
 	}
 
 	return r, nil
 }
 
 func (r *ristrettoCache) Get(ctx context.Context, key string) ([]byte, error) {
-	retries := r.retries
+	var boff backoff.BackOff
+	if r.retriesEnabled {
+		boff = r.boffPool.Get().(backoff.BackOff)
+		defer func() {
+			boff.Reset()
+			r.boffPool.Put(boff)
+		}()
+	}
+
 	for {
 		res, ok := r.cache.Get(key)
 		if ok {
 			return res.([]byte), nil
 		}
 
-		if retries <= 0 {
+		if boff == nil {
 			return nil, service.ErrKeyNotFound
 		}
 
-		retries--
+		wait := boff.NextBackOff()
+		if wait == backoff.Stop {
+			return nil, service.ErrKeyNotFound
+		}
 		select {
-		case <-time.After(r.retryPeriod):
+		case <-time.After(wait):
 		case <-ctx.Done():
 			return nil, service.ErrKeyNotFound
 		}
