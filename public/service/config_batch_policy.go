@@ -35,8 +35,9 @@ func (b BatchPolicy) toInternal() batch.PolicyConfig {
 	return batchConf
 }
 
-// Provides a batching mechanism where messages can be added one-by-one with a
-// boolean return indicating whether the batching policy has been triggered.
+// Batcher provides a batching mechanism where messages can be added one-by-one
+// with a boolean return indicating whether the batching policy has been
+// triggered.
 //
 // Upon triggering the policy it is the responsibility of the owner of this
 // batcher to call Flush, which returns all the pending messages in the batch.
