@@ -1,0 +1,24 @@
+tests:
+  - name: run all resources
+    target_processors: '/processor_resources'
+    input_batch:
+      - content: 'example content'
+    output_batches:
+      -
+        - content_equals: BAR EXAMPLE CONTENT
+
+  - name: run just prefix
+    target_processors: '/processor_resources/0'
+    input_batch:
+      - content: 'example content'
+    output_batches:
+      -
+        - content_equals: bar example content
+
+  - name: run just upper
+    target_processors: '/processor_resources/1'
+    input_batch:
+      - content: 'example content'
+    output_batches:
+      -
+        - content_equals: EXAMPLE CONTENT

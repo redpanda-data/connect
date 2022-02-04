@@ -1,0 +1,6 @@
+processor_resources:
+  - label: prefix
+    bloblang: 'root = "bar " + content()'
+
+  - label: upper
+    bloblang: 'root = content().uppercase()'
