@@ -57,6 +57,7 @@ input:
     subject: ""
     durable: ""
     deliver: all
+    ack_wait: 30s
     max_ack_pending: 1024
     tls:
       enabled: false
@@ -176,6 +177,22 @@ Default: `"all"`
 | `all` | Deliver all available messages. |
 | `last` | Deliver starting with the last published messages. |
 
+
+### `ack_wait`
+
+The maximum amount of time NATS server should wait for an ack from consumer.
+
+
+Type: `string`  
+Default: `"30s"`  
+
+```yaml
+# Examples
+
+ack_wait: 100ms
+
+ack_wait: 5m
+```
 
 ### `max_ack_pending`
 

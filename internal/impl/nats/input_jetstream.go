@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -52,6 +53,12 @@ You can access these metadata fields using
 		}).
 			Description("Determines which messages to deliver when consuming without a durable subscriber.").
 			Default("all")).
+		Field(service.NewStringField("ack_wait").
+			Description("The maximum amount of time NATS server should wait for an ack from consumer.").
+			Advanced().
+			Default("30s").
+			Example("100ms").
+			Example("5m")).
 		Field(service.NewIntField("max_ack_pending").
 			Description("The maximum number of outstanding acks to be allowed before consuming is halted.").
 			Advanced().
@@ -80,6 +87,7 @@ type jetStreamReader struct {
 	subject       string
 	queue         string
 	durable       string
+	ackWait       time.Duration
 	maxAckPending int
 	authConf      auth.Config
 	tlsConf       *tls.Config
@@ -129,6 +137,17 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, log *service.Logge
 	if conf.Contains("durable") {
 		if j.durable, err = conf.FieldString("durable"); err != nil {
 			return nil, err
+		}
+	}
+
+	ackWaitStr, err := conf.FieldString("ack_wait")
+	if err != nil {
+		return nil, err
+	}
+	if ackWaitStr != "" {
+		j.ackWait, err = time.ParseDuration(ackWaitStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse ack wait duration: %v", err)
 		}
 	}
 
@@ -197,6 +216,9 @@ func (j *jetStreamReader) Connect(ctx context.Context) error {
 		options = append(options, nats.Durable(j.durable))
 	}
 	options = append(options, j.deliverOpt)
+	if j.ackWait > 0 {
+		options = append(options, nats.AckWait(j.ackWait))
+	}
 	if j.maxAckPending != 0 {
 		options = append(options, nats.MaxAckPending(j.maxAckPending))
 	}
