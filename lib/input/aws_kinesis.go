@@ -390,6 +390,15 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 
 		k.log.Debugf("Consuming stream '%v' shard '%v' as client '%v'\n", streamID, shardID, k.checkpointer.clientID)
 
+		// Switches our pull chan to unblocked only if it's currently blocked,
+		// as otherwise it's set to a timed channel that we do not want to
+		// disturb.
+		unblockPullChan := func() {
+			if nextPullChan == blockedChan {
+				nextPullChan = unblockedChan
+			}
+		}
+
 		for {
 			var err error
 			if state == awsKinesisConsumerConsuming && len(pending) == 0 && nextPullChan == unblockedChan {
@@ -422,8 +431,8 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 				if iter == "" {
 					state = awsKinesisConsumerFinished
 				}
-			} else if nextPullChan == unblockedChan {
-				nextPullChan = blockedChan
+			} else {
+				unblockPullChan()
 			}
 
 			if pendingMsg.msg == nil {
@@ -449,12 +458,10 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 						}
 					}
 					if pending = pending[i+1:]; len(pending) == 0 {
-						// We reached the end of our records so unblock pulling.
-						nextPullChan = unblockedChan
+						unblockPullChan()
 					}
 				} else {
-					// We reached the end of our records so unblock pulling.
-					nextPullChan = unblockedChan
+					unblockPullChan()
 				}
 			}
 
