@@ -140,11 +140,15 @@ func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- type
 	wg := sync.WaitGroup{}
 	wg.Add(len(msgs))
 
+	block := make(chan bool, 32)
+
 	for _, msg := range msgs {
+	    block <- true
 		go func(m types.Message) {
 			sendMsg(m)
 			wg.Done()
 		}(msg)
+		<-block
 	}
 
 	wg.Wait()
