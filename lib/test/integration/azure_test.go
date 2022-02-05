@@ -2,7 +2,7 @@ package integration
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,12 +47,12 @@ func (t AzuriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Details here: https://github.com/Azure/Azurite/issues/663
 	if strings.Contains(reqURL, "comp=list") &&
 		strings.Contains(reqURL, "restype=container") {
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return resp, fmt.Errorf("failed to read response body: %w", err)
 		}
 		newBody := strings.ReplaceAll(string(bodyBytes), "<Snapshot/>", "")
-		resp.Body = ioutil.NopCloser(strings.NewReader(newBody))
+		resp.Body = io.NopCloser(strings.NewReader(newBody))
 		resp.ContentLength = int64(len(newBody))
 	}
 
@@ -129,13 +130,13 @@ input:
     prefix: $VAR2
     storage_connection_string: "UseDevelopmentStorage=true;"
 `
-		integrationTests(
-			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolated(10),
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			testOptVarOne(dummyContainer),
-			testOptVarTwo(dummyPrefix),
+			integration.StreamTestOptVarOne(dummyContainer),
+			integration.StreamTestOptVarTwo(dummyPrefix),
 		)
 	})
 
@@ -157,12 +158,12 @@ input:
 	//     prefix: $VAR2/data.txt
 	//     storage_connection_string: "UseDevelopmentStorage=true;"
 	// `
-	// 		integrationTests(
-	// 			integrationTestOpenCloseIsolated(),
+	// 		integration.StreamTests(
+	// 			integration.StreamTestOpenCloseIsolated(),
 	// 		).Run(
 	// 			t, template,
-	// 			testOptVarOne(dummyContainer),
-	// 			testOptVarTwo(dummyPrefix),
+	// 			integration.StreamTestOptVarOne(dummyContainer),
+	// 			integration.StreamTestOptVarTwo(dummyPrefix),
 	// 		)
 	// 	})
 
@@ -180,12 +181,12 @@ input:
    queue_name: $VAR1$ID
    storage_connection_string: "UseDevelopmentStorage=true;"
 `
-		integrationTests(
-			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolated(10),
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			testOptVarOne(dummyQueue),
+			integration.StreamTestOptVarOne(dummyQueue),
 		)
 	})
 })

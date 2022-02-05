@@ -111,7 +111,7 @@ The config field `ack_replicas` determines whether we wait for acknowledgement f
 
 Both the `key` and `topic` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
-[Metadata](/docs/configuration/metadata) will be added to each message sent as headers, but can be restricted using the field [`metadata`](#metadata).
+[Metadata](/docs/configuration/metadata) will be added to each message sent as headers (version 0.11+), but can be restricted using the field [`metadata`](#metadata).
 
 ### Strict Ordering and Retries
 
@@ -119,7 +119,15 @@ When strict ordering is required for messages written to topic partitions it is 
 
 You must also ensure that failed batches are never rerouted back to the same output. This can be done by setting the field `max_retries` to `0` and `backoff.max_elapsed_time` to empty, which will apply back pressure indefinitely until the batch is sent successfully.
 
-However, this also means that manual intervention will eventually be required in cases where the batch cannot be sent due to configuration problems such as an incorrect `max_msg_bytes` estimate. A less strict but automated alternative would be to route failed batches to a dead letter queue using a [`try` broker](/docs/components/outputs/try), but this would allow subsequent batches to be delivered in the meantime whilst those failed batches are dealt with.
+However, this also means that manual intervention will eventually be required in cases where the batch cannot be sent due to configuration problems such as an incorrect `max_msg_bytes` estimate. A less strict but automated alternative would be to route failed batches to a dead letter queue using a [`fallback` broker](/docs/components/outputs/fallback), but this would allow subsequent batches to be delivered in the meantime whilst those failed batches are dealt with.
+
+### Troubleshooting
+
+If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer [`kafka_franz` output](/docs/components/outputs/kafka_franz).
+
+- I'm seeing logs that report `Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`, but the brokers are definitely reachable.
+
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.
 
 ## Performance
 
@@ -287,7 +295,7 @@ Default: `""`
 
 | Option | Summary |
 |---|---|
-| `PLAIN` | Plain text authentication. |
+| `PLAIN` | Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled). |
 | `OAUTHBEARER` | OAuth Bearer based authentication. |
 | `SCRAM-SHA-256` | Authentication using the SCRAM-SHA-256 mechanism. |
 | `SCRAM-SHA-512` | Authentication using the SCRAM-SHA-512 mechanism. |

@@ -3,7 +3,7 @@ package reader
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -92,7 +92,7 @@ func (f *Files) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 	}
 	defer file.Close()
 
-	msgBytes, readerr := ioutil.ReadAll(file)
+	msgBytes, readerr := io.ReadAll(file)
 	if readerr != nil {
 		return nil, nil, readerr
 	}

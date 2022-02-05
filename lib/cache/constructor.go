@@ -78,6 +78,8 @@ var Constructors = map[string]TypeSpec{}
 //------------------------------------------------------------------------------
 
 // String constants representing each cache type.
+// Deprecated: Do not add new components here. Instead, use the public plugin
+// APIs. Examples can be found in: ./internal/impl
 const (
 	TypeAWSDynamoDB = "aws_dynamodb"
 	TypeAWSS3       = "aws_s3"
@@ -95,6 +97,8 @@ const (
 //------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all cache types.
+// Deprecated: Do not add new components here. Instead, use the public plugin
+// APIs. Examples can be found in: ./internal/impl
 type Config struct {
 	Label       string           `json:"label" yaml:"label"`
 	Type        string           `json:"type" yaml:"type"`

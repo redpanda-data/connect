@@ -6,9 +6,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )

@@ -112,6 +112,34 @@ func TestFunctions(t *testing.T) {
 				}},
 			},
 		},
+		"check range start > end": {
+			input: mustFunc("range", mustFunc("var", "start"), 0, 1),
+			vars: map[string]interface{}{
+				"start": 10,
+			},
+			err: `with positive step arg start (10) must be < stop (0)`,
+		},
+		"check range start >= end": {
+			input: mustFunc("range", mustFunc("var", "start"), 10, 1),
+			vars: map[string]interface{}{
+				"start": 10,
+			},
+			err: `with positive step arg start (10) must be < stop (10)`,
+		},
+		"check range zero step": {
+			input: mustFunc("range", mustFunc("var", "start"), 100, 0),
+			vars: map[string]interface{}{
+				"start": 10,
+			},
+			err: `step must be greater than or less than 0`,
+		},
+		"check range start < end neg step": {
+			input: mustFunc("range", mustFunc("var", "start"), 100, -1),
+			vars: map[string]interface{}{
+				"start": 10,
+			},
+			err: `with negative step arg stop (100) must be <= start (10)`,
+		},
 	}
 
 	for name, test := range tests {
@@ -237,6 +265,15 @@ func TestNanoidFunctionAlphabet(t *testing.T) {
 	res, err := e.Exec(FunctionContext{})
 	require.NoError(t, err)
 	assert.Equal(t, "a", res)
+}
+
+func TestKsuidFunction(t *testing.T) {
+	e, err := InitFunctionHelper("ksuid")
+	require.Nil(t, err)
+
+	res, err := e.Exec(FunctionContext{})
+	require.NoError(t, err)
+	assert.NotEmpty(t, res)
 }
 
 func TestEnvFunction(t *testing.T) {

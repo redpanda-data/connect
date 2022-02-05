@@ -84,30 +84,30 @@ type FieldSpec struct {
 	Kind FieldKind `json:"kind"`
 
 	// Description of the field purpose (in markdown).
-	Description string `json:"description"`
+	Description string `json:"description,omitempty"`
 
 	// IsAdvanced is true for optional fields that will not be present in most
 	// configs.
-	IsAdvanced bool `json:"is_advanced"`
+	IsAdvanced bool `json:"is_advanced,omitempty"`
 
 	// IsDeprecated is true for fields that are deprecated and only exist
 	// for backwards compatibility reasons.
-	IsDeprecated bool `json:"is_deprecated"`
+	IsDeprecated bool `json:"is_deprecated,omitempty"`
 
 	// IsOptional is a boolean flag indicating that a field is optional, even
 	// if there is no default. This prevents linting errors when the field
 	// is missing.
-	IsOptional bool `json:"is_optional"`
+	IsOptional bool `json:"is_optional,omitempty"`
 
 	// Default value of the field.
 	Default *interface{} `json:"default,omitempty"`
 
 	// Interpolation indicates that the field supports interpolation
 	// functions.
-	Interpolated bool `json:"interpolated"`
+	Interpolated bool `json:"interpolated,omitempty"`
 
 	// Bloblang indicates that a string field is a Bloblang mapping.
-	Bloblang bool `json:"bloblang"`
+	Bloblang bool `json:"bloblang,omitempty"`
 
 	// Examples is a slice of optional example values for a field.
 	Examples []interface{} `json:"examples,omitempty"`
@@ -150,7 +150,7 @@ func (f FieldSpec) HasType(t FieldType) FieldSpec {
 }
 
 // Optional marks this field as being optional, and therefore its absence in a
-// config is not considered an error if when a default is not provided.
+// config is not considered an error even when a default value is not provided.
 func (f FieldSpec) Optional() FieldSpec {
 	f.IsOptional = true
 	return f
@@ -315,6 +315,11 @@ func (f FieldSpec) shouldOmit(field, parent interface{}) (string, bool) {
 		return "", false
 	}
 	return f.omitWhenFn(field, parent)
+}
+
+// FieldObject returns a field spec for an object typed field.
+func FieldObject(name, description string, examples ...interface{}) FieldSpec {
+	return FieldCommon(name, description, examples...).HasType(FieldTypeObject)
 }
 
 // FieldString returns a field spec for a common string typed field.
@@ -498,14 +503,20 @@ type LintContext struct {
 
 	// Provides an isolated context for Bloblang parsing.
 	BloblangEnv *bloblang.Environment
+
+	// Config fields
+
+	// Reject any deprecated components or fields as linting errors.
+	RejectDeprecated bool
 }
 
 // NewLintContext creates a new linting context.
 func NewLintContext() LintContext {
 	return LintContext{
-		LabelsToLine: map[string]int{},
-		DocsProvider: globalProvider,
-		BloblangEnv:  bloblang.GlobalEnvironment().Deactivated(),
+		LabelsToLine:     map[string]int{},
+		DocsProvider:     globalProvider,
+		BloblangEnv:      bloblang.GlobalEnvironment().Deactivated(),
+		RejectDeprecated: false,
 	}
 }
 
@@ -541,6 +552,16 @@ func NewLintWarning(line int, msg string) Lint {
 
 //------------------------------------------------------------------------------
 
+func (f FieldSpec) needsDefault() bool {
+	if f.IsOptional {
+		return false
+	}
+	if f.IsDeprecated {
+		return false
+	}
+	return true
+}
+
 func getDefault(pathName string, field FieldSpec) (interface{}, error) {
 	if field.Default != nil {
 		// TODO: Should be deep copy here?
@@ -554,8 +575,10 @@ func getDefault(pathName string, field FieldSpec) (interface{}, error) {
 	} else if len(field.Children) > 0 {
 		m := map[string]interface{}{}
 		for _, v := range field.Children {
-			var err error
-			if m[v.Name], err = getDefault(pathName+"."+v.Name, v); err != nil {
+			defV, err := getDefault(pathName+"."+v.Name, v)
+			if err == nil {
+				m[v.Name] = defV
+			} else if v.needsDefault() {
 				return nil, err
 			}
 		}

@@ -403,7 +403,7 @@ func closeWithContext(ctx context.Context, c types.Closable) error {
 
 // NewBuffer attempts to create a new buffer component from a config.
 func (t *Type) NewBuffer(conf buffer.Config) (buffer.Type, error) {
-	return t.env.Buffers.Init(conf, t)
+	return t.env.BufferInit(conf, t)
 }
 
 //------------------------------------------------------------------------------
@@ -433,12 +433,9 @@ func (t *Type) NewCache(conf cache.Config) (types.Cache, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := docs.ValidateLabel(conf.Label); err != nil {
-			return nil, err
-		}
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.env.Caches.Init(conf, mgr)
+	return t.env.CacheInit(conf, mgr)
 }
 
 // StoreCache attempts to store a new cache resource. If an existing resource
@@ -499,12 +496,9 @@ func (t *Type) NewInput(conf input.Config, hasBatchProc bool, pipelines ...types
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := docs.ValidateLabel(conf.Label); err != nil {
-			return nil, err
-		}
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.env.Inputs.Init(hasBatchProc, conf, mgr, pipelines...)
+	return t.env.InputInit(hasBatchProc, conf, mgr, pipelines...)
 }
 
 // StoreInput attempts to store a new input resource. If an existing resource
@@ -568,12 +562,9 @@ func (t *Type) NewProcessor(conf processor.Config) (types.Processor, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := docs.ValidateLabel(conf.Label); err != nil {
-			return nil, err
-		}
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.env.Processors.Init(conf, mgr)
+	return t.env.ProcessorInit(conf, mgr)
 }
 
 // StoreProcessor attempts to store a new processor resource. If an existing
@@ -636,12 +627,9 @@ func (t *Type) NewOutput(conf output.Config, pipelines ...types.PipelineConstruc
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := docs.ValidateLabel(conf.Label); err != nil {
-			return nil, err
-		}
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.env.Outputs.Init(conf, mgr, pipelines...)
+	return t.env.OutputInit(conf, mgr, pipelines...)
 }
 
 // StoreOutput attempts to store a new output resource. If an existing resource
@@ -708,12 +696,9 @@ func (t *Type) NewRateLimit(conf ratelimit.Config) (types.RateLimit, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
-		if err := docs.ValidateLabel(conf.Label); err != nil {
-			return nil, err
-		}
 		mgr = t.forComponent(conf.Label)
 	}
-	return t.env.RateLimits.Init(conf, mgr)
+	return t.env.RateLimitInit(conf, mgr)
 }
 
 // StoreRateLimit attempts to store a new rate limit resource. If an existing

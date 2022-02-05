@@ -76,6 +76,59 @@ func TestMethods(t *testing.T) {
 		messages []easyMsg
 		index    int
 	}{
+		"check format_json with default indentation": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_json"),
+			),
+			output: []byte(`{
+    "doc": {
+        "foo": "bar"
+    }
+}`),
+		},
+		"check format_json with two spaces indentation": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_json", "  "),
+			),
+			output: []byte(`{
+  "doc": {
+    "foo": "bar"
+  }
+}`),
+		},
+		"check format_json with one tab indentation": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_json", "\t"),
+			),
+			output: []byte(`{
+	"doc": {
+		"foo": "bar"
+	}
+}`),
+		},
+		"check format_json with empty indentation": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_json", ""),
+			),
+			output: []byte(`{
+"doc": {
+"foo": "bar"
+}
+}`),
+		},
+		"check format_yaml": {
+			input: methods(
+				jsonFn(`{"doc":{"foo":"bar"}}`),
+				method("format_yaml"),
+			),
+			output: []byte(`doc:
+    foo: bar
+`),
+		},
 		"check parse csv 1": {
 			input: methods(
 				literalFn("foo,bar,baz\n1,2,3\n4,5,6"),
@@ -1144,6 +1197,41 @@ func TestMethods(t *testing.T) {
 				method("parse_json"),
 			),
 			err: `string literal: failed to parse value as JSON: invalid character 'o' in literal null (expecting 'u')`,
+		},
+		"check parse duration ISO-8601": {
+			input: methods(
+				literalFn("P3Y6M4DT12H30M5.3S"),
+				method("parse_duration_iso8601"),
+			),
+			output: int64(110839937300000000),
+		},
+		"check parse duration ISO-8601 ignore more than one decimal place": {
+			input: methods(
+				literalFn("P3Y6M4DT12H30M5.33S"),
+				method("parse_duration_iso8601"),
+			),
+			output: int64(110839937300000000),
+		},
+		"check parse duration ISO-8601 only allow fractions in the last field": {
+			input: methods(
+				literalFn("P2.5YT7.5S"),
+				method("parse_duration_iso8601"),
+			),
+			err: "string literal: P2.5YT7.5S: 'Y' & 'S' only the last field can have a fraction",
+		},
+		"check parse duration ISO-8601 with invalid format": {
+			input: methods(
+				literalFn("P3S"),
+				method("parse_duration_iso8601"),
+			),
+			err: "string literal: P3S: 'S' designator cannot occur here",
+		},
+		"check parse duration ISO-8601 with bogus format": {
+			input: methods(
+				literalFn("gibberish"),
+				method("parse_duration_iso8601"),
+			),
+			err: "string literal: gibberish: expected 'P' period mark at the start",
 		},
 		"check parse timestamp unix": {
 			input: methods(

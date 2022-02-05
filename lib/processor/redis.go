@@ -9,11 +9,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -317,7 +317,7 @@ func (r *Redis) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	r.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part types.Part) error {
 		key := r.key.String(index, newMsg)
 		if err := r.operator(r, key, part); err != nil {
 			r.mErr.Incr(1)
@@ -327,7 +327,7 @@ func (r *Redis) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		return nil
 	}
 
-	IteratePartsWithSpan(TypeRedis, r.parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeRedis, r.parts, newMsg, proc)
 
 	r.mBatchSent.Incr(1)
 	r.mSent.Incr(int64(newMsg.Len()))

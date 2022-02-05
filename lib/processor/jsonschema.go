@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
 	jsonschema "github.com/xeipuuv/gojsonschema"
 )
 
@@ -171,7 +171,7 @@ func NewJSONSchema(
 func (s *JSONSchema) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
 	s.mCount.Incr(1)
 	newMsg := msg.Copy()
-	proc := func(i int, span opentracing.Span, part types.Part) error {
+	proc := func(i int, span *tracing.Span, part types.Part) error {
 		jsonPart, err := msg.Get(i).JSON()
 		if err != nil {
 			s.log.Debugf("Failed to parse part into json: %v\n", err)
@@ -213,7 +213,7 @@ func (s *JSONSchema) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		return nil, response.NewAck()
 	}
 
-	IteratePartsWithSpan(TypeJSONSchema, s.conf.Parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeJSONSchema, s.conf.Parts, newMsg, proc)
 
 	s.mBatchSent.Incr(1)
 	s.mSent.Incr(int64(newMsg.Len()))

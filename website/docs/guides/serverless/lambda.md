@@ -4,12 +4,27 @@ description: Deploying Benthos as an AWS Lambda function
 ---
 
 The `benthos-lambda` distribution is a version of Benthos specifically tailored
-for deployment as an AWS Lambda function.
+for deployment as an AWS Lambda function on the `go1.x` runtime,
+which runs Amazon Linux on the `x86_64` architecture.
+The `benthos-lambda-al2` distribution supports the `provided.al2` runtime,
+which runs Amazon Linux 2 on either the `x86_64` or `arm64` architecture.
 
-It uses the same configuration format as a regular Benthos instance, except it
-is read from the environment variable `BENTHOS_CONFIG` (YAML format). Also, the
-`http`, `input` and `buffer` sections are ignored as the service wide HTTP
-server is not used, and messages are inserted via function invocations.
+It uses the same configuration format as a regular Benthos instance, which can be
+provided in 1 of 2 ways:
+
+1. Inline via the `BENTHOS_CONFIG` environment variable (YAML format).
+2. Via the filesystem using a layer, extension, or container image. By default,
+   the `benthos-lambda` distribution will look for a valid configuration file in
+   the locations listed below. Alternatively, the configuration file path can be
+   set explicity by passing a `BENTHOS_CONFIG_PATH` environment variable.
+  - `./benthos.yaml`
+  - `./config.yaml`
+  - `/benthos.yaml`
+  - `/etc/benthos/config.yaml`
+  - `/etc/benthos.yaml`
+
+Also, the `http`, `input` and `buffer` sections are ignored as the service wide
+HTTP server is not used, and messages are inserted via function invocations.
 
 If the `output` section is omitted in your config then the result of the
 processing pipeline is returned back to the caller, otherwise the resulting data
@@ -81,7 +96,7 @@ output:
     cases:
       - check: '!errored()'
         output:
-          type: sync_response
+          sync_response: {}
       - output:
           reject: "processing failed due to: ${! error() }"
 ```
@@ -107,10 +122,12 @@ output:
         - todo:9092
         client_id: benthos_serverless
         topic: example_topic
-    - type: sync_response
+    - sync_response: {}
 ```
 
 ## Upload to AWS
+
+### go1.x on x86_64
 
 Grab an archive labelled `benthos-lambda` from the [releases page][releases]
 page and then create your function:
@@ -128,6 +145,28 @@ aws lambda create-function \
 
 There is also an example [SAM template][sam-template] and
 [Terraform resource][tf-example] in the repo to copy from.
+
+### provided.al2 on amd64
+
+Grab an archive labelled `benthos-lambda-al2` for `arm64` from the [releases page][releases]
+page and then create your function (AWS CLI v2 only):
+
+```sh
+LAMBDA_ENV=`cat yourconfig.yaml | jq -csR {Variables:{BENTHOS_CONFIG:.}}`
+aws lambda create-function \
+  --runtime provided.al2 \
+  --architectures arm64 \
+  --handler not.used.for.provided.al2.runtime \
+  --role benthos-example-role \
+  --zip-file fileb://benthos-lambda.zip \
+  --environment "$LAMBDA_ENV" \
+  --function-name benthos-example
+```
+
+There is also an example [SAM template][sam-template-al2] and
+[Terraform resource][tf-example-al2] in the repo to copy from.
+
+Note that you can also run `benthos-lambda-al2` on x86_64, just use the `amd64` zip instead.
 
 ## Invoke
 
@@ -150,5 +189,7 @@ zip benthos-lambda.zip benthos-lambda
 [releases]: https://github.com/Jeffail/benthos/releases
 [sam-template]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda-sam.yaml
 [tf-example]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda.tf
+[sam-template-al2]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda-al2-sam.yaml
+[tf-example-al2]: https://github.com/Jeffail/benthos/tree/master/resources/serverless/lambda/benthos-lambda-al2.tf
 [output-broker]: /docs/components/outputs/broker
 [output.reject]: /docs/components/outputs/reject

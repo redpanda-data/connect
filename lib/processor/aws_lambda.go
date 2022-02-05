@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/lambda/client"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -58,6 +58,7 @@ pipeline:
           }
 output:
   switch:
+    retry_until_success: false
     cases:
       - check: errored()
         output:
@@ -241,7 +242,7 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	var resultMsg types.Message
 	if !l.parallel || msg.Len() == 1 {
 		resultMsg = msg.Copy()
-		IteratePartsWithSpan("aws_lambda", nil, resultMsg, func(i int, _ opentracing.Span, p types.Part) error {
+		IteratePartsWithSpanV2("aws_lambda", nil, resultMsg, func(i int, _ *tracing.Span, p types.Part) error {
 			if err := l.client.InvokeV2(p); err != nil {
 				l.mErr.Incr(1)
 				l.mErrLambda.Incr(1)

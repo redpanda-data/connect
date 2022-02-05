@@ -43,13 +43,12 @@ output:
   broker:
     pattern: fan_out
     outputs:
-    - kafka:
-        addresses: [ TODO:9092 ]
-        topic: foo_topic
-    - type: sync_response
-      processors:
-      - text:
-          operator: to_upper
+      - kafka:
+          addresses: [ TODO:9092 ]
+          topic: foo_topic
+      - sync_response: {}
+        processors:
+          - bloblang: 'root = content().uppercase()'
 ```
 
 Using the above example and posting the message 'hello world' to the endpoint

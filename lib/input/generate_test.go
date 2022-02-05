@@ -44,6 +44,14 @@ func TestBloblangInterval(t *testing.T) {
 	b.CloseAsync()
 }
 
+func TestBloblangZeroInterval(t *testing.T) {
+	conf := NewBloblangConfig()
+	conf.Mapping = `root = "hello world"`
+	conf.Interval = "0s"
+	_, err := newBloblang(types.NoopMgr(), conf)
+	require.NoError(t, err)
+}
+
 func TestBloblangCron(t *testing.T) {
 	t.Skip()
 
@@ -129,4 +137,54 @@ func TestBloblangRemaining(t *testing.T) {
 
 	_, _, err = b.ReadWithContext(ctx)
 	assert.EqualError(t, err, "type was closed")
+}
+
+func TestBloblangUnbounded(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer done()
+
+	conf := NewBloblangConfig()
+	conf.Mapping = `root = "foobar"`
+	conf.Interval = "0s"
+
+	b, err := newBloblang(types.NoopMgr(), conf)
+	require.NoError(t, err)
+
+	err = b.ConnectWithContext(ctx)
+	require.NoError(t, err)
+
+	for i := 0; i < 10; i++ {
+		m, _, err := b.ReadWithContext(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 1, m.Len())
+		assert.Equal(t, "foobar", string(m.Get(0).Get()))
+	}
+
+	b.CloseAsync()
+	require.NoError(t, b.WaitForClose(time.Second))
+}
+
+func TestBloblangUnboundedEmpty(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer done()
+
+	conf := NewBloblangConfig()
+	conf.Mapping = `root = "foobar"`
+	conf.Interval = ""
+
+	b, err := newBloblang(types.NoopMgr(), conf)
+	require.NoError(t, err)
+
+	err = b.ConnectWithContext(ctx)
+	require.NoError(t, err)
+
+	for i := 0; i < 10; i++ {
+		m, _, err := b.ReadWithContext(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 1, m.Len())
+		assert.Equal(t, "foobar", string(m.Get(0).Get()))
+	}
+
+	b.CloseAsync()
+	require.NoError(t, b.WaitForClose(time.Second))
 }

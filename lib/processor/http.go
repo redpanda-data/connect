@@ -66,16 +66,16 @@ will not be reattempted and is immediately considered a failed request.
 If the request returns an error response code this processor sets a metadata
 field ` + "`http_status_code`" + ` on the resulting message.
 
-If the field ` + "`copy_response_headers` is set to `true`" + ` then any headers
-in the response will also be set in the resulting message as metadata.
- 
+Use the field ` + "`extract_headers`" + ` to specify rules for which other
+headers should be copied into the resulting message from the response.
+
 ## Error Handling
 
 When all retry attempts for a message are exhausted the processor cancels the
 attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](/docs/configuration/error_handling).`,
-		FieldSpecs: append(docs.FieldSpecs{
+		config: client.FieldSpec(
 			docs.FieldCommon("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request."),
 			docs.FieldDeprecated("max_parallel"),
 			docs.FieldDeprecated("request").OmitWhen(func(v, _ interface{}) (string, bool) {
@@ -89,7 +89,7 @@ can read about these patterns [here](/docs/configuration/error_handling).`,
 				}
 				return "field request is deprecated", cmp.Equal(v, iDefault)
 			}),
-		}, client.FieldSpecs()...),
+		),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "Branched Request",

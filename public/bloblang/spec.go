@@ -82,11 +82,19 @@ func (d ParamDefinition) Default(v interface{}) ParamDefinition {
 // following the order in which the parameters are added, or named style
 // (c: baz, a: foo).
 type PluginSpec struct {
+	category    string
 	description string
 	params      query.Params
+	examples    []pluginExample
 }
 
-// NewPluginSpec creates a new parameters definition for a function or method
+type pluginExample struct {
+	summary      string
+	mapping      string
+	inputOutputs [][2]string
+}
+
+// NewPluginSpec creates a new plugin definition for a function or method
 // plugin that describes the arguments that the plugin expects.
 func NewPluginSpec() *PluginSpec {
 	return &PluginSpec{
@@ -94,10 +102,30 @@ func NewPluginSpec() *PluginSpec {
 	}
 }
 
-// Description adds an optional description to the parameter spec, this is used
+// Category adds an optional category string to the plugin spec, this is used
+// when generating documentation for the plugin.
+func (p *PluginSpec) Category(str string) *PluginSpec {
+	p.category = str
+	return p
+}
+
+// Description adds an optional description to the plugin spec, this is used
 // when generating documentation for the plugin.
 func (p *PluginSpec) Description(str string) *PluginSpec {
 	p.description = str
+	return p
+}
+
+// Example adds an optional example to the plugin spec, this is used when
+// generating documentation for the plugin. An example consists of a short
+// summary, a mapping demonstrating the plugin, and one or more input/output
+// combinations.
+func (p *PluginSpec) Example(summary, mapping string, inputOutputs ...[2]string) *PluginSpec {
+	p.examples = append(p.examples, pluginExample{
+		summary:      summary,
+		mapping:      mapping,
+		inputOutputs: inputOutputs,
+	})
 	return p
 }
 
@@ -113,7 +141,7 @@ func (p *PluginSpec) Param(def ParamDefinition) *PluginSpec {
 // populate the configuration spec. The schema of this method is undocumented
 // and is not intended for general use.
 //
-// EXPERIMENTAL: This method is not intended for general use and could have its
+// Experimental: This method is not intended for general use and could have its
 // signature and/or behaviour changed outside of major version bumps.
 func (p *PluginSpec) EncodeJSON(v []byte) error {
 	def := struct {

@@ -78,16 +78,16 @@ type ComponentSpec struct {
 	Plugin bool `json:"plugin"`
 
 	// Summary of the component (in markdown, must be short).
-	Summary string `json:"summary"`
+	Summary string `json:"summary,omitempty"`
 
 	// Description of the component (in markdown).
-	Description string `json:"description"`
+	Description string `json:"description,omitempty"`
 
 	// Categories that describe the purpose of the component.
 	Categories []string `json:"categories"`
 
 	// Footnotes of the component (in markdown).
-	Footnotes string `json:"footnotes"`
+	Footnotes string `json:"footnotes,omitempty"`
 
 	// Examples demonstrating use cases for the component.
 	Examples []AnnotatedExample `json:"examples,omitempty"`

@@ -2,7 +2,6 @@ package processor
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
@@ -181,14 +180,14 @@ func TestAvroSchemaPath(t *testing.T) {
 	]
 }`
 
-	tmpSchemaFile, err := ioutil.TempFile("", "benthos_avro_test")
+	tmpSchemaFile, err := os.CreateTemp("", "benthos_avro_test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(tmpSchemaFile.Name())
 
 	// write schema definition to tmpfile
-	if _, err := tmpSchemaFile.Write([]byte(schema)); err != nil {
+	if _, err := tmpSchemaFile.WriteString(schema); err != nil {
 		t.Fatal(err)
 	}
 

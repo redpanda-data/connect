@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"regexp"
@@ -143,7 +144,7 @@ func testKinesisConnect(t *testing.T, c KinesisConfig, client *kinesis.Kinesis) 
 		t.Fatalf("Expected GetRecords response to have records with length of %d, got %d", exp, act)
 	}
 	for i, record := range records {
-		if string(out.Records[i].Data) != string(record) {
+		if !bytes.Equal(out.Records[i].Data, record) {
 			t.Errorf("Expected record %d to equal %v, got %v", i, record, out.Records[i])
 		}
 	}

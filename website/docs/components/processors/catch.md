@@ -32,11 +32,13 @@ the catch.
 
 For example, with the following config:
 
-``` yaml
-- type: foo
-- catch:
-  - type: bar
-  - type: baz
+```yaml
+pipeline:
+  processors:
+    - resource: foo
+    - catch:
+      - resource: bar
+      - resource: baz
 ```
 
 If the processor `foo` fails for a particular message, that message

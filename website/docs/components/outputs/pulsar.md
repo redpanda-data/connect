@@ -22,15 +22,52 @@ Write messages to an Apache Pulsar server.
 
 Introduced in version 3.43.0.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yaml
-# Config fields, showing default values
+# Common config fields, showing default values
 output:
   label: ""
   pulsar:
     url: ""
     topic: ""
+    key: ""
+    ordering_key: ""
     max_in_flight: 1
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yaml
+# All config fields, showing default values
+output:
+  label: ""
+  pulsar:
+    url: ""
+    topic: ""
+    key: ""
+    ordering_key: ""
+    max_in_flight: 1
+    auth:
+      oauth2:
+        enabled: false
+        audience: ""
+        issuer_url: ""
+        private_key_file: ""
+      token:
+        enabled: false
+        token: ""
+```
+
+</TabItem>
+</Tabs>
 
 ## Fields
 
@@ -60,6 +97,24 @@ A topic to publish to.
 Type: `string`  
 Default: `""`  
 
+### `key`
+
+The key to publish messages with.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+### `ordering_key`
+
+The ordering key to publish messages with.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
 ### `max_in_flight`
 
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
@@ -67,5 +122,87 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 Type: `int`  
 Default: `1`  
+
+### `auth`
+
+Optional configuration of Pulsar authentication methods.
+
+
+Type: `object`  
+Requires version 3.60.0 or newer  
+
+### `auth.oauth2`
+
+Parameters for Pulsar OAuth2 authentication.
+
+
+Type: `object`  
+
+### `auth.oauth2.enabled`
+
+Whether OAuth2 is enabled.
+
+
+Type: `bool`  
+Default: `false`  
+
+```yaml
+# Examples
+
+enabled: true
+```
+
+### `auth.oauth2.audience`
+
+OAuth2 audience.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth.oauth2.issuer_url`
+
+OAuth2 issuer URL.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth.oauth2.private_key_file`
+
+File containing the private key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `auth.token`
+
+Parameters for Pulsar Token authentication.
+
+
+Type: `object`  
+
+### `auth.token.enabled`
+
+Whether Token Auth is enabled.
+
+
+Type: `bool`  
+Default: `false`  
+
+```yaml
+# Examples
+
+enabled: true
+```
+
+### `auth.token.token`
+
+Actual base64 encoded token.
+
+
+Type: `string`  
+Default: `""`  
 
 

@@ -24,7 +24,7 @@ import TabItem from '@theme/TabItem';
 
 ```yaml
 input:
-  bloblang:
+  generate:
     interval: 60s
     mapping: root = ""
 
@@ -46,12 +46,11 @@ input:
     verb: GET
     rate_limit: brewlimit
 
-resources:
-  rate_limits:
-    brewlimit:
-      local:
-        count: 1
-        interval: 60s
+rate_limit_resources:
+  - label: brewlimit
+    local:
+      count: 1
+      interval: 60s
 ```
 
 </TabItem>
@@ -78,7 +77,7 @@ http:
   address: 0.0.0.0:4195
 
 input:
-  bloblang:
+  generate:
     interval: 60s
     mapping: root = ""
 
@@ -160,7 +159,7 @@ http:
   address: 0.0.0.0:4195
 
 input:
-  bloblang:
+  generate:
     interval: 60s
     mapping: root = ""
 
@@ -240,7 +239,7 @@ http:
   address: 0.0.0.0:4195
 
 input:
-  bloblang:
+  generate:
     interval: 60s
     mapping: root = ""
 
@@ -290,7 +289,7 @@ http:
   address: 0.0.0.0:4195
 
 input:
-  bloblang:
+  generate:
     interval: 60s
     mapping: root = {}
 

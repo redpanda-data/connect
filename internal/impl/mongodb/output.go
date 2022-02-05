@@ -9,11 +9,13 @@ import (
 	"time"
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -42,11 +44,8 @@ func init() {
 		Description: ioutput.Description(true, true, ""),
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
-				docs.FieldCommon(
-					"operation",
-					"The mongo operation to perform. Must be one of the following: insert-one, delete-one, delete-many, "+
-						"replace-one, update-one.",
-				),
+				outputOperationDocs(client.OperationUpdateOne),
+				docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
 				docs.FieldCommon(
 					"write_concern",
 					"The write concern settings for the mongo connection.",
@@ -71,6 +70,11 @@ func init() {
 						"except insert-one. It is used to improve performance of finding the documents in the mongodb.",
 					mapExamples()...,
 				),
+				docs.FieldCommon(
+					"upsert",
+					"The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,"+
+						"the document is updated or replaced accordingly, otherwise it is created.",
+				).HasDefault(false).HasType(docs.FieldTypeBool).AtVersion("3.60.0"),
 				docs.FieldCommon(
 					"max_in_flight",
 					"The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
@@ -102,11 +106,18 @@ func NewWriter(
 	log log.Modular,
 	stats metrics.Type,
 ) (*Writer, error) {
+	// TODO: Remove this after V4 lands and #972 is fixed
+	operation := client.NewOperation(conf.Operation)
+	if operation == client.OperationInvalid {
+		return nil, fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one or update-one", conf.Operation)
+	}
+
 	db := &Writer{
-		conf:    conf,
-		log:     log,
-		stats:   stats,
-		shutSig: shutdown.NewSignaller(),
+		conf:      conf,
+		log:       log,
+		stats:     stats,
+		operation: operation,
+		shutSig:   shutdown.NewSignaller(),
 	}
 
 	if conf.MongoConfig.URL == "" {
@@ -121,22 +132,10 @@ func NewWriter(
 		return nil, errors.New("mongo collection must be specified")
 	}
 
-	var filterNeeded, documentNeeded bool
-	var hintAllowed bool
-
-	if _, ok := documentMapOps[conf.Operation]; !ok {
-		return nil, fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, or update-one", conf.Operation)
-	}
-
-	documentNeeded = documentMapOps[conf.Operation]
-	filterNeeded = filterMapOps[conf.Operation]
-	hintAllowed = hintAllowedOps[conf.Operation]
-
 	bEnv := mgr.BloblEnvironment()
-
 	var err error
 
-	if filterNeeded {
+	if isFilterAllowed(db.operation) {
 		if conf.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
@@ -144,10 +143,10 @@ func NewWriter(
 			return nil, fmt.Errorf("failed to parse filter_map: %v", err)
 		}
 	} else if conf.FilterMap != "" {
-		return nil, fmt.Errorf("mongodb filter_map not allowed for '%s' operation", conf.Operation)
+		return nil, fmt.Errorf("mongodb filter_map not allowed for '%s' operation", db.operation)
 	}
 
-	if documentNeeded {
+	if isDocumentAllowed(db.operation) {
 		if conf.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
@@ -155,20 +154,28 @@ func NewWriter(
 			return nil, fmt.Errorf("failed to parse document_map: %v", err)
 		}
 	} else if conf.DocumentMap != "" {
-		return nil, fmt.Errorf("mongodb document_map not allowed for '%s' operation", conf.Operation)
+		return nil, fmt.Errorf("mongodb document_map not allowed for '%s' operation", db.operation)
 	}
 
-	if hintAllowed && conf.HintMap != "" {
+	if isHintAllowed(db.operation) && conf.HintMap != "" {
 		if db.hintMap, err = bEnv.NewMapping(conf.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.HintMap != "" {
-		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.Operation)
+		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", db.operation)
+	}
+
+	if !isUpsertAllowed(db.operation) && conf.Upsert {
+		return nil, fmt.Errorf("mongodb upsert not allowed for '%s' operation", db.operation)
 	}
 
 	if db.wcTimeout, err = time.ParseDuration(conf.WriteConcern.WTimeout); err != nil {
 		return nil, fmt.Errorf("failed to parse write concern wtimeout string: %v", err)
 	}
+	if db.collection, err = interop.NewBloblangField(mgr, conf.MongoConfig.Collection); err != nil {
+		return nil, fmt.Errorf("failed to parse collection expression: %v", err)
+	}
+
 	return db, nil
 }
 
@@ -184,10 +191,13 @@ type Writer struct {
 	filterMap   *mapping.Executor
 	documentMap *mapping.Executor
 	hintMap     *mapping.Executor
+	operation   client.Operation
 
-	mu         sync.Mutex
-	client     *mongo.Client
-	collection *mongo.Collection
+	mu                           sync.Mutex
+	client                       *mongo.Client
+	collection                   *field.Expression
+	database                     *mongo.Database
+	writeConcernCollectionOption *options.CollectionOptions
 
 	shutSig *shutdown.Signaller
 }
@@ -234,9 +244,9 @@ func (m *Writer) ConnectWithContext(ctx context.Context) error {
 		return fmt.Errorf("write_concern validation error: %w", err)
 	}
 
-	m.collection = client.
-		Database(m.conf.MongoConfig.Database).
-		Collection(m.conf.MongoConfig.Collection, options.Collection().SetWriteConcern(writeConcern))
+	m.database = client.Database(m.conf.MongoConfig.Database)
+	m.writeConcernCollectionOption = options.Collection().SetWriteConcern(writeConcern)
+
 	m.client = client
 	return nil
 }
@@ -251,14 +261,15 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		return types.ErrNotConnected
 	}
 
-	var writeModels []mongo.WriteModel
+	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
 	err := writer.IterateBatchedSend(msg, func(i int, _ types.Part) error {
 		var err error
 		var filterVal, documentVal types.Part
-		var filterValWanted, documentValWanted bool
+		var upsertVal, filterValWanted, documentValWanted bool
 
-		filterValWanted = filterMapOps[m.conf.Operation]
-		documentValWanted = documentMapOps[m.conf.Operation]
+		filterValWanted = isFilterAllowed(m.operation)
+		documentValWanted = isDocumentAllowed(m.operation)
+		upsertVal = m.conf.Upsert
 
 		if filterValWanted {
 			if filterVal, err = m.filterMap.MapPart(i, msg); err != nil {
@@ -305,32 +316,33 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		}
 
 		var writeModel mongo.WriteModel
-		upsertFalse := false
-		switch m.conf.Operation {
-		case "insert-one":
+		collection := m.database.Collection(collection.String(i, msg), m.writeConcernCollectionOption)
+
+		switch m.operation {
+		case client.OperationInsertOne:
 			writeModel = &mongo.InsertOneModel{
 				Document: docJSON,
 			}
-		case "delete-one":
+		case client.OperationDeleteOne:
 			writeModel = &mongo.DeleteOneModel{
 				Filter: filterJSON,
 				Hint:   hintJSON,
 			}
-		case "delete-many":
+		case client.OperationDeleteMany:
 			writeModel = &mongo.DeleteManyModel{
 				Filter: filterJSON,
 				Hint:   hintJSON,
 			}
-		case "replace-one":
+		case client.OperationReplaceOne:
 			writeModel = &mongo.ReplaceOneModel{
-				Upsert:      &upsertFalse,
+				Upsert:      &upsertVal,
 				Filter:      filterJSON,
 				Replacement: docJSON,
 				Hint:        hintJSON,
 			}
-		case "update-one":
+		case client.OperationUpdateOne:
 			writeModel = &mongo.UpdateOneModel{
-				Upsert: &upsertFalse,
+				Upsert: &upsertVal,
 				Filter: filterJSON,
 				Update: docJSON,
 				Hint:   hintJSON,
@@ -338,11 +350,12 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		}
 
 		if writeModel != nil {
-			writeModels = append(writeModels, writeModel)
+			writeModelsMap[collection] = append(writeModelsMap[collection], writeModel)
 		}
 		return nil
 	})
 
+	// Check for fatal errors and exit immediately if we encounter one
 	var batchErr *ibatch.Error
 	if err != nil {
 		if !errors.As(err, &batchErr) {
@@ -350,12 +363,17 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 		}
 	}
 
-	if len(writeModels) > 0 {
-		if _, err = collection.BulkWrite(ctx, writeModels); err != nil {
-			return err
+	// Dispatch any documents which IterateBatchedSend managed to process successfully
+	if len(writeModelsMap) > 0 {
+		for collection, writeModels := range writeModelsMap {
+			// We should have at least one write model in the slice
+			if _, err := collection.BulkWrite(context.Background(), writeModels); err != nil {
+				return err
+			}
 		}
 	}
 
+	// Return any errors produced by invalid messages from the batch
 	if batchErr != nil {
 		return batchErr
 	}

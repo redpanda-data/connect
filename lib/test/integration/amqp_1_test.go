@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Azure/go-amqp"
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,30 +48,30 @@ input:
     url: amqp://guest:guest@localhost:$PORT/
     source_address: "queue:/$ID"
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestSendBatch(10),
-		integrationTestStreamSequential(1000),
-		integrationTestStreamParallel(1000),
-		integrationTestStreamParallelLossy(1000),
-		integrationTestStreamParallelLossyThroughReconnect(1000),
-		integrationTestMetadata(),
-		integrationTestMetadataFilter(),
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestStreamSequential(1000),
+		integration.StreamTestStreamParallel(1000),
+		integration.StreamTestStreamParallelLossy(1000),
+		integration.StreamTestStreamParallelLossyThroughReconnect(1000),
+		integration.StreamTestMetadata(),
+		integration.StreamTestMetadataFilter(),
 	)
 	suite.Run(
 		t, template,
-		testOptSleepAfterInput(100*time.Millisecond),
-		testOptSleepAfterOutput(100*time.Millisecond),
-		testOptPort(resource.GetPort("5672/tcp")),
+		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+		integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
-			testOptPort(resource.GetPort("5672/tcp")),
-			testOptMaxInFlight(10),
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
+			integration.StreamTestOptMaxInFlight(10),
 		)
 	})
 })

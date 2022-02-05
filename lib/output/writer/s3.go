@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -27,22 +27,23 @@ import (
 // AmazonS3Config contains configuration fields for the AmazonS3 output type.
 type AmazonS3Config struct {
 	sess.Config             `json:",inline" yaml:",inline"`
-	Bucket                  string             `json:"bucket" yaml:"bucket"`
-	ForcePathStyleURLs      bool               `json:"force_path_style_urls" yaml:"force_path_style_urls"`
-	Path                    string             `json:"path" yaml:"path"`
-	Tags                    map[string]string  `json:"tags" yaml:"tags"`
-	ContentType             string             `json:"content_type" yaml:"content_type"`
-	ContentEncoding         string             `json:"content_encoding" yaml:"content_encoding"`
-	CacheControl            string             `json:"cache_control" yaml:"cache_control"`
-	ContentDisposition      string             `json:"content_disposition" yaml:"content_disposition"`
-	ContentLanguage         string             `json:"content_language" yaml:"content_language"`
-	WebsiteRedirectLocation string             `json:"website_redirect_location" yaml:"website_redirect_location"`
-	Metadata                output.Metadata    `json:"metadata" yaml:"metadata"`
-	StorageClass            string             `json:"storage_class" yaml:"storage_class"`
-	Timeout                 string             `json:"timeout" yaml:"timeout"`
-	KMSKeyID                string             `json:"kms_key_id" yaml:"kms_key_id"`
-	MaxInFlight             int                `json:"max_in_flight" yaml:"max_in_flight"`
-	Batching                batch.PolicyConfig `json:"batching" yaml:"batching"`
+	Bucket                  string                       `json:"bucket" yaml:"bucket"`
+	ForcePathStyleURLs      bool                         `json:"force_path_style_urls" yaml:"force_path_style_urls"`
+	Path                    string                       `json:"path" yaml:"path"`
+	Tags                    map[string]string            `json:"tags" yaml:"tags"`
+	ContentType             string                       `json:"content_type" yaml:"content_type"`
+	ContentEncoding         string                       `json:"content_encoding" yaml:"content_encoding"`
+	CacheControl            string                       `json:"cache_control" yaml:"cache_control"`
+	ContentDisposition      string                       `json:"content_disposition" yaml:"content_disposition"`
+	ContentLanguage         string                       `json:"content_language" yaml:"content_language"`
+	WebsiteRedirectLocation string                       `json:"website_redirect_location" yaml:"website_redirect_location"`
+	Metadata                metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
+	StorageClass            string                       `json:"storage_class" yaml:"storage_class"`
+	Timeout                 string                       `json:"timeout" yaml:"timeout"`
+	KMSKeyID                string                       `json:"kms_key_id" yaml:"kms_key_id"`
+	ServerSideEncryption    string                       `json:"server_side_encryption" yaml:"server_side_encryption"`
+	MaxInFlight             int                          `json:"max_in_flight" yaml:"max_in_flight"`
+	Batching                batch.PolicyConfig           `json:"batching" yaml:"batching"`
 }
 
 // NewAmazonS3Config creates a new Config with default values.
@@ -59,10 +60,11 @@ func NewAmazonS3Config() AmazonS3Config {
 		ContentDisposition:      "",
 		ContentLanguage:         "",
 		WebsiteRedirectLocation: "",
-		Metadata:                output.NewMetadata(),
+		Metadata:                metadata.NewExcludeFilterConfig(),
 		StorageClass:            "STANDARD",
 		Timeout:                 "5s",
 		KMSKeyID:                "",
+		ServerSideEncryption:    "",
 		MaxInFlight:             1,
 		Batching:                batch.NewPolicyConfig(),
 	}
@@ -89,7 +91,7 @@ type AmazonS3 struct {
 	contentLanguage         *field.Expression
 	websiteRedirectLocation *field.Expression
 	storageClass            *field.Expression
-	metaFilter              *output.MetadataFilter
+	metaFilter              *metadata.ExcludeFilter
 
 	session  *session.Session
 	uploader *s3manager.Uploader
@@ -275,6 +277,13 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 		if a.conf.KMSKeyID != "" {
 			uploadInput.ServerSideEncryption = aws.String("aws:kms")
 			uploadInput.SSEKMSKeyId = &a.conf.KMSKeyID
+		}
+
+		// NOTE: This overrides the ServerSideEncryption set above. We need this to preserve
+		// backwards compatibility, where it is allowed to only set kms_key_id in the config and
+		// the ServerSideEncryption value of "aws:kms" is implied.
+		if a.conf.ServerSideEncryption != "" {
+			uploadInput.ServerSideEncryption = &a.conf.ServerSideEncryption
 		}
 
 		if _, err := a.uploader.UploadWithContext(ctx, uploadInput); err != nil {

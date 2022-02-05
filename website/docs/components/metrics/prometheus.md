@@ -42,6 +42,8 @@ metrics:
   prometheus:
     prefix: benthos
     path_mapping: ""
+    use_histogram_timing: false
+    histogram_buckets: []
     push_url: ""
     push_interval: ""
     push_job_name: benthos_push
@@ -90,6 +92,24 @@ path_mapping: |-
   meta processor = $matches.0.1 | deleted()
   root = $matches.0.2 | deleted()
 ```
+
+### `use_histogram_timing`
+
+Whether to export timing metrics as a histogram, if `false` a summary is used instead. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 3.63.0 or newer  
+
+### `histogram_buckets`
+
+Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)
+
+
+Type: `array`  
+Default: `[]`  
+Requires version 3.63.0 or newer  
 
 ### `push_url`
 

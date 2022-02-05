@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -112,6 +111,37 @@ func parseGetBody(t *testing.T, data *bytes.Buffer) getBody {
 		t.Fatal(err)
 	}
 	return result
+}
+
+type endpointReg struct {
+	endpoints map[string]http.HandlerFunc
+	types.DudMgr
+}
+
+func (f *endpointReg) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
+	f.endpoints[path] = h
+}
+
+func TestTypeAPIDisabled(t *testing.T) {
+	r := &endpointReg{endpoints: map[string]http.HandlerFunc{}}
+	_ = manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(r),
+		manager.OptSetAPITimeout(time.Millisecond*100),
+		manager.OptAPIEnabled(true),
+	)
+	assert.NotEmpty(t, r.endpoints)
+
+	r = &endpointReg{endpoints: map[string]http.HandlerFunc{}}
+	_ = manager.New(
+		manager.OptSetLogger(log.Noop()),
+		manager.OptSetStats(metrics.Noop()),
+		manager.OptSetManager(r),
+		manager.OptSetAPITimeout(time.Millisecond*100),
+		manager.OptAPIEnabled(false),
+	)
+	assert.Empty(t, r.endpoints)
 }
 
 func TestTypeAPIBadMethods(t *testing.T) {
@@ -816,7 +846,7 @@ func TestTypeAPISetResources(t *testing.T) {
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
-	tmpDir, err := ioutil.TempDir("", "resources")
+	tmpDir, err := os.MkdirTemp("", "resources")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -824,10 +854,10 @@ func TestTypeAPISetResources(t *testing.T) {
 	})
 
 	dir1 := filepath.Join(tmpDir, "dir1")
-	require.NoError(t, os.MkdirAll(dir1, 0750))
+	require.NoError(t, os.MkdirAll(dir1, 0o750))
 
 	dir2 := filepath.Join(tmpDir, "dir2")
-	require.NoError(t, os.MkdirAll(dir2, 0750))
+	require.NoError(t, os.MkdirAll(dir2, 0o750))
 
 	r := router(mgr)
 

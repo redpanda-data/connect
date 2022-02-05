@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -18,49 +17,43 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	httpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	imetadata "github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	httputil "github.com/Jeffail/benthos/v3/lib/util/http"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
 
 func init() {
+	corsSpec := httpdocs.ServerCORSFieldSpec()
+	corsSpec.Description += " Only valid with a custom `address`."
+
 	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: fromSimpleConstructor(NewHTTPServer),
 		Summary: `
-Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS,
-which is enabled when key and cert files are specified.`,
+Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS, which is enabled when key and cert files are specified.`,
 		Description: `
-You can leave the 'address' config field blank in order to use the instance wide
-HTTP server.
+If the ` + "`address`" + ` config field is left blank the [service-wide HTTP server](/docs/components/http/about) will be used.
 
-The field ` + "`rate_limit`" + ` allows you to specify an optional
-` + "[`rate_limit` resource](/docs/components/rate_limits/about)" + `, which
-will be applied to each HTTP request made and each websocket payload received.
+The field ` + "`rate_limit`" + ` allows you to specify an optional ` + "[`rate_limit` resource](/docs/components/rate_limits/about)" + `, which will be applied to each HTTP request made and each websocket payload received.
 
-When the rate limit is breached HTTP requests will have a 429 response returned
-with a Retry-After header. Websocket payloads will be dropped and an optional
-response payload will be sent as per ` + "`ws_rate_limit_message`" + `.
+When the rate limit is breached HTTP requests will have a 429 response returned with a Retry-After header. Websocket payloads will be dropped and an optional response payload will be sent as per ` + "`ws_rate_limit_message`" + `.
 
 ### Responses
 
-It's possible to return a response for each message received using
-[synchronous responses](/docs/guides/sync_responses). When doing so you can
-customise headers with the ` + "`sync_response` field `headers`" + `, which can
-also use [function interpolation](/docs/configuration/interpolation#bloblang-queries)
-in the value based on the response message contents.
+It's possible to return a response for each message received using [synchronous responses](/docs/guides/sync_responses). When doing so you can customise headers with the ` + "`sync_response` field `headers`" + `, which can also use [function interpolation](/docs/configuration/interpolation#bloblang-queries) in the value based on the response message contents.
 
 ### Endpoints
 
@@ -68,25 +61,17 @@ The following fields specify endpoints that are registered for sending messages,
 
 #### ` + "`path` (defaults to `/post`)" + `
 
-This endpoint expects POST requests where the entire request body is consumed as
-a single message.
+This endpoint expects POST requests where the entire request body is consumed as a single message.
 
-If the request contains a multipart ` + "`content-type`" + ` header as per
-[rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the
-multiple parts are consumed as a batch of messages, where each body part is a
-message of the batch.
+If the request contains a multipart ` + "`content-type`" + ` header as per [rfc1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html) then the multiple parts are consumed as a batch of messages, where each body part is a message of the batch.
 
 #### ` + "`ws_path` (defaults to `/post/ws`)" + `
 
-Creates a websocket connection, where payloads received on the socket are passed
-through the pipeline as a batch of one message.
+Creates a websocket connection, where payloads received on the socket are passed through the pipeline as a batch of one message.
 
-You may specify an optional ` + "`ws_welcome_message`" + `, which is a static
-payload to be sent to all clients once a websocket connection is first
-established.
+You may specify an optional ` + "`ws_welcome_message`" + `, which is a static payload to be sent to all clients once a websocket connection is first established.
 
-It's also possible to specify a ` + "`ws_rate_limit_message`" + `, which is a
-static payload to be sent to clients that have triggered the servers rate limit.
+It's also possible to specify a ` + "`ws_rate_limit_message`" + `, which is a static payload to be sent to clients that have triggered the servers rate limit.
 
 ### Metadata
 
@@ -102,8 +87,7 @@ This input adds the following metadata fields to each message:
 - All cookies
 ` + "```" + `
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("address", "An alternative address to host from. If left empty the service wide address is used."),
 			docs.FieldCommon("path", "The endpoint path to listen for POST requests."),
@@ -113,8 +97,9 @@ You can access these metadata fields using
 			docs.FieldCommon("allowed_verbs", "An array of verbs that are allowed for the `path` endpoint.").AtVersion("3.33.0").Array(),
 			docs.FieldCommon("timeout", "Timeout for requests. If a consumed messages takes longer than this to be delivered the connection is closed, but the message may still be delivered."),
 			docs.FieldCommon("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
-			docs.FieldAdvanced("cert_file", "Only valid with a custom `address`."),
-			docs.FieldAdvanced("key_file", "Only valid with a custom `address`."),
+			docs.FieldAdvanced("cert_file", "Enable TLS by specifying a certificate and key file. Only valid with a custom `address`."),
+			docs.FieldAdvanced("key_file", "Enable TLS by specifying a certificate and key file. Only valid with a custom `address`."),
+			corsSpec,
 			docs.FieldAdvanced("sync_response", "Customise messages returned via [synchronous responses](/docs/guides/sync_responses).").WithChildren(
 				docs.FieldCommon(
 					"status",
@@ -124,6 +109,7 @@ You can access these metadata fields using
 				docs.FieldString("headers", "Specify headers to return with synchronous responses.").IsInterpolated().Map().HasDefault(map[string]string{
 					"Content-Type": "application/octet-stream",
 				}),
+				docs.FieldCommon("metadata_headers", "Specify criteria for which metadata values are added to the response as headers.").WithChildren(imetadata.IncludeFilterDocs()...),
 			),
 		},
 		Categories: []Category{
@@ -137,8 +123,9 @@ You can access these metadata fields using
 // HTTPServerResponseConfig provides config fields for customising the response
 // given from successful requests.
 type HTTPServerResponseConfig struct {
-	Status  string            `json:"status" yaml:"status"`
-	Headers map[string]string `json:"headers" yaml:"headers"`
+	Status          string                        `json:"status" yaml:"status"`
+	Headers         map[string]string             `json:"headers" yaml:"headers"`
+	ExtractMetadata imetadata.IncludeFilterConfig `json:"metadata_headers" yaml:"metadata_headers"`
 }
 
 // NewHTTPServerResponseConfig creates a new HTTPServerConfig with default values.
@@ -148,6 +135,7 @@ func NewHTTPServerResponseConfig() HTTPServerResponseConfig {
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",
 		},
+		ExtractMetadata: imetadata.NewIncludeFilterConfig(),
 	}
 }
 
@@ -163,6 +151,7 @@ type HTTPServerConfig struct {
 	RateLimit          string                   `json:"rate_limit" yaml:"rate_limit"`
 	CertFile           string                   `json:"cert_file" yaml:"cert_file"`
 	KeyFile            string                   `json:"key_file" yaml:"key_file"`
+	CORS               httpdocs.ServerCORS      `json:"cors" yaml:"cors"`
 	Response           HTTPServerResponseConfig `json:"sync_response" yaml:"sync_response"`
 }
 
@@ -181,6 +170,7 @@ func NewHTTPServerConfig() HTTPServerConfig {
 		RateLimit: "",
 		CertFile:  "",
 		KeyFile:   "",
+		CORS:      httpdocs.NewServerCORS(),
 		Response:  NewHTTPServerResponseConfig(),
 	}
 }
@@ -204,6 +194,7 @@ type HTTPServer struct {
 
 	responseStatus  *field.Expression
 	responseHeaders map[string]*field.Expression
+	metaFilter      *imetadata.IncludeFilter
 
 	handlerWG    sync.WaitGroup
 	transactions chan types.Transaction
@@ -234,14 +225,17 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	var mux *http.ServeMux
 	var server *http.Server
 
+	var err error
 	if len(conf.HTTPServer.Address) > 0 {
 		mux = http.NewServeMux()
-		server = &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
+		server = &http.Server{Addr: conf.HTTPServer.Address}
+		if server.Handler, err = conf.HTTPServer.CORS.WrapHandler(mux); err != nil {
+			return nil, fmt.Errorf("bad CORS configuration: %w", err)
+		}
 	}
 
 	var timeout time.Duration
 	if len(conf.HTTPServer.Timeout) > 0 {
-		var err error
 		if timeout, err = time.ParseDuration(conf.HTTPServer.Timeout); err != nil {
 			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
 		}
@@ -285,14 +279,17 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mAsyncSucc:     stats.GetCounter("send.async_success"),
 	}
 
-	var err error
 	if h.responseStatus, err = interop.NewBloblangField(mgr, h.conf.Response.Status); err != nil {
 		return nil, fmt.Errorf("failed to parse response status expression: %v", err)
 	}
 	for k, v := range h.conf.Response.Headers {
-		if h.responseHeaders[k], err = interop.NewBloblangField(mgr, v); err != nil {
+		if h.responseHeaders[strings.ToLower(k)], err = interop.NewBloblangField(mgr, v); err != nil {
 			return nil, fmt.Errorf("failed to parse response header '%v' expression: %v", k, err)
 		}
+	}
+
+	if h.metaFilter, err = h.conf.Response.ExtractMetadata.CreateFilter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
 	postHdlr := httputil.GzipHandler(h.postHandler)
@@ -353,14 +350,14 @@ func (h *HTTPServer) extractMessageFromRequest(r *http.Request) (types.Message, 
 				return nil, err
 			}
 			var msgBytes []byte
-			if msgBytes, err = ioutil.ReadAll(p); err != nil {
+			if msgBytes, err = io.ReadAll(p); err != nil {
 				return nil, err
 			}
 			msg.Append(message.NewPart(msgBytes))
 		}
 	} else {
 		var msgBytes []byte
-		if msgBytes, err = ioutil.ReadAll(r.Body); err != nil {
+		if msgBytes, err = io.ReadAll(r.Body); err != nil {
 			return nil, err
 		}
 		msg.Append(message.NewPart(msgBytes))
@@ -388,14 +385,14 @@ func (h *HTTPServer) extractMessageFromRequest(r *http.Request) (types.Message, 
 	}
 	message.SetAllMetadata(msg, meta)
 
-	// Try to either extract parent span from headers, or create a new one.
-	carrier := opentracing.HTTPHeadersCarrier(r.Header)
-	if clientSpanContext, serr := opentracing.GlobalTracer().Extract(opentracing.HTTPHeaders, carrier); serr == nil {
-		tracing.InitSpansFromParent("input_http_server_post", clientSpanContext, msg)
-	} else {
-		tracing.InitSpans("input_http_server_post", msg)
+	textMapGeneric := map[string]interface{}{}
+	for k, vals := range r.Header {
+		for _, v := range vals {
+			textMapGeneric[k] = v
+		}
 	}
 
+	_ = tracing.InitSpansFromParentTextMap("input_http_server_post", textMapGeneric, msg)
 	return msg, nil
 }
 
@@ -511,21 +508,37 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if plen := responseMsg.Len(); plen == 1 {
-			payload := responseMsg.Get(0).Get()
+			part := responseMsg.Get(0)
+			part.Metadata().Iter(func(k, v string) error {
+				if h.metaFilter.Match(k) {
+					w.Header().Set(k, v)
+					return nil
+				}
+				return nil
+			})
+			payload := part.Get()
 			if w.Header().Get("Content-Type") == "" {
 				w.Header().Set("Content-Type", http.DetectContentType(payload))
 			}
 			w.WriteHeader(statusCode)
 			w.Write(payload)
 		} else if plen > 1 {
-			customContentType, customContentTypeExists := h.responseHeaders["Content-Type"]
+			customContentType, customContentTypeExists := h.responseHeaders["content-type"]
 
 			var buf bytes.Buffer
 			writer := multipart.NewWriter(&buf)
 
 			var merr error
 			for i := 0; i < plen && merr == nil; i++ {
-				payload := responseMsg.Get(i).Get()
+				part := responseMsg.Get(i)
+				part.Metadata().Iter(func(k, v string) error {
+					if h.metaFilter.Match(k) {
+						w.Header().Set(k, v)
+						return nil
+					}
+					return nil
+				})
+				payload := part.Get()
 
 				mimeHeader := textproto.MIMEHeader{}
 				if customContentTypeExists {
@@ -534,9 +547,9 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 					mimeHeader.Set("Content-Type", http.DetectContentType(payload))
 				}
 
-				var part io.Writer
-				if part, merr = writer.CreatePart(mimeHeader); merr == nil {
-					_, merr = io.Copy(part, bytes.NewReader(payload))
+				var partWriter io.Writer
+				if partWriter, merr = writer.CreatePart(mimeHeader); merr == nil {
+					_, merr = io.Copy(partWriter, bytes.NewReader(payload))
 				}
 			}
 

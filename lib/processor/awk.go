@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"regexp"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -18,7 +19,6 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/benhoyt/goawk/interp"
 	"github.com/benhoyt/goawk/parser"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -672,7 +672,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	}
 	a.mut.Unlock()
 
-	proc := func(i int, span opentracing.Span, part types.Part) error {
+	proc := func(i int, span *tracing.Span, part types.Part) error {
 		var outBuf, errBuf bytes.Buffer
 
 		// Function overrides
@@ -852,7 +852,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			return err
 		}
 
-		if errMsg, err := ioutil.ReadAll(&errBuf); err != nil {
+		if errMsg, err := io.ReadAll(&errBuf); err != nil {
 			a.log.Errorf("Read err error: %v\n", err)
 		} else if len(errMsg) > 0 {
 			a.mErr.Incr(1)
@@ -860,7 +860,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			return errors.New(string(errMsg))
 		}
 
-		resMsg, err := ioutil.ReadAll(&outBuf)
+		resMsg, err := io.ReadAll(&outBuf)
 		if err != nil {
 			a.mErr.Incr(1)
 			a.log.Errorf("Read output error: %v\n", err)
@@ -877,7 +877,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		return nil
 	}
 
-	IteratePartsWithSpan(TypeAWK, a.parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeAWK, a.parts, newMsg, proc)
 
 	msgs := [1]types.Message{newMsg}
 

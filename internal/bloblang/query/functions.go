@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"sync"
@@ -14,6 +13,7 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
+	"github.com/segmentio/ksuid"
 )
 
 type fieldFunction struct {
@@ -212,7 +212,7 @@ root.id = count("bloblang_function_example")`,
 			`{"message":"bar"}`,
 			`{"id":2,"message":"bar"}`,
 		),
-	).Param(ParamString("name", "An identifier for the counter.")),
+	).Param(ParamString("name", "An identifier for the counter.")).MarkImpure(),
 	countFunction,
 )
 
@@ -244,7 +244,7 @@ func countFunction(args *ParsedParams) (Function, error) {
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "deleted",
-		"A function that returns a result indicating that the mapping target should be deleted.",
+		"A function that returns a result indicating that the mapping target should be deleted. Deleting, also known as dropping, messages will result in them being acknowledged as successfully processed to inputs in a Benthos pipeline. For more information about error handling patterns read [here][error_handling].",
 		NewExampleSpec("",
 			`root = this
 root.bar = deleted()`,
@@ -336,7 +336,7 @@ func fileFunction(args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	pathBytes, err := ioutil.ReadFile(path)
+	pathBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -376,8 +376,15 @@ func rangeFunction(args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	if step < 0 && stop > start {
-		return nil, fmt.Errorf("with negative step arg stop (%v) must be <= to start (%v)", stop, start)
+	if step == 0 {
+		return nil, errors.New("step must be greater than or less than 0")
+	}
+	if step < 0 {
+		if stop > start {
+			return nil, fmt.Errorf("with negative step arg stop (%v) must be <= start (%v)", stop, start)
+		}
+	} else if start >= stop {
+		return nil, fmt.Errorf("with positive step arg start (%v) must be < stop (%v)", start, stop)
 	}
 	r := make([]interface{}, (stop-start)/step)
 	for i := 0; i < len(r); i++ {
@@ -816,6 +823,19 @@ func nanoidFunction(args *ParsedParams) (Function, error) {
 		return gonanoid.New()
 	}, nil), nil
 }
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "ksuid",
+		"Generates a new ksuid each time it is invoked and prints a string representation.",
+		NewExampleSpec("", `root.id = ksuid()`),
+	),
+	func(_ FunctionContext) (interface{}, error) {
+		return ksuid.New().String(), nil
+	},
+)
 
 //------------------------------------------------------------------------------
 

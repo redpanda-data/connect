@@ -57,6 +57,9 @@ output:
     verb: POST
     headers:
       Content-Type: application/octet-stream
+    metadata:
+      include_prefixes: []
+      include_patterns: []
     oauth:
       enabled: false
       consumer_key: ""
@@ -86,7 +89,9 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    copy_response_headers: false
+    extract_headers:
+      include_prefixes: []
+      include_patterns: []
     rate_limit: ""
     timeout: 5s
     retry_period: 1s
@@ -106,6 +111,7 @@ output:
       period: ""
       check: ""
       processors: []
+    multipart: []
 ```
 
 </TabItem>
@@ -183,6 +189,53 @@ Default: `{"Content-Type":"application/octet-stream"}`
 
 headers:
   Content-Type: application/octet-stream
+```
+
+### `metadata`
+
+Specify optional matching rules to determine which metadata keys should be added to the HTTP request as headers.
+
+
+Type: `object`  
+
+### `metadata.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_prefixes:
+  - foo_
+  - bar_
+
+include_prefixes:
+  - kafka_
+
+include_prefixes:
+  - content-
+```
+
+### `metadata.include_patterns`
+
+Provide a list of explicit metadata key regular expression (re2) patterns to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_patterns:
+  - .*
+
+include_patterns:
+  - _timestamp_unix$
 ```
 
 ### `oauth`
@@ -473,13 +526,52 @@ The path of a certificate key to use.
 Type: `string`  
 Default: `""`  
 
-### `copy_response_headers`
+### `extract_headers`
 
-Sets whether to copy the headers from the response to the resulting payload.
+Specify which response headers should be added to resulting synchronous response messages as metadata. Header keys are lowercased before matching, so ensure that your patterns target lowercased versions of the header keys that you expect. This field is not applicable unless `propagate_response` is set to `true`.
 
 
-Type: `bool`  
-Default: `false`  
+Type: `object`  
+
+### `extract_headers.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_prefixes:
+  - foo_
+  - bar_
+
+include_prefixes:
+  - kafka_
+
+include_prefixes:
+  - content-
+```
+
+### `extract_headers.include_patterns`
+
+Provide a list of explicit metadata key regular expression (re2) patterns to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_patterns:
+  - .*
+
+include_patterns:
+  - _timestamp_unix$
+```
 
 ### `rate_limit`
 
@@ -671,6 +763,60 @@ processors:
 
 processors:
   - merge_json: {}
+```
+
+### `multipart`
+
+EXPERIMENTAL: Create explicit multipart HTTP requests by specifying an array of parts to add to the request, each part specified consists of content headers and a data field that can be populated dynamically. If this field is populated it will override the default request creation behaviour.
+
+
+Type: `array`  
+Default: `[]`  
+Requires version 3.63.0 or newer  
+
+### `multipart[].content_type`
+
+The content type of the individual message part.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+content_type: application/bin
+```
+
+### `multipart[].content_disposition`
+
+The content disposition of the individual message part.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+content_disposition: form-data; name="bin"; filename='${! meta("AttachmentName") }
+```
+
+### `multipart[].body`
+
+The body of the individual message part.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
+```yaml
+# Examples
+
+body: ${! json("data.part1") }
 ```
 
 

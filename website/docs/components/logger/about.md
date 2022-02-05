@@ -6,7 +6,6 @@ Benthos logging prints to stdout (or stderr if your output is stdout), and is fo
 
 ```yaml
 logger:
-  prefix: benthos
   level: INFO
   format: json
   add_timestamp: true

@@ -154,6 +154,8 @@ var Constructors = map[string]TypeSpec{}
 //------------------------------------------------------------------------------
 
 // String constants representing each output type.
+// Deprecated: Do not add new components here. Instead, use the public plugin
+// APIs. Examples can be found in: ./internal/impl
 const (
 	TypeAMQP               = "amqp"
 	TypeAMQP09             = "amqp_0_9"
@@ -177,6 +179,7 @@ const (
 	TypeDynamic            = "dynamic"
 	TypeDynamoDB           = "dynamodb"
 	TypeElasticsearch      = "elasticsearch"
+	TypeFallback           = "fallback"
 	TypeFile               = "file"
 	TypeFiles              = "files"
 	TypeGCPCloudStorage    = "gcp_cloud_storage"
@@ -224,6 +227,8 @@ const (
 //------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all output types.
+// Deprecated: Do not add new components here. Instead, use the public plugin
+// APIs. Examples can be found in: ./internal/impl
 type Config struct {
 	Label              string                         `json:"label" yaml:"label"`
 	Type               string                         `json:"type" yaml:"type"`
@@ -249,6 +254,7 @@ type Config struct {
 	Dynamic            DynamicConfig                  `json:"dynamic" yaml:"dynamic"`
 	DynamoDB           writer.DynamoDBConfig          `json:"dynamodb" yaml:"dynamodb"`
 	Elasticsearch      writer.ElasticsearchConfig     `json:"elasticsearch" yaml:"elasticsearch"`
+	Fallback           TryConfig                      `json:"fallback" yaml:"fallback"`
 	File               FileConfig                     `json:"file" yaml:"file"`
 	Files              writer.FilesConfig             `json:"files" yaml:"files"`
 	GCPCloudStorage    GCPCloudStorageConfig          `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
@@ -296,6 +302,8 @@ type Config struct {
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
+// Deprecated: Do not add new components here. Instead, use the public plugin
+// APIs. Examples can be found in: ./internal/impl
 func NewConfig() Config {
 	return Config{
 		Label:              "",
@@ -322,6 +330,7 @@ func NewConfig() Config {
 		Dynamic:            NewDynamicConfig(),
 		DynamoDB:           writer.NewDynamoDBConfig(),
 		Elasticsearch:      writer.NewElasticsearchConfig(),
+		Fallback:           NewTryConfig(),
 		File:               NewFileConfig(),
 		Files:              writer.NewFilesConfig(),
 		GCPCloudStorage:    NewGCPCloudStorageConfig(),

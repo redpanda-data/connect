@@ -34,6 +34,7 @@ output:
     urls:
       - nats://127.0.0.1:4222
     subject: benthos_messages
+    headers: {}
     max_in_flight: 1
 ```
 
@@ -48,6 +49,7 @@ output:
     urls:
       - nats://127.0.0.1:4222
     subject: benthos_messages
+    headers: {}
     max_in_flight: 1
     tls:
       enabled: false
@@ -128,6 +130,23 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"benthos_messages"`  
+
+### `headers`
+
+Explicit message headers to add to messages.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `object`  
+Default: `{}`  
+
+```yaml
+# Examples
+
+headers:
+  Content-Type: application/json
+  Timestamp: ${!meta("Timestamp")}
+```
 
 ### `max_in_flight`
 

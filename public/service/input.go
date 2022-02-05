@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -29,6 +30,10 @@ type Input interface {
 	// Establish a connection to the upstream service. Connect will always be
 	// called first when a reader is instantiated, and will be continuously
 	// called with back off until a nil error is returned.
+	//
+	// The provided context remains open only for the duration of the connecting
+	// phase, and should not be used to establish the lifetime of the connection
+	// itself.
 	//
 	// Once Connect returns a nil error the Read method will be called until
 	// either ErrNotConnected is returned, or the reader is closed.
@@ -64,6 +69,10 @@ type BatchInput interface {
 	// Establish a connection to the upstream service. Connect will always be
 	// called first when a reader is instantiated, and will be continuously
 	// called with back off until a nil error is returned.
+	//
+	// The provided context remains open only for the duration of the connecting
+	// phase, and should not be used to establish the lifetime of the connection
+	// itself.
 	//
 	// Once Connect returns a nil error the Read method will be called until
 	// either ErrNotConnected is returned, or the reader is closed.
@@ -129,9 +138,9 @@ func (a *airGapReader) ReadWithContext(ctx context.Context) (types.Message, read
 
 func (a *airGapReader) CloseAsync() {
 	go func() {
-		if err := a.r.Close(context.Background()); err == nil {
-			a.sig.ShutdownComplete()
-		}
+		// TODO: Determine whether to continue trying or log/exit.
+		_ = a.r.Close(context.Background())
+		a.sig.ShutdownComplete()
 	}()
 }
 
@@ -199,4 +208,72 @@ func (a *airGapBatchReader) WaitForClose(tout time.Duration) error {
 		return types.ErrTimeout
 	}
 	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// OwnedInput provides direct ownership of an input extracted from a plugin
+// config. Connectivity of the input is handled internally, and so the consumer
+// of this type should only be concerned with reading messages and eventually
+// calling Close to terminate the input.
+type OwnedInput struct {
+	i types.Input
+}
+
+// ReadBatch attemps to read a message batch from the input, along with a
+// function to be called once the entire batch can be either acked (successfully
+// sent or intentionally filtered) or nacked (failed to be processed or
+// dispatched to the output).
+//
+// If this method returns ErrEndOfInput then that indicates that the input has
+// finished and will no longer yield new messages.
+func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, error) {
+	var tran types.Transaction
+	var open bool
+	select {
+	case tran, open = <-o.i.TransactionChan():
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+	if !open {
+		return nil, nil, ErrEndOfInput
+	}
+
+	var b MessageBatch
+	_ = tran.Payload.Iter(func(i int, part types.Part) error {
+		b = append(b, newMessageFromPart(part))
+		return nil
+	})
+
+	return b, func(actx context.Context, err error) error {
+		var res types.Response
+		if err != nil {
+			res = response.NewError(err)
+		} else {
+			res = response.NewAck()
+		}
+		select {
+		case tran.ResponseChan <- res:
+		case <-actx.Done():
+			return actx.Err()
+		}
+		return nil
+	}, nil
+}
+
+// Close the input.
+func (o *OwnedInput) Close(ctx context.Context) error {
+	o.i.CloseAsync()
+	for {
+		// Gross but will do for now until we replace these with context params.
+		if err := o.i.WaitForClose(time.Millisecond * 100); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+	}
+
 }

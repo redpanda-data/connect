@@ -45,6 +45,7 @@ input:
   aws_sqs:
     url: ""
     delete_message: true
+    reset_visibility: true
     region: eu-west-1
     endpoint: ""
     credentials:
@@ -97,6 +98,15 @@ Whether to delete the consumed message once it is acked. Disabling allows you to
 
 Type: `bool`  
 Default: `true`  
+
+### `reset_visibility`
+
+Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.
+
+
+Type: `bool`  
+Default: `true`  
+Requires version 3.58.0 or newer  
 
 ### `region`
 

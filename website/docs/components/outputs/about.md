@@ -11,13 +11,13 @@ An output config section looks like this:
 output:
   label: my_s3_output
 
-  s3:
+  aws_s3:
     bucket: TODO
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 
   # Optional list of processing steps
   processors:
-   - bloblang: '{"message":this,"meta":{"link_count":this.links.length()}}'
+    - bloblang: '{"message":this,"meta":{"link_count":this.links.length()}}'
 ```
 
 ## Back Pressure
@@ -32,12 +32,12 @@ It's possible to instead have Benthos indefinitely retry an output until success
 
 ## Dead Letter Queues
 
-It's possible to create fallback outputs for when an output target fails using a [`try`][output.try] output:
+It's possible to create fallback outputs for when an output target fails using a [`fallback`][output.fallback] output:
 
 ```yaml
 output:
-  try:
-    - sqs:
+  fallback:
+    - aws_sqs:
         url: https://sqs.us-west-2.amazonaws.com/TODO/TODO
         max_in_flight: 20
 
@@ -114,6 +114,6 @@ import ComponentSelect from '@theme/ComponentSelect';
 [output.broker]: /docs/components/outputs/broker
 [output.switch]: /docs/components/outputs/switch
 [output.retry]: /docs/components/outputs/retry
-[output.try]: /docs/components/outputs/try
+[output.fallback]: /docs/components/outputs/fallback
 [interpolation]: /docs/configuration/interpolation
 [metrics.about]: /docs/components/metrics/about

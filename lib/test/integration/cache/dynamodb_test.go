@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -16,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createTable(ctx context.Context, t *testing.T, dynamoPort, id string) error {
+func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error {
 	endpoint := fmt.Sprintf("http://localhost:%v", dynamoPort)
 
 	table := id
@@ -105,18 +106,18 @@ cache_resources:
         secret: xxxxx
         token: xxxxx
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestMissingKey(),
-		integrationTestDoubleAdd(),
-		integrationTestDelete(),
-		integrationTestGetAndSet(50),
+	suite := integration.CacheTests(
+		integration.CacheTestOpenClose(),
+		integration.CacheTestMissingKey(),
+		integration.CacheTestDoubleAdd(),
+		integration.CacheTestDelete(),
+		integration.CacheTestGetAndSet(50),
 	)
 	suite.Run(
 		t, template,
-		testOptPort(resource.GetPort("8000/tcp")),
-		testOptPreTest(func(t *testing.T, env *testEnvironment) {
-			require.NoError(t, createTable(env.ctx, t, resource.GetPort("8000/tcp"), env.configVars.id))
+		integration.CacheTestOptPort(resource.GetPort("8000/tcp")),
+		integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
+			require.NoError(t, createTable(ctx, t, resource.GetPort("8000/tcp"), testID))
 		}),
 	)
 })

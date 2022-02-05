@@ -1,7 +1,7 @@
 package template_test
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,7 +13,7 @@ import (
 
 func TestTemplateTesting(t *testing.T) {
 	testTemplatesDir := "../../template/test"
-	files, err := ioutil.ReadDir(testTemplatesDir)
+	files, err := os.ReadDir(testTemplatesDir)
 	require.NoError(t, err)
 
 	for _, f := range files {

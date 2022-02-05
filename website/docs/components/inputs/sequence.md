@@ -75,7 +75,7 @@ input:
     inputs:
       - csv:
           paths: [ ./dataset.csv ]
-      - bloblang:
+      - generate:
           count: 1
           mapping: 'root = {"status":"finished"}'
 ```

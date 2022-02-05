@@ -42,6 +42,7 @@ You can access these metadata fields using
 			docs.FieldAdvanced("qos", "The level of delivery guarantee to enforce.").HasOptions("0", "1", "2"),
 			docs.FieldAdvanced("clean_session", "Set whether the connection is non-persistent."),
 			mqttconf.WillFieldSpec(),
+			docs.FieldString("connect_timeout", "The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.", "1s", "500ms").HasDefault("30s").AtVersion("3.58.0"),
 			docs.FieldAdvanced("user", "A username to assume for the connection."),
 			docs.FieldAdvanced("password", "A password to provide for the connection."),
 			docs.FieldAdvanced("keepalive", "Max seconds of inactivity before a keepalive message is sent."),

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -65,18 +66,18 @@ input:
     project: benthos-test-project
     subscription: sub-$ID
 `
-	suiteOpts := []testOptFunc{
-		testOptSleepAfterInput(100 * time.Millisecond),
-		testOptSleepAfterOutput(100 * time.Millisecond),
-		testOptTimeout(time.Minute * 5),
-		testOptPreTest(func(t testing.TB, env *testEnvironment) {
-			client, err := pubsub.NewClient(env.ctx, "benthos-test-project")
+	suiteOpts := []integration.StreamTestOptFunc{
+		integration.StreamTestOptSleepAfterInput(100 * time.Millisecond),
+		integration.StreamTestOptSleepAfterOutput(100 * time.Millisecond),
+		integration.StreamTestOptTimeout(time.Minute * 5),
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			client, err := pubsub.NewClient(ctx, "benthos-test-project")
 			require.NoError(t, err)
 
-			topic, err := client.CreateTopic(env.ctx, fmt.Sprintf("topic-%v", env.configVars.id))
+			topic, err := client.CreateTopic(ctx, fmt.Sprintf("topic-%v", testID))
 			require.NoError(t, err)
 
-			_, err = client.CreateSubscription(env.ctx, fmt.Sprintf("sub-%v", env.configVars.id), pubsub.SubscriptionConfig{
+			_, err = client.CreateSubscription(ctx, fmt.Sprintf("sub-%v", testID), pubsub.SubscriptionConfig{
 				AckDeadline: time.Second * 10,
 				RetryPolicy: &pubsub.RetryPolicy{
 					MaximumBackoff: time.Millisecond * 10,
@@ -89,22 +90,22 @@ input:
 			client.Close()
 		}),
 	}
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestMetadata(),
-		integrationTestMetadataFilter(),
-		integrationTestSendBatches(10, 1000, 10),
-		integrationTestStreamSequential(1000),
-		integrationTestStreamParallel(1000),
-		integrationTestStreamParallelLossy(1000),
-		// integrationTestAtLeastOnceDelivery(),
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestMetadata(),
+		integration.StreamTestMetadataFilter(),
+		integration.StreamTestSendBatches(10, 1000, 10),
+		integration.StreamTestStreamSequential(1000),
+		integration.StreamTestStreamParallel(1000),
+		integration.StreamTestStreamParallelLossy(1000),
+		// integration.StreamTestAtLeastOnceDelivery(),
 	)
 	suite.Run(t, template, suiteOpts...)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
 			t, template,
-			append([]testOptFunc{testOptMaxInFlight(10)}, suiteOpts...)...,
+			append([]integration.StreamTestOptFunc{integration.StreamTestOptMaxInFlight(10)}, suiteOpts...)...,
 		)
 	})
 })

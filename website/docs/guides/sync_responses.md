@@ -38,7 +38,7 @@ pipeline:
   processors:
     - bloblang: root = content().uppercase()
 output:
-  type: sync_response
+  sync_response: {}
 ```
 
 Using the above example, sending a request 'foo bar' to the path `/post` returns the response 'FOO BAR'.
@@ -56,7 +56,7 @@ output:
       - kafka:
           addresses: [ TODO:9092 ]
           topic: foo_topic
-      - type: sync_response
+      - sync_response: {}
         processors:
           - bloblang: root = content().uppercase()
 ```
@@ -79,7 +79,7 @@ input:
 pipeline:
   processors:
     - bloblang: root = "%v baz".format(content().string())
-    - type: sync_response
+    - sync_response: {}
     - bloblang: root = content().uppercase()
 
 output:

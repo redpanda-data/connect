@@ -1,0 +1,22 @@
+http:
+  enabled: false
+
+input:
+  kafka:
+    addresses: [ redpanda:9092 ]
+    consumer_group: benthos_consumer_group
+    topics: [ benthos_redpanda ]
+
+pipeline:
+  processors:
+    - schema_registry_decode:
+        url: http://redpanda:8081
+
+    - catch:
+      - log:
+          level: ERROR
+          message: ${! error() }
+      - bloblang: root = deleted()
+
+output:
+  stdout: {}

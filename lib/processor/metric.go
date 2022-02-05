@@ -64,7 +64,7 @@ pipeline:
           type: ${! json("document.type").or("unknown") }
 
 metrics:
-  cloudwatch:
+  aws_cloudwatch:
     namespace: ProdConsumer
     region: eu-west-1
     path_mapping: |
@@ -111,10 +111,12 @@ For example, the following configuration will increment the value of the
 ` + "`count.custom.field` metric by the contents of `field.some.value`" + `:
 
 ` + "```yaml" + `
-metric:
-  type: counter_by
-  name: CountCustomField
-  value: ${!json("field.some.value")}
+pipeline:
+  processors:
+    - metric:
+        type: counter_by
+        name: CountCustomField
+        value: ${!json("field.some.value")}
 ` + "```" + `
 
 ### ` + "`gauge`" + `
@@ -126,10 +128,12 @@ For example, the following configuration will set the value of the
 ` + "`gauge.custom.field` metric to the contents of `field.some.value`" + `:
 
 ` + "```yaml" + `
-metric:
-  type: gauge
-  path: GaugeCustomField
-  value: ${!json("field.some.value")}
+pipeline:
+  processors:
+    - metric:
+        type: gauge
+        path: GaugeCustomField
+        value: ${!json("field.some.value")}
 ` + "```" + `
 
 ### ` + "`timing`" + `

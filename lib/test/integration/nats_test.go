@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/nats-io/nats.go"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
@@ -48,27 +49,27 @@ input:
     subject: subject-$ID
     prefetch_count: 1048
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		// integrationTestMetadata(), TODO
-		integrationTestSendBatch(10),
-		integrationTestStreamParallel(500),
-		integrationTestStreamParallelLossy(500),
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		// integration.StreamTestMetadata(), TODO
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestStreamParallel(500),
+		integration.StreamTestStreamParallelLossy(500),
 	)
 	suite.Run(
 		t, template,
-		testOptSleepAfterInput(100*time.Millisecond),
-		testOptSleepAfterOutput(100*time.Millisecond),
-		testOptPort(resource.GetPort("4222/tcp")),
+		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+		integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
-			testOptPort(resource.GetPort("4222/tcp")),
-			testOptMaxInFlight(10),
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
+			integration.StreamTestOptMaxInFlight(10),
 		)
 	})
 })

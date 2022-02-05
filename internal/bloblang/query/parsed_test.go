@@ -2,7 +2,6 @@ package query_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -12,16 +11,18 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestFunctionExamples(t *testing.T) {
-	tmpJSONFile, err := ioutil.TempFile("", "benthos_bloblang_functions_test")
+	tmpJSONFile, err := os.CreateTemp("", "benthos_bloblang_functions_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.Remove(tmpJSONFile.Name())
 	})
 
-	_, err = tmpJSONFile.Write([]byte(`{"foo":"bar"}`))
+	_, err = tmpJSONFile.WriteString(`{"foo":"bar"}`)
 	require.NoError(t, err)
 
 	key := "BENTHOS_TEST_BLOBLANG_FILE"
@@ -56,20 +57,20 @@ func TestFunctionExamples(t *testing.T) {
 }
 
 func TestMethodExamples(t *testing.T) {
-	tmpJSONFile, err := ioutil.TempFile("", "benthos_bloblang_methods_test")
+	tmpJSONFile, err := os.CreateTemp("", "benthos_bloblang_methods_test")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.Remove(tmpJSONFile.Name())
 	})
 
-	_, err = tmpJSONFile.Write([]byte(`
+	_, err = tmpJSONFile.WriteString(`
   "type":"object",
   "properties":{
     "foo":{
       "type":"string"
     }
   }
-}`))
+}`)
 	require.NoError(t, err)
 
 	key := "BENTHOS_TEST_BLOBLANG_SCHEMA_FILE"

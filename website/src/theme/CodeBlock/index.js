@@ -9,7 +9,7 @@ import React, {useEffect, useState, useRef} from 'react';
 import clsx from 'clsx';
 import Highlight, {defaultProps} from 'prism-react-renderer';
 import copy from 'copy-text-to-clipboard';
-import usePrismTheme from '@theme/hooks/usePrismTheme';
+import {usePrismTheme} from '@docusaurus/theme-common';
 import Translate, {translate} from '@docusaurus/Translate';
 
 import styles from './styles.module.css';

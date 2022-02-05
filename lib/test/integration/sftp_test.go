@@ -5,6 +5,7 @@ import (
 	"time"
 
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/impl/sftp"
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,28 +79,28 @@ resources:
       memory:
         ttl: 900
 `
-		suite := integrationTests(
-			integrationTestOpenCloseIsolated(),
-			integrationTestStreamIsolated(100),
+		suite := integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(100),
 		)
 		suite.Run(
 			t, template,
-			testOptPort(resource.GetPort("22/tcp")),
-			testOptVarOne("all-bytes"),
-			testOptVarTwo("false"),
+			integration.StreamTestOptPort(resource.GetPort("22/tcp")),
+			integration.StreamTestOptVarOne("all-bytes"),
+			integration.StreamTestOptVarTwo("false"),
 		)
 
-		watcherSuite := integrationTests(
-			integrationTestOpenClose(),
-			integrationTestStreamParallel(50),
-			integrationTestStreamSequential(20),
-			integrationTestStreamParallelLossyThroughReconnect(20),
+		watcherSuite := integration.StreamTests(
+			integration.StreamTestOpenClose(),
+			integration.StreamTestStreamParallel(50),
+			integration.StreamTestStreamSequential(20),
+			integration.StreamTestStreamParallelLossyThroughReconnect(20),
 		)
 		watcherSuite.Run(
 			t, template,
-			testOptPort(resource.GetPort("22/tcp")),
-			testOptVarOne("all-bytes"),
-			testOptVarTwo("true"),
+			integration.StreamTestOptPort(resource.GetPort("22/tcp")),
+			integration.StreamTestOptVarOne("all-bytes"),
+			integration.StreamTestOptVarTwo("true"),
 		)
 	})
 })

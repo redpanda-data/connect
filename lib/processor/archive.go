@@ -12,13 +12,12 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -96,9 +95,11 @@ unique IDs (with the extension ` + "`.json`" + `), our config might look like
 this:
 
 ` + "```yaml" + `
-archive:
-  format: tar
-  path: ${!json("doc.id")}.json
+pipeline:
+  processors:
+    - archive:
+        format: tar
+        path: ${!json("doc.id")}.json
 ` + "```" + ``,
 	}
 }
@@ -334,7 +335,7 @@ func (d *Archive) createHeaderFunc(msg types.Message) func(int, types.Part) os.F
 		return fakeInfo{
 			name: d.path.String(index, msg),
 			size: int64(len(body.Get())),
-			mode: 0666,
+			mode: 0o666,
 		}
 	}
 }
@@ -360,9 +361,9 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	if err != nil {
 		newMsg.Iter(func(i int, p types.Part) error {
 			FlagErr(p, err)
-			spans[i].LogFields(
-				olog.String("event", "error"),
-				olog.String("type", err.Error()),
+			spans[i].LogKV(
+				"event", "error",
+				"type", err.Error(),
 			)
 			return nil
 		})

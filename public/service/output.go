@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -21,6 +23,10 @@ type Output interface {
 	// Establish a connection to the downstream service. Connect will always be
 	// called first when a writer is instantiated, and will be continuously
 	// called with back off until a nil error is returned.
+	//
+	// The provided context remains open only for the duration of the connecting
+	// phase, and should not be used to establish the lifetime of the connection
+	// itself.
 	//
 	// Once Connect returns a nil error the write method will be called until
 	// either ErrNotConnected is returned, or the writer is closed.
@@ -92,9 +98,9 @@ func (a *airGapWriter) WriteWithContext(ctx context.Context, msg types.Message) 
 
 func (a *airGapWriter) CloseAsync() {
 	go func() {
-		if err := a.w.Close(context.Background()); err == nil {
-			a.sig.ShutdownComplete()
-		}
+		// TODO: Determine whether to continue trying or log/exit.
+		_ = a.w.Close(context.Background())
+		a.sig.ShutdownComplete()
 	}()
 }
 
@@ -152,4 +158,89 @@ func (a *airGapBatchWriter) WaitForClose(tout time.Duration) error {
 		return types.ErrTimeout
 	}
 	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// OwnedOutput provides direct ownership of an output extracted from a plugin
+// config. Connectivity of the output is handled internally, and so the owner
+// of this type should only be concerned with writing messages and eventually
+// calling Close to terminate the output.
+type OwnedOutput struct {
+	o         types.Output
+	closeOnce sync.Once
+	t         chan types.Transaction
+}
+
+func newOwnedOutput(o types.Output) (*OwnedOutput, error) {
+	tChan := make(chan types.Transaction)
+	if err := o.Consume(tChan); err != nil {
+		return nil, err
+	}
+	return &OwnedOutput{
+		o: o,
+		t: tChan,
+	}, nil
+}
+
+// Write a message to the output, or return an error either if delivery is not
+// possible or the context is cancelled.
+func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
+	payload := message.New(nil)
+	payload.Append(m.part)
+
+	resChan := make(chan types.Response, 1)
+	select {
+	case o.t <- types.NewTransaction(payload, resChan):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	select {
+	case res := <-resChan:
+		return res.Error()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// WriteBatch attempts to write a message batch to the output, and returns an
+// error either if delivery is not possible or the context is cancelled.
+func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
+	payload := message.New(nil)
+	for _, m := range b {
+		payload.Append(m.part)
+	}
+
+	resChan := make(chan types.Response, 1)
+	select {
+	case o.t <- types.NewTransaction(payload, resChan):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	select {
+	case res := <-resChan:
+		return res.Error()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// Close the output.
+func (o *OwnedOutput) Close(ctx context.Context) error {
+	o.closeOnce.Do(func() {
+		close(o.t)
+	})
+	for {
+		// Gross but will do for now until we replace these with context params.
+		if err := o.o.WaitForClose(time.Millisecond * 100); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+	}
 }

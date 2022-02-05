@@ -9,8 +9,8 @@ import (
 	"cloud.google.com/go/pubsub"
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -20,11 +20,12 @@ import (
 
 // GCPPubSubConfig contains configuration fields for the output GCPPubSub type.
 type GCPPubSubConfig struct {
-	ProjectID      string          `json:"project" yaml:"project"`
-	TopicID        string          `json:"topic" yaml:"topic"`
-	MaxInFlight    int             `json:"max_in_flight" yaml:"max_in_flight"`
-	PublishTimeout string          `json:"publish_timeout" yaml:"publish_timeout"`
-	Metadata       output.Metadata `json:"metadata" yaml:"metadata"`
+	ProjectID      string                       `json:"project" yaml:"project"`
+	TopicID        string                       `json:"topic" yaml:"topic"`
+	MaxInFlight    int                          `json:"max_in_flight" yaml:"max_in_flight"`
+	PublishTimeout string                       `json:"publish_timeout" yaml:"publish_timeout"`
+	Metadata       metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
+	OrderingKey    string                       `json:"ordering_key" yaml:"ordering_key"`
 }
 
 // NewGCPPubSubConfig creates a new Config with default values.
@@ -34,7 +35,8 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 		TopicID:        "",
 		MaxInFlight:    1,
 		PublishTimeout: "60s",
-		Metadata:       output.NewMetadata(),
+		Metadata:       metadata.NewExcludeFilterConfig(),
+		OrderingKey:    "",
 	}
 }
 
@@ -47,7 +49,10 @@ type GCPPubSub struct {
 
 	client         *pubsub.Client
 	publishTimeout time.Duration
-	metaFilter     *output.MetadataFilter
+	metaFilter     *metadata.ExcludeFilter
+
+	orderingEnabled bool
+	orderingKey     *field.Expression
 
 	topicID  *field.Expression
 	topics   map[string]*pubsub.Topic
@@ -83,6 +88,10 @@ func NewGCPPubSubV2(
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
+	orderingKey, err := interop.NewBloblangField(mgr, conf.OrderingKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ordering key: %v", err)
+	}
 	pubTimeout, err := time.ParseDuration(conf.PublishTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse publish timeout duration: %w", err)
@@ -92,13 +101,15 @@ func NewGCPPubSubV2(
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 	return &GCPPubSub{
-		conf:           conf,
-		log:            log,
-		metaFilter:     metaFilter,
-		client:         client,
-		publishTimeout: pubTimeout,
-		stats:          stats,
-		topicID:        topic,
+		conf:            conf,
+		log:             log,
+		metaFilter:      metaFilter,
+		client:          client,
+		publishTimeout:  pubTimeout,
+		stats:           stats,
+		topicID:         topic,
+		orderingKey:     orderingKey,
+		orderingEnabled: len(conf.OrderingKey) > 0,
 	}, nil
 }
 
@@ -135,6 +146,7 @@ func (c *GCPPubSub) getTopic(ctx context.Context, t string) (*pubsub.Topic, erro
 		return nil, fmt.Errorf("topic '%v' does not exist", t)
 	}
 	topic.PublishSettings.Timeout = c.publishTimeout
+	topic.EnableMessageOrdering = c.orderingEnabled
 	c.topics[t] = topic
 	return topic, nil
 }
@@ -167,6 +179,9 @@ func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) err
 		})
 		gmsg := &pubsub.Message{
 			Data: part.Get(),
+		}
+		if c.orderingEnabled {
+			gmsg.OrderingKey = c.orderingKey.String(i, msg)
 		}
 		if len(attr) > 0 {
 			gmsg.Attributes = attr

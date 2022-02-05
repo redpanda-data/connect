@@ -458,6 +458,11 @@ func customLintFromYAML(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint
 // errors found in the config.
 func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 	if cType == "condition" {
+		if ctx.RejectDeprecated {
+			return []Lint{
+				NewLintError(node.Line, "condition components are deprecated, use bloblang mappings instead when `check` fields or other alternatives are available"),
+			}
+		}
 		return nil
 	}
 
@@ -490,6 +495,10 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 	if !exists {
 		lints = append(lints, NewLintWarning(node.Line, fmt.Sprintf("failed to obtain docs for %v type %v", cType, name)))
 		return lints
+	}
+
+	if ctx.RejectDeprecated && cSpec.Status == StatusDeprecated {
+		lints = append(lints, NewLintError(node.Line, fmt.Sprintf("component %v is deprecated", cSpec.Name)))
 	}
 
 	nameFound := false
@@ -538,6 +547,10 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 	node = unwrapDocumentNode(node)
 
 	var lints []Lint
+
+	if ctx.RejectDeprecated && f.IsDeprecated {
+		lints = append(lints, NewLintError(node.Line, fmt.Sprintf("field %v is deprecated", f.Name)))
+	}
 
 	// Check basic kind matches, and execute custom linters
 	switch f.Kind {
@@ -632,11 +645,10 @@ func (f FieldSpecs) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 
 	for name, remaining := range specNames {
 		_, isCore := remaining.Type.IsCoreComponent()
-		if !remaining.IsOptional &&
+		if remaining.needsDefault() &&
 			remaining.Default == nil &&
 			!isCore &&
 			remaining.Kind == KindScalar &&
-			!remaining.IsDeprecated &&
 			len(remaining.Children) == 0 {
 			lints = append(lints, NewLintError(node.Line, fmt.Sprintf("field %v is required", name)))
 		}
@@ -860,7 +872,7 @@ func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]i
 	for k, v := range pendingFieldsMap {
 		defValue, err := getDefault(k, v)
 		if err != nil {
-			if !conf.Passive {
+			if v.needsDefault() && !conf.Passive {
 				return nil, err
 			}
 			continue

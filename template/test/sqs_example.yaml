@@ -1,0 +1,34 @@
+name: aws_sqs_list
+type: input
+
+fields:
+  - name: urls
+    type: string
+    kind: list
+  - name: region
+    type: string
+    default: us-east-1
+
+mapping: |
+  root.broker.inputs = this.urls.map_each(url -> {
+    "aws_sqs": {
+      "url": url,
+      "region": this.region,
+    }
+  })
+
+tests:
+  - name: urls array
+    config:
+      urls:
+        - https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue1
+        - https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue2
+    expected:
+      broker:
+        inputs:
+          - aws_sqs:
+              url: https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue1
+              region: us-east-1
+          - aws_sqs:
+              url: https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue2
+              region: us-east-1

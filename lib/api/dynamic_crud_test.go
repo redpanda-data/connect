@@ -68,7 +68,7 @@ func TestDynamicCRUDBadReqs(t *testing.T) {
 	dAPI := NewDynamic()
 	r := router(dAPI)
 
-	request, _ := http.NewRequest("DERP", "/input/foo", nil)
+	request, _ := http.NewRequest("DERP", "/input/foo", http.NoBody)
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusBadGateway, response.Code; exp != act {
@@ -96,7 +96,7 @@ func TestDynamicDelete(t *testing.T) {
 		return nil
 	})
 
-	request, _ := http.NewRequest("DELETE", "/input/foo", nil)
+	request, _ := http.NewRequest("DELETE", "/input/foo", http.NoBody)
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusBadGateway, response.Code; exp != act {
@@ -108,7 +108,7 @@ func TestDynamicDelete(t *testing.T) {
 
 	failRemove = false
 	expRemoved = append(expRemoved, "foo")
-	request, _ = http.NewRequest("DELETE", "/input/foo", nil)
+	request, _ = http.NewRequest("DELETE", "/input/foo", http.NoBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -141,7 +141,7 @@ func TestDynamicBasicCRUD(t *testing.T) {
 		return updateErr
 	})
 
-	request, _ := http.NewRequest("GET", "/input/foo", nil)
+	request, _ := http.NewRequest("GET", "/input/foo", http.NoBody)
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusNotFound, response.Code; exp != act {
@@ -157,7 +157,7 @@ func TestDynamicBasicCRUD(t *testing.T) {
 
 	dAPI.Started("foo", []byte("foo bar"))
 
-	request, _ = http.NewRequest("GET", "/input/foo", nil)
+	request, _ = http.NewRequest("GET", "/input/foo", http.NoBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -175,7 +175,7 @@ func TestDynamicBasicCRUD(t *testing.T) {
 		t.Errorf("Unexpected response code: %v != %v", act, exp)
 	}
 
-	request, _ = http.NewRequest("GET", "/input/foo", nil)
+	request, _ = http.NewRequest("GET", "/input/foo", http.NoBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -209,7 +209,7 @@ func TestDynamicListing(t *testing.T) {
 
 	dAPI.Started("foo", []byte(`{"test":"second sanitised"}`))
 
-	request, _ = http.NewRequest("GET", "/inputs", nil)
+	request, _ = http.NewRequest("GET", "/inputs", http.NoBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -230,7 +230,7 @@ func TestDynamicListing(t *testing.T) {
 
 	dAPI.Stopped("foo")
 
-	request, _ = http.NewRequest("DELETE", "/input/bar", nil)
+	request, _ = http.NewRequest("DELETE", "/input/bar", http.NoBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -239,7 +239,7 @@ func TestDynamicListing(t *testing.T) {
 
 	dAPI.Stopped("bar")
 
-	request, _ = http.NewRequest("GET", "/inputs", nil)
+	request, _ = http.NewRequest("GET", "/inputs", http.NoBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {

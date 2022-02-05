@@ -2,18 +2,17 @@ package processor
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
-	"net/http"
-
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/linkedin/goavro/v2"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -28,6 +27,8 @@ func init() {
 Performs Avro based operations on messages based on a schema.`,
 		Status: docs.StatusBeta,
 		Description: `
+WARNING: If you are consuming or generating messages using a schema registry service then it is likely this processor will fail as those services require messages to be prefixed with the identifier of the schema version being used. Instead, try the ` + "[`schema_registry_encode`](/docs/components/processors/schema_registry_encode) and [`schema_registry_decode`](/docs/components/processors/schema_registry_decode)" + ` processors.
+
 ## Operators
 
 ### ` + "`to_json`" + `
@@ -187,7 +188,7 @@ func loadSchema(schemaPath string) (string, error) {
 
 	defer response.Body.Close()
 
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 
 	if err != nil {
 		return "", err
@@ -263,7 +264,7 @@ func (p *Avro) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part types.Part) error {
 		if err := p.operator(part); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Operator failed: %v\n", err)
@@ -272,7 +273,7 @@ func (p *Avro) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		return nil
 	}
 
-	IteratePartsWithSpan(TypeAvro, p.parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeAvro, p.parts, newMsg, proc)
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(newMsg.Len()))

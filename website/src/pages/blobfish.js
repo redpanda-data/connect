@@ -12,6 +12,7 @@ const emojis = [
   "blobno.png",
   "blobcool.png",
   "blobkiss.png",
+  "blobthanks.png",
   "blobthinking.png",
   "blobpalm.png",
   "blobwave.png",
@@ -21,6 +22,8 @@ const emojis = [
   "blobnaughty.png",
   "blobbot.png",
   "blobemo.png",
+  "blobnerd.png",
+  "cowblob.png",
   "blobbounce.gif",
   "blobtrance.gif",
 ];

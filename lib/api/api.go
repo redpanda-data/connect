@@ -12,31 +12,25 @@ import (
 	"sync"
 	"time"
 
+	httpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v3"
 )
 
 //------------------------------------------------------------------------------
 
-// CORS contains configuration for allowing CORS headers.
-type CORS struct {
-	Enabled        bool     `json:"enabled" yaml:"enabled"`
-	AllowedOrigins []string `json:"allowed_origins" yaml:"allowed_origins"`
-}
-
 // Config contains the configuration fields for the Benthos API.
 type Config struct {
-	Address        string `json:"address" yaml:"address"`
-	Enabled        bool   `json:"enabled" yaml:"enabled"`
-	ReadTimeout    string `json:"read_timeout" yaml:"read_timeout"`
-	RootPath       string `json:"root_path" yaml:"root_path"`
-	DebugEndpoints bool   `json:"debug_endpoints" yaml:"debug_endpoints"`
-	CertFile       string `json:"cert_file" yaml:"cert_file"`
-	KeyFile        string `json:"key_file" yaml:"key_file"`
-	CORS           CORS   `json:"cors" yaml:"cors"`
+	Address        string              `json:"address" yaml:"address"`
+	Enabled        bool                `json:"enabled" yaml:"enabled"`
+	ReadTimeout    string              `json:"read_timeout" yaml:"read_timeout"`
+	RootPath       string              `json:"root_path" yaml:"root_path"`
+	DebugEndpoints bool                `json:"debug_endpoints" yaml:"debug_endpoints"`
+	CertFile       string              `json:"cert_file" yaml:"cert_file"`
+	KeyFile        string              `json:"key_file" yaml:"key_file"`
+	CORS           httpdocs.ServerCORS `json:"cors" yaml:"cors"`
 }
 
 // NewConfig creates a new API config with default values.
@@ -49,10 +43,7 @@ func NewConfig() Config {
 		DebugEndpoints: false,
 		CertFile:       "",
 		KeyFile:        "",
-		CORS: CORS{
-			Enabled:        false,
-			AllowedOrigins: []string{},
-		},
+		CORS:           httpdocs.NewServerCORS(),
 	}
 }
 
@@ -105,21 +96,11 @@ func New(
 	opts ...OptFunc,
 ) (*Type, error) {
 	gMux := mux.NewRouter()
+	server := &http.Server{Addr: conf.Address}
 
-	var handler http.Handler = gMux
-	if conf.CORS.Enabled {
-		if len(conf.CORS.AllowedOrigins) == 0 {
-			return nil, errors.New("must specify at least one allowed origin")
-		}
-		handler = handlers.CORS(
-			handlers.AllowedOrigins(conf.CORS.AllowedOrigins),
-			handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}),
-		)(gMux)
-	}
-
-	server := &http.Server{
-		Addr:    conf.Address,
-		Handler: handler,
+	var err error
+	if server.Handler, err = conf.CORS.WrapHandler(gMux); err != nil {
+		return nil, fmt.Errorf("bad CORS configuration: %w", err)
 	}
 
 	if conf.CertFile != "" || conf.KeyFile != "" {
@@ -129,7 +110,6 @@ func New(
 	}
 
 	if tout := conf.ReadTimeout; len(tout) > 0 {
-		var err error
 		if server.ReadTimeout, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse read timeout string: %v", err)
 		}
@@ -183,7 +163,7 @@ func New(
 	}
 
 	handleVersion := func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf("{\"version\":\"%v\", \"built\":\"%v\"}", version, dateBuilt)))
+		fmt.Fprintf(w, "{\"version\":\"%v\", \"built\":\"%v\"}", version, dateBuilt)
 	}
 
 	handleEndpoints := func(w http.ResponseWriter, r *http.Request) {

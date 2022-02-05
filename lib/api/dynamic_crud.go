@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -152,6 +152,7 @@ func (d *Dynamic) HandleList(w http.ResponseWriter, r *http.Request) {
 		}
 		if httpErr != nil {
 			http.Error(w, "Internal server error", http.StatusBadGateway)
+			return
 		}
 	}()
 
@@ -207,7 +208,7 @@ func (d *Dynamic) handleGETInput(w http.ResponseWriter, r *http.Request) error {
 func (d *Dynamic) handlePOSTInput(w http.ResponseWriter, r *http.Request) error {
 	id := mux.Vars(r)["id"]
 
-	reqBytes, err := ioutil.ReadAll(r.Body)
+	reqBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		return err
 	}
@@ -254,6 +255,7 @@ func (d *Dynamic) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 		if httpErr != nil {
 			http.Error(w, fmt.Sprintf("Error: %v", httpErr), http.StatusBadGateway)
+			return
 		}
 	}()
 

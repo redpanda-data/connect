@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -94,54 +95,54 @@ input:
       token: xxxxx
 `
 
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestSendBatch(10),
-		integrationTestSendBatchCount(10),
-		integrationTestStreamSequential(200),
-		integrationTestStreamParallel(200),
-		integrationTestStreamParallelLossy(200),
-		integrationTestStreamParallelLossyThroughReconnect(200),
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestSendBatchCount(10),
+		integration.StreamTestStreamSequential(200),
+		integration.StreamTestStreamParallel(200),
+		integration.StreamTestStreamParallelLossy(200),
+		integration.StreamTestStreamParallelLossyThroughReconnect(200),
 	)
 
 	t.Run("with static shards", func(t *testing.T) {
 		suite.Run(
 			t, template,
-			testOptPreTest(func(t testing.TB, env *testEnvironment) {
-				streamName := "stream-" + env.configVars.id
-				env.configVars.var1 = fmt.Sprintf(":0,%v:1", streamName)
-				require.NoError(t, createKinesisShards(env.ctx, resource.GetPort("4566/tcp"), env.configVars.id, 2))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				streamName := "stream-" + testID
+				vars.Var1 = fmt.Sprintf(":0,%v:1", streamName)
+				require.NoError(t, createKinesisShards(ctx, resource.GetPort("4566/tcp"), testID, 2))
 			}),
-			testOptPort(resource.GetPort("4566/tcp")),
-			testOptAllowDupes(),
-			testOptVarTwo("10"),
+			integration.StreamTestOptPort(resource.GetPort("4566/tcp")),
+			integration.StreamTestOptAllowDupes(),
+			integration.StreamTestOptVarTwo("10"),
 		)
 	})
 
 	t.Run("with balanced shards", func(t *testing.T) {
 		suite.Run(
 			t, template,
-			testOptPreTest(func(t testing.TB, env *testEnvironment) {
-				require.NoError(t, createKinesisShards(env.ctx, resource.GetPort("4566/tcp"), env.configVars.id, 2))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createKinesisShards(ctx, resource.GetPort("4566/tcp"), testID, 2))
 			}),
-			testOptPort(resource.GetPort("4566/tcp")),
-			testOptAllowDupes(),
-			testOptVarTwo("10"),
+			integration.StreamTestOptPort(resource.GetPort("4566/tcp")),
+			integration.StreamTestOptAllowDupes(),
+			integration.StreamTestOptVarTwo("10"),
 		)
 	})
 
 	t.Run("single shard", func(t *testing.T) {
-		integrationTests(
-			integrationTestCheckpointCapture(),
+		integration.StreamTests(
+			integration.StreamTestCheckpointCapture(),
 		).Run(
 			t, template,
-			testOptPreTest(func(t testing.TB, env *testEnvironment) {
-				require.NoError(t, createKinesisShards(env.ctx, resource.GetPort("4566/tcp"), env.configVars.id, 1))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createKinesisShards(ctx, resource.GetPort("4566/tcp"), testID, 1))
 			}),
-			testOptPort(resource.GetPort("4566/tcp")),
-			testOptAllowDupes(),
-			testOptVarOne(":0"),
-			testOptVarTwo("10"),
+			integration.StreamTestOptPort(resource.GetPort("4566/tcp")),
+			integration.StreamTestOptAllowDupes(),
+			integration.StreamTestOptVarOne(":0"),
+			integration.StreamTestOptVarTwo("10"),
 		)
 	})
 })

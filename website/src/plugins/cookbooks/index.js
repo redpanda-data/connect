@@ -24,7 +24,7 @@ const DEFAULT_OPTIONS = {
 const {
   STATIC_DIR_NAME,
   DEFAULT_PLUGIN_ID,
-} = require('@docusaurus/core/lib/constants');
+} = require('@docusaurus/utils');
 
 module.exports = pluginContentCookbook;
 

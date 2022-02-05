@@ -108,6 +108,12 @@ pipeline:
 pipeline:
   processors:
     - bloblang: 'root = meow()'
+
+output:
+  drop: {}
+
+logger:
+  level: OFF
 `
 
 	assert.Error(t, envOne.NewStreamBuilder().SetYAML(badConfig))

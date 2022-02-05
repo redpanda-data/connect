@@ -1,7 +1,6 @@
 package output
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,14 +11,15 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTryOutputBasic(t *testing.T) {
-	dir, err := ioutil.TempDir("", "benthos_try_output_tests")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir, err := os.MkdirTemp("", "benthos_try_output_tests")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = os.RemoveAll(dir)
+	})
 
 	outOne, outTwo, outThree := NewConfig(), NewConfig(), NewConfig()
 	outOne.Type, outTwo.Type, outThree.Type = TypeHTTPClient, TypeFiles, TypeFile
@@ -47,22 +47,16 @@ func TestTryOutputBasic(t *testing.T) {
 	conf.Try = append(conf.Try, outOne, outTwo, outThree)
 
 	s, err := New(conf, nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	sendChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)
-	if err = s.Consume(sendChan); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, s.Consume(sendChan))
 
-	defer func() {
+	t.Cleanup(func() {
 		s.CloseAsync()
-		if err := s.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
-	}()
+		require.NoError(t, s.WaitForClose(time.Second))
+	})
 
 	inputs := []string{
 		"first", "second", "third", "fourth",
@@ -94,7 +88,7 @@ func TestTryOutputBasic(t *testing.T) {
 
 	for k, exp := range expFiles {
 		k = filepath.Join(dir, k)
-		fileBytes, err := ioutil.ReadFile(k)
+		fileBytes, err := os.ReadFile(k)
 		if err != nil {
 			t.Errorf("Expected file '%v' could not be read: %v", k, err)
 			continue

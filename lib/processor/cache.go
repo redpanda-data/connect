@@ -9,10 +9,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -292,7 +292,7 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 	c.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part types.Part) error {
 		key := c.key.String(index, msg)
 		value := c.value.Bytes(index, msg)
 
@@ -332,7 +332,7 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		return nil
 	}
 
-	IteratePartsWithSpan(TypeCache, c.parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeCache, c.parts, newMsg, proc)
 
 	c.mBatchSent.Incr(1)
 	c.mSent.Incr(int64(newMsg.Len()))

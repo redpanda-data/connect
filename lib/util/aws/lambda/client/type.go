@@ -7,15 +7,13 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/lambda"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -169,13 +167,13 @@ func (l *Type) Invoke(msg types.Message) (types.Message, error) {
 
 	response := msg.Copy()
 	_ = response.Iter(func(i int, p types.Part) error {
-		s, _ := opentracing.StartSpanFromContext(message.GetContext(p), "lambda_invoke")
+		s := tracing.CreateChildSpan("lambda_invoke", p)
 		defer s.Finish()
 
 		if err := l.InvokeV2(p); err != nil {
-			s.LogFields(
-				olog.String("event", "error"),
-				olog.String("type", err.Error()),
+			s.LogKV(
+				"event", "error",
+				"type", err.Error(),
 			)
 			return err
 		}

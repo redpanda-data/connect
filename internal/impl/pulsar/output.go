@@ -3,11 +3,15 @@ package pulsar
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/pulsar/auth"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -19,7 +23,7 @@ import (
 
 func init() {
 	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
-		w, err := newPulsarWriter(c.Pulsar, nm.Logger(), nm.Metrics())
+		w, err := newPulsarWriter(c.Pulsar, nm, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
@@ -45,7 +49,10 @@ func init() {
 				"pulsar+ssl://pulsar.us-west.example.com:6651",
 			),
 			docs.FieldCommon("topic", "A topic to publish to."),
+			docs.FieldCommon("key", "The key to publish messages with.").IsInterpolated(),
+			docs.FieldCommon("ordering_key", "The ordering key to publish messages with.").IsInterpolated(),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			auth.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewPulsarConfig()),
 	})
 }
@@ -60,22 +67,37 @@ type pulsarWriter struct {
 	stats metrics.Type
 	log   log.Modular
 
+	key         *field.Expression
+	orderingKey *field.Expression
+
 	m       sync.RWMutex
 	shutSig *shutdown.Signaller
 }
 
-func newPulsarWriter(conf output.PulsarConfig, log log.Modular, stats metrics.Type) (*pulsarWriter, error) {
+func newPulsarWriter(conf output.PulsarConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*pulsarWriter, error) {
+	var err error
+	var key, orderingKey *field.Expression
+
 	if conf.URL == "" {
 		return nil, errors.New("field url must not be empty")
 	}
 	if conf.Topic == "" {
 		return nil, errors.New("field topic must not be empty")
 	}
+	if key, err = interop.NewBloblangField(mgr, conf.Key); err != nil {
+		return nil, fmt.Errorf("failed to parse key expression: %v", err)
+	}
+	if orderingKey, err = interop.NewBloblangField(mgr, conf.OrderingKey); err != nil {
+		return nil, fmt.Errorf("failed to parse ordering_key expression: %v", err)
+	}
+
 	p := pulsarWriter{
-		conf:    conf,
-		stats:   stats,
-		log:     log,
-		shutSig: shutdown.NewSignaller(),
+		conf:        conf,
+		stats:       stats,
+		log:         log,
+		key:         key,
+		orderingKey: orderingKey,
+		shutSig:     shutdown.NewSignaller(),
 	}
 	return &p, nil
 }
@@ -97,10 +119,19 @@ func (p *pulsarWriter) ConnectWithContext(ctx context.Context) error {
 		err      error
 	)
 
-	if client, err = pulsar.NewClient(pulsar.ClientOptions{
-		URL:    p.conf.URL,
-		Logger: NoopLogger(),
-	}); err != nil {
+	opts := pulsar.ClientOptions{
+		Logger:            DefaultLogger(p.log),
+		ConnectionTimeout: time.Second * 3,
+		URL:               p.conf.URL,
+	}
+
+	if p.conf.Auth.OAuth2.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationOAuth2(p.conf.Auth.OAuth2.ToMap())
+	} else if p.conf.Auth.Token.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationToken(p.conf.Auth.Token.Token)
+	}
+
+	if client, err = pulsar.NewClient(opts); err != nil {
 		return err
 	}
 
@@ -155,9 +186,15 @@ func (p *pulsarWriter) WriteWithContext(ctx context.Context, msg types.Message) 
 		return types.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, part types.Part) error {
 		m := &pulsar.ProducerMessage{
-			Payload: p.Get(),
+			Payload: part.Get(),
+		}
+		if key := p.key.Bytes(i, msg); len(key) > 0 {
+			m.Key = string(key)
+		}
+		if orderingKey := p.orderingKey.Bytes(i, msg); len(orderingKey) > 0 {
+			m.OrderingKey = string(orderingKey)
 		}
 		_, err := r.Send(context.Background(), m)
 		return err

@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	llog "log"
 	"sync"
 	"time"
@@ -104,7 +104,7 @@ func (n *NSQ) Connect() error {
 		return err
 	}
 
-	producer.SetLogger(llog.New(ioutil.Discard, "", llog.Flags()), nsq.LogLevelError)
+	producer.SetLogger(llog.New(io.Discard, "", llog.Flags()), nsq.LogLevelError)
 
 	if err := producer.Ping(); err != nil {
 		return err

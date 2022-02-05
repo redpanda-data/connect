@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/colinmarc/hdfs"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
@@ -81,9 +82,9 @@ input:
     user: root
     directory: /$ID
 `
-	integrationTests(
-		integrationTestOpenCloseIsolated(),
-		integrationTestStreamIsolated(10),
-		integrationTestSendBatchCountIsolated(10),
+	integration.StreamTests(
+		integration.StreamTestOpenCloseIsolated(),
+		integration.StreamTestStreamIsolated(10),
+		integration.StreamTestSendBatchCountIsolated(10),
 	).Run(t, template)
 })

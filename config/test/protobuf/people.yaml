@@ -7,11 +7,11 @@ pipeline:
       - protobuf:
           operator: from_json
           message: testing.Person
-          import_path: config/test/protobuf/schema
+          import_paths: [ config/test/protobuf/schema ]
       - protobuf:
           operator: to_json
           message: testing.Person
-          import_path: config/test/protobuf/schema
+          import_paths: [ config/test/protobuf/schema ]
       - bloblang: |
           root = this
           root.age = (this.age | 0) + 10
@@ -19,11 +19,11 @@ pipeline:
       - protobuf:
           operator: from_json
           message: testing.Person
-          import_path: config/test/protobuf/schema
+          import_paths: [ config/test/protobuf/schema ]
       - protobuf:
           operator: to_json
           message: testing.Person
-          import_path: config/test/protobuf/schema
+          import_paths: [ config/test/protobuf/schema ]
     - catch:
       - bloblang: 'root = "error: %v".format(error())'
 

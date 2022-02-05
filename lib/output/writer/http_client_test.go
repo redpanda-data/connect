@@ -1,9 +1,9 @@
 package writer
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -66,7 +66,7 @@ func TestHTTPClientBasic(t *testing.T) {
 			resultChan <- msg
 		}()
 
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
 			return
@@ -117,7 +117,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 	nTestLoops := 1000
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
 			return
@@ -164,7 +164,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 	nTestLoops := 1000
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
 			return
@@ -235,7 +235,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				msgBytes, err := ioutil.ReadAll(p)
+				msgBytes, err := io.ReadAll(p)
 				if err != nil {
 					t.Error(err)
 					return
@@ -243,7 +243,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 				msg.Append(message.NewPart(msgBytes))
 			}
 		} else {
-			b, err := ioutil.ReadAll(r.Body)
+			b, err := io.ReadAll(r.Body)
 			if err != nil {
 				t.Error(err)
 				return
@@ -292,6 +292,177 @@ func TestHTTPClientMultipart(t *testing.T) {
 		}
 	}
 
+	h.CloseAsync()
+	if err = h.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+func TestHTTPOutputClientMultipartBody(t *testing.T) {
+	nTestLoops := 1000
+	resultChan := make(chan types.Message, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		msg := message.New(nil)
+		defer func() {
+			resultChan <- msg
+		}()
+
+		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if err != nil {
+			t.Errorf("Bad media type: %v -> %v", r.Header.Get("Content-Type"), err)
+			return
+		}
+
+		if strings.HasPrefix(mediaType, "multipart/") {
+			mr := multipart.NewReader(r.Body, params["boundary"])
+			for {
+				p, err := mr.NextPart()
+
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				msgBytes, err := io.ReadAll(p)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				msg.Append(message.NewPart(msgBytes))
+			}
+		}
+	}))
+	defer ts.Close()
+
+	conf := NewHTTPClientConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.Multipart = []HTTPClientMultipartExpression{
+		{
+			ContentDisposition: `form-data; name="text"`,
+			ContentType:        "text/plain",
+			Body:               "PART-A"},
+		{
+			ContentDisposition: `form-data; name="file1"; filename="a.txt"`,
+			ContentType:        "text/plain",
+			Body:               "PART-B"},
+	}
+	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < nTestLoops; i++ {
+		if err = h.Write(message.New([][]byte{[]byte("test")})); err != nil {
+			t.Error(err)
+		}
+		select {
+		case resMsg := <-resultChan:
+			if resMsg.Len() != len(conf.Multipart) {
+				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 2)
+				return
+			}
+			if exp, actual := "PART-A", string(resMsg.Get(0).Get()); exp != actual {
+				t.Errorf("Wrong result, %v != %v", exp, actual)
+				return
+			}
+			if exp, actual := "PART-B", string(resMsg.Get(1).Get()); exp != actual {
+				t.Errorf("Wrong result, %v != %v", exp, actual)
+				return
+			}
+		case <-time.After(time.Second):
+			t.Errorf("Action timed out")
+			return
+		}
+	}
+
+	h.CloseAsync()
+	if err = h.WaitForClose(time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
+	resultChan := make(chan types.Message, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		msg := message.New(nil)
+		defer func() {
+			resultChan <- msg
+		}()
+
+		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if err != nil {
+			t.Errorf("Bad media type: %v -> %v", r.Header.Get("Content-Type"), err)
+			return
+		}
+
+		if strings.HasPrefix(mediaType, "multipart/") {
+			mr := multipart.NewReader(r.Body, params["boundary"])
+			for {
+				p, err := mr.NextPart()
+
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				a, err := json.Marshal(p.Header)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				msg.Append(message.NewPart(a))
+			}
+		}
+	}))
+	defer ts.Close()
+
+	conf := NewHTTPClientConfig()
+	conf.URL = ts.URL + "/testpost"
+	conf.Multipart = []HTTPClientMultipartExpression{
+		{
+			ContentDisposition: `form-data; name="text"`,
+			ContentType:        "text/plain",
+			Body:               "PART-A"},
+		{
+			ContentDisposition: `form-data; name="file1"; filename="a.txt"`,
+			ContentType:        "text/plain",
+			Body:               "PART-B"},
+	}
+	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = h.Write(message.New([][]byte{[]byte("test")})); err != nil {
+		t.Error(err)
+	}
+	select {
+	case resMsg := <-resultChan:
+		for i := range conf.Multipart {
+			if resMsg.Len() != len(conf.Multipart) {
+				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 2)
+				return
+			}
+			mp := make(map[string][]string)
+			err := json.Unmarshal(resMsg.Get(i).Get(), &mp)
+			if err != nil {
+				t.Error(err)
+			}
+			if exp, actual := conf.Multipart[i].ContentDisposition, mp["Content-Disposition"]; exp != actual[0] {
+				t.Errorf("Wrong result, %v != %v", exp, actual)
+				return
+			}
+			if exp, actual := conf.Multipart[i].ContentType, mp["Content-Type"]; exp != actual[0] {
+				t.Errorf("Wrong result, %v != %v", exp, actual)
+				return
+			}
+		}
+	case <-time.After(time.Second):
+		t.Errorf("Action timed out")
+		return
+
+	}
 	h.CloseAsync()
 	if err = h.WaitForClose(time.Second); err != nil {
 		t.Error(err)

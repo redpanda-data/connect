@@ -20,7 +20,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
 
-func httpClientSpecs() docs.FieldSpecs {
+func httpClientSpec() docs.FieldSpec {
 	codecDocs := codec.ReaderDocs.AtVersion("3.42.0")
 	codecDocs.Description = "The way in which the bytes of a continuous stream are converted into messages. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. It's not necessary to add gzip in the codec when the response headers specify it as it will be decompressed automatically."
 	codecDocs.Examples = []interface{}{"lines", "delim:\t", "delim:foobar", "csv"}
@@ -34,14 +34,13 @@ func httpClientSpecs() docs.FieldSpecs {
 		docs.FieldDeprecated("delimiter"),
 	}
 
-	specs := append(client.FieldSpecs(),
+	return client.FieldSpec(
 		docs.FieldCommon("payload", "An optional payload to deliver for each request."),
 		docs.FieldAdvanced("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped."),
 		docs.FieldCommon(
 			"stream", "Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.",
 		).WithChildren(streamSpecs...),
 	)
-	return specs
 }
 
 func init() {
@@ -60,7 +59,7 @@ If you enable streaming then Benthos will consume the body of the response as a 
 ### Pagination
 
 This input supports interpolation functions in the ` + "`url` and `headers`" + ` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an ` + "[`http` processor](/docs/components/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate)" + ` in order to schedule the processor.`,
-		FieldSpecs: httpClientSpecs(),
+		config: httpClientSpec(),
 		Categories: []Category{
 			CategoryNetwork,
 		},

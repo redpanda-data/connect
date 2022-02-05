@@ -1,0 +1,31 @@
+input:
+  http_server:
+    address: 0.0.0.0:4196
+    path: /poke
+    allowed_verbs: [ POST, HEAD ]
+    cors:
+      enabled: true
+      allowed_origins:
+        - '*'
+  processors:
+    - metric:
+        type: counter
+        name: site_visit
+        labels:
+          host: ${! meta("h") }
+          path: ${! meta("p") }
+          referrer: ${! meta("r") }
+    - bloblang: 'root = deleted()'
+
+metrics:
+  prometheus:
+    prefix: ""
+    path_mapping: |
+      # Undo wonky '_' to '__' replace that's done automatically.
+      # TODO: V4 this won't be necessary
+      let path = this.replace("__", "_")
+
+      # Only emit our custom metric, and no internal Benthos metrics.
+      root = if ![
+        "site_visit",
+      ].contains($path) { deleted() } else { $path }

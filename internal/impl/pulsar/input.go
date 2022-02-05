@@ -3,11 +3,14 @@ package pulsar
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/pulsar/auth"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -16,6 +19,10 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/apache/pulsar-client-go/pulsar"
+)
+
+const (
+	defaultSubscriptionType = "shared"
 )
 
 func init() {
@@ -38,8 +45,14 @@ func init() {
 This input adds the following metadata fields to each message:
 
 ` + "```text" + `
+- pulsar_message_id
 - pulsar_key
+- pulsar_ordering_key
+- pulsar_event_time_unix
+- pulsar_publish_time_unix
 - pulsar_topic
+- pulsar_producer_name
+- pulsar_redelivery_count
 - All properties of the message
 ` + "```" + `
 
@@ -57,6 +70,10 @@ You can access these metadata fields using
 			),
 			docs.FieldString("topics", "A list of topics to subscribe to.").Array(),
 			docs.FieldCommon("subscription_name", "Specify the subscription name for this consumer."),
+			docs.FieldCommon("subscription_type", "Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See [Pulsar documentation](https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement) and [this Github issue](https://github.com/apache/pulsar/issues/12208) for more details.").
+				HasOptions("shared", "key_shared", "failover", "exclusive").
+				HasDefault(defaultSubscriptionType),
+			auth.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(input.NewPulsarConfig()),
 	})
 }
@@ -85,6 +102,16 @@ func newPulsarReader(conf input.PulsarConfig, log log.Modular, stats metrics.Typ
 	if conf.SubscriptionName == "" {
 		return nil, errors.New("field subscription_name must not be empty")
 	}
+	if conf.SubscriptionType == "" {
+		conf.SubscriptionType = defaultSubscriptionType // set default subscription type if empty
+	}
+	if _, err := parseSubscriptionType(conf.SubscriptionType); err != nil {
+		return nil, fmt.Errorf("field subscription_type is invalid: %v", err)
+	}
+	if err := conf.Auth.Validate(); err != nil {
+		return nil, fmt.Errorf("field auth is invalid: %v", err)
+	}
+
 	p := pulsarReader{
 		conf:    conf,
 		stats:   stats,
@@ -92,6 +119,21 @@ func newPulsarReader(conf input.PulsarConfig, log log.Modular, stats metrics.Typ
 		shutSig: shutdown.NewSignaller(),
 	}
 	return &p, nil
+}
+
+func parseSubscriptionType(subType string) (pulsar.SubscriptionType, error) {
+	// Pulsar docs: https://pulsar.apache.org/docs/en/2.8.0/concepts-messaging/#subscriptions
+	switch subType {
+	case "shared":
+		return pulsar.Shared, nil
+	case "key_shared":
+		return pulsar.KeyShared, nil
+	case "failover":
+		return pulsar.Failover, nil
+	case "exclusive":
+		return pulsar.Exclusive, nil
+	}
+	return pulsar.Shared, fmt.Errorf("could not parse subscription type: %s", subType)
 }
 
 //------------------------------------------------------------------------------
@@ -108,21 +150,37 @@ func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
 	var (
 		client   pulsar.Client
 		consumer pulsar.Consumer
+		subType  pulsar.SubscriptionType
 		err      error
 	)
 
-	if client, err = pulsar.NewClient(pulsar.ClientOptions{
-		Logger:            NoopLogger(),
+	opts := pulsar.ClientOptions{
+		Logger:            DefaultLogger(p.log),
 		ConnectionTimeout: time.Second * 3,
 		URL:               p.conf.URL,
-	}); err != nil {
+	}
+
+	if p.conf.Auth.OAuth2.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationOAuth2(p.conf.Auth.OAuth2.ToMap())
+	} else if p.conf.Auth.Token.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationToken(p.conf.Auth.Token.Token)
+	}
+
+	if client, err = pulsar.NewClient(opts); err != nil {
+		return err
+	}
+
+	if subType, err = parseSubscriptionType(p.conf.SubscriptionType); err != nil {
 		return err
 	}
 
 	if consumer, err = client.Subscribe(pulsar.ConsumerOptions{
 		Topics:           p.conf.Topics,
 		SubscriptionName: p.conf.SubscriptionName,
-		Type:             pulsar.Shared,
+		Type:             subType,
+		KeySharedPolicy: &pulsar.KeySharedPolicy{
+			AllowOutOfOrderDelivery: true,
+		},
 	}); err != nil {
 		client.Close()
 		return err
@@ -188,10 +246,22 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (types.Message, read
 
 	part := message.NewPart(pulMsg.Payload())
 
+	part.Metadata().Set("pulsar_message_id", string(pulMsg.ID().Serialize()))
+	part.Metadata().Set("pulsar_topic", pulMsg.Topic())
+	part.Metadata().Set("pulsar_publish_time_unix", strconv.FormatInt(pulMsg.PublishTime().Unix(), 10))
+	part.Metadata().Set("pulsar_redelivery_count", strconv.FormatInt(int64(pulMsg.RedeliveryCount()), 10))
 	if key := pulMsg.Key(); len(key) > 0 {
 		part.Metadata().Set("pulsar_key", key)
 	}
-	part.Metadata().Set("pulsar_topic", pulMsg.Topic())
+	if orderingKey := pulMsg.OrderingKey(); len(orderingKey) > 0 {
+		part.Metadata().Set("pulsar_ordering_key", orderingKey)
+	}
+	if !pulMsg.EventTime().IsZero() {
+		part.Metadata().Set("pulsar_event_time_unix", strconv.FormatInt(pulMsg.EventTime().Unix(), 10))
+	}
+	if producerName := pulMsg.ProducerName(); producerName != "" {
+		part.Metadata().Set("pulsar_producer_name", producerName)
+	}
 	for k, v := range pulMsg.Properties() {
 		part.Metadata().Set(k, v)
 	}

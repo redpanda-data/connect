@@ -447,13 +447,20 @@ func EndOfInput() Func {
 
 // Newline parses a line break.
 func Newline() Func {
-	return Expect(Char('\n'), "line break")
+	return Expect(
+		JoinStringPayloads(
+			Sequence(
+				Optional(Char('\r')),
+				Char('\n'),
+			),
+		),
+		"line break")
 }
 
 // NewlineAllowComment parses an optional comment followed by a mandatory line
 // break.
 func NewlineAllowComment() Func {
-	return Expect(OneOf(Comment(), Char('\n')), "line break")
+	return Expect(OneOf(Comment(), Newline()), "line break")
 }
 
 // UntilFail applies a parser until it fails, and returns a slice containing all

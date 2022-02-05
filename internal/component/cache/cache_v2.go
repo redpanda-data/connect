@@ -15,9 +15,12 @@ type V2 interface {
 	// Get a cache item.
 	Get(ctx context.Context, key string) ([]byte, error)
 
-	// Set a cache item, specifying an optioal TTL. It is okay for caches to
+	// Set a cache item, specifying an optional TTL. It is okay for caches to
 	// ignore the ttl parameter if it isn't possible to implement.
 	Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error
+
+	// SetMulti sets one or more cache items within as few requests as possible.
+	SetMulti(ctx context.Context, keyValues map[string]types.CacheTTLItem) error
 
 	// Add is the same operation as Set except that it returns an error if the
 	// key already exists. It is okay for caches to return nil on duplicates if
@@ -128,21 +131,34 @@ func (a *v2ToV1Cache) SetWithTTL(key string, value []byte, ttl *time.Duration) e
 }
 
 func (a *v2ToV1Cache) SetMulti(items map[string][]byte) error {
+	bItems := make(map[string]types.CacheTTLItem, len(items))
 	for k, v := range items {
-		if err := a.Set(k, v); err != nil {
-			return err
+		bItems[k] = types.CacheTTLItem{
+			Value: v,
 		}
 	}
-	return nil
+
+	started := time.Now()
+	err := a.c.SetMulti(context.Background(), bItems)
+	a.mSetLatency.Timing(int64(time.Since(started)))
+	if err != nil {
+		a.mSetFailed.Incr(int64(len(items)))
+	} else {
+		a.mSetSuccess.Incr(int64(len(items)))
+	}
+	return err
 }
 
 func (a *v2ToV1Cache) SetMultiWithTTL(items map[string]types.CacheTTLItem) error {
-	for k, v := range items {
-		if err := a.SetWithTTL(k, v.Value, v.TTL); err != nil {
-			return err
-		}
+	started := time.Now()
+	err := a.c.SetMulti(context.Background(), items)
+	a.mSetLatency.Timing(int64(time.Since(started)))
+	if err != nil {
+		a.mSetFailed.Incr(int64(len(items)))
+	} else {
+		a.mSetSuccess.Incr(int64(len(items)))
 	}
-	return nil
+	return err
 }
 
 func (a *v2ToV1Cache) Add(key string, value []byte) error {

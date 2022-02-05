@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 
@@ -27,13 +26,13 @@ func CliCommand() *cli.Command {
 		Name:  "blobl",
 		Usage: "Execute a Bloblang mapping on documents consumed via stdin",
 		Description: `
-   Provides a convenient tool for mapping JSON documents over the command line:
+Provides a convenient tool for mapping JSON documents over the command line:
 
-   cat documents.jsonl | benthos blobl 'foo.bar.map_each(this.uppercase())'
+  cat documents.jsonl | benthos blobl 'foo.bar.map_each(this.uppercase())'
 
-   echo '{"foo":"bar"}' | benthos blobl -f ./mapping.blobl
+  echo '{"foo":"bar"}' | benthos blobl -f ./mapping.blobl
 
-   Find out more about Bloblang at: https://benthos.dev/docs/guides/bloblang/about`[4:],
+Find out more about Bloblang at: https://benthos.dev/docs/guides/bloblang/about`[1:],
 		Flags: []cli.Flag{
 			&cli.IntFlag{
 				Name:    "threads",
@@ -220,7 +219,7 @@ func run(c *cli.Context) error {
 			fmt.Fprintln(os.Stderr, red("invalid flags, unable to execute both a file mapping and an inline mapping"))
 			os.Exit(1)
 		}
-		mappingBytes, err := ioutil.ReadFile(file)
+		mappingBytes, err := os.ReadFile(file)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, red("failed to read mapping file: %v\n"), err)
 			os.Exit(1)

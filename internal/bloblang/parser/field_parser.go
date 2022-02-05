@@ -19,7 +19,7 @@ func intoStaticResolver(p Func) Func {
 	}
 }
 
-func aFunction(pCtx Context) Func {
+func aFunction(pCtx Context, isDeprecated *bool) Func {
 	return func(input []rune) Result {
 		if len(input) < 3 || input[0] != '$' || input[1] != '{' || input[2] != '!' {
 			return Fail(NewError(input, "${!"), input)
@@ -27,7 +27,7 @@ func aFunction(pCtx Context) Func {
 		i := 3
 		for ; i < len(input); i++ {
 			if input[i] == '}' {
-				res := ParseDeprecatedQuery(pCtx)(input[3:i])
+				res := ParseDeprecatedQuery(pCtx, isDeprecated)(input[3:i])
 				if res.Err == nil {
 					if len(res.Remaining) > 0 {
 						pos := len(input[3:i]) - len(res.Remaining)
@@ -65,12 +65,12 @@ func escapedBlock(input []rune) Result {
 
 //------------------------------------------------------------------------------
 
-func parseFieldResolvers(pCtx Context, expr string) ([]field.Resolver, *Error) {
+func parseFieldResolvers(pCtx Context, expr string, isDeprecated *bool) ([]field.Resolver, *Error) {
 	var resolvers []field.Resolver
 
 	p := OneOf(
 		escapedBlock,
-		aFunction(pCtx),
+		aFunction(pCtx, isDeprecated),
 		intoStaticResolver(Char('$')),
 		intoStaticResolver(NotChar('$')),
 	)
@@ -90,11 +90,14 @@ func parseFieldResolvers(pCtx Context, expr string) ([]field.Resolver, *Error) {
 
 // ParseField attempts to parse a field expression.
 func ParseField(pCtx Context, expr string) (*field.Expression, *Error) {
-	resolvers, err := parseFieldResolvers(pCtx, expr)
+	var isDep bool
+	resolvers, err := parseFieldResolvers(pCtx, expr, &isDep)
 	if err != nil {
 		return nil, err
 	}
-	return field.NewExpression(resolvers...), nil
+	e := field.NewExpression(resolvers...)
+	e.ContainsDeprecated = isDep
+	return e, nil
 }
 
 //------------------------------------------------------------------------------

@@ -124,7 +124,7 @@ func (h *HTTP) HandlerFunc() http.HandlerFunc {
 			obj.SetP(v, k)
 			obj.SetP(time.Duration(v).String(), k+"_readable")
 		}
-		obj.SetP(fmt.Sprintf("%v", uptime), "uptime")
+		obj.SetP(uptime, "uptime")
 		obj.SetP(goroutines, "goroutines")
 
 		w.Header().Set("Content-Type", "application/json")

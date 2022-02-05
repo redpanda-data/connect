@@ -70,6 +70,7 @@ output:
       exclude_prefixes: []
     storage_class: STANDARD
     kms_key_id: ""
+    server_side_encryption: ""
     force_path_style_urls: false
     max_in_flight: 1
     timeout: 5s
@@ -302,6 +303,15 @@ An optional server side encryption key.
 
 Type: `string`  
 Default: `""`  
+
+### `server_side_encryption`
+
+An optional server side encryption algorithm.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 3.63.0 or newer  
 
 ### `force_path_style_urls`
 

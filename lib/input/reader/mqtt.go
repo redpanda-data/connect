@@ -31,6 +31,7 @@ type MQTTConfig struct {
 	CleanSession           bool          `json:"clean_session" yaml:"clean_session"`
 	User                   string        `json:"user" yaml:"user"`
 	Password               string        `json:"password" yaml:"password"`
+	ConnectTimeout         string        `json:"connect_timeout" yaml:"connect_timeout"`
 	StaleConnectionTimeout string        `json:"stale_connection_timeout" yaml:"stale_connection_timeout"`
 	KeepAlive              int64         `json:"keepalive" yaml:"keepalive"`
 	TLS                    tls.Config    `json:"tls" yaml:"tls"`
@@ -47,6 +48,7 @@ func NewMQTTConfig() MQTTConfig {
 		CleanSession:           true,
 		User:                   "",
 		Password:               "",
+		ConnectTimeout:         "30s",
 		StaleConnectionTimeout: "",
 		KeepAlive:              30,
 		TLS:                    tls.NewConfig(),
@@ -61,6 +63,7 @@ type MQTT struct {
 	msgChan chan mqtt.Message
 	cMut    sync.Mutex
 
+	connectTimeout         time.Duration
 	staleConnectionTimeout time.Duration
 
 	conf MQTTConfig
@@ -84,8 +87,11 @@ func NewMQTT(
 		log:           log,
 	}
 
+	var err error
+	if m.connectTimeout, err = time.ParseDuration(conf.ConnectTimeout); err != nil {
+		return nil, fmt.Errorf("unable to parse connect timeout duration string: %w", err)
+	}
 	if len(conf.StaleConnectionTimeout) > 0 {
-		var err error
 		if m.staleConnectionTimeout, err = time.ParseDuration(conf.StaleConnectionTimeout); err != nil {
 			return nil, fmt.Errorf("unable to parse stale connection timeout duration string: %w", err)
 		}
@@ -152,7 +158,8 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 		SetAutoReconnect(false).
 		SetClientID(m.conf.ClientID).
 		SetCleanSession(m.conf.CleanSession).
-		SetKeepAlive(time.Duration(m.conf.KeepAlive)).
+		SetConnectTimeout(m.connectTimeout).
+		SetKeepAlive(time.Duration(m.conf.KeepAlive) * time.Second).
 		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
 			client.Disconnect(0)
 			closeMsgChan()

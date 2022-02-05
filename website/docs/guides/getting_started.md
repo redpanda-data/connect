@@ -69,13 +69,13 @@ The main sections that make up a config are `input`, `pipeline` and `output`. Wh
 
 ```yaml
 input:
-  type: stdin
+  stdin: {}
 
 pipeline:
   processors: []
 
 output:
-  type: stdout
+  stdout: {}
 ```
 
 Eventually we'll want to configure a more useful [input][inputs] and [output][outputs], but for now this is useful for quickly testing processors. You can execute this config with:
@@ -90,14 +90,14 @@ Next, let's add some processing steps in order to mutate messages. The most powe
 
 ```yaml
 input:
-  type: stdin
+  stdin: {}
 
 pipeline:
   processors:
     - bloblang: root = content().uppercase()
 
 output:
-  type: stdout
+  stdout: {}
 ```
 
 Now your messages should come out in all caps, how whacky! IT'S LIKE BENTHOS IS SHOUTING BACK AT YOU!
@@ -106,7 +106,7 @@ You can add as many [processing steps][processors] as you like, and since proces
 
 ```yaml
 input:
-  type: stdin
+  stdin: {}
 
 pipeline:
   processors:
@@ -118,7 +118,7 @@ pipeline:
         root.last_name = this.names.index(-1).hash("sha256").encode("base64")
 
 output:
-  type: stdout
+  stdout: {}
 ```
 
 First, we sleep for 500 milliseconds just to keep the suspense going. Next, we restructure our input JSON document by nesting it within a field `doc`, we map the upper-cased first element of `names` to a new field `first_name`. Finally, we map the hashed and base64 encoded value of the last element of `names` to a new field `last_name`.

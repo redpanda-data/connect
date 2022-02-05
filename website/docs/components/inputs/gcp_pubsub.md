@@ -25,6 +25,7 @@ input:
   gcp_pubsub:
     project: ""
     subscription: ""
+    sync: false
     max_outstanding_messages: 1000
     max_outstanding_bytes: 1000000000
 ```
@@ -61,6 +62,14 @@ The target subscription ID.
 
 Type: `string`  
 Default: `""`  
+
+### `sync`
+
+Enable synchronous pull mode.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `max_outstanding_messages`
 

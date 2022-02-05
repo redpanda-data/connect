@@ -1,10 +1,12 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -67,32 +69,32 @@ input:
     client_id: client-input-$ID
     consumer_group: group-$ID
 `
-		suite := integrationTests(
-			integrationTestOpenClose(),
-			integrationTestMetadata(),
-			integrationTestMetadataFilter(),
-			integrationTestSendBatch(10),
-			integrationTestSendBatches(20, 100, 1),
-			integrationTestStreamSequential(1000),
-			integrationTestStreamParallel(1000),
-			integrationTestStreamParallelLossy(1000),
-			integrationTestStreamParallelLossyThroughReconnect(100),
-			integrationTestSendBatchCount(10),
+		suite := integration.StreamTests(
+			integration.StreamTestOpenClose(),
+			integration.StreamTestMetadata(),
+			integration.StreamTestMetadataFilter(),
+			integration.StreamTestSendBatch(10),
+			integration.StreamTestSendBatches(20, 100, 1),
+			integration.StreamTestStreamSequential(1000),
+			integration.StreamTestStreamParallel(1000),
+			integration.StreamTestStreamParallelLossy(1000),
+			integration.StreamTestStreamParallelLossyThroughReconnect(100),
+			integration.StreamTestSendBatchCount(10),
 		)
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
-			testOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
 		)
 		t.Run("with max in flight", func(t *testing.T) {
 			t.Parallel()
 			suite.Run(
 				t, template,
-				testOptSleepAfterInput(100*time.Millisecond),
-				testOptSleepAfterOutput(100*time.Millisecond),
-				testOptPort(resource.GetPort("6379/tcp")),
-				testOptMaxInFlight(10),
+				integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+				integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+				integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+				integration.StreamTestOptMaxInFlight(10),
 			)
 		})
 	})
@@ -113,29 +115,29 @@ input:
     url: tcp://localhost:$PORT
     channels: [ channel-$ID ]
 `
-		suite := integrationTests(
-			integrationTestOpenClose(),
-			integrationTestSendBatch(10),
-			integrationTestSendBatches(20, 100, 1),
-			integrationTestStreamSequential(100),
-			integrationTestStreamParallel(100),
-			integrationTestStreamParallelLossy(100),
-			integrationTestSendBatchCount(10),
+		suite := integration.StreamTests(
+			integration.StreamTestOpenClose(),
+			integration.StreamTestSendBatch(10),
+			integration.StreamTestSendBatches(20, 100, 1),
+			integration.StreamTestStreamSequential(100),
+			integration.StreamTestStreamParallel(100),
+			integration.StreamTestStreamParallelLossy(100),
+			integration.StreamTestSendBatchCount(10),
 		)
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(500*time.Millisecond),
-			testOptSleepAfterOutput(500*time.Millisecond),
-			testOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
 		)
 		t.Run("with max in flight", func(t *testing.T) {
 			t.Parallel()
 			suite.Run(
 				t, template,
-				testOptSleepAfterInput(500*time.Millisecond),
-				testOptSleepAfterOutput(500*time.Millisecond),
-				testOptPort(resource.GetPort("6379/tcp")),
-				testOptMaxInFlight(10),
+				integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+				integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+				integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+				integration.StreamTestOptMaxInFlight(10),
 			)
 		})
 	})
@@ -156,29 +158,29 @@ input:
     url: tcp://localhost:$PORT
     key: key-$ID
 `
-		suite := integrationTests(
-			integrationTestOpenClose(),
-			integrationTestSendBatch(10),
-			integrationTestSendBatches(20, 100, 1),
-			integrationTestStreamSequential(1000),
-			integrationTestStreamParallel(1000),
-			integrationTestStreamParallelLossy(1000),
-			integrationTestSendBatchCount(10),
+		suite := integration.StreamTests(
+			integration.StreamTestOpenClose(),
+			integration.StreamTestSendBatch(10),
+			integration.StreamTestSendBatches(20, 100, 1),
+			integration.StreamTestStreamSequential(1000),
+			integration.StreamTestStreamParallel(1000),
+			integration.StreamTestStreamParallelLossy(1000),
+			integration.StreamTestSendBatchCount(10),
 		)
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
-			testOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
 		)
 		t.Run("with max in flight", func(t *testing.T) {
 			t.Parallel()
 			suite.Run(
 				t, template,
-				testOptSleepAfterInput(100*time.Millisecond),
-				testOptSleepAfterOutput(100*time.Millisecond),
-				testOptPort(resource.GetPort("6379/tcp")),
-				testOptMaxInFlight(10),
+				integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+				integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+				integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+				integration.StreamTestOptMaxInFlight(10),
 			)
 		})
 	})
@@ -194,28 +196,28 @@ output:
     fields:
       content: ${! content() }
 `
-		hashGetFn := func(env *testEnvironment, id string) (string, []string, error) {
+		hashGetFn := func(ctx context.Context, testID string, id string) (string, []string, error) {
 			client := redis.NewClient(&redis.Options{
 				Addr:    fmt.Sprintf("localhost:%v", resource.GetPort("6379/tcp")),
 				Network: "tcp",
 			})
-			key := env.configVars.id + "-" + id
+			key := testID + "-" + id
 			res, err := client.HGet(key, "content").Result()
 			if err != nil {
 				return "", nil, err
 			}
 			return res, nil, nil
 		}
-		suite := integrationTests(
-			integrationTestOutputOnlySendSequential(10, hashGetFn),
-			integrationTestOutputOnlySendBatch(10, hashGetFn),
-			integrationTestOutputOnlyOverride(hashGetFn),
+		suite := integration.StreamTests(
+			integration.StreamTestOutputOnlySendSequential(10, hashGetFn),
+			integration.StreamTestOutputOnlySendBatch(10, hashGetFn),
+			integration.StreamTestOutputOnlyOverride(hashGetFn),
 		)
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
-			testOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
 		)
 	})
 })
@@ -268,19 +270,19 @@ input:
     client_id: client-input-$ID
     consumer_group: group-$ID
 `
-		suite := integrationBenchs(
-			integrationBenchSend(20, 1),
-			integrationBenchSend(10, 1),
-			integrationBenchSend(1, 1),
-			integrationBenchWrite(20),
-			integrationBenchWrite(10),
-			integrationBenchWrite(1),
+		suite := integration.StreamBenchs(
+			integration.StreamBenchSend(20, 1),
+			integration.StreamBenchSend(10, 1),
+			integration.StreamBenchSend(1, 1),
+			integration.StreamBenchWrite(20),
+			integration.StreamBenchWrite(10),
+			integration.StreamBenchWrite(1),
 		)
 		suite.Run(
 			b, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
-			testOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
 		)
 	})
 
@@ -297,19 +299,19 @@ input:
     url: tcp://localhost:$PORT
     channels: [ channel-$ID ]
 `
-		suite := integrationBenchs(
-			integrationBenchSend(20, 1),
-			integrationBenchSend(10, 1),
-			integrationBenchSend(1, 1),
-			integrationBenchWrite(20),
-			integrationBenchWrite(10),
-			integrationBenchWrite(1),
+		suite := integration.StreamBenchs(
+			integration.StreamBenchSend(20, 1),
+			integration.StreamBenchSend(10, 1),
+			integration.StreamBenchSend(1, 1),
+			integration.StreamBenchWrite(20),
+			integration.StreamBenchWrite(10),
+			integration.StreamBenchWrite(1),
 		)
 		suite.Run(
 			b, template,
-			testOptSleepAfterInput(500*time.Millisecond),
-			testOptSleepAfterOutput(500*time.Millisecond),
-			testOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
 		)
 	})
 
@@ -326,19 +328,19 @@ input:
     url: tcp://localhost:$PORT
     key: key-$ID
 `
-		suite := integrationBenchs(
-			integrationBenchSend(20, 1),
-			integrationBenchSend(10, 1),
-			integrationBenchSend(1, 1),
-			integrationBenchWrite(20),
-			integrationBenchWrite(10),
-			integrationBenchWrite(1),
+		suite := integration.StreamBenchs(
+			integration.StreamBenchSend(20, 1),
+			integration.StreamBenchSend(10, 1),
+			integration.StreamBenchSend(1, 1),
+			integration.StreamBenchWrite(20),
+			integration.StreamBenchWrite(10),
+			integration.StreamBenchWrite(1),
 		)
 		suite.Run(
 			b, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
-			testOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
 		)
 	})
 })

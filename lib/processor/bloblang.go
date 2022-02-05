@@ -8,14 +8,12 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -188,15 +186,7 @@ func (b *Bloblang) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	newParts := make([]types.Part, 0, msg.Len())
 
 	msg.Iter(func(i int, part types.Part) error {
-		span := tracing.GetSpan(part)
-		if span == nil {
-			span = opentracing.StartSpan(TypeBloblang)
-		} else {
-			span = opentracing.StartSpan(
-				TypeBloblang,
-				opentracing.ChildOf(span.Context()),
-			)
-		}
+		span := tracing.CreateChildSpan(TypeBloblang, part)
 
 		p, err := b.exec.MapPart(i, msg)
 		if err != nil {
@@ -205,9 +195,9 @@ func (b *Bloblang) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			b.log.Errorf("%v\n", err)
 			FlagErr(p, err)
 			span.SetTag("error", true)
-			span.LogFields(
-				olog.String("event", "error"),
-				olog.String("type", err.Error()),
+			span.LogKV(
+				"event", "error",
+				"type", err.Error(),
 			)
 		}
 

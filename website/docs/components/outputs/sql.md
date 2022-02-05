@@ -1,7 +1,7 @@
 ---
 title: sql
 type: output
-status: beta
+status: deprecated
 categories: ["Services"]
 ---
 
@@ -15,8 +15,8 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution BETA
-This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
 :::
 
 Runs an SQL prepared query against a target database for each message.
@@ -72,7 +72,9 @@ output:
 </TabItem>
 </Tabs>
 
-Query arguments are set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the `args` field.
+## Alternatives
+
+Use the [`sql_insert`](/docs/components/outputs/sql_insert) output instead.
 
 ## Drivers
 

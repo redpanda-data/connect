@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -175,7 +174,7 @@ func TestFunctionQueries(t *testing.T) {
 		},
 		"hostname": {
 			input:  `hostname()`,
-			output: fmt.Sprintf(`%v`, hostname),
+			output: hostname,
 		},
 		"metadata triple quote string arg 1": {
 			input:  `meta("""foo""")`,

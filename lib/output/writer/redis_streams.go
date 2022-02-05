@@ -7,8 +7,8 @@ import (
 	"time"
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -21,12 +21,12 @@ import (
 // RedisStreamsConfig contains configuration fields for the RedisStreams output type.
 type RedisStreamsConfig struct {
 	bredis.Config `json:",inline" yaml:",inline"`
-	Stream        string             `json:"stream" yaml:"stream"`
-	BodyKey       string             `json:"body_key" yaml:"body_key"`
-	MaxLenApprox  int64              `json:"max_length" yaml:"max_length"`
-	MaxInFlight   int                `json:"max_in_flight" yaml:"max_in_flight"`
-	Metadata      output.Metadata    `json:"metadata" yaml:"metadata"`
-	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
+	Stream        string                       `json:"stream" yaml:"stream"`
+	BodyKey       string                       `json:"body_key" yaml:"body_key"`
+	MaxLenApprox  int64                        `json:"max_length" yaml:"max_length"`
+	MaxInFlight   int                          `json:"max_in_flight" yaml:"max_in_flight"`
+	Metadata      metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
+	Batching      batch.PolicyConfig           `json:"batching" yaml:"batching"`
 }
 
 // NewRedisStreamsConfig creates a new RedisStreamsConfig with default values.
@@ -37,7 +37,7 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		BodyKey:      "body",
 		MaxLenApprox: 0,
 		MaxInFlight:  1,
-		Metadata:     output.NewMetadata(),
+		Metadata:     metadata.NewExcludeFilterConfig(),
 		Batching:     batch.NewPolicyConfig(),
 	}
 }
@@ -50,7 +50,7 @@ type RedisStreams struct {
 	stats metrics.Type
 
 	conf       RedisStreamsConfig
-	metaFilter *output.MetadataFilter
+	metaFilter *metadata.ExcludeFilter
 
 	client  redis.UniversalClient
 	connMut sync.RWMutex

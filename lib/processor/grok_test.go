@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -126,17 +125,17 @@ func TestGrok(t *testing.T) {
 }
 
 func TestGrokFileImports(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "grok_test")
+	tmpDir, err := os.MkdirTemp("", "grok_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		os.RemoveAll(tmpDir)
 	})
 
-	err = ioutil.WriteFile(filepath.Join(tmpDir, "foos"), []byte(`
+	err = os.WriteFile(filepath.Join(tmpDir, "foos"), []byte(`
 FOOFLAT %{WORD:first} %{WORD:second} %{WORD:third}
 FOONESTED %{INT:nested.first:int} %{WORD:nested.second} %{WORD:nested.third}
-`), 0777)
+`), 0o777)
 	require.NoError(t, err)
 
 	conf := NewConfig()

@@ -65,14 +65,25 @@ type Executor struct {
 	input      []rune
 	maps       map[string]query.Function
 	statements []Statement
+
+	maxMapStacks int
 }
+
+const defaultMaxMapStacks = 5000
 
 // NewExecutor initialises a new mapping executor from a map of query functions,
 // and a list of assignments to be executed on each mapping. The input parameter
 // is an optional slice pointing to the parsed expression that created the
 // executor.
 func NewExecutor(annotation string, input []rune, maps map[string]query.Function, statements ...Statement) *Executor {
-	return &Executor{annotation, input, maps, statements}
+	return &Executor{annotation, input, maps, statements, defaultMaxMapStacks}
+}
+
+// SetMaxMapRecursion configures the maximum recursion allowed for maps, if the
+// execution of this mapping matches this number of recursive map calls the
+// mapping will error out.
+func (e *Executor) SetMaxMapRecursion(m int) {
+	e.maxMapStacks = m
 }
 
 // Annotation returns a string annotation that describes the mapping executor.
@@ -238,28 +249,18 @@ func (e *Executor) AssignmentTargets() []TargetPath {
 	return paths
 }
 
-const maxMapStacks = 10000
-
 // Exec this function with a context struct.
 func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 	ctx, stackCount := ctx.IncrStackCount()
-	if stackCount > maxMapStacks {
-		return nil, fmt.Errorf("entering %v exceeded maximum allowed stacks of %v, this could be due to unbounded recursion", e.annotation, maxMapStacks)
+	if stackCount > e.maxMapStacks {
+		return nil, &errStacks{annotation: e.annotation, maxStacks: e.maxMapStacks}
 	}
 
 	var newObj interface{} = query.Nothing(nil)
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(ctx)
 		if err != nil {
-			// TODO: Do this betterly
-			if strings.HasPrefix(err.Error(), "failed assignment") {
-				return nil, err
-			}
-			var line int
-			if len(e.input) > 0 && len(stmt.input) > 0 {
-				line, _ = LineAndColOf(e.input, stmt.input)
-			}
-			return nil, fmt.Errorf("failed assignment (line %v): %w", line, err)
+			return nil, formatExecErr(err, true, e.input, stmt.input)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
@@ -270,11 +271,7 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 			// Meta: meta, Prevented for now due to .from(int)
 			Value: &newObj,
 		}); err != nil {
-			var line int
-			if len(e.input) > 0 && len(stmt.input) > 0 {
-				line, _ = LineAndColOf(e.input, stmt.input)
-			}
-			return nil, fmt.Errorf("failed to assign result (line %v): %w", line, err)
+			return nil, formatExecErr(err, false, e.input, stmt.input)
 		}
 	}
 
@@ -286,22 +283,14 @@ func (e *Executor) ExecOnto(ctx query.FunctionContext, onto AssignmentContext) e
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(ctx)
 		if err != nil {
-			var line int
-			if len(e.input) > 0 && len(stmt.input) > 0 {
-				line, _ = LineAndColOf(e.input, stmt.input)
-			}
-			return fmt.Errorf("failed assignment (line %v): %w", line, err)
+			return formatExecErr(err, true, e.input, stmt.input)
 		}
 		if _, isNothing := res.(query.Nothing); isNothing {
 			// Skip assignment entirely
 			continue
 		}
 		if err = stmt.assignment.Apply(res, onto); err != nil {
-			var line int
-			if len(e.input) > 0 && len(stmt.input) > 0 {
-				line, _ = LineAndColOf(e.input, stmt.input)
-			}
-			return fmt.Errorf("failed to assign result (line %v): %w", line, err)
+			return formatExecErr(err, false, e.input, stmt.input)
 		}
 	}
 	return nil
@@ -334,3 +323,52 @@ func (e *Executor) ToString(ctx query.FunctionContext) string {
 }
 
 //------------------------------------------------------------------------------
+
+type failedAssignmentErr struct {
+	line   int
+	onExec bool
+	err    error
+}
+
+func (f *failedAssignmentErr) Unwrap() error {
+	return f.err
+}
+
+func (f *failedAssignmentErr) Error() string {
+	if f.onExec {
+		return fmt.Sprintf("failed assignment (line %v): %v", f.line, f.err)
+	}
+	return fmt.Sprintf("failed to assign result (line %v): %v", f.line, f.err)
+}
+
+type errStacks struct {
+	annotation string
+	maxStacks  int
+}
+
+func (e *errStacks) Error() string {
+	return fmt.Sprintf("entering %v exceeded maximum allowed stacks of %v, this could be due to unbounded recursion", e.annotation, e.maxStacks)
+}
+
+func formatExecErr(err error, onExec bool, input, stmtInput []rune) error {
+	var u *failedAssignmentErr
+	if errors.As(err, &u) {
+		return u
+	}
+
+	var line int
+	if len(input) > 0 && len(stmtInput) > 0 {
+		line, _ = LineAndColOf(input, stmtInput)
+	}
+
+	var e *errStacks
+	if errors.As(err, &e) {
+		err = e
+	}
+
+	return &failedAssignmentErr{
+		line:   line,
+		onExec: onExec,
+		err:    err,
+	}
+}

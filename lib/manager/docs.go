@@ -19,7 +19,7 @@ func lintResource(ctx docs.LintContext, line, col int, v interface{}) []docs.Lin
 // Spec returns a field spec for the manager configuration.
 func Spec() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldCommon(
+		docs.FieldDeprecated(
 			"resources", "A map of components identified by unique names that can be referenced throughout a Benthos config.",
 		).WithChildren(
 			docs.FieldCommon("inputs", "A map of inputs.").Map().HasType(docs.FieldTypeInput),

@@ -63,11 +63,11 @@ input:
     interval: '@every 5m'
     mapping: 'root = {}'
   processors:
-    - sql:
-        driver: postgresql
-        data_source_name: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
-        query: "select * from foo;"
-        result_codec: json_array
+    - sql_select:
+        driver: postgres
+        dsn: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
+        table: foo
+        columns: [ "*" ]
 `,
 			},
 			{
@@ -186,7 +186,9 @@ func newBloblang(mgr types.Manager, conf BloblangConfig) (*Bloblang, error) {
 			firstIsFree = false
 			duration = getDurationTillNextSchedule(*schedule, location)
 		}
-		timer = time.NewTicker(duration)
+		if duration > 0 {
+			timer = time.NewTicker(duration)
+		}
 	}
 	exec, err := interop.NewBloblangMapping(mgr, conf.Mapping)
 	if err != nil {

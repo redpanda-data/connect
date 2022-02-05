@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -15,7 +14,7 @@ import (
 func TestFileCache(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeFile
-	dir, err := ioutil.TempDir("", "benthos_file_cache_test")
+	dir, err := os.MkdirTemp("", "benthos_file_cache_test")
 	if err != nil {
 		t.Fatal(err)
 	}

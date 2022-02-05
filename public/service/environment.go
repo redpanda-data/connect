@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"gopkg.in/yaml.v3"
 )
 
 // Environment is a collection of Benthos component plugins that can be used in
@@ -88,8 +87,8 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeBuffer
-	return e.internal.Buffers.Add(func(conf buffer.Config, nm bundle.NewManagement) (buffer.Type, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+	return e.internal.BufferAdd(func(conf buffer.Config, nm bundle.NewManagement) (buffer.Type, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +103,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 // WalkBuffers executes a provided function argument for every buffer component
 // that has been registered to the environment.
 func (e *Environment) WalkBuffers(fn func(name string, config *ConfigView)) {
-	for _, v := range e.internal.Buffers.Docs() {
+	for _, v := range e.internal.BufferDocs() {
 		fn(v.Name, &ConfigView{
 			component: v,
 		})
@@ -119,8 +118,8 @@ func (e *Environment) RegisterCache(name string, spec *ConfigSpec, ctor CacheCon
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeCache
-	return e.internal.Caches.Add(func(conf cache.Config, nm bundle.NewManagement) (types.Cache, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+	return e.internal.CacheAdd(func(conf cache.Config, nm bundle.NewManagement) (types.Cache, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +134,7 @@ func (e *Environment) RegisterCache(name string, spec *ConfigSpec, ctor CacheCon
 // WalkCaches executes a provided function argument for every cache component
 // that has been registered to the environment.
 func (e *Environment) WalkCaches(fn func(name string, config *ConfigView)) {
-	for _, v := range e.internal.Caches.Docs() {
+	for _, v := range e.internal.CacheDocs() {
 		fn(v.Name, &ConfigView{
 			component: v,
 		})
@@ -154,8 +153,8 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
-	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -181,8 +180,8 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
-	return e.internal.Inputs.Add(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -198,7 +197,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 // WalkInputs executes a provided function argument for every input component
 // that has been registered to the environment.
 func (e *Environment) WalkInputs(fn func(name string, config *ConfigView)) {
-	for _, v := range e.internal.Inputs.Docs() {
+	for _, v := range e.internal.InputDocs() {
 		fn(v.Name, &ConfigView{
 			component: v,
 		})
@@ -213,9 +212,9 @@ func (e *Environment) RegisterOutput(name string, spec *ConfigSpec, ctor OutputC
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeOutput
-	return e.internal.Outputs.Add(bundle.OutputConstructorFromSimple(
+	return e.internal.OutputAdd(bundle.OutputConstructorFromSimple(
 		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
-			pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 			if err != nil {
 				return nil, err
 			}
@@ -252,9 +251,9 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeOutput
-	return e.internal.Outputs.Add(bundle.OutputConstructorFromSimple(
+	return e.internal.OutputAdd(bundle.OutputConstructorFromSimple(
 		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
-			pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 			if err != nil {
 				return nil, err
 			}
@@ -280,7 +279,7 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 // WalkOutputs executes a provided function argument for every output component
 // that has been registered to the environment.
 func (e *Environment) WalkOutputs(fn func(name string, config *ConfigView)) {
-	for _, v := range e.internal.Outputs.Docs() {
+	for _, v := range e.internal.OutputDocs() {
 		fn(v.Name, &ConfigView{
 			component: v,
 		})
@@ -298,8 +297,8 @@ func (e *Environment) RegisterProcessor(name string, spec *ConfigSpec, ctor Proc
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
-	return e.internal.Processors.Add(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -323,8 +322,8 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
-	return e.internal.Processors.Add(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -339,7 +338,7 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 // WalkProcessors executes a provided function argument for every processor
 // component that has been registered to the environment.
 func (e *Environment) WalkProcessors(fn func(name string, config *ConfigView)) {
-	for _, v := range e.internal.Processors.Docs() {
+	for _, v := range e.internal.ProcessorDocs() {
 		fn(v.Name, &ConfigView{
 			component: v,
 		})
@@ -354,8 +353,8 @@ func (e *Environment) RegisterRateLimit(name string, spec *ConfigSpec, ctor Rate
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeRateLimit
-	return e.internal.RateLimits.Add(func(conf ratelimit.Config, nm bundle.NewManagement) (types.RateLimit, error) {
-		pluginConf, err := spec.configFromNode(nm, conf.Plugin.(*yaml.Node))
+	return e.internal.RateLimitAdd(func(conf ratelimit.Config, nm bundle.NewManagement) (types.RateLimit, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -370,7 +369,29 @@ func (e *Environment) RegisterRateLimit(name string, spec *ConfigSpec, ctor Rate
 // WalkRateLimits executes a provided function argument for every rate limit
 // component that has been registered to the environment.
 func (e *Environment) WalkRateLimits(fn func(name string, config *ConfigView)) {
-	for _, v := range e.internal.RateLimits.Docs() {
+	for _, v := range e.internal.RateLimitDocs() {
+		fn(v.Name, &ConfigView{
+			component: v,
+		})
+	}
+}
+
+// WalkMetrics executes a provided function argument for every metrics component
+// that has been registered to the environment. Note that metrics components
+// available to an environment cannot be modified
+func (e *Environment) WalkMetrics(fn func(name string, config *ConfigView)) {
+	for _, v := range bundle.AllMetrics.Docs() {
+		fn(v.Name, &ConfigView{
+			component: v,
+		})
+	}
+}
+
+// WalkTracers executes a provided function argument for every tracer component
+// that has been registered to the environment. Note that tracer components
+// available to an environment cannot be modified
+func (e *Environment) WalkTracers(fn func(name string, config *ConfigView)) {
+	for _, v := range bundle.AllTracers.Docs() {
 		fn(v.Name, &ConfigView{
 			component: v,
 		})

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
@@ -57,38 +58,38 @@ input:
     dynamic_client_id_suffix: "$VAR1"
     clean_session: false
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		// integrationTestMetadata(), TODO
-		integrationTestSendBatch(10),
-		integrationTestStreamParallel(1000),
-		// integrationTestStreamParallelLossy(1000),
+	suite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		// integration.StreamTestMetadata(), TODO
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestStreamParallel(1000),
+		// integration.StreamTestStreamParallelLossy(1000),
 	)
 	suite.Run(
 		t, template,
-		testOptSleepAfterInput(100*time.Millisecond),
-		testOptSleepAfterOutput(100*time.Millisecond),
-		testOptPort(resource.GetPort("1883/tcp")),
+		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+		integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
-			testOptPort(resource.GetPort("1883/tcp")),
-			testOptMaxInFlight(10),
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
+			integration.StreamTestOptMaxInFlight(10),
 		)
 	})
 	t.Run("with generated suffix", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
 			t, template,
-			testOptSleepAfterInput(100*time.Millisecond),
-			testOptSleepAfterOutput(100*time.Millisecond),
-			testOptPort(resource.GetPort("1883/tcp")),
-			testOptMaxInFlight(10),
-			testOptVarOne("nanoid"),
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
+			integration.StreamTestOptMaxInFlight(10),
+			integration.StreamTestOptVarOne("nanoid"),
 		)
 	})
 })

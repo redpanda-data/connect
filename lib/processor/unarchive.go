@@ -12,12 +12,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -428,9 +427,9 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			d.log.Errorf("Failed to unarchive message part: %v\n", err)
 			newMsg.Append(part)
 			FlagErr(newMsg.Get(-1), err)
-			span.LogFields(
-				olog.String("event", "error"),
-				olog.String("type", err.Error()),
+			span.LogKV(
+				"event", "error",
+				"type", err.Error(),
 			)
 		}
 		return nil

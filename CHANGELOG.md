@@ -7,7 +7,129 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Field `cors` added to the `http_server` input and output, for supporting CORS requests when custom servers are used.
+- Field `server_side_encryption` added to the `aws_s3` output.
+- Field `use_histogram_timing` and `histogram_buckets` added to the `prometheus` metrics exporter.
+- New duration string and back off field types added to plugin config builders.
+- Experimental field `multipart` added to the `http_client` output.
+- Codec `regex` added to inputs.
+
+### Changed
+
+- The old map-style resource config fields (`resources.processors.<name>`, etc) are now marked as deprecated. Use the newer list based fields (`processor_resources`, etc) instead.
+
+### Fixed
+
+- The `generate` input now supports zeroed duration strings (`0s`, etc) for unbounded document creation.
+- The `aws_dynamodb_partiql` processor no longer ignores the `endpoint` field.
+- Corrected duplicate detection for custom cache implementations.
+- Fixed panic caused by invalid bounds in the `range` function.
+- Resource config files imported now allow (and ignore) a `tests` field.
+
+## 3.62.0 - 2022-01-21
+
+### Added
+
+- Field `sync` added to the `gcp_pubsub` input.
+- New input, processor, and output config field types added to the plugin APIs.
+- Added new experimental `parquet` processor.
+- New Bloblang method `format_json`.
+- Field `collection` in `mongodb` processor and output now supports interpolation functions.
+- Field `output_raw` added to the `jq` processor.
+- The lambda distribution now supports a `BENTHOS_CONFIG_PATH` environment variable for specifying a custom config path.
+- Field `metadata` added to `http` and `http_client` components.
+- Field `ordering_key` added to the `gcp_pubsub` output.
+- A suite of new experimental `geoip_` methods have been added.
+- Added flag `--deprecated` to the `benthos lint` subcommand for detecting deprecated fields.
+
+### Changed
+
+- The `sql` processor and output have been marked deprecated in favour of the newer `sql_insert`, `sql_select` alternatives.
+
+### Fixed
+
+- The input codec `chunked` is no longer capped by the packet size of the incoming streams.
+- The `schema_registry_decode` and `schema_registry_encode` processors now honour trailing slashes in the `url` field.
+- Processors configured within `pipeline.processors` now share processors across threads rather than clone them.
+- Go API: Errors returned from input/output plugin `Close` methods no longer cause shutdown to block.
+- The `pulsar` output should now follow authentication configuration.
+- Fixed an issue where the `aws_sqs` output might occasionally retry a failed message send with an invalid empty message body.
+
+## 3.61.0 - 2021-12-28
+
+### Added
+
+- Field `json_marshal_mode` added to the MongoDB processor.
+- Fields `extract_headers.include_prefixes` and `extract_headers.include_patterns` added to the `http_client` input and output and to the `http` processor.
+- Fields `sync_response.metadata_headers.include_prefixes` and `sync_response.metadata_headers.include_patterns` added to the `http_server` input.
+- The `http_client` input and output and the `http` processor field `copy_response_headers` has been deprecated in favour of the `extract_headers` functionality.
+- Added new cli flag `--no-api` for the `streams` subcommand to disable the REST API.
+- New experimental `kafka_franz` input and output.
+- Added new Bloblang function `ksuid`.
+- All `codec` input fields now support custom csv delimiters.
+
+### Fixed
+
+- Streams mode paths now resolve glob patterns in all cases.
+- Prevented the `nats` input from error logging when acknowledgments can't be fulfilled due to the lack of message replies.
+- Fixed an issue where GCP inputs and outputs could terminate requests early due to a cancelled client context.
+- Prevented more parsing errors in Bloblang mappings with windows style line endings.
+
+## 3.60.1 - 2021-12-03
+
+### Fixed
+
+- Fixed an issue where the `mongodb` output would incorrectly report upsert not allowed on valid operators.
+
+## 3.60.0 - 2021-12-01
+
+### Added
+
+- The `pulsar` input and output now support `oauth2` and `token` authentication mechanisms.
+- The `pulsar` input now enriches messages with more metadata.
+- Fields `message_group_id`, `message_deduplication_id`, and `metadata` added to the `aws_sns` output.
+- Field `upsert` added to the `mongodb` processor and output.
+
+### Fixed
+
+- The `schema_registry_encode` and `schema_registry_decode` processors now honour path prefixes included in the `url` field.
+- The `mqtt` input and output `keepalive` field is now interpreted as seconds, previously it was being erroneously interpreted as nanoseconds.
+- The header `Content-Type` in the field `http_server.sync_response.headers` is now detected in a case insensitive way when populating multipart message encoding types.
+- The `nats_jetstream` input and outputs should now honour `auth.*` config fields.
+
+## 3.59.0 - 2021-11-22
+
+### Added
+
+- New Bloblang method `parse_duration_iso8601` for parsing ISO-8601 duration strings into an integer.
+- The `nats` input now supports metadata from headers when supported.
+- Field `headers` added to the `nats` output.
+- Go API: Optional field definitions added for config specs.
+- New (experimental) `sql_select` input.
+- New (experimental) `sql_select` and `sql_insert` processors, which will supersede the existing `sql` processor.
+- New (experimental) `sql_insert` output, which will supersede the existing `sql` output.
+- Field `retained_interpolated` added to the `mqtt` output.
+- Bloblang now allows optional carriage returns before line feeds at line endings.
+- New CLI flag `-w`/`-watcher` added for automatically detecting and applying configuration file changes.
+- Field `avro_raw_json` added to the `schema_registry_encode` processor.
+- New (experimental) `msgpack` processor.
+- New `parse_msgpack` and `format_msgpack` Bloblang methods.
+
+### Fixed
+
+- Fixed an issue where the `azure_table_storage` output would attempt to send >100 size batches (and fail).
+- Fixed an issue in the `subprocess` input where saturated stdout streams could become corrupted.
+
+## 3.58.0 - 2021-11-02
+
+### Added
+
 - `amqp_0_9` components now support TLS EXTERNAL auth.
+- Field `urls` added to the `amqp_0_9` input and output.
+- New experimental `schema_registry_encode` processor.
+- Field `write_timeout` added to the `mqtt` output, and field `connect_timeout` added to both the input and output.
+- The `websocket` input and output now support custom `tls` configuration.
+- New output broker type `fallback` added as a drop-in replacement for the now deprecated `try` broker.
 
 ### Fixed
 
@@ -736,7 +858,7 @@ All notable changes to this project will be documented in this file.
 
 - New beta `bloblang` input for generating documents.
 - New beta Azure `blob_storage` output.
-- Field `sync_response.status` added to `http_server` input. 
+- Field `sync_response.status` added to `http_server` input.
 - New Bloblang `errored` function.
 
 ### Fixed

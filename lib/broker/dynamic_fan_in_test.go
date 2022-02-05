@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"reflect"
@@ -52,7 +53,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 				var ts types.Transaction
 				select {
 				case ts = <-fanIn.TransactionChan():
-					if string(ts.Payload.Get(0).Get()) != string(content[0]) {
+					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 					}
 				case <-time.After(time.Second):

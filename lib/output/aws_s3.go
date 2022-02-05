@@ -1,8 +1,8 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -113,11 +113,12 @@ output:
 			docs.FieldString("content_disposition", "The content disposition to set for each object.").Advanced().IsInterpolated(),
 			docs.FieldString("content_language", "The content language to set for each object.").Advanced().IsInterpolated(),
 			docs.FieldString("website_redirect_location", "The website redirect location to set for each object.").Advanced().IsInterpolated(),
-			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(output.MetadataFields()...),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(metadata.ExcludeFilterFields()...),
 			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
 			).IsInterpolated(),
 			docs.FieldAdvanced("kms_key_id", "An optional server side encryption key."),
+			docs.FieldAdvanced("server_side_encryption", "An optional server side encryption algorithm.").AtVersion("3.63.0"),
 			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
@@ -232,11 +233,12 @@ output:
 			docs.FieldString("content_disposition", "The content disposition to set for each object.").Advanced().IsInterpolated(),
 			docs.FieldString("content_language", "The content language to set for each object.").Advanced().IsInterpolated(),
 			docs.FieldString("website_redirect_location", "The website redirect location to set for each object.").Advanced().IsInterpolated(),
-			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(output.MetadataFields()...),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(metadata.ExcludeFilterFields()...),
 			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
 			).IsInterpolated(),
 			docs.FieldAdvanced("kms_key_id", "An optional server side encryption key."),
+			docs.FieldAdvanced("server_side_encryption", "An optional server side encryption algorithm."),
 			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),

@@ -2,7 +2,6 @@ package input
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,14 +20,14 @@ func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
 	t.Helper()
 
 	for k, v := range nameToContent {
-		require.NoError(t, ioutil.WriteFile(filepath.Join(dir, k), []byte(v), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, k), []byte(v), 0o600))
 	}
 }
 
 func TestSequenceHappy(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("", "benthos_sequence_input_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_sequence_input_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -86,7 +85,7 @@ consumeLoop:
 func TestSequenceJoins(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("", "benthos_sequence_joins_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_sequence_joins_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -218,7 +217,7 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 	for _, test := range testCases {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			tmpDir, err := ioutil.TempDir("", "benthos_sequence_joins_test")
+			tmpDir, err := os.MkdirTemp("", "benthos_sequence_joins_test")
 			require.NoError(t, err)
 
 			t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -289,7 +288,7 @@ func TestSequenceJoinsBig(t *testing.T) {
 	t.Skip()
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("", "benthos_sequence_joins_big_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_sequence_joins_big_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -324,7 +323,7 @@ func TestSequenceJoinsBig(t *testing.T) {
 
 	exp, act := []string{}, []string{}
 
-	_, err = csvFile.Write([]byte("id,bar\n"))
+	_, err = csvFile.WriteString("id,bar\n")
 	require.NoError(t, err)
 	for i := 0; i < totalRows; i++ {
 		exp = append(exp, fmt.Sprintf(`{"bar":["bar%v","baz%v"],"foo":"foo%v","id":"%v"}`, i, i, i, i))
@@ -375,7 +374,7 @@ consumeLoop:
 func TestSequenceSad(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("", "benthos_sequence_input_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_sequence_input_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -454,4 +453,42 @@ func TestSequenceSad(t *testing.T) {
 
 	rdr.CloseAsync()
 	assert.NoError(t, rdr.WaitForClose(time.Second))
+}
+
+func TestSequenceEarlyTermination(t *testing.T) {
+	t.Parallel()
+
+	tmpDir, err := os.MkdirTemp("", "benthos_sequence_early_termination")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
+	writeFiles(t, tmpDir, map[string]string{
+		"f1": "foo\nbar\nbaz",
+	})
+
+	conf := NewConfig()
+	conf.Type = TypeSequence
+
+	inConf := NewConfig()
+	inConf.Type = TypeFile
+	inConf.File.Path = filepath.Join(tmpDir, "f1")
+	conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
+
+	rdr, err := New(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	select {
+	case tran, open := <-rdr.TransactionChan():
+		if !open {
+			t.Fatal("closed earlier than expected")
+		}
+		assert.Equal(t, 1, tran.Payload.Len())
+		assert.Equal(t, "foo", string(tran.Payload.Get(0).Get()))
+	case <-time.After(time.Minute):
+		t.Fatal("timed out")
+	}
+
+	rdr.CloseAsync()
+	assert.NoError(t, rdr.WaitForClose(time.Second*5))
 }

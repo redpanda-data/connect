@@ -46,7 +46,7 @@ func getSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*s
 		awsConf = awsConf.WithRegion(region)
 	}
 	if endpoint, _ := parsedConf.FieldString("endpoint"); endpoint != "" {
-		awsConf = awsConf.WithRegion(endpoint)
+		awsConf = awsConf.WithEndpoint(endpoint)
 	}
 	if profile, _ := parsedConf.FieldString("credentials", "profile"); profile != "" {
 		awsConf = awsConf.WithCredentials(credentials.NewSharedCredentials(

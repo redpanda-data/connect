@@ -6,14 +6,13 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	syslog "github.com/influxdata/go-syslog/v3"
 	"github.com/influxdata/go-syslog/v3/rfc3164"
 	"github.com/influxdata/go-syslog/v3/rfc5424"
-
-	"github.com/opentracing/opentracing-go"
 )
 
 func init() {
@@ -298,7 +297,7 @@ func (s *ParseLog) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	s.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part types.Part) error {
 		dataMap, err := s.format(part.Get())
 		if err != nil {
 			s.mErr.Incr(1)
@@ -316,7 +315,7 @@ func (s *ParseLog) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		return nil
 	}
 
-	IteratePartsWithSpan(TypeParseLog, s.parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeParseLog, s.parts, newMsg, proc)
 
 	s.mBatchSent.Incr(1)
 	s.mSent.Incr(int64(newMsg.Len()))

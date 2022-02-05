@@ -49,6 +49,7 @@ type Expression struct {
 	static             string
 	resolvers          []Resolver
 	dynamicExpressions int
+	ContainsDeprecated bool // TODO: V4 remove this
 }
 
 func (e *Expression) resolve(index int, msg Message, escaped, legacy bool) []byte {

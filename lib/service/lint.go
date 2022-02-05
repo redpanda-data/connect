@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
@@ -40,9 +40,9 @@ type pathLint struct {
 	err    string
 }
 
-func lintFile(path string) (pathLints []pathLint) {
+func lintFile(path string, rejectDeprecated bool) (pathLints []pathLint) {
 	conf := config.New()
-	lints, err := config.Read(path, true, &conf)
+	lints, err := config.ReadV2(path, true, rejectDeprecated, &conf)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
@@ -59,8 +59,8 @@ func lintFile(path string) (pathLints []pathLint) {
 	return
 }
 
-func lintMDSnippets(path string) (pathLints []pathLint) {
-	rawBytes, err := ioutil.ReadFile(path)
+func lintMDSnippets(path string, rejectDeprecated bool) (pathLints []pathLint) {
+	rawBytes, err := os.ReadFile(path)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
@@ -98,7 +98,9 @@ func lintMDSnippets(path string) (pathLints []pathLint) {
 				err:    err.Error(),
 			})
 		} else {
-			lints, err := config.Lint(configBytes, conf)
+			lintCtx := docs.NewLintContext()
+			lintCtx.RejectDeprecated = rejectDeprecated
+			lints, err := config.LintV2(lintCtx, configBytes)
 			if err != nil {
 				pathLints = append(pathLints, pathLint{
 					source: path,
@@ -127,19 +129,27 @@ func lintCliCommand() *cli.Command {
 		Name:  "lint",
 		Usage: "Parse Benthos configs and report any linting errors",
 		Description: `
-   Exits with a status code 1 if any linting errors are detected:
-   
-   benthos -c target.yaml lint
-   benthos lint ./configs/*.yaml
-   benthos lint ./foo.yaml ./bar.yaml
-   benthos lint ./configs/...
-   
-   If a path ends with '...' then Benthos will walk the target and lint any
-   files with the .yaml or .yml extension.`[4:],
+Exits with a status code 1 if any linting errors are detected:
+
+  benthos -c target.yaml lint
+  benthos lint ./configs/*.yaml
+  benthos lint ./foo.yaml ./bar.yaml
+  benthos lint ./configs/...
+
+If a path ends with '...' then Benthos will walk the target and lint any
+files with the .yaml or .yml extension.`[1:],
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "deprecated",
+				Value: false,
+				Usage: "Print linting errors for the presence of deprecated fields.",
+			},
+		},
 		Action: func(c *cli.Context) error {
 			var targets []string
 			for _, p := range c.Args().Slice() {
 				var recurse bool
+				// TODO: V4 support wildcards
 				if p, recurse = resolveLintPath(p); recurse {
 					if err := filepath.Walk(p, func(path string, info os.FileInfo, werr error) error {
 						if werr != nil {
@@ -165,6 +175,8 @@ func lintCliCommand() *cli.Command {
 				targets = append(targets, conf)
 			}
 
+			rejectDeprecated := c.Bool("deprecated")
+
 			var pathLintMut sync.Mutex
 			var pathLints []pathLint
 			threads := runtime.NumCPU()
@@ -182,9 +194,9 @@ func lintCliCommand() *cli.Command {
 						}
 						var lints []pathLint
 						if path.Ext(target) == ".md" {
-							lints = lintMDSnippets(target)
+							lints = lintMDSnippets(target, rejectDeprecated)
 						} else {
-							lints = lintFile(target)
+							lints = lintFile(target, rejectDeprecated)
 						}
 						if len(lints) > 0 {
 							pathLintMut.Lock()

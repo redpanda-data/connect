@@ -183,6 +183,11 @@ func (t *SocketServer) sendMsg(msg types.Message) bool {
 
 	go func() {
 		hasLocked := false
+		defer func() {
+			if hasLocked {
+				t.retriesMut.RUnlock()
+			}
+		}()
 		for {
 			select {
 			case res, open := <-resChan:
@@ -202,7 +207,6 @@ func (t *SocketServer) sendMsg(msg types.Message) bool {
 				if !hasLocked {
 					hasLocked = true
 					t.retriesMut.RLock()
-					defer t.retriesMut.RUnlock()
 				}
 				t.log.Errorf("failed to send message: %v\n", sendErr)
 

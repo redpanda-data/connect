@@ -112,9 +112,9 @@ func TestDedupe(t *testing.T) {
 func TestDedupeInterpolation(t *testing.T) {
 	rndText1 := randStringRunes(20)
 	rndText2 := randStringRunes(15)
-	doc1 := []byte(fmt.Sprintf(`{"id":"%s","content":"foo"}`, rndText1))
-	doc2 := []byte(fmt.Sprintf(`{"id":"%s","content":"bar"}`, rndText1)) // duplicate
-	doc3 := []byte(fmt.Sprintf(`{"id":"%s","content":"foo"}`, rndText2))
+	doc1 := []byte(fmt.Sprintf(`{"id":%q,"content":"foo"}`, rndText1))
+	doc2 := []byte(fmt.Sprintf(`{"id":%q,"content":"bar"}`, rndText1)) // duplicate
+	doc3 := []byte(fmt.Sprintf(`{"id":%q,"content":"foo"}`, rndText2))
 	doc4 := []byte(`{"content":"foo"}`)
 
 	memCache, cacheErr := cache.NewMemory(cache.NewConfig(), nil, log.Noop(), metrics.Noop())

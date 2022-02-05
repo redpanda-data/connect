@@ -16,6 +16,24 @@ var AllProcessors = &ProcessorSet{
 
 //------------------------------------------------------------------------------
 
+// ProcessorAdd adds a new processor to this environment by providing a
+// constructor and documentation.
+func (e *Environment) ProcessorAdd(constructor ProcessorConstructor, spec docs.ComponentSpec) error {
+	return e.processors.Add(constructor, spec)
+}
+
+// ProcessorInit attempts to initialise a processor from a config.
+func (e *Environment) ProcessorInit(conf processor.Config, mgr NewManagement) (types.Processor, error) {
+	return e.processors.Init(conf, mgr)
+}
+
+// ProcessorDocs returns a slice of processor specs, which document each method.
+func (e *Environment) ProcessorDocs() []docs.ComponentSpec {
+	return e.processors.Docs()
+}
+
+//------------------------------------------------------------------------------
+
 // ProcessorConstructor constructs an processor component.
 type ProcessorConstructor func(processor.Config, NewManagement) (processor.Type, error)
 

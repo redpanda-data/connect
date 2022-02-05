@@ -9,14 +9,13 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/google/go-cmp/cmp"
-	opentracinglog "github.com/opentracing/opentracing-go/log"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -197,7 +196,7 @@ func (w *While) ProcessMessage(msg types.Message) (msgs []types.Message, res typ
 		w.mLoop.Incr(1)
 		w.log.Traceln("Looped")
 		for _, s := range spans {
-			s.LogFields(opentracinglog.Event("loop"))
+			s.LogKV("event", "loop")
 		}
 
 		msgs, res = ExecuteAll(w.children, msgs...)

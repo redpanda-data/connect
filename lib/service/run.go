@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/cli/studio"
 	clitemplate "github.com/Jeffail/benthos/v3/internal/cli/template"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
@@ -30,6 +31,21 @@ var (
 	Version   string
 	DateBuilt string
 )
+
+func init() {
+	if Version == "" {
+		if info, ok := debug.ReadBuildInfo(); ok {
+			for _, mod := range info.Deps {
+				if mod.Path == "github.com/Jeffail/benthos/v3" {
+					Version = mod.Version
+				}
+			}
+		}
+	}
+	if DateBuilt == "" {
+		DateBuilt = "unknown"
+	}
+}
 
 // OptSetVersionStamp creates an opt func for setting the version and date built
 // stamps that Benthos returns via --version and the /version endpoint. The
@@ -150,6 +166,12 @@ func Run() {
 			Value: false,
 			Usage: "continue to execute a config containing linter errors",
 		},
+		&cli.BoolFlag{
+			Name:    "watcher",
+			Aliases: []string{"w"},
+			Value:   false,
+			Usage:   "EXPERIMENTAL: watch config files for changes and automatically apply them",
+		},
 	}
 	if len(customFlags) > 0 {
 		flags = append(flags, customFlags...)
@@ -159,12 +181,12 @@ func Run() {
 		Name:  "benthos",
 		Usage: "A stream processor for mundane tasks - https://www.benthos.dev",
 		Description: `
-   Either run Benthos as a stream processor or choose a command:
+Either run Benthos as a stream processor or choose a command:
 
-   benthos list inputs
-   benthos create kafka//file > ./config.yaml
-   benthos -c ./config.yaml
-   benthos -r "./production/*.yaml" -c ./config.yaml`[4:],
+  benthos list inputs
+  benthos create kafka//file > ./config.yaml
+  benthos -c ./config.yaml
+  benthos -r "./production/*.yaml" -c ./config.yaml`[1:],
 		Flags: flags,
 		Before: func(c *cli.Context) error {
 			if dotEnvFile := c.String("env-file"); dotEnvFile != "" {
@@ -215,6 +237,8 @@ func Run() {
 				c.StringSlice("set"),
 				c.String("log.level"),
 				!c.Bool("chilled"),
+				c.Bool("watcher"),
+				false,
 				false,
 				nil,
 			))
@@ -225,14 +249,17 @@ func Run() {
 				Name:  "echo",
 				Usage: "Parse a config file and echo back a normalised version",
 				Description: `
-   This simple command is useful for sanity checking a config if it isn't
-   behaving as expected, as it shows you a normalised version after environment
-   variables have been resolved:
+This simple command is useful for sanity checking a config if it isn't
+behaving as expected, as it shows you a normalised version after environment
+variables have been resolved:
 
-   benthos -c ./config.yaml echo | less`[4:],
+  benthos -c ./config.yaml echo | less`[1:],
 				Action: func(c *cli.Context) error {
-					readConfig(c.String("config"), c.StringSlice("resources"), c.StringSlice("set"))
-
+					confReader := readConfig(c.String("config"), false, c.StringSlice("resources"), nil, c.StringSlice("set"))
+					if _, err := confReader.Read(&conf); err != nil {
+						fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
+						os.Exit(1)
+					}
 					var node yaml.Node
 					err := node.Encode(conf)
 					if err == nil {
@@ -258,20 +285,28 @@ func Run() {
 				Name:  "streams",
 				Usage: "Run Benthos in streams mode",
 				Description: `
-   Run Benthos in streams mode, where multiple pipelines can be executed in a
-   single process and can be created, updated and removed via REST HTTP
-   endpoints.
+Run Benthos in streams mode, where multiple pipelines can be executed in a
+single process and can be created, updated and removed via REST HTTP
+endpoints.
 
-   benthos streams ./path/to/stream/configs ./and/some/more
-   benthos -c ./root_config.yaml streams ./path/to/stream/configs
-   benthos -c ./root_config.yaml streams
+  benthos streams
+  benthos -c ./root_config.yaml streams
+  benthos streams ./path/to/stream/configs ./and/some/more
+  benthos -c ./root_config.yaml streams ./streams/*.yaml
 
-   In streams mode the stream fields of a root target config (input, buffer,
-   pipeline, output) will be ignored. Other fields will be shared across all
-   loaded streams (resources, metrics, etc).
+In streams mode the stream fields of a root target config (input, buffer,
+pipeline, output) will be ignored. Other fields will be shared across all
+loaded streams (resources, metrics, etc).
 
-   For more information check out the docs at:
-   https://benthos.dev/docs/guides/streams_mode/about`[4:],
+For more information check out the docs at:
+https://benthos.dev/docs/guides/streams_mode/about`[1:],
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "no-api",
+						Value: false,
+						Usage: "Disable the HTTP API for streams mode",
+					},
+				},
 				Action: func(c *cli.Context) error {
 					os.Exit(cmdService(
 						c.String("config"),
@@ -279,39 +314,20 @@ func Run() {
 						c.StringSlice("set"),
 						c.String("log.level"),
 						!c.Bool("chilled"),
+						c.Bool("watcher"),
+						!c.Bool("no-api"),
 						true,
 						c.Args().Slice(),
 					))
 					return nil
 				},
 			},
-			{
-				Name:  "list",
-				Usage: "List all Benthos component types",
-				Description: `
-   If any component types are explicitly listed then only types of those
-   components will be shown.
-
-   benthos list
-   benthos list --format json inputs output
-   benthos list rate-limits buffers`[4:],
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:  "format",
-						Value: "text",
-						Usage: "Print the component list in a specific format. Options are text or json.",
-					},
-				},
-				Action: func(c *cli.Context) error {
-					listComponents(c)
-					os.Exit(0)
-					return nil
-				},
-			},
+			listCliCommand(),
 			createCliCommand(),
 			test.CliCommand(testSuffix),
 			clitemplate.CliCommand(),
 			blobl.CliCommand(),
+			studio.CliCommand(Version, DateBuilt),
 		},
 	}
 
@@ -340,7 +356,7 @@ func Run() {
 		}
 
 		deprecatedExecute(*configPath, testSuffix)
-		os.Exit(cmdService(*configPath, nil, nil, "", false, false, nil))
+		os.Exit(cmdService(*configPath, nil, nil, "", false, false, false, false, nil))
 		return nil
 	}
 

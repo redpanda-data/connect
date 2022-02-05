@@ -32,7 +32,7 @@ message brokers, including RabbitMQ.
 input:
   label: ""
   amqp_0_9:
-    url: amqp://guest:guest@localhost:5672/
+    urls: []
     queue: benthos-queue
     consumer_tag: benthos-consumer
     prefetch_count: 10
@@ -46,7 +46,7 @@ input:
 input:
   label: ""
   amqp_0_9:
-    url: amqp://guest:guest@localhost:5672/
+    urls: []
     queue: benthos-queue
     queue_declare:
       enabled: false
@@ -101,20 +101,27 @@ You can access these metadata fields using
 
 ## Fields
 
-### `url`
+### `urls`
 
-A URL to connect to.
+A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.
 
 
-Type: `string`  
-Default: `"amqp://guest:guest@localhost:5672/"`  
+Type: `array`  
+Default: `[]`  
+Requires version 3.58.0 or newer  
 
 ```yaml
 # Examples
 
-url: amqp://localhost:5672/
+urls:
+  - amqp://guest:guest@127.0.0.1:5672/
 
-url: amqps://guest:guest@localhost:5672/
+urls:
+  - amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/
+
+urls:
+  - amqp://127.0.0.1:5672/
+  - amqp://127.0.0.2:5672/
 ```
 
 ### `queue`

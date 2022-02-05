@@ -1008,6 +1008,42 @@ root.delay_for_s = this.delay_for.parse_duration() / 1000000000
 # Out: {"delay_for_s":7200}
 ```
 
+### `parse_duration_iso8601`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Attempts to parse a string using ISO-8601 rules as a duration and returns an integer of nanoseconds. A duration string is represented by the format "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". In these representations, the "[n]" is replaced by the value for each of the date and time elements that follow the "[n]". For example, "P3Y6M4DT12H30M5S" represents a duration of "three years, six months, four days, twelve hours, thirty minutes, and five seconds". The last field of the format allows fractions with one decimal place, so "P3.5S" will return 3500000000ns. Any additional decimals will be truncated.
+
+#### Examples
+
+
+Arbitrary ISO-8601 duration string to nanoseconds:
+
+```coffee
+root.delay_for_ns = this.delay_for.parse_duration_iso8601()
+
+# In:  {"delay_for":"P3Y6M4DT12H30M5S"}
+# Out: {"delay_for_ns":110839937000000000}
+```
+
+Two hours ISO-8601 duration string to seconds:
+
+```coffee
+root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
+
+# In:  {"delay_for":"PT2H"}
+# Out: {"delay_for_s":7200}
+```
+
+Two and a half seconds ISO-8601 duration string to seconds:
+
+```coffee
+root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
+
+# In:  {"delay_for":"PT2.5S"}
+# Out: {"delay_for_s":2.5}
+```
+
 ### `parse_timestamp`
 
 BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
@@ -1414,6 +1450,15 @@ root.result = this.foo.fold("", item -> "%v%v".format(item.tally, item.value))
 # Out: {"result":"hello world"}
 ```
 
+You can use fold to merge an array of objects together:
+
+```coffee
+root.smoothie = this.fruits.fold({}, item -> item.tally.merge(item.value))
+
+# In:  {"fruits":[{"apple":5},{"banana":3},{"orange":8}]}
+# Out: {"smoothie":{"apple":5,"banana":3,"orange":8}}
+```
+
 ### `get`
 
 Extract a field value, identified via a [dot path][field_paths], from an object.
@@ -1804,6 +1849,71 @@ root.body = this.body.bloblang(this.mapping)
 # Out: {"body":{"foo":"Hello World 2"}}
 ```
 
+### `format_json`
+
+BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+
+Serializes a target value into a pretty-printed JSON byte array (with 4 space indentation by default).
+
+#### Parameters
+
+**`indent`** &lt;(optional) string, default `"    "`&gt; Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
+
+#### Examples
+
+
+```coffee
+root = this.doc.format_json()
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {
+#          "foo": "bar"
+#      }
+```
+
+Provide an argument string in order to customise the indentation used.
+
+```coffee
+root = this.format_json("  ")
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {
+#        "doc": {
+#          "foo": "bar"
+#        }
+#      }
+```
+
+Use the `.string()` method in order to coerce the result into a string.
+
+```coffee
+root.doc = this.doc.format_json().string()
+
+# In:  {"doc":{"foo":"bar"}}
+# Out: {"doc":"{\n    \"foo\": \"bar\"\n}"}
+```
+
+### `format_msgpack`
+
+Formats data as a [MessagePack](https://msgpack.org/) message in bytes format.
+
+#### Examples
+
+
+```coffee
+root = this.format_msgpack().encode("hex")
+
+# In:  {"foo":"bar"}
+# Out: 81a3666f6fa3626172
+```
+
+```coffee
+root.encoded = this.format_msgpack().encode("base64")
+
+# In:  {"foo":"bar"}
+# Out: {"encoded":"gaNmb2+jYmFy"}
+```
+
 ### `format_yaml`
 
 Serializes a target value into a YAML byte array.
@@ -1816,7 +1926,6 @@ root = this.doc.format_yaml()
 
 # In:  {"doc":{"foo":"bar"}}
 # Out: foo: bar
-
 ```
 
 Use the `.string()` method in order to coerce the result into a string.
@@ -1854,6 +1963,27 @@ root.doc = this.doc.parse_json()
 
 # In:  {"doc":"{\"foo\":\"bar\"}"}
 # Out: {"doc":{"foo":"bar"}}
+```
+
+### `parse_msgpack`
+
+Parses a [MessagePack](https://msgpack.org/) message into a structured document.
+
+#### Examples
+
+
+```coffee
+root = content().decode("hex").parse_msgpack()
+
+# In:  81a3666f6fa3626172
+# Out: {"foo":"bar"}
+```
+
+```coffee
+root = this.encoded.decode("base64").parse_msgpack()
+
+# In:  {"encoded":"gaNmb2+jYmFy"}
+# Out: {"foo":"bar"}
 ```
 
 ### `parse_xml`
@@ -2012,6 +2142,72 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")
 # In:  {"value":"hello world"}
 # Out: {"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}
 ```
+
+## GeoIP
+
+### `geoip_anonymous_ip`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the anonymous IP associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_asn`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ASN associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_city`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the city associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_connection_type`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the connection type associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_country`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the country associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_domain`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the domain associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_enterprise`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the enterprise associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+### `geoip_isp`
+
+EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ISP associated with it.
+
+#### Parameters
+
+**`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
 
 ## Deprecated
 

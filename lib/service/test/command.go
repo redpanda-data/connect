@@ -2,7 +2,6 @@ package test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -53,7 +52,7 @@ func getDefinition(targetPath, definitionPath string) (*Definition, error) {
 		definitionPath = targetPath
 	}
 	var definition Definition
-	defBytes, err := ioutil.ReadFile(definitionPath)
+	defBytes, err := os.ReadFile(definitionPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read test definition from '%v': %v", definitionPath, err)
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -74,18 +75,18 @@ cache_resources:
         secret: xxxxx
         token: xxxxx
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestMissingKey(),
-		integrationTestDoubleAdd(),
-		integrationTestDelete(),
-		integrationTestGetAndSet(1),
+	suite := integration.CacheTests(
+		integration.CacheTestOpenClose(),
+		integration.CacheTestMissingKey(),
+		integration.CacheTestDoubleAdd(),
+		integration.CacheTestDelete(),
+		integration.CacheTestGetAndSet(1),
 	)
 	suite.Run(
 		t, template,
-		testOptPort(servicePort),
-		testOptPreTest(func(t *testing.T, env *testEnvironment) {
-			require.NoError(t, createBucket(env.ctx, servicePort, env.configVars.id))
+		integration.CacheTestOptPort(servicePort),
+		integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
+			require.NoError(t, createBucket(ctx, servicePort, testID))
 		}),
 	)
 })

@@ -89,7 +89,19 @@ func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error 
 // Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) error {
-	iSpec := query.NewMethodSpec(name, spec.description).InCategory(query.MethodCategoryPlugin, "")
+	category := query.MethodCategory(spec.category)
+	if category == "" {
+		category = query.MethodCategoryPlugin
+	}
+	var examples []query.ExampleSpec
+	for _, e := range spec.examples {
+		var res []string
+		for _, inputOutput := range e.inputOutputs {
+			res = append(res, inputOutput[0], inputOutput[1])
+		}
+		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
+	}
+	iSpec := query.NewMethodSpec(name, spec.description).InCategory(category, "", examples...)
 	iSpec.Params = spec.params
 	return e.env.RegisterMethod(iSpec, func(target query.Function, args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(&ParsedParams{par: args})
@@ -129,7 +141,19 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 // Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
-	iSpec := query.NewFunctionSpec(query.FunctionCategoryPlugin, name, spec.description)
+	category := query.FunctionCategory(spec.category)
+	if category == "" {
+		category = query.FunctionCategoryPlugin
+	}
+	var examples []query.ExampleSpec
+	for _, e := range spec.examples {
+		var res []string
+		for _, inputOutput := range e.inputOutputs {
+			res = append(res, inputOutput[0], inputOutput[1])
+		}
+		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
+	}
+	iSpec := query.NewFunctionSpec(category, name, spec.description, examples...)
 	iSpec.Params = spec.params
 	return e.env.RegisterFunction(iSpec, func(args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(&ParsedParams{par: args})
@@ -165,6 +189,24 @@ func (e *Environment) WithoutFunctions(names ...string) *Environment {
 func (e *Environment) WithDisabledImports() *Environment {
 	return &Environment{
 		env: e.env.WithDisabledImports(),
+	}
+}
+
+// WithCustomImporter returns a copy of the environment where imports from
+// mappings are done via a provided closure function.
+func (e *Environment) WithCustomImporter(fn func(name string) ([]byte, error)) *Environment {
+	return &Environment{
+		env: e.env.WithCustomImporter(fn),
+	}
+}
+
+// WithMaxMapRecursion returns a copy of the environment where the maximum
+// recursion allowed for maps is set to a given value. If the execution of a
+// mapping from this environment matches this number of recursive map calls the
+// mapping will error out.
+func (e *Environment) WithMaxMapRecursion(n int) *Environment {
+	return &Environment{
+		env: e.env.WithMaxMapRecursion(n),
 	}
 }
 
@@ -210,4 +252,22 @@ func RegisterFunction(name string, ctor FunctionConstructor) error {
 // /^[a-z0-9]+(_[a-z0-9]+)*$/ (snake case).
 func RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
 	return GlobalEnvironment().RegisterFunctionV2(name, spec, ctor)
+}
+
+// WalkFunctions executes a provided function argument for every function that
+// has been registered to the environment.
+func (e *Environment) WalkFunctions(fn func(name string, spec *FunctionView)) {
+	e.env.WalkFunctions(func(name string, spec query.FunctionSpec) {
+		v := &FunctionView{spec: spec}
+		fn(name, v)
+	})
+}
+
+// WalkMethods executes a provided function argument for every method that has
+// been registered to the environment.
+func (e *Environment) WalkMethods(fn func(name string, spec *MethodView)) {
+	e.env.WalkMethods(func(name string, spec query.MethodSpec) {
+		v := &MethodView{spec: spec}
+		fn(name, v)
+	})
 }

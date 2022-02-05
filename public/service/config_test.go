@@ -331,30 +331,95 @@ c:
 	assert.Equal(t, 23.1, f)
 }
 
-func TestConfigBatching(t *testing.T) {
+func TestConfigRootString(t *testing.T) {
 	spec := NewConfigSpec().
-		Field(NewBatchPolicyField("a"))
+		Field(NewStringField(""))
 
-	parsedConfig, err := spec.ParseYAML(`
-a:
-  count: 20
-  period: 5s
-  processors:
-    - bloblang: 'root = content().uppercase()'
+	parsedConfig, err := spec.ParseYAML(`"hello world"`, nil)
+	require.NoError(t, err)
+
+	v, err := parsedConfig.FieldString()
+	require.NoError(t, err)
+
+	assert.Equal(t, "hello world", v)
+}
+
+func TestConfigListOfObjects(t *testing.T) {
+	spec := NewConfigSpec().
+		Field(NewObjectListField("objects",
+			NewStringField("foo"),
+			NewStringField("bar").Default("bar value"),
+			NewIntField("baz"),
+		))
+
+	_, err := spec.ParseYAML(`objects:
+- foo: "foo value 1"
+  bar: "bar value 1"
+`, nil)
+	require.Error(t, err)
+
+	_, err = spec.ParseYAML(`objects:
+- bar: "bar value 1"
+  baz: 11
+`, nil)
+	require.Error(t, err)
+
+	_, err = spec.ParseYAML(`objects: []`, nil)
+	require.NoError(t, err)
+
+	parsedConfig, err := spec.ParseYAML(`objects:
+- foo: "foo value 1"
+  bar: "bar value 1"
+  baz: 11
+
+- foo: "foo value 2"
+  bar: "bar value 2"
+  baz: 12
+
+- foo: "foo value 3"
+  baz: 13
 `, nil)
 	require.NoError(t, err)
 
-	_, err = parsedConfig.FieldTLS("b")
-	require.Error(t, err)
-
-	bConf, err := parsedConfig.FieldBatchPolicy("a")
+	objs, err := parsedConfig.FieldObjectList("objects")
 	require.NoError(t, err)
+	require.Len(t, objs, 3)
 
-	assert.Equal(t, 20, bConf.Count)
-	assert.Equal(t, "5s", bConf.Period)
-	require.Len(t, bConf.procs, 1)
-	assert.Equal(t, "bloblang", bConf.procs[0].Type)
-	assert.Equal(t, "root = content().uppercase()", string(bConf.procs[0].Bloblang))
+	strValue, err := objs[0].FieldString("foo")
+	require.NoError(t, err)
+	assert.Equal(t, "foo value 1", strValue)
+
+	strValue, err = objs[0].FieldString("bar")
+	require.NoError(t, err)
+	assert.Equal(t, "bar value 1", strValue)
+
+	intValue, err := objs[0].FieldInt("baz")
+	require.NoError(t, err)
+	assert.Equal(t, 11, intValue)
+
+	strValue, err = objs[1].FieldString("foo")
+	require.NoError(t, err)
+	assert.Equal(t, "foo value 2", strValue)
+
+	strValue, err = objs[1].FieldString("bar")
+	require.NoError(t, err)
+	assert.Equal(t, "bar value 2", strValue)
+
+	intValue, err = objs[1].FieldInt("baz")
+	require.NoError(t, err)
+	assert.Equal(t, 12, intValue)
+
+	strValue, err = objs[2].FieldString("foo")
+	require.NoError(t, err)
+	assert.Equal(t, "foo value 3", strValue)
+
+	strValue, err = objs[2].FieldString("bar")
+	require.NoError(t, err)
+	assert.Equal(t, "bar value", strValue)
+
+	intValue, err = objs[2].FieldInt("baz")
+	require.NoError(t, err)
+	assert.Equal(t, 13, intValue)
 }
 
 func TestConfigTLS(t *testing.T) {
@@ -403,29 +468,4 @@ b: this is ${! json } an invalid interp string
 
 	res := iConf.String(NewMessage([]byte("hello world")))
 	assert.Equal(t, "foo hello world bar", res)
-}
-
-func TestConfigBloblang(t *testing.T) {
-	spec := NewConfigSpec().
-		Field(NewBloblangField("a")).
-		Field(NewStringField("b"))
-
-	parsedConfig, err := spec.ParseYAML(`
-a: 'root = this.uppercase()'
-b: 'root = this.filter('
-`, nil)
-	require.NoError(t, err)
-
-	_, err = parsedConfig.FieldBloblang("b")
-	require.Error(t, err)
-
-	_, err = parsedConfig.FieldBloblang("c")
-	require.Error(t, err)
-
-	exec, err := parsedConfig.FieldBloblang("a")
-	require.NoError(t, err)
-
-	res, err := exec.Query("hello world")
-	require.NoError(t, err)
-	assert.Equal(t, "HELLO WORLD", res)
 }

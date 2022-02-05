@@ -2,6 +2,8 @@ package cache
 
 import (
 	"testing"
+
+	"github.com/Jeffail/benthos/v3/internal/integration"
 )
 
 var _ = registerIntegrationTest("multilevel", func(t *testing.T) {
@@ -16,12 +18,12 @@ cache_resources:
   - label: second
     memory: {}
 `
-	suite := integrationTests(
-		integrationTestOpenClose(),
-		integrationTestMissingKey(),
-		integrationTestDoubleAdd(),
-		integrationTestDelete(),
-		integrationTestGetAndSet(50),
+	suite := integration.CacheTests(
+		integration.CacheTestOpenClose(),
+		integration.CacheTestMissingKey(),
+		integration.CacheTestDoubleAdd(),
+		integration.CacheTestDelete(),
+		integration.CacheTestGetAndSet(50),
 	)
 	suite.Run(t, template)
 })

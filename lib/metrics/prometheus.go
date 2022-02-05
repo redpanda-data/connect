@@ -13,6 +13,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/client_golang/prometheus/push"
 )
@@ -93,6 +94,18 @@ func (p *PromTimingVec) With(labelValues ...string) StatTimer {
 	}
 }
 
+// PromTimingHistVec creates StatTimers with dynamic labels.
+type PromTimingHistVec struct {
+	sum *prometheus.HistogramVec
+}
+
+// With returns a StatTimer with a set of label values.
+func (p *PromTimingHistVec) With(labelValues ...string) StatTimer {
+	return &PromTiming{
+		sum: p.sum.WithLabelValues(labelValues...),
+	}
+}
+
 // PromGaugeVec creates StatGauges with dynamic labels.
 type PromGaugeVec struct {
 	ctr *prometheus.GaugeVec
@@ -114,60 +127,69 @@ type Prometheus struct {
 	closedChan chan struct{}
 	running    int32
 
-	config      PrometheusConfig
-	pathMapping *pathMapping
-	prefix      string
+	pathMapping        *pathMapping
+	prefix             string
+	useHistogramTiming bool
+	histogramBuckets   []float64
 
 	pusher *push.Pusher
 	reg    *prometheus.Registry
 
-	counters map[string]*prometheus.CounterVec
-	gauges   map[string]*prometheus.GaugeVec
-	timers   map[string]*prometheus.SummaryVec
+	counters   map[string]*prometheus.CounterVec
+	gauges     map[string]*prometheus.GaugeVec
+	timers     map[string]*prometheus.SummaryVec
+	timersHist map[string]*prometheus.HistogramVec
 
-	sync.Mutex
+	mut sync.Mutex
 }
 
 // NewPrometheus creates and returns a new Prometheus object.
 func NewPrometheus(config Config, opts ...func(Type)) (Type, error) {
+	promConf := config.Prometheus
 	p := &Prometheus{
-		log:        log.Noop(),
-		running:    1,
-		closedChan: make(chan struct{}),
-		config:     config.Prometheus,
-		prefix:     config.Prometheus.Prefix,
-		reg:        prometheus.NewRegistry(),
-		counters:   map[string]*prometheus.CounterVec{},
-		gauges:     map[string]*prometheus.GaugeVec{},
-		timers:     map[string]*prometheus.SummaryVec{},
+		log:                log.Noop(),
+		running:            1,
+		closedChan:         make(chan struct{}),
+		prefix:             promConf.Prefix,
+		useHistogramTiming: promConf.UseHistogramTiming,
+		histogramBuckets:   promConf.HistogramBuckets,
+		reg:                prometheus.NewRegistry(),
+		counters:           map[string]*prometheus.CounterVec{},
+		gauges:             map[string]*prometheus.GaugeVec{},
+		timers:             map[string]*prometheus.SummaryVec{},
+		timersHist:         map[string]*prometheus.HistogramVec{},
 	}
 
 	for _, opt := range opts {
 		opt(p)
 	}
 
-	// TODO: Maybe disable this with a config flag.
-	if err := p.reg.Register(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{})); err != nil {
+	if len(p.histogramBuckets) == 0 {
+		p.histogramBuckets = prometheus.DefBuckets
+	}
+
+	// TODO: V4 Maybe disable this with a config flag.
+	if err := p.reg.Register(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{})); err != nil {
 		return nil, err
 	}
-	if err := p.reg.Register(prometheus.NewGoCollector()); err != nil {
+	if err := p.reg.Register(collectors.NewGoCollector()); err != nil {
 		return nil, err
 	}
 
 	var err error
-	if p.pathMapping, err = newPathMapping(p.config.PathMapping, p.log); err != nil {
+	if p.pathMapping, err = newPathMapping(promConf.PathMapping, p.log); err != nil {
 		return nil, fmt.Errorf("failed to init path mapping: %v", err)
 	}
 
-	if len(p.config.PushURL) > 0 {
-		p.pusher = push.New(p.config.PushURL, p.config.PushJobName).Gatherer(p.reg)
+	if len(promConf.PushURL) > 0 {
+		p.pusher = push.New(promConf.PushURL, promConf.PushJobName).Gatherer(p.reg)
 
-		if len(p.config.PushBasicAuth.Username) > 0 && len(p.config.PushBasicAuth.Password) > 0 {
-			p.pusher = p.pusher.BasicAuth(p.config.PushBasicAuth.Username, p.config.PushBasicAuth.Password)
+		if len(promConf.PushBasicAuth.Username) > 0 && len(promConf.PushBasicAuth.Password) > 0 {
+			p.pusher = p.pusher.BasicAuth(promConf.PushBasicAuth.Username, promConf.PushBasicAuth.Password)
 		}
 
-		if len(p.config.PushInterval) > 0 {
-			interval, err := time.ParseDuration(p.config.PushInterval)
+		if len(promConf.PushInterval) > 0 {
+			interval, err := time.ParseDuration(promConf.PushInterval)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse push interval: %v", err)
 			}
@@ -215,7 +237,7 @@ func (p *Prometheus) GetCounter(path string) StatCounter {
 
 	var ctr *prometheus.CounterVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if ctr, exists = p.counters[stat]; !exists {
 		ctr = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -226,7 +248,7 @@ func (p *Prometheus) GetCounter(path string) StatCounter {
 		p.reg.MustRegister(ctr)
 		p.counters[stat] = ctr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	return &PromCounter{
 		ctr: ctr.WithLabelValues(values...),
@@ -235,6 +257,10 @@ func (p *Prometheus) GetCounter(path string) StatCounter {
 
 // GetTimer returns a stat timer object for a path.
 func (p *Prometheus) GetTimer(path string) StatTimer {
+	if p.useHistogramTiming {
+		return p.getTimerHist(path)
+	}
+
 	stat, labels, values := p.toPromName(path)
 	if stat == "" {
 		return DudStat{}
@@ -242,7 +268,7 @@ func (p *Prometheus) GetTimer(path string) StatTimer {
 
 	var tmr *prometheus.SummaryVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if tmr, exists = p.timers[stat]; !exists {
 		tmr = prometheus.NewSummaryVec(prometheus.SummaryOpts{
@@ -254,7 +280,34 @@ func (p *Prometheus) GetTimer(path string) StatTimer {
 		p.reg.MustRegister(tmr)
 		p.timers[stat] = tmr
 	}
-	p.Unlock()
+	p.mut.Unlock()
+
+	return &PromTiming{
+		sum: tmr.WithLabelValues(values...),
+	}
+}
+
+func (p *Prometheus) getTimerHist(path string) StatTimer {
+	stat, labels, values := p.toPromName(path)
+	if stat == "" {
+		return DudStat{}
+	}
+
+	var tmr *prometheus.HistogramVec
+
+	p.mut.Lock()
+	var exists bool
+	if tmr, exists = p.timersHist[stat]; !exists {
+		tmr = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: p.prefix,
+			Name:      stat,
+			Help:      "Benthos Timing metric",
+			Buckets:   p.histogramBuckets,
+		}, labels)
+		p.reg.MustRegister(tmr)
+		p.timersHist[stat] = tmr
+	}
+	p.mut.Unlock()
 
 	return &PromTiming{
 		sum: tmr.WithLabelValues(values...),
@@ -270,7 +323,7 @@ func (p *Prometheus) GetGauge(path string) StatGauge {
 
 	var ctr *prometheus.GaugeVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if ctr, exists = p.gauges[stat]; !exists {
 		ctr = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -281,7 +334,7 @@ func (p *Prometheus) GetGauge(path string) StatGauge {
 		p.reg.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	return &PromGauge{
 		ctr: ctr.WithLabelValues(values...),
@@ -304,7 +357,7 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 
 	var ctr *prometheus.CounterVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if ctr, exists = p.counters[stat]; !exists {
 		ctr = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -315,7 +368,7 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 		p.reg.MustRegister(ctr)
 		p.counters[stat] = ctr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	if len(labels) > 0 {
 		return fakeCounterVec(func(vs []string) StatCounter {
@@ -335,6 +388,10 @@ func (p *Prometheus) GetCounterVec(path string, labelNames []string) StatCounter
 // these labels must be consistent with any other metrics registered on the same
 // path.
 func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec {
+	if p.useHistogramTiming {
+		return p.getTimerHistVec(path, labelNames)
+	}
+
 	stat, labels, values := p.toPromName(path)
 	if stat == "" {
 		return fakeTimerVec(func([]string) StatTimer {
@@ -347,7 +404,7 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 
 	var tmr *prometheus.SummaryVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if tmr, exists = p.timers[stat]; !exists {
 		tmr = prometheus.NewSummaryVec(prometheus.SummaryOpts{
@@ -359,7 +416,7 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 		p.reg.MustRegister(tmr)
 		p.timers[stat] = tmr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	if len(labels) > 0 {
 		return fakeTimerVec(func(vs []string) StatTimer {
@@ -371,6 +428,47 @@ func (p *Prometheus) GetTimerVec(path string, labelNames []string) StatTimerVec 
 		})
 	}
 	return &PromTimingVec{
+		sum: tmr,
+	}
+}
+
+func (p *Prometheus) getTimerHistVec(path string, labelNames []string) StatTimerVec {
+	stat, labels, values := p.toPromName(path)
+	if stat == "" {
+		return fakeTimerVec(func([]string) StatTimer {
+			return DudStat{}
+		})
+	}
+	if len(labels) > 0 {
+		labelNames = append(labels, labelNames...)
+	}
+
+	var tmr *prometheus.HistogramVec
+
+	p.mut.Lock()
+	var exists bool
+	if tmr, exists = p.timersHist[stat]; !exists {
+		tmr = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: p.prefix,
+			Name:      stat,
+			Help:      "Benthos Timing metric",
+			Buckets:   p.histogramBuckets,
+		}, labelNames)
+		p.reg.MustRegister(tmr)
+		p.timersHist[stat] = tmr
+	}
+	p.mut.Unlock()
+
+	if len(labels) > 0 {
+		return fakeTimerVec(func(vs []string) StatTimer {
+			fvs := append([]string{}, values...)
+			fvs = append(fvs, vs...)
+			return (&PromTimingHistVec{
+				sum: tmr,
+			}).With(fvs...)
+		})
+	}
+	return &PromTimingHistVec{
 		sum: tmr,
 	}
 }
@@ -391,7 +489,7 @@ func (p *Prometheus) GetGaugeVec(path string, labelNames []string) StatGaugeVec 
 
 	var ctr *prometheus.GaugeVec
 
-	p.Lock()
+	p.mut.Lock()
 	var exists bool
 	if ctr, exists = p.gauges[stat]; !exists {
 		ctr = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -402,7 +500,7 @@ func (p *Prometheus) GetGaugeVec(path string, labelNames []string) StatGaugeVec 
 		p.reg.MustRegister(ctr)
 		p.gauges[stat] = ctr
 	}
-	p.Unlock()
+	p.mut.Unlock()
 
 	if len(labels) > 0 {
 		return fakeGaugeVec(func(vs []string) StatGauge {

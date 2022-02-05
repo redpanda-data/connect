@@ -3,7 +3,6 @@ package test
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -424,7 +423,7 @@ func TestJSONContainsCondition(t *testing.T) {
 func TestFileEqualsCondition(t *testing.T) {
 	color.NoColor = true
 
-	tmpDir, err := ioutil.TempDir("", "test_file_condition")
+	tmpDir, err := os.MkdirTemp("", "test_file_condition")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -434,9 +433,9 @@ func TestFileEqualsCondition(t *testing.T) {
 	uppercasedPath := filepath.Join(tmpDir, "inner", "uppercased.txt")
 	notUppercasedPath := filepath.Join(tmpDir, "not_uppercased.txt")
 
-	require.NoError(t, os.MkdirAll(filepath.Dir(uppercasedPath), 0755))
-	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0644))
-	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Dir(uppercasedPath), 0o755))
+	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0o644))
+	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0o644))
 
 	type testCase struct {
 		name        string

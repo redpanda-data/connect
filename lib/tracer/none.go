@@ -8,7 +8,7 @@ func init() {
 	Constructors[TypeNone] = TypeSpec{
 		constructor: NewNone,
 		Summary: `
-Do not send opentracing events anywhere.`,
+Do not send tracing events anywhere.`,
 		config: docs.FieldComponent().HasType(docs.FieldTypeObject),
 	}
 }

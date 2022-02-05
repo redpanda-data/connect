@@ -1,8 +1,8 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -34,7 +34,7 @@ Message metadata is added to each AMQP message as string annotations. In order t
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			tls.FieldSpec(),
 			sasl.FieldSpec(),
-			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to messages as headers.").WithChildren(output.MetadataFields()...),
+			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to messages as headers.").WithChildren(metadata.ExcludeFilterFields()...),
 		},
 		Categories: []Category{
 			CategoryServices,

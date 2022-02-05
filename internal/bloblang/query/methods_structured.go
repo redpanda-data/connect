@@ -481,6 +481,11 @@ var _ = registerSimpleMethod(
 			`{"foo":["hello ", "world"]}`,
 			`{"result":"hello world"}`,
 		),
+		NewExampleSpec(`You can use fold to merge an array of objects together:`,
+			`root.smoothie = this.fruits.fold({}, item -> item.tally.merge(item.value))`,
+			`{"fruits":[{"apple":5},{"banana":3},{"orange":8}]}`,
+			`{"smoothie":{"apple":5,"banana":3,"orange":8}}`,
+		),
 	).
 		Param(ParamAny("initial", "The initial value to start the fold with. For example, an empty object `{}`, a zero count `0`, or an empty string `\"\"`.")).
 		Param(ParamQuery("query", "A query to apply for each element. The query is provided an object with two fields; `tally` containing the current tally, and `value` containing the value of the current element. The query should result in a new tally to be passed to the next element query.", false)),
@@ -612,7 +617,7 @@ var _ = registerSimpleMethod(
 				var errStr string
 				for i, desc := range result.Errors() {
 					if i > 0 {
-						errStr = errStr + "\n"
+						errStr += "\n"
 					}
 					description := strings.ToLower(desc.Description())
 					if property := desc.Details()["property"]; property != nil {

@@ -3,8 +3,11 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -27,11 +30,40 @@ func NewStringField(name string) *ConfigField {
 	}
 }
 
+// NewDurationField describes a new duration string type config field, allowing
+// users to define a time interval with strings of the form 60s, 3m, etc.
+func NewDurationField(name string) *ConfigField {
+	// TODO: Add linting rule for duration
+	return &ConfigField{
+		field: docs.FieldString(name, ""),
+	}
+}
+
 // NewStringEnumField describes a new string type config field that can have one
 // of a discrete list of values.
 func NewStringEnumField(name string, options ...string) *ConfigField {
 	return &ConfigField{
 		field: docs.FieldString(name, "").HasOptions(options...).LintOptions(),
+	}
+}
+
+// NewStringAnnotatedEnumField describes a new string type config field that can
+// have one of a discrete list of values, where each value must be accompanied
+// by a description that annotates its behaviour in the documentation.
+func NewStringAnnotatedEnumField(name string, options map[string]string) *ConfigField {
+	optionKeys := make([]string, 0, len(options))
+	for key := range options {
+		optionKeys = append(optionKeys, key)
+	}
+	sort.Strings(optionKeys)
+
+	flatOptions := make([]string, 0, len(options)*2)
+	for _, o := range optionKeys {
+		flatOptions = append(flatOptions, o, options[o])
+	}
+
+	return &ConfigField{
+		field: docs.FieldString(name, "").HasAnnotatedOptions(flatOptions...).LintOptions(),
 	}
 }
 
@@ -100,6 +132,23 @@ func NewObjectField(name string, fields ...*ConfigField) *ConfigField {
 	}
 }
 
+// NewObjectListField describes a new list type config field consisting of
+// objects with one or more child fields.
+func NewObjectListField(name string, fields ...*ConfigField) *ConfigField {
+	objField := NewObjectField(name, fields...)
+	return &ConfigField{
+		field: objField.field.Array(),
+	}
+}
+
+// NewInternalField returns a ConfigField derived from an internal package field
+// spec. This function is for internal use only.
+func NewInternalField(ifield docs.FieldSpec) *ConfigField {
+	return &ConfigField{
+		field: ifield,
+	}
+}
+
 // Description adds a description to the field which will be shown when printing
 // documentation for the component config spec.
 func (c *ConfigField) Description(d string) *ConfigField {
@@ -122,10 +171,25 @@ func (c *ConfigField) Default(v interface{}) *ConfigField {
 	return c
 }
 
+// Optional specifies that a field is optional even when a default value has not
+// been specified. When a field is marked as optional you can test its presence
+// within a parsed config with the method Contains.
+func (c *ConfigField) Optional() *ConfigField {
+	c.field = c.field.Optional()
+	return c
+}
+
 // Example adds an example value to the field which will be shown when printing
 // documentation for the component config spec.
 func (c *ConfigField) Example(e interface{}) *ConfigField {
 	c.field.Examples = append(c.field.Examples, e)
+	return c
+}
+
+// Version specifies the specific version at which this field was added to the
+// component.
+func (c *ConfigField) Version(v string) *ConfigField {
+	c.field = c.field.AtVersion(v)
 	return c
 }
 
@@ -148,7 +212,7 @@ func (c *ConfigSpec) configFromNode(mgr bundle.NewManagement, node *yaml.Node) (
 		return &ParsedConfig{mgr: mgr, asStruct: conf}, nil
 	}
 
-	fields, err := c.component.Config.Children.YAMLToMap(node, docs.ToValueConfig{})
+	fields, err := c.component.Config.YAMLToValue(node, docs.ToValueConfig{})
 	if err != nil {
 		return nil, err
 	}
@@ -252,6 +316,13 @@ func (c *ConfigSpec) Beta() *ConfigSpec {
 	return c
 }
 
+// Deprecated sets a documentation label on the component indicating that it is
+// now deprecated. Plugins are considered experimental by default.
+func (c *ConfigSpec) Deprecated() *ConfigSpec {
+	c.component.Status = docs.StatusDeprecated
+	return c
+}
+
 // Categories adds one or more string tags to the component, these are used for
 // arbitrarily grouping components in documentation.
 func (c *ConfigSpec) Categories(categories ...string) *ConfigSpec {
@@ -283,10 +354,19 @@ func (c *ConfigSpec) Description(description string) *ConfigSpec {
 // Field sets the specification of a field within the config spec, used for
 // linting and generating documentation for the component.
 //
+// If the provided field has an empty name then it registered as the value at
+// the root of the config spec.
+//
 // When creating a spec with a struct constructor the fields from that struct
 // will already be inferred. However, setting a field explicitly is sometimes
 // useful for enriching the field documentation with more information.
 func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
+	if f.field.Name == "" {
+		// Set field to root of config spec
+		c.component.Config = f.field
+		return c
+	}
+
 	c.component.Config.Type = docs.FieldTypeObject
 	for i, s := range c.component.Config.Children {
 		if s.Name == f.field.Name {
@@ -294,6 +374,7 @@ func (c *ConfigSpec) Field(f *ConfigField) *ConfigSpec {
 			return c
 		}
 	}
+
 	c.component.Config.Children = append(c.component.Config.Children, f.field)
 	return c
 }
@@ -314,7 +395,7 @@ func (c *ConfigSpec) Example(title, summary, config string) *ConfigSpec {
 // populate the configuration spec. The schema of this method is undocumented
 // and is not intended for general use.
 //
-// EXPERIMENTAL: This method is not intended for general use and could have its
+// Experimental: This method is not intended for general use and could have its
 // signature and/or behaviour changed outside of major version bumps.
 func (c *ConfigSpec) EncodeJSON(v []byte) error {
 	return json.Unmarshal(v, &c.component)
@@ -350,7 +431,7 @@ func (c *ConfigView) IsDeprecated() bool {
 // JSON object. The schema of this method is undocumented and is not intended
 // for general use.
 //
-// EXPERIMENTAL: This method is not intended for general use and could have its
+// Experimental: This method is not intended for general use and could have its
 // signature and/or behaviour changed outside of major version bumps.
 func (c *ConfigView) FormatJSON() ([]byte, error) {
 	return json.Marshal(c.component)
@@ -370,7 +451,7 @@ type ParsedConfig struct {
 	hiddenPath []string
 	mgr        bundle.NewManagement
 	asStruct   interface{}
-	generic    map[string]interface{}
+	generic    interface{}
 }
 
 // AsStruct returns the root of the parsed config. If the configuration spec was
@@ -414,6 +495,13 @@ func (p *ParsedConfig) fullDotPath(path ...string) string {
 	return strings.Join(fullPath, ".")
 }
 
+// Contains checks whether the parsed config contains a given field identified
+// by its name.
+func (p *ParsedConfig) Contains(path ...string) bool {
+	gObj := gabs.Wrap(p.generic).S(p.hiddenPath...)
+	return gObj.Exists(path...)
+}
+
 // FieldString accesses a string field from the parsed config by its name. If
 // the field is not found or is not a string an error is returned.
 //
@@ -429,6 +517,28 @@ func (p *ParsedConfig) FieldString(path ...string) (string, error) {
 		return "", fmt.Errorf("expected field '%v' to be a string, got %T", p.fullDotPath(path...), v)
 	}
 	return str, nil
+}
+
+// FieldDuration accesses a duration string field from the parsed config by its
+// name. If the field is not found or is not a valid duration string an error is
+// returned.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldDuration(path ...string) (time.Duration, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	str, ok := v.(string)
+	if !ok {
+		return 0, fmt.Errorf("expected field '%v' to be a string, got %T", p.fullDotPath(path...), v)
+	}
+	d, err := time.ParseDuration(str)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse '%v' as a duration string: %w", p.fullDotPath(path...), err)
+	}
+	return d, nil
 }
 
 // FieldStringList accesses a field that is a list of strings from the parsed
@@ -495,11 +605,11 @@ func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
 	if !exists {
 		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	i, ok := v.(int)
-	if !ok {
+	i, err := query.IGetInt(v)
+	if err != nil {
 		return 0, fmt.Errorf("expected field '%v' to be an int, got %T", p.fullDotPath(path...), v)
 	}
-	return i, nil
+	return int(i), nil
 }
 
 // FieldIntList accesses a field that is a list of integers from the parsed
@@ -522,9 +632,11 @@ func (p *ParsedConfig) FieldIntList(path ...string) ([]int, error) {
 	}
 	sList := make([]int, len(iList))
 	for i, ev := range iList {
-		if sList[i], ok = ev.(int); !ok {
+		iv, err := query.IToInt(ev)
+		if err != nil {
 			return nil, fmt.Errorf("expected field '%v' to be an integer list, found an element of type %T", p.fullDotPath(path...), ev)
 		}
+		sList[i] = int(iv)
 	}
 	return sList, nil
 }
@@ -549,9 +661,11 @@ func (p *ParsedConfig) FieldIntMap(path ...string) (map[string]int, error) {
 	}
 	sMap := make(map[string]int, len(iMap))
 	for k, ev := range iMap {
-		if sMap[k], ok = ev.(int); !ok {
+		iv, err := query.IToInt(ev)
+		if err != nil {
 			return nil, fmt.Errorf("expected field '%v' to be an integer map, found an element of type %T", p.fullDotPath(path...), ev)
 		}
+		sMap[k] = int(iv)
 	}
 	return sMap, nil
 }
@@ -567,8 +681,8 @@ func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
 	if !exists {
 		return 0, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	f, ok := v.(float64)
-	if !ok {
+	f, err := query.IGetNumber(v)
+	if err != nil {
 		return 0, fmt.Errorf("expected field '%v' to be a float, got %T", p.fullDotPath(path...), v)
 	}
 	return f, nil
@@ -590,4 +704,30 @@ func (p *ParsedConfig) FieldBool(path ...string) (bool, error) {
 		return false, fmt.Errorf("expected field '%v' to be a bool, got %T", p.fullDotPath(path...), v)
 	}
 	return b, nil
+}
+
+// FieldObjectList accesses a field that is a list of objects from the parsed
+// config by its name and returns the value as an array of *ParsedConfig types,
+// where each one represents an object in the list. Returns an error if the
+// field is not found, or is not a list of objects.
+//
+// This method is not valid when the configuration spec was built around a
+// config constructor.
+func (p *ParsedConfig) FieldObjectList(path ...string) ([]*ParsedConfig, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iList, ok := v.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.fullDotPath(path...), v)
+	}
+	sList := make([]*ParsedConfig, len(iList))
+	for i, ev := range iList {
+		sList[i] = &ParsedConfig{
+			mgr:     p.mgr,
+			generic: ev,
+		}
+	}
+	return sList, nil
 }

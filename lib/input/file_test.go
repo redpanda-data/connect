@@ -3,7 +3,6 @@ package input
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
@@ -19,7 +18,7 @@ import (
 )
 
 func TestFileSinglePartDeprecated(t *testing.T) {
-	tmpfile, err := ioutil.TempFile("", "benthos_file_test")
+	tmpfile, err := os.CreateTemp("", "benthos_file_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -33,9 +32,9 @@ func TestFileSinglePartDeprecated(t *testing.T) {
 	}
 
 	for _, msg := range messages {
-		tmpfile.Write([]byte(msg))
-		tmpfile.Write([]byte("\n"))
-		tmpfile.Write([]byte("\n")) // Try some empty messages
+		_, _ = tmpfile.WriteString(msg)
+		_, _ = tmpfile.WriteString("\n")
+		_, _ = tmpfile.WriteString("\n") // Try some empty messages
 	}
 
 	conf := NewConfig()
@@ -76,7 +75,7 @@ func TestFileSinglePartDeprecated(t *testing.T) {
 }
 
 func TestFileMultiPartDeprecated(t *testing.T) {
-	tmpfile, err := ioutil.TempFile("", "benthos_file_test")
+	tmpfile, err := os.CreateTemp("", "benthos_file_test")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -103,10 +102,10 @@ func TestFileMultiPartDeprecated(t *testing.T) {
 
 	for _, msg := range messages {
 		for _, part := range msg {
-			tmpfile.Write([]byte(part))
-			tmpfile.Write([]byte("\n"))
+			_, _ = tmpfile.WriteString(part)
+			_, _ = tmpfile.WriteString("\n")
 		}
-		tmpfile.Write([]byte("\n"))
+		_, _ = tmpfile.WriteString("\n")
 	}
 
 	conf := NewConfig()
@@ -149,29 +148,29 @@ func TestFileMultiPartDeprecated(t *testing.T) {
 }
 
 func TestFileDirectory(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "benthos_file_input_test")
+	tmpDir, err := os.MkdirTemp("", "benthos_file_input_test")
 	require.NoError(t, err)
 
-	tmpInnerDir, err := ioutil.TempDir(tmpDir, "benthos_inner")
+	tmpInnerDir, err := os.MkdirTemp(tmpDir, "benthos_inner")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		os.RemoveAll(tmpDir)
 	})
 
-	tmpFile, err := ioutil.TempFile(tmpDir, "f1*.txt")
+	tmpFile, err := os.CreateTemp(tmpDir, "f1*.txt")
 	require.NoError(t, err)
 
-	_, err = tmpFile.Write([]byte("foo"))
+	_, err = tmpFile.WriteString("foo")
 	require.NoError(t, err)
 
 	err = tmpFile.Close()
 	require.NoError(t, err)
 
-	tmpFileTwo, err := ioutil.TempFile(tmpInnerDir, "f2*.txt")
+	tmpFileTwo, err := os.CreateTemp(tmpInnerDir, "f2*.txt")
 	require.NoError(t, err)
 
-	_, err = tmpFileTwo.Write([]byte("bar"))
+	_, err = tmpFileTwo.WriteString("bar")
 	require.NoError(t, err)
 
 	err = tmpFileTwo.Close()

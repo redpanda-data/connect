@@ -12,10 +12,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/opentracing/opentracing-go"
 
 	// SQL Drivers
 	_ "github.com/ClickHouse/clickhouse-go"
@@ -31,11 +31,16 @@ func init() {
 		Categories: []Category{
 			CategoryIntegration,
 		},
+		Status: docs.StatusDeprecated,
 		Summary: `
 Runs an SQL prepared query against a target database for each message and, for
 queries that return rows, replaces it with the result according to a
 [codec](#result-codecs).`,
 		Description: `
+## Alternatives
+
+Use either the ` + "[`sql_insert`](/docs/components/processors/sql_insert)" + ` or the ` + "[`sql_select`](/docs/components/processors/sql_select)" + ` processor instead.
+
 If a query contains arguments they can be set as an array of strings supporting
 [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in
 the ` + "`args`" + ` field.
@@ -498,7 +503,7 @@ func (s *SQL) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 			}
 		}
 	} else {
-		IteratePartsWithSpan(TypeSQL, nil, newMsg, func(index int, span opentracing.Span, part types.Part) error {
+		IteratePartsWithSpanV2(TypeSQL, nil, newMsg, func(index int, span *tracing.Span, part types.Part) error {
 			args, err := s.getArgs(index, msg)
 			if err != nil {
 				s.mErr.Incr(1)

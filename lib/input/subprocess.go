@@ -164,8 +164,12 @@ func (s *Subprocess) ConnectWithContext(ctx context.Context) error {
 			defer wg.Done()
 
 			for outScanner.Scan() {
+				data := outScanner.Bytes()
+				dataCopy := make([]byte, len(data))
+				copy(dataCopy, data)
+
 				select {
-				case msgChan <- outScanner.Bytes():
+				case msgChan <- dataCopy:
 				case <-s.ctx.Done():
 				}
 			}

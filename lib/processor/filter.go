@@ -5,13 +5,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/condition"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -101,9 +100,9 @@ func (c *Filter) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	filterRes := c.condition.Check(msg)
 	for _, s := range spans {
 		if !filterRes {
-			s.LogFields(
-				olog.String("event", "dropped"),
-				olog.String("type", "filtered"),
+			s.LogKV(
+				"event", "dropped",
+				"type", "filtered",
 			)
 		}
 		s.SetTag("result", filterRes)

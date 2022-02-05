@@ -3,7 +3,6 @@ package writer
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -93,12 +92,12 @@ func (f *Files) Write(msg types.Message) error {
 	return IterateBatchedSend(msg, func(i int, p types.Part) error {
 		path := f.path.String(i, msg)
 
-		err := os.MkdirAll(filepath.Dir(path), os.FileMode(0777))
+		err := os.MkdirAll(filepath.Dir(path), os.FileMode(0o777))
 		if err != nil {
 			return err
 		}
 
-		return ioutil.WriteFile(path, p.Get(), os.FileMode(0666))
+		return os.WriteFile(path, p.Get(), os.FileMode(0o666))
 	})
 }
 

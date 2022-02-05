@@ -36,6 +36,7 @@ input:
     topics:
       - benthos_topic
     client_id: benthos_input
+    connect_timeout: 30s
 ```
 
 </TabItem>
@@ -60,6 +61,7 @@ input:
       retained: false
       topic: ""
       payload: ""
+    connect_timeout: 30s
     user: ""
     password: ""
     keepalive: 30
@@ -193,6 +195,23 @@ Set payload for last will message.
 
 Type: `string`  
 Default: `""`  
+
+### `connect_timeout`
+
+The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.
+
+
+Type: `string`  
+Default: `"30s"`  
+Requires version 3.58.0 or newer  
+
+```yaml
+# Examples
+
+connect_timeout: 1s
+
+connect_timeout: 500ms
+```
 
 ### `user`
 

@@ -96,7 +96,7 @@ func (f *MmapCache) openTracker() error {
 	var err error
 
 	// Attempt to create the directory tree, ignore errors.
-	_ = os.MkdirAll(f.config.Path, 0755)
+	_ = os.MkdirAll(f.config.Path, 0o755)
 
 	fPath := path.Join(f.config.Path, "tracker")
 
@@ -109,7 +109,7 @@ func (f *MmapCache) openTracker() error {
 			_, err = f.tracker.f.Write(block)
 		}
 	} else if err == nil && fileInfo.Size() == 16 {
-		f.tracker.f, err = os.OpenFile(fPath, os.O_RDWR, 0644)
+		f.tracker.f, err = os.OpenFile(fPath, os.O_RDWR, 0o644)
 	} else if err == nil {
 		err = ErrWrongTrackerLength
 	}
@@ -183,7 +183,7 @@ func (f *MmapCache) EnsureCached(index int) error {
 			}
 		}
 	} else if err == nil {
-		cache.f, err = os.OpenFile(fPath, os.O_RDWR, 0644)
+		cache.f, err = os.OpenFile(fPath, os.O_RDWR, 0o644)
 	}
 
 	// Lock our mutex again

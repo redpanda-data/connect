@@ -1,4 +1,0 @@
-resources:
-  caches:
-    foocache:
-      memory: {}

@@ -2,7 +2,6 @@ package single
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"testing"
@@ -20,7 +19,7 @@ func cleanUpMmapDir(dir string) {
 func TestMmapBufferBasic(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := ioutil.TempDir("", "benthos_test_")
+	dir, err := os.MkdirTemp("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
 		return
@@ -76,7 +75,7 @@ func TestMmapBufferBasic(t *testing.T) {
 func TestMmapBufferBacklogCounter(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := ioutil.TempDir("", "benthos_test_")
+	dir, err := os.MkdirTemp("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
 		return
@@ -142,7 +141,7 @@ func TestMmapBufferBacklogCounter(t *testing.T) {
 func TestMmapBufferLoopingRandom(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := ioutil.TempDir("", "benthos_test_")
+	dir, err := os.MkdirTemp("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
 		return
@@ -202,7 +201,7 @@ func TestMmapBufferLoopingRandom(t *testing.T) {
 func TestMmapBufferMultiFiles(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := ioutil.TempDir("", "benthos_test_")
+	dir, err := os.MkdirTemp("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
 		return
@@ -258,7 +257,7 @@ func TestMmapBufferMultiFiles(t *testing.T) {
 func TestMmapBufferRecoverFiles(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := ioutil.TempDir("", "benthos_test_")
+	dir, err := os.MkdirTemp("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
 		return
@@ -326,7 +325,7 @@ func TestMmapBufferRecoverFiles(t *testing.T) {
 func TestMmapBufferRejectLargeMessage(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := ioutil.TempDir("", "benthos_test_")
+	dir, err := os.MkdirTemp("", "benthos_test_")
 	if err != nil {
 		t.Error(err)
 		return
@@ -354,7 +353,7 @@ func TestMmapBufferRejectLargeMessage(t *testing.T) {
 }
 
 func BenchmarkMmapBufferBasic(b *testing.B) {
-	dir, err := ioutil.TempDir("", "benthos_test_")
+	dir, err := os.MkdirTemp("", "benthos_test_")
 	if err != nil {
 		b.Error(err)
 		return

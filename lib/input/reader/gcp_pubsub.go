@@ -23,6 +23,7 @@ type GCPPubSubConfig struct {
 	SubscriptionID         string `json:"subscription" yaml:"subscription"`
 	MaxOutstandingMessages int    `json:"max_outstanding_messages" yaml:"max_outstanding_messages"`
 	MaxOutstandingBytes    int    `json:"max_outstanding_bytes" yaml:"max_outstanding_bytes"`
+	Sync                   bool   `json:"sync" yaml:"sync"`
 	// TODO: V4 Remove these.
 	MaxBatchCount int                `json:"max_batch_count" yaml:"max_batch_count"`
 	Batching      batch.PolicyConfig `json:"batching" yaml:"batching"`
@@ -35,6 +36,7 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 		SubscriptionID:         "",
 		MaxOutstandingMessages: pubsub.DefaultReceiveSettings.MaxOutstandingMessages,
 		MaxOutstandingBytes:    pubsub.DefaultReceiveSettings.MaxOutstandingBytes,
+		Sync:                   false,
 		MaxBatchCount:          1,
 		Batching:               batch.NewPolicyConfig(),
 	}
@@ -94,6 +96,7 @@ func (c *GCPPubSub) ConnectWithContext(ignored context.Context) error {
 	sub := c.client.Subscription(c.conf.SubscriptionID)
 	sub.ReceiveSettings.MaxOutstandingMessages = c.conf.MaxOutstandingMessages
 	sub.ReceiveSettings.MaxOutstandingBytes = c.conf.MaxOutstandingBytes
+	sub.ReceiveSettings.Synchronous = c.conf.Sync
 
 	subCtx, cancel := context.WithCancel(context.Background())
 	msgsChan := make(chan *pubsub.Message, c.conf.MaxBatchCount)

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
@@ -139,7 +139,7 @@ pipeline:
           bar:
             request_map: 'root = this.body'
             processors:
-              - lambda:
+              - aws_lambda:
                   function: TODO
             result_map: 'root.bar = this'
 
@@ -180,7 +180,7 @@ pipeline:
                   deleted()
               }
             processors:
-              - lambda:
+              - aws_lambda:
                   function: TODO
             result_map: 'root.tmp.result = this'
 
@@ -208,7 +208,7 @@ pipeline:
           bar:
             request_map: 'root = this.body'
             processors:
-              - lambda:
+              - aws_lambda:
                   function: TODO
             result_map: 'root.bar = this'
 

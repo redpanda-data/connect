@@ -7,12 +7,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -265,7 +264,7 @@ func (w *workflowDeprecated) ProcessMessage(msg types.Message) ([]types.Message,
 					return nil
 				})
 
-				var resSpans []opentracing.Span
+				var resSpans []*tracing.Span
 				results[index], resSpans = tracing.WithChildSpans(id, msgCopy)
 				errors[index] = w.children[id].CreateResult(results[index])
 				for _, s := range resSpans {

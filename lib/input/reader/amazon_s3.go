@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -611,7 +611,7 @@ func (a *AmazonS3) read() (types.Part, objKey, error) {
 		return nil, objKey{}, types.ErrTimeout
 	}
 
-	bytes, err := ioutil.ReadAll(obj.Body)
+	bytes, err := io.ReadAll(obj.Body)
 	obj.Body.Close()
 	if err != nil {
 		a.popTargetKey()

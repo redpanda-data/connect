@@ -56,7 +56,7 @@ root.id = count("bloblang_function_example")
 
 ### `deleted`
 
-A function that returns a result indicating that the mapping target should be deleted.
+A function that returns a result indicating that the mapping target should be deleted. Deleting, also known as dropping, messages will result in them being acknowledged as successfully processed to inputs in a Benthos pipeline. For more information about error handling patterns read [here][error_handling].
 
 #### Examples
 
@@ -76,6 +76,17 @@ root.new_nums = this.nums.map_each(num -> if num < 10 { deleted() } else { num -
 
 # In:  {"nums":[3,11,4,17]}
 # Out: {"new_nums":[1,7]}
+```
+
+### `ksuid`
+
+Generates a new ksuid each time it is invoked and prints a string representation.
+
+#### Examples
+
+
+```coffee
+root.id = ksuid()
 ```
 
 ### `nanoid`

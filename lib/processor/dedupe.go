@@ -10,13 +10,12 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/tracing"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/OneOfOne/xxhash"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
@@ -261,9 +260,9 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		if err != nil {
 			if err == types.ErrKeyAlreadyExists {
 				for _, s := range spans {
-					s.LogFields(
-						olog.String("event", "dropped"),
-						olog.String("type", "deduplicated"),
+					s.LogKV(
+						"event", "dropped",
+						"type", "deduplicated",
 					)
 				}
 				d.mDropped.Incr(1)
@@ -273,9 +272,9 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			d.mErr.Incr(1)
 			d.log.Errorf("Cache error: %v\n", err)
 			for _, s := range spans {
-				s.LogFields(
-					olog.String("event", "error"),
-					olog.String("type", err.Error()),
+				s.LogKV(
+					"event", "error",
+					"type", err.Error(),
 				)
 			}
 			if d.conf.Dedupe.DropOnCacheErr {

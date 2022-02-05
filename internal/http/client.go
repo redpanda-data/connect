@@ -18,15 +18,25 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
+
+// MultipartExpressions represents three dynamic expressions that define a
+// multipart message part in an HTTP request. Specifying one or more of these
+// can be used as a way of creating HTTP requests that overrides the default
+// behaviour.
+type MultipartExpressions struct {
+	ContentDisposition *field.Expression
+	ContentType        *field.Expression
+	Body               *field.Expression
+}
 
 // Client is a component able to send and receive Benthos messages over HTTP.
 type Client struct {
@@ -36,9 +46,12 @@ type Client struct {
 	dropOn    map[int]struct{}
 	successOn map[int]struct{}
 
-	url     *field.Expression
-	headers map[string]*field.Expression
-	host    *field.Expression
+	url               *field.Expression
+	headers           map[string]*field.Expression
+	multipart         []MultipartExpressions
+	host              *field.Expression
+	metaInsertFilter  *metadata.IncludeFilter
+	metaExtractFilter *metadata.IncludeFilter
 
 	conf          client.Config
 	retryThrottle *throttle.Type
@@ -155,6 +168,14 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 		}
 	}
 
+	if h.metaInsertFilter, err = h.conf.Metadata.CreateFilter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
+	}
+
+	if h.metaExtractFilter, err = h.conf.ExtractMetadata.CreateFilter(); err != nil {
+		return nil, fmt.Errorf("failed to construct metadata extract filter: %w", err)
+	}
+
 	h.mCount = h.stats.GetCounter("count")
 	h.mErr = h.stats.GetCounter("error")
 	h.mErrReq = h.stats.GetCounter("error.request")
@@ -202,6 +223,13 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 func OptSetLogger(log log.Modular) func(*Client) {
 	return func(t *Client) {
 		t.log = log
+	}
+}
+
+// OptSetMultiPart sets the multipart to request.
+func OptSetMultiPart(multipart []MultipartExpressions) func(*Client) {
+	return func(t *Client) {
+		t.multipart = multipart
 	}
 }
 
@@ -285,8 +313,25 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request, err error) {
 	var overrideContentType string
 	var body io.Reader
-
-	if sendMsg != nil && sendMsg.Len() == 1 {
+	if len(h.multipart) > 0 {
+		buf := &bytes.Buffer{}
+		writer := multipart.NewWriter(buf)
+		for _, v := range h.multipart {
+			var part io.Writer
+			mh := make(textproto.MIMEHeader)
+			mh.Set("Content-Type", v.ContentType.String(0, refMsg))
+			mh.Set("Content-Disposition", v.ContentDisposition.String(0, refMsg))
+			if part, err = writer.CreatePart(mh); err != nil {
+				return
+			}
+			if _, err = io.Copy(part, bytes.NewReader([]byte(v.Body.String(0, refMsg)))); err != nil {
+				return
+			}
+		}
+		writer.Close()
+		overrideContentType = writer.FormDataContentType()
+		body = buf
+	} else if sendMsg != nil && sendMsg.Len() == 1 {
 		if msgBytes := sendMsg.Get(0).Get(); len(msgBytes) > 0 {
 			body = bytes.NewBuffer(msgBytes)
 		}
@@ -299,10 +344,17 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 			if v, exists := h.headers["Content-Type"]; exists {
 				contentType = v.String(i, refMsg)
 			}
-			var part io.Writer
-			if part, err = writer.CreatePart(textproto.MIMEHeader{
+
+			headers := textproto.MIMEHeader{
 				"Content-Type": []string{contentType},
-			}); err != nil {
+			}
+			_ = h.metaInsertFilter.Iter(sendMsg.Get(i).Metadata(), func(k, v string) error {
+				headers[k] = append(headers[k], v)
+				return nil
+			})
+
+			var part io.Writer
+			if part, err = writer.CreatePart(headers); err != nil {
 				return
 			}
 			if _, err = io.Copy(part, bytes.NewReader(sendMsg.Get(i).Get())); err != nil {
@@ -324,6 +376,13 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 	for k, v := range h.headers {
 		req.Header.Add(k, v.String(0, refMsg))
 	}
+	if sendMsg != nil && sendMsg.Len() == 1 {
+		_ = h.metaInsertFilter.Iter(sendMsg.Get(0).Metadata(), func(k, v string) error {
+			req.Header.Add(k, v)
+			return nil
+		})
+	}
+
 	if h.host != nil {
 		req.Host = h.host.String(0, refMsg)
 	}
@@ -378,11 +437,12 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 				index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
 				bufferIndex += bytesRead
 
-				if h.conf.CopyResponseHeaders {
+				if h.conf.CopyResponseHeaders || h.metaExtractFilter.IsSet() {
 					meta := resMsg.Get(index).Metadata()
 					for k, values := range p.Header {
-						if len(values) > 0 {
-							meta.Set(strings.ToLower(k), values[0])
+						normalisedHeader := strings.ToLower(k)
+						if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaExtractFilter.Match(normalisedHeader)) {
+							meta.Set(normalisedHeader, values[0])
 						}
 					}
 				}
@@ -400,11 +460,12 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 			} else {
 				resMsg.Append(message.NewPart(nil))
 			}
-			if h.conf.CopyResponseHeaders {
+			if h.conf.CopyResponseHeaders || h.metaExtractFilter.IsSet() {
 				meta := resMsg.Get(0).Metadata()
 				for k, values := range res.Header {
-					if len(values) > 0 {
-						meta.Set(strings.ToLower(k), values[0])
+					normalisedHeader := strings.ToLower(k)
+					if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaExtractFilter.Match(normalisedHeader)) {
+						meta.Set(normalisedHeader, values[0])
 					}
 				}
 			}
@@ -453,13 +514,9 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Message) (res *http.Response, err error) {
 	h.mCount.Incr(1)
 
-	var spans []opentracing.Span
+	var spans []*tracing.Span
 	if sendMsg != nil {
-		spans = make([]opentracing.Span, sendMsg.Len())
-		sendMsg.Iter(func(i int, p types.Part) error {
-			spans[i], _ = opentracing.StartSpanFromContext(message.GetContext(p), "http_request")
-			return nil
-		})
+		spans = tracing.CreateChildSpans("http_request", sendMsg)
 		defer func() {
 			for _, s := range spans {
 				s.Finish()
@@ -470,9 +527,9 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 		h.mErrRes.Incr(1)
 		h.mErr.Incr(1)
 		for _, s := range spans {
-			s.LogFields(
-				olog.String("event", "error"),
-				olog.String("type", e.Error()),
+			s.LogKV(
+				"event", "error",
+				"type", e.Error(),
 			)
 		}
 	}

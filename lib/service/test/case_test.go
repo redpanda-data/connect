@@ -2,7 +2,6 @@ package test
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -223,7 +222,7 @@ func TestFileCaseInputs(t *testing.T) {
 
 	provider["/pipeline/processors"] = []types.Processor{proc}
 
-	tmpDir, err := ioutil.TempDir("", "test_file_content")
+	tmpDir, err := os.MkdirTemp("", "test_file_content")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -233,9 +232,9 @@ func TestFileCaseInputs(t *testing.T) {
 	uppercasedPath := filepath.Join(tmpDir, "inner", "uppercased.txt")
 	notUppercasedPath := filepath.Join(tmpDir, "not_uppercased.txt")
 
-	require.NoError(t, os.MkdirAll(filepath.Dir(uppercasedPath), 0755))
-	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0644))
-	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Dir(uppercasedPath), 0o755))
+	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0o644))
+	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0o644))
 
 	c := NewCase()
 	require.NoError(t, yaml.Unmarshal([]byte(`
@@ -287,7 +286,7 @@ func TestFileCaseConditions(t *testing.T) {
 
 	provider["/pipeline/processors"] = []types.Processor{proc}
 
-	tmpDir, err := ioutil.TempDir("", "test_file_case")
+	tmpDir, err := os.MkdirTemp("", "test_file_case")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -297,9 +296,9 @@ func TestFileCaseConditions(t *testing.T) {
 	uppercasedPath := filepath.Join(tmpDir, "inner", "uppercased.txt")
 	notUppercasedPath := filepath.Join(tmpDir, "not_uppercased.txt")
 
-	require.NoError(t, os.MkdirAll(filepath.Dir(uppercasedPath), 0755))
-	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0644))
-	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Dir(uppercasedPath), 0o755))
+	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0o644))
+	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0o644))
 
 	c := NewCase()
 	require.NoError(t, yaml.Unmarshal([]byte(`

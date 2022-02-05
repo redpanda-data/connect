@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,21 +64,21 @@ input:
       secret: xxxxx
       token: xxxxx
 `
-	integrationTests(
-		integrationTestOpenClose(),
-		// integrationTestMetadata(),
-		integrationTestSendBatch(10),
-		integrationTestSendBatchCount(10),
-		integrationTestStreamSequential(10),
-		integrationTestStreamParallel(10),
-		integrationTestStreamParallelLossy(10),
-		integrationTestStreamParallelLossyThroughReconnect(10),
+	integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		// integration.StreamTestMetadata(),
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestSendBatchCount(10),
+		integration.StreamTestStreamSequential(10),
+		integration.StreamTestStreamParallel(10),
+		integration.StreamTestStreamParallelLossy(10),
+		integration.StreamTestStreamParallelLossyThroughReconnect(10),
 	).Run(
 		t, template,
-		testOptPreTest(func(t testing.TB, env *testEnvironment) {
-			require.NoError(t, createKinesisShards(env.ctx, resource.GetPort("4566/tcp"), env.configVars.id, 2))
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+			require.NoError(t, createKinesisShards(ctx, resource.GetPort("4566/tcp"), testID, 2))
 		}),
-		testOptPort(resource.GetPort("4566/tcp")),
-		testOptAllowDupes(),
+		integration.StreamTestOptPort(resource.GetPort("4566/tcp")),
+		integration.StreamTestOptAllowDupes(),
 	)
 })

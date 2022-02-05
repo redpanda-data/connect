@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/OneOfOne/xxhash"
-	"github.com/opentracing/opentracing-go"
 )
 
 //------------------------------------------------------------------------------
@@ -182,7 +182,7 @@ func (c *Hash) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	newMsg := msg.Copy()
 
-	proc := func(index int, span opentracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part types.Part) error {
 		newPart, err := c.fn(part.Get())
 		if err == nil {
 			newMsg.Get(index).Set(newPart)
@@ -197,7 +197,7 @@ func (c *Hash) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		return nil, response.NewAck()
 	}
 
-	IteratePartsWithSpan(TypeHash, c.conf.Parts, newMsg, proc)
+	IteratePartsWithSpanV2(TypeHash, c.conf.Parts, newMsg, proc)
 
 	c.mBatchSent.Incr(1)
 	c.mSent.Incr(int64(newMsg.Len()))

@@ -3,6 +3,8 @@ package writer
 import (
 	"bytes"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -10,10 +12,17 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSocketBasic(t *testing.T) {
-	ln, err := net.Listen("unix", "/tmp/benthos.sock")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
 		t.Fatalf("failed to listen on address: %v", err)
 	}
@@ -76,7 +85,13 @@ func TestSocketBasic(t *testing.T) {
 }
 
 func TestSocketMultipart(t *testing.T) {
-	ln, err := net.Listen("unix", "/tmp/benthos.sock")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
 		t.Fatalf("failed to listen on address: %v", err)
 	}
@@ -385,7 +400,13 @@ func TestTCPSocketMultipart(t *testing.T) {
 }
 
 func TestSocketCustomDelimeter(t *testing.T) {
-	ln, err := net.Listen("unix", "/tmp/benthos.sock")
+	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tmpDir)
+	})
+
+	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
 		t.Fatalf("failed to listen on address: %v", err)
 	}

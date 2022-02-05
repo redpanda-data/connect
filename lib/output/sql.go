@@ -47,7 +47,7 @@ func init() {
 			}
 			return NewBatcherFromConfig(conf.SQL.Batching, w, mgr, log, stats)
 		}),
-		Status:  docs.StatusBeta,
+		Status:  docs.StatusDeprecated,
 		Batches: true,
 		Async:   true,
 		Version: "3.33.0",
@@ -57,7 +57,9 @@ func init() {
 		Summary: `
 Runs an SQL prepared query against a target database for each message.`,
 		Description: `
-Query arguments are set using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the ` + "`args`" + ` field.
+## Alternatives
+
+Use the ` + "[`sql_insert`](/docs/components/outputs/sql_insert)" + ` output instead.
 
 ## Drivers
 

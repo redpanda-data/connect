@@ -27,9 +27,9 @@ label: ""
 mongodb:
   url: ""
   database: ""
-  collection: ""
   username: ""
   password: ""
+  collection: ""
   key_field: ""
   value_field: ""
 ```
@@ -58,14 +58,6 @@ The name of the target MongoDB DB.
 Type: `string`  
 Default: `""`  
 
-### `collection`
-
-The name of the target collection in the MongoDB DB.
-
-
-Type: `string`  
-Default: `""`  
-
 ### `username`
 
 The username to connect to the database.
@@ -77,6 +69,15 @@ Default: `""`
 ### `password`
 
 The password to connect to the database.
+
+
+Type: `string`  
+Default: `""`  
+
+### `collection`
+
+The name of the target collection in the MongoDB DB.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

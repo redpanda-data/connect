@@ -18,6 +18,8 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/metadata"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -25,28 +27,28 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 //------------------------------------------------------------------------------
 
 // Config is a configuration struct for an HTTP client.
 type Config struct {
-	URL                 string            `json:"url" yaml:"url"`
-	Verb                string            `json:"verb" yaml:"verb"`
-	Headers             map[string]string `json:"headers" yaml:"headers"`
-	CopyResponseHeaders bool              `json:"copy_response_headers" yaml:"copy_response_headers"`
-	RateLimit           string            `json:"rate_limit" yaml:"rate_limit"`
-	Timeout             string            `json:"timeout" yaml:"timeout"`
-	Retry               string            `json:"retry_period" yaml:"retry_period"`
-	MaxBackoff          string            `json:"max_retry_backoff" yaml:"max_retry_backoff"`
-	NumRetries          int               `json:"retries" yaml:"retries"`
-	BackoffOn           []int             `json:"backoff_on" yaml:"backoff_on"`
-	DropOn              []int             `json:"drop_on" yaml:"drop_on"`
-	SuccessfulOn        []int             `json:"successful_on" yaml:"successful_on"`
-	TLS                 tls.Config        `json:"tls" yaml:"tls"`
-	ProxyURL            string            `json:"proxy_url" yaml:"proxy_url"`
+	URL                 string                       `json:"url" yaml:"url"`
+	Verb                string                       `json:"verb" yaml:"verb"`
+	Headers             map[string]string            `json:"headers" yaml:"headers"`
+	Metadata            metadata.IncludeFilterConfig `json:"metadata" yaml:"metadata"`
+	CopyResponseHeaders bool                         `json:"copy_response_headers" yaml:"copy_response_headers"`
+	ExtractMetadata     metadata.IncludeFilterConfig `json:"extract_headers" yaml:"extract_headers"`
+	RateLimit           string                       `json:"rate_limit" yaml:"rate_limit"`
+	Timeout             string                       `json:"timeout" yaml:"timeout"`
+	Retry               string                       `json:"retry_period" yaml:"retry_period"`
+	MaxBackoff          string                       `json:"max_retry_backoff" yaml:"max_retry_backoff"`
+	NumRetries          int                          `json:"retries" yaml:"retries"`
+	BackoffOn           []int                        `json:"backoff_on" yaml:"backoff_on"`
+	DropOn              []int                        `json:"drop_on" yaml:"drop_on"`
+	SuccessfulOn        []int                        `json:"successful_on" yaml:"successful_on"`
+	TLS                 tls.Config                   `json:"tls" yaml:"tls"`
+	ProxyURL            string                       `json:"proxy_url" yaml:"proxy_url"`
 	auth.Config         `json:",inline" yaml:",inline"`
 	OAuth2              auth.OAuth2Config `json:"oauth2" yaml:"oauth2"`
 }
@@ -60,6 +62,7 @@ func NewConfig() Config {
 			"Content-Type": "application/octet-stream",
 		},
 		CopyResponseHeaders: false,
+		ExtractMetadata:     metadata.NewIncludeFilterConfig(),
 		RateLimit:           "",
 		Timeout:             "5s",
 		Retry:               "1s",
@@ -375,7 +378,7 @@ func (h *Type) CreateRequest(msg types.Message) (req *http.Request, err error) {
 	url := h.url.String(0, msg)
 
 	if msg == nil || msg.Len() == 0 {
-		if req, err = http.NewRequest(h.conf.Verb, url, nil); err == nil {
+		if req, err = http.NewRequest(h.conf.Verb, url, http.NoBody); err == nil {
 			for k, v := range h.headers {
 				req.Header.Add(k, v.String(0, msg))
 			}
@@ -571,13 +574,9 @@ func (h *Type) Do(msg types.Message) (*http.Response, error) {
 func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.Response, err error) {
 	h.mCount.Incr(1)
 
-	var spans []opentracing.Span
+	var spans []*tracing.Span
 	if msg != nil {
-		spans = make([]opentracing.Span, msg.Len())
-		msg.Iter(func(i int, p types.Part) error {
-			spans[i], _ = opentracing.StartSpanFromContext(message.GetContext(p), "http_request")
-			return nil
-		})
+		spans = tracing.CreateChildSpans("http_request", msg)
 		defer func() {
 			for _, s := range spans {
 				s.Finish()
@@ -586,9 +585,9 @@ func (h *Type) DoWithContext(ctx context.Context, msg types.Message) (res *http.
 	}
 	logErr := func(e error) {
 		for _, s := range spans {
-			s.LogFields(
-				olog.String("event", "error"),
-				olog.String("type", e.Error()),
+			s.LogKV(
+				"event", "error",
+				"type", e.Error(),
 			)
 		}
 	}

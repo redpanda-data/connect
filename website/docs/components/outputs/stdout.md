@@ -26,6 +26,8 @@ output:
     codec: lines
 ```
 
+## Batches and Mulipart Messages
+
 When writing multipart (batched) messages using the `lines` codec the last message ends with double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
 ```
@@ -41,6 +43,8 @@ foo\n
 bar\n
 baz\n\n
 ```
+
+This enables consumers of this output feed to reconstruct the original batches. However, if you wish to avoid this behaviour then add a [`split` processor](/docs/components/processors/split) before messages reach this output.
 
 ## Fields
 

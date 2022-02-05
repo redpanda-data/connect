@@ -29,7 +29,7 @@ func queryParser(pCtx Context) func(input []rune) Result {
 // parser does not include field literals.
 //
 // TODO: V4 Remove this
-func ParseDeprecatedQuery(pCtx Context) Func {
+func ParseDeprecatedQuery(pCtx Context, isDeprecated *bool) Func {
 	return func(input []rune) Result {
 		rootParser := OneOf(
 			matchExpressionParser(pCtx),
@@ -37,7 +37,7 @@ func ParseDeprecatedQuery(pCtx Context) Func {
 			parseWithTails(bracketsExpressionParser(pCtx), pCtx),
 			parseWithTails(literalValueParser(pCtx), pCtx),
 			parseWithTails(functionParser(pCtx), pCtx),
-			parseDeprecatedFunction,
+			parseDeprecatedFunction(isDeprecated),
 		)
 
 		res := SpacesAndTabs()(input)
@@ -60,7 +60,8 @@ func tryParseQuery(expr string, deprecated bool) (query.Function, *Error) {
 	}
 	var res Result
 	if deprecated {
-		res = ParseDeprecatedQuery(pCtx)([]rune(expr))
+		var isDep bool
+		res = ParseDeprecatedQuery(pCtx, &isDep)([]rune(expr))
 	} else {
 		res = queryParser(Context{
 			Functions: query.AllFunctions,

@@ -15,7 +15,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Do not send opentracing events anywhere.
+Do not send tracing events anywhere.
 
 ```yaml
 # Config fields, showing default values

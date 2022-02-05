@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
 
@@ -27,18 +27,13 @@ import (
 
 //------------------------------------------------------------------------------
 
-var verbose bool
-
 func create(t, path string, resBytes []byte) {
-	if existing, err := ioutil.ReadFile(path); err == nil {
+	if existing, err := os.ReadFile(path); err == nil {
 		if bytes.Equal(existing, resBytes) {
-			if verbose {
-				fmt.Printf("Skipping '%v' at: %v\n", t, path)
-			}
 			return
 		}
 	}
-	if err := ioutil.WriteFile(path, resBytes, 0644); err != nil {
+	if err := os.WriteFile(path, resBytes, 0o644); err != nil {
 		panic(err)
 	}
 	fmt.Printf("Documentation for '%v' has changed, updating: %v\n", t, path)
@@ -60,7 +55,6 @@ func render(dir string, embed bool, confSanit interface{}, spec docs.ComponentSp
 func main() {
 	docsDir := "./website/docs/components"
 	flag.StringVar(&docsDir, "dir", docsDir, "The directory to write docs to")
-	flag.BoolVar(&verbose, "v", false, "Writes more information to stdout, including configs that aren't updated")
 	flag.Parse()
 
 	if _, err := template.InitTemplates(); err != nil {

@@ -17,7 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -29,6 +29,7 @@ import (
 	"github.com/OneOfOne/xxhash"
 	"github.com/itchyny/timefmt-go"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/rickb777/date/period"
 	"github.com/tilinna/z85"
 	"gopkg.in/yaml.v3"
 )
@@ -211,22 +212,22 @@ var _ = registerSimpleMethod(
 		case "base64":
 			schemeFn = func(b []byte) ([]byte, error) {
 				e := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(b))
-				return ioutil.ReadAll(e)
+				return io.ReadAll(e)
 			}
 		case "base64url":
 			schemeFn = func(b []byte) ([]byte, error) {
 				e := base64.NewDecoder(base64.URLEncoding, bytes.NewReader(b))
-				return ioutil.ReadAll(e)
+				return io.ReadAll(e)
 			}
 		case "hex":
 			schemeFn = func(b []byte) ([]byte, error) {
 				e := hex.NewDecoder(bytes.NewReader(b))
-				return ioutil.ReadAll(e)
+				return io.ReadAll(e)
 			}
 		case "ascii85":
 			schemeFn = func(b []byte) ([]byte, error) {
 				e := ascii85.NewDecoder(bytes.NewReader(b))
-				return ioutil.ReadAll(e)
+				return io.ReadAll(e)
 			}
 		case "z85":
 			schemeFn = func(b []byte) ([]byte, error) {
@@ -1096,6 +1097,63 @@ var _ = registerSimpleMethod(
 	},
 )
 
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"format_json", "",
+	).InCategory(
+		MethodCategoryParsing,
+		"Serializes a target value into a pretty-printed JSON byte array (with 4 space indentation by default).",
+		NewExampleSpec("",
+			`root = this.doc.format_json()`,
+			`{"doc":{"foo":"bar"}}`,
+			`{
+    "foo": "bar"
+}`,
+		),
+		NewExampleSpec("Provide an argument string in order to customise the indentation used.",
+			`root = this.format_json("  ")`,
+			`{"doc":{"foo":"bar"}}`,
+			`{
+  "doc": {
+    "foo": "bar"
+  }
+}`,
+		),
+		NewExampleSpec("Use the `.string()` method in order to coerce the result into a string.",
+			`root.doc = this.doc.format_json().string()`,
+			`{"doc":{"foo":"bar"}}`,
+			`{"doc":"{\n    \"foo\": \"bar\"\n}"}`,
+		),
+	).
+		Beta().
+		Param(ParamString(
+			"indent",
+			"Indentation string. Each element in a JSON object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.",
+		).Optional().Default(strings.Repeat(" ", 4))),
+	func(args *ParsedParams) (simpleMethod, error) {
+		indentOpt, err := args.FieldOptionalString("indent")
+		if err != nil {
+			return nil, err
+		}
+		indent := ""
+		if indentOpt != nil {
+			indent = *indentOpt
+		}
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return nil, err
+			}
+
+			var out bytes.Buffer
+			if err := json.Indent(&out, b, "", indent); err != nil {
+				return nil, err
+			}
+			return out.Bytes(), nil
+		}, nil
+	},
+)
+
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
@@ -1122,6 +1180,44 @@ var _ = registerSimpleMethod(
 				return nil, err
 			}
 			return d.Nanoseconds(), nil
+		}), nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"parse_duration_iso8601", "",
+	).InCategory(
+		MethodCategoryTime,
+		`Attempts to parse a string using ISO-8601 rules as a duration and returns an integer of nanoseconds. A duration string is represented by the format "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". In these representations, the "[n]" is replaced by the value for each of the date and time elements that follow the "[n]". For example, "P3Y6M4DT12H30M5S" represents a duration of "three years, six months, four days, twelve hours, thirty minutes, and five seconds". The last field of the format allows fractions with one decimal place, so "P3.5S" will return 3500000000ns. Any additional decimals will be truncated.`,
+		NewExampleSpec("Arbitrary ISO-8601 duration string to nanoseconds:",
+			`root.delay_for_ns = this.delay_for.parse_duration_iso8601()`,
+			`{"delay_for":"P3Y6M4DT12H30M5S"}`,
+			`{"delay_for_ns":110839937000000000}`,
+		),
+		NewExampleSpec("Two hours ISO-8601 duration string to seconds:",
+			`root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000`,
+			`{"delay_for":"PT2H"}`,
+			`{"delay_for_s":7200}`,
+		),
+		NewExampleSpec("Two and a half seconds ISO-8601 duration string to seconds:",
+			`root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000`,
+			`{"delay_for":"PT2.5S"}`,
+			`{"delay_for_s":2.5}`,
+		),
+	).Beta(),
+	func(*ParsedParams) (simpleMethod, error) {
+		return stringMethod(func(s string) (interface{}, error) {
+			// No need to normalise the output since we need it expressed as nanoseconds.
+			d, err := period.Parse(s, false)
+			if err != nil {
+				return nil, err
+			}
+			// The conversion is likely imprecise when the period specifies years, months and days.
+			// See method documentation for details on precision.
+			return d.DurationApprox().Nanoseconds(), nil
 		}), nil
 	},
 )
@@ -1873,6 +1969,7 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
+// TODO: V4 Rename this to `re_replace_all`
 var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"re_replace", "",

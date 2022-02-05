@@ -14,6 +14,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	httpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -25,26 +26,19 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
+	corsSpec := httpdocs.ServerCORSFieldSpec()
+	corsSpec.Description += " Only valid with a custom `address`."
+
 	Constructors[TypeHTTPServer] = TypeSpec{
 		constructor: fromSimpleConstructor(NewHTTPServer),
 		Summary: `
-Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
-2.0 is supported when using TLS, which is enabled when key and cert files are
-specified.`,
+Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP 2.0 is supported when using TLS, which is enabled when key and cert files are specified.`,
 		Description: `
-Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP
-You can leave the ` + "`address`" + ` config field blank in order to use the
-default service wide server address, but this will ignore TLS options.
+Sets up an HTTP server that will send messages over HTTP(S) GET requests. If the ` + "`address`" + ` config field is left blank the [service-wide HTTP server](/docs/components/http/about) will be used.
 
-Three endpoints will be registered at the paths specified by the fields
-` + "`path`, `stream_path` and `ws_path`" + `. Which allow you to consume a
-single message batch, a continuous stream of line delimited messages, or a
-websocket of messages for each request respectively.
+Three endpoints will be registered at the paths specified by the fields ` + "`path`, `stream_path` and `ws_path`" + `. Which allow you to consume a single message batch, a continuous stream of line delimited messages, or a websocket of messages for each request respectively.
 
-When messages are batched the ` + "`path`" + ` endpoint encodes the batch
-according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
-This behaviour can be overridden by
-[archiving your batches](/docs/configuration/batching#post-batch-processing).`,
+When messages are batched the ` + "`path`" + ` endpoint encodes the batch according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This behaviour can be overridden by [archiving your batches](/docs/configuration/batching#post-batch-processing).`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("address", "An optional address to listen from. If left empty the service wide HTTP server is used."),
 			docs.FieldCommon("path", "The path from which discrete messages can be consumed."),
@@ -54,6 +48,7 @@ This behaviour can be overridden by
 			docs.FieldAdvanced("timeout", "The maximum time to wait before a blocking, inactive connection is dropped (only applies to the `path` endpoint)."),
 			docs.FieldAdvanced("cert_file", "An optional certificate file to use for TLS connections. Only applicable when an `address` is specified."),
 			docs.FieldAdvanced("key_file", "An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified."),
+			corsSpec,
 		},
 		Categories: []Category{
 			CategoryNetwork,
@@ -66,14 +61,15 @@ This behaviour can be overridden by
 // HTTPServerConfig contains configuration fields for the HTTPServer output
 // type.
 type HTTPServerConfig struct {
-	Address      string   `json:"address" yaml:"address"`
-	Path         string   `json:"path" yaml:"path"`
-	StreamPath   string   `json:"stream_path" yaml:"stream_path"`
-	WSPath       string   `json:"ws_path" yaml:"ws_path"`
-	AllowedVerbs []string `json:"allowed_verbs" yaml:"allowed_verbs"`
-	Timeout      string   `json:"timeout" yaml:"timeout"`
-	CertFile     string   `json:"cert_file" yaml:"cert_file"`
-	KeyFile      string   `json:"key_file" yaml:"key_file"`
+	Address      string              `json:"address" yaml:"address"`
+	Path         string              `json:"path" yaml:"path"`
+	StreamPath   string              `json:"stream_path" yaml:"stream_path"`
+	WSPath       string              `json:"ws_path" yaml:"ws_path"`
+	AllowedVerbs []string            `json:"allowed_verbs" yaml:"allowed_verbs"`
+	Timeout      string              `json:"timeout" yaml:"timeout"`
+	CertFile     string              `json:"cert_file" yaml:"cert_file"`
+	KeyFile      string              `json:"key_file" yaml:"key_file"`
+	CORS         httpdocs.ServerCORS `json:"cors" yaml:"cors"`
 }
 
 // NewHTTPServerConfig creates a new HTTPServerConfig with default values.
@@ -89,6 +85,7 @@ func NewHTTPServerConfig() HTTPServerConfig {
 		Timeout:  "5s",
 		CertFile: "",
 		KeyFile:  "",
+		CORS:     httpdocs.NewServerCORS(),
 	}
 }
 
@@ -144,9 +141,13 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	var mux *http.ServeMux
 	var server *http.Server
 
+	var err error
 	if len(conf.HTTPServer.Address) > 0 {
 		mux = http.NewServeMux()
-		server = &http.Server{Addr: conf.HTTPServer.Address, Handler: mux}
+		server = &http.Server{Addr: conf.HTTPServer.Address}
+		if server.Handler, err = conf.HTTPServer.CORS.WrapHandler(mux); err != nil {
+			return nil, fmt.Errorf("bad CORS configuration: %w", err)
+		}
 	}
 
 	verbs := map[string]struct{}{}
@@ -193,7 +194,6 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	if tout := conf.HTTPServer.Timeout; len(tout) > 0 {
-		var err error
 		if h.timeout, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
 		}

@@ -56,6 +56,9 @@ input:
     verb: GET
     headers:
       Content-Type: application/octet-stream
+    metadata:
+      include_prefixes: []
+      include_patterns: []
     oauth:
       enabled: false
       consumer_key: ""
@@ -85,7 +88,9 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    copy_response_headers: false
+    extract_headers:
+      include_prefixes: []
+      include_patterns: []
     rate_limit: ""
     timeout: 5s
     retry_period: 1s
@@ -197,6 +202,53 @@ Default: `{"Content-Type":"application/octet-stream"}`
 
 headers:
   Content-Type: application/octet-stream
+```
+
+### `metadata`
+
+Specify optional matching rules to determine which metadata keys should be added to the HTTP request as headers.
+
+
+Type: `object`  
+
+### `metadata.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_prefixes:
+  - foo_
+  - bar_
+
+include_prefixes:
+  - kafka_
+
+include_prefixes:
+  - content-
+```
+
+### `metadata.include_patterns`
+
+Provide a list of explicit metadata key regular expression (re2) patterns to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_patterns:
+  - .*
+
+include_patterns:
+  - _timestamp_unix$
 ```
 
 ### `oauth`
@@ -487,13 +539,52 @@ The path of a certificate key to use.
 Type: `string`  
 Default: `""`  
 
-### `copy_response_headers`
+### `extract_headers`
 
-Sets whether to copy the headers from the response to the resulting payload.
+Specify which response headers should be added to resulting messages as metadata. Header keys are lowercased before matching, so ensure that your patterns target lowercased versions of the header keys that you expect.
 
 
-Type: `bool`  
-Default: `false`  
+Type: `object`  
+
+### `extract_headers.include_prefixes`
+
+Provide a list of explicit metadata key prefixes to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_prefixes:
+  - foo_
+  - bar_
+
+include_prefixes:
+  - kafka_
+
+include_prefixes:
+  - content-
+```
+
+### `extract_headers.include_patterns`
+
+Provide a list of explicit metadata key regular expression (re2) patterns to match against.
+
+
+Type: `array`  
+Default: `[]`  
+
+```yaml
+# Examples
+
+include_patterns:
+  - .*
+
+include_patterns:
+  - _timestamp_unix$
+```
 
 ### `rate_limit`
 
@@ -621,10 +712,12 @@ Requires version 3.42.0 or newer
 | `all-bytes` | Consume the entire file as a single binary message. |
 | `chunker:x` | Consume the file in chunks of a given number of bytes. |
 | `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
+| `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `csv:|` would consume a pipe delimited file. |
 | `delim:x` | Consume the file in segments divided by a custom delimiter. |
 | `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
 | `lines` | Consume the file in segments divided by linebreaks. |
 | `multipart` | Consumes the output of another codec and batches messages together. A batch ends when an empty message is consumed. For example, the codec `lines/multipart` could be used to consume multipart messages where an empty line indicates the end of each batch. |
+| `regex:(?m)^\d\d:\d\d:\d\d` | Consume the file in segments divided by regular expression. |
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 

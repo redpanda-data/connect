@@ -146,7 +146,7 @@ pipeline:
           - http:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos
               verb: GET
-        result_map: root.image.pull_count = this
+        result_map: root.image.pull_count = this.pull_count
 
 # Example input:  {"id":"foo","some":"pre-existing data"}
 # Example output: {"id":"foo","some":"pre-existing data","image":{"pull_count":1234}}
@@ -188,7 +188,7 @@ pipeline:
     - branch:
         request_map: '{"id":this.doc.id,"username":this.user.name}'
         processors:
-          - lambda:
+          - aws_lambda:
               function: trigger_user_update
 
 # Example input: {"doc":{"id":"foo","body":"hello world"},"user":{"name":"fooey"}}

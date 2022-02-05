@@ -51,7 +51,7 @@ func TestUnarchiveTar(t *testing.T) {
 
 		hdr := &tar.Header{
 			Name: fmt.Sprintf("testfile%v", i),
-			Mode: 0600,
+			Mode: 0o600,
 			Size: int64(len(input[i])),
 		}
 		expNames = append(expNames, hdr.Name)
@@ -370,7 +370,7 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 
 		hdr := &tar.Header{
 			Name: fmt.Sprintf("testfile%v", i),
-			Mode: 0600,
+			Mode: 0o600,
 			Size: int64(len(input[i])),
 		}
 		if err := tw.WriteHeader(hdr); err != nil {

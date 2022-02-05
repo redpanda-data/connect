@@ -7,48 +7,24 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	"github.com/opentracing/opentracing-go"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
-
-var documentMapOps = map[string]bool{
-	"insert-one":  true,
-	"delete-one":  false,
-	"delete-many": false,
-	"replace-one": true,
-	"update-one":  true,
-	"find-one":    false,
-}
-
-var filterMapOps = map[string]bool{
-	"insert-one":  false,
-	"delete-one":  true,
-	"delete-many": true,
-	"replace-one": true,
-	"update-one":  true,
-	"find-one":    true,
-}
-
-var hintAllowedOps = map[string]bool{
-	"insert-one":  false,
-	"delete-one":  true,
-	"delete-many": true,
-	"replace-one": true,
-	"update-one":  true,
-	"find-one":    true,
-}
 
 //------------------------------------------------------------------------------
 
@@ -66,11 +42,8 @@ func init() {
 		Summary: `Performs operations against MongoDB for each message, allowing you to store or retrieve data within message payloads.`,
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
-				docs.FieldCommon(
-					"operation",
-					"The mongodb operation to perform. Must be one of the following: insert-one, delete-one, delete-many, "+
-						"replace-one, update-one, find-one.",
-				),
+				processorOperationDocs(client.OperationInsertOne),
+				docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
 				docs.FieldCommon(
 					"write_concern",
 					"The write_concern settings for the mongo connection.",
@@ -95,6 +68,20 @@ func init() {
 						"except insert-one. It is used to improve performance of finding the documents in the mongodb.",
 					mapExamples()...,
 				),
+				docs.FieldCommon(
+					"upsert",
+					"The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,"+
+						"the document is updated or replaced accordingly, otherwise it is created.",
+				).HasDefault(false).HasType(docs.FieldTypeBool).AtVersion("3.60.0"),
+				docs.FieldAdvanced(
+					"json_marshal_mode",
+					"The json_marshal_mode setting is optional and controls the format of the output message.",
+				).HasDefault(client.JSONMarshalModeCanonical).HasType(docs.FieldTypeString).HasAnnotatedOptions(
+					string(client.JSONMarshalModeCanonical), "A string format that emphasizes type preservation at the expense of readability and interoperability. "+
+						"That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases. ",
+					string(client.JSONMarshalModeRelaxed), "A string format that emphasizes readability and interoperability at the expense of type preservation."+
+						"That is, conversion from relaxed format to BSON can lose type information.",
+				).AtVersion("3.60.0"),
 				processor.PartsFieldSpec,
 			).Merge(retries.FieldSpecs())...,
 		).ChildDefaultAndTypesFromStruct(processor.NewMongoDBConfig()),
@@ -110,13 +97,16 @@ type Processor struct {
 	log   log.Modular
 	stats metrics.Type
 
-	client     *mongo.Client
-	collection *mongo.Collection
+	client                       *mongo.Client
+	collection                   *field.Expression
+	database                     *mongo.Database
+	writeConcernCollectionOption *options.CollectionOptions
 
 	parts       []int
 	filterMap   *mapping.Executor
 	documentMap *mapping.Executor
 	hintMap     *mapping.Executor
+	operation   client.Operation
 
 	shutSig *shutdown.Signaller
 
@@ -131,12 +121,19 @@ type Processor struct {
 func NewProcessor(
 	conf processor.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type,
 ) (types.Processor, error) {
+	// TODO: Remove this after V4 lands and #972 is fixed
+	operation := client.NewOperation(conf.MongoDB.Operation)
+	if operation == client.OperationInvalid {
+		return nil, fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, update-one or find-one", conf.MongoDB.Operation)
+	}
+
 	m := &Processor{
 		conf:  conf.MongoDB,
 		log:   log,
 		stats: stats,
 
-		parts: conf.MongoDB.Parts,
+		parts:     conf.MongoDB.Parts,
+		operation: operation,
 
 		shutSig:           shutdown.NewSignaller(),
 		mCount:            stats.GetCounter("count"),
@@ -144,10 +141,6 @@ func NewProcessor(
 		mKeyAlreadyExists: stats.GetCounter("key_already_exists"),
 		mSent:             stats.GetCounter("sent"),
 		mBatchSent:        stats.GetCounter("batch.sent"),
-	}
-
-	if conf.MongoDB.Operation == "" {
-		return nil, fmt.Errorf("operator is a required field")
 	}
 
 	if conf.MongoDB.MongoDB.URL == "" {
@@ -162,21 +155,10 @@ func NewProcessor(
 		return nil, errors.New("mongo collection must be specified")
 	}
 
-	var filterNeeded, documentNeeded bool
-	var hintAllowed bool
-
-	if _, ok := documentMapOps[conf.MongoDB.Operation]; !ok {
-		return nil, fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, update-one or find-one", conf.MongoDB.Operation)
-	}
-
-	documentNeeded = documentMapOps[conf.MongoDB.Operation]
-	filterNeeded = filterMapOps[conf.MongoDB.Operation]
-	hintAllowed = hintAllowedOps[conf.MongoDB.Operation]
-
 	bEnv := mgr.BloblEnvironment()
 	var err error
 
-	if filterNeeded {
+	if isFilterAllowed(m.operation) {
 		if conf.MongoDB.FilterMap == "" {
 			return nil, errors.New("mongodb filter_map must be specified")
 		}
@@ -187,7 +169,7 @@ func NewProcessor(
 		return nil, fmt.Errorf("mongodb filter_map not allowed for '%s' operation", conf.MongoDB.Operation)
 	}
 
-	if documentNeeded {
+	if isDocumentAllowed(m.operation) {
 		if conf.MongoDB.DocumentMap == "" {
 			return nil, errors.New("mongodb document_map must be specified")
 		}
@@ -198,12 +180,16 @@ func NewProcessor(
 		return nil, fmt.Errorf("mongodb document_map not allowed for '%s' operation", conf.MongoDB.Operation)
 	}
 
-	if hintAllowed && conf.MongoDB.HintMap != "" {
+	if isHintAllowed(m.operation) && conf.MongoDB.HintMap != "" {
 		if m.hintMap, err = bEnv.NewMapping(conf.MongoDB.HintMap); err != nil {
 			return nil, fmt.Errorf("failed to parse hint_map: %v", err)
 		}
 	} else if conf.MongoDB.HintMap != "" {
 		return nil, fmt.Errorf("mongodb hint_map not allowed for '%s' operation", conf.MongoDB.Operation)
+	}
+
+	if !isUpsertAllowed(m.operation) && conf.MongoDB.Upsert {
+		return nil, fmt.Errorf("mongodb upsert not allowed for '%s' operation", conf.MongoDB.Operation)
 	}
 
 	if m.client, err = conf.MongoDB.MongoDB.Client(); err != nil {
@@ -239,9 +225,12 @@ func NewProcessor(
 		return nil, fmt.Errorf("write_concern validation error: %w", err)
 	}
 
-	m.collection = m.client.
-		Database(conf.MongoDB.MongoDB.Database).
-		Collection(conf.MongoDB.MongoDB.Collection, options.Collection().SetWriteConcern(writeConcern))
+	if m.collection, err = interop.NewBloblangField(mgr, m.conf.MongoDB.Collection); err != nil {
+		return nil, fmt.Errorf("failed to parse collection expression: %v", err)
+	}
+
+	m.database = m.client.Database(conf.MongoDB.MongoDB.Database)
+	m.writeConcernCollectionOption = options.Collection().SetWriteConcern(writeConcern)
 
 	return m, nil
 }
@@ -252,14 +241,15 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 	m.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	var writeModels []mongo.WriteModel
-	processor.IteratePartsWithSpan("mongodb", m.parts, newMsg, func(i int, s opentracing.Span, p types.Part) error {
+	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
+	processor.IteratePartsWithSpanV2("mongodb", m.parts, newMsg, func(i int, s *tracing.Span, p types.Part) error {
 		var err error
 		var filterVal, documentVal types.Part
-		var filterValWanted, documentValWanted bool
+		var upsertVal, filterValWanted, documentValWanted bool
 
-		filterValWanted = filterMapOps[m.conf.Operation]
-		documentValWanted = documentMapOps[m.conf.Operation]
+		filterValWanted = isFilterAllowed(m.operation)
+		documentValWanted = isDocumentAllowed(m.operation)
+		upsertVal = m.conf.Upsert
 
 		if filterValWanted {
 			if filterVal, err = m.filterMap.MapPart(i, msg); err != nil {
@@ -308,70 +298,71 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		}
 
 		var writeModel mongo.WriteModel
-		upsertFalse := false
-		switch m.conf.Operation {
-		case "insert-one":
+		collection := m.database.Collection(m.collection.String(i, msg), m.writeConcernCollectionOption)
+
+		switch m.operation {
+		case client.OperationInsertOne:
 			writeModel = &mongo.InsertOneModel{
 				Document: docJSON,
 			}
-		case "delete-one":
+		case client.OperationDeleteOne:
 			writeModel = &mongo.DeleteOneModel{
 				Filter: filterJSON,
 				Hint:   hintJSON,
 			}
-		case "delete-many":
+		case client.OperationDeleteMany:
 			writeModel = &mongo.DeleteManyModel{
 				Filter: filterJSON,
 				Hint:   hintJSON,
 			}
-		case "replace-one":
+		case client.OperationReplaceOne:
 			writeModel = &mongo.ReplaceOneModel{
-				Upsert:      &upsertFalse,
+				Upsert:      &upsertVal,
 				Filter:      filterJSON,
 				Replacement: docJSON,
 				Hint:        hintJSON,
 			}
-		case "update-one":
+		case client.OperationUpdateOne:
 			writeModel = &mongo.UpdateOneModel{
-				Upsert: &upsertFalse,
+				Upsert: &upsertVal,
 				Filter: filterJSON,
 				Update: docJSON,
 				Hint:   hintJSON,
 			}
-		case "find-one":
-			result := m.collection.FindOne(context.Background(), filterJSON, findOptions)
-			bsonValue, err := result.DecodeBytes()
+		case client.OperationFindOne:
+			var decoded interface{}
+			err := collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded)
 			if err != nil {
-				m.log.Errorf("Error finding document in mongo db, filter = %v", filterJSON)
+				if err == mongo.ErrNoDocuments {
+					return err
+				}
+				m.log.Errorf("Error decoding mongo db result, filter = %v: %s", filterJSON, err)
+				return err
+			}
+			data, err := bson.MarshalExtJSON(decoded, m.conf.JSONMarshalMode == client.JSONMarshalModeCanonical, false)
+			if err != nil {
 				return err
 			}
 
-			data := map[string]interface{}{}
-			elements, err := bsonValue.Elements()
-			if err != nil {
-				m.log.Errorf("Error getting elements from document in mongo db, filter = %v", filterJSON)
-				return err
-			}
+			p.Set(data)
 
-			for _, e := range elements {
-				key := e.Key()
-				value := e.Value().String()
-				data[key] = value
-			}
-			return p.SetJSON(data)
+			return nil
 		}
 
 		if writeModel != nil {
-			writeModels = append(writeModels, writeModel)
+			writeModelsMap[collection] = append(writeModelsMap[collection], writeModel)
 		}
 		return nil
 	})
 
-	if len(writeModels) > 0 {
-		if _, err := m.collection.BulkWrite(context.Background(), writeModels); err != nil {
-			m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
-			for _, n := range m.parts {
-				processor.FlagErr(newMsg.Get(n), err)
+	if len(writeModelsMap) > 0 {
+		for collection, writeModels := range writeModelsMap {
+			// We should have at least one write model in the slice
+			if _, err := collection.BulkWrite(context.Background(), writeModels); err != nil {
+				m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
+				for _, n := range m.parts {
+					processor.FlagErr(newMsg.Get(n), err)
+				}
 			}
 		}
 	}

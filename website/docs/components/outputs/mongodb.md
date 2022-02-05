@@ -37,10 +37,10 @@ output:
   mongodb:
     url: ""
     database: ""
-    collection: ""
     username: ""
     password: ""
     operation: update-one
+    collection: ""
     write_concern:
       w: ""
       j: false
@@ -48,6 +48,7 @@ output:
     document_map: ""
     filter_map: ""
     hint_map: ""
+    upsert: false
     max_in_flight: 1
     batching:
       count: 0
@@ -66,10 +67,10 @@ output:
   mongodb:
     url: ""
     database: ""
-    collection: ""
     username: ""
     password: ""
     operation: update-one
+    collection: ""
     write_concern:
       w: ""
       j: false
@@ -77,6 +78,7 @@ output:
     document_map: ""
     filter_map: ""
     hint_map: ""
+    upsert: false
     max_in_flight: 1
     batching:
       count: 0
@@ -129,14 +131,6 @@ The name of the target MongoDB DB.
 Type: `string`  
 Default: `""`  
 
-### `collection`
-
-The name of the target collection in the MongoDB DB.
-
-
-Type: `string`  
-Default: `""`  
-
 ### `username`
 
 The username to connect to the database.
@@ -155,11 +149,21 @@ Default: `""`
 
 ### `operation`
 
-The mongo operation to perform. Must be one of the following: insert-one, delete-one, delete-many, replace-one, update-one.
+The mongodb operation to perform.
 
 
 Type: `string`  
 Default: `"update-one"`  
+Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`.
+
+### `collection`
+
+The name of the target collection in the MongoDB DB.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
 
 ### `write_concern`
 
@@ -239,6 +243,15 @@ hint_map: |-
   root.a = this.foo
   root.b = this.bar
 ```
+
+### `upsert`
+
+The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,the document is updated or replaced accordingly, otherwise it is created.
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 3.60.0 or newer  
 
 ### `max_in_flight`
 

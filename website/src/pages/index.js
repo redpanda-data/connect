@@ -325,11 +325,14 @@ function Home() {
           <div className="container">
             <div className="row">
               <div className={classnames('col col--6')}>
-                <h3>Sponsored by the following heroes</h3>
+                <h3 id="sponsored-by">Sponsored by the following heroes</h3>
                 <a href="https://www.meltwater.com/" className={styles.sponsorLink}><img className={styles.meltwaterImg} src="/img/sponsors/mw_logo.png" /></a>
                 <a href="https://www.humansecurity.com" className={styles.sponsorLink}><img className={styles.humanImg} src="/img/sponsors/HUMAN_logo.png" /></a>
                 <a href="https://www.infosum.com/" className={styles.sponsorLink}><img className={styles.infosumImg} src="/img/sponsors/infosum_logo.png" /></a>
                 <a href="https://community.com/" className={styles.sponsorLink}><img className={styles.communityImg} src="/img/sponsors/community.svg" /></a>
+                <a href="https://www.optum.com/" className={styles.sponsorLink}><img className={styles.optumImg} src="/img/sponsors/optum_logo.png" /></a>
+                <a href="https://aurora.dev/" className={styles.sponsorLink}><img className={styles.auroraImg} src="/img/sponsors/aurora.svg" /></a>
+                <a href="https://rudderstack.com/" className={styles.sponsorLink}><img className={styles.rudderstackImg} src="/img/sponsors/rudderstack.svg" /></a>
               </div>
               <div className={classnames('col col--6', styles.loveSectionPlea)}>
                 <div>
