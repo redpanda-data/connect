@@ -143,7 +143,7 @@ func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- type
 	block := make(chan struct{}, 32)
 
 	for _, msg := range msgs {
-	    block <- struct{}
+	    block <- struct{}{}
 		go func(m types.Message) {
 			sendMsg(m)
 			wg.Done()
