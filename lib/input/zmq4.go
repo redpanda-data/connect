@@ -35,12 +35,12 @@ go install -tags "ZMQ4" github.com/Jeffail/benthos/v3/cmd/benthos
 ZMQ4 input supports PULL and SUB sockets only. If there is demand for other
 socket types then they can be added easily.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs."),
-			docs.FieldCommon("bind", "Whether to bind to the specified URLs or connect."),
-			docs.FieldCommon("socket_type", "The socket type to connect as.").HasOptions("PULL", "SUB"),
-			docs.FieldCommon("sub_filters", "A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything."),
-			docs.FieldAdvanced("high_water_mark", "The message high water mark to use."),
-			docs.FieldAdvanced("poll_timeout", "The poll timeout to use."),
+			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").Array(),
+			docs.FieldBool("bind", "Whether to bind to the specified URLs or connect."),
+			docs.FieldString("socket_type", "The socket type to connect as.").HasOptions("PULL", "SUB"),
+			docs.FieldString("sub_filters", "A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.").Array(),
+			docs.FieldInt("high_water_mark", "The message high water mark to use.").Advanced(),
+			docs.FieldString("poll_timeout", "The poll timeout to use.").Advanced(),
 		},
 		Categories: []Category{
 			CategoryNetwork,

@@ -33,11 +33,11 @@ machine, then build with the tag:
 go install -tags "ZMQ4" github.com/Jeffail/benthos/v3/cmd/benthos
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:5556"}),
-			docs.FieldCommon("bind", "Whether the URLs listed should be bind (otherwise they are connected to)."),
-			docs.FieldCommon("socket_type", "The socket type to send with.").HasOptions("PUSH", "PUB"),
-			docs.FieldAdvanced("high_water_mark", "The message high water mark to use."),
-			docs.FieldCommon("poll_timeout", "The maximum period of time to wait for a message to send before the request is abandoned and reattempted."),
+			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:5556"}).Array(),
+			docs.FieldBool("bind", "Whether the URLs listed should be bind (otherwise they are connected to)."),
+			docs.FieldString("socket_type", "The socket type to send with.").HasOptions("PUSH", "PUB"),
+			docs.FieldInt("high_water_mark", "The message high water mark to use.").Advanced(),
+			docs.FieldString("poll_timeout", "The maximum period of time to wait for a message to send before the request is abandoned and reattempted.").Advanced(),
 		},
 		Categories: []Category{
 			CategoryNetwork,

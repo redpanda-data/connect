@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - Fixed panic caused by invalid bounds in the `range` function.
 - Resource config files imported now allow (and ignore) a `tests` field.
 - Fixed an issue where the `aws_kinesis` input would fail to back off during unyielding read attempts.
+- Fixed a linting error with `zmq4` input/output `urls` fields that was incorrectly expecting a string.
 
 ## 3.62.0 - 2022-01-21
 

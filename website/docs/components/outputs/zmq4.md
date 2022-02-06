@@ -30,12 +30,12 @@ PUSH and PUB sockets are supported.
 ```yaml
 # Common config fields, showing default values
 output:
+  label: ""
   zmq4:
     urls:
       - tcp://*:5556
     bind: true
     socket_type: PUSH
-    poll_timeout: 5s
 ```
 
 </TabItem>
@@ -44,6 +44,7 @@ output:
 ```yaml
 # All config fields, showing default values
 output:
+  label: ""
   zmq4:
     urls:
       - tcp://*:5556
@@ -108,7 +109,7 @@ Options: `PUSH`, `PUB`.
 The message high water mark to use.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `poll_timeout`

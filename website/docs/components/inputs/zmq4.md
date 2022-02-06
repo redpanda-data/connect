@@ -29,6 +29,7 @@ Consumes messages from a ZeroMQ socket.
 ```yaml
 # Common config fields, showing default values
 input:
+  label: ""
   zmq4:
     urls:
       - tcp://localhost:5555
@@ -43,6 +44,7 @@ input:
 ```yaml
 # All config fields, showing default values
 input:
+  label: ""
   zmq4:
     urls:
       - tcp://localhost:5555
@@ -112,7 +114,7 @@ Default: `[]`
 The message high water mark to use.
 
 
-Type: `number`  
+Type: `int`  
 Default: `0`  
 
 ### `poll_timeout`
