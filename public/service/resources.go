@@ -4,6 +4,9 @@ import (
 	"context"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -14,6 +17,18 @@ type Resources struct {
 
 func newResourcesFromManager(nm bundle.NewManagement) *Resources {
 	return &Resources{mgr: nm}
+}
+
+// MockResources returns an instantiation of a resources struct that provides
+// valid but ineffective methods and observability components. This is useful
+// for testing components that interact with a resources type but do not
+// explicitly need it for testing purposes.
+func MockResources() *Resources {
+	// This is quite naughty, if we encounter a case where an empty resource
+	// config like this could actually return an error then we'd need to change
+	// this.
+	mgr, _ := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	return newResourcesFromManager(mgr)
 }
 
 // Label returns a label that identifies the component instantiation. This could

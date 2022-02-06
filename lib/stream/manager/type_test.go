@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/stretchr/testify/require"
 )
 
 func harmlessConf() stream.Config {
@@ -50,10 +52,13 @@ func TestTypeProcsAndPipes(t *testing.T) {
 	logger := log.Noop()
 	stats := metrics.Noop()
 
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := New(
 		OptSetLogger(logger),
 		OptSetStats(stats),
-		OptSetManager(types.NoopMgr()),
+		OptSetManager(res),
 		OptAddProcessors(func(id string) (types.Processor, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
@@ -109,10 +114,13 @@ func TestTypeProcsAndPipes(t *testing.T) {
 }
 
 func TestTypeBasicOperations(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := New(
 		OptSetLogger(log.Noop()),
 		OptSetStats(metrics.Noop()),
-		OptSetManager(types.NoopMgr()),
+		OptSetManager(res),
 	)
 
 	if err := mgr.Update("foo", harmlessConf(), time.Second); err == nil {
@@ -169,10 +177,13 @@ func TestTypeBasicOperations(t *testing.T) {
 }
 
 func TestTypeBasicClose(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := New(
 		OptSetLogger(log.Noop()),
 		OptSetStats(metrics.Noop()),
-		OptSetManager(types.NoopMgr()),
+		OptSetManager(res),
 	)
 
 	conf := harmlessConf()

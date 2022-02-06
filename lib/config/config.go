@@ -6,13 +6,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/api"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
@@ -42,49 +38,6 @@ func New() Type {
 		Tracer:             tracer.NewConfig(),
 		SystemCloseTimeout: "20s",
 		Tests:              nil,
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// AddExamples takes a configuration struct and a variant list of type names to
-// add to it and injects those types appropriately.
-//
-// For example, your variant arguments could be "kafka" and "amqp", which case
-// this function will create a configuration that reads from Kafka and writes
-// over AMQP.
-func AddExamples(conf *Type, examples ...string) {
-	var inputType, bufferType, outputType string
-	var processorTypes []string
-	for _, e := range examples {
-		if _, exists := input.Constructors[e]; exists && inputType == "" {
-			inputType = e
-		}
-		if _, exists := buffer.Constructors[e]; exists {
-			bufferType = e
-		}
-		if _, exists := processor.Constructors[e]; exists {
-			processorTypes = append(processorTypes, e)
-		}
-		if _, exists := output.Constructors[e]; exists {
-			outputType = e
-		}
-	}
-	if len(inputType) > 0 {
-		conf.Input.Type = inputType
-	}
-	if len(bufferType) > 0 {
-		conf.Buffer.Type = bufferType
-	}
-	if len(processorTypes) > 0 {
-		for _, procType := range processorTypes {
-			procConf := processor.NewConfig()
-			procConf.Type = procType
-			conf.Pipeline.Processors = append(conf.Pipeline.Processors, procConf)
-		}
-	}
-	if len(outputType) > 0 {
-		conf.Output.Type = outputType
 	}
 }
 

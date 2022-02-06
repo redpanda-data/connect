@@ -347,8 +347,7 @@ type: local`))
     label: ""
     kafka:`,
 		`buffer:
-    memory:
-        limit`,
+    memory: {}`,
 		`pipeline:
     threads: 10
     processors:`,

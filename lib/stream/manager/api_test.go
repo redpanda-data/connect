@@ -99,17 +99,15 @@ func parseListBody(data *bytes.Buffer) listBody {
 }
 
 type getBody struct {
-	Active    bool          `json:"active"`
-	Uptime    float64       `json:"uptime"`
-	UptimeStr string        `json:"uptime_str"`
-	Config    stream.Config `json:"config"`
+	Active    bool        `json:"active"`
+	Uptime    float64     `json:"uptime"`
+	UptimeStr string      `json:"uptime_str"`
+	Config    interface{} `json:"config"`
 }
 
 func parseGetBody(t *testing.T, data *bytes.Buffer) getBody {
 	t.Helper()
-	result := getBody{
-		Config: stream.NewConfig(),
-	}
+	result := getBody{}
 	if err := yaml.Unmarshal(data.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
@@ -183,10 +181,13 @@ func harmlessConf() stream.Config {
 }
 
 func TestTypeAPIBasicOperations(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetManager(res),
 		manager.OptSetAPITimeout(time.Second*10),
 	)
 
@@ -227,9 +228,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	info := parseGetBody(t, response.Body)
 	assert.True(t, info.Active)
 
-	actSanit, err := info.Config.Sanitised()
-	require.NoError(t, err)
-	assert.Equal(t, conf, actSanit)
+	assert.Equal(t, conf, info.Config)
 
 	newConf := harmlessConf()
 	newConf.Buffer.Type = "memory"
@@ -249,9 +248,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	info = parseGetBody(t, response.Body)
 	assert.True(t, info.Active)
 
-	actSanit, err = info.Config.Sanitised()
-	require.NoError(t, err)
-	assert.Equal(t, newConfSanit, actSanit)
+	assert.Equal(t, newConfSanit, info.Config)
 
 	request = genRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -289,8 +286,11 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	// replace the env var with the expected value in the struct
 	// because we will be comparing it to the rendered version.
 	newConf.Input.Type = "http_server"
+	sanitNewConf, err := newConf.Sanitised()
+	require.NoError(t, err)
+
 	assert.True(t, info.Active)
-	assert.Equal(t, newConf, info.Config)
+	assert.Equal(t, sanitNewConf, info.Config)
 
 	request = genRequest("DELETE", "/streams/fooEnv", conf)
 	response = httptest.NewRecorder()
@@ -299,10 +299,13 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 }
 
 func TestTypeAPIPatch(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetManager(res),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -348,19 +351,18 @@ func TestTypeAPIPatch(t *testing.T) {
 	if !info.Active {
 		t.Fatal("Stream not active")
 	}
-	if act, exp := info.Config.Input.HTTPServer.Path, conf.Input.HTTPServer.Path; exp != act {
-		t.Errorf("Unexpected config: %v != %v", act, exp)
-	}
-	if act, exp := info.Config.Input.Type, conf.Input.Type; exp != act {
-		t.Errorf("Unexpected config: %v != %v", act, exp)
-	}
+
+	assert.Equal(t, conf.Input.HTTPServer.Path, gabs.Wrap(info.Config).S("input", "http_server", "path").Data())
 }
 
 func TestTypeAPIBasicOperationsYAML(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetManager(res),
 		manager.OptSetAPITimeout(time.Second*10),
 	)
 
@@ -397,9 +399,12 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code)
 
+	sanitConf, err := conf.Sanitised()
+	require.NoError(t, err)
+
 	info := parseGetBody(t, response.Body)
 	require.True(t, info.Active)
-	assert.Equal(t, conf, info.Config)
+	assert.Equal(t, sanitConf, info.Config)
 
 	newConf := harmlessConf()
 	newConf.Buffer.Type = "memory"
@@ -414,9 +419,12 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code)
 
+	sanitNewConf, err := newConf.Sanitised()
+	require.NoError(t, err)
+
 	info = parseGetBody(t, response.Body)
 	require.True(t, info.Active)
-	assert.Equal(t, newConf, info.Config)
+	assert.Equal(t, sanitNewConf, info.Config)
 
 	request = genYAMLRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -430,10 +438,13 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 }
 
 func TestTypeAPIList(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetManager(res),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -467,10 +478,13 @@ func TestTypeAPIList(t *testing.T) {
 }
 
 func TestTypeAPISetStreams(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetManager(res),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -521,7 +535,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	conf := parseGetBody(t, response.Body)
-	assert.Equal(t, "BAR_ONE", conf.Config.Input.HTTPServer.Path)
+	assert.Equal(t, "BAR_ONE", gabs.Wrap(conf.Config).S("input", "http_server", "path").Data())
 
 	request = genRequest("GET", "/streams/bar2", nil)
 	response = httptest.NewRecorder()
@@ -529,7 +543,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	conf = parseGetBody(t, response.Body)
-	assert.Equal(t, "BAR_TWO", conf.Config.Input.HTTPServer.Path)
+	assert.Equal(t, "BAR_TWO", gabs.Wrap(conf.Config).S("input", "http_server", "path").Data())
 
 	request = genRequest("GET", "/streams/baz", nil)
 	response = httptest.NewRecorder()
@@ -537,14 +551,17 @@ func TestTypeAPISetStreams(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	conf = parseGetBody(t, response.Body)
-	assert.Equal(t, "BAZ_ONE", conf.Config.Input.HTTPServer.Path)
+	assert.Equal(t, "BAZ_ONE", gabs.Wrap(conf.Config).S("input", "http_server", "path").Data())
 }
 
 func TestTypeAPIStreamsDefaultConf(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetManager(res),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -575,10 +592,13 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 }
 
 func TestTypeAPIStreamsLinting(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetManager(res),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -624,10 +644,13 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 }
 
 func TestTypeAPIDefaultConf(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetManager(res),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -656,10 +679,13 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 }
 
 func TestTypeAPILinting(t *testing.T) {
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetManager(res),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
