@@ -4,7 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"fmt"
+
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -138,34 +138,34 @@ func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- type
 	}
 
 	var batch []types.Message
-    nMessages := len(msgs)
-    nBatches := 8
-    batchSize := nMessages / nBatches
+	nMessages := len(msgs)
+	nBatches := 8
+	batchSize := nMessages / nBatches
 
-    if batchSize == 0 {
-        batchSize = 1
-    }
+	if batchSize == 0 {
+		batchSize = 1
+	}
 
 	wg := sync.WaitGroup{}
 	wg.Add(nBatches)
 
-    for i := 0; i < nBatches; i++ {
-        start := i*batchSize
-        end := (i*batchSize) + batchSize - 1
+	for i := 0; i < nBatches; i++ {
+		start := i * batchSize
+		end := (i * batchSize) + batchSize - 1
 
-        if i == (nBatches - 1) {
-            batch = msgs[start:]
-        } else {
-            batch = msgs[start:end]
-        }
+		if i == (nBatches - 1) {
+			batch = msgs[start:]
+		} else {
+			batch = msgs[start:end]
+		}
 
-        go func(batch []types.Message) {
-            for _, m := range batch {
-          		sendMsg(m)
-            }
-            wg.Done()
-        }(batch)
-    }
+		go func(batch []types.Message) {
+			for _, m := range batch {
+				sendMsg(m)
+			}
+			wg.Done()
+		}(batch)
+	}
 
 	wg.Wait()
 
@@ -195,7 +195,7 @@ func (p *Processor) Consume(msgs <-chan types.Transaction) error {
 // pipeline.
 func (p *Processor) TransactionChan() <-chan types.Transaction {
 	return p.messagesOut
-}	
+}
 
 // CloseAsync shuts down the pipeline and stops processing messages.
 func (p *Processor) CloseAsync() {
