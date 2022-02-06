@@ -144,7 +144,7 @@ func (t *Type) start() (err error) {
 	if t.inputLayer, err = input.New(t.conf.Input, iMgr, iLog, iStats); err != nil {
 		return
 	}
-	if t.conf.Buffer.Type != buffer.TypeNone {
+	if t.conf.Buffer.Type != "none" {
 		bMgr, bLog, bStats := interop.LabelChild("buffer", t.manager, t.logger, t.stats)
 		if t.bufferLayer, err = buffer.New(t.conf.Buffer, bMgr, bLog, bStats); err != nil {
 			return
@@ -193,11 +193,11 @@ func (t *Type) start() (err error) {
 	return nil
 }
 
-// stopGracefully attempts to close the stream in the most graceful way by only
+// StopGracefully attempts to close the stream in the most graceful way by only
 // closing the input layer and waiting for all other layers to terminate by
 // proxy. This should guarantee that all in-flight and buffered data is resolved
 // before shutting down.
-func (t *Type) stopGracefully(timeout time.Duration) (err error) {
+func (t *Type) StopGracefully(timeout time.Duration) (err error) {
 	t.inputLayer.CloseAsync()
 	started := time.Now()
 	if err = t.inputLayer.WaitForClose(timeout); err != nil {
@@ -243,11 +243,11 @@ func (t *Type) stopGracefully(timeout time.Duration) (err error) {
 	return nil
 }
 
-// stopOrdered attempts to close all components of the stream in the order of
+// StopOrdered attempts to close all components of the stream in the order of
 // positions within the stream, this allows data to flush all the way through
 // the pipeline under certain circumstances but is less graceful than
 // stopGracefully, which should be attempted first.
-func (t *Type) stopOrdered(timeout time.Duration) (err error) {
+func (t *Type) StopOrdered(timeout time.Duration) (err error) {
 	t.inputLayer.CloseAsync()
 	started := time.Now()
 	if err = t.inputLayer.WaitForClose(timeout); err != nil {
@@ -290,10 +290,10 @@ func (t *Type) stopOrdered(timeout time.Duration) (err error) {
 	return nil
 }
 
-// stopUnorderd attempts to close all components in parallel without allowing
+// StopUnordered attempts to close all components in parallel without allowing
 // the stream to gracefully wind down in the order of component layers. This
 // should only be attempted if both stopGracefully and stopOrdered failed.
-func (t *Type) stopUnordered(timeout time.Duration) (err error) {
+func (t *Type) StopUnordered(timeout time.Duration) (err error) {
 	t.inputLayer.CloseAsync()
 	if t.bufferLayer != nil {
 		t.bufferLayer.CloseAsync()
@@ -348,7 +348,7 @@ func (t *Type) Stop(timeout time.Duration) error {
 	tOutUnordered := timeout / 4
 	tOutGraceful := timeout - tOutUnordered
 
-	err := t.stopGracefully(tOutGraceful)
+	err := t.StopGracefully(tOutGraceful)
 	if err == nil {
 		return nil
 	}
@@ -358,7 +358,7 @@ func (t *Type) Stop(timeout time.Duration) error {
 		t.logger.Errorf("Encountered error whilst shutting down: %v\n", err)
 	}
 
-	err = t.stopUnordered(tOutUnordered)
+	err = t.StopUnordered(tOutUnordered)
 	if err == nil {
 		return nil
 	}

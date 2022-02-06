@@ -2,7 +2,6 @@ package config_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -12,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	yaml "gopkg.in/yaml.v3"
 
@@ -102,35 +100,4 @@ func TestConfigTags(t *testing.T) {
 
 	checkedTypes := map[string]struct{}{}
 	CheckTagsOfType(v, checkedTypes, t)
-}
-
-func TestExampleGen(t *testing.T) {
-	conf := config.New()
-	config.AddExamples(&conf, "generate", "memory", "bloblang", "file")
-
-	jBytes, err := json.Marshal(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	gObj, err := gabs.ParseJSON(jBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if exp, act := `"generate"`, gObj.Path("input.type").String(); exp != act {
-		t.Errorf("Unexpected conf value: %v != %v", act, exp)
-	}
-
-	if exp, act := `"memory"`, gObj.Path("buffer.type").String(); exp != act {
-		t.Errorf("Unexpected conf value: %v != %v", act, exp)
-	}
-
-	if exp, act := `"bloblang"`, gObj.Path("pipeline.processors.0.type").String(); exp != act {
-		t.Errorf("Unexpected conf value: %v != %v", act, exp)
-	}
-
-	if exp, act := `"file"`, gObj.Path("output.type").String(); exp != act {
-		t.Errorf("Unexpected conf value: %v != %v", act, exp)
-	}
 }
