@@ -36,6 +36,7 @@ output:
     addresses: []
     query: ""
     args_mapping: ""
+    timeout: 600ms
     max_in_flight: 1
     batching:
       count: 0
@@ -387,6 +388,7 @@ The client connection timeout.
 
 Type: `string`  
 Default: `"600ms"`  
+Requires version 3.63.0 or newer  
 
 ### `max_in_flight`
 

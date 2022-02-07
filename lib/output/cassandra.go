@@ -127,9 +127,7 @@ output:
 				docs.FieldAdvanced("max_interval", "The maximum period to wait between retry attempts."),
 				docs.FieldDeprecated("max_elapsed_time"),
 			),
-			docs.FieldAdvanced(
-				"timeout",
-				"The client connection timeout."),
+			docs.FieldString("timeout", "The client connection timeout.").AtVersion("3.63.0"),
 		}.Merge(docs.FieldSpecs{
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),

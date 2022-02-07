@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New duration string and back off field types added to plugin config builders.
 - Experimental field `multipart` added to the `http_client` output.
 - Codec `regex` added to inputs.
+- Field `timeout` added to the `cassandra` output.
 
 ### Changed
 
