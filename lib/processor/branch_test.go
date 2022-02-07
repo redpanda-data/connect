@@ -283,12 +283,12 @@ func TestBranchBasic(t *testing.T) {
 			proc, err := NewBranch(conf, nil, log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.input {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)
@@ -306,7 +306,7 @@ func TestBranchBasic(t *testing.T) {
 					meta:    map[string]string{},
 				}
 
-				outMsgs[0].Get(i).Metadata().Iter(func(k, v string) error {
+				_ = outMsgs[0].Get(i).MetaIter(func(k, v string) error {
 					comparePart.meta[k] = v
 					return nil
 				})

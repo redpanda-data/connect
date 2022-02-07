@@ -56,7 +56,7 @@ func TestRetryBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testMsg := message.New(nil)
+	testMsg := message.QuickBatch(nil)
 	go func() {
 		select {
 		case tChan <- types.NewTransaction(testMsg, resChan):
@@ -127,7 +127,7 @@ func TestRetrySadPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testMsg := message.New(nil)
+	testMsg := message.QuickBatch(nil)
 	tran := types.NewTransaction(testMsg, resChan)
 
 	go func() {
@@ -238,7 +238,7 @@ func sendForRetry(
 	t.Helper()
 
 	select {
-	case tChan <- types.NewTransaction(message.New(
+	case tChan <- types.NewTransaction(message.QuickBatch(
 		[][]byte{[]byte(value)},
 	), resChan):
 	case <-time.After(time.Second):

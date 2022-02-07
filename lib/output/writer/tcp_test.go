@@ -56,13 +56,13 @@ func TestTCPBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.New([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("baz")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -120,10 +120,10 @@ func TestTCPMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.New([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()

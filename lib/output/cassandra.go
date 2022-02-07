@@ -17,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -288,7 +289,7 @@ func (c *cassandraWriter) ConnectWithContext(ctx context.Context) error {
 }
 
 // WriteWithContext writes a message to Cassandra.
-func (c *cassandraWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (c *cassandraWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	c.connLock.RLock()
 	session := c.session
 	c.connLock.RUnlock()
@@ -303,7 +304,7 @@ func (c *cassandraWriter) WriteWithContext(ctx context.Context, msg types.Messag
 	return c.writeBatch(session, msg)
 }
 
-func (c *cassandraWriter) writeRow(session *gocql.Session, msg types.Message) error {
+func (c *cassandraWriter) writeRow(session *gocql.Session, msg *message.Batch) error {
 	t0 := time.Now()
 
 	values, err := c.mapArgs(msg, 0)
@@ -319,11 +320,11 @@ func (c *cassandraWriter) writeRow(session *gocql.Session, msg types.Message) er
 	return nil
 }
 
-func (c *cassandraWriter) writeBatch(session *gocql.Session, msg types.Message) error {
+func (c *cassandraWriter) writeBatch(session *gocql.Session, msg *message.Batch) error {
 	batch := session.NewBatch(gocql.UnloggedBatch)
 	t0 := time.Now()
 
-	if err := msg.Iter(func(i int, p types.Part) error {
+	if err := msg.Iter(func(i int, p *message.Part) error {
 		values, err := c.mapArgs(msg, i)
 		if err != nil {
 			return fmt.Errorf("parsing args for part: %d: %w", i, err)
@@ -342,7 +343,7 @@ func (c *cassandraWriter) writeBatch(session *gocql.Session, msg types.Message) 
 	return nil
 }
 
-func (c *cassandraWriter) mapArgs(msg types.Message, index int) ([]interface{}, error) {
+func (c *cassandraWriter) mapArgs(msg *message.Batch, index int) ([]interface{}, error) {
 	if c.argsMapping != nil {
 		// We've got an "args_mapping" field, extract values from there.
 		part, err := c.argsMapping.MapPart(index, msg)

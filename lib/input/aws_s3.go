@@ -645,26 +645,25 @@ func (a *awsS3) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func s3MsgFromParts(p *s3PendingObject, parts []types.Part) types.Message {
-	msg := message.New(nil)
+func s3MsgFromParts(p *s3PendingObject, parts []*message.Part) *message.Batch {
+	msg := message.QuickBatch(nil)
 	msg.Append(parts...)
-	msg.Iter(func(_ int, part types.Part) error {
-		meta := part.Metadata()
-		meta.Set("s3_key", p.target.key)
-		meta.Set("s3_bucket", p.target.bucket)
+	_ = msg.Iter(func(_ int, part *message.Part) error {
+		part.MetaSet("s3_key", p.target.key)
+		part.MetaSet("s3_bucket", p.target.bucket)
 		if p.obj.LastModified != nil {
-			meta.Set("s3_last_modified", p.obj.LastModified.Format(time.RFC3339))
-			meta.Set("s3_last_modified_unix", strconv.FormatInt(p.obj.LastModified.Unix(), 10))
+			part.MetaSet("s3_last_modified", p.obj.LastModified.Format(time.RFC3339))
+			part.MetaSet("s3_last_modified_unix", strconv.FormatInt(p.obj.LastModified.Unix(), 10))
 		}
 		if p.obj.ContentType != nil {
-			meta.Set("s3_content_type", *p.obj.ContentType)
+			part.MetaSet("s3_content_type", *p.obj.ContentType)
 		}
 		if p.obj.ContentEncoding != nil {
-			meta.Set("s3_content_encoding", *p.obj.ContentEncoding)
+			part.MetaSet("s3_content_encoding", *p.obj.ContentEncoding)
 		}
 		for k, v := range p.obj.Metadata {
 			if v != nil {
-				meta.Set(k, *v)
+				part.MetaSet(k, *v)
 			}
 		}
 		return nil
@@ -716,7 +715,7 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*s3PendingObject, error) {
 }
 
 // ReadWithContext attempts to read a new message from the target S3 bucket.
-func (a *awsS3) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
+func (a *awsS3) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn reader.AsyncAckFn, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 	if a.session == nil {
@@ -738,7 +737,7 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg types.Message, ackFn r
 		return
 	}
 
-	var parts []types.Part
+	var parts []*message.Part
 	var scnAckFn codec.ReaderAckFn
 
 	for {

@@ -24,7 +24,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -326,8 +325,8 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 
 //------------------------------------------------------------------------------
 
-func (h *HTTPServer) extractMessageFromRequest(r *http.Request) (types.Message, error) {
-	msg := message.New(nil)
+func (h *HTTPServer) extractMessageFromRequest(r *http.Request) (*message.Batch, error) {
+	msg := message.QuickBatch(nil)
 
 	contentType := r.Header.Get("Content-Type")
 	if contentType == "" {
@@ -363,25 +362,25 @@ func (h *HTTPServer) extractMessageFromRequest(r *http.Request) (types.Message, 
 		msg.Append(message.NewPart(msgBytes))
 	}
 
-	meta := metadata.New(nil)
-	meta.Set("http_server_user_agent", r.UserAgent())
-	meta.Set("http_server_request_path", r.URL.Path)
-	meta.Set("http_server_verb", r.Method)
+	meta := map[string]string{}
+	meta["http_server_user_agent"] = r.UserAgent()
+	meta["http_server_request_path"] = r.URL.Path
+	meta["http_server_verb"] = r.Method
 	for k, v := range r.Header {
 		if len(v) > 0 {
-			meta.Set(k, v[0])
+			meta[k] = v[0]
 		}
 	}
 	for k, v := range r.URL.Query() {
 		if len(v) > 0 {
-			meta.Set(k, v[0])
+			meta[k] = v[0]
 		}
 	}
 	for k, v := range mux.Vars(r) {
-		meta.Set(k, v)
+		meta[k] = v
 	}
 	for _, c := range r.Cookies() {
-		meta.Set(c.Name, c.Value)
+		meta[c.Name] = c.Value
 	}
 	message.SetAllMetadata(msg, meta)
 
@@ -436,6 +435,8 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tracing.FinishSpans(msg)
 
+	startedAt := time.Now()
+
 	store := roundtrip.NewResultStore()
 	roundtrip.AddResultStore(msg, store)
 
@@ -470,7 +471,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, res.Error().Error(), http.StatusBadGateway)
 			return
 		}
-		tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
+		tTaken := time.Since(startedAt).Nanoseconds()
 		h.mLatency.Timing(tTaken)
 		h.mSucc.Incr(1)
 	case <-time.After(h.timeout):
@@ -486,9 +487,9 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseMsg := message.New(nil)
+	responseMsg := message.QuickBatch(nil)
 	for _, resMsg := range store.Get() {
-		resMsg.Iter(func(i int, part types.Part) error {
+		_ = resMsg.Iter(func(i int, part *message.Part) error {
 			responseMsg.Append(part)
 			return nil
 		})
@@ -509,7 +510,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 
 		if plen := responseMsg.Len(); plen == 1 {
 			part := responseMsg.Get(0)
-			part.Metadata().Iter(func(k, v string) error {
+			_ = part.MetaIter(func(k, v string) error {
 				if h.metaFilter.Match(k) {
 					w.Header().Set(k, v)
 					return nil
@@ -531,7 +532,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			var merr error
 			for i := 0; i < plen && merr == nil; i++ {
 				part := responseMsg.Get(i)
-				part.Metadata().Iter(func(k, v string) error {
+				_ = part.MetaIter(func(k, v string) error {
 					if h.metaFilter.Match(k) {
 						w.Header().Set(k, v)
 						return nil
@@ -628,25 +629,26 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		msg := message.New([][]byte{msgBytes})
+		msg := message.QuickBatch([][]byte{msgBytes})
+		startedAt := time.Now()
 
-		meta := msg.Get(0).Metadata()
-		meta.Set("http_server_user_agent", r.UserAgent())
+		part := msg.Get(0)
+		part.MetaSet("http_server_user_agent", r.UserAgent())
 		for k, v := range r.Header {
 			if len(v) > 0 {
-				meta.Set(k, v[0])
+				part.MetaSet(k, v[0])
 			}
 		}
 		for k, v := range r.URL.Query() {
 			if len(v) > 0 {
-				meta.Set(k, v[0])
+				part.MetaSet(k, v[0])
 			}
 		}
 		for k, v := range mux.Vars(r) {
-			meta.Set(k, v)
+			part.MetaSet(k, v)
 		}
 		for _, c := range r.Cookies() {
-			meta.Set(c.Name, c.Value)
+			part.MetaSet(c.Name, c.Value)
 		}
 		tracing.InitSpans("input_http_server_websocket", msg)
 
@@ -668,7 +670,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 				h.mErr.Incr(1)
 				throt.Retry()
 			} else {
-				tTaken := time.Since(msg.CreatedAt()).Nanoseconds()
+				tTaken := time.Since(startedAt).Nanoseconds()
 				h.mLatency.Timing(tTaken)
 				h.mWSSucc.Incr(1)
 				h.mSucc.Incr(1)
@@ -680,7 +682,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, responseMsg := range store.Get() {
-			if err := responseMsg.Iter(func(i int, part types.Part) error {
+			if err := responseMsg.Iter(func(i int, part *message.Part) error {
 				return ws.WriteMessage(websocket.TextMessage, part.Get())
 			}); err != nil {
 				h.log.Errorf("Failed to send sync response over websocket: %v\n", err)

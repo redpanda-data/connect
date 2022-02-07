@@ -62,7 +62,7 @@ func TestSwitchNoConditions(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.New(content), resChan):
+		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -129,7 +129,7 @@ func TestSwitchNoRetries(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.New(content), resChan):
+		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Fatal("Timed out waiting for broker send")
 		}
@@ -204,7 +204,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 	resChan := make(chan types.Response)
 	require.NoError(t, s.Consume(readChan))
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`{"content":"hello world","id":0}`),
 		[]byte(`{"content":"hello world","id":1}`),
 		[]byte(`{"content":"hello world","id":2}`),
@@ -234,7 +234,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 	assert.Equal(t, 2, bOut.IndexedErrors())
 
 	errContents := []string{}
-	bOut.WalkParts(func(i int, p types.Part, e error) bool {
+	bOut.WalkParts(func(i int, p *message.Part, e error) bool {
 		if e != nil {
 			errContents = append(errContents, string(p.Get()))
 			assert.EqualError(t, e, "meow")
@@ -268,7 +268,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 	resChan := make(chan types.Response)
 	require.NoError(t, s.Consume(readChan))
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte("hello world 0"),
 		[]byte("hello world 1"),
 		[]byte("hello world 2"),
@@ -319,7 +319,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 		assert.Equal(t, 2, bOut.IndexedErrors())
 
 		errContents := []string{}
-		bOut.WalkParts(func(i int, p types.Part, e error) bool {
+		bOut.WalkParts(func(i int, p *message.Part, e error) bool {
 			if e != nil {
 				errContents = append(errContents, string(p.Get()))
 				assert.EqualError(t, e, fmt.Sprintf("err %v", i))
@@ -418,7 +418,7 @@ func TestSwitchWithConditions(t *testing.T) {
 		}
 		content := [][]byte{[]byte(fmt.Sprintf("{\"foo\":%q}", foo))}
 		select {
-		case readChan <- types.NewTransaction(message.New(content), resChan):
+		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for output send")
 			return
@@ -460,7 +460,7 @@ func TestSwitchError(t *testing.T) {
 
 	require.NoError(t, s.Consume(readChan))
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`{"foo":"bar"}`),
 		[]byte(`{"not_foo":"baz"}`),
 		[]byte(`{"foo":"baz"}`),
@@ -527,7 +527,7 @@ func TestSwitchBatchSplit(t *testing.T) {
 
 	require.NoError(t, s.Consume(readChan))
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`{"foo":"bar"}`),
 		[]byte(`{"foo":"baz"}`),
 		[]byte(`{"foo":"buz"}`),
@@ -593,7 +593,7 @@ func TestSwitchBatchGroup(t *testing.T) {
 
 	require.NoError(t, s.Consume(readChan))
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`{"foo":"baz"}`),
 		[]byte(`{"foo":"bar"}`),
 		[]byte(`{"foo":"buz"}`),
@@ -662,7 +662,7 @@ func TestSwitchNoMatch(t *testing.T) {
 
 	require.NoError(t, s.Consume(readChan))
 
-	msg := message.New([][]byte{[]byte(`{"foo":"qux"}`)})
+	msg := message.QuickBatch([][]byte{[]byte(`{"foo":"qux"}`)})
 	select {
 	case readChan <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
@@ -706,7 +706,7 @@ func TestSwitchNoMatchStrict(t *testing.T) {
 
 	require.NoError(t, s.Consume(readChan))
 
-	msg := message.New([][]byte{[]byte(`{"foo":"qux"}`)})
+	msg := message.QuickBatch([][]byte{[]byte(`{"foo":"qux"}`)})
 	select {
 	case readChan <- types.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
@@ -816,7 +816,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 		}
 		content := [][]byte{[]byte(fmt.Sprintf("{\"foo\":%q}", foo))}
 		select {
-		case readChan <- types.NewTransaction(message.New(content), resChan):
+		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for output send")
 			return
@@ -866,7 +866,7 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 	require.Error(t, s.Consume(readChan))
 
 	select {
-	case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
+	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for output send")
 		return
@@ -946,7 +946,7 @@ func TestSwitchShutDownFromErrorResponse(t *testing.T) {
 	require.NoError(t, s.Consume(readChan))
 
 	select {
-	case readChan <- types.NewTransaction(message.New([][]byte{[]byte("foo")}), resChan):
+	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -1008,7 +1008,7 @@ func TestSwitchShutDownFromReceive(t *testing.T) {
 	require.NoError(t, s.Consume(readChan))
 
 	select {
-	case readChan <- types.NewTransaction(message.New([][]byte{[]byte("foo")}), resChan):
+	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -1054,7 +1054,7 @@ func TestSwitchShutDownFromSend(t *testing.T) {
 	require.NoError(t, s.Consume(readChan))
 
 	select {
-	case readChan <- types.NewTransaction(message.New([][]byte{[]byte("foo")}), resChan):
+	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -1116,7 +1116,7 @@ func TestSwitchBackPressure(t *testing.T) {
 bpLoop:
 	for ; i < 1000; i++ {
 		select {
-		case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
+		case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 		case <-time.After(time.Millisecond * 200):
 			break bpLoop
 		}

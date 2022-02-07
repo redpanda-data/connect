@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -130,7 +131,7 @@ func testMQTTConnect(urls []string, t *testing.T) {
 
 	lMsgs := len(testMsgs)
 	for lMsgs > 0 {
-		var actM types.Message
+		var actM *message.Batch
 		actM, _, err = m.ReadWithContext(ctx)
 		if err != nil {
 			t.Error(err)

@@ -45,7 +45,7 @@ func OnlySinglePayloads(out Type) Type {
 
 //------------------------------------------------------------------------------
 
-func (n *notBatchedOutput) breakMessageOut(msg types.Message) error {
+func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
 	var wg sync.WaitGroup
 
 	var batchErr *batch.Error
@@ -61,11 +61,11 @@ func (n *notBatchedOutput) breakMessageOut(msg types.Message) error {
 		}
 	}
 
-	if err := msg.Iter(func(i int, p types.Part) error {
+	if err := msg.Iter(func(i int, p *message.Part) error {
 		index := i
 
 		tmpResChan := make(chan types.Response)
-		tmpMsg := message.New(nil)
+		tmpMsg := message.QuickBatch(nil)
 		tmpMsg.Append(p)
 
 		select {

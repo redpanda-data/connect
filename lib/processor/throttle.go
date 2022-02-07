@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -97,7 +98,7 @@ func NewThrottle(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (m *Throttle) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (m *Throttle) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	m.mCount.Incr(1)
 	m.mut.Lock()
 	defer m.mut.Unlock()
@@ -119,7 +120,7 @@ func (m *Throttle) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	m.mBatchSent.Incr(1)
 	m.mSent.Incr(int64(msg.Len()))
-	msgs := [1]types.Message{msg}
+	msgs := [1]*message.Batch{msg}
 	return msgs[:], nil
 }
 

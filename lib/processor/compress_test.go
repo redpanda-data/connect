@@ -62,7 +62,7 @@ func TestCompressGZIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Error("Compress failed")
 	} else if res != nil {
@@ -108,7 +108,7 @@ func TestCompressZLIB(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Error("Compress failed")
 	} else if res != nil {
@@ -157,7 +157,7 @@ func TestCompressFlate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Error("Compress failed")
 	} else if res != nil {
@@ -198,7 +198,7 @@ func TestCompressSnappy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Error("Compress failed")
 	} else if res != nil {
@@ -247,7 +247,7 @@ func TestCompressLZ4(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Error("Compress failed")
 	} else if res != nil {
@@ -303,7 +303,7 @@ func TestCompressIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(message.New(input))
+		msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 		if len(msgs) != 1 {
 			t.Errorf("Compress failed on index: %v", i)
 		} else if res != nil {
@@ -329,7 +329,7 @@ func TestCompressEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(message.New([][]byte{}))
+	msgs, _ := proc.ProcessMessage(message.QuickBatch([][]byte{}))
 	if len(msgs) > 0 {
 		t.Error("Expected failure with zero part message")
 	}

@@ -27,7 +27,7 @@ func TestGrokAllParts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := message.New([][]byte{
+	msgIn := message.QuickBatch([][]byte{
 		[]byte(`foo,0`),
 		[]byte(`foo,1`),
 		[]byte(`foo,2`),
@@ -97,7 +97,7 @@ func TestGrok(t *testing.T) {
 			gSet, err := NewGrok(conf, nil, tLog, tStats)
 			require.NoError(t, err)
 
-			inMsg := message.New([][]byte{[]byte(test.input)})
+			inMsg := message.QuickBatch([][]byte{[]byte(test.input)})
 			msgs, _ := gSet.ProcessMessage(inMsg)
 			require.Len(t, msgs, 1)
 
@@ -115,7 +115,7 @@ func TestGrok(t *testing.T) {
 			gSet, err := NewGrok(conf, nil, tLog, tStats)
 			require.NoError(t, err)
 
-			inMsg := message.New([][]byte{[]byte(test.input)})
+			inMsg := message.QuickBatch([][]byte{[]byte(test.input)})
 			msgs, _ := gSet.ProcessMessage(inMsg)
 			require.Len(t, msgs, 1)
 
@@ -141,12 +141,12 @@ FOONESTED %{INT:nested.first:int} %{WORD:nested.second} %{WORD:nested.third}
 	gSet, err := NewGrok(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	inMsg := message.New([][]byte{[]byte(`hello foo bar`)})
+	inMsg := message.QuickBatch([][]byte{[]byte(`hello foo bar`)})
 	msgs, _ := gSet.ProcessMessage(inMsg)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, `{"first":"hello","second":"foo","third":"bar"}`, string(msgs[0].Get(0).Get()))
 
-	inMsg = message.New([][]byte{[]byte(`10 foo bar`)})
+	inMsg = message.QuickBatch([][]byte{[]byte(`10 foo bar`)})
 	msgs, _ = gSet.ProcessMessage(inMsg)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, `{"nested":{"first":10,"second":"foo","third":"bar"}}`, string(msgs[0].Get(0).Get()))

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -58,7 +59,7 @@ func TestCSVReaderHappy(t *testing.T) {
 		`{"header1":"bar1","header2":"bar2","header3":"bar3"}`,
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 	} {
-		var resMsg types.Message
+		var resMsg *message.Batch
 		resMsg, _, err = f.ReadWithContext(context.Background())
 		require.NoError(t, err)
 
@@ -204,7 +205,7 @@ func TestCSVReaderGroupCount(t *testing.T) {
 			`{"bar":"bar7","baz":"baz7","foo":"foo7"}`,
 		},
 	} {
-		var resMsg types.Message
+		var resMsg *message.Batch
 		resMsg, _, err = f.ReadWithContext(context.Background())
 		require.NoError(t, err)
 
@@ -276,7 +277,7 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 		`{"header4":"bar1","header5":"bar2","header6":"bar3"}`,
 		`{"header4":"baz1","header5":"baz2","header6":"baz3"}`,
 	} {
-		var resMsg types.Message
+		var resMsg *message.Batch
 		var ackFn reader.AsyncAckFn
 		resMsg, ackFn, err = f.ReadWithContext(context.Background())
 		if err == types.ErrNotConnected {
@@ -334,7 +335,7 @@ func TestCSVReaderCustomComma(t *testing.T) {
 		`{"header1":"bar1","header2":"bar2","header3":"bar3"}`,
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 	} {
-		var resMsg types.Message
+		var resMsg *message.Batch
 		resMsg, _, err = f.ReadWithContext(context.Background())
 		require.NoError(t, err)
 
@@ -389,7 +390,7 @@ func TestCSVReaderRelaxed(t *testing.T) {
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 		`{"header1":"buz1","header2":"buz2"}`,
 	} {
-		var resMsg types.Message
+		var resMsg *message.Batch
 		resMsg, _, err = f.ReadWithContext(context.Background())
 		require.NoError(t, err)
 
@@ -444,7 +445,7 @@ func TestCSVReaderStrict(t *testing.T) {
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 		errors.New("record on line 5: wrong number of fields"),
 	} {
-		var resMsg types.Message
+		var resMsg *message.Batch
 		resMsg, _, err = f.ReadWithContext(context.Background())
 
 		switch expT := exp.(type) {

@@ -133,7 +133,7 @@ func (w *Websocket) ConnectWithContext(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 // ReadWithContext attempts to read a new message from the websocket.
-func (w *Websocket) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (w *Websocket) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	client := w.getWS()
 	if client == nil {
 		return nil, nil, types.ErrNotConnected
@@ -148,7 +148,7 @@ func (w *Websocket) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 		return nil, nil, err
 	}
 
-	return message.New([][]byte{data}), noopAsyncAckFn, nil
+	return message.QuickBatch([][]byte{data}), noopAsyncAckFn, nil
 }
 
 // CloseAsync shuts down the Websocket input and stops reading messages.

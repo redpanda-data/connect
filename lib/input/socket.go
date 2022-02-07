@@ -134,7 +134,7 @@ func (s *socketClient) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a new message from the target S3 bucket.
-func (s *socketClient) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (s *socketClient) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	s.codecMut.Lock()
 	codec := s.codec
 	s.codecMut.Unlock()
@@ -167,7 +167,7 @@ func (s *socketClient) ReadWithContext(ctx context.Context) (types.Message, read
 	// benefit to aggregating acks.
 	_ = codecAckFn(context.Background(), nil)
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(parts...)
 
 	if msg.Len() == 0 {

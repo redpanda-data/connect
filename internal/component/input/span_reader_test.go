@@ -15,7 +15,7 @@ import (
 
 type fnReader struct {
 	connectWithContext func(ctx context.Context) error
-	readWithContext    func(ctx context.Context) (types.Message, reader.AsyncAckFn, error)
+	readWithContext    func(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error)
 	closeAsync         func()
 	waitForClose       func(timeout time.Duration) error
 }
@@ -24,7 +24,7 @@ func (f *fnReader) ConnectWithContext(ctx context.Context) error {
 	return f.connectWithContext(ctx)
 }
 
-func (f *fnReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (f *fnReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	return f.readWithContext(ctx)
 }
 
@@ -74,8 +74,8 @@ func TestSpanReader(t *testing.T) {
 					connCalled = true
 					return nil
 				},
-				readWithContext: func(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
-					m := message.New([][]byte{
+				readWithContext: func(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+					m := message.QuickBatch([][]byte{
 						[]byte(test.contents),
 					})
 					return m, func(context.Context, types.Response) error {

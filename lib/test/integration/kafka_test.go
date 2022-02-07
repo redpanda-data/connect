@@ -69,7 +69,7 @@ var _ = registerIntegrationTest("kafka_redpanda", func(t *testing.T) {
 		if serr = tmpOutput.Connect(); serr != nil {
 			return serr
 		}
-		return tmpOutput.Write(message.New([][]byte{
+		return tmpOutput.Write(message.QuickBatch([][]byte{
 			[]byte("foo message"),
 		}))
 	}))
@@ -397,7 +397,7 @@ var _ = registerIntegrationTest("kafka_old", func(t *testing.T) {
 		if serr = tmpOutput.Connect(); serr != nil {
 			return serr
 		}
-		return tmpOutput.Write(message.New([][]byte{
+		return tmpOutput.Write(message.QuickBatch([][]byte{
 			[]byte("foo message"),
 		}))
 	}))

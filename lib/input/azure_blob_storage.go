@@ -258,23 +258,21 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 	return object, nil
 }
 
-func blobStorageMsgFromParts(p *azurePendingObject, parts []types.Part) types.Message {
-	msg := message.New(nil)
+func blobStorageMsgFromParts(p *azurePendingObject, parts []*message.Part) *message.Batch {
+	msg := message.QuickBatch(nil)
 	msg.Append(parts...)
-	msg.Iter(func(_ int, part types.Part) error {
-		meta := part.Metadata()
-
-		meta.Set("blob_storage_key", p.target.key)
+	_ = msg.Iter(func(_ int, part *message.Part) error {
+		part.MetaSet("blob_storage_key", p.target.key)
 		if p.obj.Container != nil {
-			meta.Set("blob_storage_container", p.obj.Container.Name)
+			part.MetaSet("blob_storage_container", p.obj.Container.Name)
 		}
-		meta.Set("blob_storage_last_modified", time.Time(p.obj.Properties.LastModified).Format(time.RFC3339))
-		meta.Set("blob_storage_last_modified_unix", strconv.FormatInt(time.Time(p.obj.Properties.LastModified).Unix(), 10))
-		meta.Set("blob_storage_content_type", p.obj.Properties.ContentType)
-		meta.Set("blob_storage_content_encoding", p.obj.Properties.ContentEncoding)
+		part.MetaSet("blob_storage_last_modified", time.Time(p.obj.Properties.LastModified).Format(time.RFC3339))
+		part.MetaSet("blob_storage_last_modified_unix", strconv.FormatInt(time.Time(p.obj.Properties.LastModified).Unix(), 10))
+		part.MetaSet("blob_storage_content_type", p.obj.Properties.ContentType)
+		part.MetaSet("blob_storage_content_encoding", p.obj.Properties.ContentEncoding)
 
 		for k, v := range p.obj.Metadata {
-			meta.Set(k, v)
+			part.MetaSet(k, v)
 		}
 		return nil
 	})
@@ -284,7 +282,7 @@ func blobStorageMsgFromParts(p *azurePendingObject, parts []types.Part) types.Me
 
 // ReadWithContext attempts to read a new message from the target Azure Blob
 // Storage container.
-func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
+func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn reader.AsyncAckFn, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 
@@ -306,7 +304,7 @@ func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg types.Messa
 		return
 	}
 
-	var parts []types.Part
+	var parts []*message.Part
 	var scnAckFn codec.ReaderAckFn
 
 	for {

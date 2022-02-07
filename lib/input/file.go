@@ -170,7 +170,7 @@ func (f *fileConsumer) getReader(ctx context.Context) (codec.Reader, string, err
 }
 
 // ReadWithContext attempts to read a new message from the target S3 bucket.
-func (f *fileConsumer) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	for {
 		scanner, currentPath, err := f.getReader(ctx)
 		if err != nil {
@@ -193,10 +193,10 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (types.Message, read
 			return nil, nil, err
 		}
 
-		msg := message.New(nil)
+		msg := message.QuickBatch(nil)
 		for _, part := range parts {
 			if len(part.Get()) > 0 {
-				part.Metadata().Set("path", currentPath)
+				part.MetaSet("path", currentPath)
 				msg.Append(part)
 			}
 		}

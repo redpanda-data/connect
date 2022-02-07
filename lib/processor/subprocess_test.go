@@ -32,7 +32,7 @@ func TestSubprocessWithSed(t *testing.T) {
 		[]byte(`hello baz world`),
 		[]byte(`bar`),
 	}
-	msgIn := message.New([][]byte{
+	msgIn := message.QuickBatch([][]byte{
 		[]byte(`hello foo world`),
 		[]byte(`hello baz world`),
 		[]byte(`foo`),
@@ -72,7 +72,7 @@ func TestSubprocessWithCat(t *testing.T) {
 		[]byte(`hello baz world`),
 		[]byte(`bar`),
 	}
-	msgIn := message.New([][]byte{
+	msgIn := message.QuickBatch([][]byte{
 		[]byte(`hello bar world`),
 		[]byte(`hello baz world`),
 		[]byte(`bar`),
@@ -115,7 +115,7 @@ func TestSubprocessLineBreaks(t *testing.T) {
 		[]byte("bar"),
 		[]byte("hello bar\nbar\nbar world\n"),
 	}
-	msgIn := message.New([][]byte{
+	msgIn := message.QuickBatch([][]byte{
 		[]byte("hello foo\nfoo world"),
 		[]byte("hello foo bar world"),
 		[]byte("hello foo\nfoo world\n"),
@@ -151,7 +151,7 @@ func TestSubprocessWithErrors(t *testing.T) {
 		t.Skipf("Not sure if this is due to missing executable: %v", err)
 	}
 
-	msgIn := message.New([][]byte{
+	msgIn := message.QuickBatch([][]byte{
 		[]byte(`hello bar world`),
 	})
 
@@ -266,7 +266,7 @@ func main() {
 			exp = append(exp, []byte(``), []byte("|{O\n\r\nO}|"))
 		}
 
-		msgIn := message.New([][]byte{
+		msgIn := message.QuickBatch([][]byte{
 			[]byte(`foo`),
 			[]byte(`foö`),
 			[]byte(`bar`),
@@ -282,7 +282,7 @@ func main() {
 		require.Nil(t, res)
 
 		for i := 0; i < msgIn.Len(); i++ {
-			assert.Empty(t, msgs[0].Get(i).Metadata().Get(FailFlagKey))
+			assert.Empty(t, msgs[0].Get(i).MetaGet(FailFlagKey))
 		}
 		assert.Equal(t, exp, message.GetAllBytes(msgs[0]))
 

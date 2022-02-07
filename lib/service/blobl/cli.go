@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
@@ -111,13 +110,13 @@ Find out more about Bloblang at: https://benthos.dev/docs/guides/bloblang/about`
 }
 
 type execCache struct {
-	msg  types.Message
+	msg  *message.Batch
 	vars map[string]interface{}
 }
 
 func newExecCache() *execCache {
 	return &execCache{
-		msg:  message.New([][]byte{[]byte(nil)}),
+		msg:  message.QuickBatch([][]byte{[]byte(nil)}),
 		vars: map[string]interface{}{},
 	}
 }
@@ -159,7 +158,7 @@ func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutpu
 		MsgBatch: e.msg,
 	}.WithValueFunc(lazyValue), mapping.AssignmentContext{
 		Vars:  e.vars,
-		Meta:  e.msg.Get(0).Metadata(),
+		Msg:   e.msg.Get(0),
 		Value: &result,
 	})
 	if err != nil {

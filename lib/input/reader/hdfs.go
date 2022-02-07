@@ -94,7 +94,7 @@ func (h *HDFS) ConnectWithContext(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 // ReadWithContext reads a new HDFS message.
-func (h *HDFS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (h *HDFS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	if len(h.targets) == 0 {
 		return nil, nil, types.ErrTypeClosed
 	}
@@ -108,9 +108,9 @@ func (h *HDFS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 		return nil, nil, readerr
 	}
 
-	msg := message.New([][]byte{msgBytes})
-	msg.Get(0).Metadata().Set("hdfs_name", fileName)
-	msg.Get(0).Metadata().Set("hdfs_path", filePath)
+	msg := message.QuickBatch([][]byte{msgBytes})
+	msg.Get(0).MetaSet("hdfs_name", fileName)
+	msg.Get(0).MetaSet("hdfs_path", filePath)
 	return msg, noopAsyncAckFn, nil
 }
 

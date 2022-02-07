@@ -2,6 +2,7 @@ package processor
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/tracing"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -11,15 +12,15 @@ import (
 // ExecuteAll attempts to execute a slice of processors to a message. Returns
 // N resulting messages or a response. The response may indicate either a NoAck
 // in the event of the message being buffered or an unrecoverable error.
-func ExecuteAll(procs []types.Processor, msgs ...types.Message) ([]types.Message, types.Response) {
-	resultMsgs := make([]types.Message, len(msgs))
+func ExecuteAll(procs []types.Processor, msgs ...*message.Batch) ([]*message.Batch, types.Response) {
+	resultMsgs := make([]*message.Batch, len(msgs))
 	copy(resultMsgs, msgs)
 
 	var resultRes types.Response
 	for i := 0; len(resultMsgs) > 0 && i < len(procs); i++ {
-		var nextResultMsgs []types.Message
+		var nextResultMsgs []*message.Batch
 		for _, m := range resultMsgs {
-			var rMsgs []types.Message
+			var rMsgs []*message.Batch
 			if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.Error() != nil {
 				// We immediately return if a processor hits an unrecoverable
 				// error on a message.
@@ -44,20 +45,20 @@ func ExecuteAll(procs []types.Processor, msgs ...types.Message) ([]types.Message
 // subsequent processors. Returns N resulting messages or a response. The
 // response may indicate either a NoAck in the event of the message being
 // buffered or an unrecoverable error.
-func ExecuteTryAll(procs []types.Processor, msgs ...types.Message) ([]types.Message, types.Response) {
-	resultMsgs := make([]types.Message, len(msgs))
+func ExecuteTryAll(procs []types.Processor, msgs ...*message.Batch) ([]*message.Batch, types.Response) {
+	resultMsgs := make([]*message.Batch, len(msgs))
 	copy(resultMsgs, msgs)
 
 	var resultRes types.Response
 	for i := 0; len(resultMsgs) > 0 && i < len(procs); i++ {
-		var nextResultMsgs []types.Message
+		var nextResultMsgs []*message.Batch
 		for _, m := range resultMsgs {
 			// Skip messages that failed a prior stage.
 			if HasFailed(m.Get(0)) {
 				nextResultMsgs = append(nextResultMsgs, m)
 				continue
 			}
-			var rMsgs []types.Message
+			var rMsgs []*message.Batch
 			if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.Error() != nil {
 				// We immediately return if a processor hits an unrecoverable
 				// error on a message.
@@ -78,21 +79,21 @@ func ExecuteTryAll(procs []types.Processor, msgs ...types.Message) ([]types.Mess
 }
 
 type catchMessage struct {
-	batches []types.Message
+	batches []*message.Batch
 	caught  bool
 }
 
 // ExecuteCatchAll attempts to execute a slice of processors to only messages
 // that have failed a processing step. Returns N resulting messages or a
 // response.
-func ExecuteCatchAll(procs []types.Processor, msgs ...types.Message) ([]types.Message, types.Response) {
+func ExecuteCatchAll(procs []types.Processor, msgs ...*message.Batch) ([]*message.Batch, types.Response) {
 	// Preserves the original order of messages before entering the catch block.
 	// Only processors that have failed a previous stage are "caught", and will
 	// remain caught until all catch processors are executed.
 	catchBatches := make([]catchMessage, len(msgs))
 	for i, m := range msgs {
 		catchBatches[i] = catchMessage{
-			batches: []types.Message{m},
+			batches: []*message.Batch{m},
 			caught:  HasFailed(m.Get(0)),
 		}
 	}
@@ -104,9 +105,9 @@ func ExecuteCatchAll(procs []types.Processor, msgs ...types.Message) ([]types.Me
 				continue
 			}
 
-			var nextResultBatches []types.Message
+			var nextResultBatches []*message.Batch
 			for _, m := range catchBatches[j].batches {
-				var rMsgs []types.Message
+				var rMsgs []*message.Batch
 				if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.Error() != nil {
 					// We immediately return if a processor hits an unrecoverable
 					// error on a message.
@@ -118,7 +119,7 @@ func ExecuteCatchAll(procs []types.Processor, msgs ...types.Message) ([]types.Me
 		}
 	}
 
-	var resultBatches []types.Message
+	var resultBatches []*message.Batch
 	for _, b := range catchBatches {
 		resultBatches = append(resultBatches, b.batches...)
 	}
@@ -140,39 +141,39 @@ func ExecuteCatchAll(procs []types.Processor, msgs ...types.Message) ([]types.Me
 var FailFlagKey = types.FailFlagKey
 
 // FlagFail marks a message part as having failed at a processing step.
-func FlagFail(part types.Part) {
-	part.Metadata().Set(FailFlagKey, "true")
+func FlagFail(part *message.Part) {
+	part.MetaSet(FailFlagKey, "true")
 }
 
 // FlagErr marks a message part as having failed at a processing step with an
 // error message. If the error is nil the message part remains unchanged.
-func FlagErr(part types.Part, err error) {
+func FlagErr(part *message.Part, err error) {
 	if err != nil {
-		part.Metadata().Set(FailFlagKey, err.Error())
+		part.MetaSet(FailFlagKey, err.Error())
 	}
 }
 
 // GetFail returns an error string for a message part if it has failed, or an
 // empty string if not.
-func GetFail(part types.Part) string {
-	return part.Metadata().Get(FailFlagKey)
+func GetFail(part *message.Part) string {
+	return part.MetaGet(FailFlagKey)
 }
 
 // HasFailed checks whether a message part has failed a processing step.
-func HasFailed(part types.Part) bool {
-	return len(part.Metadata().Get(FailFlagKey)) > 0
+func HasFailed(part *message.Part) bool {
+	return len(part.MetaGet(FailFlagKey)) > 0
 }
 
 // ClearFail removes any existing failure flags from a message part.
-func ClearFail(part types.Part) {
-	part.Metadata().Delete(FailFlagKey)
+func ClearFail(part *message.Part) {
+	part.MetaDelete(FailFlagKey)
 }
 
 //------------------------------------------------------------------------------
 
 func iterateParts(
-	parts []int, msg types.Message,
-	iter func(int, types.Part) error,
+	parts []int, msg *message.Batch,
+	iter func(int, *message.Part) error,
 ) error {
 	exec := func(i int) error {
 		return iter(i, msg.Get(i))
@@ -198,8 +199,8 @@ func iterateParts(
 // along with a tracing span for that part. If an error is returned the part is
 // flagged as failed and the span has the error logged.
 func IteratePartsWithSpanV2(
-	operationName string, parts []int, msg types.Message,
-	iter func(int, *tracing.Span, types.Part) error,
+	operationName string, parts []int, msg *message.Batch,
+	iter func(int, *tracing.Span, *message.Part) error,
 ) {
 	exec := func(i int) {
 		part := msg.Get(i)
@@ -230,10 +231,10 @@ func IteratePartsWithSpanV2(
 // boolean or an error. If the error is nil and the boolean is false then the
 // message part is removed.
 func iteratePartsFilterableWithSpan(
-	operationName string, parts []int, msg types.Message,
-	iter func(int, *tracing.Span, types.Part) (bool, error),
+	operationName string, parts []int, msg *message.Batch,
+	iter func(int, *tracing.Span, *message.Part) (bool, error),
 ) {
-	newParts := make([]types.Part, 0, msg.Len())
+	newParts := make([]*message.Part, 0, msg.Len())
 	exec := func(i int) bool {
 		part := msg.Get(i)
 		span := tracing.CreateChildSpan(operationName, part)

@@ -18,7 +18,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // ReaderDocs is a static field documentation for input codecs.
@@ -71,7 +70,7 @@ func ackOnce(fn ReaderAckFn) ReaderAckFn {
 
 // Reader is a codec type that reads message parts from a source.
 type Reader interface {
-	Next(context.Context) ([]types.Part, ReaderAckFn, error)
+	Next(context.Context) ([]*message.Part, ReaderAckFn, error)
 	Close(context.Context) error
 }
 
@@ -318,7 +317,7 @@ type allBytesReader struct {
 	consumed bool
 }
 
-func (a *allBytesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+func (a *allBytesReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
 	if a.consumed {
 		return nil, nil, io.EOF
 	}
@@ -329,7 +328,7 @@ func (a *allBytesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, e
 		return nil, nil, err
 	}
 	p := message.NewPart(b)
-	return []types.Part{p}, a.ack, nil
+	return []*message.Part{p}, a.ack, nil
 }
 
 func (a *allBytesReader) Close(ctx context.Context) error {
@@ -378,7 +377,7 @@ func (a *linesReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *linesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+func (a *linesReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
 	scanned := a.buf.Scan()
 	a.mut.Lock()
 	defer a.mut.Unlock()
@@ -387,7 +386,7 @@ func (a *linesReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, erro
 		a.pending++
 		bytesCopy := make([]byte, len(a.buf.Bytes()))
 		copy(bytesCopy, a.buf.Bytes())
-		return []types.Part{message.NewPart(bytesCopy)}, a.ack, nil
+		return []*message.Part{message.NewPart(bytesCopy)}, a.ack, nil
 	}
 
 	err := a.buf.Err()
@@ -465,7 +464,7 @@ func (a *csvReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *csvReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+func (a *csvReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
 	records, err := a.scanner.Read()
 
 	a.mut.Lock()
@@ -490,7 +489,7 @@ func (a *csvReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error)
 	part := message.NewPart(nil)
 	part.SetJSON(obj)
 
-	return []types.Part{part}, a.ack, nil
+	return []*message.Part{part}, a.ack, nil
 }
 
 func (a *csvReader) Close(ctx context.Context) error {
@@ -567,7 +566,7 @@ func (a *customDelimReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *customDelimReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+func (a *customDelimReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
 	scanned := a.buf.Scan()
 
 	a.mut.Lock()
@@ -578,7 +577,7 @@ func (a *customDelimReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn
 
 		bytesCopy := make([]byte, len(a.buf.Bytes()))
 		copy(bytesCopy, a.buf.Bytes())
-		return []types.Part{message.NewPart(bytesCopy)}, a.ack, nil
+		return []*message.Part{message.NewPart(bytesCopy)}, a.ack, nil
 	}
 	err := a.buf.Err()
 	if err == nil {
@@ -640,7 +639,7 @@ func (a *chunkerReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *chunkerReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+func (a *chunkerReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
 	if a.finished {
 		return nil, nil, io.EOF
 	}
@@ -666,7 +665,7 @@ func (a *chunkerReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, er
 		copy(bytesCopy, a.buf.Bytes())
 
 		a.buf.Reset()
-		return []types.Part{message.NewPart(bytesCopy)}, a.ack, nil
+		return []*message.Part{message.NewPart(bytesCopy)}, a.ack, nil
 	}
 
 	return nil, nil, err
@@ -720,7 +719,7 @@ func (a *tarReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *tarReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+func (a *tarReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
 	_, err := a.buf.Next()
 
 	a.mut.Lock()
@@ -733,7 +732,7 @@ func (a *tarReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error)
 			return nil, nil, err
 		}
 		a.pending++
-		return []types.Part{message.NewPart(fileBuf.Bytes())}, a.ack, nil
+		return []*message.Part{message.NewPart(fileBuf.Bytes())}, a.ack, nil
 	}
 
 	if err == io.EOF {
@@ -769,7 +768,7 @@ func newMultipartReader(r Reader) (Reader, error) {
 	}, nil
 }
 
-func isEmpty(p []types.Part) bool {
+func isEmpty(p []*message.Part) bool {
 	if len(p) == 0 {
 		return true
 	}
@@ -779,8 +778,8 @@ func isEmpty(p []types.Part) bool {
 	return false
 }
 
-func (m *multipartReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
-	var parts []types.Part
+func (m *multipartReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
+	var parts []*message.Part
 	var acks []ReaderAckFn
 
 	ackFn := func(ctx context.Context, err error) error {
@@ -889,7 +888,7 @@ func (a *regexReader) ack(ctx context.Context, err error) error {
 	return nil
 }
 
-func (a *regexReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, error) {
+func (a *regexReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
 	scanned := a.buf.Scan()
 
 	a.mut.Lock()
@@ -900,7 +899,7 @@ func (a *regexReader) Next(ctx context.Context) ([]types.Part, ReaderAckFn, erro
 
 		bytesCopy := make([]byte, len(a.buf.Bytes()))
 		copy(bytesCopy, a.buf.Bytes())
-		return []types.Part{message.NewPart(bytesCopy)}, a.ack, nil
+		return []*message.Part{message.NewPart(bytesCopy)}, a.ack, nil
 	}
 	err := a.buf.Err()
 	if err == nil {

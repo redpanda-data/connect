@@ -23,7 +23,7 @@ func TestForEachEmpty(t *testing.T) {
 	exp := [][]byte{
 		[]byte("foo bar baz"),
 	}
-	msgs, res := proc.ProcessMessage(message.New(exp))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
 	if res != nil {
 		t.Fatal(res.Error())
 	}
@@ -60,7 +60,7 @@ func TestForEachBasic(t *testing.T) {
 		[]byte("MSAyIDMgNA=="),
 		[]byte("aGVsbG8gZm9vIHdvcmxk"),
 	}
-	msgs, res := proc.ProcessMessage(message.New(parts))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
 		t.Fatal(res.Error())
 	}
@@ -96,7 +96,7 @@ func TestForEachFilterSome(t *testing.T) {
 		[]byte("foo bar baz"),
 		[]byte("hello foo world"),
 	}
-	msgs, res := proc.ProcessMessage(message.New(parts))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
 		t.Fatal(res.Error())
 	}
@@ -136,7 +136,7 @@ func TestForEachMultiProcs(t *testing.T) {
 		[]byte("Zm9vIGJhciBiYXo="),
 		[]byte("aGVsbG8gZm9vIHdvcmxk"),
 	}
-	msgs, res := proc.ProcessMessage(message.New(parts))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
 		t.Fatal(res.Error())
 	}
@@ -168,7 +168,7 @@ func TestForEachFilterAll(t *testing.T) {
 		[]byte("1 2 3 4"),
 		[]byte("hello world"),
 	}
-	msgs, res := proc.ProcessMessage(message.New(parts))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res == nil {
 		t.Fatal("expected empty response")
 	}

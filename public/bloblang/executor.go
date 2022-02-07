@@ -6,19 +6,18 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Executor stores a parsed Bloblang mapping and provides APIs for executing it.
 type Executor struct {
 	exec              *mapping.Executor
-	emptyQueryMessage types.Message
+	emptyQueryMessage *message.Batch
 }
 
 func newExecutor(exec *mapping.Executor) *Executor {
 	return &Executor{
 		exec:              exec,
-		emptyQueryMessage: message.New(nil),
+		emptyQueryMessage: message.QuickBatch(nil),
 	}
 }
 

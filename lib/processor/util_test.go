@@ -17,9 +17,9 @@ type passthrough struct {
 	called int
 }
 
-func (p *passthrough) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *passthrough) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	p.called++
-	return []types.Message{msg}, nil
+	return []*message.Batch{msg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.
@@ -37,7 +37,7 @@ func TestExecuteAllBasic(t *testing.T) {
 		&passthrough{},
 	}
 
-	msg := message.New([][]byte{[]byte("test message")})
+	msg := message.QuickBatch([][]byte{[]byte("test message")})
 	msgs, res := ExecuteAll(procs, msg)
 	if res != nil {
 		t.Fatal(res.Error())
@@ -64,7 +64,7 @@ func TestExecuteAllBasicBatch(t *testing.T) {
 		&passthrough{},
 	}
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte("test message 1"),
 		[]byte("test message 2"),
 		[]byte("test message 3"),
@@ -95,8 +95,8 @@ func TestExecuteAllMulti(t *testing.T) {
 		&passthrough{},
 	}
 
-	msg1 := message.New([][]byte{[]byte("test message 1")})
-	msg2 := message.New([][]byte{[]byte("test message 2")})
+	msg1 := message.QuickBatch([][]byte{[]byte("test message 1")})
+	msg2 := message.QuickBatch([][]byte{[]byte("test message 2")})
 	msgs, res := ExecuteAll(procs, msg1, msg2)
 	if res != nil {
 		t.Fatal(res.Error())
@@ -127,7 +127,7 @@ type errored struct {
 	called int
 }
 
-func (p *errored) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *errored) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	p.called++
 	return nil, response.NewError(errors.New("test error"))
 }
@@ -148,8 +148,8 @@ func TestExecuteAllErrored(t *testing.T) {
 		&passthrough{},
 	}
 
-	msg1 := message.New([][]byte{[]byte("test message 1")})
-	msg2 := message.New([][]byte{[]byte("test message 2")})
+	msg1 := message.QuickBatch([][]byte{[]byte("test message 1")})
+	msg2 := message.QuickBatch([][]byte{[]byte("test message 2")})
 	msgs, res := ExecuteAll(procs, msg1, msg2)
 	if len(msgs) > 0 {
 		t.Fatal("received messages after drop")

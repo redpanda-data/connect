@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -125,10 +126,10 @@ func NewKinesisV2(
 // and passing each new message through the partition and hash key interpolation
 // process, allowing the user to define the partition and hash key per message
 // part.
-func (a *Kinesis) toRecords(msg types.Message) ([]*kinesis.PutRecordsRequestEntry, error) {
+func (a *Kinesis) toRecords(msg *message.Batch) ([]*kinesis.PutRecordsRequestEntry, error) {
 	entries := make([]*kinesis.PutRecordsRequestEntry, msg.Len())
 
-	err := msg.Iter(func(i int, p types.Part) error {
+	err := msg.Iter(func(i int, p *message.Part) error {
 		entry := kinesis.PutRecordsRequestEntry{
 			Data:         p.Get(),
 			PartitionKey: aws.String(a.partitionKey.String(i, msg)),
@@ -186,14 +187,14 @@ func (a *Kinesis) ConnectWithContext(ctx context.Context) error {
 // Write attempts to write message contents to a target Kinesis stream in
 // batches of 500. If throttling is detected, failed messages are retried
 // according to the configurable backoff settings.
-func (a *Kinesis) Write(msg types.Message) error {
+func (a *Kinesis) Write(msg *message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target Kinesis
 // stream in batches of 500. If throttling is detected, failed messages are
 // retried according to the configurable backoff settings.
-func (a *Kinesis) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (a *Kinesis) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if a.session == nil {
 		return types.ErrNotConnected
 	}

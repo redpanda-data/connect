@@ -96,7 +96,7 @@ type Policy struct {
 	check     *mapping.Executor
 	procs     []types.Processor
 	sizeTally int
-	parts     []types.Part
+	parts     []*message.Part
 
 	triggered bool
 	lastBatch time.Time
@@ -166,7 +166,7 @@ func NewPolicy(
 
 // Add a new message part to this batch policy. Returns true if this part
 // triggers the conditions of the policy.
-func (p *Policy) Add(part types.Part) bool {
+func (p *Policy) Add(part *message.Part) bool {
 	p.sizeTally += len(part.Get())
 	p.parts = append(p.parts, part)
 
@@ -181,7 +181,7 @@ func (p *Policy) Add(part types.Part) bool {
 		p.log.Traceln("Batching based on byte_size")
 	}
 	if p.check != nil && !p.triggered {
-		tmpMsg := message.New(nil)
+		tmpMsg := message.QuickBatch(nil)
 		tmpMsg.SetAll(p.parts)
 
 		test, err := p.check.QueryPart(tmpMsg.Len()-1, tmpMsg)
@@ -200,17 +200,17 @@ func (p *Policy) Add(part types.Part) bool {
 
 // Flush clears all messages stored by this batch policy. Returns nil if the
 // policy is currently empty.
-func (p *Policy) Flush() types.Message {
-	var newMsg types.Message
+func (p *Policy) Flush() *message.Batch {
+	var newMsg *message.Batch
 
 	resultMsgs := p.flushAny()
 	if len(resultMsgs) == 1 {
 		newMsg = resultMsgs[0]
 	} else if len(resultMsgs) > 1 {
-		newMsg = message.New(nil)
-		var parts []types.Part
+		newMsg = message.QuickBatch(nil)
+		var parts []*message.Part
 		for _, m := range resultMsgs {
-			m.Iter(func(_ int, p types.Part) error {
+			_ = m.Iter(func(_ int, p *message.Part) error {
 				parts = append(parts, p)
 				return nil
 			})
@@ -220,14 +220,14 @@ func (p *Policy) Flush() types.Message {
 	return newMsg
 }
 
-func (p *Policy) flushAny() []types.Message {
-	var newMsg types.Message
+func (p *Policy) flushAny() []*message.Batch {
+	var newMsg *message.Batch
 	if len(p.parts) > 0 {
 		if !p.triggered && p.period > 0 && time.Since(p.lastBatch) > p.period {
 			p.mPeriodBatch.Incr(1)
 			p.log.Traceln("Batching based on period")
 		}
-		newMsg = message.New(nil)
+		newMsg = message.QuickBatch(nil)
 		newMsg.Append(p.parts...)
 	}
 	p.parts = nil
@@ -250,7 +250,7 @@ func (p *Policy) flushAny() []types.Message {
 		return resultMsgs
 	}
 
-	return []types.Message{newMsg}
+	return []*message.Batch{newMsg}
 }
 
 // Count returns the number of currently buffered message parts within this

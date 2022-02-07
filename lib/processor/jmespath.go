@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	jmespath "github.com/jmespath/go-jmespath"
@@ -171,11 +172,11 @@ func clearNumbers(v interface{}) (interface{}, bool) {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *JMESPath) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span *tracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part *message.Part) error {
 		jsonPart, err := part.JSON()
 		if err != nil {
 			p.mErrJSONP.Incr(1)
@@ -206,7 +207,7 @@ func (p *JMESPath) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	IteratePartsWithSpanV2(TypeJMESPath, p.parts, newMsg, proc)
 
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(newMsg.Len()))

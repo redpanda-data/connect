@@ -138,7 +138,7 @@ func (z *ZMQ4) ConnectWithContext(ignored context.Context) error {
 }
 
 // ReadWithContext attempts to read a new message from the ZMQ socket.
-func (z *ZMQ4) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (z *ZMQ4) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	if z.socket == nil {
 		return nil, nil, types.ErrNotConnected
 	}

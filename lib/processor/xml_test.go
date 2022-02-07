@@ -96,7 +96,7 @@ func TestXMLCases(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			msgsOut, res := proc.ProcessMessage(message.New([][]byte{[]byte(test.input)}))
+			msgsOut, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(test.input)}))
 			if res != nil {
 				tt.Fatal(res.Error())
 			}
@@ -124,7 +124,7 @@ func TestXMLWithCast(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgsOut, res := proc.ProcessMessage(message.New([][]byte{[]byte(testString)}))
+	msgsOut, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(testString)}))
 	if res != nil {
 		t.Fatal(res.Error())
 	}

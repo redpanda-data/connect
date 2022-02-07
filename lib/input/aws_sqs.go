@@ -340,22 +340,21 @@ func (a *awsSQS) resetMessages(ctx context.Context, msgs ...sqsMessageHandle) er
 	return nil
 }
 
-func addSQSMetadata(p types.Part, sqsMsg *sqs.Message) {
-	meta := p.Metadata()
-	meta.Set("sqs_message_id", *sqsMsg.MessageId)
-	meta.Set("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
+func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
+	p.MetaSet("sqs_message_id", *sqsMsg.MessageId)
+	p.MetaSet("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
 	if rCountStr := sqsMsg.Attributes["ApproximateReceiveCount"]; rCountStr != nil {
-		meta.Set("sqs_approximate_receive_count", *rCountStr)
+		p.MetaSet("sqs_approximate_receive_count", *rCountStr)
 	}
 	for k, v := range sqsMsg.MessageAttributes {
 		if v.StringValue != nil {
-			meta.Set(k, *v.StringValue)
+			p.MetaSet(k, *v.StringValue)
 		}
 	}
 }
 
 // ReadWithContext attempts to read a new message from the target SQS.
-func (a *awsSQS) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (a *awsSQS) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	if a.session == nil {
 		return nil, nil, types.ErrNotConnected
 	}
@@ -373,7 +372,7 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (types.Message, reader.Asy
 		return nil, nil, ctx.Err()
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	if next.Body != nil {
 		part := message.NewPart([]byte(*next.Body))
 		addSQSMetadata(part, next)

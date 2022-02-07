@@ -15,6 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -229,13 +230,13 @@ func (a *AMQP) disconnect() error {
 
 // WriteWithContext will attempt to write a message over AMQP, wait for
 // acknowledgement, and returns an error if applicable.
-func (a *AMQP) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (a *AMQP) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return a.Write(msg)
 }
 
 // Write will attempt to write a message over AMQP, wait for acknowledgement,
 // and returns an error if applicable.
-func (a *AMQP) Write(msg types.Message) error {
+func (a *AMQP) Write(msg *message.Batch) error {
 	a.connLock.RLock()
 	conn := a.conn
 	amqpChan := a.amqpChan
@@ -247,7 +248,7 @@ func (a *AMQP) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		bindingKey := strings.ReplaceAll(a.key.String(i, msg), "/", ".")
 		msgType := strings.ReplaceAll(a.msgType.String(i, msg), "/", ".")
 		contentType := a.contentType.String(i, msg)
@@ -266,7 +267,7 @@ func (a *AMQP) Write(msg types.Message) error {
 		}
 
 		headers := amqp.Table{}
-		a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
+		a.metaFilter.Iter(p, func(k, v string) error {
 			headers[strings.ReplaceAll(k, "_", "-")] = v
 			return nil
 		})

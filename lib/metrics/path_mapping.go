@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 )
 
 type pathMapping struct {
@@ -76,7 +75,7 @@ func (m *pathMapping) mapPath(path string, allowLabels bool) (outPath string, la
 	}
 
 	var input interface{} = path
-	meta := metadata.New(nil)
+	msg := message.NewPart(nil)
 	vars := map[string]interface{}{}
 
 	var v interface{} = query.Nothing(nil)
@@ -84,17 +83,17 @@ func (m *pathMapping) mapPath(path string, allowLabels bool) (outPath string, la
 	if err := m.m.ExecOnto(query.FunctionContext{
 		Maps:     map[string]query.Function{},
 		Vars:     vars,
-		MsgBatch: message.New(nil),
+		MsgBatch: message.QuickBatch(nil),
 	}.WithValue(input), mapping.AssignmentContext{
 		Vars:  vars,
-		Meta:  meta,
+		Msg:   msg,
 		Value: &v,
 	}); err != nil {
 		m.logger.Errorf("Failed to apply path mapping on '%v': %v\n", path, err)
 		return path, nil, nil
 	}
 
-	meta.Iter(func(k, v string) error {
+	_ = msg.MetaIter(func(k, v string) error {
 		labelNames = append(labelNames, k)
 		return nil
 	})
@@ -107,7 +106,7 @@ func (m *pathMapping) mapPath(path string, allowLabels bool) (outPath string, la
 	if len(labelNames) > 0 {
 		sort.Strings(labelNames)
 		for _, k := range labelNames {
-			v := meta.Get(k)
+			v := msg.MetaGet(k)
 			m.logger.Tracef("Metrics label '%v' created with static value '%v'.\n", k, v)
 			labelValues = append(labelValues, v)
 		}

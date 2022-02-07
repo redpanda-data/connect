@@ -8,7 +8,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
@@ -91,7 +90,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			msgs, _ := c.ProcessMessage(message.New(tt.arg))
+			msgs, _ := c.ProcessMessage(message.QuickBatch(tt.arg))
 
 			if len(msgs) != 1 {
 				t.Fatalf("Test '%v' did not succeed", tt.name)
@@ -100,8 +99,8 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 			if exp, act := tt.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 				t.Errorf("Wrong result '%v': %v != %v", tt.name, act, exp)
 			}
-			msgs[0].Iter(func(i int, part types.Part) error {
-				act := part.Metadata().Get(FailFlagKey)
+			_ = msgs[0].Iter(func(i int, part *message.Part) error {
+				act := part.MetaGet(FailFlagKey)
 				if len(act) > 0 && act != tt.err {
 					t.Errorf("Wrong error message '%v': %v != %v", tt.name, act, tt.err)
 				}
@@ -184,7 +183,7 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			msgs, _ := c.ProcessMessage(message.New(tt.arg))
+			msgs, _ := c.ProcessMessage(message.QuickBatch(tt.arg))
 
 			if len(msgs) != 1 {
 				t.Fatalf("Test '%v' did not succeed", tt.name)
@@ -193,8 +192,8 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 			if exp, act := tt.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 				t.Errorf("Wrong result '%v': %v != %v", tt.name, act, exp)
 			}
-			msgs[0].Iter(func(i int, part types.Part) error {
-				act := part.Metadata().Get(FailFlagKey)
+			_ = msgs[0].Iter(func(i int, part *message.Part) error {
+				act := part.MetaGet(FailFlagKey)
 				if len(act) > 0 && act != tt.err {
 					t.Errorf("Wrong error message '%v': %v != %v", tt.name, act, tt.err)
 				}
@@ -290,7 +289,7 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			msgs, _ := c.ProcessMessage(message.New(tt.arg))
+			msgs, _ := c.ProcessMessage(message.QuickBatch(tt.arg))
 
 			if len(msgs) != 1 {
 				t.Fatalf("Test '%v' did not succeed", tt.name)
@@ -299,8 +298,8 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 			if exp, act := tt.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 				t.Errorf("Wrong result '%v': %v != %v", tt.name, act, exp)
 			}
-			msgs[0].Iter(func(i int, part types.Part) error {
-				act := part.Metadata().Get(FailFlagKey)
+			_ = msgs[0].Iter(func(i int, part *message.Part) error {
+				act := part.MetaGet(FailFlagKey)
 				if len(act) > 0 && act != tt.err {
 					t.Errorf("Wrong error message '%v': %v != %v", tt.name, act, tt.err)
 				}

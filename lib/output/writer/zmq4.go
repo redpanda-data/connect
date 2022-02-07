@@ -124,7 +124,7 @@ func (z *ZMQ4) Connect() error {
 }
 
 // Write will attempt to write a message to the ZMQ4 socket.
-func (z *ZMQ4) Write(msg types.Message) error {
+func (z *ZMQ4) Write(msg *message.Batch) error {
 	if z.socket == nil {
 		return types.ErrNotConnected
 	}

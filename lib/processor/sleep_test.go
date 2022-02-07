@@ -19,7 +19,7 @@ func TestSleep(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := message.New(nil)
+	msgIn := message.QuickBatch(nil)
 	msgsOut, res := slp.ProcessMessage(msgIn)
 	if res != nil {
 		t.Fatal(res.Error())
@@ -42,7 +42,7 @@ func TestSleepExit(t *testing.T) {
 
 	doneChan := make(chan struct{})
 	go func() {
-		slp.ProcessMessage(message.New(nil))
+		slp.ProcessMessage(message.QuickBatch(nil))
 		close(doneChan)
 	}()
 
@@ -66,7 +66,7 @@ func TestSleep200Millisecond(t *testing.T) {
 	}
 
 	tBefore := time.Now()
-	slp.ProcessMessage(message.New(nil))
+	slp.ProcessMessage(message.QuickBatch(nil))
 	tAfter := time.Now()
 
 	if dur := tAfter.Sub(tBefore); dur < (time.Millisecond * 200) {
@@ -85,7 +85,7 @@ func TestSleepInterpolated(t *testing.T) {
 	}
 
 	tBefore := time.Now()
-	slp.ProcessMessage(message.New([][]byte{
+	slp.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte(`{"foo":200}`),
 	}))
 	tAfter := time.Now()

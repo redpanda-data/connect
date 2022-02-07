@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -191,11 +192,11 @@ func NewCompress(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (c *Compress) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	c.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(i int, span *tracing.Span, part types.Part) error {
+	proc := func(i int, span *tracing.Span, part *message.Part) error {
 		newBytes, err := c.comp(c.conf.Level, part.Get())
 		if err == nil {
 			part.Set(newBytes)
@@ -215,7 +216,7 @@ func (c *Compress) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	c.mBatchSent.Incr(1)
 	c.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 	return msgs[:], nil
 }
 

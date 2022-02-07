@@ -68,7 +68,7 @@ func (a *azureQueueStorage) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a new message from the target Azure Storage Queue Storage container.
-func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
+func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn reader.AsyncAckFn, err error) {
 	queueName := a.queueName.String(0, msg)
 	queueURL := a.serviceURL.NewQueueURL(queueName)
 	messageURL := queueURL.NewMessagesURL()
@@ -93,23 +93,22 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 	if n := dequeue.NumMessages(); n > 0 {
 		props, _ := queueURL.GetProperties(ctx)
 		metadata := props.NewMetadata()
-		msg := message.New(nil)
+		msg := message.QuickBatch(nil)
 		dqm := make([]*azqueue.DequeuedMessage, n)
 		for i := int32(0); i < n; i++ {
 			queueMsg := dequeue.Message(i)
 			part := message.NewPart([]byte(queueMsg.Text))
-			meta := part.Metadata()
-			meta.Set("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
-			meta.Set("queue_storage_queue_name", queueName)
+			part.MetaSet("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
+			part.MetaSet("queue_storage_queue_name", queueName)
 			if a.conf.TrackProperties {
 				msgLag := 0
 				if approxMsgCount >= n {
 					msgLag = int(approxMsgCount - n)
 				}
-				meta.Set("queue_storage_message_lag", strconv.Itoa(msgLag))
+				part.MetaSet("queue_storage_message_lag", strconv.Itoa(msgLag))
 			}
 			for k, v := range metadata {
-				meta.Set(k, v)
+				part.MetaSet(k, v)
 			}
 			msg.Append(part)
 			dqm[i] = queueMsg

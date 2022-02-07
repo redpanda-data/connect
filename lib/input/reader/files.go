@@ -69,7 +69,7 @@ func (f *Files) ConnectWithContext(ctx context.Context) (err error) {
 }
 
 // ReadWithContext a new Files message.
-func (f *Files) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (f *Files) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	if len(f.targets) == 0 {
 		return nil, nil, types.ErrTypeClosed
 	}
@@ -88,8 +88,8 @@ func (f *Files) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 		return nil, nil, readerr
 	}
 
-	msg := message.New([][]byte{msgBytes})
-	msg.Get(0).Metadata().Set("path", path)
+	msg := message.QuickBatch([][]byte{msgBytes})
+	msg.Get(0).MetaSet("path", path)
 	return msg, func(ctx context.Context, res types.Response) error {
 		if f.delete {
 			if res.Error() == nil {

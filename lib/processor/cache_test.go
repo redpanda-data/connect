@@ -26,7 +26,7 @@ func TestCacheSet(t *testing.T) {
 		return
 	}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(`{"key":"1","value":"foo 1"}`),
 		[]byte(`{"key":"2","value":"foo 2"}`),
 		[]byte(`{"key":"1","value":"foo 3"}`),
@@ -69,7 +69,7 @@ func TestCacheSetParts(t *testing.T) {
 		return
 	}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(`{"key":"1","value":"foo 1"}`),
 		[]byte(`{"key":"2","value":"foo 2"}`),
 		[]byte(`{"key":"1","value":"foo 3"}`),
@@ -112,7 +112,7 @@ func TestCacheAdd(t *testing.T) {
 		return
 	}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(`{"key":"1","value":"foo 1"}`),
 		[]byte(`{"key":"2","value":"foo 2"}`),
 		[]byte(`{"key":"1","value":"foo 3"}`),
@@ -167,7 +167,7 @@ func TestCacheGet(t *testing.T) {
 		return
 	}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(`{"key":"1"}`),
 		[]byte(`{"key":"2"}`),
 		[]byte(`{"key":"3"}`),
@@ -220,7 +220,7 @@ func TestCacheDelete(t *testing.T) {
 		return
 	}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(`{"key":"1"}`),
 		[]byte(`{"key":"3"}`),
 		[]byte(`{"key":"4"}`),

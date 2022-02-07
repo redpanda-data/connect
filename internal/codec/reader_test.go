@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -532,7 +532,7 @@ func TestTarGzipReaderOld(t *testing.T) {
 	testReaderSuite(t, "auto", "foo.tgz", gzipBuf.Bytes(), input...)
 }
 
-func strsFromParts(ps []types.Part) []string {
+func strsFromParts(ps []*message.Part) []string {
 	var strs []string
 	for _, part := range ps {
 		strs = append(strs, string(part.Get()))

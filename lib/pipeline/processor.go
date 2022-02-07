@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -103,10 +104,10 @@ func (p *Processor) loop() {
 
 // dispatchMessages attempts to send a multiple messages results of processors
 // over the shared messages channel. This send is retried until success.
-func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- types.Response) {
+func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- types.Response) {
 	throt := throttle.New(throttle.OptCloseChan(p.closeChan))
 
-	sendMsg := func(m types.Message) {
+	sendMsg := func(m *message.Batch) {
 		resChan := make(chan types.Response)
 		transac := types.NewTransaction(m, resChan)
 
@@ -141,7 +142,7 @@ func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- type
 	wg.Add(len(msgs))
 
 	for _, msg := range msgs {
-		go func(m types.Message) {
+		go func(m *message.Batch) {
 			sendMsg(m)
 			wg.Done()
 		}(msg)

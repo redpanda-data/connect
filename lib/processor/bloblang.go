@@ -180,12 +180,12 @@ func NewBloblangFromExecutor(exec *mapping.Executor, log log.Modular, stats metr
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (b *Bloblang) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (b *Bloblang) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	b.mCount.Incr(1)
 
-	newParts := make([]types.Part, 0, msg.Len())
+	newParts := make([]*message.Part, 0, msg.Len())
 
-	msg.Iter(func(i int, part types.Part) error {
+	_ = msg.Iter(func(i int, part *message.Part) error {
 		span := tracing.CreateChildSpan(TypeBloblang, part)
 
 		p, err := b.exec.MapPart(i, msg)
@@ -214,12 +214,12 @@ func (b *Bloblang) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		return nil, response.NewAck()
 	}
 
-	newMsg := message.New(nil)
+	newMsg := message.QuickBatch(nil)
 	newMsg.SetAll(newParts)
 
 	b.mBatchSent.Incr(1)
 	b.mSent.Incr(int64(newMsg.Len()))
-	return []types.Message{newMsg}, nil
+	return []*message.Batch{newMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

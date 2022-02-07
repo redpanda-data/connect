@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -203,7 +204,7 @@ func (l *Log) levelToLogFn(level string) (func(logger log.Modular, msg string), 
 //------------------------------------------------------------------------------
 
 // ProcessMessage logs an event and returns the message unchanged.
-func (l *Log) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (l *Log) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	targetLog := l.logger
 	if l.fieldsMapping != nil {
 		v, err := l.fieldsMapping.Exec(query.FunctionContext{
@@ -221,22 +222,22 @@ func (l *Log) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		if err != nil {
 			l.logger.Errorf("Failed to execute fields mapping: %v", err)
 			resMsg := msg.Copy()
-			resMsg.Iter(func(i int, p types.Part) error {
+			_ = resMsg.Iter(func(i int, p *message.Part) error {
 				FlagErr(p, err)
 				return nil
 			})
-			return []types.Message{resMsg}, nil
+			return []*message.Batch{resMsg}, nil
 		}
 		vObj, ok := v.(map[string]interface{})
 		if !ok {
 			l.logger.Errorf("Fields mapping yielded a non-object result: %T", v)
 			rErr := fmt.Errorf("fields mapping yielded a non-object result: %T", v)
 			resMsg := msg.Copy()
-			resMsg.Iter(func(i int, p types.Part) error {
+			_ = resMsg.Iter(func(i int, p *message.Part) error {
 				FlagErr(p, rErr)
 				return nil
 			})
-			return []types.Message{resMsg}, nil
+			return []*message.Batch{resMsg}, nil
 		}
 
 		keys := make([]string, 0, len(vObj))
@@ -259,7 +260,7 @@ func (l *Log) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		targetLog = log.WithFields(targetLog, interpFields)
 	}
 	l.printFn(targetLog, l.message.String(0, msg))
-	return []types.Message{msg}, nil
+	return []*message.Batch{msg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

@@ -19,7 +19,7 @@ func TestThrottle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := message.New(nil)
+	msgIn := message.QuickBatch(nil)
 	msgsOut, res := throt.ProcessMessage(msgIn)
 	if res != nil {
 		t.Fatal(res.Error())
@@ -41,9 +41,9 @@ func TestThrottle200Millisecond(t *testing.T) {
 	}
 
 	tBefore := time.Now()
-	throt.ProcessMessage(message.New(nil))
+	throt.ProcessMessage(message.QuickBatch(nil))
 	tBetween := time.Now()
-	throt.ProcessMessage(message.New(nil))
+	throt.ProcessMessage(message.QuickBatch(nil))
 	tAfter := time.Now()
 
 	if dur := tBetween.Sub(tBefore); dur > (time.Millisecond * 50) {

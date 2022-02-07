@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -34,7 +35,7 @@ func (t *tracedOutput) loop(inChan <-chan types.Transaction) {
 		if !open {
 			return
 		}
-		_ = tran.Payload.Iter(func(i int, part types.Part) error {
+		_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 			_ = atomic.AddUint64(t.ctr, 1)
 			t.e.Add(EventConsume, string(part.Get()))
 			return nil

@@ -21,7 +21,7 @@ func TestCount(t *testing.T) {
 }
 
 func TestMessageCount(t *testing.T) {
-	m := message.New([][]byte{
+	m := message.QuickBatch([][]byte{
 		[]byte("FOO"),
 		[]byte("BAR"),
 		[]byte("BAZ"),

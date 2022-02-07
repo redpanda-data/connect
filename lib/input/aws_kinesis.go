@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -725,7 +726,7 @@ func (k *kinesisReader) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a message from Kinesis.
-func (k *kinesisReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (k *kinesisReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()

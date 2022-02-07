@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -90,10 +91,10 @@ func NewRateLimit(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (r *RateLimit) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (r *RateLimit) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	r.mCount.Incr(1)
 
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		var waitFor time.Duration
 		var err error
 		if rerr := interop.AccessRateLimit(context.Background(), r.mgr, r.rlName, func(rl types.RateLimit) {
@@ -128,7 +129,7 @@ func (r *RateLimit) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 
 	r.mBatchSent.Incr(1)
 	r.mSent.Incr(int64(msg.Len()))
-	return []types.Message{msg}, nil
+	return []*message.Batch{msg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

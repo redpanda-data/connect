@@ -123,16 +123,16 @@ func NewArchiveConfig() ArchiveConfig {
 
 //------------------------------------------------------------------------------
 
-type archiveFunc func(hFunc headerFunc, msg types.Message) (types.Part, error)
+type archiveFunc func(hFunc headerFunc, msg *message.Batch) (*message.Part, error)
 
-type headerFunc func(index int, body types.Part) os.FileInfo
+type headerFunc func(index int, body *message.Part) os.FileInfo
 
-func tarArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+func tarArchive(hFunc headerFunc, msg *message.Batch) (*message.Part, error) {
 	buf := &bytes.Buffer{}
 	tw := tar.NewWriter(buf)
 
 	// Iterate through the parts of the message.
-	err := msg.Iter(func(i int, part types.Part) error {
+	err := msg.Iter(func(i int, part *message.Part) error {
 		hdr, err := tar.FileInfoHeader(hFunc(i, part), "")
 		if err != nil {
 			return err
@@ -155,12 +155,12 @@ func tarArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 	return newPart, nil
 }
 
-func zipArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+func zipArchive(hFunc headerFunc, msg *message.Batch) (*message.Part, error) {
 	buf := &bytes.Buffer{}
 	zw := zip.NewWriter(buf)
 
 	// Iterate through the parts of the message.
-	err := msg.Iter(func(i int, part types.Part) error {
+	err := msg.Iter(func(i int, part *message.Part) error {
 		h, err := zip.FileInfoHeader(hFunc(i, part))
 		if err != nil {
 			return err
@@ -186,15 +186,15 @@ func zipArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 	return newPart, nil
 }
 
-func binaryArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+func binaryArchive(hFunc headerFunc, msg *message.Batch) (*message.Part, error) {
 	newPart := msg.Get(0).Copy()
 	newPart.Set(message.ToBytes(msg))
 	return newPart, nil
 }
 
-func linesArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+func linesArchive(hFunc headerFunc, msg *message.Batch) (*message.Part, error) {
 	tmpParts := make([][]byte, msg.Len())
-	msg.Iter(func(i int, part types.Part) error {
+	_ = msg.Iter(func(i int, part *message.Part) error {
 		tmpParts[i] = part.Get()
 		return nil
 	})
@@ -203,9 +203,9 @@ func linesArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
 	return newPart, nil
 }
 
-func concatenateArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+func concatenateArchive(hFunc headerFunc, msg *message.Batch) (*message.Part, error) {
 	var buf bytes.Buffer
-	_ = msg.Iter(func(i int, part types.Part) error {
+	_ = msg.Iter(func(i int, part *message.Part) error {
 		buf.Write(part.Get())
 		return nil
 	})
@@ -214,11 +214,11 @@ func concatenateArchive(hFunc headerFunc, msg types.Message) (types.Part, error)
 	return newPart, nil
 }
 
-func jsonArrayArchive(hFunc headerFunc, msg types.Message) (types.Part, error) {
+func jsonArrayArchive(hFunc headerFunc, msg *message.Batch) (*message.Part, error) {
 	var array []interface{}
 
 	// Iterate through the parts of the message.
-	err := msg.Iter(func(i int, part types.Part) error {
+	err := msg.Iter(func(i int, part *message.Part) error {
 		doc, jerr := part.JSON()
 		if jerr != nil {
 			return fmt.Errorf("failed to parse message as JSON: %v", jerr)
@@ -330,8 +330,8 @@ func (f fakeInfo) Sys() interface{} {
 	return nil
 }
 
-func (d *Archive) createHeaderFunc(msg types.Message) func(int, types.Part) os.FileInfo {
-	return func(index int, body types.Part) os.FileInfo {
+func (d *Archive) createHeaderFunc(msg *message.Batch) func(int, *message.Part) os.FileInfo {
+	return func(index int, body *message.Part) os.FileInfo {
 		return fakeInfo{
 			name: d.path.String(index, msg),
 			size: int64(len(body.Get())),
@@ -344,7 +344,7 @@ func (d *Archive) createHeaderFunc(msg types.Message) func(int, types.Part) os.F
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (d *Archive) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	d.mCount.Incr(1)
 
 	if msg.Len() == 0 {
@@ -359,7 +359,7 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	spans := tracing.CreateChildSpans(TypeArchive, newMsg)
 	newPart, err := d.archive(d.createHeaderFunc(msg), msg)
 	if err != nil {
-		newMsg.Iter(func(i int, p types.Part) error {
+		_ = newMsg.Iter(func(i int, p *message.Part) error {
 			FlagErr(p, err)
 			spans[i].LogKV(
 				"event", "error",
@@ -372,13 +372,13 @@ func (d *Archive) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 	} else {
 		d.mSucc.Incr(1)
 		newPart = batch.WithCollapsedCount(newPart, msg.Len())
-		newMsg.SetAll([]types.Part{newPart})
+		newMsg.SetAll([]*message.Part{newPart})
 	}
 	for _, s := range spans {
 		s.Finish()
 	}
 
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 	return msgs[:], nil
 }
 

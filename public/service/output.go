@@ -88,7 +88,7 @@ func (a *airGapWriter) ConnectWithContext(ctx context.Context) error {
 	return a.w.Connect(ctx)
 }
 
-func (a *airGapWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (a *airGapWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	err := a.w.Write(ctx, newMessageFromPart(msg.Get(0)))
 	if err != nil && errors.Is(err, ErrNotConnected) {
 		err = types.ErrNotConnected
@@ -130,9 +130,9 @@ func (a *airGapBatchWriter) ConnectWithContext(ctx context.Context) error {
 	return a.w.Connect(ctx)
 }
 
-func (a *airGapBatchWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (a *airGapBatchWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	parts := make([]*Message, msg.Len())
-	_ = msg.Iter(func(i int, part types.Part) error {
+	_ = msg.Iter(func(i int, part *message.Part) error {
 		parts[i] = newMessageFromPart(part)
 		return nil
 	})
@@ -186,7 +186,7 @@ func newOwnedOutput(o types.Output) (*OwnedOutput, error) {
 // Write a message to the output, or return an error either if delivery is not
 // possible or the context is cancelled.
 func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
-	payload := message.New(nil)
+	payload := message.QuickBatch(nil)
 	payload.Append(m.part)
 
 	resChan := make(chan types.Response, 1)
@@ -207,7 +207,7 @@ func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
 // WriteBatch attempts to write a message batch to the output, and returns an
 // error either if delivery is not possible or the context is cancelled.
 func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
-	payload := message.New(nil)
+	payload := message.QuickBatch(nil)
 	for _, m := range b {
 		payload.Append(m.part)
 	}

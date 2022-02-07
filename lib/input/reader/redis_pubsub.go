@@ -95,7 +95,7 @@ func (r *RedisPubSub) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to pop a message from a redis pubsub channel.
-func (r *RedisPubSub) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (r *RedisPubSub) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	var pubsub *redis.PubSub
 
 	r.cMut.Lock()
@@ -112,7 +112,7 @@ func (r *RedisPubSub) ReadWithContext(ctx context.Context) (types.Message, Async
 			r.disconnect()
 			return nil, nil, types.ErrTypeClosed
 		}
-		return message.New([][]byte{[]byte(rMsg.Payload)}), noopAsyncAckFn, nil
+		return message.QuickBatch([][]byte{[]byte(rMsg.Payload)}), noopAsyncAckFn, nil
 	case <-ctx.Done():
 	}
 

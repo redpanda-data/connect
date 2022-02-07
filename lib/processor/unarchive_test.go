@@ -78,7 +78,7 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Errorf("Unarchive failed: %v", res)
 	} else if res != nil {
@@ -88,7 +88,7 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 	for i := 0; i < msgs[0].Len(); i++ {
-		if name := msgs[0].Get(i).Metadata().Get("archive_filename"); name != expNames[i] {
+		if name := msgs[0].Get(i).MetaGet("archive_filename"); name != expNames[i] {
 			t.Errorf("Unexpected name %d: %s != %s", i, name, expNames[i])
 		}
 	}
@@ -141,7 +141,7 @@ func TestUnarchiveZip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Errorf("Unarchive failed: %v", res)
 	} else if res != nil {
@@ -151,7 +151,7 @@ func TestUnarchiveZip(t *testing.T) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
 	}
 	for i := 0; i < msgs[0].Len(); i++ {
-		if name := msgs[0].Get(i).Metadata().Get("archive_filename"); name != expNames[i] {
+		if name := msgs[0].Get(i).MetaGet("archive_filename"); name != expNames[i] {
 			t.Errorf("Unexpected name %d: %s != %s", i, name, expNames[i])
 		}
 	}
@@ -176,7 +176,7 @@ func TestUnarchiveLines(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New([][]byte{
+	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte(`hello world first part
 hello world second part
 third part
@@ -211,7 +211,7 @@ func TestUnarchiveJSONDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New([][]byte{
+	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte(`{"foo":"bar"} 5 "testing 123" ["root", "is", "an", "array"] {"bar": "baz"} true`),
 	}))
 	if len(msgs) != 1 {
@@ -241,7 +241,7 @@ func TestUnarchiveJSONArray(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New([][]byte{
+	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte(`[{"foo":"bar"},5,"testing 123",["nested","array"],true]`),
 	}))
 	if len(msgs) != 1 {
@@ -274,7 +274,7 @@ func TestUnarchiveJSONMap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New([][]byte{
+	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte(`{"a":{"foo":"bar"},"b":5,"c":"testing 123","d":["nested","array"],"e":true}`),
 	}))
 	if len(msgs) != 1 {
@@ -289,7 +289,7 @@ func TestUnarchiveJSONMap(t *testing.T) {
 	// so we can't just test for byte equivalence of the whole array
 	found := make([]bool, msgs[0].Len())
 	for i := 0; i < msgs[0].Len(); i++ {
-		key := msgs[0].Get(i).Metadata().Get("archive_key")
+		key := msgs[0].Get(i).MetaGet("archive_key")
 		seq := -1
 		for j := 0; j < len(expKeys); j++ {
 			if expKeys[j] == key {
@@ -326,7 +326,7 @@ func TestUnarchiveBinary(t *testing.T) {
 	}
 
 	msgs, _ := proc.ProcessMessage(
-		message.New([][]byte{[]byte("wat this isnt good")}),
+		message.QuickBatch([][]byte{[]byte("wat this isnt good")}),
 	)
 	if exp, act := 1, len(msgs); exp != act {
 		t.Fatalf("Wrong count: %v != %v", act, exp)
@@ -338,10 +338,10 @@ func TestUnarchiveBinary(t *testing.T) {
 		t.Error("Expected fail")
 	}
 
-	testMsg := message.New([][]byte{[]byte("hello"), []byte("world")})
+	testMsg := message.QuickBatch([][]byte{[]byte("hello"), []byte("world")})
 	testMsgBlob := message.ToBytes(testMsg)
 
-	if msgs, _ := proc.ProcessMessage(message.New([][]byte{testMsgBlob})); len(msgs) == 1 {
+	if msgs, _ := proc.ProcessMessage(message.QuickBatch([][]byte{testMsgBlob})); len(msgs) == 1 {
 		if !reflect.DeepEqual(message.GetAllBytes(testMsg), message.GetAllBytes(msgs[0])) {
 			t.Errorf("Returned message did not match: %v != %v", msgs, testMsg)
 		}
@@ -442,7 +442,7 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(message.New(input))
+		msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 		if len(msgs) != 1 {
 			t.Errorf("Unarchive failed on index: %v", i)
 		} else if res != nil {
@@ -472,7 +472,7 @@ func TestUnarchiveCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New([][]byte{
+	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte(strings.Join([]string{
 			`id,name,color`,
 			`1,foo,blue`,

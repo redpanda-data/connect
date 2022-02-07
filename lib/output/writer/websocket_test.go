@@ -61,7 +61,7 @@ func TestWebsocketBasic(t *testing.T) {
 	}
 
 	for _, msg := range expMsgs {
-		if err = m.WriteWithContext(context.Background(), message.New([][]byte{[]byte(msg)})); err != nil {
+		if err = m.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte(msg)})); err != nil {
 			t.Error(err)
 		}
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 
@@ -176,10 +177,10 @@ func NewProtobufConfig() ProtobufConfig {
 
 //------------------------------------------------------------------------------
 
-type protobufOperator func(part types.Part) error
+type protobufOperator func(part *message.Part) error
 
-func newProtobufToJSONOperator(message string, importPaths []string) (protobufOperator, error) {
-	if message == "" {
+func newProtobufToJSONOperator(msg string, importPaths []string) (protobufOperator, error) {
+	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
 
@@ -188,16 +189,16 @@ func newProtobufToJSONOperator(message string, importPaths []string) (protobufOp
 		return nil, err
 	}
 
-	m := getMessageFromDescriptors(message, descriptors)
+	m := getMessageFromDescriptors(msg, descriptors)
 	if m == nil {
-		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", message, importPaths)
+		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", msg, importPaths)
 	}
 
 	marshaller := &jsonpb.Marshaler{
 		AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), descriptors...),
 	}
 
-	return func(part types.Part) error {
+	return func(part *message.Part) error {
 		msg := dynamic.NewMessage(m)
 		if err := proto.Unmarshal(part.Get(), msg); err != nil {
 			return fmt.Errorf("failed to unmarshal message: %w", err)
@@ -213,8 +214,8 @@ func newProtobufToJSONOperator(message string, importPaths []string) (protobufOp
 	}, nil
 }
 
-func newProtobufFromJSONOperator(message string, importPaths []string) (protobufOperator, error) {
-	if message == "" {
+func newProtobufFromJSONOperator(msg string, importPaths []string) (protobufOperator, error) {
+	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
 
@@ -223,16 +224,16 @@ func newProtobufFromJSONOperator(message string, importPaths []string) (protobuf
 		return nil, err
 	}
 
-	m := getMessageFromDescriptors(message, descriptors)
+	m := getMessageFromDescriptors(msg, descriptors)
 	if m == nil {
-		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", message, importPaths)
+		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", msg, importPaths)
 	}
 
 	unmarshaler := &jsonpb.Unmarshaler{
 		AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), descriptors...),
 	}
 
-	return func(part types.Part) error {
+	return func(part *message.Part) error {
 		msg := dynamic.NewMessage(m)
 		if err := msg.UnmarshalJSONPB(unmarshaler, part.Get()); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON message: %w", err)
@@ -353,11 +354,11 @@ func NewProtobuf(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *Protobuf) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *Protobuf) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span *tracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part *message.Part) error {
 		if err := p.operator(part); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Operator failed: %v\n", err)
@@ -370,7 +371,7 @@ func (p *Protobuf) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(newMsg.Len()))
-	return []types.Message{newMsg}, nil
+	return []*message.Batch{newMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

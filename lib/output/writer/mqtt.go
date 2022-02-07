@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -201,12 +202,12 @@ func (m *MQTT) Connect() error {
 //------------------------------------------------------------------------------
 
 // WriteWithContext attempts to write a message by pushing it to an MQTT broker.
-func (m *MQTT) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (m *MQTT) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return m.Write(msg)
 }
 
 // Write attempts to write a message by pushing it to an MQTT broker.
-func (m *MQTT) Write(msg types.Message) error {
+func (m *MQTT) Write(msg *message.Batch) error {
 	m.connMut.RLock()
 	client := m.client
 	m.connMut.RUnlock()
@@ -215,7 +216,7 @@ func (m *MQTT) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		retained := m.conf.Retained
 		if m.retained != nil {
 			var parseErr error

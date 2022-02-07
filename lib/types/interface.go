@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 // CacheTTLItem contains a value to cache along with an optional TTL.
@@ -75,7 +77,7 @@ type Processor interface {
 	//
 	// More information about this form of error handling can be found at:
 	// https://www.benthos.dev/docs/configuration/error_handling
-	ProcessMessage(Message) ([]Message, Response)
+	ProcessMessage(*message.Batch) ([]*message.Batch, Response)
 
 	Closable
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -97,14 +96,14 @@ func TestLogLevelTrace(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		input := message.New([][]byte{[]byte(fmt.Sprintf(`{"foo":"%v"}`, level))})
-		expMsgs := []types.Message{input}
+		input := message.QuickBatch([][]byte{[]byte(fmt.Sprintf(`{"foo":"%v"}`, level))})
+		expMsgs := []*message.Batch{input}
 		actMsgs, res := l.ProcessMessage(input)
 		if res != nil {
 			t.Fatal(res.Error())
 		}
 		if !reflect.DeepEqual(expMsgs, actMsgs) {
-			t.Errorf("Wrong message passthrough: %s != %s", actMsgs, expMsgs)
+			t.Errorf("Wrong message passthrough: %v != %v", actMsgs, expMsgs)
 		}
 	}
 
@@ -142,14 +141,14 @@ func TestLogWithFields(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	input := message.New([][]byte{[]byte(`{"foo":"info message","bar":"with fields"}`)})
-	expMsgs := []types.Message{input}
+	input := message.QuickBatch([][]byte{[]byte(`{"foo":"info message","bar":"with fields"}`)})
+	expMsgs := []*message.Batch{input}
 	actMsgs, res := l.ProcessMessage(input)
 	if res != nil {
 		t.Fatal(res.Error())
 	}
 	if !reflect.DeepEqual(expMsgs, actMsgs) {
-		t.Errorf("Wrong message passthrough: %s != %s", actMsgs, expMsgs)
+		t.Errorf("Wrong message passthrough: %v != %v", actMsgs, expMsgs)
 	}
 
 	if exp, act := []string{"info message"}, logMock.infos; !reflect.DeepEqual(exp, act) {
@@ -163,14 +162,14 @@ func TestLogWithFields(t *testing.T) {
 		t.Errorf("Wrong field output: %v != %v", act, exp)
 	}
 
-	input = message.New([][]byte{[]byte(`{"foo":"info message 2","bar":"with fields 2"}`)})
-	expMsgs = []types.Message{input}
+	input = message.QuickBatch([][]byte{[]byte(`{"foo":"info message 2","bar":"with fields 2"}`)})
+	expMsgs = []*message.Batch{input}
 	actMsgs, res = l.ProcessMessage(input)
 	if res != nil {
 		t.Fatal(res.Error())
 	}
 	if !reflect.DeepEqual(expMsgs, actMsgs) {
-		t.Errorf("Wrong message passthrough: %s != %s", actMsgs, expMsgs)
+		t.Errorf("Wrong message passthrough: %v != %v", actMsgs, expMsgs)
 	}
 
 	if exp, act := []string{"info message", "info message 2"}, logMock.infos; !reflect.DeepEqual(exp, act) {
@@ -203,10 +202,10 @@ root.is_cool = this.is_cool`
 	l, err := New(conf, nil, logMock, metrics.Noop())
 	require.NoError(t, err)
 
-	input := message.New([][]byte{[]byte(
+	input := message.QuickBatch([][]byte{[]byte(
 		`{"age":10,"is_cool":true,"ignore":"this value please"}`,
 	)})
-	expMsgs := []types.Message{input}
+	expMsgs := []*message.Batch{input}
 	actMsgs, res := l.ProcessMessage(input)
 	require.Nil(t, res)
 	assert.Equal(t, expMsgs, actMsgs)

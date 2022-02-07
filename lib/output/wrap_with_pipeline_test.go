@@ -173,7 +173,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	case tChan <- types.NewTransaction(
-		message.New([][]byte{[]byte("bar")}), resChan,
+		message.QuickBatch([][]byte{[]byte("bar")}), resChan,
 	):
 	}
 

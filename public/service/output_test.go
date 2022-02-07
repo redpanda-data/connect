@@ -58,14 +58,14 @@ func TestOutputAirGapSad(t *testing.T) {
 	err := agi.ConnectWithContext(context.Background())
 	assert.EqualError(t, err, "bad connect")
 
-	err = agi.WriteWithContext(context.Background(), message.New(nil))
+	err = agi.WriteWithContext(context.Background(), message.QuickBatch(nil))
 	assert.EqualError(t, err, "bad read")
 
 	o.write = func(m *Message) error {
 		return ErrNotConnected
 	}
 
-	err = agi.WriteWithContext(context.Background(), message.New(nil))
+	err = agi.WriteWithContext(context.Background(), message.QuickBatch(nil))
 	assert.Equal(t, types.ErrNotConnected, err)
 }
 
@@ -86,7 +86,7 @@ func TestOutputAirGapHappy(t *testing.T) {
 	err := agi.ConnectWithContext(context.Background())
 	assert.NoError(t, err)
 
-	inMsg := message.New([][]byte{[]byte("hello world")})
+	inMsg := message.QuickBatch([][]byte{[]byte("hello world")})
 
 	err = agi.WriteWithContext(context.Background(), inMsg)
 	assert.NoError(t, err)
@@ -141,14 +141,14 @@ func TestBatchOutputAirGapSad(t *testing.T) {
 	err := agi.ConnectWithContext(context.Background())
 	assert.EqualError(t, err, "bad connect")
 
-	err = agi.WriteWithContext(context.Background(), message.New(nil))
+	err = agi.WriteWithContext(context.Background(), message.QuickBatch(nil))
 	assert.EqualError(t, err, "bad read")
 
 	o.writeBatch = func(m MessageBatch) error {
 		return ErrNotConnected
 	}
 
-	err = agi.WriteWithContext(context.Background(), message.New(nil))
+	err = agi.WriteWithContext(context.Background(), message.QuickBatch(nil))
 	assert.Equal(t, types.ErrNotConnected, err)
 }
 
@@ -169,7 +169,7 @@ func TestBatchOutputAirGapHappy(t *testing.T) {
 	err := agi.ConnectWithContext(context.Background())
 	assert.NoError(t, err)
 
-	inMsg := message.New([][]byte{[]byte("hello world")})
+	inMsg := message.QuickBatch([][]byte{[]byte("hello world")})
 
 	err = agi.WriteWithContext(context.Background(), inMsg)
 	assert.NoError(t, err)

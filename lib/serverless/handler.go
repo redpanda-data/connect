@@ -40,7 +40,7 @@ func (h *Handler) Close(tout time.Duration) error {
 // Handle is a request/response func that injects a payload into the underlying
 // Benthos pipeline and returns a result.
 func (h *Handler) Handle(ctx context.Context, obj interface{}) (interface{}, error) {
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	part := message.NewPart(nil)
 	if err := part.SetJSON(obj); err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func (h *Handler) Handle(ctx context.Context, obj interface{}) (interface{}, err
 	lambdaResults := make([][]interface{}, len(resultBatches))
 	for i, batch := range resultBatches {
 		batchResults := make([]interface{}, batch.Len())
-		if err := batch.Iter(func(j int, p types.Part) error {
+		if err := batch.Iter(func(j int, p *message.Part) error {
 			var merr error
 			if batchResults[j], merr = p.JSON(); merr != nil {
 				return fmt.Errorf("failed to marshal json response: %v", merr)

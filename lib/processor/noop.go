@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -42,8 +43,8 @@ func NewNoop(
 //------------------------------------------------------------------------------
 
 // ProcessMessage does nothing and returns the message unchanged.
-func (c *Noop) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	msgs := [1]types.Message{msg}
+func (c *Noop) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+	msgs := [1]*message.Batch{msg}
 	return msgs[:], nil
 }
 

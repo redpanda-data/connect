@@ -217,7 +217,7 @@ func (p *pulsarReader) disconnect(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 // ReadWithContext a new Pulsar message.
-func (p *pulsarReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (p *pulsarReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	var r pulsar.Consumer
 	p.m.RLock()
 	if p.consumer != nil {
@@ -242,28 +242,28 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (types.Message, read
 		return nil, nil, err
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 
 	part := message.NewPart(pulMsg.Payload())
 
-	part.Metadata().Set("pulsar_message_id", string(pulMsg.ID().Serialize()))
-	part.Metadata().Set("pulsar_topic", pulMsg.Topic())
-	part.Metadata().Set("pulsar_publish_time_unix", strconv.FormatInt(pulMsg.PublishTime().Unix(), 10))
-	part.Metadata().Set("pulsar_redelivery_count", strconv.FormatInt(int64(pulMsg.RedeliveryCount()), 10))
+	part.MetaSet("pulsar_message_id", string(pulMsg.ID().Serialize()))
+	part.MetaSet("pulsar_topic", pulMsg.Topic())
+	part.MetaSet("pulsar_publish_time_unix", strconv.FormatInt(pulMsg.PublishTime().Unix(), 10))
+	part.MetaSet("pulsar_redelivery_count", strconv.FormatInt(int64(pulMsg.RedeliveryCount()), 10))
 	if key := pulMsg.Key(); len(key) > 0 {
-		part.Metadata().Set("pulsar_key", key)
+		part.MetaSet("pulsar_key", key)
 	}
 	if orderingKey := pulMsg.OrderingKey(); len(orderingKey) > 0 {
-		part.Metadata().Set("pulsar_ordering_key", orderingKey)
+		part.MetaSet("pulsar_ordering_key", orderingKey)
 	}
 	if !pulMsg.EventTime().IsZero() {
-		part.Metadata().Set("pulsar_event_time_unix", strconv.FormatInt(pulMsg.EventTime().Unix(), 10))
+		part.MetaSet("pulsar_event_time_unix", strconv.FormatInt(pulMsg.EventTime().Unix(), 10))
 	}
 	if producerName := pulMsg.ProducerName(); producerName != "" {
-		part.Metadata().Set("pulsar_producer_name", producerName)
+		part.MetaSet("pulsar_producer_name", producerName)
 	}
 	for k, v := range pulMsg.Properties() {
-		part.Metadata().Set(k, v)
+		part.MetaSet(k, v)
 	}
 
 	msg.Append(part)

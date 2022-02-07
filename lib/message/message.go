@@ -1,29 +1,19 @@
 package message
 
-import (
-	"time"
-
-	"github.com/Jeffail/benthos/v3/lib/types"
-)
-
-//------------------------------------------------------------------------------
-
-// Type is the standard implementation of types.Message, containing a multiple
-// part message.
-type Type struct {
-	createdAt time.Time
-	parts     []types.Part
+// Batch represents zero or more messages.
+type Batch struct {
+	parts []*Part
 }
 
-// New initializes a new message from a 2D byte slice, the slice can be nil.
-func New(bslice [][]byte) *Type {
-	parts := make([]types.Part, len(bslice))
+// QuickBatch initializes a new message batch from a 2D byte slice, the slice
+// can be nil, in which case the batch will start empty.
+func QuickBatch(bslice [][]byte) *Batch {
+	parts := make([]*Part, len(bslice))
 	for i, v := range bslice {
 		parts[i] = NewPart(v)
 	}
-	return &Type{
-		createdAt: time.Now(),
-		parts:     parts,
+	return &Batch{
+		parts: parts,
 	}
 }
 
@@ -32,34 +22,32 @@ func New(bslice [][]byte) *Type {
 // Copy creates a new shallow copy of the message. Parts can be re-arranged in
 // the new copy and JSON parts can be get/set without impacting other message
 // copies. However, it is still unsafe to edit the raw content of message parts.
-func (m *Type) Copy() types.Message {
-	parts := make([]types.Part, len(m.parts))
+func (m *Batch) Copy() *Batch {
+	parts := make([]*Part, len(m.parts))
 	for i, v := range m.parts {
 		parts[i] = v.Copy()
 	}
-	return &Type{
-		createdAt: m.createdAt,
-		parts:     parts,
+	return &Batch{
+		parts: parts,
 	}
 }
 
 // DeepCopy creates a new deep copy of the message. This can be considered an
 // entirely new object that is safe to use anywhere.
-func (m *Type) DeepCopy() types.Message {
-	parts := make([]types.Part, len(m.parts))
+func (m *Batch) DeepCopy() *Batch {
+	parts := make([]*Part, len(m.parts))
 	for i, v := range m.parts {
 		parts[i] = v.DeepCopy()
 	}
-	return &Type{
-		createdAt: m.createdAt,
-		parts:     parts,
+	return &Batch{
+		parts: parts,
 	}
 }
 
 //------------------------------------------------------------------------------
 
 // Get returns a message part at a particular index, indexes can be negative.
-func (m *Type) Get(index int) types.Part {
+func (m *Batch) Get(index int) *Part {
 	if index < 0 {
 		index = len(m.parts) + index
 	}
@@ -73,23 +61,23 @@ func (m *Type) Get(index int) types.Part {
 }
 
 // SetAll changes the entire set of message parts.
-func (m *Type) SetAll(parts []types.Part) {
+func (m *Batch) SetAll(parts []*Part) {
 	m.parts = parts
 }
 
 // Append adds a new message part to the message.
-func (m *Type) Append(b ...types.Part) int {
+func (m *Batch) Append(b ...*Part) int {
 	m.parts = append(m.parts, b...)
 	return len(m.parts) - 1
 }
 
 // Len returns the length of the message in parts.
-func (m *Type) Len() int {
+func (m *Batch) Len() int {
 	return len(m.parts)
 }
 
 // Iter will iterate all parts of the message, calling f for each.
-func (m *Type) Iter(f func(i int, p types.Part) error) error {
+func (m *Batch) Iter(f func(i int, p *Part) error) error {
 	for i, p := range m.parts {
 		if p == nil {
 			p = NewPart(nil)
@@ -100,11 +88,6 @@ func (m *Type) Iter(f func(i int, p types.Part) error) error {
 		}
 	}
 	return nil
-}
-
-// CreatedAt returns a timestamp whereby the message was created.
-func (m *Type) CreatedAt() time.Time {
-	return m.createdAt
 }
 
 //------------------------------------------------------------------------------
@@ -135,11 +118,11 @@ v                                        v           v
 var intLen uint32 = 4
 
 // ToBytes serialises a message into a single byte array.
-func ToBytes(m types.Message) []byte {
+func ToBytes(m *Batch) []byte {
 	lenParts := uint32(m.Len())
 
 	l := (lenParts + 1) * intLen
-	m.Iter(func(i int, p types.Part) error {
+	_ = m.Iter(func(i int, p *Part) error {
 		l += uint32(len(p.Get()))
 		return nil
 	})
@@ -152,7 +135,7 @@ func ToBytes(m types.Message) []byte {
 
 	b2 := b[intLen:]
 
-	m.Iter(func(i int, p types.Part) error {
+	_ = m.Iter(func(i int, p *Part) error {
 		le := uint32(len(p.Get()))
 
 		b2[0] = byte(le >> 24)
@@ -171,7 +154,7 @@ func ToBytes(m types.Message) []byte {
 }
 
 // FromBytes deserialises a Message from a byte array.
-func FromBytes(b []byte) (*Type, error) {
+func FromBytes(b []byte) (*Batch, error) {
 	if len(b) < 4 {
 		return nil, ErrBadMessageBytes
 	}
@@ -183,7 +166,7 @@ func FromBytes(b []byte) (*Type, error) {
 
 	b = b[4:]
 
-	m := New(nil)
+	m := QuickBatch(nil)
 	for i := uint32(0); i < numParts; i++ {
 		if len(b) < 4 {
 			return nil, ErrBadMessageBytes

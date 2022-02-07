@@ -13,12 +13,12 @@ import (
 
 func TestMessageCopyAirGap(t *testing.T) {
 	p := message.NewPart([]byte("hello world"))
-	p.Metadata().Set("foo", "bar")
+	p.MetaSet("foo", "bar")
 	g1 := newMessageFromPart(p)
 	g2 := g1.Copy()
 
 	b := p.Get()
-	v := p.Metadata().Get("foo")
+	v := p.MetaGet("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
@@ -38,7 +38,7 @@ func TestMessageCopyAirGap(t *testing.T) {
 	g2.MetaSet("foo", "baz")
 
 	b = p.Get()
-	v = p.Metadata().Get("foo")
+	v = p.MetaGet("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
@@ -58,7 +58,7 @@ func TestMessageCopyAirGap(t *testing.T) {
 	g1.MetaSet("foo", "buz")
 
 	b = p.Get()
-	v = p.Metadata().Get("foo")
+	v = p.MetaGet("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
@@ -77,8 +77,8 @@ func TestMessageCopyAirGap(t *testing.T) {
 
 func TestMessageQuery(t *testing.T) {
 	p := message.NewPart([]byte(`{"foo":"bar"}`))
-	p.Metadata().Set("foo", "bar")
-	p.Metadata().Set("bar", "baz")
+	p.MetaSet("foo", "bar")
+	p.MetaSet("bar", "baz")
 	g1 := newMessageFromPart(p)
 
 	b, err := g1.AsBytes()
@@ -115,8 +115,8 @@ func TestMessageQuery(t *testing.T) {
 
 func TestMessageMutate(t *testing.T) {
 	p := message.NewPart([]byte(`not a json doc`))
-	p.Metadata().Set("foo", "bar")
-	p.Metadata().Set("bar", "baz")
+	p.MetaSet("foo", "bar")
+	p.MetaSet("bar", "baz")
 	g1 := newMessageFromPart(p)
 
 	_, err := g1.AsStructured()
@@ -293,7 +293,7 @@ func BenchmarkMessageMappingOld(b *testing.B) {
 		"content": "hello world",
 	}))
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(part)
 
 	blobl, err := ibloblang.GlobalEnvironment().NewMapping("root.new_content = this.content.uppercase()")

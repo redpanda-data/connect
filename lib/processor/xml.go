@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/internal/xml"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -154,11 +155,11 @@ func NewXML(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *XML) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *XML) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span *tracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part *message.Part) error {
 		root, err := xml.ToMap(part.Get(), p.conf.XML.Cast)
 		if err != nil {
 			p.mErr.Incr(1)
@@ -177,7 +178,7 @@ func (p *XML) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(newMsg.Len()))
-	return []types.Message{newMsg}, nil
+	return []*message.Batch{newMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

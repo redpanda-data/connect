@@ -67,7 +67,7 @@ func TestFanOutBroker(t *testing.T) {
 	}
 
 	for _, input := range inputs {
-		testMsg := message.New([][]byte{[]byte(input)})
+		testMsg := message.QuickBatch([][]byte{[]byte(input)})
 		select {
 		case sendChan <- types.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
@@ -149,7 +149,7 @@ func TestRoundRobinBroker(t *testing.T) {
 	}
 
 	for _, input := range inputs {
-		testMsg := message.New([][]byte{[]byte(input)})
+		testMsg := message.QuickBatch([][]byte{[]byte(input)})
 		select {
 		case sendChan <- types.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
@@ -239,7 +239,7 @@ func TestGreedyBroker(t *testing.T) {
 	}
 
 	for _, input := range inputs {
-		testMsg := message.New([][]byte{[]byte(input)})
+		testMsg := message.QuickBatch([][]byte{[]byte(input)})
 		select {
 		case sendChan <- types.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
@@ -326,7 +326,7 @@ func TestTryBroker(t *testing.T) {
 	}
 
 	for _, input := range inputs {
-		testMsg := message.New([][]byte{[]byte(input)})
+		testMsg := message.QuickBatch([][]byte{[]byte(input)})
 		select {
 		case sendChan <- types.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second * 2):

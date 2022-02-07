@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -87,7 +88,7 @@ func NewResource(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (r *Resource) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
+func (r *Resource) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res types.Response) {
 	r.mCount.Incr(1)
 	if err := interop.AccessProcessor(context.Background(), r.mgr, r.name, func(p types.Processor) {
 		msgs, res = p.ProcessMessage(msg)

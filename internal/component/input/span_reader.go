@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -53,7 +54,7 @@ func (s *SpanReader) ConnectWithContext(ctx context.Context) error {
 // successful a message is returned along with a function used to
 // acknowledge receipt of the returned message. It's safe to process the
 // returned message and read the next message asynchronously.
-func (s *SpanReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (s *SpanReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	m, afn, err := s.rdr.ReadWithContext(ctx)
 	if err != nil {
 		return nil, nil, err

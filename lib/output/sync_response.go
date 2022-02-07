@@ -1,8 +1,12 @@
 package output
 
 import (
+	"context"
+	"time"
+
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -13,7 +17,7 @@ import (
 func init() {
 	Constructors[TypeSyncResponse] = TypeSpec{
 		constructor: fromSimpleConstructor(func(_ Config, _ types.Manager, logger log.Modular, stats metrics.Type) (Type, error) {
-			return NewAsyncWriter(TypeSyncResponse, 1, roundtrip.Writer{}, logger, stats)
+			return NewAsyncWriter(TypeSyncResponse, 1, SyncResponseWriter{}, logger, stats)
 		}),
 		Summary: `
 Returns the final message payload back to the input origin of the message, where
@@ -57,3 +61,28 @@ For more information please read [Synchronous Responses](/docs/guides/sync_respo
 }
 
 //------------------------------------------------------------------------------
+
+// SyncResponseWriter is a writer implementation that adds messages to a ResultStore located
+// in the context of the first message part of each batch. This is essentially a
+// mechanism that returns the result of a pipeline directly back to the origin
+// of the message.
+type SyncResponseWriter struct{}
+
+// ConnectWithContext is a noop.
+func (s SyncResponseWriter) ConnectWithContext(ctx context.Context) error {
+	return nil
+}
+
+// WriteWithContext writes a message batch to a ResultStore located in the first
+// message of the batch.
+func (s SyncResponseWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+	return roundtrip.SetAsResponse(msg)
+}
+
+// CloseAsync is a noop.
+func (s SyncResponseWriter) CloseAsync() {}
+
+// WaitForClose is a noop.
+func (s SyncResponseWriter) WaitForClose(time.Duration) error {
+	return nil
+}

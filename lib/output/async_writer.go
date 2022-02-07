@@ -31,7 +31,7 @@ type AsyncSink interface {
 	// WriteWithContext should block until either the message is sent (and
 	// acknowledged) to a sink, or a transport specific error has occurred, or
 	// the Type is closed.
-	WriteWithContext(ctx context.Context, msg types.Message) error
+	WriteWithContext(ctx context.Context, msg *message.Batch) error
 
 	types.Closable
 }
@@ -108,7 +108,7 @@ func (w *AsyncWriter) SetNoCancel() {
 
 //------------------------------------------------------------------------------
 
-func (w *AsyncWriter) latencyMeasuringWrite(msg types.Message) (latencyNs int64, err error) {
+func (w *AsyncWriter) latencyMeasuringWrite(msg *message.Batch) (latencyNs int64, err error) {
 	t0 := time.Now()
 	var ctx context.Context
 	if w.noCancel {
@@ -123,12 +123,12 @@ func (w *AsyncWriter) latencyMeasuringWrite(msg types.Message) (latencyNs int64,
 	return latencyNs, err
 }
 
-func (w *AsyncWriter) injectSpans(msg types.Message, spans []*tracing.Span) types.Message {
+func (w *AsyncWriter) injectSpans(msg *message.Batch, spans []*tracing.Span) *message.Batch {
 	if w.injectTracingMap == nil || msg.Len() > len(spans) {
 		return msg
 	}
 
-	parts := make([]types.Part, msg.Len())
+	parts := make([]*message.Part, msg.Len())
 
 	for i := 0; i < msg.Len(); i++ {
 		parts[i] = msg.Get(i).Copy()
@@ -145,7 +145,7 @@ func (w *AsyncWriter) injectSpans(msg types.Message, spans []*tracing.Span) type
 			continue
 		}
 
-		spanMsg := message.New(nil)
+		spanMsg := message.QuickBatch(nil)
 		spanMsg.Append(spanPart)
 
 		if parts[i], err = w.injectTracingMap.MapOnto(parts[i], i, spanMsg); err != nil {
@@ -154,7 +154,7 @@ func (w *AsyncWriter) injectSpans(msg types.Message, spans []*tracing.Span) type
 		}
 	}
 
-	newMsg := message.New(nil)
+	newMsg := message.QuickBatch(nil)
 	newMsg.SetAll(parts)
 	return newMsg
 }
@@ -217,7 +217,7 @@ func (w *AsyncWriter) loop() {
 	wg.Add(w.maxInflight)
 
 	connectMut := sync.Mutex{}
-	connectLoop := func(msg types.Message) (latency int64, err error) {
+	connectLoop := func(msg *message.Batch) (latency int64, err error) {
 		atomic.StoreInt32(&w.isConnected, 0)
 
 		connectMut.Lock()

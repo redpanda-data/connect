@@ -53,7 +53,7 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 
 	resChan := make(chan types.Response)
 	select {
-	case tChan <- types.NewTransaction(message.New([][]byte{
+	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{
 		[]byte("PART-A"),
 		[]byte("PART-B"),
 		[]byte("PART-C"),
@@ -108,7 +108,7 @@ func TestHTTPClientMultipartDisabled(t *testing.T) {
 
 	resChan := make(chan types.Response)
 	select {
-	case tChan <- types.NewTransaction(message.New([][]byte{
+	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{
 		[]byte("PART-A"),
 		[]byte("PART-B"),
 		[]byte("PART-C"),

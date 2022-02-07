@@ -33,7 +33,7 @@ func newAsyncMockWriter() *mockAsyncWriter {
 func (w *mockAsyncWriter) ConnectWithContext(ctx context.Context) error {
 	return <-w.connChan
 }
-func (w *mockAsyncWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (w *mockAsyncWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	w.msgsRcvd.Store(atomic.AddUint64(&w.msgsTotal, 1), msg)
 	return <-w.writeChan
 }
@@ -47,7 +47,7 @@ type writerCantConnect struct{}
 func (w writerCantConnect) ConnectWithContext(ctx context.Context) error {
 	return types.ErrNotConnected
 }
-func (w writerCantConnect) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (w writerCantConnect) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return types.ErrNotConnected
 }
 func (w writerCantConnect) CloseAsync() {}
@@ -63,7 +63,7 @@ func (w *writerCantSend) ConnectWithContext(ctx context.Context) error {
 	w.connected++
 	return nil
 }
-func (w *writerCantSend) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (w *writerCantSend) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return types.ErrNotConnected
 }
 func (w *writerCantSend) CloseAsync() {}
@@ -226,7 +226,7 @@ func TestAsyncWriterClosesOnReconn(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(message.New(nil), resChan):
+	case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -282,7 +282,7 @@ func TestAsyncWriterClosesOnResend(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(message.New(nil), resChan):
+	case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -340,7 +340,7 @@ func TestAsyncWriterCanReconnect(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(message.New(nil), resChan):
+	case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -430,12 +430,12 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(message.New(nil), resChan):
+	case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 	select {
-	case msgChan <- types.NewTransaction(message.New(nil), resChan2):
+	case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan2):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -493,7 +493,7 @@ func TestAsyncWriterCantReconnect(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(message.New(nil), resChan):
+		case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -556,7 +556,7 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(message.New(exp), resChan):
+		case msgChan <- types.NewTransaction(message.QuickBatch(exp), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -590,7 +590,7 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 	msgRcvd, exists := writerImpl.msgsRcvd.Load(uint64(1))
 	require.True(t, exists)
 
-	if act := message.GetAllBytes(msgRcvd.(types.Message)); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(msgRcvd.(*message.Batch)); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }
@@ -621,7 +621,7 @@ func TestAsyncWriterSadPath(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(message.New(exp), resChan):
+		case msgChan <- types.NewTransaction(message.QuickBatch(exp), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -659,7 +659,7 @@ func TestAsyncWriterSadPath(t *testing.T) {
 	msgRcvd, exists := writerImpl.msgsRcvd.Load(uint64(1))
 	require.True(t, exists)
 
-	if act := message.GetAllBytes(msgRcvd.(types.Message)); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(msgRcvd.(*message.Batch)); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }

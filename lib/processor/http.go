@@ -163,9 +163,9 @@ func NewHTTP(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (h *HTTP) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	h.mCount.Incr(1)
-	var responseMsg types.Message
+	var responseMsg *message.Batch
 
 	if !h.parallel || msg.Len() == 1 {
 		// Easy, just do a single request.
@@ -180,35 +180,35 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 			h.mErrHTTP.Incr(1)
 			h.log.Errorf("HTTP request failed: %v\n", err)
 			responseMsg = msg.Copy()
-			responseMsg.Iter(func(i int, p types.Part) error {
+			_ = responseMsg.Iter(func(i int, p *message.Part) error {
 				if len(codeStr) > 0 {
-					p.Metadata().Set("http_status_code", codeStr)
+					p.MetaSet("http_status_code", codeStr)
 				}
 				FlagErr(p, err)
 				return nil
 			})
 		} else {
-			parts := make([]types.Part, resultMsg.Len())
-			resultMsg.Iter(func(i int, p types.Part) error {
+			parts := make([]*message.Part, resultMsg.Len())
+			_ = resultMsg.Iter(func(i int, p *message.Part) error {
 				if i < msg.Len() {
 					parts[i] = msg.Get(i).Copy()
 				} else {
 					parts[i] = msg.Get(0).Copy()
 				}
 				parts[i].Set(p.Get())
-				p.Metadata().Iter(func(k, v string) error {
-					parts[i].Metadata().Set(k, v)
+				_ = p.MetaIter(func(k, v string) error {
+					parts[i].MetaSet(k, v)
 					return nil
 				})
 				return nil
 			})
-			responseMsg = message.New(nil)
+			responseMsg = message.QuickBatch(nil)
 			responseMsg.Append(parts...)
 		}
 	} else {
 		// Hard, need to do parallel requests limited by max parallelism.
-		results := make([]types.Part, msg.Len())
-		msg.Iter(func(i int, p types.Part) error {
+		results := make([]*message.Part, msg.Len())
+		_ = msg.Iter(func(i int, p *message.Part) error {
 			results[i] = p.Copy()
 			return nil
 		})
@@ -217,21 +217,22 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		for i := 0; i < msg.Len(); i++ {
 			go func() {
 				for index := range reqChan {
-					tmpMsg := message.Lock(msg, index)
+					tmpMsg := message.QuickBatch(nil)
+					tmpMsg.Append(msg.Get(index))
 					result, err := h.client.Send(context.Background(), tmpMsg, tmpMsg)
 					if err == nil && result.Len() != 1 {
 						err = fmt.Errorf("unexpected response size: %v", result.Len())
 					}
 					if err == nil {
 						results[index].Set(result.Get(0).Get())
-						result.Get(0).Metadata().Iter(func(k, v string) error {
-							results[index].Metadata().Set(k, v)
+						_ = result.Get(0).MetaIter(func(k, v string) error {
+							results[index].MetaSet(k, v)
 							return nil
 						})
 					} else {
 						var hErr types.ErrUnexpectedHTTPRes
 						if ok := errors.As(err, &hErr); ok {
-							results[index].Metadata().Set("http_status_code", strconv.Itoa(hErr.Code))
+							results[index].MetaSet("http_status_code", strconv.Itoa(hErr.Code))
 						}
 						FlagErr(results[index], err)
 					}
@@ -253,7 +254,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		}
 
 		close(reqChan)
-		responseMsg = message.New(nil)
+		responseMsg = message.QuickBatch(nil)
 		responseMsg.Append(results...)
 	}
 
@@ -263,7 +264,7 @@ func (h *HTTP) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 		))
 	}
 
-	msgs := [1]types.Message{responseMsg}
+	msgs := [1]*message.Batch{responseMsg}
 
 	h.mBatchSent.Incr(1)
 	h.mSent.Incr(int64(responseMsg.Len()))

@@ -10,7 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func TestAvroBasic(t *testing.T) {
@@ -129,7 +128,7 @@ func TestAvroBasic(t *testing.T) {
 				tt.Fatal(err)
 			}
 
-			input := message.New(nil)
+			input := message.QuickBatch(nil)
 			for _, p := range test.input {
 				input.Append(message.NewPart([]byte(p)))
 			}
@@ -151,8 +150,8 @@ func TestAvroBasic(t *testing.T) {
 				tt.Errorf("Unexpected output: %s != %s", exp, act)
 				tt.Logf("Part 0: %v", strconv.Quote(string(act[0])))
 			}
-			msgs[0].Iter(func(i int, part types.Part) error {
-				if fail := part.Metadata().Get(FailFlagKey); len(fail) > 0 {
+			_ = msgs[0].Iter(func(i int, part *message.Part) error {
+				if fail := part.MetaGet(FailFlagKey); len(fail) > 0 {
 					tt.Error(fail)
 				}
 				return nil
@@ -288,7 +287,7 @@ func TestAvroSchemaPath(t *testing.T) {
 				tt.Fatal(err)
 			}
 
-			input := message.New(nil)
+			input := message.QuickBatch(nil)
 			for _, p := range test.input {
 				input.Append(message.NewPart([]byte(p)))
 			}
@@ -310,8 +309,8 @@ func TestAvroSchemaPath(t *testing.T) {
 				tt.Errorf("Unexpected output: %s != %s", exp, act)
 				tt.Logf("Part 0: %v", strconv.Quote(string(act[0])))
 			}
-			msgs[0].Iter(func(i int, part types.Part) error {
-				if fail := part.Metadata().Get(FailFlagKey); len(fail) > 0 {
+			_ = msgs[0].Iter(func(i int, part *message.Part) error {
+				if fail := part.MetaGet(FailFlagKey); len(fail) > 0 {
 					tt.Error(fail)
 				}
 				return nil

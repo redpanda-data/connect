@@ -56,7 +56,7 @@ func TestProcCtor(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	case tChan <- types.NewTransaction(
-		message.New([][]byte{[]byte("foo bar baz")}), resChan,
+		message.QuickBatch([][]byte{[]byte("foo bar baz")}), resChan,
 	):
 	}
 

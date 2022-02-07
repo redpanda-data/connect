@@ -99,13 +99,13 @@ func NewParallel(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *Parallel) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *Parallel) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	p.mCount.Incr(1)
 
-	resultMsgs := make([]types.Message, msg.Len())
-	msg.Iter(func(i int, p types.Part) error {
-		tmpMsg := message.New(nil)
-		tmpMsg.SetAll([]types.Part{p})
+	resultMsgs := make([]*message.Batch, msg.Len())
+	_ = msg.Iter(func(i int, p *message.Part) error {
+		tmpMsg := message.QuickBatch(nil)
+		tmpMsg.SetAll([]*message.Part{p})
 		resultMsgs[i] = tmpMsg
 		return nil
 	})
@@ -124,9 +124,9 @@ func (p *Parallel) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			// TODO: V4 Handle processor errors when we migrate to service APIs
 			for index := range reqChan {
 				resMsgs, _ := ExecuteAll(p.children, resultMsgs[index])
-				resultParts := []types.Part{}
+				resultParts := []*message.Part{}
 				for _, m := range resMsgs {
-					m.Iter(func(i int, p types.Part) error {
+					_ = m.Iter(func(i int, p *message.Part) error {
 						resultParts = append(resultParts, p)
 						return nil
 					})
@@ -142,9 +142,9 @@ func (p *Parallel) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	close(reqChan)
 	wg.Wait()
 
-	resMsg := message.New(nil)
+	resMsg := message.QuickBatch(nil)
 	for _, m := range resultMsgs {
-		m.Iter(func(i int, p types.Part) error {
+		_ = m.Iter(func(i int, p *message.Part) error {
 			resMsg.Append(p)
 			return nil
 		})
@@ -153,7 +153,7 @@ func (p *Parallel) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(resMsg.Len()))
 
-	return []types.Message{resMsg}, nil
+	return []*message.Batch{resMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

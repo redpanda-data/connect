@@ -684,12 +684,12 @@ bar""")`,
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)
@@ -730,7 +730,7 @@ func TestCountersFunction(t *testing.T) {
 		require.Nil(t, perr)
 
 		res := query.ExecToString(e, query.FunctionContext{
-			MsgBatch: message.New(nil),
+			MsgBatch: message.QuickBatch(nil),
 		})
 		assert.Equal(t, test[1], res)
 	}
@@ -744,7 +744,7 @@ func TestUUIDV4Function(t *testing.T) {
 		require.Nil(t, perr)
 
 		res := query.ExecToString(e, query.FunctionContext{
-			MsgBatch: message.New(nil),
+			MsgBatch: message.QuickBatch(nil),
 		})
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
@@ -759,7 +759,7 @@ func TestTimestamps(t *testing.T) {
 	e, perr := tryParseQuery("timestamp_unix_nano()", false)
 	require.Nil(t, perr)
 
-	tStamp := query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
+	tStamp := query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -777,7 +777,7 @@ func TestTimestamps(t *testing.T) {
 		require.NoError(t, perr.Err)
 	}
 
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
+	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -795,7 +795,7 @@ func TestTimestamps(t *testing.T) {
 		require.NoError(t, perr.Err)
 	}
 
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
+	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
 
 	var secondsF float64
 	secondsF, err = strconv.ParseFloat(tStamp, 64)
@@ -812,7 +812,7 @@ func TestTimestamps(t *testing.T) {
 	e, perr = tryParseQuery("timestamp()", false)
 	require.Nil(t, perr)
 
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
+	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {
@@ -827,7 +827,7 @@ func TestTimestamps(t *testing.T) {
 	e, perr = tryParseQuery("timestamp_utc()", false)
 	require.Nil(t, perr)
 
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
+	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
 
 	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
 	if err != nil {

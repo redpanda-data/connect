@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -72,13 +73,13 @@ func (f *Files) Connect() error {
 }
 
 // WriteWithContext attempts to write message contents to a directory as files.
-func (f *Files) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (f *Files) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return f.Write(msg)
 }
 
 // Write attempts to write message contents to a directory as files.
-func (f *Files) Write(msg types.Message) error {
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+func (f *Files) Write(msg *message.Batch) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		path := f.path.String(i, msg)
 
 		err := os.MkdirAll(filepath.Dir(path), os.FileMode(0o777))

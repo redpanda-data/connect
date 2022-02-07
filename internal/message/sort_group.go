@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // SortGroup associates a tag of a part with the original group.
@@ -13,9 +12,9 @@ type SortGroup struct {
 }
 
 // NewSortGroupParts creates a sort group associated with a slice of parts.
-func NewSortGroupParts(parts []types.Part) (*SortGroup, []types.Part) {
+func NewSortGroupParts(parts []*message.Part) (*SortGroup, []*message.Part) {
 	g := &SortGroup{Len: len(parts)}
-	newParts := make([]types.Part, len(parts))
+	newParts := make([]*message.Part, len(parts))
 
 	for i, part := range parts {
 		tag := &tag{
@@ -42,15 +41,15 @@ func NewSortGroupParts(parts []types.Part) (*SortGroup, []types.Part) {
 }
 
 // NewSortGroup creates a new sort group to be associated with a message.
-func NewSortGroup(m types.Message) (*SortGroup, types.Message) {
-	inParts := make([]types.Part, m.Len())
-	m.Iter(func(i int, part types.Part) error {
+func NewSortGroup(m *message.Batch) (*SortGroup, *message.Batch) {
+	inParts := make([]*message.Part, m.Len())
+	_ = m.Iter(func(i int, part *message.Part) error {
 		inParts[i] = part
 		return nil
 	})
 
 	group, outParts := NewSortGroupParts(inParts)
-	newMsg := message.New(nil)
+	newMsg := message.QuickBatch(nil)
 	newMsg.SetAll(outParts)
 
 	return group, newMsg
@@ -58,7 +57,7 @@ func NewSortGroup(m types.Message) (*SortGroup, types.Message) {
 
 // GetIndex attempts to determine the original index of a message part relative
 // to a sort group.
-func (g *SortGroup) GetIndex(p types.Part) int {
+func (g *SortGroup) GetIndex(p *message.Part) int {
 	ctx := message.GetContext(p)
 
 	v, ok := ctx.Value(tagKey).(tagChecker)

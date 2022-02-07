@@ -3,31 +3,29 @@ package message
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/Jeffail/benthos/v3/lib/message/metadata"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
 // SetAllMetadata sets the metadata of all message parts to match a provided
 // metadata implementation.
-func SetAllMetadata(m types.Message, meta types.Metadata) {
-	lazy := metadata.LazyCopy(meta)
-	m.Iter(func(i int, p types.Part) error {
-		p.SetMetadata(lazy)
+func SetAllMetadata(m *Batch, meta map[string]string) {
+	_ = m.Iter(func(i int, p *Part) error {
+		for k, v := range meta {
+			p.MetaSet(k, v)
+		}
 		return nil
 	})
 }
 
 // GetAllBytes returns a 2D byte slice representing the raw byte content of the
 // parts of a message.
-func GetAllBytes(m types.Message) [][]byte {
+func GetAllBytes(m *Batch) [][]byte {
 	if m.Len() == 0 {
 		return nil
 	}
 	parts := make([][]byte, m.Len())
-	m.Iter(func(i int, p types.Part) error {
+	_ = m.Iter(func(i int, p *Part) error {
 		parts[i] = p.Get()
 		return nil
 	})
@@ -35,26 +33,16 @@ func GetAllBytes(m types.Message) [][]byte {
 }
 
 // GetAllBytesLen returns total length of message content in bytes
-func GetAllBytesLen(m types.Message) int {
+func GetAllBytesLen(m *Batch) int {
 	if m.Len() == 0 {
 		return 0
 	}
 	length := 0
-	m.Iter(func(i int, p types.Part) error {
+	_ = m.Iter(func(i int, p *Part) error {
 		length += len(p.Get())
 		return nil
 	})
 	return length
-}
-
-//------------------------------------------------------------------------------
-
-// MetaPartCopy creates a new empty message part by copying any meta fields
-// (metadata, context, etc) from a reference part.
-func MetaPartCopy(p types.Part) types.Part {
-	newPart := WithContext(GetContext(p), NewPart(nil))
-	newPart.SetMetadata(p.Metadata().Copy())
-	return newPart
 }
 
 //------------------------------------------------------------------------------

@@ -10,19 +10,18 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type fnProcessor struct {
-	fn     func(context.Context, types.Part) ([]types.Part, error)
+	fn     func(context.Context, *message.Part) ([]*message.Part, error)
 	closed bool
 
 	sync.Mutex
 }
 
-func (p *fnProcessor) Process(ctx context.Context, msg types.Part) ([]types.Part, error) {
+func (p *fnProcessor) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	return p.fn(ctx, msg)
 }
 
@@ -53,17 +52,17 @@ func TestProcessorAirGapShutdown(t *testing.T) {
 
 func TestProcessorAirGapOneToOne(t *testing.T) {
 	agrp := NewV2ToV1Processor("foo", &fnProcessor{
-		fn: func(c context.Context, m types.Part) ([]types.Part, error) {
+		fn: func(c context.Context, m *message.Part) ([]*message.Part, error) {
 			if b := m.Get(); string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
 			newPart := m.Copy()
 			newPart.Set([]byte("changed"))
-			return []types.Part{newPart}, nil
+			return []*message.Part{newPart}, nil
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -74,13 +73,13 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 
 func TestProcessorAirGapOneToError(t *testing.T) {
 	agrp := NewV2ToV1Processor("foo", &fnProcessor{
-		fn: func(c context.Context, m types.Part) ([]types.Part, error) {
+		fn: func(c context.Context, m *message.Part) ([]*message.Part, error) {
 			_, err := m.JSON()
 			return nil, err
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("not a structured doc")})
+	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -92,7 +91,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 
 func TestProcessorAirGapOneToMany(t *testing.T) {
 	agrp := NewV2ToV1Processor("foo", &fnProcessor{
-		fn: func(c context.Context, m types.Part) ([]types.Part, error) {
+		fn: func(c context.Context, m *message.Part) ([]*message.Part, error) {
 			if b := m.Get(); string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
@@ -102,11 +101,11 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 			first.Set([]byte("changed 1"))
 			second.Set([]byte("changed 2"))
 			third.Set([]byte("changed 3"))
-			return []types.Part{first, second, third}, nil
+			return []*message.Part{first, second, third}, nil
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -120,11 +119,11 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 //------------------------------------------------------------------------------
 
 type fnBatchProcessor struct {
-	fn     func(context.Context, []types.Part) ([][]types.Part, error)
+	fn     func(context.Context, []*message.Part) ([][]*message.Part, error)
 	closed bool
 }
 
-func (p *fnBatchProcessor) ProcessBatch(ctx context.Context, msg []types.Part) ([][]types.Part, error) {
+func (p *fnBatchProcessor) ProcessBatch(ctx context.Context, msg []*message.Part) ([][]*message.Part, error) {
 	return p.fn(ctx, msg)
 }
 
@@ -149,17 +148,17 @@ func TestBatchProcessorAirGapShutdown(t *testing.T) {
 
 func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs []types.Part) ([][]types.Part, error) {
+		fn: func(c context.Context, msgs []*message.Part) ([][]*message.Part, error) {
 			if b := msgs[0].Get(); string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
 			newMsg := msgs[0].Copy()
 			newMsg.Set([]byte("changed"))
-			return [][]types.Part{{newMsg}}, nil
+			return [][]*message.Part{{newMsg}}, nil
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -170,13 +169,13 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 
 func TestBatchProcessorAirGapOneToError(t *testing.T) {
 	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs []types.Part) ([][]types.Part, error) {
+		fn: func(c context.Context, msgs []*message.Part) ([][]*message.Part, error) {
 			_, err := msgs[0].JSON()
 			return nil, err
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("not a structured doc")})
+	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -188,7 +187,7 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 
 func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs []types.Part) ([][]types.Part, error) {
+		fn: func(c context.Context, msgs []*message.Part) ([][]*message.Part, error) {
 			if b := msgs[0].Get(); string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
@@ -198,11 +197,11 @@ func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 			first.Set([]byte("changed 1"))
 			second.Set([]byte("changed 2"))
 			third.Set([]byte("changed 3"))
-			return [][]types.Part{{first, second}, {third}}, nil
+			return [][]*message.Part{{first, second}, {third}}, nil
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 2)

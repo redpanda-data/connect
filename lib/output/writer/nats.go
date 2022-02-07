@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
@@ -121,12 +122,12 @@ func (n *NATS) Connect() error {
 }
 
 // WriteWithContext attempts to write a message.
-func (n *NATS) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (n *NATS) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return n.Write(msg)
 }
 
 // Write attempts to write a message.
-func (n *NATS) Write(msg types.Message) error {
+func (n *NATS) Write(msg *message.Batch) error {
 	n.connMut.RLock()
 	conn := n.natsConn
 	n.connMut.RUnlock()
@@ -135,7 +136,7 @@ func (n *NATS) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		subject := n.subjectStr.String(i, msg)
 		n.log.Debugf("Writing NATS message to topic %s", subject)
 		// fill message data

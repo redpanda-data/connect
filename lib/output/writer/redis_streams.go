@@ -10,6 +10,7 @@ import (
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -109,12 +110,12 @@ func (r *RedisStreams) Connect() error {
 //------------------------------------------------------------------------------
 
 // WriteWithContext attempts to write a message by pushing it to a Redis stream.
-func (r *RedisStreams) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (r *RedisStreams) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return r.Write(msg)
 }
 
 // Write attempts to write a message by pushing it to a Redis stream.
-func (r *RedisStreams) Write(msg types.Message) error {
+func (r *RedisStreams) Write(msg *message.Batch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
@@ -123,9 +124,9 @@ func (r *RedisStreams) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	partToMap := func(p types.Part) map[string]interface{} {
+	partToMap := func(p *message.Part) map[string]interface{} {
 		values := map[string]interface{}{}
-		r.metaFilter.Iter(p.Metadata(), func(k, v string) error {
+		r.metaFilter.Iter(p, func(k, v string) error {
 			values[k] = v
 			return nil
 		})
@@ -148,7 +149,7 @@ func (r *RedisStreams) Write(msg types.Message) error {
 	}
 
 	pipe := client.Pipeline()
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		_ = pipe.XAdd(&redis.XAddArgs{
 			ID:           "*",
 			Stream:       r.conf.Stream,

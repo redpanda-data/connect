@@ -120,7 +120,7 @@ func StreamTestMetadataFilter() StreamTestDefinition {
 			))
 
 			p := receiveMessage(env.ctx, t, input.TransactionChan(), nil)
-			assert.Empty(t, p.Metadata().Get("foo"))
+			assert.Empty(t, p.MetaGet("foo"))
 			messageMatch(t, p, "hello world", "bar", "bar_value")
 		},
 	)
@@ -241,7 +241,7 @@ func StreamTestSendBatchCount(n int) StreamTestDefinition {
 			for i := 0; i < n; i++ {
 				payload := fmt.Sprintf("hello world %v", i)
 				set[payload] = nil
-				msg := message.New(nil)
+				msg := message.QuickBatch(nil)
 				msg.Append(message.NewPart([]byte(payload)))
 				select {
 				case tranChan <- types.NewTransaction(msg, resChan):
@@ -290,7 +290,7 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 			for i := 0; i < n; i++ {
 				payload := fmt.Sprintf("hello world %v", i)
 				set[payload] = nil
-				msg := message.New(nil)
+				msg := message.QuickBatch(nil)
 				msg.Append(message.NewPart([]byte(payload)))
 				select {
 				case tranChan <- types.NewTransaction(msg, resChan):
@@ -354,7 +354,7 @@ func StreamTestReceiveBatchCount(n int) StreamTestDefinition {
 			}
 
 			assert.Equal(t, n, tran.Payload.Len())
-			tran.Payload.Iter(func(_ int, p types.Part) error {
+			_ = tran.Payload.Iter(func(_ int, p *message.Part) error {
 				messageInSet(t, true, false, p, set)
 				return nil
 			})
@@ -453,7 +453,7 @@ func StreamTestCheckpointCapture() StreamTestDefinition {
 				require.NoError(t, sendMessage(env.ctx, t, tranChan, "E"))
 			}()
 
-			var msg types.Part
+			var msg *message.Part
 			responseChans := make([]chan<- types.Response, 5)
 
 			msg, responseChans[0] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
@@ -571,7 +571,7 @@ func StreamTestStreamSaturatedUnacked(n int) StreamTestDefinition {
 
 			resChans := make([]chan<- types.Response, n/2)
 			for i := range resChans {
-				var b types.Part
+				var b *message.Part
 				b, resChans[i] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
 				messageInSet(t, true, env.allowDuplicateMessages, b, set)
 			}
@@ -612,7 +612,7 @@ func StreamTestAtLeastOnceDelivery() StreamTestDefinition {
 				}
 			}()
 
-			var msg types.Part
+			var msg *message.Part
 			badResponseChans := []chan<- types.Response{}
 
 			for i := 0; i < len(expectedMessages); i++ {

@@ -19,7 +19,7 @@ func TestJQAllParts(t *testing.T) {
 	jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	msgIn := message.New([][]byte{
+	msgIn := message.QuickBatch([][]byte{
 		[]byte(`{"foo":{"bar":0}}`),
 		[]byte(`{"foo":{"bar":1}}`),
 		[]byte(`{"foo":{"bar":2}}`),
@@ -39,7 +39,7 @@ func TestJQValidation(t *testing.T) {
 	jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	msgIn := message.New([][]byte{[]byte("this is bad json")})
+	msgIn := message.QuickBatch([][]byte{[]byte("this is bad json")})
 	msgs, res := jSet.ProcessMessage(msgIn)
 
 	require.Nil(t, res)
@@ -60,7 +60,7 @@ func TestJQMutation(t *testing.T) {
 	ogObj.Set("remove this", "bar")
 	ogExp := ogObj.String()
 
-	msgIn := message.New(make([][]byte, 1))
+	msgIn := message.QuickBatch(make([][]byte, 1))
 	msgIn.Get(0).SetJSON(ogObj.Data())
 	msgs, res := jSet.ProcessMessage(msgIn)
 	require.Nil(t, res)
@@ -149,7 +149,7 @@ func TestJQ(t *testing.T) {
 			jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
-			inMsg := message.New(
+			inMsg := message.QuickBatch(
 				[][]byte{
 					[]byte(test.input),
 				},
@@ -241,7 +241,7 @@ func TestJQ_OutputRaw(t *testing.T) {
 			jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
-			inMsg := message.New(
+			inMsg := message.QuickBatch(
 				[][]byte{
 					[]byte(test.input),
 				},

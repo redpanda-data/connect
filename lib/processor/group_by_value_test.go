@@ -46,7 +46,7 @@ func TestGroupByValueBasic(t *testing.T) {
 	}
 	act := [][][]byte{}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(`{"foo":0,"bar":0}`),
 		[]byte(`{"foo":3,"bar":1}`),
 		[]byte(`{"bar":2}`),

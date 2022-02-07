@@ -143,7 +143,7 @@ func (n *NATS) disconnect() {
 }
 
 // ReadWithContext attempts to read a new message from the NATS subject.
-func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (n *NATS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	n.cMut.Lock()
 	natsChan := n.natsChan
 	natsConn := n.natsConn
@@ -162,14 +162,14 @@ func (n *NATS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 		return nil, nil, types.ErrNotConnected
 	}
 
-	bmsg := message.New([][]byte{msg.Data})
-	meta := bmsg.Get(0).Metadata()
-	meta.Set("nats_subject", msg.Subject)
+	bmsg := message.QuickBatch([][]byte{msg.Data})
+	part := bmsg.Get(0)
+	part.MetaSet("nats_subject", msg.Subject)
 	// process message headers if server supports the feature
 	if natsConn.HeadersSupported() {
 		for key := range msg.Header {
 			value := msg.Header.Get(key)
-			meta.Set(key, value)
+			part.MetaSet(key, value)
 		}
 	}
 

@@ -347,13 +347,13 @@ func (o *Switch) Connected() bool {
 
 //------------------------------------------------------------------------------
 
-func (o *Switch) dispatchRetryOnErr(outputTargets [][]types.Part) error {
+func (o *Switch) dispatchRetryOnErr(outputTargets [][]*message.Part) error {
 	var owg errgroup.Group
 	for target, parts := range outputTargets {
 		if len(parts) == 0 {
 			continue
 		}
-		msgCopy, i := message.New(nil), target
+		msgCopy, i := message.QuickBatch(nil), target
 		msgCopy.SetAll(parts)
 		owg.Go(func() error {
 			throt := throttle.New(throttle.OptCloseChan(o.ctx.Done()))
@@ -387,11 +387,11 @@ func (o *Switch) dispatchRetryOnErr(outputTargets [][]types.Part) error {
 	return owg.Wait()
 }
 
-func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage types.Message, outputTargets [][]types.Part) error {
+func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage *message.Batch, outputTargets [][]*message.Part) error {
 	var wg sync.WaitGroup
 
 	var setErr func(error)
-	var setErrForPart func(types.Part, error)
+	var setErrForPart func(*message.Part, error)
 	var getErr func() error
 	{
 		var generalErr error
@@ -406,7 +406,7 @@ func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage type
 			generalErr = err
 			errLock.Unlock()
 		}
-		setErrForPart = func(part types.Part, err error) {
+		setErrForPart = func(part *message.Part, err error) {
 			if err == nil {
 				return
 			}
@@ -437,7 +437,7 @@ func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage type
 			continue
 		}
 		wg.Add(1)
-		msgCopy, i := message.New(nil), target
+		msgCopy, i := message.QuickBatch(nil), target
 		msgCopy.SetAll(parts)
 
 		go func() {
@@ -455,14 +455,14 @@ func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage type
 				if res.Error() != nil {
 					o.mOutputErr.Incr(1)
 					if bErr, ok := res.Error().(*batch.Error); ok {
-						bErr.WalkParts(func(i int, p types.Part, e error) bool {
+						bErr.WalkParts(func(i int, p *message.Part, e error) bool {
 							if e != nil {
 								setErrForPart(p, e)
 							}
 							return true
 						})
 					} else {
-						msgCopy.Iter(func(i int, p types.Part) error {
+						_ = msgCopy.Iter(func(i int, p *message.Part) error {
 							setErrForPart(p, res.Error())
 							return nil
 						})
@@ -514,8 +514,8 @@ func (o *Switch) loop() {
 
 			group, trackedMsg := imessage.NewSortGroup(ts.Payload)
 
-			outputTargets := make([][]types.Part, len(o.checks))
-			if checksErr := trackedMsg.Iter(func(i int, p types.Part) error {
+			outputTargets := make([][]*message.Part, len(o.checks))
+			if checksErr := trackedMsg.Iter(func(i int, p *message.Part) error {
 				routedAtLeastOnce := false
 				for j, exe := range o.checks {
 					test := true

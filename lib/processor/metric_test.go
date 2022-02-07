@@ -96,7 +96,7 @@ func TestMetricCounter(t *testing.T) {
 	}
 
 	for _, i := range inputs {
-		msg, res := proc.ProcessMessage(message.New(i))
+		msg, res := proc.ProcessMessage(message.QuickBatch(i))
 		assert.Len(t, msg, 1)
 		assert.Nil(t, res)
 	}
@@ -145,7 +145,7 @@ func TestMetricCounterBy(t *testing.T) {
 	}
 
 	for _, i := range inputs {
-		msg, res := proc.ProcessMessage(message.New(i))
+		msg, res := proc.ProcessMessage(message.QuickBatch(i))
 		assert.Len(t, msg, 1)
 		assert.Nil(t, res)
 	}
@@ -194,7 +194,7 @@ func TestMetricGauge(t *testing.T) {
 	}
 
 	for _, i := range inputs {
-		msg, res := proc.ProcessMessage(message.New(i))
+		msg, res := proc.ProcessMessage(message.QuickBatch(i))
 		assert.Len(t, msg, 1)
 		assert.Nil(t, res)
 	}
@@ -243,7 +243,7 @@ func TestMetricTiming(t *testing.T) {
 	}
 
 	for _, i := range inputs {
-		msg, res := proc.ProcessMessage(message.New(i))
+		msg, res := proc.ProcessMessage(message.QuickBatch(i))
 		assert.Len(t, msg, 1)
 		assert.Nil(t, res)
 	}

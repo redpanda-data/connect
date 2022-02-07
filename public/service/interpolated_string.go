@@ -3,7 +3,7 @@ package service
 import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 // InterpolatedString resolves a string containing dynamic interpolation
@@ -22,10 +22,10 @@ func NewInterpolatedString(expr string) (*InterpolatedString, error) {
 }
 
 type fauxOldMessage struct {
-	p types.Part
+	p *message.Part
 }
 
-func (f fauxOldMessage) Get(i int) types.Part {
+func (f fauxOldMessage) Get(i int) *message.Part {
 	return f.p
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -148,9 +149,9 @@ func (c *GCPPubSub) Connect() error {
 }
 
 // WriteWithContext attempts to write message contents to a target topic.
-func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	topics := make([]*pubsub.Topic, msg.Len())
-	if err := msg.Iter(func(i int, _ types.Part) error {
+	if err := msg.Iter(func(i int, _ *message.Part) error {
 		var tErr error
 		topics[i], tErr = c.getTopic(ctx, c.topicID.String(i, msg))
 		return tErr
@@ -159,10 +160,10 @@ func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) err
 	}
 
 	results := make([]*pubsub.PublishResult, msg.Len())
-	msg.Iter(func(i int, part types.Part) error {
+	_ = msg.Iter(func(i int, part *message.Part) error {
 		topic := topics[i]
 		attr := map[string]string{}
-		c.metaFilter.Iter(part.Metadata(), func(k, v string) error {
+		c.metaFilter.Iter(part, func(k, v string) error {
 			attr[k] = v
 			return nil
 		})
@@ -195,7 +196,7 @@ func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg types.Message) err
 }
 
 // Write attempts to write message contents to a target topic.
-func (c *GCPPubSub) Write(msg types.Message) error {
+func (c *GCPPubSub) Write(msg *message.Batch) error {
 	return c.WriteWithContext(context.Background(), msg)
 }
 

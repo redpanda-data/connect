@@ -58,13 +58,13 @@ func TestSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.New([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("baz")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -123,10 +123,10 @@ func TestSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.New([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -187,13 +187,13 @@ func TestUDPSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.New([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("baz")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -245,10 +245,10 @@ func TestUDPSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.New([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -307,13 +307,13 @@ func TestTCPSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.New([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("baz")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -372,10 +372,10 @@ func TestTCPSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.New([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -435,13 +435,13 @@ func TestSocketCustomDelimeter(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.New([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.New([][]byte{[]byte("baz\t")})); err != nil {
+	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("baz\t")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()

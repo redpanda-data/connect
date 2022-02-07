@@ -122,13 +122,13 @@ func NewTry(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *Try) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *Try) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	p.mCount.Incr(1)
 
-	resultMsgs := make([]types.Message, msg.Len())
-	msg.Iter(func(i int, p types.Part) error {
-		tmpMsg := message.New(nil)
-		tmpMsg.SetAll([]types.Part{p})
+	resultMsgs := make([]*message.Batch, msg.Len())
+	_ = msg.Iter(func(i int, p *message.Part) error {
+		tmpMsg := message.QuickBatch(nil)
+		tmpMsg.SetAll([]*message.Part{p})
 		resultMsgs[i] = tmpMsg
 		return nil
 	})
@@ -138,9 +138,9 @@ func (p *Try) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		return nil, res
 	}
 
-	resMsg := message.New(nil)
+	resMsg := message.QuickBatch(nil)
 	for _, m := range resultMsgs {
-		m.Iter(func(i int, p types.Part) error {
+		_ = m.Iter(func(i int, p *message.Part) error {
 			resMsg.Append(p)
 			return nil
 		})
@@ -149,7 +149,7 @@ func (p *Try) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(resMsg.Len()))
 
-	resMsgs := [1]types.Message{resMsg}
+	resMsgs := [1]*message.Batch{resMsg}
 	return resMsgs[:], nil
 }
 

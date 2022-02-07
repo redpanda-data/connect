@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -25,7 +26,7 @@ func testProgram(t *testing.T, program string) string {
 	return pathStr
 }
 
-func readMsg(t *testing.T, tranChan <-chan types.Transaction) types.Message {
+func readMsg(t *testing.T, tranChan <-chan types.Transaction) *message.Batch {
 	t.Helper()
 	select {
 	case tran := <-tranChan:

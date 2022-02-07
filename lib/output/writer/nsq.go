@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -108,12 +109,12 @@ func (n *NSQ) Connect() error {
 }
 
 // WriteWithContext attempts to write a message.
-func (n *NSQ) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (n *NSQ) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return n.Write(msg)
 }
 
 // Write attempts to write a message.
-func (n *NSQ) Write(msg types.Message) error {
+func (n *NSQ) Write(msg *message.Batch) error {
 	n.connMut.RLock()
 	prod := n.producer
 	n.connMut.RUnlock()
@@ -122,7 +123,7 @@ func (n *NSQ) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		return prod.Publish(n.topicStr.String(i, msg), p.Get())
 	})
 }

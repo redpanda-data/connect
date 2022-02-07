@@ -44,7 +44,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 		for j := 0; j < nInputs; j++ {
 			content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 			select {
-			case mockInputs[j].TChan <- types.NewTransaction(message.New(content), resChan):
+			case mockInputs[j].TChan <- types.NewTransaction(message.QuickBatch(content), resChan):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for broker send: %v, %v", i, j)
 				return
@@ -108,7 +108,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 		rChan := make(chan types.Response)
 		for i := 0; i < nMsgs; i++ {
 			content := [][]byte{[]byte(fmt.Sprintf("%v-%v", label, i))}
-			input.TChan <- types.NewTransaction(message.New(content), rChan)
+			input.TChan <- types.NewTransaction(message.QuickBatch(content), rChan)
 			select {
 			case <-rChan:
 			case <-time.After(time.Second):
@@ -291,7 +291,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 			for i := 0; i < nMsgs; i++ {
 				content := [][]byte{[]byte(fmt.Sprintf("hello world %v %v", i, index))}
 				select {
-				case mockInputs[index].TChan <- types.NewTransaction(message.New(content), rChan):
+				case mockInputs[index].TChan <- types.NewTransaction(message.QuickBatch(content), rChan):
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for broker send: %v, %v", i, index)
 					return

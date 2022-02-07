@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -110,8 +111,8 @@ func (w *stdoutWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *stdoutWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
-	err := writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
+func (w *stdoutWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+	err := writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		return w.handle.Write(ctx, p)
 	})
 	if err != nil {

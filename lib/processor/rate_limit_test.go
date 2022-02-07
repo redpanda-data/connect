@@ -32,7 +32,7 @@ func TestRateLimitBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(`{"key":"1","value":"foo 1"}`),
 		[]byte(`{"key":"2","value":"foo 2"}`),
 		[]byte(`{"key":"1","value":"foo 3"}`),
@@ -75,7 +75,7 @@ func TestRateLimitClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(`{"key":"1","value":"foo 1"}`),
 		[]byte(`{"key":"2","value":"foo 2"}`),
 		[]byte(`{"key":"1","value":"foo 3"}`),
@@ -114,7 +114,7 @@ func TestRateLimitErroredOut(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(`{"key":"1","value":"foo 1"}`),
 		[]byte(`{"key":"2","value":"foo 2"}`),
 		[]byte(`{"key":"1","value":"foo 3"}`),
@@ -160,7 +160,7 @@ func TestRateLimitBlocked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(`{"key":"1","value":"foo 1"}`),
 		[]byte(`{"key":"2","value":"foo 2"}`),
 		[]byte(`{"key":"1","value":"foo 3"}`),

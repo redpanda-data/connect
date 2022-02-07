@@ -122,7 +122,7 @@ func NewGroupByValue(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (g *GroupByValue) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (g *GroupByValue) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	g.mCount.Incr(1)
 
 	if msg.Len() == 0 {
@@ -130,11 +130,11 @@ func (g *GroupByValue) ProcessMessage(msg types.Message) ([]types.Message, types
 	}
 
 	groupKeys := []string{}
-	groupMap := map[string]types.Message{}
+	groupMap := map[string]*message.Batch{}
 
 	spans := tracing.CreateChildSpans(TypeGroupByValue, msg)
 
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		v := g.value.String(i, msg)
 		spans[i].LogKV(
 			"event", "grouped",
@@ -146,7 +146,7 @@ func (g *GroupByValue) ProcessMessage(msg types.Message) ([]types.Message, types
 		} else {
 			g.log.Tracef("New group formed: %v\n", v)
 			groupKeys = append(groupKeys, v)
-			newMsg := message.New(nil)
+			newMsg := message.QuickBatch(nil)
 			newMsg.Append(p)
 			groupMap[v] = newMsg
 		}
@@ -157,7 +157,7 @@ func (g *GroupByValue) ProcessMessage(msg types.Message) ([]types.Message, types
 		s.Finish()
 	}
 
-	msgs := []types.Message{}
+	msgs := []*message.Batch{}
 	for _, key := range groupKeys {
 		msgs = append(msgs, groupMap[key])
 	}

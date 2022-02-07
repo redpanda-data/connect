@@ -7,7 +7,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
 )
 
@@ -25,7 +24,7 @@ type MessageBatchHandlerFunc func(context.Context, MessageBatch) error
 // pipeline. It is safe to mutate the message via Set methods, but the
 // underlying byte data should not be edited directly.
 type Message struct {
-	part       types.Part
+	part       *message.Part
 	partCopied bool
 }
 
@@ -52,7 +51,7 @@ func NewMessage(content []byte) *Message {
 	}
 }
 
-func newMessageFromPart(part types.Part) *Message {
+func newMessageFromPart(part *message.Part) *Message {
 	return &Message{part, false}
 }
 
@@ -167,7 +166,7 @@ func (m *Message) GetError() error {
 // MetaGet attempts to find a metadata key from the message and returns a string
 // result and a boolean indicating whether it was found.
 func (m *Message) MetaGet(key string) (string, bool) {
-	v := m.part.Metadata().Get(key)
+	v := m.part.MetaGet(key)
 	return v, len(v) > 0
 }
 
@@ -176,23 +175,23 @@ func (m *Message) MetaGet(key string) (string, bool) {
 func (m *Message) MetaSet(key, value string) {
 	m.ensureCopied()
 	if value == "" {
-		m.part.Metadata().Delete(key)
+		m.part.MetaDelete(key)
 	} else {
-		m.part.Metadata().Set(key, value)
+		m.part.MetaSet(key, value)
 	}
 }
 
 // MetaDelete removes a key from the message metadata.
 func (m *Message) MetaDelete(key string) {
 	m.ensureCopied()
-	m.part.Metadata().Delete(key)
+	m.part.MetaDelete(key)
 }
 
 // MetaWalk iterates each metadata key/value pair and executes a provided
 // closure on each iteration. To stop iterating, return an error from the
 // closure. An error returned by the closure will be returned by this function.
 func (m *Message) MetaWalk(fn func(string, string) error) error {
-	return m.part.Metadata().Iter(fn)
+	return m.part.MetaIter(fn)
 }
 
 //------------------------------------------------------------------------------
@@ -206,7 +205,7 @@ func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
 		Unwrap() *mapping.Executor
 	}).Unwrap()
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(m.part)
 
 	res, err := uw.MapPart(0, msg)
@@ -231,7 +230,7 @@ func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Messa
 		Unwrap() *mapping.Executor
 	}).Unwrap()
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	for _, m := range b {
 		msg.Append(m.part)
 	}
@@ -253,7 +252,7 @@ func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Messa
 // across message batches, and is a more powerful way to interpolate strings
 // than the standard .String method.
 func (b MessageBatch) InterpolatedString(index int, i *InterpolatedString) string {
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	for _, m := range b {
 		msg.Append(m.part)
 	}
@@ -267,7 +266,7 @@ func (b MessageBatch) InterpolatedString(index int, i *InterpolatedString) strin
 // across message batches, and is a more powerful way to interpolate strings
 // than the standard .String method.
 func (b MessageBatch) InterpolatedBytes(index int, i *InterpolatedString) []byte {
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	for _, m := range b {
 		msg.Append(m.part)
 	}

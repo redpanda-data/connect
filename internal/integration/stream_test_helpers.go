@@ -517,9 +517,9 @@ func sendMessage(
 
 	p := message.NewPart([]byte(content))
 	for i := 0; i < len(metadata); i += 2 {
-		p.Metadata().Set(metadata[i], metadata[i+1])
+		p.MetaSet(metadata[i], metadata[i+1])
 	}
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(p)
 
 	resChan := make(chan types.Response)
@@ -547,7 +547,7 @@ func sendBatch(
 ) error {
 	t.Helper()
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	for _, payload := range content {
 		msg.Append(message.NewPart([]byte(payload)))
 	}
@@ -575,7 +575,7 @@ func receiveMessage(
 	t testing.TB,
 	tranChan <-chan types.Transaction,
 	err error,
-) types.Part {
+) *message.Part {
 	t.Helper()
 
 	b, resChan := receiveMessageNoRes(ctx, t, tranChan)
@@ -597,7 +597,7 @@ func sendResponse(ctx context.Context, t testing.TB, resChan chan<- types.Respon
 }
 
 // nolint:gocritic // Ignore unnamedResult false positive
-func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan types.Transaction) (types.Part, chan<- types.Response) {
+func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan types.Transaction) (*message.Part, chan<- types.Response) {
 	t.Helper()
 
 	var tran types.Transaction
@@ -614,23 +614,23 @@ func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan type
 	return tran.Payload.Get(0), tran.ResponseChan
 }
 
-func messageMatch(t testing.TB, p types.Part, content string, metadata ...string) {
+func messageMatch(t testing.TB, p *message.Part, content string, metadata ...string) {
 	t.Helper()
 
 	assert.Equal(t, content, string(p.Get()))
 
 	allMetadata := map[string]string{}
-	p.Metadata().Iter(func(k, v string) error {
+	_ = p.MetaIter(func(k, v string) error {
 		allMetadata[k] = v
 		return nil
 	})
 
 	for i := 0; i < len(metadata); i += 2 {
-		assert.Equal(t, metadata[i+1], p.Metadata().Get(metadata[i]), fmt.Sprintf("metadata: %v", allMetadata))
+		assert.Equal(t, metadata[i+1], p.MetaGet(metadata[i]), fmt.Sprintf("metadata: %v", allMetadata))
 	}
 }
 
-func messageInSet(t testing.TB, pop, allowDupes bool, p types.Part, set map[string][]string) {
+func messageInSet(t testing.TB, pop, allowDupes bool, p *message.Part, set map[string][]string) {
 	t.Helper()
 
 	metadata, exists := set[string(p.Get())]
@@ -640,7 +640,7 @@ func messageInSet(t testing.TB, pop, allowDupes bool, p types.Part, set map[stri
 	require.True(t, exists, "in set: %v, set: %v", string(p.Get()), set)
 
 	for i := 0; i < len(metadata); i += 2 {
-		assert.Equal(t, metadata[i+1], p.Metadata().Get(metadata[i]))
+		assert.Equal(t, metadata[i+1], p.MetaGet(metadata[i]))
 	}
 
 	if pop {

@@ -47,7 +47,7 @@ func TestBasicFanOutSequential(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.New(content), resChan):
+		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -109,7 +109,7 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
+	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for broker send")
 		return
@@ -191,7 +191,7 @@ func TestFanOutSequentialBlock(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.New([][]byte{[]byte("hello world")}), resChan):
+	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for broker send")
 		return

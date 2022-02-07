@@ -103,7 +103,7 @@ pipeline:
 	if exp, act := 4, len(procs); exp != act {
 		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
 	}
-	msgs, res := processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")}))
+	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")}))
 	if res != nil {
 		t.Fatal(res.Error())
 	}
@@ -119,7 +119,7 @@ pipeline:
 	if exp, act := 4, len(procs); exp != act {
 		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
 	}
-	if msgs, res = processor.ExecuteAll(procs, message.New([][]byte{[]byte("hello world")})); res != nil {
+	if msgs, res = processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")})); res != nil {
 		t.Fatal(res.Error())
 	}
 	if exp, act := "NEWVALUE", string(msgs[0].Get(0).Get()); exp != act {
@@ -164,7 +164,7 @@ pipeline:
 
 	require.Len(t, procs, 4)
 
-	msgs, res := processor.ExecuteAll(procs, message.New([][]byte{[]byte("starts with")}))
+	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("starts with")}))
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())
@@ -211,7 +211,7 @@ pipeline:
 
 	require.Len(t, procs, 4)
 
-	msgs, res := processor.ExecuteAll(procs, message.New([][]byte{[]byte("starts with")}))
+	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("starts with")}))
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())
@@ -258,7 +258,7 @@ pipeline:
 
 	require.Len(t, procs, 4)
 
-	msgs, res := processor.ExecuteAll(procs, message.New([][]byte{[]byte("starts with")}))
+	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("starts with")}))
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())

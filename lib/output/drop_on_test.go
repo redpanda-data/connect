@@ -54,7 +54,7 @@ func TestDropOnNothing(t *testing.T) {
 	require.NoError(t, d.Consume(tChan))
 
 	select {
-	case tChan <- types.NewTransaction(message.New([][]byte{[]byte("foobar")}), rChan):
+	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foobar")}), rChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -105,7 +105,7 @@ func TestDropOnError(t *testing.T) {
 	require.NoError(t, d.Consume(tChan))
 
 	select {
-	case tChan <- types.NewTransaction(message.New([][]byte{[]byte("foobar")}), rChan):
+	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foobar")}), rChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -188,7 +188,7 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 		t.Helper()
 
 		select {
-		case tChan <- types.NewTransaction(message.New([][]byte{[]byte(msg)}), rChan):
+		case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(msg)}), rChan):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -281,7 +281,7 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 		t.Helper()
 
 		select {
-		case tChan <- types.NewTransaction(message.New([][]byte{[]byte(msg)}), rChan):
+		case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(msg)}), rChan):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}

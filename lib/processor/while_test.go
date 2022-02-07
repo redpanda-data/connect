@@ -41,7 +41,7 @@ func TestWhileWithCount(t *testing.T) {
 		[]byte(`bar`),
 	}
 
-	msg, res := c.ProcessMessage(message.New([][]byte{[]byte("bar")}))
+	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	require.Nil(t, res)
 
 	assert.Equal(t, exp, message.GetAllBytes(msg[0]))
@@ -71,7 +71,7 @@ func TestWhileWithContentCheck(t *testing.T) {
 		[]byte(`bar`),
 	}
 
-	msg, res := c.ProcessMessage(message.New([][]byte{[]byte("bar")}))
+	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res.Error())
 	}
@@ -105,7 +105,7 @@ func TestWhileWithCountALO(t *testing.T) {
 		[]byte(`bar`),
 	}
 
-	msg, res := c.ProcessMessage(message.New([][]byte{[]byte("bar")}))
+	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res.Error())
 	}
@@ -139,7 +139,7 @@ func TestWhileMaxLoops(t *testing.T) {
 		[]byte(`bar`),
 	}
 
-	msg, res := c.ProcessMessage(message.New([][]byte{[]byte("bar")}))
+	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res.Error())
 	}
@@ -176,7 +176,7 @@ func TestWhileWithStaticTrue(t *testing.T) {
 		c.CloseAsync()
 	}()
 
-	_, res := c.ProcessMessage(message.New([][]byte{[]byte("bar")}))
+	_, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res == nil {
 		t.Error("Expected error response due to shut down")
 	}

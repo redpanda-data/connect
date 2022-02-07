@@ -44,7 +44,7 @@ func TestBatcherStandard(t *testing.T) {
 	doneReadsChan := make(chan struct{})
 	go func() {
 		for i, m := range testMsgs {
-			mock.ts <- types.NewTransaction(message.New([][]byte{[]byte(m)}), testResChans[i])
+			mock.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(m)}), testResChans[i])
 		}
 		close(doneWritesChan)
 		for _, rChan := range testResChans {
@@ -66,7 +66,7 @@ func TestBatcherStandard(t *testing.T) {
 	if exp, act := 3, tran.Payload.Len(); exp != act {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
 	}
-	tran.Payload.Iter(func(i int, part types.Part) error {
+	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 		if exp, act := fmt.Sprintf("test%v", i), string(part.Get()); exp != act {
 			t.Errorf("Unexpected message part: %v != %v", act, exp)
 		}
@@ -83,7 +83,7 @@ func TestBatcherStandard(t *testing.T) {
 	if exp, act := 3, tran.Payload.Len(); exp != act {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
 	}
-	tran.Payload.Iter(func(i int, part types.Part) error {
+	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 		if exp, act := fmt.Sprintf("test%v", i+3), string(part.Get()); exp != act {
 			t.Errorf("Unexpected message part: %v != %v", act, exp)
 		}
@@ -113,7 +113,7 @@ func TestBatcherStandard(t *testing.T) {
 	if exp, act := 2, tran.Payload.Len(); exp != act {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
 	}
-	tran.Payload.Iter(func(i int, part types.Part) error {
+	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 		if exp, act := fmt.Sprintf("test%v", i+6), string(part.Get()); exp != act {
 			t.Errorf("Unexpected message part: %v != %v", act, exp)
 		}
@@ -176,7 +176,7 @@ func TestBatcherErrorTracking(t *testing.T) {
 	doneReadsChan := make(chan struct{})
 	go func() {
 		for i, m := range testMsgs {
-			mock.ts <- types.NewTransaction(message.New([][]byte{[]byte(m)}), testResChans[i])
+			mock.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(m)}), testResChans[i])
 		}
 		for _, rChan := range testResChans {
 			resErrs = append(resErrs, (<-rChan).Error())
@@ -192,7 +192,7 @@ func TestBatcherErrorTracking(t *testing.T) {
 	}
 
 	assert.Equal(t, 3, tran.Payload.Len())
-	tran.Payload.Iter(func(i int, part types.Part) error {
+	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 		assert.Equal(t, fmt.Sprintf("test%v", i), string(part.Get()))
 		return nil
 	})
@@ -238,7 +238,7 @@ func TestBatcherTiming(t *testing.T) {
 
 	resChan := make(chan types.Response)
 	select {
-	case mock.ts <- types.NewTransaction(message.New([][]byte{[]byte("foo1")}), resChan):
+	case mock.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo1")}), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -273,7 +273,7 @@ func TestBatcherTiming(t *testing.T) {
 	}
 
 	select {
-	case mock.ts <- types.NewTransaction(message.New([][]byte{[]byte("foo2")}), resChan):
+	case mock.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo2")}), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -327,7 +327,7 @@ func TestBatcherFinalFlush(t *testing.T) {
 
 	resChan := make(chan types.Response)
 	select {
-	case mock.ts <- types.NewTransaction(message.New([][]byte{[]byte("foo1")}), resChan):
+	case mock.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo1")}), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}

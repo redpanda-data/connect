@@ -62,7 +62,7 @@ func TestResourceProc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := p.ProcessMessage(message.New([][]byte{[]byte("bar")}))
+	msgs, res := p.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Fatal(res.Error())
 	}

@@ -78,30 +78,6 @@ func TestExpressions(t *testing.T) {
 			),
 			output: `hello $ world`,
 		},
-		"echo function": {
-			expression: NewExpression(
-				NewQueryResolver(func() query.Function {
-					fn, ok := query.DeprecatedFunction("echo", "this")
-					require.True(t, ok)
-					return fn
-				}()),
-			),
-			numDyn: 1,
-			output: `this`,
-		},
-		"echo function 2": {
-			expression: NewExpression(
-				StaticResolver("foo "),
-				NewQueryResolver(func() query.Function {
-					fn, ok := query.DeprecatedFunction("echo", "")
-					require.True(t, ok)
-					return fn
-				}()),
-				StaticResolver(" bar"),
-			),
-			numDyn: 1,
-			output: `foo  bar`,
-		},
 		"json function": {
 			expression: NewExpression(
 				NewQueryResolver(func() query.Function {
@@ -357,12 +333,12 @@ func TestExpressions(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)
@@ -376,94 +352,6 @@ func TestExpressions(t *testing.T) {
 			}
 			assert.Equal(t, test.output, res)
 			assert.Equal(t, test.numDyn, test.expression.NumDynamicExpressions())
-		})
-	}
-}
-
-func TestLegacyExpressions(t *testing.T) {
-	type easyMsg struct {
-		content string
-		meta    map[string]string
-	}
-
-	tests := map[string]struct {
-		expression *Expression
-		output     string
-		messages   []easyMsg
-		index      int
-		escaped    bool
-	}{
-		"json function": {
-			expression: NewExpression(
-				NewQueryResolver(func() query.Function {
-					fn, ok := query.DeprecatedFunction("json_field", "")
-					require.True(t, ok)
-					return fn
-				}()),
-			),
-			index:  1,
-			output: `{"foo":"bar"}`,
-			messages: []easyMsg{
-				{content: `{"foo":"bar"}`},
-				{content: `not json`},
-			},
-		},
-		"json function escaped": {
-			expression: NewExpression(
-				NewQueryResolver(func() query.Function {
-					fn, ok := query.DeprecatedFunction("json_field", "")
-					require.True(t, ok)
-					return fn
-				}()),
-			),
-			escaped: true,
-			index:   1,
-			output:  `{\"foo\":\"bar\"}`,
-			messages: []easyMsg{
-				{content: `{"foo":"bar"}`},
-				{content: `not json`},
-			},
-		},
-		"json function 2": {
-			expression: NewExpression(
-				NewQueryResolver(func() query.Function {
-					fn, ok := query.DeprecatedFunction("json_field", "1")
-					require.True(t, ok)
-					return fn
-				}()),
-			),
-			index:  0,
-			output: `null`,
-			messages: []easyMsg{
-				{content: `{"foo":"bar"}`},
-				{content: `not json`},
-			},
-		},
-	}
-
-	for name, test := range tests {
-		test := test
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			msg := message.New(nil)
-			for _, m := range test.messages {
-				part := message.NewPart([]byte(m.content))
-				if m.meta != nil {
-					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
-					}
-				}
-				msg.Append(part)
-			}
-
-			var res string
-			if test.escaped {
-				res = string(test.expression.BytesEscapedLegacy(test.index, msg))
-			} else {
-				res = test.expression.StringLegacy(test.index, msg)
-			}
-			assert.Equal(t, test.output, res)
 		})
 	}
 }

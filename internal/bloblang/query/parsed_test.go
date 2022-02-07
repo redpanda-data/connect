@@ -40,7 +40,7 @@ func TestFunctionExamples(t *testing.T) {
 				require.NoError(t, err)
 
 				for j, io := range e.Results {
-					msg := message.New([][]byte{[]byte(io[0])})
+					msg := message.QuickBatch([][]byte{[]byte(io[0])})
 					p, err := m.MapPart(0, msg)
 					exp := io[1]
 					if strings.HasPrefix(exp, "Error(") {
@@ -88,7 +88,7 @@ func TestMethodExamples(t *testing.T) {
 				require.NoError(t, err)
 
 				for j, io := range e.Results {
-					msg := message.New([][]byte{[]byte(io[0])})
+					msg := message.QuickBatch([][]byte{[]byte(io[0])})
 					p, err := m.MapPart(0, msg)
 					exp := io[1]
 					if strings.HasPrefix(exp, "Error(") {
@@ -109,7 +109,7 @@ func TestMethodExamples(t *testing.T) {
 					require.NoError(t, err)
 
 					for j, io := range e.Results {
-						msg := message.New([][]byte{[]byte(io[0])})
+						msg := message.QuickBatch([][]byte{[]byte(io[0])})
 						p, err := m.MapPart(0, msg)
 						exp := io[1]
 						if strings.HasPrefix(exp, "Error(") {
@@ -164,7 +164,7 @@ func TestMappings(t *testing.T) {
 			require.NoError(t, err)
 
 			for i, io := range test.inputOutputs {
-				msg := message.New([][]byte{[]byte(io[0])})
+				msg := message.QuickBatch([][]byte{[]byte(io[0])})
 				p, err := m.MapPart(0, msg)
 				exp := io[1]
 				if strings.HasPrefix(exp, "Error(") {

@@ -62,7 +62,7 @@ func TestGroupBy(t *testing.T) {
 	}
 	act := [][][]byte{}
 
-	input := message.New([][]byte{
+	input := message.QuickBatch([][]byte{
 		[]byte(` hello foo world 1 `),
 		[]byte(` hello world 1 `),
 		[]byte(` hello foo bar world 1 `),

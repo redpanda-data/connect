@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -252,13 +253,13 @@ type pendingBulkIndex struct {
 
 // WriteWithContext will attempt to write a message to Elasticsearch, wait for
 // acknowledgement, and returns an error if applicable.
-func (e *Elasticsearch) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (e *Elasticsearch) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return e.Write(msg)
 }
 
 // Write will attempt to write a message to Elasticsearch, wait for
 // acknowledgement, and returns an error if applicable.
-func (e *Elasticsearch) Write(msg types.Message) error {
+func (e *Elasticsearch) Write(msg *message.Batch) error {
 	if e.client == nil {
 		return types.ErrNotConnected
 	}
@@ -266,7 +267,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 	boff := e.backoffCtor()
 
 	requests := make([]*pendingBulkIndex, msg.Len())
-	if err := msg.Iter(func(i int, part types.Part) error {
+	if err := msg.Iter(func(i int, part *message.Part) error {
 		jObj, ierr := part.JSON()
 		if ierr != nil {
 			e.eJSONErr.Incr(1)

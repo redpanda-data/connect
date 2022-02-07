@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -157,10 +158,10 @@ func isValidSQSAttribute(k, v string) bool {
 	return len(sqsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
-func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
+func (a *AmazonSQS) getSQSAttributes(msg *message.Batch, i int) sqsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
-	a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
+	a.metaFilter.Iter(p, func(k, v string) error {
 		if isValidSQSAttribute(k, v) {
 			keys = append(keys, k)
 		} else {
@@ -176,7 +177,7 @@ func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
 		for i, k := range keys {
 			values[k] = &sqs.MessageAttributeValue{
 				DataType:    aws.String("String"),
-				StringValue: aws.String(p.Metadata().Get(k)),
+				StringValue: aws.String(p.MetaGet(k)),
 			}
 			if i == 9 {
 				break
@@ -201,12 +202,12 @@ func (a *AmazonSQS) getSQSAttributes(msg types.Message, i int) sqsAttributes {
 }
 
 // Write attempts to write message contents to a target SQS.
-func (a *AmazonSQS) Write(msg types.Message) error {
+func (a *AmazonSQS) Write(msg *message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target SQS.
-func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if a.sqs == nil {
 		return types.ErrNotConnected
 	}
@@ -215,7 +216,7 @@ func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg types.Message) err
 
 	entries := []*sqs.SendMessageBatchRequestEntry{}
 	attrMap := map[string]sqsAttributes{}
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		id := strconv.Itoa(i)
 		attrs := a.getSQSAttributes(msg, i)
 		attrMap[id] = attrs

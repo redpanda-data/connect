@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/nsf/jsondiff"
 	yaml "gopkg.in/yaml.v3"
 )
@@ -22,7 +21,7 @@ import (
 
 // Condition is a test case against a message part.
 type Condition interface {
-	Check(part types.Part) error
+	Check(part *message.Part) error
 }
 
 //------------------------------------------------------------------------------
@@ -94,11 +93,11 @@ func (c *ConditionsMap) UnmarshalYAML(value *yaml.Node) error {
 
 // CheckAll checks all conditions against a message part. Conditions are
 // executed in alphabetical order.
-func (c ConditionsMap) CheckAll(part types.Part) (errs []error) {
+func (c ConditionsMap) CheckAll(part *message.Part) (errs []error) {
 	return c.checkAllFrom("", part)
 }
 
-func (c ConditionsMap) checkAllFrom(dir string, part types.Part) (errs []error) {
+func (c ConditionsMap) checkAllFrom(dir string, part *message.Part) (errs []error) {
 	condTypes := []string{}
 	for k := range c {
 		condTypes = append(condTypes, k)
@@ -106,7 +105,7 @@ func (c ConditionsMap) checkAllFrom(dir string, part types.Part) (errs []error) 
 	sort.Strings(condTypes)
 	for _, k := range condTypes {
 		if relCheck, ok := c[k].(interface {
-			checkFrom(string, types.Part) error
+			checkFrom(string, *message.Part) error
 		}); ok {
 			if err := relCheck.checkFrom(dir, part); err != nil {
 				errs = append(errs, fmt.Errorf("%v: %v", k, err))
@@ -140,8 +139,8 @@ func parseBloblangCondition(n yaml.Node) (*bloblangCondition, error) {
 }
 
 // Check this condition against a message part.
-func (b *bloblangCondition) Check(p types.Part) error {
-	msg := message.New(nil)
+func (b *bloblangCondition) Check(p *message.Part) error {
+	msg := message.QuickBatch(nil)
 	msg.Append(p)
 	res, err := b.m.QueryPart(0, msg)
 	if err != nil {
@@ -160,7 +159,7 @@ func (b *bloblangCondition) Check(p types.Part) error {
 type ContentEqualsCondition string
 
 // Check this condition against a message part.
-func (c ContentEqualsCondition) Check(p types.Part) error {
+func (c ContentEqualsCondition) Check(p *message.Part) error {
 	if exp, act := string(c), string(p.Get()); exp != act {
 		return fmt.Errorf("content mismatch\n  expected: %v\n  received: %v", blue(exp), red(act))
 	}
@@ -174,7 +173,7 @@ func (c ContentEqualsCondition) Check(p types.Part) error {
 type ContentMatchesCondition string
 
 // Check this condition against a message part.
-func (c ContentMatchesCondition) Check(p types.Part) error {
+func (c ContentMatchesCondition) Check(p *message.Part) error {
 	re := regexp.MustCompile(string(c))
 	if !re.MatchString(string(p.Get())) {
 		return fmt.Errorf("pattern mismatch\n   pattern: %v\n  received: %v", blue(string(c)), red(string(p.Get())))
@@ -190,7 +189,7 @@ func (c ContentMatchesCondition) Check(p types.Part) error {
 type ContentJSONEqualsCondition string
 
 // Check this condition against a message part.
-func (c ContentJSONEqualsCondition) Check(p types.Part) error {
+func (c ContentJSONEqualsCondition) Check(p *message.Part) error {
 	jdopts := jsondiff.DefaultConsoleOptions()
 	diff, explanation := jsondiff.Compare(p.Get(), []byte(c), &jdopts)
 	if diff != jsondiff.FullMatch {
@@ -207,7 +206,7 @@ func (c ContentJSONEqualsCondition) Check(p types.Part) error {
 type ContentJSONContainsCondition string
 
 // Check this condition against a message part.
-func (c ContentJSONContainsCondition) Check(p types.Part) error {
+func (c ContentJSONContainsCondition) Check(p *message.Part) error {
 	jdopts := jsondiff.DefaultConsoleOptions()
 	diff, explanation := jsondiff.Compare(p.Get(), []byte(c), &jdopts)
 	if diff != jsondiff.FullMatch && diff != jsondiff.SupersetMatch {
@@ -223,11 +222,11 @@ func (c ContentJSONContainsCondition) Check(p types.Part) error {
 type FileEqualsCondition string
 
 // Check this condition against a message part.
-func (c FileEqualsCondition) Check(p types.Part) error {
+func (c FileEqualsCondition) Check(p *message.Part) error {
 	return c.checkFrom("", p)
 }
 
-func (c FileEqualsCondition) checkFrom(dir string, p types.Part) error {
+func (c FileEqualsCondition) checkFrom(dir string, p *message.Part) error {
 	relPath := filepath.Join(dir, string(c))
 
 	fileContent, err := os.ReadFile(relPath)
@@ -248,9 +247,9 @@ func (c FileEqualsCondition) checkFrom(dir string, p types.Part) error {
 type MetadataEqualsCondition map[string]string
 
 // Check this condition against a message part.
-func (m MetadataEqualsCondition) Check(p types.Part) error {
+func (m MetadataEqualsCondition) Check(p *message.Part) error {
 	for k, v := range m {
-		if exp, act := v, p.Metadata().Get(k); exp != act {
+		if exp, act := v, p.MetaGet(k); exp != act {
 			return fmt.Errorf("metadata key '%v' mismatch\n  expected: %v\n  received: %v", k, blue(exp), red(act))
 		}
 	}

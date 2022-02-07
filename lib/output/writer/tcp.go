@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -73,7 +74,7 @@ func (t *TCP) Connect() error {
 }
 
 // Write attempts to write a message.
-func (t *TCP) Write(msg types.Message) error {
+func (t *TCP) Write(msg *message.Batch) error {
 	t.connMut.Lock()
 	conn := t.conn
 	t.connMut.Unlock()
@@ -82,7 +83,7 @@ func (t *TCP) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	err := msg.Iter(func(i int, part types.Part) error {
+	err := msg.Iter(func(i int, part *message.Part) error {
 		partBytes := part.Get()
 		if partBytes[len(partBytes)-1] != '\n' {
 			partBytes = append(partBytes[:len(partBytes):len(partBytes)], []byte("\n")...)

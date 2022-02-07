@@ -31,7 +31,7 @@ func testProgram(t *testing.T, program string) string {
 func sendMsg(t *testing.T, msg string, tChan chan types.Transaction) {
 	t.Helper()
 
-	m := message.New(nil)
+	m := message.QuickBatch(nil)
 	m.Append(message.NewPart([]byte(msg)))
 
 	resChan := make(chan types.Response)

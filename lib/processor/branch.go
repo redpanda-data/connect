@@ -337,7 +337,7 @@ pathLoop:
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	branchMsg, propSpans := tracing.WithChildSpans(TypeBranch, msg.Copy())
 	defer func() {
 		for _, s := range propSpans {
@@ -345,8 +345,8 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		}
 	}()
 
-	parts := make([]types.Part, 0, branchMsg.Len())
-	branchMsg.Iter(func(i int, p types.Part) error {
+	parts := make([]*message.Part, 0, branchMsg.Len())
+	_ = branchMsg.Iter(func(i int, p *message.Part) error {
 		// Remove errors so that they aren't propagated into the branch.
 		ClearFail(p)
 		parts = append(parts, p)
@@ -357,7 +357,7 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	if err != nil {
 		result := msg.Copy()
 		// Add general error to all messages.
-		result.Iter(func(i int, p types.Part) error {
+		_ = result.Iter(func(i int, p *message.Part) error {
 			FlagErr(p, err)
 			return nil
 		})
@@ -365,7 +365,7 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		for _, e := range mapErrs {
 			FlagErr(result.Get(e.index), e.err)
 		}
-		msgs := [1]types.Message{result}
+		msgs := [1]*message.Batch{result}
 		return msgs[:], nil
 	}
 
@@ -376,11 +376,11 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	}
 
 	if mapErrs, err = b.overlayResult(result, resultParts); err != nil {
-		result.Iter(func(i int, p types.Part) error {
+		_ = result.Iter(func(i int, p *message.Part) error {
 			FlagErr(p, err)
 			return nil
 		})
-		msgs := [1]types.Message{result}
+		msgs := [1]*message.Batch{result}
 		return msgs[:], nil
 	}
 	for _, e := range mapErrs {
@@ -388,7 +388,7 @@ func (b *Branch) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		b.log.Errorf("Branch error: %v", e.err)
 	}
 
-	return []types.Message{result}, nil
+	return []*message.Batch{result}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -408,7 +408,7 @@ func newBranchMapError(index int, err error) branchMapError {
 // of the payload will remain unchanged, where reduced indexes are nil. This
 // result can be overlayed onto the original message in order to complete the
 // map.
-func (b *Branch) createResult(parts []types.Part, referenceMsg types.Message) ([]types.Part, []branchMapError, error) {
+func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch) ([]*message.Part, []branchMapError, error) {
 	b.mCount.Incr(1)
 
 	originalLen := len(parts)
@@ -417,7 +417,7 @@ func (b *Branch) createResult(parts []types.Part, referenceMsg types.Message) ([
 	var skipped, failed []int
 	var mapErrs []branchMapError
 
-	newParts := make([]types.Part, 0, len(parts))
+	newParts := make([]*message.Part, 0, len(parts))
 	for i := 0; i < len(parts); i++ {
 		if parts[i] == nil {
 			// Skip if the message part is nil.
@@ -447,11 +447,11 @@ func (b *Branch) createResult(parts []types.Part, referenceMsg types.Message) ([
 	parts = newParts
 
 	// Execute child processors
-	var procResults []types.Message
+	var procResults []*message.Batch
 	var err error
 	if len(parts) > 0 {
 		var res types.Response
-		msg := message.New(nil)
+		msg := message.QuickBatch(nil)
 		msg.SetAll(parts)
 		if procResults, res = ExecuteAll(b.children, msg); res != nil && res.Error() != nil {
 			err = fmt.Errorf("child processors failed: %v", res.Error())
@@ -468,7 +468,7 @@ func (b *Branch) createResult(parts []types.Part, referenceMsg types.Message) ([
 	}
 
 	// Re-align processor results with original message indexes
-	var alignedResult []types.Part
+	var alignedResult []*message.Part
 	if alignedResult, err = alignBranchResult(originalLen, skipped, failed, procResults); err != nil {
 		b.mErrAlign.Incr(1)
 		b.mErr.Incr(1)
@@ -491,7 +491,7 @@ func (b *Branch) createResult(parts []types.Part, referenceMsg types.Message) ([
 
 // overlayResult attempts to merge the result of a process_map with the original
 // payload as per the map specified in the postmap and postmap_optional fields.
-func (b *Branch) overlayResult(payload types.Message, results []types.Part) ([]branchMapError, error) {
+func (b *Branch) overlayResult(payload *message.Batch, results []*message.Part) ([]branchMapError, error) {
 	if exp, act := payload.Len(), len(results); exp != act {
 		b.mErr.Incr(1)
 		return nil, fmt.Errorf(
@@ -500,14 +500,14 @@ func (b *Branch) overlayResult(payload types.Message, results []types.Part) ([]b
 		)
 	}
 
-	resultMsg := message.New(nil)
+	resultMsg := message.QuickBatch(nil)
 	resultMsg.SetAll(results)
 
 	var failed []branchMapError
 
 	if b.resultMap != nil {
-		parts := make([]types.Part, payload.Len())
-		payload.Iter(func(i int, p types.Part) error {
+		parts := make([]*message.Part, payload.Len())
+		_ = payload.Iter(func(i int, p *message.Part) error {
 			parts[i] = p
 			return nil
 		})
@@ -540,10 +540,10 @@ func (b *Branch) overlayResult(payload types.Message, results []types.Part) ([]b
 	return failed, nil
 }
 
-func alignBranchResult(length int, skipped, failed []int, result []types.Message) ([]types.Part, error) {
-	resMsgParts := []types.Part{}
+func alignBranchResult(length int, skipped, failed []int, result []*message.Batch) ([]*message.Part, error) {
+	resMsgParts := []*message.Part{}
 	for _, m := range result {
-		m.Iter(func(i int, p types.Part) error {
+		_ = m.Iter(func(i int, p *message.Part) error {
 			resMsgParts = append(resMsgParts, p)
 			return nil
 		})
@@ -563,12 +563,12 @@ func alignBranchResult(length int, skipped, failed []int, result []types.Message
 		)
 	}
 
-	var resultParts []types.Part
+	var resultParts []*message.Part
 	if len(skippedOrFailed) == 0 {
 		resultParts = resMsgParts
 	} else {
 		// Remember to insert nil for each skipped part at the correct index.
-		resultParts = make([]types.Part, length)
+		resultParts = make([]*message.Part, length)
 		sIndex := 0
 		for i = 0; i < len(resMsgParts); i++ {
 			for sIndex < len(skippedOrFailed) && skippedOrFailed[sIndex] == (i+sIndex) {

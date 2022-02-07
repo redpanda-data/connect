@@ -254,7 +254,7 @@ func TestHTTPServerLifecycle(t *testing.T) {
 	conf.HTTPServer.Path = "/foo/bar"
 
 	timeout := time.Second * 5
-	readNextMsg := func(in input.Type) (types.Message, error) {
+	readNextMsg := func(in input.Type) (*message.Batch, error) {
 		t.Helper()
 		var tran types.Transaction
 		select {
@@ -346,7 +346,7 @@ func TestHTTPServerMetadata(t *testing.T) {
 
 	timeout := time.Second * 5
 
-	readNextMsg := func() (types.Message, error) {
+	readNextMsg := func() (*message.Batch, error) {
 		var tran types.Transaction
 		select {
 		case tran = <-server.TransactionChan():
@@ -365,12 +365,12 @@ func TestHTTPServerMetadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, dummyData, message.GetAllBytes(msg)[0])
 
-	meta := msg.Get(0).Metadata()
-	assert.Equal(t, dummyPath, meta.Get("http_server_request_path"))
-	assert.Equal(t, "POST", meta.Get("http_server_verb"))
-	assert.Regexp(t, "^Go-http-client/", meta.Get("http_server_user_agent"))
+	part := msg.Get(0)
+	assert.Equal(t, dummyPath, part.MetaGet("http_server_request_path"))
+	assert.Equal(t, "POST", part.MetaGet("http_server_verb"))
+	assert.Regexp(t, "^Go-http-client/", part.MetaGet("http_server_user_agent"))
 	// Make sure query params are set in the metadata
-	assert.Contains(t, "bar", meta.Get("foo"))
+	assert.Contains(t, "bar", part.MetaGet("foo"))
 }
 
 func TestHTTPtServerPathParameters(t *testing.T) {
@@ -411,7 +411,7 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 		defer resp.Body.Close()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
+	readNextMsg := func() (*message.Batch, error) {
 		var tran types.Transaction
 		select {
 		case tran = <-server.TransactionChan():
@@ -430,13 +430,13 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, dummyData, message.GetAllBytes(msg)[0])
 
-	meta := msg.Get(0).Metadata()
+	part := msg.Get(0)
 
-	assert.Equal(t, dummyPath, meta.Get("http_server_request_path"))
-	assert.Equal(t, "PUT", meta.Get("http_server_verb"))
-	assert.Equal(t, "foo1", meta.Get("foo"))
-	assert.Equal(t, "bar1", meta.Get("bar"))
-	assert.Equal(t, "will go on", meta.Get("mylove"))
+	assert.Equal(t, dummyPath, part.MetaGet("http_server_request_path"))
+	assert.Equal(t, "PUT", part.MetaGet("http_server_verb"))
+	assert.Equal(t, "foo1", part.MetaGet("foo"))
+	assert.Equal(t, "bar1", part.MetaGet("bar"))
+	assert.Equal(t, "will go on", part.MetaGet("mylove"))
 }
 
 func TestHTTPBadRequests(t *testing.T) {
@@ -1095,7 +1095,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 		if res := string(ts.Payload.Get(0).Get()); res != input {
 			t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 		}
-		ts.Payload.Get(0).Metadata().Set("status", "400")
+		ts.Payload.Get(0).MetaSet("status", "400")
 		roundtrip.SetAsResponse(ts.Payload)
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message")

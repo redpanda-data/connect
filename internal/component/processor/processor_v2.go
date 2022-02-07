@@ -18,7 +18,7 @@ type V2 interface {
 	// Process a message into one or more resulting messages, or return an error
 	// if the message could not be processed. If zero messages are returned and
 	// the error is nil then the message is filtered.
-	Process(ctx context.Context, p types.Part) ([]types.Part, error)
+	Process(ctx context.Context, p *message.Part) ([]*message.Part, error)
 
 	// Close the component, blocks until either the underlying resources are
 	// cleaned up or the context is cancelled. Returns an error if the context
@@ -32,7 +32,7 @@ type V2Batched interface {
 	// Process a batch of messages into one or more resulting batches, or return
 	// an error if the entire batch could not be processed. If zero messages are
 	// returned and the error is nil then all messages are filtered.
-	ProcessBatch(ctx context.Context, p []types.Part) ([][]types.Part, error)
+	ProcessBatch(ctx context.Context, p []*message.Part) ([][]*message.Part, error)
 
 	// Close the component, blocks until either the underlying resources are
 	// cleaned up or the context is cancelled. Returns an error if the context
@@ -67,12 +67,12 @@ func NewV2ToV1Processor(typeStr string, p V2, stats metrics.Type) types.Processo
 	}
 }
 
-func (a *v2ToV1Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	a.mCount.Incr(1)
 
-	newParts := make([]types.Part, 0, msg.Len())
+	newParts := make([]*message.Part, 0, msg.Len())
 
-	msg.Iter(func(i int, part types.Part) error {
+	_ = msg.Iter(func(i int, part *message.Part) error {
 		span := tracing.CreateChildSpan(a.typeStr, part)
 
 		nextParts, err := a.p.Process(context.Background(), part)
@@ -101,11 +101,11 @@ func (a *v2ToV1Processor) ProcessMessage(msg types.Message) ([]types.Message, ty
 		return nil, response.NewAck()
 	}
 
-	newMsg := message.New(nil)
+	newMsg := message.QuickBatch(nil)
 	newMsg.SetAll(newParts)
 
 	a.mSent.Incr(int64(newMsg.Len()))
-	return []types.Message{newMsg}, nil
+	return []*message.Batch{newMsg}, nil
 }
 
 func (a *v2ToV1Processor) CloseAsync() {
@@ -150,17 +150,17 @@ func NewV2BatchedToV1Processor(typeStr string, p V2Batched, stats metrics.Type) 
 	}
 }
 
-func (a *v2BatchedToV1Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (a *v2BatchedToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	a.mCount.Incr(1)
 
 	newMsg, spans := tracing.WithChildSpans(a.typeStr, msg)
-	parts := make([]types.Part, newMsg.Len())
-	newMsg.Iter(func(i int, part types.Part) error {
+	parts := make([]*message.Part, newMsg.Len())
+	_ = newMsg.Iter(func(i int, part *message.Part) error {
 		parts[i] = part
 		return nil
 	})
 
-	var outputBatches []types.Message
+	var outputBatches []*message.Batch
 
 	batches, err := a.p.ProcessBatch(context.Background(), parts)
 	if err != nil {
@@ -181,7 +181,7 @@ func (a *v2BatchedToV1Processor) ProcessMessage(msg types.Message) ([]types.Mess
 	} else {
 		for _, batch := range batches {
 			a.mSent.Incr(int64(len(batch)))
-			nextMsg := message.New(nil)
+			nextMsg := message.QuickBatch(nil)
 			nextMsg.SetAll(batch)
 			outputBatches = append(outputBatches, nextMsg)
 		}

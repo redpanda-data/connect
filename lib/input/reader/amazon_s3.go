@@ -97,7 +97,7 @@ type AmazonS3 struct {
 	targetKeys    []objKey
 	targetKeysMut sync.Mutex
 
-	readMethod func() (types.Part, objKey, error)
+	readMethod func() (*message.Part, objKey, error)
 
 	session    *session.Session
 	s3         *s3.S3
@@ -466,7 +466,7 @@ func (a *AmazonS3) popTargetKey() {
 }
 
 // ReadWithContext attempts to read a new message from the target S3 bucket.
-func (a *AmazonS3) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (a *AmazonS3) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	a.targetKeysMut.Lock()
 	defer a.targetKeysMut.Unlock()
 
@@ -488,7 +488,7 @@ func (a *AmazonS3) ReadWithContext(ctx context.Context) (types.Message, AsyncAck
 		return nil, nil, types.ErrTimeout
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 
 	part, obj, err := a.readMethod()
 	if err != nil {
@@ -513,22 +513,21 @@ func (a *AmazonS3) ReadWithContext(ctx context.Context) (types.Message, AsyncAck
 	}, nil
 }
 
-func addS3Metadata(p types.Part, obj *s3.GetObjectOutput) {
-	meta := p.Metadata()
+func addS3Metadata(p *message.Part, obj *s3.GetObjectOutput) {
 	if obj.LastModified != nil {
-		meta.Set("s3_last_modified", obj.LastModified.Format(time.RFC3339))
-		meta.Set("s3_last_modified_unix", strconv.FormatInt(obj.LastModified.Unix(), 10))
+		p.MetaSet("s3_last_modified", obj.LastModified.Format(time.RFC3339))
+		p.MetaSet("s3_last_modified_unix", strconv.FormatInt(obj.LastModified.Unix(), 10))
 	}
 	if obj.ContentType != nil {
-		meta.Set("s3_content_type", *obj.ContentType)
+		p.MetaSet("s3_content_type", *obj.ContentType)
 	}
 	if obj.ContentEncoding != nil {
-		meta.Set("s3_content_encoding", *obj.ContentEncoding)
+		p.MetaSet("s3_content_encoding", *obj.ContentEncoding)
 	}
 }
 
 // read attempts to read a new message from the target S3 bucket.
-func (a *AmazonS3) read() (types.Part, objKey, error) {
+func (a *AmazonS3) read() (*message.Part, objKey, error) {
 	target := a.targetKeys[0]
 
 	bucket := a.conf.Bucket
@@ -560,12 +559,11 @@ func (a *AmazonS3) read() (types.Part, objKey, error) {
 	}
 
 	part := message.NewPart(bytes)
-	meta := part.Metadata()
 	for k, v := range obj.Metadata {
-		meta.Set(k, *v)
+		part.MetaSet(k, *v)
 	}
-	meta.Set("s3_key", target.s3Key)
-	meta.Set("s3_bucket", bucket)
+	part.MetaSet("s3_key", target.s3Key)
+	part.MetaSet("s3_bucket", bucket)
 	addS3Metadata(part, obj)
 
 	a.popTargetKey()
@@ -574,7 +572,7 @@ func (a *AmazonS3) read() (types.Part, objKey, error) {
 
 // readFromMgr attempts to read a new message from the target S3 bucket using a
 // download manager.
-func (a *AmazonS3) readFromMgr() (types.Part, objKey, error) {
+func (a *AmazonS3) readFromMgr() (*message.Part, objKey, error) {
 	target := a.targetKeys[0]
 
 	buff := &aws.WriteAtBuffer{}
@@ -602,9 +600,8 @@ func (a *AmazonS3) readFromMgr() (types.Part, objKey, error) {
 	}
 
 	part := message.NewPart(buff.Bytes())
-	part.Metadata().
-		Set("s3_key", target.s3Key).
-		Set("s3_bucket", bucket)
+	part.MetaSet("s3_key", target.s3Key)
+	part.MetaSet("s3_bucket", bucket)
 
 	a.popTargetKey()
 	return part, target, nil

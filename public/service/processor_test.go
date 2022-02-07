@@ -52,7 +52,7 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -69,7 +69,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("not a structured doc")})
+	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -94,7 +94,7 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -146,7 +146,7 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -163,7 +163,7 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("not a structured doc")})
+	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -188,7 +188,7 @@ func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 2)

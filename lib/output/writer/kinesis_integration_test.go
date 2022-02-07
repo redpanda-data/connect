@@ -116,7 +116,7 @@ func testKinesisConnect(t *testing.T, c KinesisConfig, client *kinesis.Kinesis) 
 		[]byte(`{"foo":"qux","id":789}`),
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	for _, record := range records {
 		msg.Append(message.NewPart(record))
 	}

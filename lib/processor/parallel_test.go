@@ -35,7 +35,7 @@ func TestParallelBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.New([][]byte{
+	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
@@ -82,7 +82,7 @@ func TestParallelError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.New([][]byte{
+	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
@@ -136,7 +136,7 @@ func TestParallelCapped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.New([][]byte{
+	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),

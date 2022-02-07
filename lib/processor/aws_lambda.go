@@ -170,13 +170,13 @@ func newLambda(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (l *Lambda) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	l.mCount.Incr(1)
 
-	var resultMsg types.Message
+	var resultMsg *message.Batch
 	if !l.parallel || msg.Len() == 1 {
 		resultMsg = msg.Copy()
-		IteratePartsWithSpanV2("aws_lambda", nil, resultMsg, func(i int, _ *tracing.Span, p types.Part) error {
+		IteratePartsWithSpanV2("aws_lambda", nil, resultMsg, func(i int, _ *tracing.Span, p *message.Part) error {
 			if err := l.client.InvokeV2(p); err != nil {
 				l.mErr.Incr(1)
 				l.mErrLambda.Incr(1)
@@ -186,8 +186,8 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 			return nil
 		})
 	} else {
-		parts := make([]types.Part, msg.Len())
-		msg.Iter(func(i int, p types.Part) error {
+		parts := make([]*message.Part, msg.Len())
+		_ = msg.Iter(func(i int, p *message.Part) error {
 			parts[i] = p.Copy()
 			return nil
 		})
@@ -213,11 +213,11 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 		}
 
 		wg.Wait()
-		resultMsg = message.New(nil)
+		resultMsg = message.QuickBatch(nil)
 		resultMsg.SetAll(parts)
 	}
 
-	msgs := [1]types.Message{resultMsg}
+	msgs := [1]*message.Batch{resultMsg}
 
 	l.mBatchSent.Incr(1)
 	l.mSent.Incr(int64(resultMsg.Len()))

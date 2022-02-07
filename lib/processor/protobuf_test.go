@@ -6,7 +6,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -119,7 +118,7 @@ func TestProtobuf(t *testing.T) {
 			proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
-			input := message.New(nil)
+			input := message.QuickBatch(nil)
 			for _, p := range test.input {
 				input.Append(message.NewPart(p))
 			}
@@ -129,8 +128,8 @@ func TestProtobuf(t *testing.T) {
 			require.Len(t, msgs, 1)
 
 			assert.Equal(t, message.GetAllBytes(msgs[0]), test.output)
-			msgs[0].Iter(func(i int, part types.Part) error {
-				if fail := part.Metadata().Get(FailFlagKey); len(fail) > 0 {
+			_ = msgs[0].Iter(func(i int, part *message.Part) error {
+				if fail := part.MetaGet(FailFlagKey); len(fail) > 0 {
 					tt.Error(fail)
 				}
 				return nil
@@ -179,7 +178,7 @@ func TestProtobufErrors(t *testing.T) {
 			proc, err := New(conf, nil, log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
-			input := message.New(nil)
+			input := message.QuickBatch(nil)
 			for _, p := range test.input {
 				input.Append(message.NewPart(p))
 			}
@@ -189,8 +188,8 @@ func TestProtobufErrors(t *testing.T) {
 			require.Len(t, msgs, 1)
 
 			errs := make([]string, msgs[0].Len())
-			msgs[0].Iter(func(i int, part types.Part) error {
-				errs[i] = part.Metadata().Get(FailFlagKey)
+			_ = msgs[0].Iter(func(i int, part *message.Part) error {
+				errs[i] = part.MetaGet(FailFlagKey)
 				return nil
 			})
 

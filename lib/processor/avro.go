@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/linkedin/goavro/v2"
@@ -79,12 +80,12 @@ func NewAvroConfig() AvroConfig {
 
 //------------------------------------------------------------------------------
 
-type avroOperator func(part types.Part) error
+type avroOperator func(part *message.Part) error
 
 func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, error) {
 	switch encoding {
 	case "textual":
-		return func(part types.Part) error {
+		return func(part *message.Part) error {
 			jObj, _, err := codec.NativeFromTextual(part.Get())
 			if err != nil {
 				return fmt.Errorf("failed to convert Avro document to JSON: %v", err)
@@ -95,7 +96,7 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 			return nil
 		}, nil
 	case "binary":
-		return func(part types.Part) error {
+		return func(part *message.Part) error {
 			jObj, _, err := codec.NativeFromBinary(part.Get())
 			if err != nil {
 				return fmt.Errorf("failed to convert Avro document to JSON: %v", err)
@@ -106,7 +107,7 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 			return nil
 		}, nil
 	case "single":
-		return func(part types.Part) error {
+		return func(part *message.Part) error {
 			jObj, _, err := codec.NativeFromSingle(part.Get())
 			if err != nil {
 				return fmt.Errorf("failed to convert Avro document to JSON: %v", err)
@@ -123,7 +124,7 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, error) {
 	switch encoding {
 	case "textual":
-		return func(part types.Part) error {
+		return func(part *message.Part) error {
 			jObj, err := part.JSON()
 			if err != nil {
 				return fmt.Errorf("failed to parse message as JSON: %v", err)
@@ -136,7 +137,7 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 			return nil
 		}, nil
 	case "binary":
-		return func(part types.Part) error {
+		return func(part *message.Part) error {
 			jObj, err := part.JSON()
 			if err != nil {
 				return fmt.Errorf("failed to parse message as JSON: %v", err)
@@ -149,7 +150,7 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 			return nil
 		}, nil
 	case "single":
-		return func(part types.Part) error {
+		return func(part *message.Part) error {
 			jObj, err := part.JSON()
 			if err != nil {
 				return fmt.Errorf("failed to parse message as JSON: %v", err)
@@ -260,11 +261,11 @@ func NewAvro(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *Avro) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *Avro) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span *tracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part *message.Part) error {
 		if err := p.operator(part); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Operator failed: %v\n", err)
@@ -277,7 +278,7 @@ func (p *Avro) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(newMsg.Len()))
-	return []types.Message{newMsg}, nil
+	return []*message.Batch{newMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

@@ -4,13 +4,12 @@ import (
 	"bytes"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Message is an interface type to be given to a function interpolator, it
 // allows the function to resolve fields and metadata from a message.
 type Message interface {
-	Get(p int) types.Part
+	Get(p int) *message.Part
 	Len() int
 }
 
@@ -24,7 +23,7 @@ func NewExpression(resolvers ...Resolver) *Expression {
 	var staticBuf bytes.Buffer
 	for _, r := range resolvers {
 		if s, is := r.(StaticResolver); is {
-			staticBuf.Write(s.ResolveBytes(0, message.New(nil), false, false))
+			staticBuf.Write(s.ResolveBytes(0, message.QuickBatch(nil), false, false))
 		} else {
 			e.dynamicExpressions++
 		}
@@ -49,7 +48,6 @@ type Expression struct {
 	static             string
 	resolvers          []Resolver
 	dynamicExpressions int
-	ContainsDeprecated bool // TODO: V4 remove this
 }
 
 func (e *Expression) resolve(index int, msg Message, escaped, legacy bool) []byte {
@@ -78,16 +76,6 @@ func (e *Expression) Bytes(index int, msg Message) []byte {
 	return e.resolve(index, msg, false, false)
 }
 
-// BytesLegacy is DEPRECATED - Instructs deprecated functions to disregard index
-// information.
-// TODO V4: Remove this.
-func (e *Expression) BytesLegacy(index int, msg Message) []byte {
-	if len(e.resolvers) == 0 {
-		return []byte(e.static)
-	}
-	return e.resolve(index, msg, false, true)
-}
-
 // BytesEscaped returns a byte slice representing the expression resolved for a
 // message of a batch with the contents of resolved expressions escaped.
 func (e *Expression) BytesEscaped(index int, msg Message) []byte {
@@ -97,16 +85,6 @@ func (e *Expression) BytesEscaped(index int, msg Message) []byte {
 	return e.resolve(index, msg, true, false)
 }
 
-// BytesEscapedLegacy is DEPRECATED - Instructs deprecated functions to
-// disregard index information.
-// TODO V4: Remove this.
-func (e *Expression) BytesEscapedLegacy(index int, msg Message) []byte {
-	if len(e.resolvers) == 0 {
-		return []byte(e.static)
-	}
-	return e.resolve(index, msg, true, true)
-}
-
 // String returns a string representing the expression resolved for a message of
 // a batch.
 func (e *Expression) String(index int, msg Message) string {
@@ -114,14 +92,4 @@ func (e *Expression) String(index int, msg Message) string {
 		return e.static
 	}
 	return string(e.Bytes(index, msg))
-}
-
-// StringLegacy is DEPRECATED - Instructs deprecated functions to disregard
-// index information.
-// TODO V4: Remove this.
-func (e *Expression) StringLegacy(index int, msg Message) string {
-	if len(e.resolvers) == 0 {
-		return e.static
-	}
-	return string(e.BytesLegacy(index, msg))
 }
