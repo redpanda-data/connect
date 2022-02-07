@@ -72,6 +72,7 @@ output:
     backoff:
       initial_interval: 1s
       max_interval: 5s
+    timeout: 600ms
     max_in_flight: 1
     batching:
       count: 0
@@ -378,6 +379,14 @@ The maximum period to wait between retry attempts.
 
 Type: `string`  
 Default: `"5s"`  
+
+### `timeout`
+
+The client connection timeout.
+
+
+Type: `string`  
+Default: `"600ms"`  
 
 ### `max_in_flight`
 
