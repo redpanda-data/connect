@@ -33,7 +33,7 @@ This processor will interpolate functions within the ` + "`key` and `value`" + `
 			docs.FieldCommon("key", "A key to use with the cache.").IsInterpolated(),
 			docs.FieldCommon("value", "A value to use with the cache (when applicable).").IsInterpolated(),
 			docs.FieldAdvanced(
-				"ttl", "The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, and those that do not will fall back to their generally configured TTL setting.",
+				"ttl", "The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, those that do will have a configuration field `default_ttl`, and those that do not will fall back to their generally configured TTL setting.",
 				"60s", "5m", "36h",
 			).IsInterpolated().AtVersion("3.33.0"),
 			PartsFieldSpec,
@@ -224,42 +224,32 @@ func NewCache(
 
 //------------------------------------------------------------------------------
 
-type cacheOperator func(cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error)
+type cacheOperator func(ctx context.Context, cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error)
 
 func newCacheSetOperator() cacheOperator {
-	return func(cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
-		var err error
-		if cttl, ok := cache.(types.CacheWithTTL); ok {
-			err = cttl.SetWithTTL(key, value, ttl)
-		} else {
-			err = cache.Set(key, value)
-		}
+	return func(ctx context.Context, cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
+		err := cache.Set(ctx, key, value, ttl)
 		return nil, false, err
 	}
 }
 
 func newCacheAddOperator() cacheOperator {
-	return func(cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
-		var err error
-		if cttl, ok := cache.(types.CacheWithTTL); ok {
-			err = cttl.AddWithTTL(key, value, ttl)
-		} else {
-			err = cache.Add(key, value)
-		}
+	return func(ctx context.Context, cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
+		err := cache.Add(ctx, key, value, ttl)
 		return nil, false, err
 	}
 }
 
 func newCacheGetOperator() cacheOperator {
-	return func(cache types.Cache, key string, _ []byte, _ *time.Duration) ([]byte, bool, error) {
-		result, err := cache.Get(key)
+	return func(ctx context.Context, cache types.Cache, key string, _ []byte, _ *time.Duration) ([]byte, bool, error) {
+		result, err := cache.Get(ctx, key)
 		return result, true, err
 	}
 }
 
 func newCacheDeleteOperator() cacheOperator {
-	return func(cache types.Cache, key string, _ []byte, ttl *time.Duration) ([]byte, bool, error) {
-		err := cache.Delete(key)
+	return func(ctx context.Context, cache types.Cache, key string, _ []byte, ttl *time.Duration) ([]byte, bool, error) {
+		err := cache.Delete(ctx, key)
 		return nil, false, err
 	}
 }
@@ -305,7 +295,7 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		var useResult bool
 		var err error
 		if cerr := interop.AccessCache(context.Background(), c.mgr, c.cacheName, func(cache types.Cache) {
-			result, useResult, err = c.operator(cache, key, value, ttl)
+			result, useResult, err = c.operator(context.Background(), cache, key, value, ttl)
 		}); cerr != nil {
 			err = cerr
 		}

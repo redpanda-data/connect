@@ -87,36 +87,27 @@ func (c *Cache) Connect() error {
 
 func (c *Cache) writeMulti(ctx context.Context, msg types.Message) error {
 	var err error
-	if cerr := interop.AccessCache(context.Background(), c.mgr, c.conf.Target, func(cache types.Cache) {
-		if cttl, ok := cache.(types.CacheWithTTL); ok {
-			items := map[string]types.CacheTTLItem{}
-			if err = msg.Iter(func(i int, p types.Part) error {
-				var ttl *time.Duration
-				if ttls := c.ttl.String(i, msg); ttls != "" {
-					t, terr := time.ParseDuration(ttls)
-					if terr != nil {
-						c.log.Debugf("Invalid duration string for TTL field: %v\n", terr)
-						return fmt.Errorf("ttl field: %w", terr)
-					}
-					ttl = &t
+	if cerr := interop.AccessCache(ctx, c.mgr, c.conf.Target, func(cache types.Cache) {
+		items := map[string]types.CacheTTLItem{}
+		if err = msg.Iter(func(i int, p types.Part) error {
+			var ttl *time.Duration
+			if ttls := c.ttl.String(i, msg); ttls != "" {
+				t, terr := time.ParseDuration(ttls)
+				if terr != nil {
+					c.log.Debugf("Invalid duration string for TTL field: %v\n", terr)
+					return fmt.Errorf("ttl field: %w", terr)
 				}
-				items[c.key.String(i, msg)] = types.CacheTTLItem{
-					Value: p.Get(),
-					TTL:   ttl,
-				}
-				return nil
-			}); err != nil {
-				return
+				ttl = &t
 			}
-			err = cttl.SetMultiWithTTL(items)
+			items[c.key.String(i, msg)] = types.CacheTTLItem{
+				Value: p.Get(),
+				TTL:   ttl,
+			}
+			return nil
+		}); err != nil {
 			return
 		}
-		items := map[string][]byte{}
-		msg.Iter(func(i int, p types.Part) error {
-			items[c.key.String(i, msg)] = p.Get()
-			return nil
-		})
-		err = cache.SetMulti(items)
+		err = cache.SetMulti(ctx, items)
 	}); cerr != nil {
 		err = cerr
 	}
@@ -130,21 +121,17 @@ func (c *Cache) WriteWithContext(ctx context.Context, msg types.Message) error {
 	}
 	var err error
 	if cerr := interop.AccessCache(ctx, c.mgr, c.conf.Target, func(cache types.Cache) {
-		if cttl, ok := cache.(types.CacheWithTTL); ok {
-			var ttl *time.Duration
-			if ttls := c.ttl.String(0, msg); ttls != "" {
-				t, terr := time.ParseDuration(ttls)
-				if terr != nil {
-					c.log.Debugf("Invalid duration string for TTL field: %v\n", terr)
-					err = fmt.Errorf("ttl field: %w", terr)
-					return
-				}
-				ttl = &t
+		var ttl *time.Duration
+		if ttls := c.ttl.String(0, msg); ttls != "" {
+			t, terr := time.ParseDuration(ttls)
+			if terr != nil {
+				c.log.Debugf("Invalid duration string for TTL field: %v\n", terr)
+				err = fmt.Errorf("ttl field: %w", terr)
+				return
 			}
-			err = cttl.SetWithTTL(c.key.String(0, msg), msg.Get(0).Get(), ttl)
-			return
+			ttl = &t
 		}
-		err = cache.Set(c.key.String(0, msg), msg.Get(0).Get())
+		err = cache.Set(ctx, c.key.String(0, msg), msg.Get(0).Get(), ttl)
 	}); cerr != nil {
 		err = cerr
 	}

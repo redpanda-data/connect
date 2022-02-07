@@ -23,7 +23,7 @@ type RateLimit interface {
 //------------------------------------------------------------------------------
 
 func newAirGapRateLimit(c RateLimit, stats metrics.Type) types.RateLimit {
-	return ratelimit.NewV2ToV1RateLimit(c, stats)
+	return ratelimit.MetricsForRateLimit(c, stats)
 }
 
 //------------------------------------------------------------------------------
@@ -37,21 +37,10 @@ func newReverseAirGapRateLimit(r types.RateLimit) *reverseAirGapRateLimit {
 	return &reverseAirGapRateLimit{r}
 }
 
-func (a *reverseAirGapRateLimit) Access(context.Context) (time.Duration, error) {
-	return a.r.Access()
+func (a *reverseAirGapRateLimit) Access(ctx context.Context) (time.Duration, error) {
+	return a.r.Access(ctx)
 }
 
 func (a *reverseAirGapRateLimit) Close(ctx context.Context) error {
-	a.r.CloseAsync()
-	for {
-		// Gross but will do for now until we replace these with context params.
-		if err := a.r.WaitForClose(time.Millisecond * 100); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-	}
+	return a.r.Close(ctx)
 }

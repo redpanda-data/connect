@@ -99,7 +99,7 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 	case "SUB":
 		return sub.NewSocket()
 	}
-	return nil, types.ErrInvalidScaleProtoType
+	return nil, errors.New("invalid Scalability Protocols socket type")
 }
 
 //------------------------------------------------------------------------------

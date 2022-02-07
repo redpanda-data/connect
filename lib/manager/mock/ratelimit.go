@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"context"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -9,18 +10,14 @@ import (
 var _ types.RateLimit = RateLimit(nil)
 
 // RateLimit provides a mock rate limit implementation around a closure.
-type RateLimit func() (time.Duration, error)
+type RateLimit func(context.Context) (time.Duration, error)
 
 // Access the rate limit
-func (r RateLimit) Access() (time.Duration, error) {
-	return r()
+func (r RateLimit) Access(ctx context.Context) (time.Duration, error) {
+	return r(ctx)
 }
 
-// CloseAsync does nothing
-func (r RateLimit) CloseAsync() {
-}
-
-// WaitForClose does nothing
-func (r RateLimit) WaitForClose(t time.Duration) error {
+// Close does nothing
+func (r RateLimit) Close(ctx context.Context) error {
 	return nil
 }

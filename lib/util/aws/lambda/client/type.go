@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -132,15 +131,15 @@ func OptSetManager(mgr types.Manager) func(*Type) {
 
 //------------------------------------------------------------------------------
 
-func (l *Type) waitForAccess() bool {
+func (l *Type) waitForAccess(ctx context.Context) bool {
 	if l.conf.RateLimit == "" {
 		return true
 	}
 	for {
 		var period time.Duration
 		var err error
-		if rerr := interop.AccessRateLimit(context.Background(), l.mgr, l.conf.RateLimit, func(rl types.RateLimit) {
-			period, err = rl.Access()
+		if rerr := interop.AccessRateLimit(ctx, l.mgr, l.conf.RateLimit, func(rl types.RateLimit) {
+			period, err = rl.Access(ctx)
 		}); rerr != nil {
 			err = rerr
 		}
@@ -161,28 +160,6 @@ func (l *Type) waitForAccess() bool {
 	}
 }
 
-// Invoke attempts to invoke lambda function with a message as its payload.
-func (l *Type) Invoke(msg types.Message) (types.Message, error) {
-	l.mCount.Incr(1)
-
-	response := msg.Copy()
-	_ = response.Iter(func(i int, p types.Part) error {
-		s := tracing.CreateChildSpan("lambda_invoke", p)
-		defer s.Finish()
-
-		if err := l.InvokeV2(p); err != nil {
-			s.LogKV(
-				"event", "error",
-				"type", err.Error(),
-			)
-			return err
-		}
-		return nil
-	})
-
-	return response, nil
-}
-
 // InvokeV2 attempts to invoke a lambda function with a message and replaces
 // its contents with the result on success, or returns an error.
 func (l *Type) InvokeV2(p types.Part) error {
@@ -190,7 +167,7 @@ func (l *Type) InvokeV2(p types.Part) error {
 
 	remainingRetries := l.conf.NumRetries
 	for {
-		l.waitForAccess()
+		l.waitForAccess(context.Background())
 
 		ctx, done := context.WithTimeout(context.Background(), l.timeout)
 		result, err := l.lambda.InvokeWithContext(ctx, &lambda.InvokeInput{

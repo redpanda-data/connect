@@ -423,7 +423,7 @@ func (t *Type) StoreCache(ctx context.Context, name string, conf cache.Config) e
 		// If a previous resource exists with the same name then we do NOT allow
 		// it to be replaced unless it can be successfully closed. This ensures
 		// that we do not leak connections.
-		if err := closeWithContext(ctx, c); err != nil {
+		if err := c.Close(ctx); err != nil {
 			return err
 		}
 	}
@@ -684,7 +684,7 @@ func (t *Type) StoreRateLimit(ctx context.Context, name string, conf ratelimit.C
 		// If a previous resource exists with the same name then we do NOT allow
 		// it to be replaced unless it can be successfully closed. This ensures
 		// that we do not leak connections.
-		if err := closeWithContext(ctx, r); err != nil {
+		if err := r.Close(ctx); err != nil {
 			return err
 		}
 	}
@@ -712,9 +712,6 @@ func (t *Type) CloseAsync() {
 	for _, c := range t.inputs {
 		c.CloseAsync()
 	}
-	for _, c := range t.caches {
-		c.CloseAsync()
-	}
 	for _, p := range t.processors {
 		p.CloseAsync()
 	}
@@ -722,9 +719,6 @@ func (t *Type) CloseAsync() {
 		if closer, ok := c.(types.Closable); ok {
 			closer.CloseAsync()
 		}
-	}
-	for _, c := range t.rateLimits {
-		c.CloseAsync()
 	}
 	for _, c := range t.outputs {
 		c.CloseAsync()
@@ -737,6 +731,9 @@ func (t *Type) WaitForClose(timeout time.Duration) error {
 	t.resourceLock.Lock()
 	defer t.resourceLock.Unlock()
 
+	tOutCtx, done := context.WithTimeout(context.Background(), timeout)
+	defer done()
+
 	timesOut := time.Now().Add(timeout)
 	for k, c := range t.inputs {
 		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
@@ -745,7 +742,7 @@ func (t *Type) WaitForClose(timeout time.Duration) error {
 		delete(t.inputs, k)
 	}
 	for k, c := range t.caches {
-		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+		if err := c.Close(tOutCtx); err != nil {
 			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}
 		delete(t.caches, k)
@@ -757,7 +754,7 @@ func (t *Type) WaitForClose(timeout time.Duration) error {
 		delete(t.processors, k)
 	}
 	for k, c := range t.rateLimits {
-		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+		if err := c.Close(tOutCtx); err != nil {
 			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}
 		delete(t.rateLimits, k)

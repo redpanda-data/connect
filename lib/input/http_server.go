@@ -410,7 +410,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		var tUntil time.Duration
 		var err error
 		if rerr := interop.AccessRateLimit(r.Context(), h.mgr, h.conf.RateLimit, func(rl types.RateLimit) {
-			tUntil, err = rl.Access()
+			tUntil, err = rl.Access(r.Context())
 		}); rerr != nil {
 			http.Error(w, "Server error", http.StatusBadGateway)
 			h.log.Warnf("Failed to access rate limit: %v\n", rerr)
@@ -609,7 +609,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		if h.conf.RateLimit != "" {
 			var tUntil time.Duration
 			if rerr := interop.AccessRateLimit(r.Context(), h.mgr, h.conf.RateLimit, func(rl types.RateLimit) {
-				tUntil, err = rl.Access()
+				tUntil, err = rl.Access(r.Context())
 			}); rerr != nil {
 				h.log.Warnf("Failed to access rate limit: %v\n", rerr)
 				err = rerr
