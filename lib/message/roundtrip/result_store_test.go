@@ -5,14 +5,13 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func TestResultStore(t *testing.T) {
 	impl := &resultStoreImpl{}
 	ctx := context.WithValue(context.Background(), ResultStoreKey, impl)
-	msg := message.New(nil)
-	var p types.Part = message.NewPart([]byte("foo"))
+	msg := message.QuickBatch(nil)
+	p := message.NewPart([]byte("foo"))
 	p = message.WithContext(ctx, p)
 	msg.Append(p)
 	msg.Append(message.NewPart([]byte("bar")))

@@ -280,7 +280,7 @@ func (r *csvReader) readNext(reader *csv.Reader) ([]string, error) {
 }
 
 // ReadWithContext attempts to read a new line from the io.Reader.
-func (r *csvReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (r *csvReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	r.mut.Lock()
 	scanner := r.scanner
 	headers := r.headers
@@ -290,7 +290,7 @@ func (r *csvReader) ReadWithContext(ctx context.Context) (types.Message, reader.
 		return nil, nil, types.ErrNotConnected
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 
 	for i := 0; i < r.groupCount; i++ {
 		records, err := r.readNext(scanner)

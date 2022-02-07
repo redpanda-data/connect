@@ -11,6 +11,7 @@ import (
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -104,7 +105,7 @@ func (r *RedisList) Connect() error {
 
 // WriteWithContext attempts to write a message by pushing it to the end of a
 // Redis list.
-func (r *RedisList) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (r *RedisList) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
@@ -124,7 +125,7 @@ func (r *RedisList) WriteWithContext(ctx context.Context, msg types.Message) err
 	}
 
 	pipe := client.Pipeline()
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		key := r.keyStr.String(0, msg)
 		_ = pipe.RPush(key, p.Get())
 		return nil
@@ -152,7 +153,7 @@ func (r *RedisList) WriteWithContext(ctx context.Context, msg types.Message) err
 }
 
 // Write attempts to write a message by pushing it to the end of a Redis list.
-func (r *RedisList) Write(msg types.Message) error {
+func (r *RedisList) Write(msg *message.Batch) error {
 	return r.WriteWithContext(context.Background(), msg)
 }
 

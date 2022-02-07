@@ -147,11 +147,11 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 		}
 	}()
 
-	if err = m.Write(message.New([][]byte{[]byte(`{"message":"hello world","user":"1"}`)})); err != nil {
+	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":"hello world","user":"1"}`)})); err != nil {
 		t.Error(err)
 	}
 
-	if err = m.Write(message.New([][]byte{
+	if err = m.Write(message.QuickBatch([][]byte{
 		[]byte(`{"message":"hello world","user":"2"}`),
 		[]byte(`{"message":"hello world","user":"3"}`),
 	})); err != nil {
@@ -212,7 +212,7 @@ func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing
 		docs[fmt.Sprintf("doc-%v", i)] = str
 		go func(content string) {
 			<-startChan
-			if lerr := m.Write(message.New([][]byte{[]byte(content)})); lerr != nil {
+			if lerr := m.Write(message.QuickBatch([][]byte{[]byte(content)})); lerr != nil {
 				t.Error(lerr)
 			}
 			wg.Done()
@@ -269,11 +269,11 @@ func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.
 		}
 	}()
 
-	if err = m.Write(message.New([][]byte{[]byte(`{"message":true}`)})); err == nil {
+	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":true}`)})); err == nil {
 		t.Error("Expected error")
 	}
 
-	if err = m.Write(message.New([][]byte{[]byte(`{"message":"foo"}`), []byte(`{"message":"bar"}`)})); err == nil {
+	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":"foo"}`), []byte(`{"message":"bar"}`)})); err == nil {
 		t.Error("Expected error")
 	}
 }
@@ -311,7 +311,7 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 		})
 	}
 	for i := 0; i < N; i++ {
-		if err = m.Write(message.New(testMsgs[i])); err != nil {
+		if err = m.Write(message.QuickBatch(testMsgs[i])); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -373,8 +373,8 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 		})
 	}
 	for i := 0; i < N; i++ {
-		msg := message.New(testMsgs[i])
-		msg.Get(0).Metadata().Set("index", "test_conn_index")
+		msg := message.QuickBatch(testMsgs[i])
+		msg.Get(0).MetaSet("index", "test_conn_index")
 		if err = m.Write(msg); err != nil {
 			t.Fatal(err)
 		}
@@ -436,9 +436,9 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
 		)
 	}
-	msg := message.New(testMsg)
+	msg := message.QuickBatch(testMsg)
 	for i := 0; i < N; i++ {
-		msg.Get(i).Metadata().Set("index", "test_conn_index")
+		msg.Get(i).MetaSet("index", "test_conn_index")
 	}
 	if err = m.Write(msg); err != nil {
 		t.Fatal(err)
@@ -501,10 +501,10 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
 		)
 	}
-	msg := message.New(testMsg)
+	msg := message.QuickBatch(testMsg)
 	for i := 0; i < N; i++ {
-		msg.Get(i).Metadata().Set("index", "test_conn_index")
-		msg.Get(i).Metadata().Set("elastic_action", "index")
+		msg.Get(i).MetaSet("index", "test_conn_index")
+		msg.Get(i).MetaSet("elastic_action", "index")
 	}
 	if err = m.Write(msg); err != nil {
 		t.Fatal(err)
@@ -535,7 +535,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 
 	// Set elastic_action to deleted for some message parts
 	for i := N / 2; i < N; i++ {
-		msg.Get(i).Metadata().Set("elastic_action", "delete")
+		msg.Get(i).MetaSet("elastic_action", "delete")
 	}
 
 	if err = m.Write(msg); err != nil {
@@ -553,7 +553,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		partAction := msg.Get(i).Metadata().Get("elastic_action")
+		partAction := msg.Get(i).MetaGet("elastic_action")
 		if partAction == "deleted" && get.Found {
 			t.Errorf("document %v found when it should have been deleted", i)
 		} else if partAction != "deleted" && !get.Found {

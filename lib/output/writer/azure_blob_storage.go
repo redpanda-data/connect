@@ -17,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -100,7 +101,7 @@ func (a *AzureBlobStorage) Connect() error {
 }
 
 // Write attempts to write message contents to a target Azure Blob Storage container as files.
-func (a *AzureBlobStorage) Write(msg types.Message) error {
+func (a *AzureBlobStorage) Write(msg *message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
@@ -132,8 +133,8 @@ func (a *AzureBlobStorage) createContainer(c *storage.Container, accessLevel str
 }
 
 // WriteWithContext attempts to write message contents to a target storage account as files.
-func (a *AzureBlobStorage) WriteWithContext(_ context.Context, msg types.Message) error {
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+func (a *AzureBlobStorage) WriteWithContext(_ context.Context, msg *message.Batch) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		c := a.client.GetContainerReference(a.container.String(i, msg))
 		b := c.GetBlobReference(a.path.String(i, msg))
 		if err := a.uploadBlob(b, a.blobType.String(i, msg), p.Get()); err != nil {

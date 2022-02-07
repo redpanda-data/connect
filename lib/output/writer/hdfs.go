@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -102,17 +103,17 @@ func (h *HDFS) Connect() error {
 
 // WriteWithContext attempts to write message contents to a target HDFS
 // directory as files.
-func (h *HDFS) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (h *HDFS) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return h.Write(msg)
 }
 
 // Write attempts to write message contents to a target HDFS directory as files.
-func (h *HDFS) Write(msg types.Message) error {
+func (h *HDFS) Write(msg *message.Batch) error {
 	if h.client == nil {
 		return types.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		path := h.path.String(i, msg)
 		filePath := filepath.Join(h.conf.Directory, path)
 

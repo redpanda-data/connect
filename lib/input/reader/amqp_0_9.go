@@ -212,7 +212,7 @@ func (a *AMQP09) disconnect() error {
 
 //------------------------------------------------------------------------------
 
-func amqpSetMetadata(p types.Part, k string, v interface{}) {
+func amqpSetMetadata(p *message.Part, k string, v interface{}) {
 	var metaValue string
 	var metaKey = strings.ReplaceAll(k, "-", "_")
 
@@ -253,12 +253,12 @@ func amqpSetMetadata(p types.Part, k string, v interface{}) {
 	}
 
 	if metaValue != "" {
-		p.Metadata().Set(metaKey, metaValue)
+		p.MetaSet(metaKey, metaValue)
 	}
 }
 
 // ReadWithContext a new AMQP09 message.
-func (a *AMQP09) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (a *AMQP09) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	var c <-chan amqp.Delivery
 
 	a.m.RLock()
@@ -271,7 +271,7 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn
 		return nil, nil, types.ErrNotConnected
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	addPart := func(data amqp.Delivery) {
 		part := message.NewPart(data.Body)
 

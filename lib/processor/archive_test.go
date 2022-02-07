@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,9 +48,9 @@ func TestArchiveTar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := message.New(exp)
-	msg.Iter(func(i int, p types.Part) error {
-		p.Metadata().Set("path", fmt.Sprintf("bar%v", i))
+	msg := message.QuickBatch(exp)
+	_ = msg.Iter(func(i int, p *message.Part) error {
+		p.MetaSet("path", fmt.Sprintf("bar%v", i))
 		return nil
 	})
 	msgs, res := proc.ProcessMessage(msg)
@@ -117,7 +116,7 @@ func TestArchiveZip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(exp))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
 	if len(msgs) != 1 {
 		t.Error("Archive failed")
 	} else if res != nil {
@@ -165,7 +164,7 @@ func TestArchiveLines(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New([][]byte{
+	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte("hello world first part"),
 		[]byte("hello world second part"),
 		[]byte("third part"),
@@ -205,7 +204,7 @@ func TestArchiveConcatenate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New([][]byte{
+	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
 		{},
 		{0},
 		{1, 2},
@@ -239,7 +238,7 @@ func TestArchiveJSONArray(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New([][]byte{
+	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte(`{"foo":"bar"}`),
 		[]byte(`5`),
 		[]byte(`"testing 123"`),
@@ -275,7 +274,7 @@ func TestArchiveBinary(t *testing.T) {
 		return
 	}
 
-	testMsg := message.New([][]byte{[]byte("hello"), []byte("world")})
+	testMsg := message.QuickBatch([][]byte{[]byte("hello"), []byte("world")})
 	testMsgBlob := message.ToBytes(testMsg)
 
 	if msgs, _ := proc.ProcessMessage(testMsg); len(msgs) == 1 {
@@ -300,7 +299,7 @@ func TestArchiveEmpty(t *testing.T) {
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(message.New([][]byte{}))
+	msgs, _ := proc.ProcessMessage(message.QuickBatch([][]byte{}))
 	if len(msgs) != 0 {
 		t.Error("Expected failure with zero part message")
 	}

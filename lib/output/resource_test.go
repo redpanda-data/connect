@@ -103,7 +103,7 @@ func TestResourceOutput(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		msg := fmt.Sprintf("foo:%v", i)
 		select {
-		case tChan <- types.NewTransaction(message.New([][]byte{[]byte(msg)}), nil):
+		case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(msg)}), nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}

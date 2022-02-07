@@ -17,7 +17,7 @@ import (
 )
 
 type mockAsyncReader struct {
-	msgsToSnd []types.Message
+	msgsToSnd []*message.Batch
 	ackRcvd   []error
 
 	connChan         chan error
@@ -45,7 +45,7 @@ func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 	return cerr
 }
 
-func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	select {
 	case <-ctx.Done():
 		return nil, nil, types.ErrTimeout
@@ -60,7 +60,7 @@ func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (types.Message, A
 	r.ackRcvd = append(r.ackRcvd, errors.New("ack not received"))
 	i := len(r.ackRcvd) - 1
 
-	var nextMsg types.Message = message.New(nil)
+	nextMsg := message.QuickBatch(nil)
 	if len(r.msgsToSnd) > 0 {
 		nextMsg = r.msgsToSnd[0]
 		r.msgsToSnd = r.msgsToSnd[1:]
@@ -135,8 +135,8 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReader()
-	readerImpl.msgsToSnd = []types.Message{
-		message.New([][]byte{[]byte("hello world")}),
+	readerImpl.msgsToSnd = []*message.Batch{
+		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
 	pres := NewAsyncPreserver(readerImpl)
 
@@ -224,8 +224,8 @@ func TestAsyncPreserverCloseThenAck(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReader()
-	readerImpl.msgsToSnd = []types.Message{
-		message.New([][]byte{[]byte("hello world")}),
+	readerImpl.msgsToSnd = []*message.Batch{
+		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
 	pres := NewAsyncPreserver(readerImpl)
 
@@ -300,8 +300,8 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReader()
-	readerImpl.msgsToSnd = []types.Message{
-		message.New([][]byte{[]byte("hello world")}),
+	readerImpl.msgsToSnd = []*message.Batch{
+		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
 	pres := NewAsyncPreserver(readerImpl)
 
@@ -393,8 +393,8 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReader()
-	readerImpl.msgsToSnd = []types.Message{
-		message.New([][]byte{[]byte("hello world")}),
+	readerImpl.msgsToSnd = []*message.Batch{
+		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
 	pres := NewAsyncPreserver(readerImpl)
 
@@ -494,7 +494,7 @@ func TestAsyncPreserverHappy(t *testing.T) {
 			t.Error("Timed out")
 		}
 		for _, p := range expParts {
-			readerImpl.msgsToSnd = []types.Message{message.New([][]byte{p})}
+			readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch([][]byte{p})}
 			select {
 			case readerImpl.readChan <- nil:
 			case <-time.After(time.Second):
@@ -633,8 +633,8 @@ func TestAsyncPreserverBatchError(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
-		readerImpl.msgsToSnd = []types.Message{
-			message.New([][]byte{
+		readerImpl.msgsToSnd = []*message.Batch{
+			message.QuickBatch([][]byte{
 				[]byte("foo"),
 				[]byte("bar"),
 				[]byte("baz"),
@@ -696,8 +696,8 @@ func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
-		readerImpl.msgsToSnd = []types.Message{
-			message.New([][]byte{
+		readerImpl.msgsToSnd = []*message.Batch{
+			message.QuickBatch([][]byte{
 				[]byte("foo"),
 				[]byte("bar"),
 				[]byte("baz"),
@@ -728,7 +728,7 @@ func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
 		[]byte("bev"),
 	}, message.GetAllBytes(msg))
 
-	bMsg := message.New(nil)
+	bMsg := message.QuickBatch(nil)
 	bMsg.Append(msg.Get(1))
 	bMsg.Append(msg.Get(3))
 	bMsg.Append(msg.Get(0))
@@ -763,7 +763,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	pres := NewAsyncPreserver(readerImpl)
 
 	sendMsg := func(content string) {
-		readerImpl.msgsToSnd = []types.Message{message.New(
+		readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch(
 			[][]byte{[]byte(content)},
 		)}
 		select {
@@ -865,7 +865,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 	pres := NewAsyncPreserver(readerImpl)
 
 	sendMsg := func(content string) {
-		readerImpl.msgsToSnd = []types.Message{message.New(
+		readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch(
 			[][]byte{[]byte(content)},
 		)}
 		select {

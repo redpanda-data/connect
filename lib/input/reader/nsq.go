@@ -183,13 +183,13 @@ func (n *NSQ) read(ctx context.Context) (*nsq.Message, error) {
 }
 
 // ReadWithContext attempts to read a new message from NSQ.
-func (n *NSQ) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (n *NSQ) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	msg, err := n.read(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	n.unAckMsgs = append(n.unAckMsgs, msg)
-	return message.New([][]byte{msg.Body}), func(rctx context.Context, res types.Response) error {
+	return message.QuickBatch([][]byte{msg.Body}), func(rctx context.Context, res types.Response) error {
 		if res.Error() != nil {
 			msg.Requeue(-1)
 		}

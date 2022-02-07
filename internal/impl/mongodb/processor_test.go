@@ -132,7 +132,7 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 		[]byte(`{"foo":"foo2","bar":"bar2"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.New(parts))
+	resMsgs, response := m.ProcessMessage(message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -210,7 +210,7 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_delete","bar":"bar_delete"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.New(parts))
+	resMsgs, response := m.ProcessMessage(message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -272,7 +272,7 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_delete_many","bar":"bar_delete_many"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.New(parts))
+	resMsgs, response := m.ProcessMessage(message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -332,7 +332,7 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_replace","bar":"bar_new"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.New(parts))
+	resMsgs, response := m.ProcessMessage(message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -397,7 +397,7 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_update","bar":"bar_update_new"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.New(parts))
+	resMsgs, response := m.ProcessMessage(message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -493,11 +493,11 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 
 		m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
 		require.NoError(t, err)
-		resMsgs, response := m.ProcessMessage(message.New([][]byte{[]byte(tt.message)}))
+		resMsgs, response := m.ProcessMessage(message.QuickBatch([][]byte{[]byte(tt.message)}))
 		require.Nil(t, response)
 		require.Len(t, resMsgs, 1)
 		if tt.expectedErr != nil {
-			require.Equal(t, mongo.ErrNoDocuments.Error(), resMsgs[0].Get(0).Metadata().Get(types.FailFlagKey))
+			require.Equal(t, mongo.ErrNoDocuments.Error(), resMsgs[0].Get(0).MetaGet(types.FailFlagKey))
 			continue
 		}
 

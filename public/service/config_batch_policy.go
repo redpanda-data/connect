@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -74,7 +74,7 @@ func (b *Batcher) Flush(ctx context.Context) (batch MessageBatch, err error) {
 	if m == nil || m.Len() == 0 {
 		return
 	}
-	_ = m.Iter(func(i int, part types.Part) error {
+	_ = m.Iter(func(i int, part *message.Part) error {
 		batch = append(batch, newMessageFromPart(part))
 		return nil
 	})

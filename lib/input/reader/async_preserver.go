@@ -18,11 +18,11 @@ import (
 type asyncPreserverResend struct {
 	boff     backoff.BackOff
 	attempts int
-	msg      types.Message
+	msg      *message.Batch
 	ackFn    AsyncAckFn
 }
 
-func newResendMsg(msg types.Message, ackFn AsyncAckFn) asyncPreserverResend {
+func newResendMsg(msg *message.Batch, ackFn AsyncAckFn) asyncPreserverResend {
 	boff := backoff.NewExponentialBackOff()
 	boff.InitialInterval = time.Millisecond
 	boff.MaxInterval = time.Second
@@ -75,22 +75,22 @@ func (p *AsyncPreserver) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (p *AsyncPreserver) wrapAckFn(m asyncPreserverResend) (types.Message, AsyncAckFn) {
+func (p *AsyncPreserver) wrapAckFn(m asyncPreserverResend) (*message.Batch, AsyncAckFn) {
 	if m.msg.Len() == 1 {
 		return p.wrapSingleAckFn(m)
 	}
 	return p.wrapBatchAckFn(m)
 }
 
-func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (types.Message, AsyncAckFn) {
+func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (*message.Batch, AsyncAckFn) {
 	sortGroup, trackedMsg := imessage.NewSortGroup(m.msg)
 
 	return trackedMsg, func(ctx context.Context, res types.Response) error {
 		if res.Error() != nil {
 			resendMsg := m.msg
 			if walkable, ok := res.Error().(batch.WalkableError); ok && walkable.IndexedErrors() < m.msg.Len() {
-				resendMsg = message.New(nil)
-				walkable.WalkParts(func(i int, p types.Part, e error) bool {
+				resendMsg = message.QuickBatch(nil)
+				walkable.WalkParts(func(i int, p *message.Part, e error) bool {
 					if e == nil {
 						return true
 					}
@@ -121,7 +121,7 @@ func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (types.Message, 
 	}
 }
 
-func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (types.Message, AsyncAckFn) {
+func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (*message.Batch, AsyncAckFn) {
 	return m.msg, func(ctx context.Context, res types.Response) error {
 		if res.Error() != nil {
 			p.msgsMut.Lock()
@@ -136,7 +136,7 @@ func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (types.Message,
 }
 
 // ReadWithContext attempts to read a new message from the source.
-func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	var cancel func()
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
@@ -171,7 +171,7 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (types.Message, As
 	p.msgsMut.Unlock()
 
 	var (
-		msg types.Message
+		msg *message.Batch
 		aFn AsyncAckFn
 		err error
 	)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -106,12 +107,12 @@ func (s *Socket) ConnectWithContext(ctx context.Context) error {
 }
 
 // Write attempts to write a message.
-func (s *Socket) Write(msg types.Message) error {
+func (s *Socket) Write(msg *message.Batch) error {
 	return s.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write a message.
-func (s *Socket) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (s *Socket) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	s.writerMut.Lock()
 	w := s.writer
 	s.writerMut.Unlock()
@@ -120,7 +121,7 @@ func (s *Socket) WriteWithContext(ctx context.Context, msg types.Message) error 
 		return types.ErrNotConnected
 	}
 
-	err := msg.Iter(func(i int, part types.Part) error {
+	err := msg.Iter(func(i int, part *message.Part) error {
 		serr := w.Write(ctx, part)
 		if serr != nil || s.codecConf.CloseAfter {
 			s.writerMut.Lock()

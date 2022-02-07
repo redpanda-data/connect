@@ -8,7 +8,7 @@ import (
 )
 
 func TestNestedSortGroups(t *testing.T) {
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(message.NewPart([]byte("first")))
 	msg.Append(message.NewPart([]byte("second")))
 
@@ -20,7 +20,7 @@ func TestNestedSortGroups(t *testing.T) {
 	assert.Equal(t, 0, group1.GetIndex(msg1.Get(0)))
 	assert.Equal(t, 1, group1.GetIndex(msg1.Get(1)))
 
-	msg1Reordered := message.New(nil)
+	msg1Reordered := message.QuickBatch(nil)
 	msg1Reordered.Append(msg1.Get(1))
 	msg1Reordered.Append(msg1.Get(0))
 

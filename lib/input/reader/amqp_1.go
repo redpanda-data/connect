@@ -193,7 +193,7 @@ func (a *AMQP1) disconnect(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 // ReadWithContext a new AMQP1 message.
-func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (a *AMQP1) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	a.m.RLock()
 	conn := a.conn
 	a.m.RUnlock()
@@ -219,7 +219,7 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn,
 		return nil, nil, err
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 
 	part := message.NewPart(amqpMsg.GetData())
 

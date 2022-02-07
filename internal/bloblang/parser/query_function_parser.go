@@ -373,29 +373,3 @@ func functionParser(pCtx Context) Func {
 		return Success(fn, res.Remaining)
 	}
 }
-
-//------------------------------------------------------------------------------
-
-func parseDeprecatedFunction(isDeprecated *bool) func(input []rune) Result {
-	return func(input []rune) Result {
-		var targetFunc, arg string
-
-		for i := 0; i < len(input); i++ {
-			if input[i] == ':' {
-				targetFunc = string(input[:i])
-				arg = string(input[i+1:])
-				break
-			}
-		}
-		if targetFunc == "" {
-			targetFunc = string(input)
-		}
-
-		fn, exists := query.DeprecatedFunction(targetFunc, arg)
-		if !exists {
-			return Fail(NewError(input), input)
-		}
-		(*isDeprecated) = true
-		return Success(fn, nil)
-	}
-}

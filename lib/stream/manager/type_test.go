@@ -7,6 +7,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/stream"
@@ -25,9 +26,9 @@ type mockProc struct {
 	mChan chan struct{}
 }
 
-func (m *mockProc) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (m *mockProc) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	m.mChan <- struct{}{}
-	return []types.Message{msg}, nil
+	return []*message.Batch{msg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

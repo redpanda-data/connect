@@ -54,7 +54,7 @@ func TestDynamoDBHappy(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, db.Write(message.New([][]byte{
+	require.NoError(t, db.Write(message.QuickBatch([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
 	})))
@@ -129,7 +129,7 @@ func TestDynamoDBSadToGood(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, db.Write(message.New([][]byte{
+	require.NoError(t, db.Write(message.QuickBatch([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
 		[]byte(`{"id":"baz","content":"baz stuff"}`),
@@ -241,7 +241,7 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, db.Write(message.New([][]byte{
+	require.NoError(t, db.Write(message.QuickBatch([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
 		[]byte(`{"id":"baz","content":"baz stuff"}`),
@@ -333,7 +333,7 @@ func TestDynamoDBSad(t *testing.T) {
 		},
 	}
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
 		[]byte(`{"id":"baz","content":"baz stuff"}`),
@@ -447,7 +447,7 @@ func TestDynamoDBSadBatch(t *testing.T) {
 		},
 	}
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
 		[]byte(`{"id":"baz","content":"baz stuff"}`),

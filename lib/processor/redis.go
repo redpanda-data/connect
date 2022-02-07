@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
@@ -212,10 +213,10 @@ func NewRedis(
 
 //------------------------------------------------------------------------------
 
-type redisOperator func(r *Redis, key string, part types.Part) error
+type redisOperator func(r *Redis, key string, part *message.Part) error
 
 func newRedisKeysOperator() redisOperator {
-	return func(r *Redis, key string, part types.Part) error {
+	return func(r *Redis, key string, part *message.Part) error {
 		res, err := r.client.Keys(key).Result()
 
 		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
@@ -237,7 +238,7 @@ func newRedisKeysOperator() redisOperator {
 }
 
 func newRedisSCardOperator() redisOperator {
-	return func(r *Redis, key string, part types.Part) error {
+	return func(r *Redis, key string, part *message.Part) error {
 		res, err := r.client.SCard(key).Result()
 
 		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
@@ -256,7 +257,7 @@ func newRedisSCardOperator() redisOperator {
 }
 
 func newRedisSAddOperator() redisOperator {
-	return func(r *Redis, key string, part types.Part) error {
+	return func(r *Redis, key string, part *message.Part) error {
 		res, err := r.client.SAdd(key, part.Get()).Result()
 
 		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
@@ -275,7 +276,7 @@ func newRedisSAddOperator() redisOperator {
 }
 
 func newRedisIncrByOperator() redisOperator {
-	return func(r *Redis, key string, part types.Part) error {
+	return func(r *Redis, key string, part *message.Part) error {
 		valueInt, err := strconv.Atoi(string(part.Get()))
 		if err != nil {
 			return err
@@ -313,11 +314,11 @@ func getRedisOperator(opStr string) (redisOperator, error) {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (r *Redis) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (r *Redis) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	r.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span *tracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part *message.Part) error {
 		key := r.key.String(index, newMsg)
 		if err := r.operator(r, key, part); err != nil {
 			r.mErr.Incr(1)
@@ -331,7 +332,7 @@ func (r *Redis) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 
 	r.mBatchSent.Incr(1)
 	r.mSent.Incr(int64(newMsg.Len()))
-	return []types.Message{newMsg}, nil
+	return []*message.Batch{newMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

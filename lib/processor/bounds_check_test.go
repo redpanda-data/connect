@@ -69,7 +69,7 @@ func TestBoundsCheck(t *testing.T) {
 	}
 
 	for _, parts := range goodParts {
-		msg := message.New(parts)
+		msg := message.QuickBatch(parts)
 		if msgs, _ := proc.ProcessMessage(msg); len(msgs) == 0 {
 			t.Errorf("Bounds check failed on: %s", parts)
 		} else if !reflect.DeepEqual(msgs[0], msg) {
@@ -78,7 +78,7 @@ func TestBoundsCheck(t *testing.T) {
 	}
 
 	for _, parts := range badParts {
-		if msgs, res := proc.ProcessMessage(message.New(parts)); len(msgs) > 0 {
+		if msgs, res := proc.ProcessMessage(message.QuickBatch(parts)); len(msgs) > 0 {
 			t.Errorf("Bounds check didnt fail on: %s", parts)
 		} else if _, ok := res.(response.Ack); !ok {
 			t.Error("Expected simple response from bad message")

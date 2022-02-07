@@ -914,7 +914,7 @@ file:
 
 	resChan := make(chan types.Response)
 	select {
-	case tChan <- types.NewTransaction(message.New([][]byte{[]byte(`{"id":"first","content":"hello world"}`)}), resChan):
+	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(`{"id":"first","content":"hello world"}`)}), resChan):
 	case <-time.After(time.Second * 5):
 		t.Fatal("timed out")
 	}
@@ -933,7 +933,7 @@ file:
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	select {
-	case tChan <- types.NewTransaction(message.New([][]byte{[]byte(`{"id":"second","content":"hello world 2"}`)}), resChan):
+	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(`{"id":"second","content":"hello world 2"}`)}), resChan):
 	case <-time.After(time.Second * 5):
 		t.Fatal("timed out")
 	}

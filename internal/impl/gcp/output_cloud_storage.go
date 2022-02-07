@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -188,7 +189,7 @@ func (g *gcpCloudStorageOutput) ConnectWithContext(ctx context.Context) error {
 
 // WriteWithContext attempts to write message contents to a target GCP Cloud
 // Storage bucket as files.
-func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	g.connMut.RLock()
 	client := g.client
 	g.connMut.RUnlock()
@@ -197,9 +198,9 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.
 		return types.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		metadata := map[string]string{}
-		p.Metadata().Iter(func(k, v string) error {
+		_ = p.MetaIter(func(k, v string) error {
 			metadata[k] = v
 			return nil
 		})

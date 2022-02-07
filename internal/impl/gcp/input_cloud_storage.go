@@ -281,21 +281,19 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 	return object, nil
 }
 
-func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []types.Part) types.Message {
-	msg := message.New(nil)
+func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*message.Part) *message.Batch {
+	msg := message.QuickBatch(nil)
 	msg.Append(parts...)
-	msg.Iter(func(_ int, part types.Part) error {
-		meta := part.Metadata()
-
-		meta.Set("gcs_key", p.target.key)
-		meta.Set("gcs_bucket", p.obj.Bucket)
-		meta.Set("gcs_last_modified", p.obj.Updated.Format(time.RFC3339))
-		meta.Set("gcs_last_modified_unix", strconv.FormatInt(p.obj.Updated.Unix(), 10))
-		meta.Set("gcs_content_type", p.obj.ContentType)
-		meta.Set("gcs_content_encoding", p.obj.ContentEncoding)
+	_ = msg.Iter(func(_ int, part *message.Part) error {
+		part.MetaSet("gcs_key", p.target.key)
+		part.MetaSet("gcs_bucket", p.obj.Bucket)
+		part.MetaSet("gcs_last_modified", p.obj.Updated.Format(time.RFC3339))
+		part.MetaSet("gcs_last_modified_unix", strconv.FormatInt(p.obj.Updated.Unix(), 10))
+		part.MetaSet("gcs_content_type", p.obj.ContentType)
+		part.MetaSet("gcs_content_encoding", p.obj.ContentEncoding)
 
 		for k, v := range p.obj.Metadata {
-			meta.Set(k, v)
+			part.MetaSet(k, v)
 		}
 		return nil
 	})
@@ -305,7 +303,7 @@ func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []types.
 
 // ReadWithContext attempts to read a new message from the target Google Cloud
 // Storage bucket.
-func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
+func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn reader.AsyncAckFn, err error) {
 	g.objectMut.Lock()
 	defer g.objectMut.Unlock()
 
@@ -324,7 +322,7 @@ func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg types.M
 		return
 	}
 
-	var parts []types.Part
+	var parts []*message.Part
 	var scnAckFn codec.ReaderAckFn
 
 	for {

@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -64,7 +65,7 @@ func TestFilesDirectory(t *testing.T) {
 		t.Error(err)
 	}
 
-	var msg types.Message
+	var msg *message.Batch
 	if msg, _, err = f.ReadWithContext(context.Background()); err != nil {
 		t.Error(err)
 	} else {
@@ -118,7 +119,7 @@ func TestFilesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var msg types.Message
+	var msg *message.Batch
 	var ackFn AsyncAckFn
 	if msg, ackFn, err = f.ReadWithContext(context.Background()); err != nil {
 		t.Error(err)
@@ -182,7 +183,7 @@ func TestFilesDirectoryDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var msg types.Message
+	var msg *message.Batch
 	if msg, _, err = f.ReadWithContext(context.Background()); err != nil {
 		t.Error(err)
 	} else {

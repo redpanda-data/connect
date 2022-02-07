@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 // WriterDocs is a static field documentation for output codecs.
@@ -26,7 +26,7 @@ var WriterDocs = docs.FieldCommon(
 
 // Writer is a codec type that reads message parts from a source.
 type Writer interface {
-	Write(context.Context, types.Part) error
+	Write(context.Context, *message.Part) error
 	Close(context.Context) error
 
 	// TODO V4: Remove this, we only have it in place in order to satisfy the
@@ -82,7 +82,7 @@ type allBytesWriter struct {
 	o io.WriteCloser
 }
 
-func (a *allBytesWriter) Write(ctx context.Context, msg types.Part) error {
+func (a *allBytesWriter) Write(ctx context.Context, msg *message.Part) error {
 	_, err := a.o.Write(msg.Get())
 	return err
 }
@@ -109,7 +109,7 @@ func newLinesWriter(w io.WriteCloser) (Writer, error) {
 	return &linesWriter{w: w}, nil
 }
 
-func (l *linesWriter) Write(ctx context.Context, p types.Part) error {
+func (l *linesWriter) Write(ctx context.Context, p *message.Part) error {
 	partBytes := p.Get()
 	if _, err := l.w.Write(partBytes); err != nil {
 		return err
@@ -146,7 +146,7 @@ func newCustomDelimWriter(w io.WriteCloser, delim string) (Writer, error) {
 	return &customDelimWriter{w: w, delim: delimBytes}, nil
 }
 
-func (d *customDelimWriter) Write(ctx context.Context, p types.Part) error {
+func (d *customDelimWriter) Write(ctx context.Context, p *message.Part) error {
 	partBytes := p.Get()
 	if _, err := d.w.Write(partBytes); err != nil {
 		return err

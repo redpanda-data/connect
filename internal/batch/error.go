@@ -5,20 +5,20 @@ package batch
 import (
 	"errors"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 // Error is an error type that also allows storing granular errors for each
 // message of a batch.
 type Error struct {
 	err        error
-	source     types.Message
+	source     *message.Batch
 	partErrors map[int]error
 }
 
 // NewError creates a new batch-wide error, where it's possible to add granular
 // errors for individual messages of the batch.
-func NewError(msg types.Message, err error) *Error {
+func NewError(msg *message.Batch, err error) *Error {
 	if berr, ok := err.(*Error); ok {
 		err = berr.Unwrap()
 	}
@@ -51,7 +51,7 @@ func (e *Error) IndexedErrors() int {
 // WalkableError is an interface implemented by batch errors that allows you to
 // walk the messages of the batch and dig into the individual errors.
 type WalkableError interface {
-	WalkParts(fn func(int, types.Part, error) bool)
+	WalkParts(fn func(int, *message.Part, error) bool)
 	IndexedErrors() int
 	error
 }
@@ -61,8 +61,8 @@ type WalkableError interface {
 // to the part, and its individual error, which may be nil if the message itself
 // was processed successfully. The closure returns a bool which indicates
 // whether the iteration should be continued.
-func (e *Error) WalkParts(fn func(int, types.Part, error) bool) {
-	e.source.Iter(func(i int, p types.Part) error {
+func (e *Error) WalkParts(fn func(int, *message.Part, error) bool) {
+	_ = e.source.Iter(func(i int, p *message.Part) error {
 		var err error
 		if e.partErrors == nil {
 			err = e.err

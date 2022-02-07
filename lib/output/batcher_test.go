@@ -39,7 +39,7 @@ func TestBatcherEarlyTermination(t *testing.T) {
 	require.Error(t, b.WaitForClose(time.Millisecond*100))
 
 	select {
-	case tInChan <- types.NewTransaction(message.New([][]byte{[]byte("foo")}), resChan):
+	case tInChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("unexpected")
 	}
@@ -87,7 +87,7 @@ func TestBatcherBasic(t *testing.T) {
 		defer wg.Done()
 		for _, batch := range firstBatchExpected {
 			select {
-			case tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan):
+			case tInChan <- types.NewTransaction(message.QuickBatch([][]byte{batch}), resChan):
 			case <-time.After(time.Second):
 				t.Error("timed out")
 			}
@@ -102,7 +102,7 @@ func TestBatcherBasic(t *testing.T) {
 		}
 		for _, batch := range secondBatchExpected {
 			select {
-			case tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan):
+			case tInChan <- types.NewTransaction(message.QuickBatch([][]byte{batch}), resChan):
 			case <-time.After(time.Second):
 				t.Error("timed out")
 			}
@@ -117,7 +117,7 @@ func TestBatcherBasic(t *testing.T) {
 		}
 		for _, batch := range finalBatchExpected {
 			select {
-			case tInChan <- types.NewTransaction(message.New([][]byte{batch}), resChan):
+			case tInChan <- types.NewTransaction(message.QuickBatch([][]byte{batch}), resChan):
 			case <-time.After(time.Second):
 				t.Error("timed out")
 			}
@@ -234,7 +234,7 @@ func TestBatcherBatchError(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		data := []byte(fmt.Sprintf("foo%v", i))
 		select {
-		case tInChan <- types.NewTransaction(message.New([][]byte{data}), resChan):
+		case tInChan <- types.NewTransaction(message.QuickBatch([][]byte{data}), resChan):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -293,7 +293,7 @@ func TestBatcherTimed(t *testing.T) {
 	}
 
 	select {
-	case tInChan <- types.NewTransaction(message.New(batchExpected), resChan):
+	case tInChan <- types.NewTransaction(message.QuickBatch(batchExpected), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message send")
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -231,10 +232,10 @@ func strToPartitioner(str string) (sarama.PartitionerConstructor, error) {
 
 //------------------------------------------------------------------------------
 
-func (k *Kafka) buildSystemHeaders(part types.Part) []sarama.RecordHeader {
+func (k *Kafka) buildSystemHeaders(part *message.Part) []sarama.RecordHeader {
 	if k.version.IsAtLeast(sarama.V0_11_0_0) {
 		out := []sarama.RecordHeader{}
-		k.metaFilter.Iter(part.Metadata(), func(k, v string) error {
+		k.metaFilter.Iter(part, func(k, v string) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
 				Value: []byte(v),
@@ -321,13 +322,13 @@ func (k *Kafka) Connect() error {
 
 // Write will attempt to write a message to Kafka, wait for acknowledgement, and
 // returns an error if applicable.
-func (k *Kafka) Write(msg types.Message) error {
+func (k *Kafka) Write(msg *message.Batch) error {
 	return k.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext will attempt to write a message to Kafka, wait for
 // acknowledgement, and returns an error if applicable.
-func (k *Kafka) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (k *Kafka) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	k.connMut.RLock()
 	producer := k.producer
 	k.connMut.RUnlock()
@@ -341,7 +342,7 @@ func (k *Kafka) WriteWithContext(ctx context.Context, msg types.Message) error {
 	userDefinedHeaders := k.buildUserDefinedHeaders(k.staticHeaders)
 	msgs := []*sarama.ProducerMessage{}
 
-	err := msg.Iter(func(i int, p types.Part) error {
+	err := msg.Iter(func(i int, p *message.Part) error {
 		key := k.key.Bytes(i, msg)
 		nextMsg := &sarama.ProducerMessage{
 			Topic:    k.topic.String(i, msg),

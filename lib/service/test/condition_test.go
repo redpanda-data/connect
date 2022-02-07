@@ -111,7 +111,7 @@ func TestConditionCheckAll(t *testing.T) {
 	}
 
 	part := message.NewPart([]byte("foo bar"))
-	part.Metadata().Set("foo", "bar")
+	part.MetaSet("foo", "bar")
 	errs := conds.CheckAll(part)
 	if errs != nil {
 		t.Errorf("Unexpected errors: %v", errs)
@@ -130,7 +130,7 @@ func TestConditionCheckAll(t *testing.T) {
 	}
 
 	part = message.NewPart([]byte("foo bar"))
-	part.Metadata().Set("foo", "wrong")
+	part.MetaSet("foo", "wrong")
 	errs = conds.CheckAll(part)
 	if exp, act := 1, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
@@ -140,7 +140,7 @@ func TestConditionCheckAll(t *testing.T) {
 	}
 
 	part = message.NewPart([]byte("wrong"))
-	part.Metadata().Set("foo", "bar")
+	part.MetaSet("foo", "bar")
 	errs = conds.CheckAll(part)
 	if exp, act := 1, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
@@ -285,7 +285,7 @@ func TestMetadataEqualsCondition(t *testing.T) {
 		t.Run(test.name, func(tt *testing.T) {
 			part := message.NewPart(nil)
 			for k, v := range test.input {
-				part.Metadata().Set(k, v)
+				part.MetaSet(k, v)
 			}
 			actErr := cond.Check(part)
 			if test.expected == nil && actErr == nil {

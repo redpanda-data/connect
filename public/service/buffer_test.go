@@ -90,7 +90,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 
 		select {
 		// Send to buffer
-		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+		case tChan <- types.NewTransaction(message.QuickBatch(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for unbuffered message %v send", i)
 		}
@@ -126,7 +126,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		msgBytes[0][0] = i
 
 		select {
-		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+		case tChan <- types.NewTransaction(message.QuickBatch(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v send", i)
 		}
@@ -143,7 +143,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	msgBytes[0] = make([]byte, int(incr)+1)
 
 	select {
-	case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+	case tChan <- types.NewTransaction(message.QuickBatch(msgBytes), resChan):
 	case <-time.After(time.Second):
 		t.Fatalf("Timed out waiting for final buffered message send")
 	}
@@ -232,7 +232,7 @@ func TestStreamBufferClosing(t *testing.T) {
 		msgBytes[0][0] = i
 
 		select {
-		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+		case tChan <- types.NewTransaction(message.QuickBatch(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v send", i)
 		}

@@ -113,8 +113,8 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 			defer wg.Done()
 
 			assert.True(t, testMsgs[string(actM.Get(0).Get())], "Unexpected message")
-			assert.Equal(t, "plain/text", actM.Get(0).Metadata().Get("amqp_content_type"))
-			assert.Equal(t, "utf-8", actM.Get(0).Metadata().Get("amqp_content_encoding"))
+			assert.Equal(t, "plain/text", actM.Get(0).MetaGet("amqp_content_type"))
+			assert.Equal(t, "utf-8", actM.Get(0).MetaGet("amqp_content_encoding"))
 
 			time.Sleep(6 * time.Second) // Simulate long processing before ack so message lock expires and lock renewal is requires
 

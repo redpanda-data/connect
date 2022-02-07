@@ -6,7 +6,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func TestSplitToSingleParts(t *testing.T) {
@@ -36,9 +35,9 @@ func TestSplitToSingleParts(t *testing.T) {
 	}
 
 	for _, tIn := range tests {
-		inMsg := message.New(tIn)
-		inMsg.Iter(func(i int, p types.Part) error {
-			p.Metadata().Set("foo", "bar")
+		inMsg := message.QuickBatch(tIn)
+		_ = inMsg.Iter(func(i int, p *message.Part) error {
+			p.MetaSet("foo", "bar")
 			return nil
 		})
 		msgs, _ := proc.ProcessMessage(inMsg)
@@ -50,7 +49,7 @@ func TestSplitToSingleParts(t *testing.T) {
 			if act, exp := string(msgs[i].Get(0).Get()), string(expBytes); act != exp {
 				t.Errorf("Wrong contents: %v != %v", act, exp)
 			}
-			if act, exp := msgs[i].Get(0).Metadata().Get("foo"), "bar"; act != exp {
+			if act, exp := msgs[i].Get(0).MetaGet("foo"), "bar"; act != exp {
 				t.Errorf("Wrong metadata: %v != %v", act, exp)
 			}
 		}
@@ -68,7 +67,7 @@ func TestSplitToMultipleParts(t *testing.T) {
 		return
 	}
 
-	inMsg := message.New([][]byte{
+	inMsg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
@@ -105,7 +104,7 @@ func TestSplitByBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inMsg := message.New([][]byte{
+	inMsg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
@@ -142,7 +141,7 @@ func TestSplitByBytesTooLarge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inMsg := message.New([][]byte{
+	inMsg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),

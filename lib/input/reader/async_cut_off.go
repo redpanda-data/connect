@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
 type asyncCutOffMsg struct {
-	msg   types.Message
+	msg   *message.Batch
 	ackFn AsyncAckFn
 }
 
@@ -48,7 +49,7 @@ func (c *AsyncCutOff) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a new message from the source.
-func (c *AsyncCutOff) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (c *AsyncCutOff) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	go func() {
 		msg, ackFn, err := c.r.ReadWithContext(ctx)
 		if err == nil {

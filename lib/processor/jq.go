@@ -174,16 +174,16 @@ func NewJQ(
 
 //------------------------------------------------------------------------------
 
-func (j *JQ) getPartMetadata(part types.Part) map[string]interface{} {
+func (j *JQ) getPartMetadata(part *message.Part) map[string]interface{} {
 	metadata := map[string]interface{}{}
-	part.Metadata().Iter(func(k, v string) error {
+	_ = part.MetaIter(func(k, v string) error {
 		metadata[k] = v
 		return nil
 	})
 	return metadata
 }
 
-func (j *JQ) getPartValue(part types.Part, raw bool) (obj interface{}, err error) {
+func (j *JQ) getPartValue(part *message.Part, raw bool) (obj interface{}, err error) {
 	if raw {
 		return string(part.Get()), nil
 	}
@@ -201,11 +201,11 @@ func (j *JQ) getPartValue(part types.Part, raw bool) (obj interface{}, err error
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (j *JQ) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (j *JQ) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	j.mCount.Incr(1)
 
 	newMsg := msg.Copy()
-	iteratePartsFilterableWithSpan(TypeJQ, nil, newMsg, func(index int, span *tracing.Span, part types.Part) (bool, error) {
+	iteratePartsFilterableWithSpan(TypeJQ, nil, newMsg, func(index int, span *tracing.Span, part *message.Part) (bool, error) {
 		in, err := j.getPartValue(part, j.conf.Raw)
 		if err != nil {
 			j.mErr.Incr(1)
@@ -281,7 +281,7 @@ func (j *JQ) ProcessMessage(msg types.Message) ([]types.Message, types.Response)
 	j.mBatchSent.Incr(1)
 	j.mSent.Incr(int64(newMsg.Len()))
 
-	return []types.Message{newMsg}, nil
+	return []*message.Batch{newMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

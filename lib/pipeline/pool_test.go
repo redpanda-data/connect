@@ -47,7 +47,7 @@ func TestPoolBasic(t *testing.T) {
 		t.Error("Expected error from dupe receiving")
 	}
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
 	})
@@ -165,7 +165,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 
 		// Send message
 		select {
-		case tChan <- types.NewTransaction(message.New(nil), resChan):
+		case tChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
 		}
@@ -240,7 +240,7 @@ func TestPoolMultiThreads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
 	})

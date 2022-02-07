@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ func (d *Drop) ConnectWithContext(ctx context.Context) error {
 }
 
 // WriteWithContext does nothing.
-func (d *Drop) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (d *Drop) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return nil
 }
 

@@ -4,13 +4,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/message/metadata"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMessageSerialization(t *testing.T) {
-	m := New([][]byte{
+	m := QuickBatch([][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 		[]byte("12345"),
@@ -31,7 +30,7 @@ func TestMessageSerialization(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
-	m := New(nil)
+	m := QuickBatch(nil)
 	if act := m.Len(); act > 0 {
 		t.Errorf("New returned more than zero message parts: %v", act)
 	}
@@ -43,9 +42,9 @@ func TestIter(t *testing.T) {
 		[]byte(`bar`),
 		[]byte(`baz`),
 	}
-	m := New(parts)
+	m := QuickBatch(parts)
 	iters := 0
-	m.Iter(func(index int, b types.Part) error {
+	_ = m.Iter(func(index int, b *Part) error {
 		if exp, act := string(parts[index]), string(b.Get()); exp != act {
 			t.Errorf("Unexpected part: %v != %v", act, exp)
 		}
@@ -105,7 +104,7 @@ func TestMessageIncompleteJSON(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		msg := New([][]byte{[]byte(test.message)})
+		msg := QuickBatch([][]byte{[]byte(test.message)})
 		_, err := msg.Get(0).JSON()
 		if test.err == "" {
 			assert.NoError(t, err)
@@ -116,7 +115,7 @@ func TestMessageIncompleteJSON(t *testing.T) {
 }
 
 func TestMessageJSONGet(t *testing.T) {
-	msg := New(
+	msg := QuickBatch(
 		[][]byte{[]byte(`{"foo":{"bar":"baz"}}`)},
 	)
 
@@ -156,7 +155,7 @@ func TestMessageJSONGet(t *testing.T) {
 }
 
 func TestMessageJSONSet(t *testing.T) {
-	msg := New([][]byte{[]byte(`hello world`)})
+	msg := QuickBatch([][]byte{[]byte(`hello world`)})
 
 	msg.Get(1).SetJSON(nil)
 
@@ -197,23 +196,23 @@ func TestMessageJSONSet(t *testing.T) {
 }
 
 func TestMessageMetadata(t *testing.T) {
-	m := New([][]byte{
+	m := QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 	})
 
-	m.Get(0).Metadata().Set("foo", "bar")
-	if exp, act := "bar", m.Get(0).Metadata().Get("foo"); exp != act {
+	m.Get(0).MetaSet("foo", "bar")
+	if exp, act := "bar", m.Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m.Get(0).Metadata().Set("foo", "bar2")
-	if exp, act := "bar2", m.Get(0).Metadata().Get("foo"); exp != act {
+	m.Get(0).MetaSet("foo", "bar2")
+	if exp, act := "bar2", m.Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m.Get(0).Metadata().Set("bar", "baz")
-	m.Get(0).Metadata().Set("baz", "qux")
+	m.Get(0).MetaSet("bar", "baz")
+	m.Get(0).MetaSet("baz", "qux")
 
 	exp := map[string]string{
 		"foo": "bar2",
@@ -221,121 +220,79 @@ func TestMessageMetadata(t *testing.T) {
 		"baz": "qux",
 	}
 	act := map[string]string{}
-	m.Get(0).Metadata().Iter(func(k, v string) error {
+	require.NoError(t, m.Get(0).MetaIter(func(k, v string) error {
 		act[k] = v
 		return nil
-	})
+	}))
 	if !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
-	}
-
-	newMetadata := metadata.New(map[string]string{
-		"foo": "new1",
-		"bar": "new2",
-		"baz": "new3",
-	})
-	m.Get(0).SetMetadata(newMetadata)
-	if exp, act := "new1", m.Get(0).Metadata().Get("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-	if exp, act := "new2", m.Get(0).Metadata().Get("bar"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-	if exp, act := "", m.Get(-1).Metadata().Get("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-	if exp, act := "", m.Get(100).Metadata().Get("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-
-	m.Get(0).SetMetadata(newMetadata)
-	m.Get(1).SetMetadata(newMetadata)
-	if exp, act := "new1", m.Get(0).Metadata().Get("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-	if exp, act := "new1", m.Get(1).Metadata().Get("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-
-	newMetadata = metadata.New(map[string]string{
-		"foo": "more_new",
-	})
-	m.Iter(func(i int, p types.Part) error {
-		p.SetMetadata(newMetadata)
-		return nil
-	})
-	if exp, act := "more_new", m.Get(0).Metadata().Get("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-	if exp, act := "more_new", m.Get(1).Metadata().Get("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
 
 func TestMessageCopy(t *testing.T) {
-	m := New([][]byte{
+	m := QuickBatch([][]byte{
 		[]byte(`foo`),
 		[]byte(`bar`),
 	})
-	m.Get(0).Metadata().Set("foo", "bar")
+	m.Get(0).MetaSet("foo", "bar")
 
 	m2 := m.Copy()
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m2.Get(0).Metadata().Get("foo"); exp != act {
+	if exp, act := "bar", m2.Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m2.Get(0).Metadata().Set("foo", "bar2")
+	m2.Get(0).MetaSet("foo", "bar2")
 	m2.Get(0).Set([]byte(`baz`))
 	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar2", m2.Get(0).Metadata().Get("foo"); exp != act {
+	if exp, act := "bar2", m2.Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m.Get(0).Metadata().Get("foo"); exp != act {
+	if exp, act := "bar", m.Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
 
 func TestMessageDeepCopy(t *testing.T) {
-	m := New([][]byte{
+	m := QuickBatch([][]byte{
 		[]byte(`foo`),
 		[]byte(`bar`),
 	})
-	m.Get(0).Metadata().Set("foo", "bar")
+	m.Get(0).MetaSet("foo", "bar")
 
 	m2 := m.DeepCopy()
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m2.Get(0).Metadata().Get("foo"); exp != act {
+	if exp, act := "bar", m2.Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m2.Get(0).Metadata().Set("foo", "bar2")
+	m2.Get(0).MetaSet("foo", "bar2")
 	m2.Get(0).Set([]byte(`baz`))
 	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar2", m2.Get(0).Metadata().Get("foo"); exp != act {
+	if exp, act := "bar2", m2.Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m.Get(0).Metadata().Get("foo"); exp != act {
+	if exp, act := "bar", m.Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
 
 func TestMessageJSONSetGet(t *testing.T) {
-	msg := New([][]byte{[]byte(`hello world`)})
+	msg := QuickBatch([][]byte{[]byte(`hello world`)})
 
 	p1Obj := map[string]interface{}{
 		"foo": map[string]interface{}{
@@ -395,7 +352,7 @@ func TestMessageJSONSetGet(t *testing.T) {
 }
 
 func TestMessageSplitJSON(t *testing.T) {
-	msg1 := New([][]byte{
+	msg1 := QuickBatch([][]byte{
 		[]byte("Foo plain text"),
 		[]byte(`nothing here`),
 	})
@@ -553,7 +510,7 @@ func TestMessageConditionCaching(t *testing.T) {
 */
 
 func TestMessageCrossContaminateJSON(t *testing.T) {
-	msg1 := New([][]byte{
+	msg1 := QuickBatch([][]byte{
 		[]byte(`{"foo":"bar"}`),
 	})
 
@@ -638,7 +595,7 @@ func BenchmarkJSONGet(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		msg := New([][]byte{sample1})
+		msg := QuickBatch([][]byte{sample1})
 
 		jObj, err := msg.Get(0).JSON()
 		if err != nil {

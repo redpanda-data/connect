@@ -9,7 +9,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -114,7 +113,7 @@ func TestSwitchCases(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, s := range test.input {
 				msg.Append(message.NewPart([]byte(s)))
 			}
@@ -162,7 +161,7 @@ func TestSwitchError(t *testing.T) {
 		assert.NoError(t, c.WaitForClose(time.Second))
 	}()
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(message.NewPart([]byte(`{"id":"foo","content":"just a foo"}`)))
 	msg.Append(message.NewPart([]byte(`{"content":"bar but doesnt have an id!"}`)))
 	msg.Append(message.NewPart([]byte(`{"id":"buz","content":"a real foobar"}`)))
@@ -230,7 +229,7 @@ func BenchmarkSwitch10(b *testing.B) {
 		assert.NoError(b, c.WaitForClose(time.Second))
 	}()
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte("A"),
 		[]byte("B"),
 		[]byte("C"),
@@ -306,17 +305,17 @@ func BenchmarkSwitch1(b *testing.B) {
 		assert.NoError(b, c.WaitForClose(time.Second))
 	}()
 
-	msgs := []types.Message{
-		message.New([][]byte{[]byte("A")}),
-		message.New([][]byte{[]byte("B")}),
-		message.New([][]byte{[]byte("C")}),
-		message.New([][]byte{[]byte("D")}),
-		message.New([][]byte{[]byte("AB")}),
-		message.New([][]byte{[]byte("AC")}),
-		message.New([][]byte{[]byte("AD")}),
-		message.New([][]byte{[]byte("BC")}),
-		message.New([][]byte{[]byte("BD")}),
-		message.New([][]byte{[]byte("CD")}),
+	msgs := []*message.Batch{
+		message.QuickBatch([][]byte{[]byte("A")}),
+		message.QuickBatch([][]byte{[]byte("B")}),
+		message.QuickBatch([][]byte{[]byte("C")}),
+		message.QuickBatch([][]byte{[]byte("D")}),
+		message.QuickBatch([][]byte{[]byte("AB")}),
+		message.QuickBatch([][]byte{[]byte("AC")}),
+		message.QuickBatch([][]byte{[]byte("AD")}),
+		message.QuickBatch([][]byte{[]byte("BC")}),
+		message.QuickBatch([][]byte{[]byte("BD")}),
+		message.QuickBatch([][]byte{[]byte("CD")}),
 	}
 
 	exp := [][]byte{
@@ -342,7 +341,7 @@ func BenchmarkSwitch1(b *testing.B) {
 }
 
 func BenchmarkSortCorrect(b *testing.B) {
-	sortedParts := make([]types.Part, b.N)
+	sortedParts := make([]*message.Part, b.N)
 	for i := range sortedParts {
 		sortedParts[i] = message.NewPart([]byte(fmt.Sprintf("hello world %040d", i)))
 	}
@@ -356,13 +355,13 @@ func BenchmarkSortCorrect(b *testing.B) {
 }
 
 func BenchmarkSortReverse(b *testing.B) {
-	sortedParts := make([]types.Part, b.N)
+	sortedParts := make([]*message.Part, b.N)
 	for i := range sortedParts {
 		sortedParts[i] = message.NewPart([]byte(fmt.Sprintf("hello world %040d", i)))
 	}
 
 	group, parts := imessage.NewSortGroupParts(sortedParts)
-	unsortedParts := make([]types.Part, b.N)
+	unsortedParts := make([]*message.Part, b.N)
 	for i := range parts {
 		unsortedParts[i] = parts[len(parts)-i-1]
 	}

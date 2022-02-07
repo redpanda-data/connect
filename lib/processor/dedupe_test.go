@@ -40,7 +40,7 @@ func TestDedupe(t *testing.T) {
 		return
 	}
 
-	msgIn := message.New([][]byte{doc1})
+	msgIn := message.QuickBatch([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -49,7 +49,7 @@ func TestDedupe(t *testing.T) {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = message.New([][]byte{doc2})
+	msgIn = message.QuickBatch([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -58,7 +58,7 @@ func TestDedupe(t *testing.T) {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
 	}
 
-	msgIn = message.New([][]byte{doc3})
+	msgIn = message.QuickBatch([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -89,7 +89,7 @@ func TestDedupeInterpolation(t *testing.T) {
 		return
 	}
 
-	msgIn := message.New([][]byte{doc1})
+	msgIn := message.QuickBatch([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -98,7 +98,7 @@ func TestDedupeInterpolation(t *testing.T) {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = message.New([][]byte{doc2})
+	msgIn = message.QuickBatch([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 3 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -107,7 +107,7 @@ func TestDedupeInterpolation(t *testing.T) {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
 	}
 
-	msgIn = message.New([][]byte{doc3})
+	msgIn = message.QuickBatch([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -116,7 +116,7 @@ func TestDedupeInterpolation(t *testing.T) {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = message.New([][]byte{doc4})
+	msgIn = message.QuickBatch([][]byte{doc4})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 4 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -147,7 +147,7 @@ func TestDedupeXXHash(t *testing.T) {
 		return
 	}
 
-	msgIn := message.New([][]byte{doc1})
+	msgIn := message.QuickBatch([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -156,7 +156,7 @@ func TestDedupeXXHash(t *testing.T) {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = message.New([][]byte{doc2})
+	msgIn = message.QuickBatch([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -165,7 +165,7 @@ func TestDedupeXXHash(t *testing.T) {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
 	}
 
-	msgIn = message.New([][]byte{doc3})
+	msgIn = message.QuickBatch([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -197,7 +197,7 @@ func TestDedupePartSelection(t *testing.T) {
 		return
 	}
 
-	msgIn := message.New([][]byte{hdr, doc1})
+	msgIn := message.QuickBatch([][]byte{hdr, doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -206,7 +206,7 @@ func TestDedupePartSelection(t *testing.T) {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
 	}
 
-	msgIn = message.New([][]byte{hdr, doc2})
+	msgIn = message.QuickBatch([][]byte{hdr, doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.Error())
@@ -215,7 +215,7 @@ func TestDedupePartSelection(t *testing.T) {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
 	}
 
-	msgIn = message.New([][]byte{hdr, doc3})
+	msgIn = message.QuickBatch([][]byte{hdr, doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
 	if err != nil && err.Error() != nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.Error())
@@ -253,7 +253,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 
 	delete(mgr.Caches, "foocache")
 
-	msgs, res := proc.ProcessMessage(message.New([][]byte{[]byte("foo"), []byte("bar")}))
+	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar")}))
 	if exp := response.NewAck(); !reflect.DeepEqual(exp, res) || len(msgs) > 0 {
 		t.Errorf("Expected message drop on error: %v - %v", res, len(msgs))
 	}
@@ -268,7 +268,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 
 	delete(mgr.Caches, "foocache")
 
-	msgs, res = proc.ProcessMessage(message.New([][]byte{[]byte("foo"), []byte("bar")}))
+	msgs, res = proc.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar")}))
 	if res != nil || len(msgs) != 1 {
 		t.Errorf("Expected message propagate on error: %v - %v", res, len(msgs))
 	}
@@ -304,7 +304,7 @@ func TestDedupeBoundsCheck(t *testing.T) {
 		t.Fatal(err1)
 	}
 
-	msgIn := message.New([][]byte{})
+	msgIn := message.QuickBatch([][]byte{})
 	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")
@@ -330,7 +330,7 @@ func TestDedupeNegBoundsCheck(t *testing.T) {
 		t.Fatal(err1)
 	}
 
-	msgIn := message.New([][]byte{})
+	msgIn := message.QuickBatch([][]byte{})
 	msgs, res := proc.ProcessMessage(msgIn)
 	if len(msgs) > 0 {
 		t.Error("OOB message told to propagate")

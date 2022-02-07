@@ -24,15 +24,15 @@ type mockMsgProcessor struct {
 	mut               sync.Mutex
 }
 
-func (m *mockMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (m *mockMsgProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	if drop := <-m.dropChan; drop {
 		return nil, response.NewError(errMockProc)
 	}
-	newMsg := message.New([][]byte{
+	newMsg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 	})
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 	return msgs[:], nil
 }
 
@@ -74,7 +74,7 @@ func TestProcessorPipeline(t *testing.T) {
 		t.Error("Expected error from dupe listening")
 	}
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`one`),
 		[]byte(`two`),
 	})
@@ -184,10 +184,10 @@ type mockMultiMsgProcessor struct {
 	mut               sync.Mutex
 }
 
-func (m *mockMultiMsgProcessor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	var msgs []types.Message
+func (m *mockMultiMsgProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+	var msgs []*message.Batch
 	for i := 0; i < m.N; i++ {
-		newMsg := message.New([][]byte{
+		newMsg := message.QuickBatch([][]byte{
 			[]byte(fmt.Sprintf("test%v", i)),
 		})
 		msgs = append(msgs, newMsg)
@@ -227,7 +227,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(message.New(nil), resChan):
+	case tChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -317,7 +317,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(message.New(nil), resChan):
+	case tChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}

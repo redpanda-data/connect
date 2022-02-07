@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
@@ -138,10 +139,10 @@ func isValidSNSAttribute(k, v string) bool {
 	return len(snsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
-func (a *SNS) getSNSAttributes(msg types.Message, i int) snsAttributes {
+func (a *SNS) getSNSAttributes(msg *message.Batch, i int) snsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
-	a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
+	a.metaFilter.Iter(p, func(k, v string) error {
 		if isValidSNSAttribute(k, v) {
 			keys = append(keys, k)
 		} else {
@@ -157,7 +158,7 @@ func (a *SNS) getSNSAttributes(msg types.Message, i int) snsAttributes {
 		for _, k := range keys {
 			values[k] = &sns.MessageAttributeValue{
 				DataType:    aws.String("String"),
-				StringValue: aws.String(p.Metadata().Get(k)),
+				StringValue: aws.String(p.MetaGet(k)),
 			}
 		}
 	}
@@ -178,12 +179,12 @@ func (a *SNS) getSNSAttributes(msg types.Message, i int) snsAttributes {
 }
 
 // Write attempts to write message contents to a target SNS.
-func (a *SNS) Write(msg types.Message) error {
+func (a *SNS) Write(msg *message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target SNS.
-func (a *SNS) WriteWithContext(wctx context.Context, msg types.Message) error {
+func (a *SNS) WriteWithContext(wctx context.Context, msg *message.Batch) error {
 	if a.session == nil {
 		return types.ErrNotConnected
 	}
@@ -191,7 +192,7 @@ func (a *SNS) WriteWithContext(wctx context.Context, msg types.Message) error {
 	ctx, cancel := context.WithTimeout(wctx, a.tout)
 	defer cancel()
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		attrs := a.getSNSAttributes(msg, i)
 		message := &sns.PublishInput{
 			TopicArn:               aws.String(a.conf.TopicArn),

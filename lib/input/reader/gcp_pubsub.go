@@ -9,7 +9,6 @@ import (
 	"cloud.google.com/go/pubsub"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -122,7 +121,7 @@ func (c *GCPPubSub) ConnectWithContext(ignored context.Context) error {
 }
 
 // ReadWithContext attempts to read a new message from the target subscription.
-func (c *GCPPubSub) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (c *GCPPubSub) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	c.subMut.Lock()
 	msgsChan := c.msgsChan
 	c.subMut.Unlock()
@@ -130,7 +129,7 @@ func (c *GCPPubSub) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 		return nil, nil, types.ErrNotConnected
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 
 	var gmsg *pubsub.Message
 	var open bool
@@ -144,8 +143,10 @@ func (c *GCPPubSub) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 	}
 
 	part := message.NewPart(gmsg.Data)
-	part.SetMetadata(metadata.New(gmsg.Attributes))
-	part.Metadata().Set("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
+	for k, v := range gmsg.Attributes {
+		part.MetaSet(k, v)
+	}
+	part.MetaSet("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
 	msg.Append(part)
 
 	return msg, func(ctx context.Context, res types.Response) error {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
@@ -162,7 +163,7 @@ func (l *Type) waitForAccess(ctx context.Context) bool {
 
 // InvokeV2 attempts to invoke a lambda function with a message and replaces
 // its contents with the result on success, or returns an error.
-func (l *Type) InvokeV2(p types.Part) error {
+func (l *Type) InvokeV2(p *message.Part) error {
 	l.mCount.Incr(1)
 
 	remainingRetries := l.conf.NumRetries
@@ -177,7 +178,7 @@ func (l *Type) InvokeV2(p types.Part) error {
 		done()
 		if err == nil {
 			if result.FunctionError != nil {
-				p.Metadata().Set("lambda_function_error", *result.FunctionError)
+				p.MetaSet("lambda_function_error", *result.FunctionError)
 			}
 			l.mSucc.Incr(1)
 			p.Set(result.Payload)

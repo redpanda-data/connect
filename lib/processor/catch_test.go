@@ -7,7 +7,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -24,7 +23,7 @@ func TestCatchEmpty(t *testing.T) {
 	exp := [][]byte{
 		[]byte("foo bar baz"),
 	}
-	msgs, res := proc.ProcessMessage(message.New(exp))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
 	if res != nil {
 		t.Fatal(res.Error())
 	}
@@ -35,7 +34,7 @@ func TestCatchEmpty(t *testing.T) {
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
-	msgs[0].Iter(func(i int, p types.Part) error {
+	_ = msgs[0].Iter(func(i int, p *message.Part) error {
 		if HasFailed(p) {
 			t.Errorf("Unexpected part %v failed flag", i)
 		}
@@ -68,8 +67,8 @@ func TestCatchBasic(t *testing.T) {
 		[]byte("aGVsbG8gZm9vIHdvcmxk"),
 	}
 
-	msg := message.New(parts)
-	msg.Iter(func(i int, p types.Part) error {
+	msg := message.QuickBatch(parts)
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		FlagFail(p)
 		return nil
 	})
@@ -84,7 +83,7 @@ func TestCatchBasic(t *testing.T) {
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
-	msgs[0].Iter(func(i int, p types.Part) error {
+	_ = msgs[0].Iter(func(i int, p *message.Part) error {
 		if HasFailed(p) {
 			t.Errorf("Unexpected part %v failed flag", i)
 		}
@@ -115,8 +114,8 @@ func TestCatchFilterSome(t *testing.T) {
 		[]byte("foo bar baz"),
 		[]byte("hello foo world"),
 	}
-	msg := message.New(parts)
-	msg.Iter(func(i int, p types.Part) error {
+	msg := message.QuickBatch(parts)
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		FlagFail(p)
 		return nil
 	})
@@ -131,7 +130,7 @@ func TestCatchFilterSome(t *testing.T) {
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
-	msgs[0].Iter(func(i int, p types.Part) error {
+	_ = msgs[0].Iter(func(i int, p *message.Part) error {
 		if HasFailed(p) {
 			t.Errorf("Unexpected part %v failed flag", i)
 		}
@@ -166,8 +165,8 @@ func TestCatchMultiProcs(t *testing.T) {
 		[]byte("Zm9vIGJhciBiYXo="),
 		[]byte("aGVsbG8gZm9vIHdvcmxk"),
 	}
-	msg := message.New(parts)
-	msg.Iter(func(i int, p types.Part) error {
+	msg := message.QuickBatch(parts)
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		FlagFail(p)
 		return nil
 	})
@@ -182,7 +181,7 @@ func TestCatchMultiProcs(t *testing.T) {
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
-	msgs[0].Iter(func(i int, p types.Part) error {
+	_ = msgs[0].Iter(func(i int, p *message.Part) error {
 		if HasFailed(p) {
 			t.Errorf("Unexpected part %v failed flag", i)
 		}
@@ -214,7 +213,7 @@ func TestCatchNotFails(t *testing.T) {
 		[]byte("NOT FAILED, DO NOT ENCODE"),
 		[]byte("RkFJTEVEIEVOQ09ERSBNRSBQTEVBU0UgMg=="),
 	}
-	msg := message.New(parts)
+	msg := message.QuickBatch(parts)
 	FlagFail(msg.Get(0))
 	FlagFail(msg.Get(2))
 	msgs, res := proc.ProcessMessage(msg)
@@ -228,7 +227,7 @@ func TestCatchNotFails(t *testing.T) {
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
-	msgs[0].Iter(func(i int, p types.Part) error {
+	_ = msgs[0].Iter(func(i int, p *message.Part) error {
 		if HasFailed(p) {
 			t.Errorf("Unexpected part %v failed flag", i)
 		}
@@ -255,8 +254,8 @@ func TestCatchFilterAll(t *testing.T) {
 		[]byte("1 2 3 4"),
 		[]byte("hello world"),
 	}
-	msg := message.New(parts)
-	msg.Iter(func(i int, p types.Part) error {
+	msg := message.QuickBatch(parts)
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		FlagFail(p)
 		return nil
 	})

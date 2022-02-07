@@ -11,6 +11,7 @@ import (
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
@@ -122,7 +123,7 @@ func (r *RedisHash) Connect() error {
 //------------------------------------------------------------------------------
 
 func walkForHashFields(
-	msg types.Message, index int, fields map[string]interface{},
+	msg *message.Batch, index int, fields map[string]interface{},
 ) error {
 	jVal, err := msg.Get(index).JSON()
 	if err != nil {
@@ -140,13 +141,13 @@ func walkForHashFields(
 
 // WriteWithContext attempts to write a message to Redis by setting it using the
 // HMSET command.
-func (r *RedisHash) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (r *RedisHash) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return r.Write(msg)
 }
 
 // Write attempts to write a message to Redis by setting it using the HMSET
 // command.
-func (r *RedisHash) Write(msg types.Message) error {
+func (r *RedisHash) Write(msg *message.Batch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
@@ -155,11 +156,11 @@ func (r *RedisHash) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		key := r.keyStr.String(i, msg)
 		fields := map[string]interface{}{}
 		if r.conf.WalkMetadata {
-			p.Metadata().Iter(func(k, v string) error {
+			_ = p.MetaIter(func(k, v string) error {
 				fields[k] = v
 				return nil
 			})

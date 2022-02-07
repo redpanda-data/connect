@@ -10,6 +10,7 @@ import (
 	"github.com/Azure/go-amqp"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
@@ -166,13 +167,13 @@ func (a *AMQP1) disconnect(ctx context.Context) error {
 
 // Write will attempt to write a message over AMQP1, wait for acknowledgement,
 // and returns an error if applicable.
-func (a *AMQP1) Write(msg types.Message) error {
+func (a *AMQP1) Write(msg *message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext will attempt to write a message over AMQP1, wait for
 // acknowledgement, and returns an error if applicable.
-func (a *AMQP1) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (a *AMQP1) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	var s *amqp.Sender
 	a.connLock.RLock()
 	if a.sender != nil {
@@ -184,9 +185,9 @@ func (a *AMQP1) WriteWithContext(ctx context.Context, msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		m := amqp.NewMessage(p.Get())
-		a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
+		a.metaFilter.Iter(p, func(k, v string) error {
 			if m.Annotations == nil {
 				m.Annotations = amqp.Annotations{}
 			}

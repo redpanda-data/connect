@@ -100,7 +100,7 @@ func (c *compiled) ExpandToNode(node *yaml.Node) (*yaml.Node, error) {
 		return nil, fmt.Errorf("invalid config for template component: %w", err)
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	part := message.NewPart(nil)
 	if err := part.SetJSON(generic); err != nil {
 		return nil, err

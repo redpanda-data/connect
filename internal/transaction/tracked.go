@@ -6,6 +6,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -14,7 +15,7 @@ import (
 // that an error returned resulting from multiple transaction messages can be
 // reduced.
 type Tracked struct {
-	msg     types.Message
+	msg     *message.Batch
 	group   *imessage.SortGroup
 	resChan chan<- types.Response
 }
@@ -24,7 +25,7 @@ type Tracked struct {
 // is returned from a downstream component that merged messages from other
 // transactions the tag can be used in order to determine whether the message
 // owned by this transaction succeeded.
-func NewTracked(msg types.Message, resChan chan<- types.Response) *Tracked {
+func NewTracked(msg *message.Batch, resChan chan<- types.Response) *Tracked {
 	group, trackedMsg := imessage.NewSortGroup(msg)
 	return &Tracked{
 		msg:     trackedMsg,
@@ -34,7 +35,7 @@ func NewTracked(msg types.Message, resChan chan<- types.Response) *Tracked {
 }
 
 // Message returns the message owned by this transaction.
-func (t *Tracked) Message() types.Message {
+func (t *Tracked) Message() *message.Batch {
 	return t.msg
 }
 
@@ -50,7 +51,7 @@ func (t *Tracked) getResFromGroup(walkable batch.WalkableError) types.Response {
 	}
 
 	var res types.Response
-	walkable.WalkParts(func(_ int, p types.Part, err error) bool {
+	walkable.WalkParts(func(_ int, p *message.Part, err error) bool {
 		if index := t.group.GetIndex(p); index >= 0 {
 			if err != nil {
 				res = response.NewError(err)

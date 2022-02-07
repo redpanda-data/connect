@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
@@ -210,11 +211,11 @@ func addGrokPatternsFromPath(path string, patterns map[string]string) error {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (g *Grok) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	g.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span *tracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part *message.Part) error {
 		body := part.Get()
 
 		var values map[string]interface{}
@@ -253,7 +254,7 @@ func (g *Grok) ProcessMessage(msg types.Message) ([]types.Message, types.Respons
 
 	IteratePartsWithSpanV2(TypeGrok, g.parts, newMsg, proc)
 
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 
 	g.mBatchSent.Incr(1)
 	g.mSent.Incr(int64(newMsg.Len()))

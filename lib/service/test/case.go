@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	yaml "gopkg.in/yaml.v3"
@@ -164,7 +163,7 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 		})
 	}
 
-	parts := make([]types.Part, len(c.InputBatch))
+	parts := make([]*message.Part, len(c.InputBatch))
 	for i, v := range c.InputBatch {
 		var content string
 		if content, err = v.getContent(dir); err != nil {
@@ -172,11 +171,13 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 			return
 		}
 		part := message.NewPart([]byte(content))
-		part.SetMetadata(metadata.New(v.Metadata))
+		for k, v := range v.Metadata {
+			part.MetaSet(k, v)
+		}
 		parts[i] = part
 	}
 
-	inputMsg := message.New(nil)
+	inputMsg := message.QuickBatch(nil)
 	inputMsg.SetAll(parts)
 	outputBatches, result := processor.ExecuteAll(procSet, inputMsg)
 	if result != nil {
@@ -204,7 +205,7 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 		if lExp, lAct := len(expectedBatch), v.Len(); lExp != lAct {
 			reportFailure(fmt.Sprintf("mismatch of output batch %v message counts, expected %v, got %v", i, lExp, lAct))
 		}
-		v.Iter(func(i2 int, part types.Part) error {
+		_ = v.Iter(func(i2 int, part *message.Part) error {
 			if len(expectedBatch) <= i2 {
 				reportFailure(fmt.Sprintf("unexpected message from batch %v: %s", i, part.Get()))
 				return nil

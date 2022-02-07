@@ -16,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -237,14 +238,14 @@ func NewProcessor(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (m *Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	m.mCount.Incr(1)
 	newMsg := msg.Copy()
 
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
-	processor.IteratePartsWithSpanV2("mongodb", m.parts, newMsg, func(i int, s *tracing.Span, p types.Part) error {
+	processor.IteratePartsWithSpanV2("mongodb", m.parts, newMsg, func(i int, s *tracing.Span, p *message.Part) error {
 		var err error
-		var filterVal, documentVal types.Part
+		var filterVal, documentVal *message.Part
 		var upsertVal, filterValWanted, documentValWanted bool
 
 		filterValWanted = isFilterAllowed(m.operation)
@@ -369,7 +370,7 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 
 	m.mBatchSent.Incr(1)
 	m.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 	return msgs[:], nil
 }
 

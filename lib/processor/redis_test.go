@@ -96,7 +96,7 @@ func testRedisKeys(t *testing.T, client *redis.Client, url string) {
 		require.NoError(t, err)
 	}
 
-	msg := message.New([][]byte{[]byte(`ignore me please`)})
+	msg := message.QuickBatch([][]byte{[]byte(`ignore me please`)})
 
 	resMsgs, response := r.ProcessMessage(msg)
 	if !assert.Nil(t, response) {
@@ -135,7 +135,7 @@ func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
 		t.Fatal(err)
 	}
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`foo`),
 		[]byte(`bar`),
 		[]byte(`bar`),
@@ -143,12 +143,12 @@ func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
 		[]byte(`buz`),
 		[]byte(`bev`),
 	})
-	msg.Get(0).Metadata().Set("key", "foo1")
-	msg.Get(1).Metadata().Set("key", "foo1")
-	msg.Get(2).Metadata().Set("key", "foo1")
-	msg.Get(3).Metadata().Set("key", "foo2")
-	msg.Get(4).Metadata().Set("key", "foo2")
-	msg.Get(5).Metadata().Set("key", "foo2")
+	msg.Get(0).MetaSet("key", "foo1")
+	msg.Get(1).MetaSet("key", "foo1")
+	msg.Get(2).MetaSet("key", "foo1")
+	msg.Get(3).MetaSet("key", "foo2")
+	msg.Get(4).MetaSet("key", "foo2")
+	msg.Get(5).MetaSet("key", "foo2")
 
 	resMsgs, response := r.ProcessMessage(msg)
 	if response != nil {
@@ -202,7 +202,7 @@ func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 		t.Fatal(err)
 	}
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`doesntexist`),
 		[]byte(`foo1`),
 		[]byte(`foo2`),
@@ -241,7 +241,7 @@ func testRedisIncrby(t *testing.T, client *redis.Client, url string) {
 		t.Fatal(err)
 	}
 
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`2`),
 		[]byte(`1`),
 		[]byte(`5`),

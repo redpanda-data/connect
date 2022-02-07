@@ -95,7 +95,7 @@ func (r *RedisList) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to pop a message from a Redis list.
-func (r *RedisList) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (r *RedisList) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	var client redis.UniversalClient
 
 	r.cMut.Lock()
@@ -118,7 +118,7 @@ func (r *RedisList) ReadWithContext(ctx context.Context) (types.Message, AsyncAc
 		return nil, nil, types.ErrTimeout
 	}
 
-	return message.New([][]byte{[]byte(res[1])}), noopAsyncAckFn, nil
+	return message.QuickBatch([][]byte{[]byte(res[1])}), noopAsyncAckFn, nil
 }
 
 // disconnect safely closes a connection to an RedisList server.

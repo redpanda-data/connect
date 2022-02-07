@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -98,10 +99,10 @@ func NewKinesisFirehose(
 // and passing each new message through the partition and hash key interpolation
 // process, allowing the user to define the partition and hash key per message
 // part.
-func (a *KinesisFirehose) toRecords(msg types.Message) ([]*firehose.Record, error) {
+func (a *KinesisFirehose) toRecords(msg *message.Batch) ([]*firehose.Record, error) {
 	entries := make([]*firehose.Record, msg.Len())
 
-	err := msg.Iter(func(i int, p types.Part) error {
+	err := msg.Iter(func(i int, p *message.Part) error {
 		entry := firehose.Record{
 			Data: p.Get(),
 		}
@@ -154,14 +155,14 @@ func (a *KinesisFirehose) Connect() error {
 // Write attempts to write message contents to a target Kinesis Firehose delivery
 // stream in batches of 500. If throttling is detected, failed messages are retried
 // according to the configurable backoff settings.
-func (a *KinesisFirehose) Write(msg types.Message) error {
+func (a *KinesisFirehose) Write(msg *message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target Kinesis
 // Firehose delivery stream in batches of 500. If throttling is detected, failed
 // messages are retried according to the configurable backoff settings.
-func (a *KinesisFirehose) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (a *KinesisFirehose) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if a.session == nil {
 		return types.ErrNotConnected
 	}

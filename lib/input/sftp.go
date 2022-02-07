@@ -258,7 +258,7 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a new message from the target file(s) on the server.
-func (s *sftpReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (s *sftpReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	s.scannerMut.Lock()
 	defer s.scannerMut.Unlock()
 
@@ -294,9 +294,9 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (types.Message, reader
 	}
 
 	for _, part := range parts {
-		part.Metadata().Set("sftp_path", s.currentPath)
+		part.MetaSet("sftp_path", s.currentPath)
 	}
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(parts...)
 
 	return msg, func(ctx context.Context, res types.Response) error {

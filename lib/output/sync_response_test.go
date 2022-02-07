@@ -1,4 +1,4 @@
-package roundtrip
+package output
 
 import (
 	"context"
@@ -6,22 +6,22 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 )
 
-func TestWriter(t *testing.T) {
+func TestSyncResponseWriter(t *testing.T) {
 	wctx := context.Background()
 
-	impl := &resultStoreImpl{}
-	w := Writer{}
+	impl := roundtrip.NewResultStore()
+	w := SyncResponseWriter{}
 	if err := w.ConnectWithContext(wctx); err != nil {
 		t.Fatal(err)
 	}
 
-	ctx := context.WithValue(context.Background(), ResultStoreKey, impl)
+	ctx := context.WithValue(context.Background(), roundtrip.ResultStoreKey, impl)
 
-	msg := message.New(nil)
-	var p types.Part = message.NewPart([]byte("foo"))
+	msg := message.QuickBatch(nil)
+	p := message.NewPart([]byte("foo"))
 	p = message.WithContext(ctx, p)
 	msg.Append(p)
 	msg.Append(message.NewPart([]byte("bar")))
@@ -44,7 +44,7 @@ func TestWriter(t *testing.T) {
 	if exp, act := "bar", string(results[0].Get(1).Get()); exp != act {
 		t.Errorf("Wrong message contents: %v != %v", act, exp)
 	}
-	if store := message.GetContext(results[0].Get(0)).Value(ResultStoreKey); store != nil {
+	if store := message.GetContext(results[0].Get(0)).Value(roundtrip.ResultStoreKey); store != nil {
 		t.Error("Unexpected nested result store")
 	}
 

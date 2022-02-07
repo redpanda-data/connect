@@ -14,6 +14,7 @@ import (
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/impl/sftp"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -147,7 +148,7 @@ func (s *sftpWriter) ConnectWithContext(ctx context.Context) error {
 }
 
 // WriteWithContext attempts to write message contents to a target file via an SFTP connection.
-func (s *sftpWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (s *sftpWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	s.handleMut.Lock()
 	client := s.client
 	s.handleMut.Unlock()
@@ -155,7 +156,7 @@ func (s *sftpWriter) WriteWithContext(ctx context.Context, msg types.Message) er
 		return types.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		path := s.path.String(i, msg)
 
 		s.handleMut.Lock()

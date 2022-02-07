@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -131,7 +132,7 @@ func NewWhile(
 
 //------------------------------------------------------------------------------
 
-func (w *While) checkMsg(msg types.Message) bool {
+func (w *While) checkMsg(msg *message.Batch) bool {
 	c, err := w.check.QueryPart(0, msg)
 	if err != nil {
 		c = false
@@ -142,11 +143,11 @@ func (w *While) checkMsg(msg types.Message) bool {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (w *While) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
+func (w *While) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res types.Response) {
 	w.mCount.Incr(1)
 
 	spans := tracing.CreateChildSpans(TypeWhile, msg)
-	msgs = []types.Message{msg}
+	msgs = []*message.Batch{msg}
 
 	loops := 0
 	condResult := w.atLeastOnce || w.checkMsg(msg)

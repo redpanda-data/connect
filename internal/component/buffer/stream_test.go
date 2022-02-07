@@ -34,7 +34,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 
 		select {
 		// Send to buffer
-		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+		case tChan <- types.NewTransaction(message.QuickBatch(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for unbuffered message %v send", i)
 		}
@@ -70,7 +70,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		msgBytes[0][0] = i
 
 		select {
-		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+		case tChan <- types.NewTransaction(message.QuickBatch(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v send", i)
 		}
@@ -87,7 +87,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	msgBytes[0] = make([]byte, int(incr)+1)
 
 	select {
-	case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+	case tChan <- types.NewTransaction(message.QuickBatch(msgBytes), resChan):
 	case <-time.After(time.Second):
 		t.Fatalf("Timed out waiting for final buffered message send")
 	}
@@ -176,7 +176,7 @@ func TestStreamBufferClosing(t *testing.T) {
 		msgBytes[0][0] = i
 
 		select {
-		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+		case tChan <- types.NewTransaction(message.QuickBatch(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v send", i)
 		}
@@ -220,18 +220,18 @@ type readErrorBuffer struct {
 	readErrs chan error
 }
 
-func (r *readErrorBuffer) Read(ctx context.Context) (types.Message, AckFunc, error) {
+func (r *readErrorBuffer) Read(ctx context.Context) (*message.Batch, AckFunc, error) {
 	select {
 	case err := <-r.readErrs:
 		return nil, nil, err
 	default:
 	}
-	return message.New([][]byte{[]byte("hello world")}), func(c context.Context, e error) error {
+	return message.QuickBatch([][]byte{[]byte("hello world")}), func(c context.Context, e error) error {
 		return nil
 	}, nil
 }
 
-func (r *readErrorBuffer) Write(ctx context.Context, msg types.Message, aFn AckFunc) error {
+func (r *readErrorBuffer) Write(ctx context.Context, msg *message.Batch, aFn AckFunc) error {
 	return aFn(context.Background(), nil)
 }
 

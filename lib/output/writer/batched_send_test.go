@@ -15,13 +15,13 @@ func TestBatchedSendHappy(t *testing.T) {
 		"foo", "bar", "baz", "buz",
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	for _, p := range parts {
 		msg.Append(message.NewPart([]byte(p)))
 	}
 
 	seen := []string{}
-	assert.NoError(t, IterateBatchedSend(msg, func(i int, p types.Part) error {
+	assert.NoError(t, IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		assert.Equal(t, i, len(seen))
 		seen = append(seen, string(p.Get()))
 		return nil
@@ -35,7 +35,7 @@ func TestBatchedSendALittleSad(t *testing.T) {
 		"foo", "bar", "baz", "buz",
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	for _, p := range parts {
 		msg.Append(message.NewPart([]byte(p)))
 	}
@@ -43,7 +43,7 @@ func TestBatchedSendALittleSad(t *testing.T) {
 	errFirst, errSecond := errors.New("first"), errors.New("second")
 
 	seen := []string{}
-	err := IterateBatchedSend(msg, func(i int, p types.Part) error {
+	err := IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		assert.Equal(t, i, len(seen))
 		seen = append(seen, string(p.Get()))
 		if i == 1 {
@@ -63,7 +63,7 @@ func TestBatchedSendALittleSad(t *testing.T) {
 }
 
 func TestBatchedSendFatal(t *testing.T) {
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	for _, p := range []string{
 		"foo", "bar", "baz", "buz",
 	} {
@@ -71,7 +71,7 @@ func TestBatchedSendFatal(t *testing.T) {
 	}
 
 	seen := []string{}
-	err := IterateBatchedSend(msg, func(i int, p types.Part) error {
+	err := IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		assert.Equal(t, i, len(seen))
 		seen = append(seen, string(p.Get()))
 		if i == 1 {
@@ -84,7 +84,7 @@ func TestBatchedSendFatal(t *testing.T) {
 	assert.Equal(t, []string{"foo", "bar"}, seen)
 
 	seen = []string{}
-	err = IterateBatchedSend(msg, func(i int, p types.Part) error {
+	err = IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		assert.Equal(t, i, len(seen))
 		seen = append(seen, string(p.Get()))
 		if i == 1 {
@@ -97,7 +97,7 @@ func TestBatchedSendFatal(t *testing.T) {
 	assert.Equal(t, []string{"foo", "bar"}, seen)
 
 	seen = []string{}
-	err = IterateBatchedSend(msg, func(i int, p types.Part) error {
+	err = IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		assert.Equal(t, i, len(seen))
 		seen = append(seen, string(p.Get()))
 		if i == 1 {

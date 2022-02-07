@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
@@ -132,13 +133,13 @@ func (w *Websocket) ConnectWithContext(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 // WriteWithContext attempts to write a message by pushing it to an Websocket broker.
-func (w *Websocket) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (w *Websocket) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	client := w.getWS()
 	if client == nil {
 		return types.ErrNotConnected
 	}
 
-	err := msg.Iter(func(i int, p types.Part) error {
+	err := msg.Iter(func(i int, p *message.Part) error {
 		return client.WriteMessage(websocket.BinaryMessage, p.Get())
 	})
 	if err != nil {

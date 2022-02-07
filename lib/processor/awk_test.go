@@ -20,7 +20,7 @@ func TestAWKValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := message.New([][]byte{[]byte("this is bad json")})
+	msgIn := message.QuickBatch([][]byte{[]byte("this is bad json")})
 	msgs, res := a.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
@@ -41,7 +41,7 @@ func TestAWKValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn = message.New([][]byte{[]byte("{}")})
+	msgIn = message.QuickBatch([][]byte{[]byte("{}")})
 	msgs, res = a.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad index")
@@ -70,7 +70,7 @@ func TestAWKBadExitStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := message.New([][]byte{[]byte("this will fail")})
+	msgIn := message.QuickBatch([][]byte{[]byte("this will fail")})
 	msgs, res := a.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
@@ -97,7 +97,7 @@ func TestAWKBadDateString(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := message.New([][]byte{[]byte("this is a value")})
+	msgIn := message.QuickBatch([][]byte{[]byte("this is a value")})
 	msgs, res := a.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough on error")
@@ -124,7 +124,7 @@ func TestAWKJSONParts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := message.New([][]byte{
+	msgIn := message.QuickBatch([][]byte{
 		[]byte(`{"init":{"val":"first"}}`),
 		[]byte(`{"init":{"val":"second"}}`),
 		[]byte(`{"init":{"val":"third"}}`),
@@ -614,13 +614,13 @@ func TestAWK(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := message.New(
+		inMsg := message.QuickBatch(
 			[][]byte{
 				[]byte(test.input),
 			},
 		)
 		for k, v := range test.metadata {
-			inMsg.Get(0).Metadata().Set(k, v)
+			inMsg.Get(0).MetaSet(k, v)
 		}
 		msgs, _ := a.ProcessMessage(inMsg)
 		if len(msgs) != 1 {
@@ -629,7 +629,7 @@ func TestAWK(t *testing.T) {
 
 		if exp := test.metadataAfter; len(exp) > 0 {
 			act := map[string]string{}
-			msgs[0].Get(0).Metadata().Iter(func(k, v string) error {
+			_ = msgs[0].Get(0).MetaIter(func(k, v string) error {
 				act[k] = v
 				return nil
 			})

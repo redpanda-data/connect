@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
@@ -174,7 +175,7 @@ func (p *pulsarWriter) disconnect(ctx context.Context) error {
 
 // WriteWithContext will attempt to write a message over Pulsar, wait for
 // acknowledgement, and returns an error if applicable.
-func (p *pulsarWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (p *pulsarWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	var r pulsar.Producer
 	p.m.RLock()
 	if p.producer != nil {
@@ -186,7 +187,7 @@ func (p *pulsarWriter) WriteWithContext(ctx context.Context, msg types.Message) 
 		return types.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, part types.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, part *message.Part) error {
 		m := &pulsar.ProducerMessage{
 			Payload: part.Get(),
 		}

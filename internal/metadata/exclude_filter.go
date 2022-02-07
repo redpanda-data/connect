@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 // ExcludeFilterFields returns a docs spec for the fields within a metadata
@@ -43,8 +43,8 @@ type ExcludeFilter struct {
 
 // Iter applies a function to each metadata key value pair that passes the
 // filter.
-func (f *ExcludeFilter) Iter(m types.Metadata, fn func(k, v string) error) error {
-	return m.Iter(func(k, v string) error {
+func (f *ExcludeFilter) Iter(m *message.Part, fn func(k, v string) error) error {
+	return m.MetaIter(func(k, v string) error {
 		for _, prefix := range f.excludePrefixes {
 			if strings.HasPrefix(k, prefix) {
 				return nil

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -92,7 +93,7 @@ func NewBoundsCheck(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (m *BoundsCheck) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	m.mCount.Incr(1)
 
 	lParts := msg.Len()
@@ -115,7 +116,7 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 	}
 
 	var reject bool
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		if size := len(p.Get()); size > m.conf.BoundsCheck.MaxPartSize ||
 			size < m.conf.BoundsCheck.MinPartSize {
 			m.log.Debugf(
@@ -138,7 +139,7 @@ func (m *BoundsCheck) ProcessMessage(msg types.Message) ([]types.Message, types.
 
 	m.mBatchSent.Incr(1)
 	m.mSent.Incr(int64(msg.Len()))
-	msgs := [1]types.Message{msg}
+	msgs := [1]*message.Batch{msg}
 	return msgs[:], nil
 }
 

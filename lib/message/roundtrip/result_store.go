@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -34,10 +33,10 @@ type ResultStore interface {
 	// Add a message to the store. The message will be deep copied and have its
 	// context wiped before storing, and is therefore safe to add even when
 	// ownership of the message is about to be yielded.
-	Add(msg types.Message)
+	Add(msg *message.Batch)
 
 	// Get the stored slice of messages.
-	Get() []types.Message
+	Get() []*message.Batch
 
 	// Clear any currently stored messages.
 	Clear()
@@ -46,15 +45,15 @@ type ResultStore interface {
 //------------------------------------------------------------------------------
 
 type resultStoreImpl struct {
-	payloads []types.Message
+	payloads []*message.Batch
 	sync.RWMutex
 }
 
-func (r *resultStoreImpl) Add(msg types.Message) {
+func (r *resultStoreImpl) Add(msg *message.Batch) {
 	r.Lock()
 	defer r.Unlock()
-	strippedParts := make([]types.Part, msg.Len())
-	msg.DeepCopy().Iter(func(i int, p types.Part) error {
+	strippedParts := make([]*message.Part, msg.Len())
+	_ = msg.DeepCopy().Iter(func(i int, p *message.Part) error {
 		strippedParts[i] = message.WithContext(context.Background(), p)
 		return nil
 	})
@@ -62,7 +61,7 @@ func (r *resultStoreImpl) Add(msg types.Message) {
 	r.payloads = append(r.payloads, msg)
 }
 
-func (r *resultStoreImpl) Get() []types.Message {
+func (r *resultStoreImpl) Get() []*message.Batch {
 	r.RLock()
 	defer r.RUnlock()
 	return r.payloads
@@ -86,9 +85,9 @@ func NewResultStore() ResultStore {
 // AddResultStore sets a result store within the context of the provided message
 // that allows a roundtrip.Writer or any other component to propagate a
 // resulting message back to the origin.
-func AddResultStore(msg types.Message, store ResultStore) {
-	parts := make([]types.Part, msg.Len())
-	msg.Iter(func(i int, p types.Part) error {
+func AddResultStore(msg *message.Batch, store ResultStore) {
+	parts := make([]*message.Part, msg.Len())
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		ctx := message.GetContext(p)
 		parts[i] = message.WithContext(context.WithValue(ctx, ResultStoreKey, store), p)
 		return nil
@@ -99,7 +98,7 @@ func AddResultStore(msg types.Message, store ResultStore) {
 // SetAsResponse takes a mutated message and stores it as a response message,
 // this action fails if the message does not contain a valid ResultStore within
 // its context.
-func SetAsResponse(msg types.Message) error {
+func SetAsResponse(msg *message.Batch) error {
 	ctx := message.GetContext(msg.Get(0))
 	store, ok := ctx.Value(ResultStoreKey).(ResultStore)
 	if !ok {

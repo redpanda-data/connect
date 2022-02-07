@@ -180,7 +180,7 @@ func (s *ScaleProto) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a new message from the nanomsg socket.
-func (s *ScaleProto) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (s *ScaleProto) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	s.cMut.Lock()
 	socket := s.socket
 	s.cMut.Unlock()
@@ -195,7 +195,7 @@ func (s *ScaleProto) ReadWithContext(ctx context.Context) (types.Message, AsyncA
 		}
 		return nil, nil, err
 	}
-	return message.New([][]byte{data}), noopAsyncAckFn, nil
+	return message.QuickBatch([][]byte{data}), noopAsyncAckFn, nil
 }
 
 // CloseAsync shuts down the ScaleProto input and stops processing requests.

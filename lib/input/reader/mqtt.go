@@ -230,7 +230,7 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a new message from an MQTT broker.
-func (m *MQTT) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (m *MQTT) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	m.cMut.Lock()
 	msgChan := m.msgChan
 	m.cMut.Unlock()
@@ -249,14 +249,14 @@ func (m *MQTT) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, 
 			return nil, nil, types.ErrNotConnected
 		}
 
-		message := message.New([][]byte{msg.Payload()})
+		message := message.QuickBatch([][]byte{msg.Payload()})
 
-		meta := message.Get(0).Metadata()
-		meta.Set("mqtt_duplicate", strconv.FormatBool(msg.Duplicate()))
-		meta.Set("mqtt_qos", strconv.Itoa(int(msg.Qos())))
-		meta.Set("mqtt_retained", strconv.FormatBool(msg.Retained()))
-		meta.Set("mqtt_topic", msg.Topic())
-		meta.Set("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
+		p := message.Get(0)
+		p.MetaSet("mqtt_duplicate", strconv.FormatBool(msg.Duplicate()))
+		p.MetaSet("mqtt_qos", strconv.Itoa(int(msg.Qos())))
+		p.MetaSet("mqtt_retained", strconv.FormatBool(msg.Retained()))
+		p.MetaSet("mqtt_topic", msg.Topic())
+		p.MetaSet("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
 
 		return message, func(ctx context.Context, res types.Response) error {
 			if res.Error() == nil {

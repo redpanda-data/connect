@@ -15,6 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -102,14 +103,14 @@ func (a *AzureTableStorage) Connect() error {
 }
 
 // Write attempts to write message contents to a target Azure Table Storage container as files.
-func (a *AzureTableStorage) Write(msg types.Message) error {
+func (a *AzureTableStorage) Write(msg *message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target storage account as files.
-func (a *AzureTableStorage) WriteWithContext(wctx context.Context, msg types.Message) error {
+func (a *AzureTableStorage) WriteWithContext(wctx context.Context, msg *message.Batch) error {
 	writeReqs := make(map[string]map[string][]*storage.Entity)
-	if err := IterateBatchedSend(msg, func(i int, p types.Part) error {
+	if err := IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		entity := &storage.Entity{}
 		tableName := a.tableName.String(i, msg)
 		partitionKey := a.partitionKey.String(i, msg)
@@ -127,7 +128,7 @@ func (a *AzureTableStorage) WriteWithContext(wctx context.Context, msg types.Mes
 	return a.writeBatches(writeReqs)
 }
 
-func (a *AzureTableStorage) getProperties(i int, p types.Part, msg types.Message) map[string]interface{} {
+func (a *AzureTableStorage) getProperties(i int, p *message.Part, msg *message.Batch) map[string]interface{} {
 	properties := make(map[string]interface{})
 	if len(a.properties) == 0 {
 		err := json.Unmarshal(p.Get(), &properties)

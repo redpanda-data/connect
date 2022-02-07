@@ -57,13 +57,12 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		return path, labelNames, labelValues
 	}
 	for i, v := range labelNames {
-		part.Metadata().Set(v, labelValues[i])
+		part.MetaSet(v, labelValues[i])
 	}
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(part)
 
 	outPart := part.Copy()
-	outMeta := outPart.Metadata()
 
 	var input interface{} = path
 	vars := map[string]interface{}{}
@@ -76,21 +75,21 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		NewMsg:   outPart,
 	}.WithValue(input), mapping.AssignmentContext{
 		Vars:  vars,
-		Meta:  outMeta,
+		Msg:   outPart,
 		Value: &v,
 	}); err != nil {
 		m.logger.Errorf("Failed to apply path mapping on '%v': %v\n", path, err)
 		return path, nil, nil
 	}
 
-	outMeta.Iter(func(k, v string) error {
+	_ = outPart.MetaIter(func(k, v string) error {
 		outLabelNames = append(outLabelNames, k)
 		return nil
 	})
 	if len(outLabelNames) > 0 {
 		sort.Strings(outLabelNames)
 		for _, k := range outLabelNames {
-			v := outMeta.Get(k)
+			v := outPart.MetaGet(k)
 			m.logger.Tracef("Metrics label '%v' created with static value '%v'.\n", k, v)
 			outLabelValues = append(outLabelValues, v)
 		}

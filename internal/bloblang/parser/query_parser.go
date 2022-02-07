@@ -24,12 +24,11 @@ func queryParser(pCtx Context) func(input []rune) Result {
 	}
 }
 
-// ParseDeprecatedQuery parses an input into a query.Function, but permits
-// deprecated function interpolations. In order to support old functions this
-// parser does not include field literals.
+// ParseInterpolation parses an input into a query.Function, but restricts the
+// parser to better fit within configs.
 //
-// TODO: V4 Remove this
-func ParseDeprecatedQuery(pCtx Context, isDeprecated *bool) Func {
+// TODO: Expand the field parser to permit more expressions.
+func ParseInterpolation(pCtx Context) Func {
 	return func(input []rune) Result {
 		rootParser := OneOf(
 			matchExpressionParser(pCtx),
@@ -37,7 +36,6 @@ func ParseDeprecatedQuery(pCtx Context, isDeprecated *bool) Func {
 			parseWithTails(bracketsExpressionParser(pCtx), pCtx),
 			parseWithTails(literalValueParser(pCtx), pCtx),
 			parseWithTails(functionParser(pCtx), pCtx),
-			parseDeprecatedFunction(isDeprecated),
 		)
 
 		res := SpacesAndTabs()(input)
@@ -53,15 +51,14 @@ func ParseDeprecatedQuery(pCtx Context, isDeprecated *bool) Func {
 	}
 }
 
-func tryParseQuery(expr string, deprecated bool) (query.Function, *Error) {
+func tryParseQuery(expr string, forInterpolation bool) (query.Function, *Error) {
 	pCtx := Context{
 		Functions: query.AllFunctions,
 		Methods:   query.AllMethods,
 	}
 	var res Result
-	if deprecated {
-		var isDep bool
-		res = ParseDeprecatedQuery(pCtx, &isDep)([]rune(expr))
+	if forInterpolation {
+		res = ParseInterpolation(pCtx)([]rune(expr))
 	} else {
 		res = queryParser(Context{
 			Functions: query.AllFunctions,

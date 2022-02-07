@@ -451,12 +451,12 @@ func TestWorkflows(t *testing.T) {
 			p, err := NewWorkflow(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
-			inputMsg := message.New(nil)
+			inputMsg := message.QuickBatch(nil)
 			for _, m := range test.input {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				inputMsg.Append(part)
@@ -475,7 +475,7 @@ func TestWorkflows(t *testing.T) {
 						meta:    map[string]string{},
 					}
 
-					msgs[0].Get(i).Metadata().Iter(func(k, v string) error {
+					_ = msgs[0].Get(i).MetaIter(func(k, v string) error {
 						comparePart.meta[k] = v
 						return nil
 					})
@@ -641,7 +641,7 @@ func TestWorkflowsWithResources(t *testing.T) {
 				parts = append(parts, []byte(input))
 			}
 
-			msgs, res := p.ProcessMessage(message.New(parts))
+			msgs, res := p.ProcessMessage(message.QuickBatch(parts))
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
 				require.EqualError(t, res.Error(), test.err)
@@ -718,7 +718,7 @@ func TestWorkflowsParallel(t *testing.T) {
 						parts = append(parts, []byte(input))
 					}
 
-					msgs, res := p.ProcessMessage(message.New(parts))
+					msgs, res := p.ProcessMessage(message.QuickBatch(parts))
 					require.Nil(t, res)
 					require.Len(t, msgs, 1)
 					var actual []string
@@ -899,7 +899,7 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 				parts = append(parts, []byte(input))
 			}
 
-			msgs, res := p.ProcessMessage(message.New(parts))
+			msgs, res := p.ProcessMessage(message.QuickBatch(parts))
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
 				require.EqualError(t, res.Error(), test.err)

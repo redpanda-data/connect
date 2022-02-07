@@ -42,7 +42,7 @@ func TestHTTPClientRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = h.Write(message.New([][]byte{[]byte("test")})); err == nil {
+	if err = h.Write(message.QuickBatch([][]byte{[]byte("test")})); err == nil {
 		t.Error("Expected error from end of retries")
 	}
 
@@ -59,9 +59,9 @@ func TestHTTPClientRetries(t *testing.T) {
 func TestHTTPClientBasic(t *testing.T) {
 	nTestLoops := 1000
 
-	resultChan := make(chan types.Message, 1)
+	resultChan := make(chan *message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		msg := message.New(nil)
+		msg := message.QuickBatch(nil)
 		defer func() {
 			resultChan <- msg
 		}()
@@ -85,7 +85,7 @@ func TestHTTPClientBasic(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := message.New([][]byte{[]byte(testStr)})
+		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 
 		if err = h.Write(testMsg); err != nil {
 			t.Error(err)
@@ -141,7 +141,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 		testStr := fmt.Sprintf("test%v", i)
 
 		resultStore := roundtrip.NewResultStore()
-		testMsg := message.New([][]byte{[]byte(testStr)})
+		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 		roundtrip.AddResultStore(testMsg, resultStore)
 
 		require.NoError(t, h.Write(testMsg))
@@ -151,7 +151,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 		resMsg := resMsgs[0]
 		require.Equal(t, 1, resMsg.Len())
 		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).Get()))
-		assert.Equal(t, "", resMsg.Get(0).Metadata().Get("fooheader"))
+		assert.Equal(t, "", resMsg.Get(0).MetaGet("fooheader"))
 	}
 
 	h.CloseAsync()
@@ -189,7 +189,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 		testStr := fmt.Sprintf("test%v", i)
 
 		resultStore := roundtrip.NewResultStore()
-		testMsg := message.New([][]byte{[]byte(testStr)})
+		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 		roundtrip.AddResultStore(testMsg, resultStore)
 
 		require.NoError(t, h.Write(testMsg))
@@ -199,7 +199,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 		resMsg := resMsgs[0]
 		require.Equal(t, 1, resMsg.Len())
 		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).Get()))
-		assert.Equal(t, "foovalue", resMsg.Get(0).Metadata().Get("fooheader"))
+		assert.Equal(t, "foovalue", resMsg.Get(0).MetaGet("fooheader"))
 	}
 
 	h.CloseAsync()
@@ -211,9 +211,9 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 func TestHTTPClientMultipart(t *testing.T) {
 	nTestLoops := 1000
 
-	resultChan := make(chan types.Message, 1)
+	resultChan := make(chan *message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		msg := message.New(nil)
+		msg := message.QuickBatch(nil)
 		defer func() {
 			resultChan <- msg
 		}()
@@ -263,7 +263,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
-		testMsg := message.New([][]byte{
+		testMsg := message.QuickBatch([][]byte{
 			[]byte(testStr + "PART-A"),
 			[]byte(testStr + "PART-B"),
 		})
@@ -299,9 +299,9 @@ func TestHTTPClientMultipart(t *testing.T) {
 }
 func TestHTTPOutputClientMultipartBody(t *testing.T) {
 	nTestLoops := 1000
-	resultChan := make(chan types.Message, 1)
+	resultChan := make(chan *message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		msg := message.New(nil)
+		msg := message.QuickBatch(nil)
 		defer func() {
 			resultChan <- msg
 		}()
@@ -352,7 +352,7 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < nTestLoops; i++ {
-		if err = h.Write(message.New([][]byte{[]byte("test")})); err != nil {
+		if err = h.Write(message.QuickBatch([][]byte{[]byte("test")})); err != nil {
 			t.Error(err)
 		}
 		select {
@@ -382,9 +382,9 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 }
 
 func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
-	resultChan := make(chan types.Message, 1)
+	resultChan := make(chan *message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		msg := message.New(nil)
+		msg := message.QuickBatch(nil)
 		defer func() {
 			resultChan <- msg
 		}()
@@ -434,7 +434,7 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = h.Write(message.New([][]byte{[]byte("test")})); err != nil {
+	if err = h.Write(message.QuickBatch([][]byte{[]byte("test")})); err != nil {
 		t.Error(err)
 	}
 	select {

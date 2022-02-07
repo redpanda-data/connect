@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -63,11 +64,11 @@ func NewSyncResponse(
 //------------------------------------------------------------------------------
 
 // ProcessMessage logs an event and returns the message unchanged.
-func (s *SyncResponse) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (s *SyncResponse) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	if err := roundtrip.SetAsResponse(msg); err != nil {
 		s.log.Debugf("Failed to store message as a sync response: %v\n", err)
 	}
-	return []types.Message{msg}, nil
+	return []*message.Batch{msg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

@@ -15,15 +15,15 @@ import (
 )
 
 func TestBloblangCrossfire(t *testing.T) {
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 
 	part := message.NewPart([]byte(`{"foo":{"bar":{"baz":"original value","qux":"dont change"}}}`))
-	part.Metadata().Set("foo", "orig1")
-	part.Metadata().Set("bar", "orig2")
+	part.MetaSet("foo", "orig1")
+	part.MetaSet("bar", "orig2")
 	msg.Append(part)
 
 	msg.Append(message.NewPart([]byte(`{}`)))
-	if err := msg.Iter(func(i int, p types.Part) error {
+	if err := msg.Iter(func(i int, p *message.Part) error {
 		_, err := p.JSON()
 		return err
 	}); err != nil {
@@ -54,24 +54,24 @@ func TestBloblangCrossfire(t *testing.T) {
 	resPartTwo := outMsgs[0].Get(1)
 
 	assert.Equal(t, `{"foo":{"bar":{"baz":"original value","qux":"dont change"}}}`, string(inputPartOne.Get()))
-	assert.Equal(t, "orig1", inputPartOne.Metadata().Get("foo"))
-	assert.Equal(t, "orig2", inputPartOne.Metadata().Get("bar"))
-	assert.Equal(t, "", inputPartOne.Metadata().Get("baz"))
+	assert.Equal(t, "orig1", inputPartOne.MetaGet("foo"))
+	assert.Equal(t, "orig2", inputPartOne.MetaGet("bar"))
+	assert.Equal(t, "", inputPartOne.MetaGet("baz"))
 
 	assert.Equal(t, `{}`, string(inputPartTwo.Get()))
-	assert.Equal(t, "", inputPartTwo.Metadata().Get("foo"))
-	assert.Equal(t, "", inputPartTwo.Metadata().Get("bar"))
-	assert.Equal(t, "", inputPartTwo.Metadata().Get("baz"))
+	assert.Equal(t, "", inputPartTwo.MetaGet("foo"))
+	assert.Equal(t, "", inputPartTwo.MetaGet("bar"))
+	assert.Equal(t, "", inputPartTwo.MetaGet("baz"))
 
 	assert.Equal(t, `{"foo":{"bar":{"baz":"and this changed","qux":"dont change"},"bar_new":"this is swapped now"}}`, string(resPartOne.Get()))
-	assert.Equal(t, "orig1", resPartOne.Metadata().Get("foo"))
-	assert.Equal(t, "orig2", resPartOne.Metadata().Get("bar"))
-	assert.Equal(t, "new meta", resPartOne.Metadata().Get("baz"))
+	assert.Equal(t, "orig1", resPartOne.MetaGet("foo"))
+	assert.Equal(t, "orig2", resPartOne.MetaGet("bar"))
+	assert.Equal(t, "new meta", resPartOne.MetaGet("baz"))
 
 	assert.Equal(t, `{"foo":{"bar":{"baz":"and this changed","qux":"dont change"},"bar_new":"this is swapped now"}}`, string(resPartTwo.Get()))
-	assert.Equal(t, "orig1", resPartTwo.Metadata().Get("foo"))
-	assert.Equal(t, "orig2", resPartTwo.Metadata().Get("bar"))
-	assert.Equal(t, "new meta", resPartTwo.Metadata().Get("baz"))
+	assert.Equal(t, "orig1", resPartTwo.MetaGet("foo"))
+	assert.Equal(t, "orig2", resPartTwo.MetaGet("bar"))
+	assert.Equal(t, "new meta", resPartTwo.MetaGet("baz"))
 }
 
 type testKeyType int
@@ -79,11 +79,11 @@ type testKeyType int
 const testFooKey testKeyType = iota
 
 func TestBloblangContext(t *testing.T) {
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 
 	part := message.NewPart([]byte(`{"foo":{"bar":{"baz":"original value"}}}`))
-	part.Metadata().Set("foo", "orig1")
-	part.Metadata().Set("bar", "orig2")
+	part.MetaSet("foo", "orig1")
+	part.MetaSet("bar", "orig2")
 
 	key, val := testFooKey, "bar"
 	msg.Append(message.WithContext(context.WithValue(context.Background(), key, val), part))
@@ -102,13 +102,13 @@ func TestBloblangContext(t *testing.T) {
 	resPart := outMsgs[0].Get(0)
 
 	assert.Equal(t, `{"result":"ORIGINAL VALUE"}`, string(resPart.Get()))
-	assert.Equal(t, "orig1", resPart.Metadata().Get("foo"))
-	assert.Equal(t, "orig2", resPart.Metadata().Get("bar"))
+	assert.Equal(t, "orig1", resPart.MetaGet("foo"))
+	assert.Equal(t, "orig2", resPart.MetaGet("bar"))
 	assert.Equal(t, val, message.GetContext(resPart).Value(key))
 }
 
 func TestBloblangCustomObject(t *testing.T) {
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 
 	part := message.NewPart(nil)
 
@@ -139,7 +139,7 @@ func TestBloblangCustomObject(t *testing.T) {
 }
 
 func TestBloblangFiltering(t *testing.T) {
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`{"foo":{"delete":true}}`),
 		[]byte(`{"foo":{"dont":"delete me"}}`),
 		[]byte(`{"bar":{"delete":true}}`),
@@ -161,14 +161,14 @@ func TestBloblangFiltering(t *testing.T) {
 	require.Nil(t, res)
 	require.Len(t, outMsgs, 1)
 	require.Equal(t, 2, outMsgs[0].Len())
-	assert.Equal(t, ``, outMsgs[0].Get(0).Metadata().Get(FailFlagKey))
-	assert.Equal(t, ``, outMsgs[0].Get(1).Metadata().Get(FailFlagKey))
+	assert.Equal(t, ``, outMsgs[0].Get(0).MetaGet(FailFlagKey))
+	assert.Equal(t, ``, outMsgs[0].Get(1).MetaGet(FailFlagKey))
 	assert.Equal(t, `{"foo":{"dont":"delete me"}}`, string(outMsgs[0].Get(0).Get()))
 	assert.Equal(t, `{"bar":{"dont":"delete me"}}`, string(outMsgs[0].Get(1).Get()))
 }
 
 func TestBloblangFilterAll(t *testing.T) {
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`{"foo":{"delete":true}}`),
 		[]byte(`{"foo":{"dont":"delete me"}}`),
 		[]byte(`{"bar":{"delete":true}}`),
@@ -188,7 +188,7 @@ func TestBloblangFilterAll(t *testing.T) {
 }
 
 func TestBloblangJSONError(t *testing.T) {
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte(`this is not valid json`),
 	})
 
@@ -208,5 +208,5 @@ func TestBloblangJSONError(t *testing.T) {
 	resPart := outMsgs[0].Get(0)
 
 	assert.Equal(t, `this is not valid json`, string(resPart.Get()))
-	assert.Equal(t, `failed assignment (line 2): invalid character 'h' in literal true (expecting 'r')`, resPart.Metadata().Get(types.FailFlagKey))
+	assert.Equal(t, `failed assignment (line 2): invalid character 'h' in literal true (expecting 'r')`, resPart.MetaGet(types.FailFlagKey))
 }

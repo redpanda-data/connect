@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -27,7 +28,7 @@ type Async interface {
 	// successful a message is returned along with a function used to
 	// acknowledge receipt of the returned message. It's safe to process the
 	// returned message and read the next message asynchronously.
-	ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error)
+	ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error)
 
 	types.Closable
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 type batchedCountKeyType int
@@ -14,7 +13,7 @@ const batchedCountKey batchedCountKeyType = iota
 // CollapsedCount attempts to extract the actual number of messages that were
 // collapsed into the resulting message part. This value could be greater than 1
 // when users configure processors that archive batched message parts.
-func CollapsedCount(p types.Part) int {
+func CollapsedCount(p *message.Part) int {
 	if v, ok := message.GetContext(p).Value(batchedCountKey).(int); ok {
 		return v
 	}
@@ -25,9 +24,9 @@ func CollapsedCount(p types.Part) int {
 // were combined into the resulting batched message parts. This value could
 // differ from message.Len() when users configure processors that archive
 // batched message parts.
-func MessageCollapsedCount(m types.Message) int {
+func MessageCollapsedCount(m *message.Batch) int {
 	total := 0
-	m.Iter(func(i int, p types.Part) error {
+	_ = m.Iter(func(i int, p *message.Part) error {
 		total += CollapsedCount(p)
 		return nil
 	})
@@ -37,7 +36,7 @@ func MessageCollapsedCount(m types.Message) int {
 // WithCollapsedCount returns a message part with a context indicating that this
 // message is the result of collapsing a number of messages. This allows
 // downstream components to know how many total messages were combined.
-func WithCollapsedCount(p types.Part, count int) types.Part {
+func WithCollapsedCount(p *message.Part, count int) *message.Part {
 	// Start with the previous length which could also be >1.
 	ctx := message.GetContext(p)
 	base := 1

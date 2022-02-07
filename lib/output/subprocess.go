@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -155,14 +156,14 @@ func (s *Subprocess) ConnectWithContext(ctx context.Context) error {
 }
 
 // WriteWithContext attempts to write message contents to a directory as files.
-func (s *Subprocess) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (s *Subprocess) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	s.cmdMut.Lock()
 	defer s.cmdMut.Unlock()
 	if s.stdin == nil {
 		return types.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		return s.codec(s.stdin, p.Get())
 	})
 }

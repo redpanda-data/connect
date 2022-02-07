@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -119,8 +120,8 @@ func (w *fileWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *fileWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
-	err := writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
+func (w *fileWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+	err := writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		path := filepath.Clean(w.path.String(i, msg))
 
 		w.handleMut.Lock()

@@ -33,7 +33,7 @@ func TestCacheSingle(t *testing.T) {
 	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	require.NoError(t, w.Write(message.New([][]byte{
+	require.NoError(t, w.Write(message.QuickBatch([][]byte{
 		[]byte(`{"id":"1","value":"first"}`),
 	})))
 
@@ -53,7 +53,7 @@ func TestCacheBatch(t *testing.T) {
 	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	require.NoError(t, w.Write(message.New([][]byte{
+	require.NoError(t, w.Write(message.QuickBatch([][]byte{
 		[]byte(`{"id":"1","value":"first"}`),
 		[]byte(`{"id":"2","value":"second"}`),
 		[]byte(`{"id":"3","value":"third"}`),
@@ -87,7 +87,7 @@ func TestCacheSingleTTL(t *testing.T) {
 	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	require.NoError(t, w.Write(message.New([][]byte{
+	require.NoError(t, w.Write(message.QuickBatch([][]byte{
 		[]byte(`{"id":"1","value":"first"}`),
 	})))
 
@@ -120,7 +120,7 @@ func TestCacheBatchTTL(t *testing.T) {
 	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	require.NoError(t, w.Write(message.New([][]byte{
+	require.NoError(t, w.Write(message.QuickBatch([][]byte{
 		[]byte(`{"id":"1","value":"first"}`),
 		[]byte(`{"id":"2","value":"second"}`),
 		[]byte(`{"id":"3","value":"third"}`),
@@ -249,7 +249,7 @@ func TestCacheBasic(t *testing.T) {
 		key := fmt.Sprintf("key%v", i)
 		value := fmt.Sprintf(`{"key":"%v","test":"hello world"}`, key)
 		exp[key] = value
-		if err := c.Write(message.New([][]byte{[]byte(value)})); err != nil {
+		if err := c.Write(message.QuickBatch([][]byte{[]byte(value)})); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -293,7 +293,7 @@ func TestCacheBatches(t *testing.T) {
 
 	exp := map[string]string{}
 	for i := 0; i < 10; i++ {
-		msg := message.New(nil)
+		msg := message.QuickBatch(nil)
 		for j := 0; j < 10; j++ {
 			key := fmt.Sprintf("key%v", i*10+j)
 			value := fmt.Sprintf(`{"key":"%v","test":"hello world"}`, key)

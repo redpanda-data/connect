@@ -256,15 +256,16 @@ func (n *NATSStream) read(ctx context.Context) (*stan.Msg, error) {
 
 // ReadWithContext attempts to read a new message from the NATS streaming
 // server.
-func (n *NATSStream) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (n *NATSStream) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	msg, err := n.read(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	bmsg := message.New([][]byte{msg.Data})
-	bmsg.Get(0).Metadata().Set("nats_stream_subject", msg.Subject)
-	bmsg.Get(0).Metadata().Set("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
+	bmsg := message.QuickBatch([][]byte{msg.Data})
+	part := bmsg.Get(0)
+	part.MetaSet("nats_stream_subject", msg.Subject)
+	part.MetaSet("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
 
 	return bmsg, func(rctx context.Context, res types.Response) error {
 		if res.Error() == nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	syslog "github.com/influxdata/go-syslog/v3"
@@ -293,11 +294,11 @@ func NewParseLog(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (s *ParseLog) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (s *ParseLog) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	s.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span *tracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part *message.Part) error {
 		dataMap, err := s.format(part.Get())
 		if err != nil {
 			s.mErr.Incr(1)
@@ -319,7 +320,7 @@ func (s *ParseLog) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	s.mBatchSent.Incr(1)
 	s.mSent.Incr(int64(newMsg.Len()))
-	return []types.Message{newMsg}, nil
+	return []*message.Batch{newMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

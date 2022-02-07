@@ -4,23 +4,24 @@ import (
 	"context"
 	"sync"
 
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 type memoryBuffer struct {
-	messages       chan types.Message
+	messages       chan *message.Batch
 	endOfInputChan chan struct{}
 	closeOnce      sync.Once
 }
 
 func newMemoryBuffer(n int) *memoryBuffer {
 	return &memoryBuffer{
-		messages:       make(chan types.Message, n),
+		messages:       make(chan *message.Batch, n),
 		endOfInputChan: make(chan struct{}),
 	}
 }
 
-func (m *memoryBuffer) Read(ctx context.Context) (types.Message, AckFunc, error) {
+func (m *memoryBuffer) Read(ctx context.Context) (*message.Batch, AckFunc, error) {
 	select {
 	case msg := <-m.messages:
 		return msg, func(c context.Context, e error) error {
@@ -42,7 +43,7 @@ func (m *memoryBuffer) Read(ctx context.Context) (types.Message, AckFunc, error)
 	}
 }
 
-func (m *memoryBuffer) Write(ctx context.Context, msg types.Message, aFn AckFunc) error {
+func (m *memoryBuffer) Write(ctx context.Context, msg *message.Batch, aFn AckFunc) error {
 	select {
 	case m.messages <- msg:
 		if err := aFn(context.Background(), nil); err != nil {

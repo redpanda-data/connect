@@ -1,6 +1,7 @@
 package writer
 
 import (
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -16,7 +17,7 @@ type Type interface {
 	// Write should block until either the message is sent (and acknowledged) to
 	// a sink, or a transport specific error has occurred, or the Type is
 	// closed.
-	Write(msg types.Message) error
+	Write(msg *message.Batch) error
 
 	types.Closable
 }

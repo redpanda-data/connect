@@ -11,6 +11,7 @@ import (
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -104,7 +105,7 @@ func (r *RedisPubSub) Connect() error {
 
 // WriteWithContext attempts to write a message by pushing it to a Redis pub/sub
 // topic.
-func (r *RedisPubSub) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (r *RedisPubSub) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
@@ -124,7 +125,7 @@ func (r *RedisPubSub) WriteWithContext(ctx context.Context, msg types.Message) e
 	}
 
 	pipe := client.Pipeline()
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		_ = pipe.Publish(r.channelStr.String(i, msg), p.Get())
 		return nil
 	})
@@ -151,7 +152,7 @@ func (r *RedisPubSub) WriteWithContext(ctx context.Context, msg types.Message) e
 }
 
 // Write attempts to write a message by pushing it to a Redis pub/sub topic.
-func (r *RedisPubSub) Write(msg types.Message) error {
+func (r *RedisPubSub) Write(msg *message.Batch) error {
 	return r.WriteWithContext(context.Background(), msg)
 }
 

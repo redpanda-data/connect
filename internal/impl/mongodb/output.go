@@ -18,6 +18,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -252,7 +253,7 @@ func (m *Writer) ConnectWithContext(ctx context.Context) error {
 }
 
 // WriteWithContext attempts to perform the designated operation to the mongo DB collection.
-func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (m *Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	m.mu.Lock()
 	collection := m.collection
 	m.mu.Unlock()
@@ -262,9 +263,9 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error 
 	}
 
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
-	err := writer.IterateBatchedSend(msg, func(i int, _ types.Part) error {
+	err := writer.IterateBatchedSend(msg, func(i int, _ *message.Part) error {
 		var err error
-		var filterVal, documentVal types.Part
+		var filterVal, documentVal *message.Part
 		var upsertVal, filterValWanted, documentValWanted bool
 
 		filterValWanted = isFilterAllowed(m.operation)

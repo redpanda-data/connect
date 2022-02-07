@@ -207,7 +207,7 @@ func (b *Bloblang) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext a new bloblang generated message.
-func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (b *Bloblang) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	if b.limited {
 		if remaining := atomic.AddInt64(&b.remaining, -1); remaining < 0 {
 			return nil, nil, types.ErrTypeClosed
@@ -229,7 +229,7 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.A
 	}
 
 	b.firstIsFree = false
-	p, err := b.exec.MapPart(0, message.New(nil))
+	p, err := b.exec.MapPart(0, message.QuickBatch(nil))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -237,7 +237,7 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (types.Message, reader.A
 		return nil, nil, types.ErrTimeout
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(p)
 
 	return msg, func(context.Context, types.Response) error { return nil }, nil

@@ -96,7 +96,7 @@ func TestMappings(t *testing.T) {
 			assert.Equal(t, test.queryTargets, targets)
 
 			res, err := m.Exec(query.FunctionContext{
-				MsgBatch: message.New(nil),
+				MsgBatch: message.QuickBatch(nil),
 				Vars:     map[string]interface{}{},
 			}.WithValue(test.input))
 			require.NoError(t, err)
@@ -145,7 +145,7 @@ func TestMappingParallelExecution(t *testing.T) {
 						part := message.NewPart(nil)
 						require.NoError(t, part.SetJSON(test.input))
 
-						msg := message.New(nil)
+						msg := message.QuickBatch(nil)
 						msg.Append(part)
 
 						p, err := m.MapPart(0, msg)

@@ -216,6 +216,9 @@ root.id = count("bloblang_function_example")`,
 	countFunction,
 )
 
+var counters = map[string]int64{}
+var countersMux = &sync.Mutex{}
+
 func countFunction(args *ParsedParams) (Function, error) {
 	name, err := args.FieldString("name")
 	if err != nil {
@@ -298,7 +301,7 @@ var _ = registerSimpleFunction(
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		return ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey), nil
+		return ctx.MsgBatch.Get(ctx.Index).MetaGet(types.FailFlagKey), nil
 	},
 )
 
@@ -311,7 +314,7 @@ var _ = registerSimpleFunction(
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		return len(ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey)) > 0, nil
+		return len(ctx.MsgBatch.Get(ctx.Index).MetaGet(types.FailFlagKey)) > 0, nil
 	},
 )
 
@@ -494,7 +497,7 @@ var _ = registerFunction(
 		}
 		if len(key) > 0 {
 			return ClosureFunction("meta field "+key, func(ctx FunctionContext) (interface{}, error) {
-				v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(key)
+				v := ctx.MsgBatch.Get(ctx.Index).MetaGet(key)
 				if v == "" {
 					return nil, &ErrRecoverable{
 						Recovered: "",
@@ -512,7 +515,7 @@ var _ = registerFunction(
 		}
 		return ClosureFunction("meta object", func(ctx FunctionContext) (interface{}, error) {
 			kvs := map[string]interface{}{}
-			ctx.MsgBatch.Get(ctx.Index).Metadata().Iter(func(k, v string) error {
+			_ = ctx.MsgBatch.Get(ctx.Index).MetaIter(func(k, v string) error {
 				if len(v) > 0 {
 					kvs[k] = v
 				}
@@ -557,7 +560,7 @@ var _ = registerFunction(
 				if ctx.NewMsg == nil {
 					return nil, errors.New("root metadata cannot be queried in this context")
 				}
-				v := ctx.NewMsg.Metadata().Get(key)
+				v := ctx.NewMsg.MetaGet(key)
 				if v == "" {
 					return nil, fmt.Errorf("metadata value '%v' not found", key)
 				}
@@ -575,7 +578,7 @@ var _ = registerFunction(
 				return nil, errors.New("root metadata cannot be queried in this context")
 			}
 			kvs := map[string]interface{}{}
-			ctx.NewMsg.Metadata().Iter(func(k, v string) error {
+			_ = ctx.NewMsg.MetaIter(func(k, v string) error {
 				if len(v) > 0 {
 					kvs[k] = v
 				}

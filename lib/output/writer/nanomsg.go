@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"go.nanomsg.org/mangos/v3"
@@ -164,12 +165,12 @@ func (s *Nanomsg) Connect() error {
 
 // WriteWithContext attempts to write a message by pushing it to a nanomsg
 // socket.
-func (s *Nanomsg) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (s *Nanomsg) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	return s.Write(msg)
 }
 
 // Write attempts to write a message by pushing it to a nanomsg socket.
-func (s *Nanomsg) Write(msg types.Message) error {
+func (s *Nanomsg) Write(msg *message.Batch) error {
 	s.sockMut.RLock()
 	socket := s.socket
 	s.sockMut.RUnlock()
@@ -178,7 +179,7 @@ func (s *Nanomsg) Write(msg types.Message) error {
 		return types.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		return socket.Send(p.Get())
 	})
 }

@@ -20,7 +20,7 @@ type awsKinesisRecordBatcher struct {
 	batchPolicy  *batch.Policy
 	checkpointer *checkpoint.Capped
 
-	flushedMessage types.Message
+	flushedMessage *message.Batch
 
 	batchedSequence string
 
@@ -46,13 +46,12 @@ func (k *kinesisReader) newAWSKinesisRecordBatcher(streamID, shardID, sequence s
 
 func (a *awsKinesisRecordBatcher) AddRecord(r *kinesis.Record) bool {
 	p := message.NewPart(r.Data)
-	met := p.Metadata()
-	met.Set("kinesis_stream", a.streamID)
-	met.Set("kinesis_shard", a.shardID)
+	p.MetaSet("kinesis_stream", a.streamID)
+	p.MetaSet("kinesis_shard", a.shardID)
 	if r.PartitionKey != nil {
-		met.Set("kinesis_partition_key", *r.PartitionKey)
+		p.MetaSet("kinesis_partition_key", *r.PartitionKey)
 	}
-	met.Set("kinesis_sequence_number", *r.SequenceNumber)
+	p.MetaSet("kinesis_sequence_number", *r.SequenceNumber)
 
 	a.batchedSequence = *r.SequenceNumber
 	if a.flushedMessage != nil {

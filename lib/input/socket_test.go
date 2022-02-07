@@ -16,7 +16,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -71,8 +70,8 @@ func TestSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
-		var msg types.Message
+	readNextMsg := func() (*message.Batch, error) {
+		var msg *message.Batch
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
@@ -172,8 +171,8 @@ func TestSocketReconnect(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
-		var msg types.Message
+	readNextMsg := func() (*message.Batch, error) {
+		var msg *message.Batch
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
@@ -271,8 +270,8 @@ func TestSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
-		var msg types.Message
+	readNextMsg := func() (*message.Batch, error) {
+		var msg *message.Batch
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
@@ -362,8 +361,8 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
-		var msg types.Message
+	readNextMsg := func() (*message.Batch, error) {
+		var msg *message.Batch
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
@@ -454,8 +453,8 @@ func TestSocketMultipartShutdown(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
-		var msg types.Message
+	readNextMsg := func() (*message.Batch, error) {
+		var msg *message.Batch
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
@@ -536,8 +535,8 @@ func TestTCPSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
-		var msg types.Message
+	readNextMsg := func() (*message.Batch, error) {
+		var msg *message.Batch
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
@@ -633,8 +632,8 @@ func TestTCPSocketReconnect(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
-		var msg types.Message
+	readNextMsg := func() (*message.Batch, error) {
+		var msg *message.Batch
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
@@ -728,8 +727,8 @@ func TestTCPSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
-		var msg types.Message
+	readNextMsg := func() (*message.Batch, error) {
+		var msg *message.Batch
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
@@ -815,8 +814,8 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
-		var msg types.Message
+	readNextMsg := func() (*message.Batch, error) {
+		var msg *message.Batch
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
@@ -903,8 +902,8 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (types.Message, error) {
-		var msg types.Message
+	readNextMsg := func() (*message.Batch, error) {
+		var msg *message.Batch
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()

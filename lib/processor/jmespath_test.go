@@ -22,7 +22,7 @@ func TestJMESPathAllParts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := message.New([][]byte{
+	msgIn := message.QuickBatch([][]byte{
 		[]byte(`{"foo":{"bar":0}}`),
 		[]byte(`{"foo":{"bar":1}}`),
 		[]byte(`{"foo":{"bar":2}}`),
@@ -53,7 +53,7 @@ func TestJMESPathValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := message.New([][]byte{[]byte("this is bad json")})
+	msgIn := message.QuickBatch([][]byte{[]byte("this is bad json")})
 	msgs, res := jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
@@ -72,7 +72,7 @@ func TestJMESPathValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn = message.New([][]byte{[]byte("{}")})
+	msgIn = message.QuickBatch([][]byte{[]byte("{}")})
 	msgs, res = jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad index")
@@ -98,7 +98,7 @@ func TestJMESPathMutation(t *testing.T) {
 	ogObj.Set("is this", "foo", "original", "content")
 	ogExp := ogObj.String()
 
-	msgIn := message.New(make([][]byte, 1))
+	msgIn := message.QuickBatch(make([][]byte, 1))
 	msgIn.Get(0).SetJSON(ogObj.Data())
 	msgs, res := jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
@@ -188,7 +188,7 @@ func TestJMESPath(t *testing.T) {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
 
-		inMsg := message.New(
+		inMsg := message.QuickBatch(
 			[][]byte{
 				[]byte(test.input),
 			},

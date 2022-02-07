@@ -168,22 +168,22 @@ func NewGroupBy(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	g.mCount.Incr(1)
 
 	if msg.Len() == 0 {
 		return nil, response.NewAck()
 	}
 
-	groups := make([]types.Message, len(g.groups))
+	groups := make([]*message.Batch, len(g.groups))
 	for i := range groups {
-		groups[i] = message.New(nil)
+		groups[i] = message.QuickBatch(nil)
 	}
-	groupless := message.New(nil)
+	groupless := message.QuickBatch(nil)
 
 	spans := tracing.CreateChildSpans(TypeGroupBy, msg)
 
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		for j, group := range g.groups {
 			res, err := group.Check.QueryPart(i, msg)
 			if err != nil {
@@ -217,7 +217,7 @@ func (g *GroupBy) ProcessMessage(msg types.Message) ([]types.Message, types.Resp
 		s.Finish()
 	}
 
-	msgs := []types.Message{}
+	msgs := []*message.Batch{}
 	for i, gmsg := range groups {
 		if gmsg.Len() == 0 {
 			continue

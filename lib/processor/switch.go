@@ -206,8 +206,8 @@ func NewSwitch(
 
 //------------------------------------------------------------------------------
 
-func reorderFromGroup(group *imessage.SortGroup, parts []types.Part) {
-	partToIndex := map[types.Part]int{}
+func reorderFromGroup(group *imessage.SortGroup, parts []*message.Part) {
+	partToIndex := map[*message.Part]int{}
 	for _, p := range parts {
 		if i := group.GetIndex(p); i >= 0 {
 			partToIndex[p] = i
@@ -227,27 +227,27 @@ func reorderFromGroup(group *imessage.SortGroup, parts []types.Part) {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res types.Response) {
+func (s *Switch) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res types.Response) {
 	s.mCount.Incr(1)
 
-	var result []types.Part
-	var remaining []types.Part
-	var carryOver []types.Part
+	var result []*message.Part
+	var remaining []*message.Part
+	var carryOver []*message.Part
 
 	sortGroup, sortMsg := imessage.NewSortGroup(msg)
-	remaining = make([]types.Part, sortMsg.Len())
-	sortMsg.Iter(func(i int, p types.Part) error {
+	remaining = make([]*message.Part, sortMsg.Len())
+	_ = sortMsg.Iter(func(i int, p *message.Part) error {
 		remaining[i] = p
 		return nil
 	})
 
 	for i, switchCase := range s.cases {
-		passed, failed := carryOver, []types.Part{}
+		passed, failed := carryOver, []*message.Part{}
 
 		// Form a message to test against, consisting of fallen through messages
 		// from prior cases plus remaining messages that haven't passed a case
 		// yet.
-		testMsg := message.New(nil)
+		testMsg := message.QuickBatch(nil)
 		testMsg.Append(remaining...)
 
 		for j, p := range remaining {
@@ -272,7 +272,7 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 		remaining = failed
 
 		if len(passed) > 0 {
-			execMsg := message.New(nil)
+			execMsg := message.QuickBatch(nil)
 			execMsg.SetAll(passed)
 
 			msgs, res := ExecuteAll(switchCase.processors, execMsg)
@@ -281,7 +281,7 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 			}
 
 			for _, m := range msgs {
-				m.Iter(func(_ int, p types.Part) error {
+				_ = m.Iter(func(_ int, p *message.Part) error {
 					if switchCase.fallThrough {
 						carryOver = append(carryOver, p)
 					} else {
@@ -298,7 +298,7 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 		reorderFromGroup(sortGroup, result)
 	}
 
-	resMsg := message.New(nil)
+	resMsg := message.QuickBatch(nil)
 	resMsg.SetAll(result)
 
 	if resMsg.Len() == 0 {
@@ -306,7 +306,7 @@ func (s *Switch) ProcessMessage(msg types.Message) (msgs []types.Message, res ty
 	}
 
 	s.mSent.Incr(int64(resMsg.Len()))
-	return []types.Message{resMsg}, nil
+	return []*message.Batch{resMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

@@ -64,7 +64,7 @@ func TestDecompressGZIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Error("Decompress failed")
 	} else if res != nil {
@@ -103,7 +103,7 @@ func TestDecompressSnappy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Error("Decompress failed")
 	} else if res != nil {
@@ -151,7 +151,7 @@ func TestDecompressZLIB(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Error("Decompress failed")
 	} else if res != nil {
@@ -202,7 +202,7 @@ func TestDecompressFlate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Error("Decompress failed")
 	} else if res != nil {
@@ -250,7 +250,7 @@ func TestDecompressLZ4(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.New(input))
+	msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 	if len(msgs) != 1 {
 		t.Error("Decompress failed")
 	} else if res != nil {
@@ -339,7 +339,7 @@ func TestDecompressIndexBounds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		msgs, res := proc.ProcessMessage(message.New(input))
+		msgs, res := proc.ProcessMessage(message.QuickBatch(input))
 		if len(msgs) != 1 {
 			t.Errorf("Decompress failed on index: %v", i)
 		} else if res != nil {

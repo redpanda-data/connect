@@ -112,13 +112,13 @@ func NewUnarchiveConfig() UnarchiveConfig {
 
 //------------------------------------------------------------------------------
 
-type unarchiveFunc func(part types.Part) ([]types.Part, error)
+type unarchiveFunc func(part *message.Part) ([]*message.Part, error)
 
-func tarUnarchive(part types.Part) ([]types.Part, error) {
+func tarUnarchive(part *message.Part) ([]*message.Part, error) {
 	buf := bytes.NewBuffer(part.Get())
 	tr := tar.NewReader(buf)
 
-	var newParts []types.Part
+	var newParts []*message.Part
 
 	// Iterate through the files in the archive.
 	for {
@@ -138,21 +138,21 @@ func tarUnarchive(part types.Part) ([]types.Part, error) {
 
 		newPart := part.Copy()
 		newPart.Set(newPartBuf.Bytes())
-		newPart.Metadata().Set("archive_filename", h.Name)
+		newPart.MetaSet("archive_filename", h.Name)
 		newParts = append(newParts, newPart)
 	}
 
 	return newParts, nil
 }
 
-func zipUnarchive(part types.Part) ([]types.Part, error) {
+func zipUnarchive(part *message.Part) ([]*message.Part, error) {
 	buf := bytes.NewReader(part.Get())
 	zr, err := zip.NewReader(buf, int64(buf.Len()))
 	if err != nil {
 		return nil, err
 	}
 
-	var newParts []types.Part
+	var newParts []*message.Part
 
 	// Iterate through the files in the archive.
 	for _, f := range zr.File {
@@ -168,20 +168,20 @@ func zipUnarchive(part types.Part) ([]types.Part, error) {
 
 		newPart := part.Copy()
 		newPart.Set(newPartBuf.Bytes())
-		newPart.Metadata().Set("archive_filename", f.Name)
+		newPart.MetaSet("archive_filename", f.Name)
 		newParts = append(newParts, newPart)
 	}
 
 	return newParts, nil
 }
 
-func binaryUnarchive(part types.Part) ([]types.Part, error) {
+func binaryUnarchive(part *message.Part) ([]*message.Part, error) {
 	msg, err := message.FromBytes(part.Get())
 	if err != nil {
 		return nil, err
 	}
-	parts := make([]types.Part, msg.Len())
-	msg.Iter(func(i int, p types.Part) error {
+	parts := make([]*message.Part, msg.Len())
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		newPart := part.Copy()
 		newPart.Set(p.Get())
 		parts[i] = newPart
@@ -191,9 +191,9 @@ func binaryUnarchive(part types.Part) ([]types.Part, error) {
 	return parts, nil
 }
 
-func linesUnarchive(part types.Part) ([]types.Part, error) {
+func linesUnarchive(part *message.Part) ([]*message.Part, error) {
 	lines := bytes.Split(part.Get(), []byte("\n"))
-	parts := make([]types.Part, len(lines))
+	parts := make([]*message.Part, len(lines))
 	for i, l := range lines {
 		newPart := part.Copy()
 		newPart.Set(l)
@@ -202,8 +202,8 @@ func linesUnarchive(part types.Part) ([]types.Part, error) {
 	return parts, nil
 }
 
-func jsonDocumentsUnarchive(part types.Part) ([]types.Part, error) {
-	var parts []types.Part
+func jsonDocumentsUnarchive(part *message.Part) ([]*message.Part, error) {
+	var parts []*message.Part
 	dec := json.NewDecoder(bytes.NewReader(part.Get()))
 	for {
 		var m interface{}
@@ -221,7 +221,7 @@ func jsonDocumentsUnarchive(part types.Part) ([]types.Part, error) {
 	return parts, nil
 }
 
-func jsonArrayUnarchive(part types.Part) ([]types.Part, error) {
+func jsonArrayUnarchive(part *message.Part) ([]*message.Part, error) {
 	jDoc, err := part.JSON()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message into JSON array: %v", err)
@@ -232,7 +232,7 @@ func jsonArrayUnarchive(part types.Part) ([]types.Part, error) {
 		return nil, fmt.Errorf("failed to parse message into JSON array: invalid type '%T'", jDoc)
 	}
 
-	parts := make([]types.Part, len(jArray))
+	parts := make([]*message.Part, len(jArray))
 	for i, ele := range jArray {
 		newPart := part.Copy()
 		if err = newPart.SetJSON(ele); err != nil {
@@ -243,7 +243,7 @@ func jsonArrayUnarchive(part types.Part) ([]types.Part, error) {
 	return parts, nil
 }
 
-func jsonMapUnarchive(part types.Part) ([]types.Part, error) {
+func jsonMapUnarchive(part *message.Part) ([]*message.Part, error) {
 	jDoc, err := part.JSON()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message into JSON map: %v", err)
@@ -254,27 +254,27 @@ func jsonMapUnarchive(part types.Part) ([]types.Part, error) {
 		return nil, fmt.Errorf("failed to parse message into JSON map: invalid type '%T'", jDoc)
 	}
 
-	parts := make([]types.Part, len(jMap))
+	parts := make([]*message.Part, len(jMap))
 	i := 0
 	for key, ele := range jMap {
 		newPart := part.Copy()
 		if err = newPart.SetJSON(ele); err != nil {
 			return nil, fmt.Errorf("failed to marshal element into new message: %v", err)
 		}
-		newPart.Metadata().Set("archive_key", key)
+		newPart.MetaSet("archive_key", key)
 		parts[i] = newPart
 		i++
 	}
 	return parts, nil
 }
 
-func csvUnarchive(part types.Part) ([]types.Part, error) {
+func csvUnarchive(part *message.Part) ([]*message.Part, error) {
 	buf := bytes.NewReader(part.Get())
 
 	scanner := csv.NewReader(buf)
 	scanner.ReuseRecord = true
 
-	var newParts []types.Part
+	var newParts []*message.Part
 
 	var headers []string
 
@@ -393,14 +393,14 @@ func NewUnarchive(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (d *Unarchive) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	d.mCount.Incr(1)
 
-	newMsg := message.New(nil)
+	newMsg := message.QuickBatch(nil)
 	lParts := msg.Len()
 
 	noParts := len(d.conf.Parts) == 0
-	msg.Iter(func(i int, part types.Part) error {
+	_ = msg.Iter(func(i int, part *message.Part) error {
 		isTarget := noParts
 		if !isTarget {
 			nI := i - lParts
@@ -437,7 +437,7 @@ func (d *Unarchive) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 
 	d.mBatchSent.Incr(1)
 	d.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 	return msgs[:], nil
 }
 

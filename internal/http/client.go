@@ -310,7 +310,7 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 
 // CreateRequest forms an *http.Request from a message to be sent as the body,
 // and also a message used to form headers (they can be the same).
-func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request, err error) {
+func (h *Client) CreateRequest(sendMsg, refMsg *message.Batch) (req *http.Request, err error) {
 	var overrideContentType string
 	var body io.Reader
 	if len(h.multipart) > 0 {
@@ -348,7 +348,7 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 			headers := textproto.MIMEHeader{
 				"Content-Type": []string{contentType},
 			}
-			_ = h.metaInsertFilter.Iter(sendMsg.Get(i).Metadata(), func(k, v string) error {
+			_ = h.metaInsertFilter.Iter(sendMsg.Get(i), func(k, v string) error {
 				headers[k] = append(headers[k], v)
 				return nil
 			})
@@ -377,7 +377,7 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 		req.Header.Add(k, v.String(0, refMsg))
 	}
 	if sendMsg != nil && sendMsg.Len() == 1 {
-		_ = h.metaInsertFilter.Iter(sendMsg.Get(0).Metadata(), func(k, v string) error {
+		_ = h.metaInsertFilter.Iter(sendMsg.Get(0), func(k, v string) error {
 			req.Header.Add(k, v)
 			return nil
 		})
@@ -396,8 +396,8 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 }
 
 // ParseResponse attempts to parse an HTTP response into a 2D slice of bytes.
-func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err error) {
-	resMsg = message.New(nil)
+func (h *Client) ParseResponse(res *http.Response) (resMsg *message.Batch, err error) {
+	resMsg = message.QuickBatch(nil)
 
 	if res.Body != nil {
 		defer res.Body.Close()
@@ -438,11 +438,11 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 				bufferIndex += bytesRead
 
 				if h.conf.CopyResponseHeaders || h.metaExtractFilter.IsSet() {
-					meta := resMsg.Get(index).Metadata()
+					part := resMsg.Get(index)
 					for k, values := range p.Header {
 						normalisedHeader := strings.ToLower(k)
 						if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaExtractFilter.Match(normalisedHeader)) {
-							meta.Set(normalisedHeader, values[0])
+							part.MetaSet(normalisedHeader, values[0])
 						}
 					}
 				}
@@ -461,11 +461,11 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 				resMsg.Append(message.NewPart(nil))
 			}
 			if h.conf.CopyResponseHeaders || h.metaExtractFilter.IsSet() {
-				meta := resMsg.Get(0).Metadata()
+				part := resMsg.Get(0)
 				for k, values := range res.Header {
 					normalisedHeader := strings.ToLower(k)
 					if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaExtractFilter.Match(normalisedHeader)) {
-						meta.Set(normalisedHeader, values[0])
+						part.MetaSet(normalisedHeader, values[0])
 					}
 				}
 			}
@@ -474,8 +474,8 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 		resMsg.Append(message.NewPart(nil))
 	}
 
-	resMsg.Iter(func(i int, p types.Part) error {
-		p.Metadata().Set("http_status_code", strconv.Itoa(res.StatusCode))
+	_ = resMsg.Iter(func(i int, p *message.Part) error {
+		p.MetaSet("http_status_code", strconv.Itoa(res.StatusCode))
 		return nil
 	})
 	return
@@ -511,7 +511,7 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 // SendToResponse attempts to create an HTTP request from a provided message,
 // performs it, and then returns the *http.Response, allowing the raw response
 // to be consumed.
-func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Message) (res *http.Response, err error) {
+func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Batch) (res *http.Response, err error) {
 	h.mCount.Incr(1)
 
 	var spans []*tracing.Span
@@ -637,7 +637,7 @@ func UnexpectedErr(res *http.Response) error {
 //
 // If the request is successful then the response is parsed into a message,
 // including headers added as metadata (when configured to do so).
-func (h *Client) Send(ctx context.Context, sendMsg, refMsg types.Message) (types.Message, error) {
+func (h *Client) Send(ctx context.Context, sendMsg, refMsg *message.Batch) (*message.Batch, error) {
 	res, err := h.SendToResponse(ctx, sendMsg, refMsg)
 	if err != nil {
 		return nil, err

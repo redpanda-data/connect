@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
@@ -498,7 +499,7 @@ func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
 }
 
 // ProcessMessage applies workflow stages to each part of a message type.
-func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	w.mCount.Incr(1)
 
 	payload := msg.DeepCopy()
@@ -509,20 +510,19 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 		w.mErr.Incr(1)
 		w.log.Errorf("Failed to establish workflow: %v\n", err)
 
-		payload.Iter(func(i int, p types.Part) error {
+		_ = payload.Iter(func(i int, p *message.Part) error {
 			FlagErr(p, err)
 			return nil
 		})
 		w.mSentParts.Incr(int64(payload.Len()))
 		w.mSent.Incr(1)
-		return []types.Message{payload}, nil
+		return []*message.Batch{payload}, nil
 	}
 	defer unlock()
 
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
-	payload.Iter(func(i int, p types.Part) error {
-		p.Get()
-		p.Metadata()
+	_ = payload.Iter(func(i int, p *message.Part) error {
+		p.Get() // TODO: V4 Ensure metadata initialized
 		if jObj, err := p.JSON(); err == nil {
 			skipOnMeta[i] = w.skipFromMeta(jObj)
 		} else {
@@ -539,7 +539,7 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 	}
 
 	for _, layer := range dag {
-		results := make([][]types.Part, len(layer))
+		results := make([][]*message.Part, len(layer))
 		errors := make([]error, len(layer))
 
 		wg := sync.WaitGroup{}
@@ -548,8 +548,8 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			go func(id string, index int) {
 				branchMsg, branchSpans := tracing.WithChildSpans(id, propMsg.Copy())
 
-				branchParts := make([]types.Part, branchMsg.Len())
-				branchMsg.Iter(func(partIndex int, part types.Part) error {
+				branchParts := make([]*message.Part, branchMsg.Len())
+				_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
 					// Remove errors so that they aren't propagated into the
 					// branch.
 					ClearFail(part)
@@ -603,7 +603,7 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	// Finally, set the meta records of each document.
 	if len(w.metaPath) > 0 {
-		payload.Iter(func(i int, p types.Part) error {
+		_ = payload.Iter(func(i int, p *message.Part) error {
 			pJSON, err := p.JSON()
 			if err != nil {
 				w.mErr.Incr(1)
@@ -625,7 +625,7 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			return nil
 		})
 	} else {
-		payload.Iter(func(i int, p types.Part) error {
+		_ = payload.Iter(func(i int, p *message.Part) error {
 			if lf := len(records[i].failed); lf > 0 {
 				failed := make([]string, 0, lf)
 				for k := range records[i].failed {
@@ -642,7 +642,7 @@ func (w *Workflow) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	w.mSentParts.Incr(int64(payload.Len()))
 	w.mSent.Incr(1)
-	msgs := [1]types.Message{payload}
+	msgs := [1]*message.Batch{payload}
 	return msgs[:], nil
 }
 

@@ -126,7 +126,7 @@ func TestLiteralParser(t *testing.T) {
 			q := res.Payload.(query.Function)
 
 			result, err := q.Exec(query.FunctionContext{
-				Index: 0, MsgBatch: message.New(nil),
+				Index: 0, MsgBatch: message.QuickBatch(nil),
 			}.WithValueFunc(func() *interface{} { return test.value }))
 			if len(test.err) > 0 {
 				assert.EqualError(t, err, test.err)

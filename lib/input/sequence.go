@@ -244,15 +244,17 @@ func NewSequenceConfig() SequenceConfig {
 //------------------------------------------------------------------------------
 
 type joinedMessage struct {
-	metadata types.Metadata
+	metadata map[string]string
 	fields   *gabs.Container
 }
 
-func (j *joinedMessage) ToMsg() types.Message {
+func (j *joinedMessage) ToMsg() *message.Batch {
 	part := message.NewPart(nil)
 	part.SetJSON(j.fields)
-	part.SetMetadata(j.metadata)
-	msg := message.New(nil)
+	for k, v := range j.metadata {
+		part.MetaSet(k, v)
+	}
+	msg := message.QuickBatch(nil)
 	msg.Append(part)
 	return msg
 }
@@ -297,12 +299,12 @@ type messageJoiner struct {
 	flushOnLast      bool
 }
 
-func (m *messageJoiner) Add(msg types.Message, lastInSequence bool, fn func(msg types.Message)) {
+func (m *messageJoiner) Add(msg *message.Batch, lastInSequence bool, fn func(msg *message.Batch)) {
 	if m.messages == nil {
 		m.messages = map[string]*joinedMessage{}
 	}
 
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		var incomingObj map[string]interface{}
 		if jData, err := p.JSON(); err == nil {
 			incomingObj, _ = jData.(map[string]interface{})
@@ -325,11 +327,17 @@ func (m *messageJoiner) Add(msg types.Message, lastInSequence bool, fn func(msg 
 			return nil
 		}
 
+		meta := map[string]string{}
+		_ = p.MetaIter(func(k, v string) error {
+			meta[k] = v
+			return nil
+		})
+
 		jObj := m.messages[id]
 		if jObj == nil {
 			jObj = &joinedMessage{
 				fields:   gIncoming,
-				metadata: p.Metadata().Copy(),
+				metadata: meta,
 			}
 			m.messages[id] = jObj
 
@@ -342,8 +350,8 @@ func (m *messageJoiner) Add(msg types.Message, lastInSequence bool, fn func(msg 
 		_ = gIncoming.Delete(m.idPath)
 		_ = jObj.fields.MergeFn(gIncoming, m.collisionFn)
 
-		p.Metadata().Iter(func(k, v string) error {
-			jObj.metadata.Set(k, v)
+		_ = p.MetaIter(func(k, v string) error {
+			jObj.metadata[k] = v
 			return nil
 		})
 
@@ -358,7 +366,7 @@ func (m *messageJoiner) GetIteration() (int, bool) {
 	return m.currentIteration, m.currentIteration == (m.totalIterations - 1)
 }
 
-func (m *messageJoiner) Empty(fn func(types.Message)) bool {
+func (m *messageJoiner) Empty(fn func(*message.Batch)) bool {
 	for k, v := range m.messages {
 		if !m.flushOnLast {
 			msg := v.ToMsg()
@@ -497,7 +505,7 @@ func (r *Sequence) resetTargets() {
 	r.targetMut.Unlock()
 }
 
-func (r *Sequence) dispatchJoinedMessage(wg *sync.WaitGroup, msg types.Message) {
+func (r *Sequence) dispatchJoinedMessage(wg *sync.WaitGroup, msg *message.Batch) {
 	resChan := make(chan types.Response)
 	tran := types.NewTransaction(msg, resChan)
 	select {
@@ -575,7 +583,7 @@ runLoop:
 				// Wait for pending transactions before adding more.
 				shardJoinWG.Wait()
 
-				lastIteration := r.joiner.Empty(func(msg types.Message) {
+				lastIteration := r.joiner.Empty(func(msg *message.Batch) {
 					r.dispatchJoinedMessage(&shardJoinWG, msg)
 				})
 				shardJoinWG.Wait()
@@ -605,7 +613,7 @@ runLoop:
 		}
 
 		if r.joiner != nil {
-			r.joiner.Add(tran.Payload.DeepCopy(), finalInSequence, func(msg types.Message) {
+			r.joiner.Add(tran.Payload.DeepCopy(), finalInSequence, func(msg *message.Batch) {
 				r.dispatchJoinedMessage(&shardJoinWG, msg)
 			})
 			select {

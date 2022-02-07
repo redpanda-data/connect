@@ -18,6 +18,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -98,7 +99,7 @@ type Subprocess struct {
 
 	conf     SubprocessConfig
 	subproc  *subprocWrapper
-	procFunc func(index int, span *tracing.Span, part types.Part) error
+	procFunc func(index int, span *tracing.Span, part *message.Part) error
 	mut      sync.Mutex
 
 	mCount     metrics.StatCounter
@@ -138,10 +139,10 @@ func newSubprocess(
 
 //------------------------------------------------------------------------------
 
-func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span *tracing.Span, part types.Part) error, error) {
+func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span *tracing.Span, part *message.Part) error, error) {
 	switch codec {
 	case "length_prefixed_uint32_be":
-		return func(_ int, _ *tracing.Span, part types.Part) error {
+		return func(_ int, _ *tracing.Span, part *message.Part) error {
 			const prefixBytes int = 4
 
 			lenBuf := make([]byte, prefixBytes)
@@ -160,7 +161,7 @@ func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span
 			return nil
 		}, nil
 	case "netstring":
-		return func(_ int, _ *tracing.Span, part types.Part) error {
+		return func(_ int, _ *tracing.Span, part *message.Part) error {
 			lenBuf := make([]byte, 0)
 			m := part.Get()
 			lenBuf = append(strconv.AppendUint(lenBuf, uint64(len(m)), 10), ':')
@@ -176,7 +177,7 @@ func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span
 			return nil
 		}, nil
 	case "lines":
-		return func(_ int, _ *tracing.Span, part types.Part) error {
+		return func(_ int, _ *tracing.Span, part *message.Part) error {
 			results := [][]byte{}
 			splitMsg := bytes.Split(part.Get(), newLineBytes)
 			for j, p := range splitMsg {
@@ -497,7 +498,7 @@ var newLineBytes = []byte("\n")
 var commaBytes = []byte(",")
 
 // ProcessMessage logs an event and returns the message unchanged.
-func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (e *Subprocess) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	e.mCount.Incr(1)
 	e.mut.Lock()
 	defer e.mut.Unlock()
@@ -509,7 +510,7 @@ func (e *Subprocess) ProcessMessage(msg types.Message) ([]types.Message, types.R
 	e.mSent.Incr(int64(result.Len()))
 	e.mBatchSent.Incr(1)
 
-	msgs := [1]types.Message{result}
+	msgs := [1]*message.Batch{result}
 	return msgs[:], nil
 }
 

@@ -97,27 +97,26 @@ func (a *AmazonSQS) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func addSQSMetadata(p types.Part, sqsMsg *sqs.Message) {
-	meta := p.Metadata()
-	meta.Set("sqs_message_id", *sqsMsg.MessageId)
-	meta.Set("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
+func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
+	p.MetaSet("sqs_message_id", *sqsMsg.MessageId)
+	p.MetaSet("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
 	if rCountStr := sqsMsg.Attributes["ApproximateReceiveCount"]; rCountStr != nil {
-		meta.Set("sqs_approximate_receive_count", *rCountStr)
+		p.MetaSet("sqs_approximate_receive_count", *rCountStr)
 	}
 	for k, v := range sqsMsg.MessageAttributes {
 		if v.StringValue != nil {
-			meta.Set(k, *v.StringValue)
+			p.MetaSet(k, *v.StringValue)
 		}
 	}
 }
 
 // ReadWithContext attempts to read a new message from the target SQS.
-func (a *AmazonSQS) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (a *AmazonSQS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	if a.session == nil {
 		return nil, nil, types.ErrNotConnected
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	pendingHandles := map[string]string{}
 
 	output, err := a.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{

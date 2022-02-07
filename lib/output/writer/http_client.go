@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/http"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -125,18 +126,18 @@ func (h *HTTPClient) Connect() error {
 
 // Write attempts to send a message to an HTTP server, this attempt may include
 // retries, and if all retries fail an error is returned.
-func (h *HTTPClient) Write(msg types.Message) error {
+func (h *HTTPClient) Write(msg *message.Batch) error {
 	return h.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to send a message to an HTTP server, this attempt
 // may include retries, and if all retries fail an error is returned.
-func (h *HTTPClient) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (h *HTTPClient) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	resultMsg, err := h.client.Send(ctx, msg, msg)
 	if err == nil && h.conf.PropagateResponse {
 		msgCopy := msg.Copy()
-		parts := make([]types.Part, resultMsg.Len())
-		resultMsg.Iter(func(i int, p types.Part) error {
+		parts := make([]*message.Part, resultMsg.Len())
+		_ = resultMsg.Iter(func(i int, p *message.Part) error {
 			if i < msgCopy.Len() {
 				parts[i] = msgCopy.Get(i)
 			} else {
@@ -144,8 +145,8 @@ func (h *HTTPClient) WriteWithContext(ctx context.Context, msg types.Message) er
 			}
 			parts[i].Set(p.Get())
 
-			p.Metadata().Iter(func(k, v string) error {
-				parts[i].Metadata().Set(k, v)
+			_ = p.MetaIter(func(k, v string) error {
+				parts[i].MetaSet(k, v)
 				return nil
 			})
 

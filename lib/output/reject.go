@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -89,7 +90,7 @@ func (w *rejectWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *rejectWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (w *rejectWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	errStr := w.errExpr.String(0, msg)
 	return errors.New(errStr)
 }

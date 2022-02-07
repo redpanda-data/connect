@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/cenkalti/backoff/v4"
@@ -172,6 +173,8 @@ func (r *AsyncReader) loop() {
 			r.log.Tracef("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 		}
 
+		startedAt := time.Now()
+
 		resChan := make(chan types.Response)
 		tracing.InitSpans("input_"+r.typeStr, msg)
 		select {
@@ -182,7 +185,7 @@ func (r *AsyncReader) loop() {
 
 		pendingAcks.Add(1)
 		go func(
-			m types.Message,
+			m *message.Batch,
 			aFn reader.AsyncAckFn,
 			rChan chan types.Response,
 		) {
@@ -200,7 +203,7 @@ func (r *AsyncReader) loop() {
 			if !open {
 				return
 			}
-			mLatency.Timing(time.Since(m.CreatedAt()).Nanoseconds())
+			mLatency.Timing(time.Since(startedAt).Nanoseconds())
 			tracing.FinishSpans(m)
 
 			ackCtx, ackDone := r.shutSig.CloseNowCtx(context.Background())

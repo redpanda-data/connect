@@ -167,7 +167,7 @@ func TestSQSRetries(t *testing.T) {
 		{},
 	}
 
-	inMsg := message.New([][]byte{
+	inMsg := message.QuickBatch([][]byte{
 		[]byte("hello world 1"),
 		[]byte("hello world 2"),
 		[]byte("hello world 3"),
@@ -219,7 +219,7 @@ func TestSQSSendLimit(t *testing.T) {
 		{}, {},
 	}
 
-	inMsg := message.New(nil)
+	inMsg := message.QuickBatch(nil)
 	for i := 0; i < 15; i++ {
 		inMsg.Append(message.NewPart([]byte(fmt.Sprintf("hello world %v", i+1))))
 	}

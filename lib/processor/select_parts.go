@@ -95,10 +95,10 @@ func NewSelectParts(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (m *SelectParts) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	m.mCount.Incr(1)
 
-	newMsg := message.New(nil)
+	newMsg := message.QuickBatch(nil)
 
 	lParts := msg.Len()
 	for _, index := range m.conf.SelectParts.Parts {
@@ -123,7 +123,7 @@ func (m *SelectParts) ProcessMessage(msg types.Message) ([]types.Message, types.
 
 	m.mBatchSent.Incr(1)
 	m.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 	return msgs[:], nil
 }
 

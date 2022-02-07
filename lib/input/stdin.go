@@ -99,7 +99,7 @@ func (s *stdinConsumer) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a new message from the target S3 bucket.
-func (s *stdinConsumer) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (s *stdinConsumer) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	parts, codecAckFn, err := s.scanner.Next(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) ||
@@ -116,7 +116,7 @@ func (s *stdinConsumer) ReadWithContext(ctx context.Context) (types.Message, rea
 	}
 	_ = codecAckFn(ctx, nil)
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(parts...)
 
 	if msg.Len() == 0 {

@@ -100,7 +100,7 @@ func NewInsertPart(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *InsertPart) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	p.mCount.Incr(1)
 
 	newPartBytes := p.part.Bytes(0, msg)
@@ -115,10 +115,10 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 		index = msgLen
 	}
 
-	newMsg := message.New(nil)
+	newMsg := message.QuickBatch(nil)
 	newPart := msg.Get(0).Copy()
 	newPart.Set(newPartBytes)
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		if i == index {
 			newMsg.Append(newPart)
 		}
@@ -131,7 +131,7 @@ func (p *InsertPart) ProcessMessage(msg types.Message) ([]types.Message, types.R
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 	return msgs[:], nil
 }
 

@@ -660,7 +660,7 @@ func flattenForAWK(path string, data interface{}) map[string]string {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (a *AWK) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	a.mCount.Incr(1)
 	newMsg := msg.Copy()
 	mutableJSONParts := make([]interface{}, newMsg.Len())
@@ -672,15 +672,15 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	}
 	a.mut.Unlock()
 
-	proc := func(i int, span *tracing.Span, part types.Part) error {
+	proc := func(i int, span *tracing.Span, part *message.Part) error {
 		var outBuf, errBuf bytes.Buffer
 
 		// Function overrides
 		customFuncs["metadata_get"] = func(k string) string {
-			return part.Metadata().Get(k)
+			return part.MetaGet(k)
 		}
 		customFuncs["metadata_set"] = func(k, v string) {
-			part.Metadata().Set(k, v)
+			part.MetaSet(k, v)
 		}
 		customFuncs["json_get"] = func(path string) (string, error) {
 			jsonPart, err := part.JSON()
@@ -833,7 +833,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 		}
 
 		if a.conf.Codec != "none" {
-			part.Metadata().Iter(func(k, v string) error {
+			_ = part.MetaIter(func(k, v string) error {
 				config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
 				return nil
 			})
@@ -879,7 +879,7 @@ func (a *AWK) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 
 	IteratePartsWithSpanV2(TypeAWK, a.parts, newMsg, proc)
 
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 
 	a.mBatchSent.Incr(1)
 	a.mSent.Incr(int64(newMsg.Len()))

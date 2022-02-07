@@ -7,8 +7,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
-//------------------------------------------------------------------------------
-
 // Resolver is an interface for resolving a string containing Bloblang function
 // interpolations into either a string or bytes.
 type Resolver interface {
@@ -49,7 +47,7 @@ func NewQueryResolver(fn query.Function) *QueryResolver {
 // ResolveString returns a string.
 func (q QueryResolver) ResolveString(index int, msg Message, escaped, legacy bool) string {
 	if msg == nil {
-		msg = message.New(nil)
+		msg = message.QuickBatch(nil)
 	}
 	return query.ExecToString(q.fn, query.FunctionContext{
 		Index:    index,
@@ -67,7 +65,7 @@ func (q QueryResolver) ResolveString(index int, msg Message, escaped, legacy boo
 // ResolveBytes returns a byte slice.
 func (q QueryResolver) ResolveBytes(index int, msg Message, escaped, legacy bool) []byte {
 	if msg == nil {
-		msg = message.New(nil)
+		msg = message.QuickBatch(nil)
 	}
 	bs := query.ExecToBytes(q.fn, query.FunctionContext{
 		Index:    index,
@@ -93,5 +91,3 @@ func escapeBytes(in []byte) []byte {
 	}
 	return []byte(quoted[1 : len(quoted)-1])
 }
-
-//------------------------------------------------------------------------------

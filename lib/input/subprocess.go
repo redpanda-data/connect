@@ -211,7 +211,7 @@ func (s *Subprocess) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext a new bloblang generated message.
-func (s *Subprocess) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (s *Subprocess) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	msgChan, errChan := s.msgChan, s.errChan
 	if msgChan == nil {
 		return nil, nil, types.ErrNotConnected
@@ -227,7 +227,7 @@ func (s *Subprocess) ReadWithContext(ctx context.Context) (types.Message, reader
 			}
 			return nil, nil, types.ErrTypeClosed
 		}
-		msg := message.New(nil)
+		msg := message.QuickBatch(nil)
 		msg.Append(message.NewPart(b))
 		return msg, func(context.Context, types.Response) error { return nil }, nil
 	case err, open := <-errChan:

@@ -88,7 +88,7 @@ func NewSplit(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (s *Split) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	s.mCount.Incr(1)
 
 	if msg.Len() == 0 {
@@ -96,17 +96,17 @@ func (s *Split) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 		return nil, response.NewAck()
 	}
 
-	msgs := []types.Message{}
+	msgs := []*message.Batch{}
 
-	nextMsg := message.New(nil)
+	nextMsg := message.QuickBatch(nil)
 	byteSize := 0
 
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		if (s.size > 0 && nextMsg.Len() >= s.size) ||
 			(s.byteSize > 0 && (byteSize+len(p.Get())) > s.byteSize) {
 			if nextMsg.Len() > 0 {
 				msgs = append(msgs, nextMsg)
-				nextMsg = message.New(nil)
+				nextMsg = message.QuickBatch(nil)
 				byteSize = 0
 			} else {
 				s.log.Warnf("A single message exceeds the target batch byte size of '%v', actual size: '%v'", s.byteSize, len(p.Get()))

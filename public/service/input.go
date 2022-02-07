@@ -119,7 +119,7 @@ func (a *airGapReader) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (a *airGapReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (a *airGapReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	msg, ackFn, err := a.r.Read(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNotConnected) {
@@ -129,7 +129,7 @@ func (a *airGapReader) ReadWithContext(ctx context.Context) (types.Message, read
 		}
 		return nil, nil, err
 	}
-	tMsg := message.New(nil)
+	tMsg := message.QuickBatch(nil)
 	tMsg.Append(msg.part)
 	return tMsg, func(c context.Context, r types.Response) error {
 		return ackFn(c, r.Error())
@@ -174,7 +174,7 @@ func (a *airGapBatchReader) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	batch, ackFn, err := a.r.ReadBatch(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNotConnected) {
@@ -184,7 +184,7 @@ func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (types.Message,
 		}
 		return nil, nil, err
 	}
-	tMsg := message.New(nil)
+	tMsg := message.QuickBatch(nil)
 	for _, msg := range batch {
 		tMsg.Append(msg.part)
 	}
@@ -240,7 +240,7 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 	}
 
 	var b MessageBatch
-	_ = tran.Payload.Iter(func(i int, part types.Part) error {
+	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 		b = append(b, newMessageFromPart(part))
 		return nil
 	})

@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -185,7 +186,7 @@ type Metric struct {
 	mGaugeVec   metrics.StatGaugeVec
 	mTimerVec   metrics.StatTimerVec
 
-	handler func(string, int, types.Message) error
+	handler func(string, int, *message.Batch) error
 }
 
 type labels []label
@@ -194,7 +195,7 @@ type label struct {
 	value *field.Expression
 }
 
-func (l *label) val(index int, msg types.Message) string {
+func (l *label) val(index int, msg *message.Batch) string {
 	return l.value.String(index, msg)
 }
 
@@ -206,7 +207,7 @@ func (l labels) names() []string {
 	return names
 }
 
-func (l labels) values(index int, msg types.Message) []string {
+func (l labels) values(index int, msg *message.Batch) []string {
 	var values []string
 	for i := range l {
 		values = append(values, l[i].val(index, msg))
@@ -302,7 +303,7 @@ func NewMetric(
 	return m, nil
 }
 
-func (m *Metric) handleCounter(val string, index int, msg types.Message) error {
+func (m *Metric) handleCounter(val string, index int, msg *message.Batch) error {
 	if len(m.labels) > 0 {
 		m.mCounterVec.With(m.labels.values(index, msg)...).Incr(1)
 	} else {
@@ -311,7 +312,7 @@ func (m *Metric) handleCounter(val string, index int, msg types.Message) error {
 	return nil
 }
 
-func (m *Metric) handleCounterBy(val string, index int, msg types.Message) error {
+func (m *Metric) handleCounterBy(val string, index int, msg *message.Batch) error {
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return err
@@ -327,7 +328,7 @@ func (m *Metric) handleCounterBy(val string, index int, msg types.Message) error
 	return nil
 }
 
-func (m *Metric) handleGauge(val string, index int, msg types.Message) error {
+func (m *Metric) handleGauge(val string, index int, msg *message.Batch) error {
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return err
@@ -343,7 +344,7 @@ func (m *Metric) handleGauge(val string, index int, msg types.Message) error {
 	return nil
 }
 
-func (m *Metric) handleTimer(val string, index int, msg types.Message) error {
+func (m *Metric) handleTimer(val string, index int, msg *message.Batch) error {
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return err
@@ -360,15 +361,15 @@ func (m *Metric) handleTimer(val string, index int, msg types.Message) error {
 }
 
 // ProcessMessage applies the processor to a message
-func (m *Metric) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (m *Metric) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	if m.deprecated {
 		value := m.value.String(0, msg)
 		if err := m.handler(value, 0, msg); err != nil {
 			m.log.Errorf("Handler error: %v\n", err)
 		}
-		return []types.Message{msg}, nil
+		return []*message.Batch{msg}, nil
 	}
-	if err := iterateParts(m.parts, msg, func(index int, p types.Part) error {
+	if err := iterateParts(m.parts, msg, func(index int, p *message.Part) error {
 		value := m.value.String(index, msg)
 		if err := m.handler(value, index, msg); err != nil {
 			m.log.Errorf("Handler error: %v\n", err)
@@ -377,7 +378,7 @@ func (m *Metric) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	}); err != nil {
 		m.log.Errorf("Failed to iterate parts: %v\n", err)
 	}
-	return []types.Message{msg}, nil
+	return []*message.Batch{msg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

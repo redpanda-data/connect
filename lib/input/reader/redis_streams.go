@@ -51,7 +51,7 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 //------------------------------------------------------------------------------
 
 type pendingRedisStreamMsg struct {
-	payload types.Message
+	payload *message.Batch
 	stream  string
 	id      string
 }
@@ -300,13 +300,13 @@ func (r *RedisStreams) read() (pendingRedisStreamMsg, error) {
 			}
 
 			part := message.NewPart(bodyBytes)
-			part.Metadata().Set("redis_stream", xmsg.ID)
+			part.MetaSet("redis_stream", xmsg.ID)
 			for k, v := range xmsg.Values {
-				part.Metadata().Set(k, fmt.Sprintf("%v", v))
+				part.MetaSet(k, fmt.Sprintf("%v", v))
 			}
 
 			nextMsg := pendingRedisStreamMsg{
-				payload: message.New(nil),
+				payload: message.QuickBatch(nil),
 				stream:  strRes.Stream,
 				id:      xmsg.ID,
 			}
@@ -327,7 +327,7 @@ func (r *RedisStreams) read() (pendingRedisStreamMsg, error) {
 }
 
 // ReadWithContext attempts to pop a message from a Redis list.
-func (r *RedisStreams) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, error) {
+func (r *RedisStreams) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	msg, err := r.read()
 	if err != nil {
 		if err == types.ErrTimeout {

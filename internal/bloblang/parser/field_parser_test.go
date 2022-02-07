@@ -20,17 +20,13 @@ func TestFieldStaticExpressionOptimization(t *testing.T) {
 
 	for k, v := range tests {
 		t.Run(k, func(t *testing.T) {
-			var isDep bool
-			rs, err := parseFieldResolvers(GlobalContext(), k, &isDep)
+			rs, err := parseFieldResolvers(GlobalContext(), k)
 			require.Nil(t, err)
 
 			e := field.NewExpression(rs...)
-			assert.Equal(t, v, e.String(0, message.New(nil)))
-			assert.Equal(t, v, e.StringLegacy(0, message.New(nil)))
-			assert.Equal(t, v, string(e.Bytes(0, message.New(nil))))
-			assert.Equal(t, v, string(e.BytesEscaped(0, message.New(nil))))
-			assert.Equal(t, v, string(e.BytesLegacy(0, message.New(nil))))
-			assert.Equal(t, v, string(e.BytesEscapedLegacy(0, message.New(nil))))
+			assert.Equal(t, v, e.String(0, message.QuickBatch(nil)))
+			assert.Equal(t, v, string(e.Bytes(0, message.QuickBatch(nil))))
+			assert.Equal(t, v, string(e.BytesEscaped(0, message.QuickBatch(nil))))
 		})
 	}
 }
@@ -134,23 +130,6 @@ func TestFieldExpressions(t *testing.T) {
 			input:  `${{!this is escaped}}`,
 			output: `${!this is escaped}`,
 		},
-		"echo function": {
-			input:  `${!echo:this}`,
-			output: `this`,
-		},
-		"echo function 2": {
-			input:  `foo ${!echo:} bar`,
-			output: `foo  bar`,
-		},
-		"echo function 3": {
-			input:  `${!echo} bar`,
-			output: ` bar`,
-		},
-		"echo function 4": {
-			input:   `${!echo:"this"}`,
-			output:  `\"this\"`,
-			escaped: true,
-		},
 		"json function": {
 			input:  `${!json()}`,
 			output: `{"foo":"bar"}`,
@@ -224,12 +203,12 @@ func TestFieldExpressions(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)

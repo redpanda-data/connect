@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -196,13 +197,13 @@ func (a *AmazonS3) Connect() error {
 }
 
 // Write attempts to write message contents to a target S3 bucket as files.
-func (a *AmazonS3) Write(msg types.Message) error {
+func (a *AmazonS3) Write(msg *message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target S3 bucket as
 // files.
-func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) error {
+func (a *AmazonS3) WriteWithContext(wctx context.Context, msg *message.Batch) error {
 	if a.session == nil {
 		return types.ErrNotConnected
 	}
@@ -212,9 +213,9 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg types.Message) err
 	)
 	defer cancel()
 
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		metadata := map[string]*string{}
-		a.metaFilter.Iter(p.Metadata(), func(k, v string) error {
+		a.metaFilter.Iter(p, func(k, v string) error {
 			metadata[k] = aws.String(v)
 			return nil
 		})

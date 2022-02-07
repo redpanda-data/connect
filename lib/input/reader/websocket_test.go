@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gorilla/websocket"
@@ -60,7 +61,7 @@ func TestWebsocketBasic(t *testing.T) {
 	}
 
 	for _, exp := range expMsgs {
-		var actMsg types.Message
+		var actMsg *message.Batch
 		if actMsg, _, err = m.ReadWithContext(ctx); err != nil {
 			t.Error(err)
 		} else if act := string(actMsg.Get(0).Get()); act != exp {
@@ -128,7 +129,7 @@ func TestWebsocketOpenMsg(t *testing.T) {
 	}
 
 	for _, exp := range expMsgs {
-		var actMsg types.Message
+		var actMsg *message.Batch
 		if actMsg, _, err = m.ReadWithContext(ctx); err != nil {
 			t.Error(err)
 		} else if act := string(actMsg.Get(0).Get()); act != exp {

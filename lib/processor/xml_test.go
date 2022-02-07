@@ -91,7 +91,7 @@ func TestXMLCases(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			msgsOut, res := proc.ProcessMessage(message.New([][]byte{[]byte(test.input)}))
+			msgsOut, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(test.input)}))
 			if res != nil {
 				tt.Fatal(res.Error())
 			}

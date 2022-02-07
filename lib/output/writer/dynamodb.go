@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -223,13 +224,13 @@ func jsonToMap(path string, root interface{}) (*dynamodb.AttributeValue, error) 
 }
 
 // Write attempts to write message contents to a target DynamoDB table.
-func (d *DynamoDB) Write(msg types.Message) error {
+func (d *DynamoDB) Write(msg *message.Batch) error {
 	return d.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target DynamoDB
 // table.
-func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (d *DynamoDB) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if d.client == nil {
 		return types.ErrNotConnected
 	}
@@ -241,7 +242,7 @@ func (d *DynamoDB) WriteWithContext(ctx context.Context, msg types.Message) erro
 	}()
 
 	writeReqs := []*dynamodb.WriteRequest{}
-	msg.Iter(func(i int, p types.Part) error {
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		items := map[string]*dynamodb.AttributeValue{}
 		if d.ttl != 0 && d.conf.TTLKey != "" {
 			items[d.conf.TTLKey] = &dynamodb.AttributeValue{

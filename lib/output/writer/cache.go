@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -85,11 +86,11 @@ func (c *Cache) Connect() error {
 	return nil
 }
 
-func (c *Cache) writeMulti(ctx context.Context, msg types.Message) error {
+func (c *Cache) writeMulti(ctx context.Context, msg *message.Batch) error {
 	var err error
 	if cerr := interop.AccessCache(ctx, c.mgr, c.conf.Target, func(cache types.Cache) {
 		items := map[string]types.CacheTTLItem{}
-		if err = msg.Iter(func(i int, p types.Part) error {
+		if err = msg.Iter(func(i int, p *message.Part) error {
 			var ttl *time.Duration
 			if ttls := c.ttl.String(i, msg); ttls != "" {
 				t, terr := time.ParseDuration(ttls)
@@ -115,7 +116,7 @@ func (c *Cache) writeMulti(ctx context.Context, msg types.Message) error {
 }
 
 // WriteWithContext attempts to write message contents to a target Cache.
-func (c *Cache) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (c *Cache) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if msg.Len() > 1 {
 		return c.writeMulti(ctx, msg)
 	}
@@ -139,7 +140,7 @@ func (c *Cache) WriteWithContext(ctx context.Context, msg types.Message) error {
 }
 
 // Write attempts to write message contents to a target Cache.
-func (c *Cache) Write(msg types.Message) error {
+func (c *Cache) Write(msg *message.Batch) error {
 	return c.WriteWithContext(context.Background(), msg)
 }
 

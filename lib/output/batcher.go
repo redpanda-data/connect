@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/transaction"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -112,7 +113,7 @@ func (m *Batcher) loop() {
 				}
 			} else {
 				trackedTran := transaction.NewTracked(tran.Payload, tran.ResponseChan)
-				trackedTran.Message().Iter(func(i int, p types.Part) error {
+				_ = trackedTran.Message().Iter(func(i int, p *message.Part) error {
 					if m.batcher.Add(p) {
 						flushBatch = true
 					}

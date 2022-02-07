@@ -11,7 +11,7 @@ import (
 )
 
 func TestTaggingErrorsSinglePart(t *testing.T) {
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 	})
 
@@ -34,7 +34,7 @@ func TestTaggingErrorsSinglePart(t *testing.T) {
 	assert.Equal(t, response.NewError(errTest2), tran.resFromError(batchErr))
 
 	// Create new message, no common part, and create batch error
-	newMsg := message.New([][]byte{[]byte("bar")})
+	newMsg := message.QuickBatch([][]byte{[]byte("bar")})
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
@@ -54,7 +54,7 @@ func TestTaggingErrorsSinglePart(t *testing.T) {
 }
 
 func TestTaggingErrorsMultiplePart(t *testing.T) {
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 	})
@@ -78,7 +78,7 @@ func TestTaggingErrorsMultiplePart(t *testing.T) {
 	assert.Equal(t, response.NewError(errTest2), tran.resFromError(batchErr))
 
 	// Create new message, no common part, and create batch error
-	newMsg := message.New([][]byte{[]byte("baz")})
+	newMsg := message.QuickBatch([][]byte{[]byte("baz")})
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
@@ -111,7 +111,7 @@ func TestTaggingErrorsMultiplePart(t *testing.T) {
 }
 
 func TestTaggingErrorsNestedOverlap(t *testing.T) {
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 	})
@@ -121,7 +121,7 @@ func TestTaggingErrorsNestedOverlap(t *testing.T) {
 
 	tranOne := NewTracked(msg, nil)
 
-	msgTwo := message.New(nil)
+	msgTwo := message.QuickBatch(nil)
 	msgTwo.Append(tranOne.Message().Get(1))
 	msgTwo.Append(tranOne.Message().Get(0))
 	tranTwo := NewTracked(msgTwo, nil)
@@ -151,10 +151,10 @@ func TestTaggingErrorsNestedOverlap(t *testing.T) {
 }
 
 func TestTaggingErrorsNestedSerial(t *testing.T) {
-	msgOne := message.New([][]byte{
+	msgOne := message.QuickBatch([][]byte{
 		[]byte("foo"),
 	})
-	msgTwo := message.New([][]byte{
+	msgTwo := message.QuickBatch([][]byte{
 		[]byte("bar"),
 	})
 
@@ -164,7 +164,7 @@ func TestTaggingErrorsNestedSerial(t *testing.T) {
 	tranOne := NewTracked(msgOne, nil)
 	tranTwo := NewTracked(msgTwo, nil)
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(tranOne.Message().Get(0))
 	msg.Append(tranTwo.Message().Get(0))
 
@@ -185,7 +185,7 @@ func TestTaggingErrorsNestedSerial(t *testing.T) {
 }
 
 func BenchmarkErrorWithTagging(b *testing.B) {
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
@@ -206,7 +206,7 @@ func BenchmarkErrorWithTagging(b *testing.B) {
 }
 
 func BenchmarkErrorWithTaggingN3(b *testing.B) {
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
@@ -231,7 +231,7 @@ func BenchmarkErrorWithTaggingN3(b *testing.B) {
 }
 
 func BenchmarkErrorWithTaggingN2(b *testing.B) {
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
@@ -254,7 +254,7 @@ func BenchmarkErrorWithTaggingN2(b *testing.B) {
 }
 
 func BenchmarkErrorNoTagging(b *testing.B) {
-	msg := message.New([][]byte{
+	msg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),

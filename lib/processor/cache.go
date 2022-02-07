@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -272,11 +273,11 @@ func cacheOperatorFromString(operator string) (cacheOperator, error) {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (c *Cache) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	c.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span *tracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part *message.Part) error {
 		key := c.key.String(index, msg)
 		value := c.value.Bytes(index, msg)
 
@@ -320,7 +321,7 @@ func (c *Cache) ProcessMessage(msg types.Message) ([]types.Message, types.Respon
 
 	c.mBatchSent.Incr(1)
 	c.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]types.Message{newMsg}
+	msgs := [1]*message.Batch{newMsg}
 	return msgs[:], nil
 }
 

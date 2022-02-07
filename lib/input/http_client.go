@@ -137,8 +137,8 @@ type HTTPClient struct {
 	conf HTTPClientConfig
 
 	client       *http.Client
-	payload      types.Message
-	prevResponse types.Message
+	payload      *message.Batch
+	prevResponse *message.Batch
 
 	codecCtor codec.ReaderConstructor
 
@@ -170,9 +170,9 @@ func newHTTPClient(conf HTTPClientConfig, mgr types.Manager, log log.Modular, st
 		}
 	}
 
-	var payload types.Message = message.New(nil)
+	payload := message.QuickBatch(nil)
 	if len(conf.Payload) > 0 {
-		payload = message.New([][]byte{[]byte(conf.Payload)})
+		payload = message.QuickBatch([][]byte{[]byte(conf.Payload)})
 	}
 
 	cMgr, cLog, cStats := interop.LabelChild("client", mgr, log, stats)
@@ -189,7 +189,7 @@ func newHTTPClient(conf HTTPClientConfig, mgr types.Manager, log log.Modular, st
 	return &HTTPClient{
 		conf:         conf,
 		payload:      payload,
-		prevResponse: message.New(nil),
+		prevResponse: message.QuickBatch(nil),
 		client:       client,
 
 		codecCtor: codecCtor,
@@ -220,13 +220,12 @@ func (h *HTTPClient) ConnectWithContext(ctx context.Context) (err error) {
 	}
 
 	p := message.NewPart(nil)
-	meta := p.Metadata()
 	for k, values := range res.Header {
 		if len(values) > 0 {
-			meta.Set(strings.ToLower(k), values[0])
+			p.MetaSet(strings.ToLower(k), values[0])
 		}
 	}
-	h.prevResponse = message.New(nil)
+	h.prevResponse = message.QuickBatch(nil)
 	h.prevResponse.Append(p)
 
 	if h.codec, err = h.codecCtor("", res.Body, func(ctx context.Context, err error) error {
@@ -239,14 +238,14 @@ func (h *HTTPClient) ConnectWithContext(ctx context.Context) (err error) {
 }
 
 // ReadWithContext a new HTTPClient message.
-func (h *HTTPClient) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (h *HTTPClient) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	if h.conf.Stream.Enabled {
 		return h.readStreamed(ctx)
 	}
 	return h.readNotStreamed(ctx)
 }
 
-func (h *HTTPClient) readStreamed(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (h *HTTPClient) readStreamed(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	h.codecMut.Lock()
 	defer h.codecMut.Unlock()
 
@@ -273,7 +272,7 @@ func (h *HTTPClient) readStreamed(ctx context.Context) (types.Message, reader.As
 		return nil, nil, err
 	}
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(parts...)
 
 	if msg.Len() == 1 && msg.Get(0).IsEmpty() && h.conf.DropEmptyBodies {
@@ -285,11 +284,18 @@ func (h *HTTPClient) readStreamed(ctx context.Context) (types.Message, reader.As
 		return nil, nil, types.ErrTimeout
 	}
 
-	meta := h.prevResponse.Get(0).Metadata()
-	resParts := make([]types.Part, 0, msg.Len())
-	msg.Iter(func(i int, p types.Part) error {
+	meta := map[string]string{}
+	_ = h.prevResponse.Get(0).MetaIter(func(k, v string) error {
+		meta[k] = v
+		return nil
+	})
+
+	resParts := make([]*message.Part, 0, msg.Len())
+	_ = msg.Iter(func(i int, p *message.Part) error {
 		part := message.NewPart(p.Get())
-		part.SetMetadata(meta)
+		for k, v := range meta {
+			part.MetaSet(k, v)
+		}
 		resParts = append(resParts, part)
 		return nil
 	})
@@ -300,7 +306,7 @@ func (h *HTTPClient) readStreamed(ctx context.Context) (types.Message, reader.As
 	}, nil
 }
 
-func (h *HTTPClient) readNotStreamed(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (h *HTTPClient) readNotStreamed(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	msg, err := h.client.Send(ctx, h.payload, h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {

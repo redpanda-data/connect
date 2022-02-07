@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/impl/azure"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -71,13 +72,13 @@ func (a *AzureQueueStorage) Connect() error {
 }
 
 // Write attempts to write message contents to a target Azure Queue Storage queue.
-func (a *AzureQueueStorage) Write(msg types.Message) error {
+func (a *AzureQueueStorage) Write(msg *message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target Queue Storage
-func (a *AzureQueueStorage) WriteWithContext(ctx context.Context, msg types.Message) error {
-	return IterateBatchedSend(msg, func(i int, p types.Part) error {
+func (a *AzureQueueStorage) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		queueURL := a.serviceURL.NewQueueURL(a.queueName.String(i, msg))
 		msgURL := queueURL.NewMessagesURL()
 		var ttl *time.Duration

@@ -3,23 +3,20 @@ package message
 import (
 	"reflect"
 	"testing"
-
-	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 )
 
 func TestPartBasic(t *testing.T) {
 	p := NewPart([]byte(`{"hello":"world"}`))
-	p.Metadata().
-		Set("foo", "bar").
-		Set("foo2", "bar2")
+	p.MetaSet("foo", "bar")
+	p.MetaSet("foo2", "bar2")
 
 	if exp, act := `{"hello":"world"}`, string(p.Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := "bar", p.Metadata().Get("foo"); exp != act {
+	if exp, act := "bar", p.MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := "bar2", p.Metadata().Get("foo2"); exp != act {
+	if exp, act := "bar2", p.MetaGet("foo2"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -30,7 +27,7 @@ func TestPartBasic(t *testing.T) {
 	if exp, act := map[string]interface{}{"hello": "world"}, jObj; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	p.data = nil
+	p.data.rawBytes = nil
 	if jObj, err = p.JSON(); err != nil {
 		t.Fatal(err)
 	}
@@ -52,50 +49,36 @@ func TestPartBasic(t *testing.T) {
 	if exp, act := `{"foo":"bar"}`, string(p.Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := "bar", p.Metadata().Get("foo"); exp != act {
+	if exp, act := "bar", p.MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := "bar2", p.Metadata().Get("foo2"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-
-	p.SetMetadata(metadata.New(map[string]string{
-		"foo": "new_bar",
-	}))
-	if exp, act := `{"foo":"bar"}`, string(p.Get()); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-	if exp, act := "new_bar", p.Metadata().Get("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-	if exp, act := "", p.Metadata().Get("foo2"); exp != act {
+	if exp, act := "bar2", p.MetaGet("foo2"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
 
 func TestPartShallowCopy(t *testing.T) {
 	p := NewPart([]byte(`{"hello":"world"}`))
-	p.Metadata().
-		Set("foo", "bar").
-		Set("foo2", "bar2")
+	p.MetaSet("foo", "bar")
+	p.MetaSet("foo2", "bar2")
 
 	if _, err := p.JSON(); err != nil {
 		t.Fatal(err)
 	}
 
-	p2 := p.Copy().(*Part)
-	if exp, act := string(p2.data), string(p.data); exp != act {
+	p2 := p.Copy()
+	if exp, act := string(p2.data.rawBytes), string(p.data.rawBytes); exp != act {
 		t.Error("Part slices diverged")
 	}
-	if exp, act := p.jsonCache, p2.jsonCache; !reflect.DeepEqual(exp, act) {
+	if exp, act := p.data.jsonCache, p2.data.jsonCache; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unmatched json docs: %v != %v", act, exp)
 	}
-	if exp, act := p.metadata, p2.metadata; !reflect.DeepEqual(exp, act) {
+	if exp, act := p.data.metadata, p2.data.metadata; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unmatched metadata types: %v != %v", act, exp)
 	}
 
-	p2.Metadata().Set("foo", "new")
-	if exp, act := "bar", p.Metadata().Get("foo"); exp != act {
+	p2.MetaSet("foo", "new")
+	if exp, act := "bar", p.MetaGet("foo"); exp != act {
 		t.Errorf("Metadata changed after copy: %v != %v", act, exp)
 	}
 }
@@ -169,34 +152,33 @@ func TestPartJSONMarshal(t *testing.T) {
 
 func TestPartDeepCopy(t *testing.T) {
 	p := NewPart([]byte(`{"hello":"world"}`))
-	p.Metadata().
-		Set("foo", "bar").
-		Set("foo2", "bar2")
+	p.MetaSet("foo", "bar")
+	p.MetaSet("foo2", "bar2")
 
 	if _, err := p.JSON(); err != nil {
 		t.Fatal(err)
 	}
 
-	p2 := p.DeepCopy().(*Part)
-	if exp, act := string(p2.data), string(p.data); exp != act {
+	p2 := p.DeepCopy()
+	if exp, act := string(p2.data.rawBytes), string(p.data.rawBytes); exp != act {
 		t.Error("Part slices diverged")
 	}
-	if exp, act := p.jsonCache, p2.jsonCache; !reflect.DeepEqual(exp, act) {
+	if exp, act := p.data.jsonCache, p2.data.jsonCache; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unmatched json docs: %v != %v", act, exp)
 	}
-	if exp, act := p.metadata, p2.metadata; !reflect.DeepEqual(exp, act) {
+	if exp, act := p.data.metadata, p2.data.metadata; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unmatched metadata types: %v != %v", act, exp)
 	}
 
-	p2.data[0] = '['
+	p2.data.rawBytes[0] = '['
 	if exp, act := `["hello":"world"}`, string(p2.Get()); exp != act {
 		t.Errorf("Byte slice wrong: %v != %v", act, exp)
 	}
 	if exp, act := `{"hello":"world"}`, string(p.Get()); exp != act {
 		t.Errorf("Byte slice changed after deep copy: %v != %v", act, exp)
 	}
-	p2.Metadata().Set("foo", "new")
-	if exp, act := "bar", p.Metadata().Get("foo"); exp != act {
+	p2.MetaSet("foo", "new")
+	if exp, act := "bar", p.MetaGet("foo"); exp != act {
 		t.Errorf("Metadata changed after copy: %v != %v", act, exp)
 	}
 }

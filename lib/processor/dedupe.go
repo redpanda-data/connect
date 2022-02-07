@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -212,7 +213,7 @@ func NewDedupe(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (d *Dedupe) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	d.mCount.Incr(1)
 
 	extractedHash := false
@@ -286,7 +287,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 
 	d.mBatchSent.Incr(1)
 	d.mSent.Incr(int64(msg.Len()))
-	msgs := [1]types.Message{msg}
+	msgs := [1]*message.Batch{msg}
 	return msgs[:], nil
 }
 

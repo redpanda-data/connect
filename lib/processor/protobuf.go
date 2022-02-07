@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 
@@ -174,14 +175,14 @@ func NewProtobufConfig() ProtobufConfig {
 
 //------------------------------------------------------------------------------
 
-type protobufOperator func(part types.Part) error
+type protobufOperator func(part *message.Part) error
 
-func newProtobufToJSONOperator(message string, importPaths []string) (protobufOperator, error) {
-	m, err := loadDescriptor(message, importPaths)
+func newProtobufToJSONOperator(msg string, importPaths []string) (protobufOperator, error) {
+	m, err := loadDescriptor(msg, importPaths)
 	if err != nil {
 		return nil, err
 	}
-	return func(part types.Part) error {
+	return func(part *message.Part) error {
 		msg := dynamic.NewMessage(m)
 		if err := proto.Unmarshal(part.Get(), msg); err != nil {
 			return fmt.Errorf("failed to unmarshal message: %w", err)
@@ -197,12 +198,12 @@ func newProtobufToJSONOperator(message string, importPaths []string) (protobufOp
 	}, nil
 }
 
-func newProtobufFromJSONOperator(message string, importPaths []string) (protobufOperator, error) {
-	m, err := loadDescriptor(message, importPaths)
+func newProtobufFromJSONOperator(msg string, importPaths []string) (protobufOperator, error) {
+	m, err := loadDescriptor(msg, importPaths)
 	if err != nil {
 		return nil, err
 	}
-	return func(part types.Part) error {
+	return func(part *message.Part) error {
 		msg := dynamic.NewMessage(m)
 		if err := msg.UnmarshalJSON(part.Get()); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON message: %w", err)
@@ -325,11 +326,11 @@ func NewProtobuf(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *Protobuf) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
+func (p *Protobuf) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 
-	proc := func(index int, span *tracing.Span, part types.Part) error {
+	proc := func(index int, span *tracing.Span, part *message.Part) error {
 		if err := p.operator(part); err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Operator failed: %v\n", err)
@@ -342,7 +343,7 @@ func (p *Protobuf) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 
 	p.mBatchSent.Incr(1)
 	p.mSent.Incr(int64(newMsg.Len()))
-	return []types.Message{newMsg}, nil
+	return []*message.Batch{newMsg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

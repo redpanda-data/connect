@@ -128,7 +128,7 @@ func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Typ
 //------------------------------------------------------------------------------
 
 type asyncMessage struct {
-	msg   types.Message
+	msg   *message.Batch
 	ackFn reader.AsyncAckFn
 }
 
@@ -301,9 +301,9 @@ func newKafkaReader(
 
 //------------------------------------------------------------------------------
 
-func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, types.Message, int64) bool {
+func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, *message.Batch, int64) bool {
 	cp := checkpoint.NewCapped(int64(k.conf.CheckpointLimit))
-	return func(ctx context.Context, c chan<- asyncMessage, msg types.Message, offset int64) bool {
+	return func(ctx context.Context, c chan<- asyncMessage, msg *message.Batch, offset int64) bool {
 		if msg == nil {
 			return true
 		}
@@ -340,9 +340,9 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 	}
 }
 
-func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, types.Message, int64) bool {
+func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, *message.Batch, int64) bool {
 	ackedChan := make(chan error)
-	return func(ctx context.Context, c chan<- asyncMessage, msg types.Message, offset int64) bool {
+	return func(ctx context.Context, c chan<- asyncMessage, msg *message.Batch, offset int64) bool {
 		if msg == nil {
 			return true
 		}
@@ -384,12 +384,11 @@ func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(conte
 	}
 }
 
-func dataToPart(highestOffset int64, data *sarama.ConsumerMessage) types.Part {
+func dataToPart(highestOffset int64, data *sarama.ConsumerMessage) *message.Part {
 	part := message.NewPart(data.Value)
 
-	meta := part.Metadata()
 	for _, hdr := range data.Headers {
-		meta.Set(string(hdr.Key), string(hdr.Value))
+		part.MetaSet(string(hdr.Key), string(hdr.Value))
 	}
 
 	lag := highestOffset - data.Offset - 1
@@ -397,12 +396,12 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage) types.Part {
 		lag = 0
 	}
 
-	meta.Set("kafka_key", string(data.Key))
-	meta.Set("kafka_partition", strconv.Itoa(int(data.Partition)))
-	meta.Set("kafka_topic", data.Topic)
-	meta.Set("kafka_offset", strconv.Itoa(int(data.Offset)))
-	meta.Set("kafka_lag", strconv.FormatInt(lag, 10))
-	meta.Set("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
+	part.MetaSet("kafka_key", string(data.Key))
+	part.MetaSet("kafka_partition", strconv.Itoa(int(data.Partition)))
+	part.MetaSet("kafka_topic", data.Topic)
+	part.MetaSet("kafka_offset", strconv.Itoa(int(data.Offset)))
+	part.MetaSet("kafka_lag", strconv.FormatInt(lag, 10))
+	part.MetaSet("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
 
 	return part
 }
@@ -477,7 +476,7 @@ func (k *kafkaReader) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a message from a kafkaReader topic.
-func (k *kafkaReader) ReadWithContext(ctx context.Context) (types.Message, reader.AsyncAckFn, error) {
+func (k *kafkaReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()

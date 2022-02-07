@@ -102,7 +102,7 @@ func TestBundleOutputTracing(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		resChan := make(chan types.Response)
-		tran := types.NewTransaction(message.New([][]byte{[]byte(strconv.Itoa(i))}), resChan)
+		tran := types.NewTransaction(message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}), resChan)
 		select {
 		case tranChan <- tran:
 			select {
@@ -163,7 +163,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		resChan := make(chan types.Response)
-		tran := types.NewTransaction(message.New([][]byte{[]byte("hello world " + strconv.Itoa(i))}), resChan)
+		tran := types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world " + strconv.Itoa(i))}), resChan)
 		select {
 		case tranChan <- tran:
 			select {
@@ -236,7 +236,7 @@ root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		batch, res := proc.ProcessMessage(message.New([][]byte{[]byte(strconv.Itoa(i))}))
+		batch, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}))
 		require.Nil(t, res)
 		require.Len(t, batch, 1)
 		assert.Equal(t, 1, batch[0].Len())

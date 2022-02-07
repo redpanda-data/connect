@@ -45,7 +45,7 @@ func Register() error {
 				return exec.Exec(query.FunctionContext{
 					Vars:     map[string]interface{}{},
 					Maps:     exec.Maps(),
-					MsgBatch: message.New(nil),
+					MsgBatch: message.QuickBatch(nil),
 				}.WithValue(v))
 			}, target.QueryTargets), nil
 		},

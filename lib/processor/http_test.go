@@ -35,7 +35,7 @@ func TestHTTPClientRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.New([][]byte{[]byte("test")}))
+	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("test")}))
 	if res != nil {
 		t.Fatal(res.Error())
 	}
@@ -51,7 +51,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	if !HasFailed(msgs[0].Get(0)) {
 		t.Error("Failed message part not flagged")
 	}
-	if exp, act := "403", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+	if exp, act := "403", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 
@@ -86,35 +86,35 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.New([][]byte{[]byte("foo")}))
+	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+	} else if exp, act := "201", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
-	} else if exp, act := "", msgs[0].Get(0).Metadata().Get("foobar"); exp != act {
+	} else if exp, act := "", msgs[0].Get(0).MetaGet("foobar"); exp != act {
 		t.Errorf("Wrong metadata value: %v != %v", act, exp)
 	}
 
-	msgs, res = h.ProcessMessage(message.New([][]byte{[]byte("bar")}))
+	msgs, res = h.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+	} else if exp, act := "201", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
-	} else if exp, act := "", msgs[0].Get(0).Metadata().Get("foobar"); exp != act {
+	} else if exp, act := "", msgs[0].Get(0).MetaGet("foobar"); exp != act {
 		t.Errorf("Wrong metadata value: %v != %v", act, exp)
 	}
 
 	// Check metadata persists.
-	msg := message.New([][]byte{[]byte("baz")})
-	msg.Get(0).Metadata().Set("foo", "bar")
+	msg := message.QuickBatch([][]byte{[]byte("baz")})
+	msg.Get(0).MetaSet("foo", "bar")
 	msgs, res = h.ProcessMessage(msg)
 	if res != nil {
 		t.Error(res.Error())
@@ -122,11 +122,11 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "bar", msgs[0].Get(0).Metadata().Get("foo"); exp != act {
+	} else if exp, act := "bar", msgs[0].Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Metadata not preserved: %v != %v", act, exp)
-	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+	} else if exp, act := "201", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
-	} else if exp, act := "", msgs[0].Get(0).Metadata().Get("foobar"); exp != act {
+	} else if exp, act := "", msgs[0].Get(0).MetaGet("foobar"); exp != act {
 		t.Errorf("Wrong metadata value: %v != %v", act, exp)
 	}
 }
@@ -155,31 +155,31 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.New([][]byte{[]byte("foo")}))
+	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "200", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+	} else if exp, act := "200", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 
-	msgs, res = h.ProcessMessage(message.New([][]byte{[]byte("bar")}))
+	msgs, res = h.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "200", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+	} else if exp, act := "200", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 
 	// Check metadata persists.
-	msg := message.New([][]byte{[]byte("baz")})
-	msg.Get(0).Metadata().Set("foo", "bar")
+	msg := message.QuickBatch([][]byte{[]byte("baz")})
+	msg.Get(0).MetaSet("foo", "bar")
 	msgs, res = h.ProcessMessage(msg)
 	if res != nil {
 		t.Error(res.Error())
@@ -187,7 +187,7 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "200", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+	} else if exp, act := "200", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 }
@@ -206,14 +206,14 @@ func TestHTTPClientEmpty404Response(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.New([][]byte{[]byte("foo")}))
+	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foo", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "404", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+	} else if exp, act := "404", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	} else if !HasFailed(msgs[0].Get(0)) {
 		t.Error("Expected error flag")
@@ -247,16 +247,16 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.New([][]byte{[]byte("foo")}))
+	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
 		t.Error(res.Error())
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+	} else if exp, act := "201", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
-	} else if exp, act := "baz", msgs[0].Get(0).Metadata().Get("foobar"); exp != act {
+	} else if exp, act := "baz", msgs[0].Get(0).MetaGet("foobar"); exp != act {
 		t.Errorf("Wrong metadata value: %v != %v", act, exp)
 	}
 }
@@ -281,14 +281,14 @@ func TestHTTPClientParallel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inputMsg := message.New([][]byte{
+	inputMsg := message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
 		[]byte("qux"),
 		[]byte("quz"),
 	})
-	inputMsg.Get(0).Metadata().Set("foo", "bar")
+	inputMsg.Get(0).MetaSet("foo", "bar")
 	msgs, res := h.ProcessMessage(inputMsg)
 	if res != nil {
 		t.Error(res.Error())
@@ -296,9 +296,9 @@ func TestHTTPClientParallel(t *testing.T) {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
-	} else if exp, act := "bar", msgs[0].Get(0).Metadata().Get("foo"); exp != act {
+	} else if exp, act := "bar", msgs[0].Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Metadata not preserved: %v != %v", act, exp)
-	} else if exp, act := "201", msgs[0].Get(0).Metadata().Get("http_status_code"); exp != act {
+	} else if exp, act := "201", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 }
@@ -331,7 +331,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.New([][]byte{
+	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
@@ -350,7 +350,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 	if !HasFailed(msgs[0].Get(2)) {
 		t.Error("Expected failed flag")
 	}
-	if exp, act := "403", msgs[0].Get(2).Metadata().Get("http_status_code"); exp != act {
+	if exp, act := "403", msgs[0].Get(2).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 	for _, i := range []int{0, 1, 3, 4} {
@@ -360,7 +360,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 		if HasFailed(msgs[0].Get(i)) {
 			t.Error("Did not expect failed flag")
 		}
-		if exp, act := "200", msgs[0].Get(i).Metadata().Get("http_status_code"); exp != act {
+		if exp, act := "200", msgs[0].Get(i).MetaGet("http_status_code"); exp != act {
 			t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 		}
 	}
@@ -408,7 +408,7 @@ func TestHTTPClientFailLogURL(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, res := h.ProcessMessage(message.New([][]byte{[]byte("foo")}))
+			_, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
 			if res != nil {
 				t.Error(res.Error())
 			}
