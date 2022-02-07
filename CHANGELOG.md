@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Experimental field `multipart` added to the `http_client` output.
 - Codec `regex` added to inputs.
 - Field `timeout` added to the `cassandra` output.
+- New `gcp_bigquery_select` input.
 
 ### Changed
 

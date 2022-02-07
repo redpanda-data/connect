@@ -71,7 +71,7 @@ func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf big
 
 func newBigQuerySelectInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		// Beta().
 		Version("3.63.0").
 		Categories(
 			string(input.CategoryServices),
