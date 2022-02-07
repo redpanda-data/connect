@@ -2,7 +2,7 @@
 title: sql_select
 type: input
 status: experimental
-categories: ["Integration"]
+categories: ["Services"]
 ---
 
 <!--

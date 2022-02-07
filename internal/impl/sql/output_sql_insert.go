@@ -15,7 +15,7 @@ import (
 func sqlInsertOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Categories("Integration").
+		Categories("Services").
 		Summary("Inserts a row into an SQL database for each message.").
 		Description(``).
 		Field(driverField).

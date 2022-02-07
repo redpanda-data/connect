@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Codec `regex` added to inputs.
 - Field `timeout` added to the `cassandra` output.
 - New `gcp_bigquery_select` input.
+- Field `ack_wait` added to the `nats_jetstream` input.
 
 ### Changed
 

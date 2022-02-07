@@ -2,7 +2,7 @@
 title: sql_insert
 type: output
 status: stable
-categories: ["Integration"]
+categories: ["Services"]
 ---
 
 <!--
