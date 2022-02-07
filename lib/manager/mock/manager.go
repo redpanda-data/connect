@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -13,7 +14,7 @@ var _ types.Manager = &Manager{}
 // interactions with fake resources.
 type Manager struct {
 	Caches     map[string]map[string]string
-	RateLimits map[string]func() (time.Duration, error)
+	RateLimits map[string]func(context.Context) (time.Duration, error)
 	Pipes      map[string]<-chan types.Transaction
 }
 
@@ -21,7 +22,7 @@ type Manager struct {
 func NewManager() *Manager {
 	return &Manager{
 		Caches:     map[string]map[string]string{},
-		RateLimits: map[string]func() (time.Duration, error){},
+		RateLimits: map[string]func(context.Context) (time.Duration, error){},
 		Pipes:      map[string]<-chan types.Transaction{},
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/http"
+	ihttpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -32,7 +33,7 @@ func httpClientSpec() docs.FieldSpec {
 		docs.FieldInt("max_buffer", "Must be larger than the largest line of the stream.").Advanced(),
 	}
 
-	return client.FieldSpec(
+	return ihttpdocs.ClientFieldSpec(false,
 		docs.FieldCommon("payload", "An optional payload to deliver for each request."),
 		docs.FieldAdvanced("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped."),
 		docs.FieldCommon(

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -62,14 +61,12 @@ type batchedCache interface {
 type airGapCache struct {
 	c  Cache
 	cm batchedCache
-
-	sig *shutdown.Signaller
 }
 
 func newAirGapCache(c Cache, stats metrics.Type) types.Cache {
-	ag := &airGapCache{c, nil, shutdown.NewSignaller()}
+	ag := &airGapCache{c, nil}
 	ag.cm, _ = c.(batchedCache)
-	return cache.NewV2ToV1Cache(ag, stats)
+	return cache.MetricsForCache(ag, stats)
 }
 
 func (a *airGapCache) Get(ctx context.Context, key string) ([]byte, error) {
@@ -132,7 +129,7 @@ func newReverseAirGapCache(c types.Cache) *reverseAirGapCache {
 }
 
 func (r *reverseAirGapCache) Get(ctx context.Context, key string) ([]byte, error) {
-	b, err := r.c.Get(key)
+	b, err := r.c.Get(ctx, key)
 	if errors.Is(err, types.ErrKeyNotFound) {
 		err = ErrKeyNotFound
 	}
@@ -140,39 +137,20 @@ func (r *reverseAirGapCache) Get(ctx context.Context, key string) ([]byte, error
 }
 
 func (r *reverseAirGapCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	if cttl, ok := r.c.(types.CacheWithTTL); ok {
-		return cttl.SetWithTTL(key, value, ttl)
-	}
-	return r.c.Set(key, value)
+	return r.c.Set(ctx, key, value, ttl)
 }
 
 func (r *reverseAirGapCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) (err error) {
-	if cttl, ok := r.c.(types.CacheWithTTL); ok {
-		err = cttl.AddWithTTL(key, value, ttl)
-	} else {
-		err = r.c.Add(key, value)
-	}
-	if errors.Is(err, types.ErrKeyAlreadyExists) {
+	if err = r.c.Add(ctx, key, value, ttl); errors.Is(err, types.ErrKeyAlreadyExists) {
 		err = ErrKeyAlreadyExists
 	}
 	return
 }
 
 func (r *reverseAirGapCache) Delete(ctx context.Context, key string) error {
-	return r.c.Delete(key)
+	return r.c.Delete(ctx, key)
 }
 
 func (r *reverseAirGapCache) Close(ctx context.Context) error {
-	r.c.CloseAsync()
-	for {
-		// Gross but will do for now until we replace these with context params.
-		if err := r.c.WaitForClose(time.Millisecond * 100); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-	}
+	return r.c.Close(ctx)
 }

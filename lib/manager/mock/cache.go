@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"context"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -14,7 +15,7 @@ type Cache struct {
 }
 
 // Get a mock cache item
-func (c *Cache) Get(key string) ([]byte, error) {
+func (c *Cache) Get(ctx context.Context, key string) ([]byte, error) {
 	i, ok := c.Values[key]
 	if !ok {
 		return nil, types.ErrKeyNotFound
@@ -23,21 +24,21 @@ func (c *Cache) Get(key string) ([]byte, error) {
 }
 
 // Set a mock cache item
-func (c *Cache) Set(key string, value []byte) error {
+func (c *Cache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	c.Values[key] = string(value)
 	return nil
 }
 
 // SetMulti sets multiple mock cache items
-func (c *Cache) SetMulti(kvs map[string][]byte) error {
+func (c *Cache) SetMulti(ctx context.Context, kvs map[string]types.CacheTTLItem) error {
 	for k, v := range kvs {
-		c.Values[k] = string(v)
+		c.Values[k] = string(v.Value)
 	}
 	return nil
 }
 
 // Add a mock cache item
-func (c *Cache) Add(key string, value []byte) error {
+func (c *Cache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	if _, ok := c.Values[key]; ok {
 		return types.ErrKeyAlreadyExists
 	}
@@ -47,16 +48,12 @@ func (c *Cache) Add(key string, value []byte) error {
 }
 
 // Delete a mock cache item
-func (c *Cache) Delete(key string) error {
+func (c *Cache) Delete(ctx context.Context, key string) error {
 	delete(c.Values, key)
 	return nil
 }
 
-// CloseAsync does nothing
-func (c *Cache) CloseAsync() {
-}
-
-// WaitForClose does nothing
-func (c *Cache) WaitForClose(t time.Duration) error {
+// Close does nothing
+func (c *Cache) Close(ctx context.Context) error {
 	return nil
 }

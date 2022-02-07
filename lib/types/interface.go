@@ -6,55 +6,39 @@ import (
 	"time"
 )
 
-// Cache is a key/value store that can be shared across components and executing
-// threads of a Benthos service.
-type Cache interface {
-	// Get attempts to locate and return a cached value by its key, returns an
-	// error if the key does not exist or if the command fails.
-	Get(key string) ([]byte, error)
-
-	// Set attempts to set the value of a key, returns an error if the command
-	// fails.
-	Set(key string, value []byte) error
-
-	// SetMulti attempts to set the value of multiple keys, returns an error if
-	// any of the keys fail.
-	SetMulti(items map[string][]byte) error
-
-	// Add attempts to set the value of a key only if the key does not already
-	// exist, returns an error if the key already exists or if the command
-	// fails.
-	Add(key string, value []byte) error
-
-	// Delete attempts to remove a key. Returns an error if a failure occurs.
-	Delete(key string) error
-
-	Closable
-}
-
 // CacheTTLItem contains a value to cache along with an optional TTL.
 type CacheTTLItem struct {
 	Value []byte
 	TTL   *time.Duration
 }
 
-// CacheWithTTL is a key/value store that can be shared across components and
-// executing threads of a Benthos service.
-type CacheWithTTL interface {
-	// SetWithTTL attempts to set the value of a key, returns an error if the
-	// command fails.
-	SetWithTTL(key string, value []byte, ttl *time.Duration) error
+// Cache is a key/value store that can be shared across components and executing
+// threads of a Benthos service.
+type Cache interface {
+	// Get attempts to locate and return a cached value by its key, returns an
+	// error if the key does not exist or if the command fails.
+	Get(ctx context.Context, key string) ([]byte, error)
 
-	// SetMultiWithTTL attempts to set the value of multiple keys, returns an
-	// error if any of the keys fail.
-	SetMultiWithTTL(items map[string]CacheTTLItem) error
+	// Set attempts to set the value of a key, returns an error if the command
+	// fails.
+	Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error
 
-	// AddWithTTL attempts to set the value of a key only if the key does not
-	// already exist, returns an error if the key already exists or if the
-	// command fails.
-	AddWithTTL(key string, value []byte, ttl *time.Duration) error
+	// SetMulti attempts to set the value of multiple keys, returns an error if
+	// any of the keys fail.
+	SetMulti(ctx context.Context, items map[string]CacheTTLItem) error
 
-	Cache
+	// Add attempts to set the value of a key only if the key does not already
+	// exist, returns an error if the key already exists or if the command
+	// fails.
+	Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error
+
+	// Delete attempts to remove a key. Returns an error if a failure occurs.
+	Delete(ctx context.Context, key string) error
+
+	// Close the component, blocks until either the underlying resources are
+	// cleaned up or the context is cancelled. Returns an error if the context
+	// is cancelled.
+	Close(ctx context.Context) error
 }
 
 //------------------------------------------------------------------------------
@@ -66,9 +50,12 @@ type RateLimit interface {
 	// rate limit check fails. The returned duration is either zero (meaning the
 	// resource may be accessed) or a reasonable length of time to wait before
 	// requesting again.
-	Access() (time.Duration, error)
+	Access(ctx context.Context) (time.Duration, error)
 
-	Closable
+	// Close the component, blocks until either the underlying resources are
+	// cleaned up or the context is cancelled. Returns an error if the context
+	// is cancelled.
+	Close(ctx context.Context) error
 }
 
 //------------------------------------------------------------------------------

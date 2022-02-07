@@ -97,7 +97,7 @@ func (r *RateLimit) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		var waitFor time.Duration
 		var err error
 		if rerr := interop.AccessRateLimit(context.Background(), r.mgr, r.rlName, func(rl types.RateLimit) {
-			waitFor, err = rl.Access()
+			waitFor, err = rl.Access(context.Background())
 		}); rerr != nil {
 			err = rerr
 		}
@@ -118,7 +118,7 @@ func (r *RateLimit) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 				return types.ErrTypeClosed
 			}
 			if rerr := interop.AccessRateLimit(context.Background(), r.mgr, r.rlName, func(rl types.RateLimit) {
-				waitFor, err = rl.Access()
+				waitFor, err = rl.Access(context.Background())
 			}); rerr != nil {
 				err = rerr
 			}

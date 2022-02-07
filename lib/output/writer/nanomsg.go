@@ -2,6 +2,7 @@ package writer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -96,7 +97,7 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 	case "PUB":
 		return pub.NewSocket()
 	}
-	return nil, types.ErrInvalidScaleProtoType
+	return nil, errors.New("invalid Scalability Protocols socket type")
 }
 
 // ConnectWithContext establishes a connection to a nanomsg socket.

@@ -283,7 +283,7 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 		var period time.Duration
 		var err error
 		if rerr := interop.AccessRateLimit(ctx, h.mgr, h.conf.RateLimit, func(rl types.RateLimit) {
-			period, err = rl.Access()
+			period, err = rl.Access(ctx)
 		}); rerr != nil {
 			err = rerr
 		}

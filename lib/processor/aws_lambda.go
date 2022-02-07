@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -198,17 +197,15 @@ func (l *Lambda) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 
 		for i := 0; i < msg.Len(); i++ {
 			go func(index int) {
-				result, err := l.client.Invoke(message.Lock(msg, index))
-				if err == nil && result.Len() != 1 {
-					err = fmt.Errorf("unexpected response size: %v", result.Len())
-				}
+				result := msg.Get(index).Copy()
+				err := l.client.InvokeV2(result)
 				if err != nil {
 					l.mErr.Incr(1)
 					l.mErrLambda.Incr(1)
 					l.log.Errorf("Lambda parallel request to '%v' failed: %v\n", l.conf.Config.Function, err)
 					FlagErr(parts[index], err)
 				} else {
-					parts[index] = result.Get(0)
+					parts[index] = result
 				}
 
 				wg.Done()

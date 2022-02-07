@@ -157,7 +157,7 @@ Default: `""`
 
 ### `ttl`
 
-The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, and those that do not will fall back to their generally configured TTL setting.
+The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, those that do will have a configuration field `default_ttl`, and those that do not will fall back to their generally configured TTL setting.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 

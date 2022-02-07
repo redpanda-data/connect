@@ -124,7 +124,7 @@ func (c *cacheAccessTokenProvider) Token() (*sarama.AccessToken, error) {
 	var tok []byte
 	var terr error
 	if err := interop.AccessCache(context.Background(), c.mgr, c.cacheName, func(cache types.Cache) {
-		tok, terr = cache.Get(c.key)
+		tok, terr = cache.Get(context.Background(), c.key)
 	}); err != nil {
 		return nil, fmt.Errorf("failed to obtain cache resource '%v': %v", c.cacheName, err)
 	}

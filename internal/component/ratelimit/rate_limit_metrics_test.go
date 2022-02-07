@@ -24,14 +24,9 @@ func (c *closableRateLimit) Close(ctx context.Context) error {
 
 func TestRateLimitAirGapShutdown(t *testing.T) {
 	rl := &closableRateLimit{}
-	agrl := NewV2ToV1RateLimit(rl, metrics.Noop())
+	agrl := MetricsForRateLimit(rl, metrics.Noop())
 
-	err := agrl.WaitForClose(time.Millisecond * 5)
-	assert.EqualError(t, err, "action timed out")
-	assert.False(t, rl.closed)
-
-	agrl.CloseAsync()
-	err = agrl.WaitForClose(time.Millisecond * 5)
+	err := agrl.Close(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, rl.closed)
 }

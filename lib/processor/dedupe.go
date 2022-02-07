@@ -253,7 +253,7 @@ func (d *Dedupe) ProcessMessage(msg types.Message) ([]types.Message, types.Respo
 	} else {
 		var err error
 		if cerr := interop.AccessCache(context.Background(), d.mgr, d.cacheName, func(cache types.Cache) {
-			err = cache.Add(string(hasher.Bytes()), []byte{'t'})
+			err = cache.Add(context.Background(), string(hasher.Bytes()), []byte{'t'}, nil)
 		}); cerr != nil {
 			err = cerr
 		}

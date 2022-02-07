@@ -1,6 +1,7 @@
 package writer_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -189,18 +190,11 @@ type ttlCache struct {
 	values map[string]ttlCacheItem
 }
 
-func (t *ttlCache) Get(key string) ([]byte, error) {
+func (t *ttlCache) Get(ctx context.Context, key string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (t *ttlCache) Set(key string, value []byte) error {
-	t.values[key] = ttlCacheItem{
-		value: string(value),
-	}
-	return nil
-}
-
-func (t *ttlCache) SetWithTTL(key string, value []byte, ttl *time.Duration) error {
+func (t *ttlCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	t.values[key] = ttlCacheItem{
 		value: string(value),
 		ttl:   ttl,
@@ -208,16 +202,7 @@ func (t *ttlCache) SetWithTTL(key string, value []byte, ttl *time.Duration) erro
 	return nil
 }
 
-func (t *ttlCache) SetMulti(items map[string][]byte) error {
-	for k, v := range items {
-		t.values[k] = ttlCacheItem{
-			value: string(v),
-		}
-	}
-	return nil
-}
-
-func (t *ttlCache) SetMultiWithTTL(items map[string]types.CacheTTLItem) error {
+func (t *ttlCache) SetMulti(ctx context.Context, items map[string]types.CacheTTLItem) error {
 	for k, v := range items {
 		t.values[k] = ttlCacheItem{
 			value: string(v.Value),
@@ -227,23 +212,15 @@ func (t *ttlCache) SetMultiWithTTL(items map[string]types.CacheTTLItem) error {
 	return nil
 }
 
-func (t *ttlCache) Add(key string, value []byte) error {
+func (t *ttlCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	return errors.New("not implemented")
 }
 
-func (t *ttlCache) AddWithTTL(key string, value []byte, ttl *time.Duration) error {
+func (t *ttlCache) Delete(ctx context.Context, key string) error {
 	return errors.New("not implemented")
 }
 
-func (t *ttlCache) Delete(key string) error {
-	return errors.New("not implemented")
-}
-
-func (t *ttlCache) CloseAsync() {}
-
-func (t *ttlCache) WaitForClose(time.Duration) error {
-	return nil
-}
+func (t *ttlCache) Close(context.Context) error { return nil }
 
 func TestCacheBasic(t *testing.T) {
 	mgrConf := manager.NewResourceConfig()
@@ -282,7 +259,7 @@ func TestCacheBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 	for k, v := range exp {
-		res, err := memCache.Get(k)
+		res, err := memCache.Get(context.Background(), k)
 		if err != nil {
 			t.Errorf("Missing key '%v': %v", k, err)
 		}
@@ -333,7 +310,7 @@ func TestCacheBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	for k, v := range exp {
-		res, err := memCache.Get(k)
+		res, err := memCache.Get(context.Background(), k)
 		if err != nil {
 			t.Errorf("Missing key '%v': %v", k, err)
 		}

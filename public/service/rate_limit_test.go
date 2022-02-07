@@ -26,28 +26,24 @@ func (c *closableRateLimit) Close(ctx context.Context) error {
 }
 
 func TestRateLimitAirGapShutdown(t *testing.T) {
+	ctx := context.Background()
 	rl := &closableRateLimit{
 		next: time.Second,
 	}
 	agrl := newAirGapRateLimit(rl, metrics.Noop())
 
-	tout, err := agrl.Access()
+	tout, err := agrl.Access(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, time.Second, tout)
 
 	rl.next = time.Millisecond
 	rl.err = errors.New("test error")
 
-	tout, err = agrl.Access()
+	tout, err = agrl.Access(ctx)
 	assert.EqualError(t, err, "test error")
 	assert.Equal(t, time.Millisecond, tout)
 
-	err = agrl.WaitForClose(time.Millisecond * 5)
-	assert.EqualError(t, err, "action timed out")
-	assert.False(t, rl.closed)
-
-	agrl.CloseAsync()
-	err = agrl.WaitForClose(time.Millisecond * 5)
+	err = agrl.Close(ctx)
 	assert.NoError(t, err)
 	assert.True(t, rl.closed)
 }
@@ -60,15 +56,12 @@ type closableRateLimitType struct {
 	closed bool
 }
 
-func (c *closableRateLimitType) Access() (time.Duration, error) {
+func (c *closableRateLimitType) Access(ctx context.Context) (time.Duration, error) {
 	return c.next, c.err
 }
 
-func (c *closableRateLimitType) CloseAsync() {
+func (c *closableRateLimitType) Close(ctx context.Context) error {
 	c.closed = true
-}
-
-func (c *closableRateLimitType) WaitForClose(tout time.Duration) error {
 	return nil
 }
 

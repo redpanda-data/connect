@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"sync/atomic"
@@ -16,7 +17,7 @@ import (
 
 func TestRateLimitBasic(t *testing.T) {
 	var hits int32
-	rlFn := func() (time.Duration, error) {
+	rlFn := func(context.Context) (time.Duration, error) {
 		atomic.AddInt32(&hits, 1)
 		return 0, nil
 	}
@@ -57,7 +58,7 @@ func TestRateLimitBasic(t *testing.T) {
 
 func TestRateLimitClosed(t *testing.T) {
 	var hits int32
-	rlFn := func() (time.Duration, error) {
+	rlFn := func(context.Context) (time.Duration, error) {
 		if i := atomic.AddInt32(&hits, 1); i == 2 {
 			return 0, types.ErrTypeClosed
 		}
@@ -99,7 +100,7 @@ func TestRateLimitClosed(t *testing.T) {
 }
 
 func TestRateLimitErroredOut(t *testing.T) {
-	rlFn := func() (time.Duration, error) {
+	rlFn := func(context.Context) (time.Duration, error) {
 		return 0, errors.New("omg foo")
 	}
 
@@ -145,7 +146,7 @@ func TestRateLimitErroredOut(t *testing.T) {
 }
 
 func TestRateLimitBlocked(t *testing.T) {
-	rlFn := func() (time.Duration, error) {
+	rlFn := func(context.Context) (time.Duration, error) {
 		return time.Second * 10, nil
 	}
 

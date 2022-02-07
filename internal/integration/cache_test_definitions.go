@@ -24,9 +24,9 @@ func CacheTestOpenClose() CacheTestDefinition {
 				closeCache(t, cache)
 			})
 
-			require.NoError(t, cache.Add("foo", []byte("bar")))
+			require.NoError(t, cache.Add(env.ctx, "foo", []byte("bar"), nil))
 
-			res, err := cache.Get("foo")
+			res, err := cache.Get(env.ctx, "foo")
 			require.NoError(t, err)
 			assert.Equal(t, "bar", string(res))
 		},
@@ -45,7 +45,7 @@ func CacheTestMissingKey() CacheTestDefinition {
 				closeCache(t, cache)
 			})
 
-			_, err := cache.Get("missingkey")
+			_, err := cache.Get(env.ctx, "missingkey")
 			assert.EqualError(t, err, "key does not exist")
 		},
 	)
@@ -63,13 +63,13 @@ func CacheTestDoubleAdd() CacheTestDefinition {
 				closeCache(t, cache)
 			})
 
-			require.NoError(t, cache.Add("addkey", []byte("first")))
+			require.NoError(t, cache.Add(env.ctx, "addkey", []byte("first"), nil))
 
 			assert.Eventually(t, func() bool {
-				return errors.Is(cache.Add("addkey", []byte("second")), types.ErrKeyAlreadyExists)
+				return errors.Is(cache.Add(env.ctx, "addkey", []byte("second"), nil), types.ErrKeyAlreadyExists)
 			}, time.Minute, time.Second)
 
-			res, err := cache.Get("addkey")
+			res, err := cache.Get(env.ctx, "addkey")
 			require.NoError(t, err)
 			assert.Equal(t, "first", string(res))
 		},
@@ -88,15 +88,15 @@ func CacheTestDelete() CacheTestDefinition {
 				closeCache(t, cache)
 			})
 
-			require.NoError(t, cache.Add("addkey", []byte("first")))
+			require.NoError(t, cache.Add(env.ctx, "addkey", []byte("first"), nil))
 
-			res, err := cache.Get("addkey")
+			res, err := cache.Get(env.ctx, "addkey")
 			require.NoError(t, err)
 			assert.Equal(t, "first", string(res))
 
-			require.NoError(t, cache.Delete("addkey"))
+			require.NoError(t, cache.Delete(env.ctx, "addkey"))
 
-			_, err = cache.Get("addkey")
+			_, err = cache.Get(env.ctx, "addkey")
 			require.EqualError(t, err, "key does not exist")
 		},
 	)
@@ -117,14 +117,14 @@ func CacheTestGetAndSet(n int) CacheTestDefinition {
 			for i := 0; i < n; i++ {
 				key := fmt.Sprintf("key:%v", i)
 				value := fmt.Sprintf("value:%v", i)
-				require.NoError(t, cache.Set(key, []byte(value)))
+				require.NoError(t, cache.Set(env.ctx, key, []byte(value), nil))
 			}
 
 			for i := 0; i < n; i++ {
 				key := fmt.Sprintf("key:%v", i)
 				value := fmt.Sprintf("value:%v", i)
 
-				res, err := cache.Get(key)
+				res, err := cache.Get(env.ctx, key)
 				require.NoError(t, err)
 				assert.Equal(t, value, string(res))
 			}

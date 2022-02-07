@@ -202,6 +202,5 @@ func initCache(t *testing.T, env *cacheTestEnvironment) types.Cache {
 }
 
 func closeCache(t *testing.T, cache types.Cache) {
-	cache.CloseAsync()
-	require.NoError(t, cache.WaitForClose(time.Second*10))
+	require.NoError(t, cache.Close(context.Background()))
 }

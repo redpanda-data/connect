@@ -211,7 +211,7 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 			return err
 		}
 		s.log.Debugln("Finding more paths")
-		s.paths, err = s.getFilePaths()
+		s.paths, err = s.getFilePaths(ctx)
 		if err != nil {
 			return err
 		}
@@ -229,7 +229,7 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		s.paths, err = s.getFilePaths()
+		s.paths, err = s.getFilePaths(ctx)
 		return err
 	}
 
@@ -276,7 +276,7 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (types.Message, reader
 			if s.conf.Watcher.Enabled {
 				var setErr error
 				if cerr := interop.AccessCache(ctx, s.mgr, s.conf.Watcher.Cache, func(cache types.Cache) {
-					setErr = cache.Set(s.currentPath, []byte("@"))
+					setErr = cache.Set(ctx, s.currentPath, []byte("@"), nil)
 				}); cerr != nil {
 					return nil, nil, fmt.Errorf("failed to get the cache for sftp watcher mode: %v", cerr)
 				}
@@ -327,7 +327,7 @@ func (s *sftpReader) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-func (s *sftpReader) getFilePaths() ([]string, error) {
+func (s *sftpReader) getFilePaths(ctx context.Context) ([]string, error) {
 	var filepaths []string
 	if !s.conf.Watcher.Enabled {
 		for _, p := range s.conf.Paths {
@@ -341,7 +341,7 @@ func (s *sftpReader) getFilePaths() ([]string, error) {
 		return filepaths, nil
 	}
 
-	if cerr := interop.AccessCache(context.Background(), s.mgr, s.conf.Watcher.Cache, func(cache types.Cache) {
+	if cerr := interop.AccessCache(ctx, s.mgr, s.conf.Watcher.Cache, func(cache types.Cache) {
 		for _, p := range s.conf.Paths {
 			paths, err := s.client.Glob(p)
 			if err != nil {
@@ -358,9 +358,9 @@ func (s *sftpReader) getFilePaths() ([]string, error) {
 				if time.Since(info.ModTime()) < s.watcherMinAge {
 					continue
 				}
-				if _, err := cache.Get(path); err != nil {
+				if _, err := cache.Get(ctx, path); err != nil {
 					filepaths = append(filepaths, path)
-				} else if err = cache.Set(path, []byte("@")); err != nil { // Reset the TTL for the path
+				} else if err = cache.Set(ctx, path, []byte("@"), nil); err != nil { // Reset the TTL for the path
 					s.log.Warnf("Failed to set key in cache for path %v: %v\n", path, err)
 				}
 			}
