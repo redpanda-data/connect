@@ -130,7 +130,7 @@ Options: `to_json`.
 
 ### `cast`
 
-Whether to try to cast values that are numbers and booleans to the right type. Default: false - all values are strings.
+Whether to try to cast values that are numbers and booleans to the right type. Default: all values are strings.
 
 
 Type: `bool`  
