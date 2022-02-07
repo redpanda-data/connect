@@ -66,9 +66,29 @@ The resulting JSON structure would look like this:
     ]
   }
 }
+` + "```" + `
+
+With cast set to true, the resulting JSON structure would look like this:
+
+` + "```json" + `
+{
+  "root":{
+    "title":"This is a title",
+    "description":{
+      "#text":"This is a description",
+      "-tone":"boring"
+    },
+    "elements":[
+      {"#text":"foo1","-id":1},
+      {"#text":"foo2","-id":2},
+      "foo3"
+    ]
+  }
+}
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "An XML [operation](#operators) to apply to messages.").HasOptions("to_json"),
+			docs.FieldCommon("cast", "Whether to try to cast values that are numbers and booleans to the right type. Default: all values are strings."),
 			PartsFieldSpec,
 		},
 	}
@@ -80,6 +100,7 @@ The resulting JSON structure would look like this:
 type XMLConfig struct {
 	Parts    []int  `json:"parts" yaml:"parts"`
 	Operator string `json:"operator" yaml:"operator"`
+	Cast     bool   `json:"cast" yaml:"cast"`
 }
 
 // NewXMLConfig returns a XMLConfig with default values.
@@ -87,6 +108,7 @@ func NewXMLConfig() XMLConfig {
 	return XMLConfig{
 		Parts:    []int{},
 		Operator: "to_json",
+		Cast:     false,
 	}
 }
 
@@ -137,7 +159,7 @@ func (p *XML) ProcessMessage(msg types.Message) ([]types.Message, types.Response
 	newMsg := msg.Copy()
 
 	proc := func(index int, span *tracing.Span, part types.Part) error {
-		root, err := xml.ToMap(part.Get())
+		root, err := xml.ToMap(part.Get(), p.conf.XML.Cast)
 		if err != nil {
 			p.mErr.Incr(1)
 			p.log.Debugf("Failed to parse part as XML: %v\n", err)

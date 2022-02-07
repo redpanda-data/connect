@@ -35,6 +35,7 @@ overwrites the previous contents with the new value.
 label: ""
 xml:
   operator: to_json
+  cast: false
 ```
 
 </TabItem>
@@ -45,6 +46,7 @@ xml:
 label: ""
 xml:
   operator: to_json
+  cast: false
   parts: []
 ```
 
@@ -96,6 +98,25 @@ The resulting JSON structure would look like this:
 }
 ```
 
+With cast set to true, the resulting JSON structure would look like this:
+
+```json
+{
+  "root":{
+    "title":"This is a title",
+    "description":{
+      "#text":"This is a description",
+      "-tone":"boring"
+    },
+    "elements":[
+      {"#text":"foo1","-id":1},
+      {"#text":"foo2","-id":2},
+      "foo3"
+    ]
+  }
+}
+```
+
 ## Fields
 
 ### `operator`
@@ -106,6 +127,14 @@ An XML [operation](#operators) to apply to messages.
 Type: `string`  
 Default: `"to_json"`  
 Options: `to_json`.
+
+### `cast`
+
+Whether to try to cast values that are numbers and booleans to the right type. Default: false - all values are strings.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `parts`
 
