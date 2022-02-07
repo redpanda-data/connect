@@ -22,7 +22,7 @@ Executes a `SELECT` query against BigQuery and creates a message for each row re
 
 Introduced in version 3.63.0.
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   label: ""
@@ -86,7 +86,7 @@ Fully-qualified BigQuery table name to query.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 table: bigquery-public-data.samples.shakespeare
@@ -106,7 +106,7 @@ An optional where clause to add. Placeholder arguments are populated with the `a
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 where: type = ? and created_at > ?
@@ -129,7 +129,7 @@ An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluat
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 args_mapping: root = [ "article", now().format_timestamp("2006-01-02") ]

@@ -186,7 +186,7 @@ The maximum amount of time NATS server should wait for an ack from consumer.
 Type: `string`  
 Default: `"30s"`  
 
-```yaml
+```yml
 # Examples
 
 ack_wait: 100ms
