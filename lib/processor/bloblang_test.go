@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
+	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -208,5 +208,5 @@ func TestBloblangJSONError(t *testing.T) {
 	resPart := outMsgs[0].Get(0)
 
 	assert.Equal(t, `this is not valid json`, string(resPart.Get()))
-	assert.Equal(t, `failed assignment (line 2): invalid character 'h' in literal true (expecting 'r')`, resPart.MetaGet(types.FailFlagKey))
+	assert.Equal(t, `failed assignment (line 2): invalid character 'h' in literal true (expecting 'r')`, resPart.MetaGet(imessage.FailFlagKey))
 }

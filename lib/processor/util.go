@@ -1,6 +1,7 @@
 package processor
 
 import (
+	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -138,7 +139,7 @@ func ExecuteCatchAll(procs []types.Processor, msgs ...*message.Batch) ([]*messag
 // FailFlagKey is a metadata key used for flagging processor errors in Benthos.
 // If a message part has any non-empty value for this metadata key then it will
 // be interpretted as having failed a processor step somewhere in the pipeline.
-var FailFlagKey = types.FailFlagKey
+var FailFlagKey = imessage.FailFlagKey
 
 // FlagFail marks a message part as having failed at a processing step.
 func FlagFail(part *message.Part) {
