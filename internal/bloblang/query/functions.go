@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
@@ -301,7 +301,7 @@ var _ = registerSimpleFunction(
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		return ctx.MsgBatch.Get(ctx.Index).MetaGet(types.FailFlagKey), nil
+		return ctx.MsgBatch.Get(ctx.Index).MetaGet(message.FailFlagKey), nil
 	},
 )
 
@@ -314,7 +314,7 @@ var _ = registerSimpleFunction(
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		return len(ctx.MsgBatch.Get(ctx.Index).MetaGet(types.FailFlagKey)) > 0, nil
+		return len(ctx.MsgBatch.Get(ctx.Index).MetaGet(message.FailFlagKey)) > 0, nil
 	},
 )
 

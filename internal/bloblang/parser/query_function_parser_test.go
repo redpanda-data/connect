@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -323,7 +323,7 @@ bar""")`,
 			output: `test error`,
 			messages: []easyMsg{
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					imessage.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -332,7 +332,7 @@ bar""")`,
 			output: ``,
 			messages: []easyMsg{
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					imessage.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -342,7 +342,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					imessage.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -353,7 +353,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					imessage.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -362,7 +362,7 @@ bar""")`,
 			output: `true`,
 			messages: []easyMsg{
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					imessage.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -373,7 +373,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					imessage.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -384,7 +384,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					imessage.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -393,7 +393,7 @@ bar""")`,
 			output: `false`,
 			messages: []easyMsg{
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					imessage.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -403,7 +403,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					imessage.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -414,7 +414,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					imessage.FailFlagKey: "test error",
 				}},
 			},
 		},
