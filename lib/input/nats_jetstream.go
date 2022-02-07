@@ -14,6 +14,7 @@ type NATSJetStreamConfig struct {
 	Queue         string      `json:"queue" yaml:"queue"`
 	Durable       string      `json:"durable" yaml:"durable"`
 	Deliver       string      `json:"deliver" yaml:"deliver"`
+	AckWait       string      `json:"ack_wait" yaml:"ack_wait"`
 	MaxAckPending int         `json:"max_ack_pending" yaml:"max_ack_pending"`
 	TLS           tls.Config  `json:"tls" yaml:"tls"`
 	Auth          auth.Config `json:"auth" yaml:"auth"`
@@ -24,6 +25,7 @@ func NewNATSJetStreamConfig() NATSJetStreamConfig {
 	return NATSJetStreamConfig{
 		URLs:          []string{nats.DefaultURL},
 		Subject:       "",
+		AckWait:       "30s",
 		MaxAckPending: 1024,
 		Deliver:       "all",
 		TLS:           tls.NewConfig(),
