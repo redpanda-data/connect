@@ -260,7 +260,7 @@ func (m *MQTT) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 		p.MetaSet("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
 
 		return message, func(ctx context.Context, res types.Response) error {
-			if res.Error() == nil {
+			if res.AckError() == nil {
 				msg.Ack()
 			}
 			return nil

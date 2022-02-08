@@ -98,7 +98,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		// Instant response from buffer
 		select {
 		case res := <-resChan:
-			require.NoError(t, res.Error())
+			require.NoError(t, res.AckError())
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for unbuffered message %v response", i)
 		}
@@ -132,7 +132,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		}
 		select {
 		case res := <-resChan:
-			assert.NoError(t, res.Error())
+			assert.NoError(t, res.AckError())
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v response", i)
 		}
@@ -151,8 +151,8 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	// Response should block until buffer is relieved
 	select {
 	case res := <-resChan:
-		if res.Error() != nil {
-			t.Fatal(res.Error())
+		if res.AckError() != nil {
+			t.Fatal(res.AckError())
 		} else {
 			t.Fatalf("Overflowed response returned before timeout")
 		}
@@ -173,7 +173,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	// Response from the last attempt should no longer be blocking
 	select {
 	case res := <-resChan:
-		assert.NoError(t, res.Error())
+		assert.NoError(t, res.AckError())
 	case <-time.After(100 * time.Millisecond):
 		t.Errorf("Final buffered response blocked")
 	}
@@ -238,7 +238,7 @@ func TestStreamBufferClosing(t *testing.T) {
 		}
 		select {
 		case res := <-resChan:
-			assert.NoError(t, res.Error())
+			assert.NoError(t, res.AckError())
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v response", i)
 		}

@@ -320,7 +320,7 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckF
 			if a.conf.AutoAck {
 				return nil
 			}
-			if res.Error() != nil {
+			if res.AckError() != nil {
 				return data.Nack(false, true)
 			}
 			return data.Ack(false)

@@ -353,8 +353,8 @@ func (d *DynamicFanOut) loop() {
 
 						select {
 						case res := <-resChan:
-							if res.Error() != nil {
-								d.log.Errorf("Failed to dispatch dynamic fan out message to '%v': %v\n", name, res.Error())
+							if res.AckError() != nil {
+								d.log.Errorf("Failed to dispatch dynamic fan out message to '%v': %v\n", name, res.AckError())
 								mOutputErr.Incr(1)
 								if cont := throt.Retry(); !cont {
 									return component.ErrTypeClosed

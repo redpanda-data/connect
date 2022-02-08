@@ -151,7 +151,7 @@ func (c *GCPPubSub) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 	msg.Append(part)
 
 	return msg, func(ctx context.Context, res types.Response) error {
-		if res.Error() != nil {
+		if res.AckError() != nil {
 			gmsg.Nack()
 		} else {
 			gmsg.Ack()

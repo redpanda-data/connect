@@ -93,8 +93,8 @@ func TestTryHappyPath(t *testing.T) {
 
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Error(res.Error())
+			if res.AckError() != nil {
+				t.Error(res.AckError())
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out responding to broker")
@@ -193,8 +193,8 @@ func TestTryHappyishPath(t *testing.T) {
 
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Error(res.Error())
+			if res.AckError() != nil {
+				t.Error(res.AckError())
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out responding to broker")
@@ -269,7 +269,7 @@ func TestTryAllFail(t *testing.T) {
 
 		select {
 		case res := <-resChan:
-			if exp, act := testErr, res.Error(); exp != act {
+			if exp, act := testErr, res.AckError(); exp != act {
 				t.Errorf("Wrong error returned: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
@@ -364,7 +364,7 @@ func TestTryAllFailParallel(t *testing.T) {
 	for _, resChan := range resChans {
 		select {
 		case res := <-resChan:
-			if exp, act := testErr, res.Error(); exp != act {
+			if exp, act := testErr, res.AckError(); exp != act {
 				t.Errorf("Wrong error returned: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):

@@ -80,8 +80,8 @@ func TestFanOutBroker(t *testing.T) {
 
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Fatal(res.Error())
+			if res.AckError() != nil {
+				t.Fatal(res.AckError())
 			}
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
@@ -168,8 +168,8 @@ func TestRoundRobinBroker(t *testing.T) {
 
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Fatal(res.Error())
+			if res.AckError() != nil {
+				t.Fatal(res.AckError())
 			}
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
@@ -262,8 +262,8 @@ func TestGreedyBroker(t *testing.T) {
 
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Fatal(res.Error())
+			if res.AckError() != nil {
+				t.Fatal(res.AckError())
 			}
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
@@ -353,8 +353,8 @@ func TestTryBroker(t *testing.T) {
 
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Fatal(res.Error())
+			if res.AckError() != nil {
+				t.Fatal(res.AckError())
 			}
 		case <-time.After(time.Second * 2):
 			t.Fatal("Action timed out")

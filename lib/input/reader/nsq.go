@@ -191,7 +191,7 @@ func (n *NSQ) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, 
 	}
 	n.unAckMsgs = append(n.unAckMsgs, msg)
 	return message.QuickBatch([][]byte{msg.Body}), func(rctx context.Context, res types.Response) error {
-		if res.Error() != nil {
+		if res.AckError() != nil {
 			msg.Requeue(-1)
 		}
 		msg.Finish()

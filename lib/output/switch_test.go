@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -91,8 +92,8 @@ func TestSwitchNoConditions(t *testing.T) {
 		}
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Errorf("Received unexpected errors from broker: %v", res.Error())
+			if res.AckError() != nil {
+				t.Errorf("Received unexpected errors from broker: %v", res.AckError())
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out responding to broker")
@@ -161,9 +162,9 @@ func TestSwitchNoRetries(t *testing.T) {
 		}
 		select {
 		case res := <-resChan:
-			if res.Error() == nil {
+			if res.AckError() == nil {
 				t.Error("Received nil error from broker")
-			} else if exp, act := "test", res.Error().Error(); exp != act {
+			} else if exp, act := "test", res.AckError().Error(); exp != act {
 				t.Errorf("Wrong error message from broker: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
@@ -197,7 +198,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 		Output: errOut,
 	})
 
-	s, err := NewSwitch(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	s, err := NewSwitch(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	readChan := make(chan types.Transaction)
@@ -225,7 +226,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 		t.Fatal("Timed out responding to broker")
 	}
 
-	err = res.Error()
+	err = res.AckError()
 	require.Error(t, err)
 
 	bOut, ok := err.(*batch.Error)
@@ -310,7 +311,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		err := res.Error()
+		err := res.AckError()
 		require.Error(t, err)
 
 		bOut, ok := err.(*batch.Error)
@@ -426,8 +427,8 @@ func TestSwitchWithConditions(t *testing.T) {
 
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Errorf("Received unexpected errors from output: %v", res.Error())
+			if res.AckError() != nil {
+				t.Errorf("Received unexpected errors from output: %v", res.AckError())
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out responding to output")
@@ -498,8 +499,8 @@ func TestSwitchError(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		if res.Error() != nil {
-			t.Errorf("Received unexpected errors from output: %v", res.Error())
+		if res.AckError() != nil {
+			t.Errorf("Received unexpected errors from output: %v", res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to output")
@@ -564,8 +565,8 @@ func TestSwitchBatchSplit(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		if res.Error() != nil {
-			t.Errorf("Received unexpected errors from output: %v", res.Error())
+		if res.AckError() != nil {
+			t.Errorf("Received unexpected errors from output: %v", res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to output")
@@ -633,8 +634,8 @@ func TestSwitchBatchGroup(t *testing.T) {
 	case <-mockOutputs[2].TChan:
 		t.Error("did not expect message route to 2")
 	case res := <-resChan:
-		if res.Error() != nil {
-			t.Errorf("Received unexpected errors from output: %v", res.Error())
+		if res.AckError() != nil {
+			t.Errorf("Received unexpected errors from output: %v", res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to output")
@@ -672,7 +673,7 @@ func TestSwitchNoMatch(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		if err := res.Error(); err != nil {
+		if err := res.AckError(); err != nil {
 			t.Errorf("Expected error from output to equal nil, got %v", err)
 		}
 	case <-time.After(time.Second):
@@ -716,7 +717,7 @@ func TestSwitchNoMatchStrict(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		if err := res.Error(); err == nil {
+		if err := res.AckError(); err == nil {
 			t.Error("Expected error from output but was nil")
 		}
 	case <-time.After(time.Second):
@@ -824,8 +825,8 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Errorf("Received unexpected errors from output: %v", res.Error())
+			if res.AckError() != nil {
+				t.Errorf("Received unexpected errors from output: %v", res.AckError())
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out responding to output")
@@ -914,8 +915,8 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 	}
 	select {
 	case res := <-resChan:
-		if res.Error() != nil {
-			t.Errorf("Fan out returned error %v", res.Error())
+		if res.AckError() != nil {
+			t.Errorf("Fan out returned error %v", res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Errorf("Timed out responding to output")

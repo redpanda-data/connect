@@ -133,7 +133,7 @@ func (a *airGapReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 	tMsg := message.QuickBatch(nil)
 	tMsg.Append(msg.part)
 	return tMsg, func(c context.Context, r types.Response) error {
-		return ackFn(c, r.Error())
+		return ackFn(c, r.AckError())
 	}, nil
 }
 
@@ -190,7 +190,7 @@ func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (*message.Batch
 		tMsg.Append(msg.part)
 	}
 	return tMsg, func(c context.Context, r types.Response) error {
-		return ackFn(c, r.Error())
+		return ackFn(c, r.AckError())
 	}, nil
 }
 

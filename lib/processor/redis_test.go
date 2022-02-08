@@ -100,7 +100,7 @@ func testRedisKeys(t *testing.T, client *redis.Client, url string) {
 
 	resMsgs, response := r.ProcessMessage(msg)
 	if !assert.Nil(t, response) {
-		require.NoError(t, response.Error())
+		require.NoError(t, response.AckError())
 	}
 
 	require.Len(t, resMsgs, 1)
@@ -152,8 +152,8 @@ func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
 
 	resMsgs, response := r.ProcessMessage(msg)
 	if response != nil {
-		if response.Error() != nil {
-			t.Fatal(response.Error())
+		if response.AckError() != nil {
+			t.Fatal(response.AckError())
 		}
 		t.Fatal("Expected nil response")
 	}
@@ -210,8 +210,8 @@ func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 
 	resMsgs, response := r.ProcessMessage(msg)
 	if response != nil {
-		if response.Error() != nil {
-			t.Fatal(response.Error())
+		if response.AckError() != nil {
+			t.Fatal(response.AckError())
 		}
 		t.Fatal("Expected nil response")
 	}
@@ -250,8 +250,8 @@ func testRedisIncrby(t *testing.T, client *redis.Client, url string) {
 	})
 	resMsgs, response := r.ProcessMessage(msg)
 	if response != nil {
-		if response.Error() != nil {
-			t.Fatal(response.Error())
+		if response.AckError() != nil {
+			t.Fatal(response.AckError())
 		}
 		t.Fatal("Expected nil response")
 	}

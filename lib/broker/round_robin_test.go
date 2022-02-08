@@ -93,8 +93,8 @@ func TestBasicRoundRobin(t *testing.T) {
 
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Errorf("Received unexpected errors from broker: %v", res.Error())
+			if res.AckError() != nil {
+				t.Errorf("Received unexpected errors from broker: %v", res.AckError())
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out responding to broker")
@@ -143,8 +143,8 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 		ts := <-mockOutputs[i%3].TChan
 		ts.ResponseChan <- response.NewAck()
 		res := <-resChan
-		if res.Error() != nil {
-			b.Errorf("Received unexpected errors from broker: %v", res.Error())
+		if res.AckError() != nil {
+			b.Errorf("Received unexpected errors from broker: %v", res.AckError())
 		}
 	}
 

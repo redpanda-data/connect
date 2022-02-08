@@ -69,8 +69,8 @@ func TestPoolBasic(t *testing.T) {
 		if !open {
 			t.Fatal("Closed early")
 		}
-		if res.Error() != errMockProc {
-			t.Error(res.Error())
+		if res.AckError() != errMockProc {
+			t.Error(res.AckError())
 		}
 	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
@@ -119,8 +119,8 @@ func TestPoolBasic(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if res.Error() != nil {
-			t.Error(res.Error())
+		if res.AckError() != nil {
+			t.Error(res.AckError())
 		}
 	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
@@ -203,8 +203,8 @@ func TestPoolMultiMsgs(t *testing.T) {
 		case res, open := <-resChan:
 			if !open {
 				t.Error("Closed early")
-			} else if res.Error() != nil {
-				t.Error(res.Error())
+			} else if res.AckError() != nil {
+				t.Error(res.AckError())
 			}
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
@@ -284,8 +284,8 @@ func TestPoolMultiThreads(t *testing.T) {
 		case res, open := <-resChan:
 			if !open {
 				t.Error("Closed early")
-			} else if res.Error() != nil {
-				t.Error(res.Error())
+			} else if res.AckError() != nil {
+				t.Error(res.AckError())
 			}
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")

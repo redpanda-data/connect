@@ -5,8 +5,8 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	"github.com/Shopify/sarama"
 	"github.com/stretchr/testify/require"
@@ -24,7 +24,7 @@ func TestApplyPlaintext(t *testing.T) {
 		Password:  "bar",
 	}
 
-	err := saslConf.Apply(types.NoopMgr(), conf)
+	err := saslConf.Apply(mock.NewManager(), conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestApplyPlaintextDeprecated(t *testing.T) {
 		Password:  "bar",
 	}
 
-	err := saslConf.Apply(types.NoopMgr(), conf)
+	err := saslConf.Apply(mock.NewManager(), conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestApplyOAuthBearerStaticProvider(t *testing.T) {
 		AccessToken: "foo",
 	}
 
-	err := saslConf.Apply(types.NoopMgr(), conf)
+	err := saslConf.Apply(mock.NewManager(), conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ cache_resources:
         jwt: foo
 `), &resConf))
 
-	mgr, err := manager.NewV2(resConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(resConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	require.NoError(t, saslConf.Apply(mgr, conf))
@@ -168,7 +168,7 @@ func TestApplyUnknownMechanism(t *testing.T) {
 		Mechanism: "foo",
 	}
 
-	err := saslConf.Apply(types.NoopMgr(), conf)
+	err := saslConf.Apply(mock.NewManager(), conf)
 	if err != sasl.ErrUnsupportedSASLMechanism {
 		t.Errorf("Err %v != %v", err, sasl.ErrUnsupportedSASLMechanism)
 	}

@@ -16,15 +16,9 @@ type Error struct {
 	err error
 }
 
-// Error returns the underlying error.
-func (o Error) Error() error {
+// AckError returns the underlying error.
+func (o Error) AckError() error {
 	return o.err
-}
-
-// SkipAck indicates whether a successful message should be acknowledged.
-// TODO: V4 Remove this once batch processor is removed.
-func (o Error) SkipAck() bool {
-	return false
 }
 
 // NewError returns a response that wraps an error (nil error signals successful
@@ -41,34 +35,10 @@ func NewError(err error) Error {
 // and can be acknowledged upstream.
 type Ack struct{}
 
-// Error returns the underlying error.
-func (a Ack) Error() error { return nil }
-
-// SkipAck indicates whether a successful message should be acknowledged.
-func (a Ack) SkipAck() bool {
-	return false
-}
+// AckError returns nil.
+func (a Ack) AckError() error { return nil }
 
 // NewAck returns an Ack response type.
 func NewAck() Ack {
 	return Ack{}
-}
-
-//------------------------------------------------------------------------------
-
-// Noack is a response type that indicates the message has failed to reach a
-// destination.
-type Noack struct{}
-
-// Error returns the underlying error.
-func (a Noack) Error() error { return ErrNoAck }
-
-// SkipAck indicates whether a successful message should be acknowledged.
-func (a Noack) SkipAck() bool {
-	return false
-}
-
-// NewNoack returns a Nack response type.
-func NewNoack() Noack {
-	return Noack{}
 }

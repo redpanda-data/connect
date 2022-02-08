@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,7 +37,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	conf.Retry = "1ms"
 	conf.NumRetries = 3
 
-	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	conf := NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 	conf.URL = ts.URL + "/testpost"
 	conf.PropagateResponse = true
 
-	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 	conf.PropagateResponse = true
 	conf.CopyResponseHeaders = true
 
-	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 	conf := NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 			ContentType:        "text/plain",
 			Body:               "PART-B"},
 	}
-	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 			ContentType:        "text/plain",
 			Body:               "PART-B"},
 	}
-	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

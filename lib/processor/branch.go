@@ -453,8 +453,8 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 		var res types.Response
 		msg := message.QuickBatch(nil)
 		msg.SetAll(parts)
-		if procResults, res = ExecuteAll(b.children, msg); res != nil && res.Error() != nil {
-			err = fmt.Errorf("child processors failed: %v", res.Error())
+		if procResults, res = ExecuteAll(b.children, msg); res != nil && res.AckError() != nil {
+			err = fmt.Errorf("child processors failed: %v", res.AckError())
 		}
 		if len(procResults) == 0 {
 			err = errors.New("child processors resulted in zero messages")

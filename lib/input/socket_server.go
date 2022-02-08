@@ -183,7 +183,7 @@ func (t *SocketServer) sendMsg(msg *message.Batch) bool {
 				}
 				var sendErr error
 				if res != nil {
-					sendErr = res.Error()
+					sendErr = res.AckError()
 				}
 				if sendErr == nil || sendErr == component.ErrTypeClosed {
 					if sendErr == nil {

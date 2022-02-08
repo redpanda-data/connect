@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
@@ -47,7 +48,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		conf:    conf,
 		stats:   metrics.Noop(),
 		logger:  log.Noop(),
-		manager: types.NoopMgr(),
+		manager: mock.NewManager(),
 		onClose: func() {},
 	}
 	for _, opt := range opts {

@@ -73,7 +73,7 @@ func TestWhileWithContentCheck(t *testing.T) {
 
 	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
-		t.Error(res.Error())
+		t.Error(res.AckError())
 	}
 	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
@@ -107,7 +107,7 @@ func TestWhileWithCountALO(t *testing.T) {
 
 	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
-		t.Error(res.Error())
+		t.Error(res.AckError())
 	}
 	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
@@ -141,7 +141,7 @@ func TestWhileMaxLoops(t *testing.T) {
 
 	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
-		t.Error(res.Error())
+		t.Error(res.AckError())
 	}
 	if act := message.GetAllBytes(msg[0]); !reflect.DeepEqual(act, exp) {
 		t.Errorf("Wrong result: %s != %s", act, exp)

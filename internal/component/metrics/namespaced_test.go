@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -165,10 +165,10 @@ func TestNamespacedPrefixStaticLabels(t *testing.T) {
 func TestNamespacedPrefixStaticLabelsWithMappings(t *testing.T) {
 	prom, handler := getTestProm(t)
 
-	mappingFooToBar, err := NewMapping(types.NoopMgr(), `root = this.replace("foo","bar")`, log.Noop())
+	mappingFooToBar, err := NewMapping(mock.NewManager(), `root = this.replace("foo","bar")`, log.Noop())
 	require.NoError(t, err)
 
-	mappingBarToBaz, err := NewMapping(types.NoopMgr(), `root = this.replace("bar","baz")`, log.Noop())
+	mappingBarToBaz, err := NewMapping(mock.NewManager(), `root = this.replace("bar","baz")`, log.Noop())
 	require.NoError(t, err)
 
 	nm := NewNamespaced(prom).WithPrefix("foo").WithLabels("static1", "svalue1")
@@ -209,12 +209,12 @@ func TestNamespacedPrefixStaticLabelsWithMappings(t *testing.T) {
 func TestNamespacedPrefixStaticLabelsWithMappingLabels(t *testing.T) {
 	prom, handler := getTestProm(t)
 
-	mappingFooToBar, err := NewMapping(types.NoopMgr(), `meta = meta().map_each(kv -> kv.value.replace("value","bar"))
+	mappingFooToBar, err := NewMapping(mock.NewManager(), `meta = meta().map_each(kv -> kv.value.replace("value","bar"))
 meta extra1 = "extravalue1"
 root = this.replace("foo","bar")`, log.Noop())
 	require.NoError(t, err)
 
-	mappingBarToBaz, err := NewMapping(types.NoopMgr(), `meta = meta().map_each(kv -> kv.value.replace("bar","baz"))
+	mappingBarToBaz, err := NewMapping(mock.NewManager(), `meta = meta().map_each(kv -> kv.value.replace("bar","baz"))
 meta extra2 = "extravalue2"
 root = this.replace("bar","baz")`, log.Noop())
 	require.NoError(t, err)

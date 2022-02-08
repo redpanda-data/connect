@@ -7,6 +7,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
@@ -89,7 +90,7 @@ func TestSpanReader(t *testing.T) {
 					waitCalled = true
 					return nil
 				},
-			}, types.NoopMgr(), log.Noop())
+			}, mock.NewManager(), log.Noop())
 			require.NoError(t, err)
 
 			assert.Nil(t, r.ConnectWithContext(context.Background()))

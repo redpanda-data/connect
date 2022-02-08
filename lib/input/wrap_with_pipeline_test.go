@@ -247,7 +247,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		t.Errorf("Unexpected response: %v", res.Error())
+		t.Errorf("Unexpected response: %v", res.AckError())
 	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
@@ -275,8 +275,8 @@ func TestBasicWrapProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if res.Error() != errFailed {
-			t.Error(res.Error())
+		if res.AckError() != errFailed {
+			t.Error(res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Error("action timed out")
@@ -321,7 +321,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		t.Errorf("Unexpected response: %v", res.Error())
+		t.Errorf("Unexpected response: %v", res.AckError())
 	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
@@ -349,8 +349,8 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		if !open {
 			t.Error("Channel was closed")
 		}
-		if res.Error() != errFailed {
-			t.Error(res.Error())
+		if res.AckError() != errFailed {
+			t.Error(res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Error("action timed out")

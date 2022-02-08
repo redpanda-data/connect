@@ -16,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -151,7 +152,7 @@ func TestTypeAPIBadMethods(t *testing.T) {
 	mgr := manager.New(
 		manager.OptSetLogger(log.Noop()),
 		manager.OptSetStats(metrics.Noop()),
-		manager.OptSetManager(types.NoopMgr()),
+		manager.OptSetManager(mock.NewManager()),
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
@@ -180,7 +181,7 @@ func harmlessConf() stream.Config {
 }
 
 func TestTypeAPIBasicOperations(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := manager.New(
@@ -298,7 +299,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 }
 
 func TestTypeAPIPatch(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := manager.New(
@@ -355,7 +356,7 @@ func TestTypeAPIPatch(t *testing.T) {
 }
 
 func TestTypeAPIBasicOperationsYAML(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := manager.New(
@@ -437,7 +438,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 }
 
 func TestTypeAPIList(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := manager.New(
@@ -477,7 +478,7 @@ func TestTypeAPIList(t *testing.T) {
 }
 
 func TestTypeAPISetStreams(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := manager.New(
@@ -554,7 +555,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 }
 
 func TestTypeAPIStreamsDefaultConf(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := manager.New(
@@ -591,7 +592,7 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 }
 
 func TestTypeAPIStreamsLinting(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := manager.New(
@@ -643,7 +644,7 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 }
 
 func TestTypeAPIDefaultConf(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := manager.New(
@@ -678,7 +679,7 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 }
 
 func TestTypeAPILinting(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := manager.New(
@@ -783,7 +784,7 @@ func TestResourceAPILinting(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+			bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			mgr := manager.New(
@@ -825,7 +826,7 @@ func TestResourceAPILinting(t *testing.T) {
 }
 
 func TestTypeAPIGetStats(t *testing.T) {
-	mgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	smgr := manager.New(
@@ -864,7 +865,7 @@ func TestTypeAPIGetStats(t *testing.T) {
 }
 
 func TestTypeAPISetResources(t *testing.T) {
-	bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	tChan := make(chan types.Transaction)

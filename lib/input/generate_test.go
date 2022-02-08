@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +19,7 @@ func TestBloblangInterval(t *testing.T) {
 	conf.Mapping = `root = "hello world"`
 	conf.Interval = "50ms"
 
-	b, err := newBloblang(types.NoopMgr(), conf)
+	b, err := newBloblang(mock.NewManager(), conf)
 	require.NoError(t, err)
 
 	err = b.ConnectWithContext(ctx)
@@ -48,7 +48,7 @@ func TestBloblangZeroInterval(t *testing.T) {
 	conf := NewBloblangConfig()
 	conf.Mapping = `root = "hello world"`
 	conf.Interval = "0s"
-	_, err := newBloblang(types.NoopMgr(), conf)
+	_, err := newBloblang(mock.NewManager(), conf)
 	require.NoError(t, err)
 }
 
@@ -62,7 +62,7 @@ func TestBloblangCron(t *testing.T) {
 	conf.Mapping = `root = "hello world"`
 	conf.Interval = "@every 1s"
 
-	b, err := newBloblang(types.NoopMgr(), conf)
+	b, err := newBloblang(mock.NewManager(), conf)
 	require.NoError(t, err)
 	assert.NotNil(t, b.schedule)
 	assert.NotNil(t, b.location)
@@ -93,7 +93,7 @@ func TestBloblangMapping(t *testing.T) {
 	}`
 	conf.Interval = "1ms"
 
-	b, err := newBloblang(types.NoopMgr(), conf)
+	b, err := newBloblang(mock.NewManager(), conf)
 	require.NoError(t, err)
 
 	err = b.ConnectWithContext(ctx)
@@ -116,7 +116,7 @@ func TestBloblangRemaining(t *testing.T) {
 	conf.Interval = "1ms"
 	conf.Count = 10
 
-	b, err := newBloblang(types.NoopMgr(), conf)
+	b, err := newBloblang(mock.NewManager(), conf)
 	require.NoError(t, err)
 
 	err = b.ConnectWithContext(ctx)
@@ -147,7 +147,7 @@ func TestBloblangUnbounded(t *testing.T) {
 	conf.Mapping = `root = "foobar"`
 	conf.Interval = "0s"
 
-	b, err := newBloblang(types.NoopMgr(), conf)
+	b, err := newBloblang(mock.NewManager(), conf)
 	require.NoError(t, err)
 
 	err = b.ConnectWithContext(ctx)
@@ -172,7 +172,7 @@ func TestBloblangUnboundedEmpty(t *testing.T) {
 	conf.Mapping = `root = "foobar"`
 	conf.Interval = ""
 
-	b, err := newBloblang(types.NoopMgr(), conf)
+	b, err := newBloblang(mock.NewManager(), conf)
 	require.NoError(t, err)
 
 	err = b.ConnectWithContext(ctx)

@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
@@ -128,7 +128,7 @@ func TestSQSRetries(t *testing.T) {
 	tCtx := context.Background()
 
 	conf := NewAmazonSQSConfig()
-	w, err := NewAmazonSQSV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	w, err := NewAmazonSQSV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var in []inEntries
@@ -190,7 +190,7 @@ func TestSQSSendLimit(t *testing.T) {
 	tCtx := context.Background()
 
 	conf := NewAmazonSQSConfig()
-	w, err := NewAmazonSQSV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	w, err := NewAmazonSQSV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var in []inEntries

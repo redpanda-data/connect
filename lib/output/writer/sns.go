@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -72,7 +73,7 @@ type SNS struct {
 
 // NewSNS creates a new Amazon SNS writer.Type.
 func NewSNS(conf SNSConfig, log log.Modular, stats metrics.Type) (*SNS, error) {
-	return NewSNSV2(conf, types.NoopMgr(), log, stats)
+	return NewSNSV2(conf, mock.NewManager(), log, stats)
 }
 
 // NewSNSV2 creates a new AWS SNS writer.

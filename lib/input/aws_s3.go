@@ -762,7 +762,7 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn 
 	}
 
 	return s3MsgFromParts(object, parts), func(rctx context.Context, res types.Response) error {
-		return scnAckFn(rctx, res.Error())
+		return scnAckFn(rctx, res.AckError())
 	}, nil
 }
 

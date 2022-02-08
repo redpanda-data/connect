@@ -130,7 +130,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- typ
 				return
 			}
 
-			if res.Error() == nil {
+			if res.AckError() == nil {
 				return
 			}
 			if !throt.Retry() {

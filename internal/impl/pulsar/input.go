@@ -277,7 +277,7 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 		}
 		p.m.RUnlock()
 		if r != nil {
-			if res.Error() != nil {
+			if res.AckError() != nil {
 				r.Nack(pulMsg)
 			} else {
 				r.Ack(pulMsg)

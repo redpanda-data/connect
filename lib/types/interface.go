@@ -218,9 +218,9 @@ type PipelineConstructorFunc func(i *int) (Pipeline, error)
 // Response is a response from an output, agent or broker that confirms the
 // input of successful message receipt.
 type Response interface {
-	// Error returns a non-nil error if the message failed to reach its
+	// AckError returns a non-nil error if the message failed to reach its
 	// destination.
-	Error() error
+	AckError() error
 }
 
 //------------------------------------------------------------------------------

@@ -166,7 +166,7 @@ func (t *Try) loop() {
 					if !lOpen {
 						return
 					}
-					if res.Error() != nil {
+					if res.AckError() != nil {
 						mErrs[i-1].Incr(1)
 					} else {
 						break triesLoop

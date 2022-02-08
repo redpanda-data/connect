@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -114,7 +115,7 @@ type Type struct {
 func New(opts ...func(*Type)) *Type {
 	t := &Type{
 		streams:    map[string]*StreamStatus{},
-		manager:    types.NoopMgr(),
+		manager:    mock.NewManager(),
 		stats:      metrics.Noop(),
 		apiTimeout: time.Second * 5,
 		logger:     log.Noop(),

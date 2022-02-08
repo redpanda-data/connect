@@ -84,7 +84,7 @@ func TestRetryBasic(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		if err = res.Error(); err != nil {
+		if err = res.AckError(); err != nil {
 			t.Error(err)
 		}
 	case <-time.After(time.Second):
@@ -152,7 +152,7 @@ func TestRetrySadPath(t *testing.T) {
 		}
 
 		select {
-		case tran.ResponseChan <- response.NewNoack():
+		case tran.ResponseChan <- response.NewError(response.ErrNoAck):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -178,7 +178,7 @@ func TestRetrySadPath(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		if err = res.Error(); err != nil {
+		if err = res.AckError(); err != nil {
 			t.Error(err)
 		}
 	case <-time.After(time.Second):
@@ -255,8 +255,8 @@ func ackForRetry(
 
 	select {
 	case res := <-resChan:
-		if res.Error() != exp.Error() {
-			t.Errorf("Unexpected response error: %v != %v", res.Error(), exp.Error())
+		if res.AckError() != exp.AckError() {
+			t.Errorf("Unexpected response error: %v != %v", res.AckError(), exp.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
@@ -293,10 +293,10 @@ func TestRetryParallel(t *testing.T) {
 
 	resChan1, resChan2 := make(chan types.Response), make(chan types.Response)
 	sendForRetry("first", tChan, resChan1, t)
-	expectFromRetry(response.NewNoack(), mOut.ts, t, "first")
+	expectFromRetry(response.NewError(response.ErrNoAck), mOut.ts, t, "first")
 
 	sendForRetry("second", tChan, resChan2, t)
-	expectFromRetry(response.NewNoack(), mOut.ts, t, "first", "second")
+	expectFromRetry(response.NewError(response.ErrNoAck), mOut.ts, t, "first", "second")
 
 	select {
 	case tChan <- types.NewTransaction(nil, nil):
@@ -312,7 +312,7 @@ func TestRetryParallel(t *testing.T) {
 	ackForRetry(response.NewAck(), resChan1, t)
 
 	sendForRetry("fourth", tChan, resChan2, t)
-	expectFromRetry(response.NewNoack(), mOut.ts, t, "fourth")
+	expectFromRetry(response.NewError(response.ErrNoAck), mOut.ts, t, "fourth")
 
 	expectFromRetry(response.NewAck(), mOut.ts, t, "fourth")
 	ackForRetry(response.NewAck(), resChan2, t)

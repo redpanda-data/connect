@@ -228,7 +228,7 @@ func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Re
 			msgs = append(msgs, resultMsgs...)
 		}
 		if res != nil {
-			if err := res.Error(); err != nil {
+			if err := res.AckError(); err != nil {
 				g.log.Errorf("Processor error: %v\n", err)
 			}
 		}

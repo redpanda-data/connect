@@ -177,7 +177,7 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 		}
 		select {
 		case res := <-resChan:
-			return res.Error()
+			return res.AckError()
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -228,7 +228,7 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 		}
 		select {
 		case res := <-resChan:
-			return res.Error()
+			return res.AckError()
 		case <-ctx.Done():
 			return ctx.Err()
 		}

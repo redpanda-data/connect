@@ -42,7 +42,7 @@ func TestSubprocessWithSed(t *testing.T) {
 		t.Fatal("Wrong count of messages")
 	}
 	if res != nil {
-		t.Fatalf("Non-nil result: %v", res.Error())
+		t.Fatalf("Non-nil result: %v", res.AckError())
 	}
 
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
@@ -82,7 +82,7 @@ func TestSubprocessWithCat(t *testing.T) {
 		t.Fatal("Wrong count of messages")
 	}
 	if res != nil {
-		t.Fatalf("Non-nil result: %v", res.Error())
+		t.Fatalf("Non-nil result: %v", res.AckError())
 	}
 
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
@@ -127,7 +127,7 @@ func TestSubprocessLineBreaks(t *testing.T) {
 		t.Fatalf("Wrong count of messages %d", len(msgs))
 	}
 	if res != nil {
-		t.Fatalf("Non-nil result: %v", res.Error())
+		t.Fatalf("Non-nil result: %v", res.AckError())
 	}
 
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {

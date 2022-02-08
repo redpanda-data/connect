@@ -7,11 +7,11 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/stream"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -25,7 +25,7 @@ func TestTypeConstruction(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = output.TypeNanomsg
 
-	newMgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, stream.OptSetManager(newMgr))
@@ -35,7 +35,7 @@ func TestTypeConstruction(t *testing.T) {
 
 	newStats := metrics.Noop()
 	newLogger := log.Noop()
-	newMgr, err = manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), newLogger, newStats)
+	newMgr, err = manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), newLogger, newStats)
 	require.NoError(t, err)
 
 	strm, err = stream.New(conf, stream.OptSetLogger(newLogger), stream.OptSetStats(newStats), stream.OptSetManager(newMgr))
@@ -50,7 +50,7 @@ func TestTypeCloseGracefully(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = output.TypeHTTPServer
 
-	newMgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, stream.OptSetManager(newMgr))
@@ -76,7 +76,7 @@ func TestTypeCloseOrdered(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = output.TypeHTTPServer
 
-	newMgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, stream.OptSetManager(newMgr))
@@ -102,7 +102,7 @@ func TestTypeCloseUnordered(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = output.TypeHTTPServer
 
-	newMgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, stream.OptSetManager(newMgr))

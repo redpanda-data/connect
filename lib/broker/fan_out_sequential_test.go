@@ -74,8 +74,8 @@ func TestBasicFanOutSequential(t *testing.T) {
 		}
 		select {
 		case res := <-resChan:
-			if res.Error() != nil {
-				t.Errorf("Received unexpected errors from broker: %v", res.Error())
+			if res.AckError() != nil {
+				t.Errorf("Received unexpected errors from broker: %v", res.AckError())
 			}
 		case <-time.After(time.Second):
 			t.Errorf("Timed out responding to broker")
@@ -157,8 +157,8 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 	}
 	select {
 	case res := <-resChan:
-		if res.Error() != nil {
-			t.Errorf("Fan out returned error %v", res.Error())
+		if res.AckError() != nil {
+			t.Errorf("Fan out returned error %v", res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Errorf("Timed out responding to broker")
@@ -240,8 +240,8 @@ func TestFanOutSequentialBlock(t *testing.T) {
 	}
 	select {
 	case res := <-resChan:
-		if res.Error() != nil {
-			t.Errorf("Fan out returned error %v", res.Error())
+		if res.AckError() != nil {
+			t.Errorf("Fan out returned error %v", res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Errorf("Timed out responding to broker")

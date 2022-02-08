@@ -207,7 +207,7 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 		}
 
 		return msg, func(rctx context.Context, res types.Response) error {
-			return codecAckFn(rctx, res.Error())
+			return codecAckFn(rctx, res.AckError())
 		}, nil
 	}
 }

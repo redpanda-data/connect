@@ -11,10 +11,10 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Shopify/sarama"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
@@ -61,7 +61,7 @@ var _ = registerIntegrationTest("kafka_redpanda", func(t *testing.T) {
 		outConf.TargetVersion = "2.1.0"
 		outConf.Addresses = []string{"localhost:" + kafkaPortStr}
 		outConf.Topic = "pls_ignore_just_testing_connection"
-		tmpOutput, serr := writer.NewKafka(outConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+		tmpOutput, serr := writer.NewKafka(outConf, mock.NewManager(), log.Noop(), metrics.Noop())
 		if serr != nil {
 			return serr
 		}
@@ -389,7 +389,7 @@ var _ = registerIntegrationTest("kafka_old", func(t *testing.T) {
 		outConf.TargetVersion = "2.1.0"
 		outConf.Addresses = []string{address}
 		outConf.Topic = "pls_ignore_just_testing_connection"
-		tmpOutput, serr := writer.NewKafka(outConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+		tmpOutput, serr := writer.NewKafka(outConf, mock.NewManager(), log.Noop(), metrics.Noop())
 		if serr != nil {
 			return serr
 		}

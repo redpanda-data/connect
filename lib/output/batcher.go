@@ -155,7 +155,7 @@ func (m *Batcher) loop() {
 				}
 				closeAtLeisureCtx, done := m.shutSig.CloseAtLeisureCtx(context.Background())
 				for _, t := range upstreamTrans {
-					if err := t.Ack(closeAtLeisureCtx, res.Error()); err != nil {
+					if err := t.Ack(closeAtLeisureCtx, res.AckError()); err != nil {
 						done()
 						return
 					}

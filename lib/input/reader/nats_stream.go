@@ -269,7 +269,7 @@ func (n *NATSStream) ReadWithContext(ctx context.Context) (*message.Batch, Async
 	part.MetaSet("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
 
 	return bmsg, func(rctx context.Context, res types.Response) error {
-		if res.Error() == nil {
+		if res.AckError() == nil {
 			return msg.Ack()
 		}
 		return nil

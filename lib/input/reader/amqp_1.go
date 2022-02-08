@@ -254,7 +254,7 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn
 
 		// TODO: These methods were moved in v0.16.0, but nacking seems broken
 		// (integration tests fail)
-		if res.Error() != nil {
+		if res.AckError() != nil {
 			return conn.receiver.ModifyMessage(ctx, amqpMsg, true, false, amqpMsg.Annotations)
 		}
 		return conn.receiver.AcceptMessage(ctx, amqpMsg)

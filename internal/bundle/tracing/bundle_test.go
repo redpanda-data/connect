@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -36,7 +37,7 @@ func TestBundleInputTracing(t *testing.T) {
 
 	mgr, err := manager.NewV2(
 		manager.NewResourceConfig(),
-		types.NoopMgr(),
+		mock.NewManager(),
 		log.Noop(),
 		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
@@ -87,7 +88,7 @@ func TestBundleOutputTracing(t *testing.T) {
 
 	mgr, err := manager.NewV2(
 		manager.NewResourceConfig(),
-		types.NoopMgr(),
+		mock.NewManager(),
 		log.Noop(),
 		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
@@ -148,7 +149,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 
 	mgr, err := manager.NewV2(
 		manager.NewResourceConfig(),
-		types.NoopMgr(),
+		mock.NewManager(),
 		log.Noop(),
 		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
@@ -225,7 +226,7 @@ root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 
 	mgr, err := manager.NewV2(
 		manager.NewResourceConfig(),
-		types.NoopMgr(),
+		mock.NewManager(),
 		log.Noop(),
 		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),

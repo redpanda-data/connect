@@ -498,7 +498,7 @@ func (a *AmazonS3) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAc
 
 	msg.Append(part)
 	return msg, func(rctx context.Context, res types.Response) error {
-		if res.Error() == nil {
+		if res.AckError() == nil {
 			a.deleteObjects([]objKey{obj})
 		} else {
 			if a.conf.SQSURL == "" {

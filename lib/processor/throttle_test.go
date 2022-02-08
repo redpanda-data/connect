@@ -22,7 +22,7 @@ func TestThrottle(t *testing.T) {
 	msgIn := message.QuickBatch(nil)
 	msgsOut, res := throt.ProcessMessage(msgIn)
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if exp, act := msgIn, msgsOut[0]; exp != act {

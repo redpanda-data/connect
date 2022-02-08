@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -60,8 +61,8 @@ func (h *Handler) Handle(ctx context.Context, obj interface{}) (interface{}, err
 
 	select {
 	case res := <-resChan:
-		if res.Error() != nil {
-			return nil, res.Error()
+		if res.AckError() != nil {
+			return nil, res.AckError()
 		}
 	case <-ctx.Done():
 		return nil, errors.New("request cancelled")
@@ -124,7 +125,7 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	}
 
 	// Create resource manager.
-	manager, err := manager.NewV2(conf.ResourceConfig, types.NoopMgr(), logger, stats)
+	manager, err := manager.NewV2(conf.ResourceConfig, mock.NewManager(), logger, stats)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %v", err)
 	}
