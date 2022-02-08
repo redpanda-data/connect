@@ -1,7 +1,7 @@
 ---
 title: gcp_bigquery_select
 type: processor
-status: beta
+status: experimental
 categories: ["Integration"]
 ---
 
@@ -15,8 +15,8 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution BETA
-This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
 Executes a `SELECT` query against BigQuery and replaces messages with the rows returned.
 

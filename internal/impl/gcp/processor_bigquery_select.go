@@ -72,7 +72,6 @@ func bigQuerySelectProcessorConfigFromParsed(inConf *service.ParsedConfig) (conf
 
 func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
 		Version("3.63.0").
 		Categories(
 			string(processor.CategoryIntegration),
