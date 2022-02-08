@@ -71,12 +71,12 @@ require (
 	github.com/influxdata/influxdb1-client v0.0.0-20200827194710-b269163b24ab
 	github.com/itchyny/gojq v0.12.6
 	github.com/itchyny/timefmt-go v0.1.3
-	github.com/jackc/pgx/v4 v4.14.0
+	github.com/jackc/pgx/v4 v4.15.0 // indirect
 	github.com/jhump/protoreflect v1.10.1
 	github.com/jmespath/go-jmespath v0.4.0
 	github.com/keybase/go-keychain v0.0.0-20211119201326-e02f34051621 // indirect
 	github.com/lib/pq v1.10.4
-	github.com/linkedin/goavro/v2 v2.10.1
+	github.com/linkedin/goavro/v2 v2.11.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.17
