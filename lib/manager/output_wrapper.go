@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -30,7 +31,7 @@ func (w *outputWrapper) WriteTransaction(ctx context.Context, t types.Transactio
 	select {
 	case w.tranChan <- t:
 	case <-ctx.Done():
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

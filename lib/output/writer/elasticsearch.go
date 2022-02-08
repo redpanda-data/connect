@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -261,7 +262,7 @@ func (e *Elasticsearch) WriteWithContext(ctx context.Context, msg *message.Batch
 // acknowledgement, and returns an error if applicable.
 func (e *Elasticsearch) Write(msg *message.Batch) error {
 	if e.client == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	boff := e.backoffCtor()

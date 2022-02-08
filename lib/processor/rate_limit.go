@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -103,7 +104,7 @@ func (r *RateLimit) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.
 			err = rerr
 		}
 		for err != nil || waitFor > 0 {
-			if err == types.ErrTypeClosed {
+			if err == component.ErrTypeClosed {
 				return err
 			}
 			if err != nil {
@@ -116,7 +117,7 @@ func (r *RateLimit) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.
 			select {
 			case <-time.After(waitFor):
 			case <-r.closeChan:
-				return types.ErrTypeClosed
+				return component.ErrTypeClosed
 			}
 			if rerr := interop.AccessRateLimit(context.Background(), r.mgr, r.rlName, func(rl types.RateLimit) {
 				waitFor, err = rl.Access(context.Background())

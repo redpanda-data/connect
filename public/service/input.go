@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -114,7 +115,7 @@ func newAirGapReader(r Input) reader.Async {
 func (a *airGapReader) ConnectWithContext(ctx context.Context) error {
 	err := a.r.Connect(ctx)
 	if err != nil && errors.Is(err, ErrEndOfInput) {
-		err = types.ErrTypeClosed
+		err = component.ErrTypeClosed
 	}
 	return err
 }
@@ -123,9 +124,9 @@ func (a *airGapReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 	msg, ackFn, err := a.r.Read(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNotConnected) {
-			err = types.ErrNotConnected
+			err = component.ErrNotConnected
 		} else if errors.Is(err, ErrEndOfInput) {
-			err = types.ErrTypeClosed
+			err = component.ErrTypeClosed
 		}
 		return nil, nil, err
 	}
@@ -148,7 +149,7 @@ func (a *airGapReader) WaitForClose(tout time.Duration) error {
 	select {
 	case <-a.sig.HasClosedChan():
 	case <-time.After(tout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }
@@ -169,7 +170,7 @@ func newAirGapBatchReader(r BatchInput) reader.Async {
 func (a *airGapBatchReader) ConnectWithContext(ctx context.Context) error {
 	err := a.r.Connect(ctx)
 	if err != nil && errors.Is(err, ErrEndOfInput) {
-		err = types.ErrTypeClosed
+		err = component.ErrTypeClosed
 	}
 	return err
 }
@@ -178,9 +179,9 @@ func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (*message.Batch
 	batch, ackFn, err := a.r.ReadBatch(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNotConnected) {
-			err = types.ErrNotConnected
+			err = component.ErrNotConnected
 		} else if errors.Is(err, ErrEndOfInput) {
-			err = types.ErrTypeClosed
+			err = component.ErrTypeClosed
 		}
 		return nil, nil, err
 	}
@@ -205,7 +206,7 @@ func (a *airGapBatchReader) WaitForClose(tout time.Duration) error {
 	select {
 	case <-a.sig.HasClosedChan():
 	case <-time.After(tout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

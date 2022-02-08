@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/pulsar/auth"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -184,7 +185,7 @@ func (p *pulsarWriter) WriteWithContext(ctx context.Context, msg *message.Batch)
 	p.m.RUnlock()
 
 	if r == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return writer.IterateBatchedSend(msg, func(i int, part *message.Part) error {
@@ -213,7 +214,7 @@ func (p *pulsarWriter) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-p.shutSig.HasClosedChan():
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -88,7 +89,7 @@ func (s *OutputSet) Init(
 ) (types.Output, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, types.ErrInvalidOutputType
+		return nil, component.ErrInvalidOutputType
 	}
 	return spec.constructor(conf, mgr, pipelines...)
 }

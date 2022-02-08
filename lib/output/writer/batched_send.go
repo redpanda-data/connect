@@ -4,19 +4,19 @@ import (
 	"errors"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Returns true if the error should break a batch send loop.
 func sendErrIsFatal(err error) bool {
-	if errors.Is(err, types.ErrTypeClosed) {
+	if errors.Is(err, component.ErrTypeClosed) {
 		return true
 	}
-	if errors.Is(err, types.ErrNotConnected) {
+	if errors.Is(err, component.ErrNotConnected) {
 		return true
 	}
-	if errors.Is(err, types.ErrTimeout) {
+	if errors.Is(err, component.ErrTimeout) {
 		return true
 	}
 	return false

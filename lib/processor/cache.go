@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -301,7 +302,7 @@ func (c *Cache) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Resp
 			err = cerr
 		}
 		if err != nil {
-			if err != types.ErrKeyAlreadyExists {
+			if err != component.ErrKeyAlreadyExists {
 				c.mErr.Incr(1)
 				c.log.Debugf("Operator failed for key '%s': %v\n", key, err)
 			} else {

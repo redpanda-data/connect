@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
@@ -305,7 +306,7 @@ func (t *Type) GetPipe(name string) (<-chan types.Transaction, error) {
 	if exists {
 		return pipe, nil
 	}
-	return nil, types.ErrPipeNotFound
+	return nil, component.ErrPipeNotFound
 }
 
 // UnsetPipe removes a named pipe transaction chan.
@@ -797,7 +798,7 @@ func (t *Type) GetInput(name string) (types.Input, error) {
 	if c, exists := t.inputs[name]; exists {
 		return c, nil
 	}
-	return nil, types.ErrInputNotFound
+	return nil, component.ErrInputNotFound
 }
 
 // GetCache attempts to find a service wide cache by its name.
@@ -805,7 +806,7 @@ func (t *Type) GetCache(name string) (types.Cache, error) {
 	if c, exists := t.caches[name]; exists {
 		return c, nil
 	}
-	return nil, types.ErrCacheNotFound
+	return nil, component.ErrCacheNotFound
 }
 
 // GetProcessor attempts to find a service wide processor by its name.
@@ -813,7 +814,7 @@ func (t *Type) GetProcessor(name string) (types.Processor, error) {
 	if p, exists := t.processors[name]; exists {
 		return p, nil
 	}
-	return nil, types.ErrProcessorNotFound
+	return nil, component.ErrProcessorNotFound
 }
 
 // GetRateLimit attempts to find a service wide rate limit by its name.
@@ -821,7 +822,7 @@ func (t *Type) GetRateLimit(name string) (types.RateLimit, error) {
 	if rl, exists := t.rateLimits[name]; exists {
 		return rl, nil
 	}
-	return nil, types.ErrRateLimitNotFound
+	return nil, component.ErrRateLimitNotFound
 }
 
 // GetOutput attempts to find a service wide output by its name.
@@ -829,13 +830,5 @@ func (t *Type) GetOutput(name string) (types.OutputWriter, error) {
 	if c, exists := t.outputs[name]; exists {
 		return c, nil
 	}
-	return nil, types.ErrOutputNotFound
-}
-
-// GetPlugin attempts to find a service wide resource plugin by its name.
-func (t *Type) GetPlugin(name string) (interface{}, error) {
-	if pl, exists := t.plugins[name]; exists {
-		return pl, nil
-	}
-	return nil, types.ErrPluginNotFound
+	return nil, component.ErrOutputNotFound
 }

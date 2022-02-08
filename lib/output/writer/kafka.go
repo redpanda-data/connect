@@ -11,6 +11,7 @@ import (
 
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -334,7 +335,7 @@ func (k *Kafka) WriteWithContext(ctx context.Context, msg *message.Batch) error 
 	k.connMut.RUnlock()
 
 	if producer == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	boff := k.backoffCtor()
@@ -425,7 +426,7 @@ func (k *Kafka) WriteWithContext(ctx context.Context, msg *message.Batch) error 
 		k.connMut.RUnlock()
 
 		if producer == nil {
-			return types.ErrNotConnected
+			return component.ErrNotConnected
 		}
 		err = producer.SendMessages(msgs)
 	}

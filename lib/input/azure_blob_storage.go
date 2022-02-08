@@ -18,6 +18,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -288,14 +289,14 @@ func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg *message.Ba
 
 	defer func() {
 		if errors.Is(err, io.EOF) {
-			err = types.ErrTypeClosed
+			err = component.ErrTypeClosed
 		} else if serr, ok := err.(storage.AzureStorageServiceError); ok && serr.StatusCode == http.StatusForbidden {
 			a.log.Warnf("error downloading blob: %v", err)
-			err = types.ErrTypeClosed
+			err = component.ErrTypeClosed
 		} else if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
 			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
 	}()
 

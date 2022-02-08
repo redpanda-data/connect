@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 
@@ -154,12 +155,12 @@ func (n *NATS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 	select {
 	case msg, open = <-natsChan:
 	case <-ctx.Done():
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	case _, open = <-n.interruptChan:
 	}
 	if !open {
 		n.disconnect()
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	bmsg := message.QuickBatch([][]byte{msg.Data})

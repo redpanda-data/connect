@@ -339,6 +339,11 @@ func NewWorkflow(
 	return w, nil
 }
 
+// Flow returns the calculated workflow as a 2D slice.
+func (w *Workflow) Flow() [][]string {
+	return w.children.dag
+}
+
 //------------------------------------------------------------------------------
 
 func (w *Workflow) incrStageErr(id string) {

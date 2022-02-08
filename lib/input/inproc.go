@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -171,7 +172,7 @@ func (i *Inproc) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-i.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

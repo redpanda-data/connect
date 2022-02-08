@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -342,7 +343,7 @@ func (r *ReadUntil) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-r.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

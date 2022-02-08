@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -182,7 +183,7 @@ func (m *Batcher) MaxInFlight() (int, bool) {
 // Consume assigns a messages channel for the output to read.
 func (m *Batcher) Consume(msgs <-chan types.Transaction) error {
 	if m.messagesIn != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	if err := m.child.Consume(m.messagesOut); err != nil {
 		return err
@@ -202,7 +203,7 @@ func (m *Batcher) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-m.shutSig.HasClosedChan():
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

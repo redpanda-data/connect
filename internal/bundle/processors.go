@@ -3,6 +3,7 @@ package bundle
 import (
 	"sort"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -66,7 +67,7 @@ func (s *ProcessorSet) Add(constructor ProcessorConstructor, spec docs.Component
 func (s *ProcessorSet) Init(conf processor.Config, mgr NewManagement) (types.Processor, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, types.ErrInvalidProcessorType
+		return nil, component.ErrInvalidProcessorType
 	}
 	return spec.constructor(conf, mgr)
 }

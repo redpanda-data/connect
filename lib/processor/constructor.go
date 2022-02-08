@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -326,5 +327,5 @@ func New(
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats)
 	}
-	return nil, types.ErrInvalidProcessorType
+	return nil, component.ErrInvalidProcessorType
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -259,7 +260,7 @@ func (d *Dedupe) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Res
 			err = cerr
 		}
 		if err != nil {
-			if err == types.ErrKeyAlreadyExists {
+			if err == component.ErrKeyAlreadyExists {
 				for _, s := range spans {
 					s.LogKV(
 						"event", "dropped",

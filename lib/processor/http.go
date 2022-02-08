@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/http"
 	ihttpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
@@ -172,7 +173,7 @@ func (h *HTTP) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Respo
 		resultMsg, err := h.client.Send(context.Background(), msg, msg)
 		if err != nil {
 			var codeStr string
-			var hErr types.ErrUnexpectedHTTPRes
+			var hErr component.ErrUnexpectedHTTPRes
 			if ok := errors.As(err, &hErr); ok {
 				codeStr = strconv.Itoa(hErr.Code)
 			}
@@ -230,7 +231,7 @@ func (h *HTTP) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Respo
 							return nil
 						})
 					} else {
-						var hErr types.ErrUnexpectedHTTPRes
+						var hErr component.ErrUnexpectedHTTPRes
 						if ok := errors.As(err, &hErr); ok {
 							results[index].MetaSet("http_status_code", strconv.Itoa(hErr.Code))
 						}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -72,7 +73,7 @@ func newAirGapCache(c Cache, stats metrics.Type) types.Cache {
 func (a *airGapCache) Get(ctx context.Context, key string) ([]byte, error) {
 	b, err := a.c.Get(ctx, key)
 	if errors.Is(err, ErrKeyNotFound) {
-		err = types.ErrKeyNotFound
+		err = component.ErrKeyNotFound
 	}
 	return b, err
 }
@@ -104,7 +105,7 @@ func (a *airGapCache) SetMulti(ctx context.Context, keyValues map[string]types.C
 func (a *airGapCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	err := a.c.Add(ctx, key, value, ttl)
 	if errors.Is(err, ErrKeyAlreadyExists) {
-		err = types.ErrKeyAlreadyExists
+		err = component.ErrKeyAlreadyExists
 	}
 	return err
 }
@@ -130,7 +131,7 @@ func newReverseAirGapCache(c types.Cache) *reverseAirGapCache {
 
 func (r *reverseAirGapCache) Get(ctx context.Context, key string) ([]byte, error) {
 	b, err := r.c.Get(ctx, key)
-	if errors.Is(err, types.ErrKeyNotFound) {
+	if errors.Is(err, component.ErrKeyNotFound) {
 		err = ErrKeyNotFound
 	}
 	return b, err
@@ -141,7 +142,7 @@ func (r *reverseAirGapCache) Set(ctx context.Context, key string, value []byte, 
 }
 
 func (r *reverseAirGapCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) (err error) {
-	if err = r.c.Add(ctx, key, value, ttl); errors.Is(err, types.ErrKeyAlreadyExists) {
+	if err = r.c.Add(ctx, key, value, ttl); errors.Is(err, component.ErrKeyAlreadyExists) {
 		err = ErrKeyAlreadyExists
 	}
 	return

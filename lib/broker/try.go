@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -83,7 +84,7 @@ func (t *Try) WithOutputMetricsPrefix(prefix string) *Try {
 // Consume assigns a new messages channel for the broker to read.
 func (t *Try) Consume(ts <-chan types.Transaction) error {
 	if t.transactions != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	t.transactions = ts
 
@@ -207,7 +208,7 @@ func (t *Try) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-t.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

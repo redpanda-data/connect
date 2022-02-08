@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -81,7 +81,7 @@ func TestFilesDirectory(t *testing.T) {
 		}
 		act[resStr] = struct{}{}
 	}
-	if _, _, err = f.ReadWithContext(context.Background()); err != types.ErrTypeClosed {
+	if _, _, err = f.ReadWithContext(context.Background()); err != component.ErrTypeClosed {
 		t.Error(err)
 	}
 
@@ -130,7 +130,7 @@ func TestFilesFile(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	if _, _, err = f.ReadWithContext(context.Background()); err != types.ErrTypeClosed {
+	if _, _, err = f.ReadWithContext(context.Background()); err != component.ErrTypeClosed {
 		t.Error(err)
 	}
 
@@ -186,7 +186,7 @@ func TestFilesDirectoryDelete(t *testing.T) {
 		}
 		act[resStr] = struct{}{}
 	}
-	if _, _, err = f.ReadWithContext(context.Background()); err != types.ErrTypeClosed {
+	if _, _, err = f.ReadWithContext(context.Background()); err != component.ErrTypeClosed {
 		t.Error(err)
 	}
 

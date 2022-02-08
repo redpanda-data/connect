@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/checkpoint"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -77,7 +78,7 @@ func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessag
 
 	resolveFn, err := a.checkpointer.Track(ctx, a.batchedSequence, int64(a.flushedMessage.Len()))
 	if err != nil {
-		if err == types.ErrTimeout {
+		if err == component.ErrTimeout {
 			err = nil
 		}
 		return asyncMessage{}, err

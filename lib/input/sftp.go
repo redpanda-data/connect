@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/impl/sftp"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -222,7 +223,7 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 			s.client.Close()
 			s.client = nil
 			s.log.Debugln("Paths exhausted, closing input")
-			return types.ErrTypeClosed
+			return component.ErrTypeClosed
 		}
 		select {
 		case <-time.After(s.watcherPollInterval):
@@ -263,16 +264,16 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (*message.Batch, reade
 	defer s.scannerMut.Unlock()
 
 	if s.scanner == nil || s.client == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	parts, codecAckFn, err := s.scanner.Next(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
-		if err != types.ErrTimeout {
+		if err != component.ErrTimeout {
 			if s.conf.Watcher.Enabled {
 				var setErr error
 				if cerr := interop.AccessCache(ctx, s.mgr, s.conf.Watcher.Cache, func(cache types.Cache) {
@@ -288,7 +289,7 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (*message.Batch, reade
 			s.scanner = nil
 		}
 		if errors.Is(err, io.EOF) {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
 		return nil, nil, err
 	}

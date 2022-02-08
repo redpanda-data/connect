@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/impl/sftp"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -153,7 +154,7 @@ func (s *sftpWriter) WriteWithContext(ctx context.Context, msg *message.Batch) e
 	client := s.client
 	s.handleMut.Unlock()
 	if client == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {

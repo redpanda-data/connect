@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -298,7 +299,7 @@ func (r *Retry) loop() {
 // Consume assigns a messages channel for the output to read.
 func (r *Retry) Consume(ts <-chan types.Transaction) error {
 	if r.transactionsIn != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	if err := r.wrapped.Consume(r.transactionsOut); err != nil {
 		return err
@@ -333,7 +334,7 @@ func (r *Retry) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-r.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

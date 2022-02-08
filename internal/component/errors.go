@@ -1,4 +1,4 @@
-package types
+package component
 
 import (
 	"errors"
@@ -9,7 +9,6 @@ import (
 // Errors used throughout the codebase
 var (
 	ErrTimeout    = errors.New("action timed out")
-	ErrChanClosed = errors.New("channel was closed unexpectedly")
 	ErrTypeClosed = errors.New("type was closed")
 
 	ErrNotConnected = errors.New("not connected to target source or sink")
@@ -17,7 +16,6 @@ var (
 	ErrInvalidProcessorType = errors.New("processor type was not recognised")
 	ErrInvalidCacheType     = errors.New("cache type was not recognised")
 	ErrInvalidRateLimitType = errors.New("rate_limit type was not recognised")
-	ErrInvalidConditionType = errors.New("condition type was not recognised")
 	ErrInvalidBufferType    = errors.New("buffer type was not recognised")
 	ErrInvalidInputType     = errors.New("input type was not recognised")
 	ErrInvalidOutputType    = errors.New("output type was not recognised")
@@ -38,7 +36,6 @@ var (
 	ErrProcessorNotFound = errors.New("processor not found")
 	ErrRateLimitNotFound = errors.New("rate limit not found")
 	ErrOutputNotFound    = errors.New("output not found")
-	ErrPluginNotFound    = errors.New("plugin not found")
 	ErrKeyAlreadyExists  = errors.New("key already exists")
 	ErrKeyNotFound       = errors.New("key does not exist")
 	ErrPipeNotFound      = errors.New("pipe was not found")

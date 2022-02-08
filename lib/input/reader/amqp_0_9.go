@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -281,7 +282,7 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckF
 	a.m.RUnlock()
 
 	if c == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	msg := message.QuickBatch(nil)
@@ -325,7 +326,7 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckF
 	case data, open := <-c:
 		if !open {
 			a.disconnect()
-			return nil, nil, types.ErrNotConnected
+			return nil, nil, component.ErrNotConnected
 		}
 		addPart(data)
 		return msg, func(actx context.Context, res types.Response) error {
@@ -345,7 +346,7 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckF
 		}, nil
 	case <-ctx.Done():
 	}
-	return nil, nil, types.ErrTimeout
+	return nil, nil, component.ErrTimeout
 }
 
 // CloseAsync shuts down the AMQP09 input and stops processing requests.

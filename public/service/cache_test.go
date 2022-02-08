@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +29,7 @@ func (c *closableCache) Get(ctx context.Context, key string) ([]byte, error) {
 	}
 	i, ok := c.m[key]
 	if !ok {
-		return nil, types.ErrKeyNotFound
+		return nil, component.ErrKeyNotFound
 	}
 	return i.b, nil
 }
@@ -48,7 +49,7 @@ func (c *closableCache) Add(ctx context.Context, key string, value []byte, ttl *
 		return c.err
 	}
 	if _, ok := c.m[key]; ok {
-		return types.ErrKeyAlreadyExists
+		return component.ErrKeyAlreadyExists
 	}
 	c.m[key] = testCacheItem{
 		b: value, ttl: ttl,
@@ -310,7 +311,7 @@ func (c *closableCacheType) Get(ctx context.Context, key string) ([]byte, error)
 	}
 	i, ok := c.m[key]
 	if !ok {
-		return nil, types.ErrKeyNotFound
+		return nil, component.ErrKeyNotFound
 	}
 	return i.b, nil
 }
@@ -334,7 +335,7 @@ func (c *closableCacheType) Add(ctx context.Context, key string, value []byte, t
 		return c.err
 	}
 	if _, ok := c.m[key]; ok {
-		return types.ErrKeyAlreadyExists
+		return component.ErrKeyAlreadyExists
 	}
 	c.m[key] = testCacheItem{
 		b: value, ttl: ttl,

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -76,7 +76,7 @@ func (c *AsyncCutOff) ReadWithContext(ctx context.Context) (*message.Batch, Asyn
 		c.r.CloseAsync()
 	case <-c.ctx.Done():
 	}
-	return nil, nil, types.ErrTypeClosed
+	return nil, nil, component.ErrTypeClosed
 }
 
 // CloseAsync triggers the asynchronous closing of the reader.

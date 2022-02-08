@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -165,7 +166,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- typ
 // Consume assigns a messages channel for the pipeline to read.
 func (p *Processor) Consume(msgs <-chan types.Transaction) error {
 	if p.messagesIn != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	p.messagesIn = msgs
 	go p.loop()
@@ -196,7 +197,7 @@ func (p *Processor) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-p.closed:
 	case <-time.After(time.Until(stopBy)):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 
 	// Wait for all processors to close.

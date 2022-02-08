@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -265,7 +265,7 @@ limit: 10
 		service.NewMessage([]byte("hello world this message is too long!")),
 	}, func(ctx context.Context, err error) error { return nil })
 	require.Error(t, err)
-	assert.Equal(t, types.ErrMessageTooLarge, err)
+	assert.Equal(t, component.ErrMessageTooLarge, err)
 
 	require.NoError(t, block.Close(ctx))
 }

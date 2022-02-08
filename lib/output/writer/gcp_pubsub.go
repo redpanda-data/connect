@@ -9,6 +9,7 @@ import (
 	"cloud.google.com/go/pubsub"
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -121,7 +122,7 @@ func (c *GCPPubSub) getTopic(ctx context.Context, t string) (*pubsub.Topic, erro
 	c.topicMut.Lock()
 	defer c.topicMut.Unlock()
 	if c.topics == nil {
-		return nil, types.ErrNotConnected
+		return nil, component.ErrNotConnected
 	}
 	if t, exists := c.topics[t]; exists {
 		return t, nil

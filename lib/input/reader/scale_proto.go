@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"go.nanomsg.org/mangos/v3"
 	"go.nanomsg.org/mangos/v3/protocol/pull"
 	"go.nanomsg.org/mangos/v3/protocol/sub"
@@ -186,12 +186,12 @@ func (s *ScaleProto) ReadWithContext(ctx context.Context) (*message.Batch, Async
 	s.cMut.Unlock()
 
 	if socket == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 	data, err := socket.Recv()
 	if err != nil {
 		if err == mangos.ErrRecvTimeout {
-			return nil, nil, types.ErrTimeout
+			return nil, nil, component.ErrTimeout
 		}
 		return nil, nil, err
 	}

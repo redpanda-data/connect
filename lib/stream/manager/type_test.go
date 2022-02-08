@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -172,7 +173,7 @@ func TestTypeBasicOperations(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := types.ErrTypeClosed, mgr.Create("foo", harmlessConf()); act != exp {
+	if exp, act := component.ErrTypeClosed, mgr.Create("foo", harmlessConf()); act != exp {
 		t.Errorf("Unexpected error: %v != %v", act, exp)
 	}
 }
@@ -198,7 +199,7 @@ func TestTypeBasicClose(t *testing.T) {
 		t.Error(err)
 	}
 
-	if exp, act := types.ErrTypeClosed, mgr.Create("foo", harmlessConf()); act != exp {
+	if exp, act := component.ErrTypeClosed, mgr.Create("foo", harmlessConf()); act != exp {
 		t.Errorf("Unexpected error: %v != %v", act, exp)
 	}
 }

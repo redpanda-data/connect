@@ -3,6 +3,7 @@ package broker
 import (
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -78,7 +79,7 @@ func (g *Greedy) WaitForClose(timeout time.Duration) error {
 		}
 		remaining -= time.Since(tStarted)
 		if remaining <= 0 {
-			return types.ErrTimeout
+			return component.ErrTimeout
 		}
 	}
 	return nil

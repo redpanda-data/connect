@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/pebbe/zmq4"
 )
 
@@ -74,7 +73,7 @@ func getZMQType(t string) (zmq4.Type, error) {
 	case "PULL":
 		return zmq4.PULL, nil
 	}
-	return zmq4.PULL, types.ErrInvalidZMQType
+	return zmq4.PULL, component.ErrInvalidZMQType
 }
 
 //------------------------------------------------------------------------------
@@ -140,7 +139,7 @@ func (z *ZMQ4) ConnectWithContext(ignored context.Context) error {
 // ReadWithContext attempts to read a new message from the ZMQ socket.
 func (z *ZMQ4) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	if z.socket == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	data, err := z.socket.RecvMessageBytes(zmq4.DONTWAIT)
@@ -149,7 +148,7 @@ func (z *ZMQ4) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 		if polled, err = z.poller.Poll(z.pollTimeout); len(polled) == 1 {
 			data, err = z.socket.RecvMessageBytes(0)
 		} else if err == nil {
-			return nil, nil, types.ErrTimeout
+			return nil, nil, component.ErrTimeout
 		}
 	}
 	if err != nil {

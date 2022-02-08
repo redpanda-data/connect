@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -71,7 +72,7 @@ func (f *Files) ConnectWithContext(ctx context.Context) (err error) {
 // ReadWithContext a new Files message.
 func (f *Files) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	if len(f.targets) == 0 {
-		return nil, nil, types.ErrTypeClosed
+		return nil, nil, component.ErrTypeClosed
 	}
 
 	path := f.targets[0]

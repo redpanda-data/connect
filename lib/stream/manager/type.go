@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
@@ -194,7 +195,7 @@ func (m *Type) Create(id string, conf stream.Config) error {
 	defer m.lock.Unlock()
 
 	if m.closed {
-		return types.ErrTypeClosed
+		return component.ErrTypeClosed
 	}
 
 	if _, exists := m.streams[id]; exists {
@@ -248,7 +249,7 @@ func (m *Type) Read(id string) (*StreamStatus, error) {
 	defer m.lock.Unlock()
 
 	if m.closed {
-		return nil, types.ErrTypeClosed
+		return nil, component.ErrTypeClosed
 	}
 
 	wrapper, exists := m.streams[id]
@@ -268,7 +269,7 @@ func (m *Type) Update(id string, conf stream.Config, timeout time.Duration) erro
 	m.lock.Unlock()
 
 	if closed {
-		return types.ErrTypeClosed
+		return component.ErrTypeClosed
 	}
 	if !exists {
 		return ErrStreamDoesNotExist
@@ -291,7 +292,7 @@ func (m *Type) Delete(id string, timeout time.Duration) error {
 	m.lock.Lock()
 	if m.closed {
 		m.lock.Unlock()
-		return types.ErrTypeClosed
+		return component.ErrTypeClosed
 	}
 
 	wrapper, exists := m.streams[id]

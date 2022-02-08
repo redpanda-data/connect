@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -205,7 +206,7 @@ func (a *AmazonS3) Write(msg *message.Batch) error {
 // files.
 func (a *AmazonS3) WriteWithContext(wctx context.Context, msg *message.Batch) error {
 	if a.session == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	ctx, cancel := context.WithTimeout(

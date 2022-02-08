@@ -4,35 +4,46 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var _ types.Cache = &Cache{}
+// CacheItem represents a cached key/ttl pair.
+type CacheItem struct {
+	Value string
+	TTL   *time.Duration
+}
 
 // Cache provides a mock cache implementation
 type Cache struct {
-	Values map[string]string
+	Values map[string]CacheItem
 }
 
 // Get a mock cache item
 func (c *Cache) Get(ctx context.Context, key string) ([]byte, error) {
 	i, ok := c.Values[key]
 	if !ok {
-		return nil, types.ErrKeyNotFound
+		return nil, component.ErrKeyNotFound
 	}
-	return []byte(i), nil
+	return []byte(i.Value), nil
 }
 
 // Set a mock cache item
 func (c *Cache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	c.Values[key] = string(value)
+	c.Values[key] = CacheItem{
+		Value: string(value),
+		TTL:   ttl,
+	}
 	return nil
 }
 
 // SetMulti sets multiple mock cache items
 func (c *Cache) SetMulti(ctx context.Context, kvs map[string]types.CacheTTLItem) error {
 	for k, v := range kvs {
-		c.Values[k] = string(v.Value)
+		c.Values[k] = CacheItem{
+			Value: string(v.Value),
+			TTL:   v.TTL,
+		}
 	}
 	return nil
 }
@@ -40,9 +51,12 @@ func (c *Cache) SetMulti(ctx context.Context, kvs map[string]types.CacheTTLItem)
 // Add a mock cache item
 func (c *Cache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	if _, ok := c.Values[key]; ok {
-		return types.ErrKeyAlreadyExists
+		return component.ErrKeyAlreadyExists
 	}
-	c.Values[key] = string(value)
+	c.Values[key] = CacheItem{
+		Value: string(value),
+		TTL:   ttl,
+	}
 	return nil
 
 }

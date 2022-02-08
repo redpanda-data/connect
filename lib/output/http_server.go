@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	httpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -435,7 +436,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 // Consume assigns a messages channel for the output to read.
 func (h *HTTPServer) Consume(ts <-chan types.Transaction) error {
 	if h.transactions != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	h.transactions = ts
 
@@ -496,7 +497,7 @@ func (h *HTTPServer) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-h.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

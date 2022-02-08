@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -153,7 +154,7 @@ func (w *While) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res t
 	condResult := w.atLeastOnce || w.checkMsg(msg)
 	for condResult {
 		if atomic.LoadInt32(&w.running) != 1 {
-			return nil, response.NewError(types.ErrTypeClosed)
+			return nil, response.NewError(component.ErrTypeClosed)
 		}
 		if w.maxLoops > 0 && loops >= w.maxLoops {
 			w.log.Traceln("Reached max loops count")

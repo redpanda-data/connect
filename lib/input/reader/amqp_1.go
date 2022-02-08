@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Azure/go-amqp"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -199,14 +200,14 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn
 	a.m.RUnlock()
 
 	if conn == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	// Receive next message
 	amqpMsg, err := conn.receiver.Receive(ctx)
 	if err != nil {
 		if err == amqp.ErrTimeout {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		} else {
 			if dErr, isDetachError := err.(*amqp.DetachError); isDetachError && dErr.RemoteError != nil {
 				a.log.Errorf("Lost connection due to: %v\n", dErr.RemoteError)
@@ -214,7 +215,7 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn
 				a.log.Errorf("Lost connection due to: %v\n", err)
 			}
 			a.disconnect(ctx)
-			err = types.ErrNotConnected
+			err = component.ErrNotConnected
 		}
 		return nil, nil, err
 	}
@@ -347,7 +348,7 @@ func (a *AMQP1) renewWithContext(ctx context.Context, msg *amqp.Message) (time.T
 	a.m.RUnlock()
 
 	if conn == nil {
-		return time.Time{}, types.ErrNotConnected
+		return time.Time{}, component.ErrNotConnected
 	}
 
 	lockToken, err := uuidFromLockTokenBytes(msg.DeliveryTag)

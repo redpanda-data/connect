@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -210,7 +211,7 @@ func (b *Bloblang) ConnectWithContext(ctx context.Context) error {
 func (b *Bloblang) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	if b.limited {
 		if remaining := atomic.AddInt64(&b.remaining, -1); remaining < 0 {
-			return nil, nil, types.ErrTypeClosed
+			return nil, nil, component.ErrTypeClosed
 		}
 	}
 
@@ -218,13 +219,13 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (*message.Batch, reader.
 		select {
 		case _, open := <-b.timer.C:
 			if !open {
-				return nil, nil, types.ErrTypeClosed
+				return nil, nil, component.ErrTypeClosed
 			}
 			if b.schedule != nil {
 				b.timer.Reset(getDurationTillNextSchedule(*b.schedule, b.location))
 			}
 		case <-ctx.Done():
-			return nil, nil, types.ErrTimeout
+			return nil, nil, component.ErrTimeout
 		}
 	}
 
@@ -234,7 +235,7 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (*message.Batch, reader.
 		return nil, nil, err
 	}
 	if p == nil {
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 
 	msg := message.QuickBatch(nil)

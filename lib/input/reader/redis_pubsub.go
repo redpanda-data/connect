@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -103,20 +103,20 @@ func (r *RedisPubSub) ReadWithContext(ctx context.Context) (*message.Batch, Asyn
 	r.cMut.Unlock()
 
 	if pubsub == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	select {
 	case rMsg, open := <-pubsub.Channel():
 		if !open {
 			r.disconnect()
-			return nil, nil, types.ErrTypeClosed
+			return nil, nil, component.ErrTypeClosed
 		}
 		return message.QuickBatch([][]byte{[]byte(rMsg.Payload)}), noopAsyncAckFn, nil
 	case <-ctx.Done():
 	}
 
-	return nil, nil, types.ErrTimeout
+	return nil, nil, component.ErrTimeout
 }
 
 // disconnect safely closes a connection to an RedisPubSub server.

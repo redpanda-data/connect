@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/pebbe/zmq4"
 )
 
@@ -70,7 +69,7 @@ func getZMQType(t string) (zmq4.Type, error) {
 	case "PUSH":
 		return zmq4.PUSH, nil
 	}
-	return zmq4.PULL, types.ErrInvalidZMQType
+	return zmq4.PULL, component.ErrInvalidZMQType
 }
 
 //------------------------------------------------------------------------------
@@ -126,7 +125,7 @@ func (z *ZMQ4) Connect() error {
 // Write will attempt to write a message to the ZMQ4 socket.
 func (z *ZMQ4) Write(msg *message.Batch) error {
 	if z.socket == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 	_, err := z.socket.SendMessageDontwait(message.GetAllBytes(msg))
 	if err != nil {
@@ -134,7 +133,7 @@ func (z *ZMQ4) Write(msg *message.Batch) error {
 		if polled, err = z.poller.Poll(z.pollTimeout); len(polled) == 1 {
 			_, err = z.socket.SendMessage(message.GetAllBytes(msg))
 		} else if err == nil {
-			return types.ErrTimeout
+			return component.ErrTimeout
 		}
 	}
 	return err

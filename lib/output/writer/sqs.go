@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -209,7 +210,7 @@ func (a *AmazonSQS) Write(msg *message.Batch) error {
 // WriteWithContext attempts to write message contents to a target SQS.
 func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if a.sqs == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	backOff := a.backoffCtor()
@@ -257,7 +258,7 @@ func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg *message.Batch) er
 			select {
 			case <-time.After(wait):
 			case <-ctx.Done():
-				return types.ErrTimeout
+				return component.ErrTimeout
 			case <-a.closeChan:
 				return err
 			}
@@ -293,7 +294,7 @@ func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg *message.Batch) er
 			select {
 			case <-time.After(wait):
 			case <-ctx.Done():
-				return types.ErrTimeout
+				return component.ErrTimeout
 			case <-a.closeChan:
 				return err
 			}

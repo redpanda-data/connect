@@ -7,8 +7,8 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
@@ -39,13 +39,7 @@ func TestBloblangParseNewIface(t *testing.T) {
 }
 
 func TestBloblangParseOldIface(t *testing.T) {
-	mgr := &oldMgr{
-		caches:     map[string]types.Cache{},
-		inputs:     map[string]types.Input{},
-		outputs:    map[string]types.OutputWriter{},
-		processors: map[string]types.Processor{},
-		ratelimits: map[string]types.RateLimit{},
-	}
+	mgr := mock.NewManager()
 
 	_, err := interop.NewBloblangMapping(mgr, "root = meow()")
 	require.Error(t, err)

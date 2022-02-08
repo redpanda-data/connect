@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/internal/component"
 )
 
 //------------------------------------------------------------------------------
@@ -28,7 +28,7 @@ func (c *closable) WaitForClose(tout time.Duration) error {
 	if c.waitFor > 0 {
 		if tout < c.waitFor {
 			<-time.After(tout)
-			return types.ErrTimeout
+			return component.ErrTimeout
 		}
 		<-time.After(c.waitFor)
 	}

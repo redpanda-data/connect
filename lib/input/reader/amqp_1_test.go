@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/Azure/go-amqp"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -153,8 +153,8 @@ func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
 		wg.Done()
 	}()
 
-	if _, _, err = m.ReadWithContext(ctx); err != types.ErrTypeClosed && err != types.ErrNotConnected {
-		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
+	if _, _, err = m.ReadWithContext(ctx); err != component.ErrTypeClosed && err != component.ErrNotConnected {
+		t.Errorf("Wrong error: %v != %v", err, component.ErrTypeClosed)
 	}
 
 	wg.Wait()

@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -191,7 +192,7 @@ func (w *AsyncWriter) loop() {
 		defer initConnDone()
 		for {
 			if err := w.writer.ConnectWithContext(initConnCtx); err != nil {
-				if w.shutSig.ShouldCloseAtLeisure() || err == types.ErrTypeClosed {
+				if w.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
 					return false
 				}
 				w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
@@ -226,7 +227,7 @@ func (w *AsyncWriter) loop() {
 		// If another goroutine got here first and we're able to send over the
 		// connection, then we gracefully accept defeat.
 		if atomic.LoadInt32(&w.isConnected) == 1 {
-			if latency, err = w.latencyMeasuringWrite(msg); err != types.ErrNotConnected {
+			if latency, err = w.latencyMeasuringWrite(msg); err != component.ErrNotConnected {
 				return
 			}
 		}
@@ -235,10 +236,10 @@ func (w *AsyncWriter) loop() {
 		// Continue to try to reconnect while still active.
 		for {
 			if !initConnection() {
-				err = types.ErrTypeClosed
+				err = component.ErrTypeClosed
 				return
 			}
-			if latency, err = w.latencyMeasuringWrite(msg); err != types.ErrNotConnected {
+			if latency, err = w.latencyMeasuringWrite(msg); err != component.ErrNotConnected {
 				atomic.StoreInt32(&w.isConnected, 1)
 				mConn.Incr(1)
 				return
@@ -269,12 +270,12 @@ func (w *AsyncWriter) loop() {
 			latency, err := w.latencyMeasuringWrite(ts.Payload)
 
 			// If our writer says it is not connected.
-			if err == types.ErrNotConnected {
+			if err == component.ErrNotConnected {
 				latency, err = connectLoop(ts.Payload)
 			}
 
 			// Close immediately if our writer is closed.
-			if err == types.ErrTypeClosed {
+			if err == component.ErrTypeClosed {
 				return
 			}
 
@@ -315,7 +316,7 @@ func (w *AsyncWriter) loop() {
 // Consume assigns a messages channel for the output to read.
 func (w *AsyncWriter) Consume(ts <-chan types.Transaction) error {
 	if w.transactions != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	w.transactions = ts
 	go w.loop()
@@ -345,7 +346,7 @@ func (w *AsyncWriter) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-w.shutSig.HasClosedChan():
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -447,7 +448,7 @@ func (s *subprocWrapper) Send(prolog, payload, epilog []byte) ([]byte, error) {
 	s.cmdMut.Unlock()
 
 	if stdin == nil {
-		return nil, types.ErrTypeClosed
+		return nil, component.ErrTypeClosed
 	}
 	if prolog != nil {
 		if _, err := stdin.Write(prolog); err != nil {
@@ -484,7 +485,7 @@ func (s *subprocWrapper) Send(prolog, payload, epilog []byte) ([]byte, error) {
 	}
 
 	if !open {
-		return nil, types.ErrTypeClosed
+		return nil, component.ErrTypeClosed
 	}
 	if len(errBytes) > 0 {
 		return nil, errors.New(string(errBytes))
@@ -525,7 +526,7 @@ func (e *Subprocess) CloseAsync() {
 func (e *Subprocess) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-time.After(timeout):
-		return fmt.Errorf("subprocess failed to close in allotted time: %w", types.ErrTimeout)
+		return fmt.Errorf("subprocess failed to close in allotted time: %w", component.ErrTimeout)
 	case <-e.subproc.closedChan:
 	}
 	return nil

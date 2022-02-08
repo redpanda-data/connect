@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/gorilla/websocket"
@@ -136,7 +136,7 @@ func (w *Websocket) ConnectWithContext(ctx context.Context) error {
 func (w *Websocket) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	client := w.getWS()
 	if client == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	_, data, err := client.ReadMessage()
@@ -144,7 +144,7 @@ func (w *Websocket) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 		w.lock.Lock()
 		w.client = nil
 		w.lock.Unlock()
-		err = types.ErrNotConnected
+		err = component.ErrNotConnected
 		return nil, nil, err
 	}
 

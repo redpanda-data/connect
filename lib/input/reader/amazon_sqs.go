@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -113,7 +114,7 @@ func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
 // ReadWithContext attempts to read a new message from the target SQS.
 func (a *AmazonSQS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	if a.session == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	msg := message.QuickBatch(nil)
@@ -128,7 +129,7 @@ func (a *AmazonSQS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 	})
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == request.CanceledErrorCode {
-			return nil, nil, types.ErrTimeout
+			return nil, nil, component.ErrTimeout
 		}
 		return nil, nil, err
 	}
@@ -144,7 +145,7 @@ func (a *AmazonSQS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 		}
 	}
 	if msg.Len() == 0 {
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 
 	return msg, func(rctx context.Context, res types.Response) error {

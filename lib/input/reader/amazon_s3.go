@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -449,7 +450,7 @@ func (a *AmazonS3) readSQSEvents() error {
 	}
 
 	if len(a.targetKeys) == 0 {
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }
@@ -471,7 +472,7 @@ func (a *AmazonS3) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAc
 	defer a.targetKeysMut.Unlock()
 
 	if a.session == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	if len(a.targetKeys) == 0 {
@@ -481,11 +482,11 @@ func (a *AmazonS3) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAc
 			}
 		} else {
 			// If we aren't using SQS but exhausted our targets we are done.
-			return nil, nil, types.ErrTypeClosed
+			return nil, nil, component.ErrTypeClosed
 		}
 	}
 	if len(a.targetKeys) == 0 {
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 
 	msg := message.QuickBatch(nil)
@@ -548,7 +549,7 @@ func (a *AmazonS3) read() (*message.Part, objKey, error) {
 			a.targetKeys[0] = target
 			return nil, objKey{}, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, bucket, err)
 		}
-		return nil, objKey{}, types.ErrTimeout
+		return nil, objKey{}, component.ErrTimeout
 	}
 
 	bytes, err := io.ReadAll(obj.Body)
@@ -596,7 +597,7 @@ func (a *AmazonS3) readFromMgr() (*message.Part, objKey, error) {
 			a.targetKeys[0] = target
 			return nil, objKey{}, fmt.Errorf("failed to download file '%s' from bucket '%s': %v", target.s3Key, bucket, err)
 		}
-		return nil, objKey{}, types.ErrTimeout
+		return nil, objKey{}, component.ErrTimeout
 	}
 
 	part := message.NewPart(buff.Bytes())

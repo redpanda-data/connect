@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
@@ -23,7 +24,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -259,7 +259,7 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error
 	m.mu.Unlock()
 
 	if collection == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
@@ -401,7 +401,7 @@ func (m *Writer) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-m.shutSig.HasClosedChan():
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

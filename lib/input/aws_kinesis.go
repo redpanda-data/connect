@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -297,7 +298,7 @@ func (k *kinesisReader) getRecords(streamID, shardID, shardIter string) ([]*kine
 func awsErrIsTimeout(err error) bool {
 	return errors.Is(err, context.Canceled) ||
 		errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, types.ErrTimeout) ||
+		errors.Is(err, component.ErrTimeout) ||
 		(err != nil && strings.HasSuffix(err.Error(), "context canceled"))
 }
 
@@ -732,18 +733,18 @@ func (k *kinesisReader) ReadWithContext(ctx context.Context) (*message.Batch, re
 	k.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	select {
 	case m, open := <-msgChan:
 		if !open {
-			return nil, nil, types.ErrNotConnected
+			return nil, nil, component.ErrNotConnected
 		}
 		return m.msg, m.ackFn, nil
 	case <-ctx.Done():
 	}
-	return nil, nil, types.ErrTimeout
+	return nil, nil, component.ErrTimeout
 }
 
 // CloseAsync shuts down the Kinesis input and stops processing requests.
@@ -756,7 +757,7 @@ func (k *kinesisReader) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-k.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
@@ -35,7 +36,7 @@ type ReaderWriter interface {
 	Write(context.Context, *message.Batch, AckFunc) error
 
 	// EndOfInput indicates to the buffer that the input has ended and that once
-	// the buffer is depleted it should return types.ErrTypeClosed from Read in
+	// the buffer is depleted it should return component.ErrTypeClosed from Read in
 	// order to gracefully shut down the pipeline.
 	//
 	// EndOfInput should be idempotent as it may be called more than once.
@@ -128,7 +129,7 @@ func (m *Stream) inputLoop() {
 				case <-ctx.Done():
 					err = ctx.Err()
 				case <-m.shutSig.CloseNowChan():
-					err = types.ErrTypeClosed
+					err = component.ErrTypeClosed
 				}
 				ackGroup.Done()
 			})
@@ -170,7 +171,7 @@ func (m *Stream) outputLoop() {
 	for {
 		msg, ackFunc, err := m.buffer.Read(closeNowCtx)
 		if err != nil {
-			if err != types.ErrTypeClosed && !errors.Is(err, context.Canceled) {
+			if err != component.ErrTypeClosed && !errors.Is(err, context.Canceled) {
 				mReadErr.Incr(1)
 				m.log.Errorf("Failed to read buffer: %v\n", err)
 				if !m.errThrottle.Retry() {
@@ -210,7 +211,7 @@ func (m *Stream) outputLoop() {
 				tracing.FinishSpans(msg)
 				if ackErr := ackFunc(closeNowCtx, res.Error()); ackErr != nil {
 					mAckErr.Incr(1)
-					if ackErr != types.ErrTypeClosed {
+					if ackErr != component.ErrTypeClosed {
 						m.log.Errorf("Failed to ack buffer message: %v\n", ackErr)
 					}
 				}
@@ -224,7 +225,7 @@ func (m *Stream) outputLoop() {
 // Consume assigns a messages channel for the output to read.
 func (m *Stream) Consume(msgs <-chan types.Transaction) error {
 	if m.messagesIn != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	m.messagesIn = msgs
 
@@ -260,7 +261,7 @@ func (m *Stream) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-m.shutSig.HasClosedChan():
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

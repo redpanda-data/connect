@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -40,7 +41,7 @@ func newMockAsyncReader() *mockAsyncReader {
 func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 	cerr, open := <-r.connChan
 	if !open {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 	return cerr
 }
@@ -48,10 +49,10 @@ func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	select {
 	case <-ctx.Done():
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	case err, open := <-r.readChan:
 		if !open {
-			return nil, nil, types.ErrNotConnected
+			return nil, nil, component.ErrNotConnected
 		}
 		if err != nil {
 			return nil, nil, err
@@ -159,7 +160,7 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 		}
 
 		select {
-		case readerImpl.readChan <- types.ErrTypeClosed:
+		case readerImpl.readChan <- component.ErrTypeClosed:
 		case <-ctx.Done():
 			t.Error("Timed out")
 		}
@@ -171,7 +172,7 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 		}
 
 		select {
-		case readerImpl.readChan <- types.ErrTypeClosed:
+		case readerImpl.readChan <- component.ErrTypeClosed:
 		case <-ctx.Done():
 			t.Error("Timed out")
 		}
@@ -201,14 +202,14 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 	}()
 
 	_, _, err = pres.ReadWithContext(ctx)
-	assert.Equal(t, types.ErrTimeout, err)
+	assert.Equal(t, component.ErrTimeout, err)
 
 	_, ackFn2, err := pres.ReadWithContext(ctx)
 	assert.NoError(t, err)
 	assert.NoError(t, ackFn2(ctx, response.NewAck()))
 
 	_, _, err = pres.ReadWithContext(ctx)
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 
 	pres.CloseAsync()
 	err = pres.WaitForClose(time.Second)
@@ -248,7 +249,7 @@ func TestAsyncPreserverCloseThenAck(t *testing.T) {
 		}
 
 		select {
-		case readerImpl.readChan <- types.ErrTypeClosed:
+		case readerImpl.readChan <- component.ErrTypeClosed:
 		case <-ctx.Done():
 			t.Error("Timed out")
 		}
@@ -284,7 +285,7 @@ func TestAsyncPreserverCloseThenAck(t *testing.T) {
 	}()
 
 	_, _, err = pres.ReadWithContext(ctx)
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 
 	pres.CloseAsync()
 	err = pres.WaitForClose(time.Second)
@@ -324,13 +325,13 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 		}
 
 		select {
-		case readerImpl.readChan <- types.ErrTypeClosed:
+		case readerImpl.readChan <- component.ErrTypeClosed:
 		case <-ctx.Done():
 			t.Error("Timed out")
 		}
 
 		select {
-		case readerImpl.readChan <- types.ErrTypeClosed:
+		case readerImpl.readChan <- component.ErrTypeClosed:
 		case <-ctx.Done():
 			t.Error("Timed out")
 		}
@@ -366,7 +367,7 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 	}()
 
 	_, _, err = pres.ReadWithContext(ctx)
-	assert.Equal(t, types.ErrTimeout, err)
+	assert.Equal(t, component.ErrTimeout, err)
 
 	_, ackFn2, err := pres.ReadWithContext(ctx)
 	require.NoError(t, err)
@@ -377,7 +378,7 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 	}()
 
 	_, _, err = pres.ReadWithContext(ctx)
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 
 	pres.CloseAsync()
 	err = pres.WaitForClose(time.Second)
@@ -417,13 +418,13 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 		}
 
 		select {
-		case readerImpl.readChan <- types.ErrNotConnected:
+		case readerImpl.readChan <- component.ErrNotConnected:
 		case <-ctx.Done():
 			t.Error("Timed out")
 		}
 
 		select {
-		case readerImpl.connChan <- types.ErrTypeClosed:
+		case readerImpl.connChan <- component.ErrTypeClosed:
 		case <-ctx.Done():
 			t.Error("Timed out")
 		}
@@ -454,7 +455,7 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, _, err = pres.ReadWithContext(ctx)
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 
 	err = pres.ConnectWithContext(ctx)
 	assert.NoError(t, err)
@@ -465,7 +466,7 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 	}()
 
 	_, _, err = pres.ReadWithContext(ctx)
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 
 	pres.CloseAsync()
 	err = pres.WaitForClose(time.Second)

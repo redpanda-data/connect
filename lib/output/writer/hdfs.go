@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -110,7 +111,7 @@ func (h *HDFS) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 // Write attempts to write message contents to a target HDFS directory as files.
 func (h *HDFS) Write(msg *message.Batch) error {
 	if h.client == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return IterateBatchedSend(msg, func(i int, p *message.Part) error {

@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -295,7 +296,7 @@ func (c *cassandraWriter) WriteWithContext(ctx context.Context, msg *message.Bat
 	c.connLock.RUnlock()
 
 	if c.session == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	if msg.Len() == 1 {

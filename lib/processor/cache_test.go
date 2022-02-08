@@ -14,7 +14,7 @@ import (
 
 func TestCacheSet(t *testing.T) {
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
@@ -47,16 +47,16 @@ func TestCacheSet(t *testing.T) {
 
 	actV, ok := mgr.Caches["foocache"]["1"]
 	require.True(t, ok)
-	assert.Equal(t, "foo 3", actV)
+	assert.Equal(t, "foo 3", actV.Value)
 
 	actV, ok = mgr.Caches["foocache"]["2"]
 	require.True(t, ok)
-	assert.Equal(t, "foo 2", actV)
+	assert.Equal(t, "foo 2", actV.Value)
 }
 
 func TestCacheSetParts(t *testing.T) {
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
@@ -90,16 +90,16 @@ func TestCacheSetParts(t *testing.T) {
 
 	actV, ok := mgr.Caches["foocache"]["1"]
 	require.True(t, ok)
-	assert.Equal(t, "foo 1", actV)
+	assert.Equal(t, "foo 1", actV.Value)
 
 	actV, ok = mgr.Caches["foocache"]["2"]
 	require.True(t, ok)
-	assert.Equal(t, "foo 2", actV)
+	assert.Equal(t, "foo 2", actV.Value)
 }
 
 func TestCacheAdd(t *testing.T) {
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	conf := NewConfig()
 	conf.Cache.Key = "${!json(\"key\")}"
@@ -143,18 +143,18 @@ func TestCacheAdd(t *testing.T) {
 
 	actV, ok := mgr.Caches["foocache"]["1"]
 	require.True(t, ok)
-	assert.Equal(t, "foo 1", actV)
+	assert.Equal(t, "foo 1", actV.Value)
 
 	actV, ok = mgr.Caches["foocache"]["2"]
 	require.True(t, ok)
-	assert.Equal(t, "foo 2", actV)
+	assert.Equal(t, "foo 2", actV.Value)
 }
 
 func TestCacheGet(t *testing.T) {
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{
-		"1": "foo 1",
-		"2": "foo 2",
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{
+		"1": {Value: "foo 1"},
+		"2": {Value: "foo 2"},
 	}
 
 	conf := NewConfig()
@@ -204,10 +204,10 @@ func TestCacheGet(t *testing.T) {
 
 func TestCacheDelete(t *testing.T) {
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{
-		"1": "foo 1",
-		"2": "foo 2",
-		"3": "foo 3",
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{
+		"1": {Value: "foo 1"},
+		"2": {Value: "foo 2"},
+		"3": {Value: "foo 3"},
 	}
 
 	conf := NewConfig()
@@ -254,7 +254,7 @@ func TestCacheDelete(t *testing.T) {
 
 	actV, ok := mgr.Caches["foocache"]["2"]
 	require.True(t, ok)
-	assert.Equal(t, "foo 2", actV)
+	assert.Equal(t, "foo 2", actV.Value)
 
 	_, ok = mgr.Caches["foocache"]["3"]
 	require.False(t, ok)

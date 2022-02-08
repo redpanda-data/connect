@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -21,8 +22,8 @@ func TestInproc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err = mgr.GetPipe("foo"); err != types.ErrPipeNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, types.ErrPipeNotFound)
+	if _, err = mgr.GetPipe("foo"); err != component.ErrPipeNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, component.ErrPipeNotFound)
 	}
 
 	conf := output.NewConfig()
@@ -68,8 +69,8 @@ func TestInproc(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
-	if _, err = mgr.GetPipe("foo"); err != types.ErrPipeNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, types.ErrPipeNotFound)
+	if _, err = mgr.GetPipe("foo"); err != component.ErrPipeNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, component.ErrPipeNotFound)
 	}
 }
 

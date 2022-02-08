@@ -10,6 +10,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -19,7 +20,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gofrs/uuid"
 )
 
@@ -195,7 +195,7 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg *messa
 	g.connMut.RUnlock()
 
 	if client == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {

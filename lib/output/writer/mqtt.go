@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -213,7 +214,7 @@ func (m *MQTT) Write(msg *message.Batch) error {
 	m.connMut.RUnlock()
 
 	if client == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
@@ -232,7 +233,7 @@ func (m *MQTT) Write(msg *message.Batch) error {
 			m.connMut.RLock()
 			m.client = nil
 			m.connMut.RUnlock()
-			sendErr = types.ErrNotConnected
+			sendErr = component.ErrNotConnected
 		}
 		return sendErr
 	})

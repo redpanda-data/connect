@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -96,7 +97,7 @@ func NewDynamicFanIn(
 // indentifier, if there was one.
 func (d *DynamicFanIn) SetInput(ident string, input DynamicInput, timeout time.Duration) error {
 	if atomic.LoadInt32(&d.running) != 1 {
-		return types.ErrTypeClosed
+		return component.ErrTypeClosed
 	}
 	resChan := make(chan error)
 	select {
@@ -107,7 +108,7 @@ func (d *DynamicFanIn) SetInput(ident string, input DynamicInput, timeout time.D
 		Timeout: timeout,
 	}:
 	case <-d.closeChan:
-		return types.ErrTypeClosed
+		return component.ErrTypeClosed
 	}
 	return <-resChan
 }
@@ -184,7 +185,7 @@ func (d *DynamicFanIn) removeInput(ident string, timeout time.Duration) error {
 	case <-time.After(timeout):
 		// Do NOT remove inputs from our map unless we are sure they are
 		// closed.
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 
 	delete(d.inputs, ident)
@@ -268,7 +269,7 @@ func (d *DynamicFanIn) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-d.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

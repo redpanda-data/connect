@@ -2,14 +2,13 @@ package output
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -17,72 +16,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeWriter struct {
-	connected bool
-	ts        []types.Transaction
-	tsMut     sync.Mutex
-	err       error
-}
-
-func (f *fakeWriter) Connected() bool {
-	return f.connected
-}
-
-func (f *fakeWriter) WriteTransaction(ctx context.Context, ts types.Transaction) error {
-	f.tsMut.Lock()
-	f.ts = append(f.ts, ts)
-	f.tsMut.Unlock()
-	return f.err
-}
-
-func (f *fakeWriter) CloseAsync() {
-}
-
-func (f *fakeWriter) WaitForClose(time.Duration) error {
-	return errors.New("not implemented")
-}
-
-//------------------------------------------------------------------------------
-
-type fakeProcMgr struct {
-	outs map[string]types.OutputWriter
-}
-
-func (f *fakeProcMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
-}
-func (f *fakeProcMgr) GetCache(name string) (types.Cache, error) {
-	return nil, types.ErrCacheNotFound
-}
-func (f *fakeProcMgr) GetProcessor(name string) (types.Processor, error) {
-	return nil, types.ErrProcessorNotFound
-}
-func (f *fakeProcMgr) GetOutput(name string) (types.OutputWriter, error) {
-	if p, exists := f.outs[name]; exists {
-		return p, nil
-	}
-	return nil, types.ErrOutputNotFound
-}
-func (f *fakeProcMgr) GetRateLimit(name string) (types.RateLimit, error) {
-	return nil, types.ErrRateLimitNotFound
-}
-func (f *fakeProcMgr) GetPlugin(name string) (interface{}, error) {
-	return nil, types.ErrPluginNotFound
-}
-func (f *fakeProcMgr) GetPipe(name string) (<-chan types.Transaction, error) {
-	return nil, types.ErrPipeNotFound
-}
-func (f *fakeProcMgr) SetPipe(name string, prod <-chan types.Transaction)   {}
-func (f *fakeProcMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}
-
-//------------------------------------------------------------------------------
-
 func TestResourceOutput(t *testing.T) {
-	out := &fakeWriter{}
+	var outLock sync.Mutex
+	var outTS []types.Transaction
 
-	mgr := &fakeProcMgr{
-		outs: map[string]types.OutputWriter{
-			"foo": out,
-		},
+	mgr := mock.NewManager()
+	mgr.Outputs["foo"] = func(c context.Context, t types.Transaction) error {
+		outLock.Lock()
+		defer outLock.Unlock()
+		outTS = append(outTS, t)
+		return nil
 	}
 
 	nConf := NewConfig()
@@ -92,9 +35,6 @@ func TestResourceOutput(t *testing.T) {
 	p, err := New(nConf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	assert.False(t, p.Connected())
-
-	out.connected = true
 	assert.True(t, p.Connected())
 
 	tChan := make(chan types.Transaction)
@@ -110,30 +50,28 @@ func TestResourceOutput(t *testing.T) {
 	}
 
 	require.Eventually(t, func() bool {
-		out.tsMut.Lock()
-		ok := len(out.ts) == 10
-		out.tsMut.Unlock()
+		outLock.Lock()
+		ok := len(outTS) == 10
+		outLock.Unlock()
 		return ok
 	}, time.Second*5, time.Millisecond*100)
 
-	out.tsMut.Lock()
+	outLock.Lock()
 	for i := 0; i < 10; i++ {
 		exp := fmt.Sprintf("foo:%v", i)
-		require.NotNil(t, out.ts[i])
-		require.NotNil(t, out.ts[i].Payload)
-		assert.Equal(t, 1, out.ts[i].Payload.Len())
-		assert.Equal(t, exp, string(out.ts[i].Payload.Get(0).Get()))
+		require.NotNil(t, outTS[i])
+		require.NotNil(t, outTS[i].Payload)
+		assert.Equal(t, 1, outTS[i].Payload.Len())
+		assert.Equal(t, exp, string(outTS[i].Payload.Get(0).Get()))
 	}
-	out.tsMut.Unlock()
+	outLock.Unlock()
 
 	p.CloseAsync()
 	assert.NoError(t, p.WaitForClose(time.Second))
 }
 
 func TestResourceBadName(t *testing.T) {
-	mgr := &fakeProcMgr{
-		outs: map[string]types.OutputWriter{},
-	}
+	mgr := mock.NewManager()
 
 	conf := NewConfig()
 	conf.Type = "resource"

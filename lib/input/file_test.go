@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -78,7 +78,7 @@ func TestFileDirectory(t *testing.T) {
 	require.NoError(t, aFn(context.Background(), response.NewAck()))
 
 	_, _, err = f.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 
 	if !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %v != %v", act, exp)

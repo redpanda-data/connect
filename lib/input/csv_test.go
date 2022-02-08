@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -67,10 +67,10 @@ func TestCSVReaderHappy(t *testing.T) {
 	}
 
 	_, _, err = f.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 
 	err = f.ConnectWithContext(context.Background())
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
 func TestCSVGPaths(t *testing.T) {
@@ -216,10 +216,10 @@ func TestCSVReaderGroupCount(t *testing.T) {
 	}
 
 	_, _, err = f.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 
 	err = f.ConnectWithContext(context.Background())
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
 func TestCSVReadersTwoFiles(t *testing.T) {
@@ -280,7 +280,7 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 		var resMsg *message.Batch
 		var ackFn reader.AsyncAckFn
 		resMsg, ackFn, err = f.ReadWithContext(context.Background())
-		if err == types.ErrNotConnected {
+		if err == component.ErrNotConnected {
 			require.NoError(t, f.ConnectWithContext(context.Background()))
 			resMsg, ackFn, err = f.ReadWithContext(context.Background())
 		}
@@ -290,10 +290,10 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 	}
 
 	_, _, err = f.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 
 	err = f.ConnectWithContext(context.Background())
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
 func TestCSVReaderCustomComma(t *testing.T) {
@@ -343,10 +343,10 @@ func TestCSVReaderCustomComma(t *testing.T) {
 	}
 
 	_, _, err = f.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 
 	err = f.ConnectWithContext(context.Background())
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
 func TestCSVReaderRelaxed(t *testing.T) {
@@ -398,10 +398,10 @@ func TestCSVReaderRelaxed(t *testing.T) {
 	}
 
 	_, _, err = f.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 
 	err = f.ConnectWithContext(context.Background())
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
 func TestCSVReaderStrict(t *testing.T) {
@@ -458,8 +458,8 @@ func TestCSVReaderStrict(t *testing.T) {
 	}
 
 	_, _, err = f.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 
 	err = f.ConnectWithContext(context.Background())
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 }

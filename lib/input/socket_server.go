@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -184,7 +185,7 @@ func (t *SocketServer) sendMsg(msg *message.Batch) bool {
 				if res != nil {
 					sendErr = res.Error()
 				}
-				if sendErr == nil || sendErr == types.ErrTypeClosed {
+				if sendErr == nil || sendErr == component.ErrTypeClosed {
 					if sendErr == nil {
 						t.mLatency.Timing(time.Since(tStarted).Nanoseconds())
 					}
@@ -283,7 +284,7 @@ acceptLoop:
 			for {
 				parts, ackFn, err := codec.Next(t.ctx)
 				if err != nil {
-					if err != io.EOF && err != types.ErrTimeout {
+					if err != io.EOF && err != component.ErrTimeout {
 						t.log.Errorf("Connection dropped due to: %v\n", err)
 					}
 					return
@@ -341,7 +342,7 @@ func (t *SocketServer) udpLoop() {
 	for {
 		parts, ackFn, err := codec.Next(t.ctx)
 		if err != nil {
-			if err != io.EOF && err != types.ErrTimeout {
+			if err != io.EOF && err != component.ErrTimeout {
 				t.log.Errorf("Connection dropped due to: %v\n", err)
 			}
 			return
@@ -384,7 +385,7 @@ func (t *SocketServer) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-t.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

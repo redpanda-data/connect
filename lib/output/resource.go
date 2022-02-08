@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -147,7 +148,7 @@ func (r *Resource) loop() {
 // Consume assigns a messages channel for the output to read.
 func (r *Resource) Consume(ts <-chan types.Transaction) error {
 	if r.transactions != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	r.transactions = ts
 	go r.loop()
@@ -177,7 +178,7 @@ func (r *Resource) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-r.ctx.Done():
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

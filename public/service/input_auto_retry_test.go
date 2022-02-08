@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +34,7 @@ func newMockInput() *mockInput {
 func (i *mockInput) Connect(ctx context.Context) error {
 	cerr, open := <-i.connChan
 	if !open {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 	return cerr
 }
@@ -42,10 +42,10 @@ func (i *mockInput) Connect(ctx context.Context) error {
 func (i *mockInput) Read(ctx context.Context) (*Message, AckFunc, error) {
 	select {
 	case <-ctx.Done():
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	case err, open := <-i.readChan:
 		if !open {
-			return nil, nil, types.ErrNotConnected
+			return nil, nil, component.ErrNotConnected
 		}
 		if err != nil {
 			return nil, nil, err

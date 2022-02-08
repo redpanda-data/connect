@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -329,7 +330,7 @@ func (s *sqsTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 	}
 	if len(s.pending) == 0 {
 		s.nextRequest = time.Now().Add(time.Millisecond * 500)
-		return nil, types.ErrTimeout
+		return nil, component.ErrTimeout
 	}
 	s.nextRequest = time.Time{}
 	t := s.pending[0]
@@ -719,16 +720,16 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn 
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 	if a.session == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	defer func() {
 		if errors.Is(err, io.EOF) {
-			err = types.ErrTypeClosed
+			err = component.ErrTypeClosed
 		} else if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
 			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
 	}()
 

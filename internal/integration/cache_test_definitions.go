@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,7 +66,7 @@ func CacheTestDoubleAdd() CacheTestDefinition {
 			require.NoError(t, cache.Add(env.ctx, "addkey", []byte("first"), nil))
 
 			assert.Eventually(t, func() bool {
-				return errors.Is(cache.Add(env.ctx, "addkey", []byte("second"), nil), types.ErrKeyAlreadyExists)
+				return errors.Is(cache.Add(env.ctx, "addkey", []byte("second"), nil), component.ErrKeyAlreadyExists)
 			}, time.Minute, time.Second)
 
 			res, err := cache.Get(env.ctx, "addkey")

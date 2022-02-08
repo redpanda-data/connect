@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -110,7 +111,7 @@ func (r *AsyncReader) loop() {
 		defer initConnDone()
 		for {
 			if err := r.reader.ConnectWithContext(initConnCtx); err != nil {
-				if r.shutSig.ShouldCloseAtLeisure() || err == types.ErrTypeClosed {
+				if r.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
 					return false
 				}
 				r.log.Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
@@ -138,7 +139,7 @@ func (r *AsyncReader) loop() {
 		readDone()
 
 		// If our reader says it is not connected.
-		if err == types.ErrNotConnected {
+		if err == component.ErrNotConnected {
 			mLostConn.Incr(1)
 			atomic.StoreInt32(&r.connected, 0)
 
@@ -151,12 +152,12 @@ func (r *AsyncReader) loop() {
 		}
 
 		// Close immediately if our reader is closed.
-		if r.shutSig.ShouldCloseAtLeisure() || err == types.ErrTypeClosed {
+		if r.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
 			return
 		}
 
 		if err != nil || msg == nil {
-			if err != nil && err != types.ErrTimeout && err != types.ErrNotConnected {
+			if err != nil && err != component.ErrTimeout && err != component.ErrNotConnected {
 				r.log.Errorf("Failed to read message: %v\n", err)
 			}
 			select {
@@ -241,7 +242,7 @@ func (r *AsyncReader) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-r.shutSig.HasClosedChan():
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }
