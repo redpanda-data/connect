@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/ory/dockertest/v3"
+	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,6 +27,9 @@ func TestIntegrationCRDB(t *testing.T) {
 		Tag:          "latest",
 		Cmd:          []string{"start-single-node", "--insecure"},
 		ExposedPorts: []string{"8080", "26257"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"26257/tcp": {{HostIP: "", HostPort: "26257"}},
+		},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -35,7 +39,7 @@ func TestIntegrationCRDB(t *testing.T) {
 	var pgpool *pgxpool.Pool
 	resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		pgpool, err = pgxpool.Connect(context.Background(), "postgresql://root@localhost:26257/defaultdb?sslmode=disabled")
+		pgpool, err = pgxpool.Connect(context.Background(), "postgresql://root@localhost:26257/defaultdb?sslmode=disable")
 		if err != nil {
 			return err
 		}
@@ -61,10 +65,9 @@ func TestIntegrationCRDB(t *testing.T) {
 	template := `
 input:
   crdb_changefeed:
-    dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disabled
+    dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
     tables:
-			- foo
-    options:
+      - foo
 
 output:
   type: stdout
