@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 3.63.0 - 2022-02-08
+
 ### Added
 
 - Field `cors` added to the `http_server` input and output, for supporting CORS requests when custom servers are used.
