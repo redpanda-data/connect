@@ -22,6 +22,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -85,7 +86,7 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 		conf:      conf,
 		log:       log.Noop(),
 		stats:     metrics.Noop(),
-		mgr:       types.NoopMgr(),
+		mgr:       mock.NewManager(),
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
 		successOn: map[int]struct{}{},

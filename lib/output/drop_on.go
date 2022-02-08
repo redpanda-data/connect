@@ -277,10 +277,10 @@ func (d *dropOn) loop() {
 			}
 		}
 
-		if res.Error() != nil && d.onError {
+		if res.AckError() != nil && d.onError {
 			mDropped.Incr(int64(ts.Payload.Len()))
 			mDroppedBatch.Incr(1)
-			d.log.Warnf("Message dropped due to: %v\n", res.Error())
+			d.log.Warnf("Message dropped due to: %v\n", res.AckError())
 			res = response.NewAck()
 		}
 

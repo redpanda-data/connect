@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -54,7 +55,7 @@ func TestTypeProcsAndPipes(t *testing.T) {
 	logger := log.Noop()
 	stats := metrics.Noop()
 
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := New(
@@ -116,7 +117,7 @@ func TestTypeProcsAndPipes(t *testing.T) {
 }
 
 func TestTypeBasicOperations(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := New(
@@ -179,7 +180,7 @@ func TestTypeBasicOperations(t *testing.T) {
 }
 
 func TestTypeBasicClose(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := New(

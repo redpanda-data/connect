@@ -276,7 +276,7 @@ func (s *Switch) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res 
 			execMsg.SetAll(passed)
 
 			msgs, res := ExecuteAll(switchCase.processors, execMsg)
-			if res != nil && res.Error() != nil {
+			if res != nil && res.AckError() != nil {
 				return nil, res
 			}
 

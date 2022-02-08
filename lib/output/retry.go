@@ -247,7 +247,7 @@ func (r *Retry) loop() {
 					return
 				}
 
-				if res.Error() != nil {
+				if res.AckError() != nil {
 					if !inErrLoop {
 						inErrLoop = true
 						atomic.AddInt64(&errLooped, 1)
@@ -262,11 +262,11 @@ func (r *Retry) loop() {
 					nextBackoff := backOff.NextBackOff()
 					if nextBackoff == backoff.Stop {
 						mEndOfRetries.Incr(1)
-						r.log.Errorf("Failed to send message: %v\n", res.Error())
-						resOut = response.NewNoack()
+						r.log.Errorf("Failed to send message: %v\n", res.AckError())
+						resOut = response.NewError(response.ErrNoAck)
 						break
 					} else {
-						r.log.Warnf("Failed to send message: %v\n", res.Error())
+						r.log.Warnf("Failed to send message: %v\n", res.AckError())
 					}
 					select {
 					case <-time.After(nextBackoff):

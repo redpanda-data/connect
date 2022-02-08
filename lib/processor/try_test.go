@@ -25,7 +25,7 @@ func TestTryEmpty(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -62,7 +62,7 @@ func TestTryBasic(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -98,7 +98,7 @@ func TestTryFilterSome(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -138,7 +138,7 @@ func TestTryMultiProcs(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -179,7 +179,7 @@ func TestTryFailJSON(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -222,7 +222,7 @@ func TestTryFilterAll(t *testing.T) {
 	if res == nil {
 		t.Fatal("expected empty response")
 	}
-	if err = res.Error(); err != nil {
+	if err = res.AckError(); err != nil {
 		t.Error(err)
 	}
 	if len(msgs) != 0 {

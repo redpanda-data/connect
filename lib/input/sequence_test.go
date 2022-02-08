@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,7 +47,7 @@ func TestSequenceHappy(t *testing.T) {
 		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
 	}
 
-	rdr, err := New(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	rdr, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	exp, act := []string{
@@ -114,7 +114,7 @@ func TestSequenceJoins(t *testing.T) {
 		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
 	}
 
-	rdr, err := New(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	rdr, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	exp, act := []string{
@@ -241,7 +241,7 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 			finalConf.CSVFile.Paths = []string{filepath.Join(tmpDir, "final.csv")}
 			conf.Sequence.Inputs = append(conf.Sequence.Inputs, finalConf)
 
-			rdr, err := New(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+			rdr, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			exp, act := test.result, []string{}
@@ -329,7 +329,7 @@ func TestSequenceJoinsBig(t *testing.T) {
 	require.NoError(t, ndjsonFile.Close())
 	require.NoError(t, csvFile.Close())
 
-	rdr, err := New(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	rdr, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 consumeLoop:
@@ -381,7 +381,7 @@ func TestSequenceSad(t *testing.T) {
 		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
 	}
 
-	rdr, err := New(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	rdr, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	exp := []string{
@@ -457,7 +457,7 @@ func TestSequenceEarlyTermination(t *testing.T) {
 	inConf.File.Paths = []string{filepath.Join(tmpDir, "f1")}
 	conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
 
-	rdr, err := New(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	rdr, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	select {

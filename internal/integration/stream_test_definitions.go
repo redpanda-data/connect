@@ -246,7 +246,7 @@ func StreamTestSendBatchCount(n int) StreamTestDefinition {
 				select {
 				case tranChan <- types.NewTransaction(msg, resChan):
 				case res := <-resChan:
-					t.Fatalf("premature response: %v", res.Error())
+					t.Fatalf("premature response: %v", res.AckError())
 				case <-env.ctx.Done():
 					t.Fatal("timed out on send")
 				}
@@ -255,7 +255,7 @@ func StreamTestSendBatchCount(n int) StreamTestDefinition {
 			for i := 0; i < n; i++ {
 				select {
 				case res := <-resChan:
-					assert.NoError(t, res.Error())
+					assert.NoError(t, res.AckError())
 				case <-env.ctx.Done():
 					t.Fatal("timed out on response")
 				}
@@ -295,7 +295,7 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 				select {
 				case tranChan <- types.NewTransaction(msg, resChan):
 				case res := <-resChan:
-					t.Fatalf("premature response: %v", res.Error())
+					t.Fatalf("premature response: %v", res.AckError())
 				case <-env.ctx.Done():
 					t.Fatal("timed out on send")
 				}
@@ -304,7 +304,7 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 			for i := 0; i < n; i++ {
 				select {
 				case res := <-resChan:
-					assert.NoError(t, res.Error())
+					assert.NoError(t, res.AckError())
 				case <-env.ctx.Done():
 					t.Fatal("timed out on response")
 				}

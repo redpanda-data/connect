@@ -87,7 +87,7 @@ func TestNotBatchedSingleMessages(t *testing.T) {
 		}
 		select {
 		case res := <-resChan:
-			assert.NoError(t, res.Error())
+			assert.NoError(t, res.AckError())
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -125,7 +125,7 @@ func TestShutdown(t *testing.T) {
 	}
 	select {
 	case res := <-resChan:
-		assert.NoError(t, res.Error())
+		assert.NoError(t, res.AckError())
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -175,7 +175,7 @@ func TestNotBatchedBreakOutMessages(t *testing.T) {
 	}
 	select {
 	case res := <-resChan:
-		assert.NoError(t, res.Error())
+		assert.NoError(t, res.AckError())
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -216,7 +216,7 @@ func TestNotBatchedBreakOutMessagesErrors(t *testing.T) {
 	}
 	select {
 	case res := <-resChan:
-		err := res.Error()
+		err := res.AckError()
 		require.Error(t, err)
 
 		walkable, ok := err.(batch.WalkableError)
@@ -273,7 +273,7 @@ func TestNotBatchedBreakOutMessagesErrorsAsync(t *testing.T) {
 	}
 	select {
 	case res := <-resChan:
-		err := res.Error()
+		err := res.AckError()
 		require.Error(t, err)
 
 		walkable, ok := err.(batch.WalkableError)

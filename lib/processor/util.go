@@ -22,7 +22,7 @@ func ExecuteAll(procs []types.Processor, msgs ...*message.Batch) ([]*message.Bat
 		var nextResultMsgs []*message.Batch
 		for _, m := range resultMsgs {
 			var rMsgs []*message.Batch
-			if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.Error() != nil {
+			if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.AckError() != nil {
 				// We immediately return if a processor hits an unrecoverable
 				// error on a message.
 				return nil, resultRes
@@ -60,7 +60,7 @@ func ExecuteTryAll(procs []types.Processor, msgs ...*message.Batch) ([]*message.
 				continue
 			}
 			var rMsgs []*message.Batch
-			if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.Error() != nil {
+			if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.AckError() != nil {
 				// We immediately return if a processor hits an unrecoverable
 				// error on a message.
 				return nil, resultRes
@@ -109,7 +109,7 @@ func ExecuteCatchAll(procs []types.Processor, msgs ...*message.Batch) ([]*messag
 			var nextResultBatches []*message.Batch
 			for _, m := range catchBatches[j].batches {
 				var rMsgs []*message.Batch
-				if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.Error() != nil {
+				if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.AckError() != nil {
 					// We immediately return if a processor hits an unrecoverable
 					// error on a message.
 					return nil, resultRes

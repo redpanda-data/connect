@@ -8,6 +8,7 @@ import (
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -18,19 +19,19 @@ import (
 )
 
 func TestBatcherStandard(t *testing.T) {
-	mock := &mockInput{
+	mockInput := &mockInput{
 		ts: make(chan types.Transaction),
 	}
 
 	batchConf := batch.NewPolicyConfig()
 	batchConf.Count = 3
 
-	batchPol, err := batch.NewPolicy(batchConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	batcher := NewBatcher(batchPol, mock, log.Noop(), metrics.Noop())
+	batcher := NewBatcher(batchPol, mockInput, log.Noop(), metrics.Noop())
 
 	testMsgs := []string{}
 	testResChans := []chan types.Response{}
@@ -44,11 +45,11 @@ func TestBatcherStandard(t *testing.T) {
 	doneReadsChan := make(chan struct{})
 	go func() {
 		for i, m := range testMsgs {
-			mock.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(m)}), testResChans[i])
+			mockInput.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(m)}), testResChans[i])
 		}
 		close(doneWritesChan)
 		for _, rChan := range testResChans {
-			resErrs = append(resErrs, (<-rChan).Error())
+			resErrs = append(resErrs, (<-rChan).AckError())
 		}
 		close(doneReadsChan)
 	}()
@@ -153,17 +154,17 @@ func TestBatcherStandard(t *testing.T) {
 }
 
 func TestBatcherErrorTracking(t *testing.T) {
-	mock := &mockInput{
+	mockInput := &mockInput{
 		ts: make(chan types.Transaction),
 	}
 
 	batchConf := batch.NewPolicyConfig()
 	batchConf.Count = 3
 
-	batchPol, err := batch.NewPolicy(batchConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	batcher := NewBatcher(batchPol, mock, log.Noop(), metrics.Noop())
+	batcher := NewBatcher(batchPol, mockInput, log.Noop(), metrics.Noop())
 
 	testMsgs := []string{}
 	testResChans := []chan types.Response{}
@@ -176,10 +177,10 @@ func TestBatcherErrorTracking(t *testing.T) {
 	doneReadsChan := make(chan struct{})
 	go func() {
 		for i, m := range testMsgs {
-			mock.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(m)}), testResChans[i])
+			mockInput.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(m)}), testResChans[i])
 		}
 		for _, rChan := range testResChans {
-			resErrs = append(resErrs, (<-rChan).Error())
+			resErrs = append(resErrs, (<-rChan).AckError())
 		}
 		close(doneReadsChan)
 	}()
@@ -216,12 +217,12 @@ func TestBatcherErrorTracking(t *testing.T) {
 	assert.EqualError(t, resErrs[1], "message specific error")
 	assert.Nil(t, resErrs[2])
 
-	mock.CloseAsync()
+	mockInput.CloseAsync()
 	require.NoError(t, batcher.WaitForClose(time.Second))
 }
 
 func TestBatcherTiming(t *testing.T) {
-	mock := &mockInput{
+	mockInput := &mockInput{
 		ts: make(chan types.Transaction),
 	}
 
@@ -229,16 +230,16 @@ func TestBatcherTiming(t *testing.T) {
 	batchConf.Count = 0
 	batchConf.Period = "1ms"
 
-	batchPol, err := batch.NewPolicy(batchConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	batcher := NewBatcher(batchPol, mock, log.Noop(), metrics.Noop())
+	batcher := NewBatcher(batchPol, mockInput, log.Noop(), metrics.Noop())
 
 	resChan := make(chan types.Response)
 	select {
-	case mock.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo1")}), resChan):
+	case mockInput.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo1")}), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -265,15 +266,15 @@ func TestBatcherTiming(t *testing.T) {
 	}
 	select {
 	case err := <-resChan:
-		if err.Error() != errSend {
-			t.Errorf("Unexpected error: %v != %v", err.Error(), errSend)
+		if err.AckError() != errSend {
+			t.Errorf("Unexpected error: %v != %v", err.AckError(), errSend)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
 
 	select {
-	case mock.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo2")}), resChan):
+	case mockInput.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo2")}), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -300,8 +301,8 @@ func TestBatcherTiming(t *testing.T) {
 	}
 	select {
 	case err := <-resChan:
-		if err.Error() != errSend {
-			t.Errorf("Unexpected error: %v != %v", err.Error(), errSend)
+		if err.AckError() != errSend {
+			t.Errorf("Unexpected error: %v != %v", err.AckError(), errSend)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
@@ -313,26 +314,26 @@ func TestBatcherTiming(t *testing.T) {
 }
 
 func TestBatcherFinalFlush(t *testing.T) {
-	mock := &mockInput{
+	mockInput := &mockInput{
 		ts: make(chan types.Transaction),
 	}
 
 	batchConf := batch.NewPolicyConfig()
 	batchConf.Count = 10
 
-	batchPol, err := batch.NewPolicy(batchConf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	batcher := NewBatcher(batchPol, mock, log.Noop(), metrics.Noop())
+	batcher := NewBatcher(batchPol, mockInput, log.Noop(), metrics.Noop())
 
 	resChan := make(chan types.Response)
 	select {
-	case mock.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo1")}), resChan):
+	case mockInput.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo1")}), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
 
-	mock.CloseAsync()
+	mockInput.CloseAsync()
 
 	var tran types.Transaction
 	select {

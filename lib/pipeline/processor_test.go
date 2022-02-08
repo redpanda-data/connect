@@ -96,8 +96,8 @@ func TestProcessorPipeline(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if res.Error() != errMockProc {
-			t.Error(res.Error())
+		if res.AckError() != errMockProc {
+			t.Error(res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out")
@@ -129,8 +129,8 @@ func TestProcessorPipeline(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if res.Error() != nil {
-			t.Error(res.Error())
+		if res.AckError() != nil {
+			t.Error(res.AckError())
 		} else {
 			t.Error("Message was dropped")
 		}
@@ -158,8 +158,8 @@ func TestProcessorPipeline(t *testing.T) {
 	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
-		} else if res.Error() != nil {
-			t.Error(res.Error())
+		} else if res.AckError() != nil {
+			t.Error(res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out")
@@ -276,8 +276,8 @@ func TestProcessorMultiMsgs(t *testing.T) {
 	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
-		} else if res.Error() != nil {
-			t.Error(res.Error())
+		} else if res.AckError() != nil {
+			t.Error(res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out")
@@ -385,8 +385,8 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
-		} else if res.Error() != nil {
-			t.Error(res.Error())
+		} else if res.AckError() != nil {
+			t.Error(res.AckError())
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out")

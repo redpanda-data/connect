@@ -303,7 +303,7 @@ func (h *HTTPClient) readStreamed(ctx context.Context) (*message.Batch, reader.A
 	h.prevResponse.SetAll(resParts)
 
 	return msg, func(rctx context.Context, res types.Response) error {
-		return codecAckFn(rctx, res.Error())
+		return codecAckFn(rctx, res.AckError())
 	}, nil
 }
 

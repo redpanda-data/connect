@@ -333,8 +333,8 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckF
 			if a.conf.AutoAck {
 				return nil
 			}
-			if res.Error() != nil {
-				errStr := res.Error().Error()
+			if res.AckError() != nil {
+				errStr := res.AckError().Error()
 				for _, p := range a.nackRejectPattens {
 					if p.MatchString(errStr) {
 						return data.Nack(false, false)

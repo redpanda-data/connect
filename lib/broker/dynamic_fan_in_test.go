@@ -298,7 +298,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 				}
 				select {
 				case res := <-rChan:
-					if expected, actual := string(content[0]), res.Error().Error(); expected != actual {
+					if expected, actual := string(content[0]), res.AckError().Error(); expected != actual {
 						t.Errorf("Wrong response: %v != %v", expected, actual)
 					}
 				case <-time.After(time.Second):

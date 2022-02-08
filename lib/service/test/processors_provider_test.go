@@ -105,7 +105,7 @@ pipeline:
 	}
 	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")}))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 	if exp, act := "DEFAULTVALUE", string(msgs[0].Get(0).Get()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
@@ -120,7 +120,7 @@ pipeline:
 		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
 	}
 	if msgs, res = processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")})); res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 	if exp, act := "NEWVALUE", string(msgs[0].Get(0).Get()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)

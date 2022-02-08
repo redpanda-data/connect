@@ -98,7 +98,7 @@ func TestXMLCases(t *testing.T) {
 		t.Run(test.name, func(tt *testing.T) {
 			msgsOut, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(test.input)}))
 			if res != nil {
-				tt.Fatal(res.Error())
+				tt.Fatal(res.AckError())
 			}
 			if len(msgsOut) != 1 {
 				tt.Fatalf("Wrong count of result messages: %v != 1", len(msgsOut))

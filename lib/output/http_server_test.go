@@ -52,8 +52,8 @@ func TestHTTPBasic(t *testing.T) {
 			}
 			select {
 			case resMsg := <-resChan:
-				if resMsg.Error() != nil {
-					t.Error(resMsg.Error())
+				if resMsg.AckError() != nil {
+					t.Error(resMsg.AckError())
 				}
 			case <-time.After(time.Second):
 				t.Error("Timed out waiting for response")

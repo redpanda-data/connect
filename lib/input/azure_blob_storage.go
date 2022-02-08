@@ -329,7 +329,7 @@ func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg *message.Ba
 	}
 
 	return blobStorageMsgFromParts(object, parts), func(rctx context.Context, res types.Response) error {
-		return scnAckFn(rctx, res.Error())
+		return scnAckFn(rctx, res.AckError())
 	}, nil
 }
 

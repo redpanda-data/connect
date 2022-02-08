@@ -45,7 +45,7 @@ func sendMsg(t *testing.T, msg string, tChan chan types.Transaction) {
 	select {
 	case res := <-resChan:
 		require.NotNil(t, res)
-		require.NoError(t, res.Error())
+		require.NoError(t, res.AckError())
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}

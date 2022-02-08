@@ -68,7 +68,7 @@ func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (*message.Batch, 
 	}
 
 	return nextMsg.DeepCopy(), func(ctx context.Context, res types.Response) error {
-		r.ackRcvd[i] = res.Error()
+		r.ackRcvd[i] = res.AckError()
 		return <-r.ackChan
 	}, nil
 }

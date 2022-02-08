@@ -350,7 +350,7 @@ func TestAsyncWriterCanReconnect(t *testing.T) {
 		if !open {
 			t.Error("Res chan closed")
 		}
-		if err := res.Error(); err != nil {
+		if err := res.AckError(); err != nil {
 			t.Error(err)
 		}
 	case <-time.After(time.Second):
@@ -445,7 +445,7 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 		if !open {
 			t.Error("Res chan closed")
 		}
-		if err := res.Error(); err != nil {
+		if err := res.AckError(); err != nil {
 			t.Error(err)
 		}
 	case <-time.After(time.Second * 5):
@@ -456,7 +456,7 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 		if !open {
 			t.Error("Res chan closed")
 		}
-		if err := res.Error(); err != nil {
+		if err := res.AckError(); err != nil {
 			t.Error(err)
 		}
 	case <-time.After(time.Second * 5):
@@ -577,7 +577,7 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 	select {
 	case res, open := <-resChan:
 		require.True(t, open)
-		require.NoError(t, res.Error())
+		require.NoError(t, res.AckError())
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -644,7 +644,7 @@ func TestAsyncWriterSadPath(t *testing.T) {
 		if !open {
 			t.Fatal("Chan closed")
 		}
-		if actErr := res.Error(); expErr != actErr {
+		if actErr := res.AckError(); expErr != actErr {
 			t.Errorf("Wrong response: %v != %v", actErr, expErr)
 		}
 	case <-time.After(time.Second):

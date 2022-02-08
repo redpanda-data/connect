@@ -467,9 +467,9 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		if !open {
 			http.Error(w, "Server closing", http.StatusServiceUnavailable)
 			return
-		} else if res.Error() != nil {
+		} else if res.AckError() != nil {
 			h.mErr.Incr(1)
-			http.Error(w, res.Error().Error(), http.StatusBadGateway)
+			http.Error(w, res.AckError().Error(), http.StatusBadGateway)
 			return
 		}
 		tTaken := time.Since(startedAt).Nanoseconds()
@@ -666,7 +666,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			if res.Error() != nil {
+			if res.AckError() != nil {
 				h.mWSErr.Incr(1)
 				h.mErr.Incr(1)
 				throt.Retry()

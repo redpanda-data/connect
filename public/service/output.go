@@ -199,7 +199,7 @@ func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
 
 	select {
 	case res := <-resChan:
-		return res.Error()
+		return res.AckError()
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -222,7 +222,7 @@ func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
 
 	select {
 	case res := <-resChan:
-		return res.Error()
+		return res.AckError()
 	case <-ctx.Done():
 		return ctx.Err()
 	}

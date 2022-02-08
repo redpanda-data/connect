@@ -95,7 +95,7 @@ func TestBatcherBasic(t *testing.T) {
 		for range firstBatchExpected {
 			select {
 			case actRes := <-resChan:
-				assert.Equal(t, firstErr, actRes.Error())
+				assert.Equal(t, firstErr, actRes.AckError())
 			case <-time.After(time.Second):
 				t.Error("timed out")
 			}
@@ -110,7 +110,7 @@ func TestBatcherBasic(t *testing.T) {
 		for range secondBatchExpected {
 			select {
 			case actRes := <-resChan:
-				assert.Equal(t, secondErr, actRes.Error())
+				assert.Equal(t, secondErr, actRes.AckError())
 			case <-time.After(time.Second):
 				t.Error("timed out")
 			}
@@ -126,7 +126,7 @@ func TestBatcherBasic(t *testing.T) {
 		for range finalBatchExpected {
 			select {
 			case actRes := <-resChan:
-				assert.Equal(t, finalErr, actRes.Error())
+				assert.Equal(t, finalErr, actRes.AckError())
 			case <-time.After(time.Second):
 				t.Error("timed out")
 			}
@@ -243,7 +243,7 @@ func TestBatcherBatchError(t *testing.T) {
 		var act error
 		select {
 		case actRes := <-resChan:
-			act = actRes.Error()
+			act = actRes.AckError()
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}

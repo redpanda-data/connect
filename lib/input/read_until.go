@@ -301,7 +301,7 @@ runLoop:
 			if !open {
 				return
 			}
-			streamEnds := res.Error() == nil
+			streamEnds := res.AckError() == nil
 			select {
 			case tran.ResponseChan <- res:
 				mFinalResSent.Incr(1)

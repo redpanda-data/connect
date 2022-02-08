@@ -347,7 +347,7 @@ func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg *messag
 	}
 
 	return gcpCloudStorageMsgFromParts(object, parts), func(rctx context.Context, res types.Response) error {
-		return scnAckFn(rctx, res.Error())
+		return scnAckFn(rctx, res.AckError())
 	}, nil
 }
 

@@ -176,7 +176,7 @@ func (n *NATS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 
 	return bmsg, func(ctx context.Context, res types.Response) error {
 		var ackErr error
-		if res.Error() != nil {
+		if res.AckError() != nil {
 			ackErr = msg.Nak()
 		} else {
 			ackErr = msg.Ack()

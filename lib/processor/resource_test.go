@@ -23,7 +23,7 @@ func TestResourceProc(t *testing.T) {
 	mgr.Processors["foo"] = func(b *message.Batch) ([]*message.Batch, error) {
 		msgs, res := resProc.ProcessMessage(b)
 		if res != nil {
-			return nil, res.Error()
+			return nil, res.AckError()
 		}
 		return msgs, nil
 	}
@@ -39,7 +39,7 @@ func TestResourceProc(t *testing.T) {
 
 	msgs, res := p.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 	if len(msgs) != 1 {
 		t.Error("Expected only 1 message")

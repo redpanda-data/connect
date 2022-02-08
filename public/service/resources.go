@@ -6,6 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -27,7 +28,7 @@ func MockResources() *Resources {
 	// This is quite naughty, if we encounter a case where an empty resource
 	// config like this could actually return an error then we'd need to change
 	// this.
-	mgr, _ := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, _ := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	return newResourcesFromManager(mgr)
 }
 

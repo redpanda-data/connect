@@ -209,7 +209,7 @@ func (m *Stream) outputLoop() {
 					return
 				}
 				tracing.FinishSpans(msg)
-				if ackErr := ackFunc(closeNowCtx, res.Error()); ackErr != nil {
+				if ackErr := ackFunc(closeNowCtx, res.AckError()); ackErr != nil {
 					mAckErr.Incr(1)
 					if ackErr != component.ErrTypeClosed {
 						m.log.Errorf("Failed to ack buffer message: %v\n", ackErr)

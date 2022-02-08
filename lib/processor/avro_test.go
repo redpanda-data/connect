@@ -140,7 +140,7 @@ func TestAvroBasic(t *testing.T) {
 
 			msgs, res := proc.ProcessMessage(input)
 			if res != nil {
-				tt.Fatal(res.Error())
+				tt.Fatal(res.AckError())
 			}
 
 			if len(msgs) != 1 {
@@ -299,7 +299,7 @@ func TestAvroSchemaPath(t *testing.T) {
 
 			msgs, res := proc.ProcessMessage(input)
 			if res != nil {
-				tt.Fatal(res.Error())
+				tt.Fatal(res.AckError())
 			}
 
 			if len(msgs) != 1 {

@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -66,7 +67,7 @@ func NewAsyncWriter(
 	log log.Modular,
 	stats metrics.Type,
 ) (Type, error) {
-	return newAsyncWriter(typeStr, maxInflight, w, types.NoopMgr(), log, stats)
+	return newAsyncWriter(typeStr, maxInflight, w, mock.NewManager(), log, stats)
 }
 
 func newAsyncWriter(

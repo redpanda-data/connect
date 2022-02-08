@@ -128,7 +128,7 @@ func (p *ForEach) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Re
 	resMsg := message.QuickBatch(nil)
 	for _, tmpMsg := range individualMsgs {
 		resultMsgs, res := ExecuteAll(p.children, tmpMsg)
-		if res != nil && res.Error() != nil {
+		if res != nil && res.AckError() != nil {
 			return nil, res
 		}
 		for _, m := range resultMsgs {

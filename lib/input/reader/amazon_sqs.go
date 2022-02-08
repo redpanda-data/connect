@@ -151,7 +151,7 @@ func (a *AmazonSQS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 	return msg, func(rctx context.Context, res types.Response) error {
 		// TODO: Replace this with a background process for batching these
 		// requests up more.
-		if res.Error() == nil {
+		if res.AckError() == nil {
 			if !a.conf.DeleteMessage {
 				return nil
 			}

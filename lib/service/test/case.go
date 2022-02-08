@@ -184,8 +184,8 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 		if len(c.OutputBatches) == 0 {
 			return
 		}
-		if result.Error() != nil {
-			reportFailure(fmt.Sprintf("processors resulted in error: %v", result.Error()))
+		if result.AckError() != nil {
+			reportFailure(fmt.Sprintf("processors resulted in error: %v", result.AckError()))
 		} else {
 			reportFailure("processors resulted in zero output batches")
 		}

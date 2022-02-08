@@ -66,7 +66,7 @@ func TestDropOnNothing(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	assert.EqualError(t, res.Error(), fmt.Sprintf("%s: HTTP request returned unexpected response code (403): 403 Forbidden, Error: test error", ts.URL))
+	assert.EqualError(t, res.AckError(), fmt.Sprintf("%s: HTTP request returned unexpected response code (403): 403 Forbidden, Error: test error", ts.URL))
 }
 
 func TestDropOnError(t *testing.T) {
@@ -117,7 +117,7 @@ func TestDropOnError(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	assert.NoError(t, res.Error())
+	assert.NoError(t, res.AckError())
 }
 
 func TestDropOnBackpressureWithErrors(t *testing.T) {
@@ -201,9 +201,9 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 		}
 
 		if expErr == "" {
-			assert.NoError(t, res.Error())
+			assert.NoError(t, res.AckError())
 		} else {
-			assert.EqualError(t, res.Error(), expErr)
+			assert.EqualError(t, res.AckError(), expErr)
 		}
 	}
 
@@ -294,9 +294,9 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 		}
 
 		if expErr == "" {
-			assert.NoError(t, res.Error())
+			assert.NoError(t, res.AckError())
 		} else {
-			assert.EqualError(t, res.Error(), expErr)
+			assert.EqualError(t, res.AckError(), expErr)
 		}
 	}
 

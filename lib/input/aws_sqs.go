@@ -394,7 +394,7 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (*message.Batch, reader.As
 			return nil
 		}
 
-		if res.Error() == nil {
+		if res.AckError() == nil {
 			if !a.conf.DeleteMessage {
 				return nil
 			}

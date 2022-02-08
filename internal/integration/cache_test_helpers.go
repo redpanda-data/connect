@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gofrs/uuid"
@@ -192,7 +193,7 @@ func initCache(t *testing.T, env *cacheTestEnvironment) types.Cache {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	manager, err := manager.NewV2(s.ResourceConfig, types.NoopMgr(), env.log, env.stats)
+	manager, err := manager.NewV2(s.ResourceConfig, mock.NewManager(), env.log, env.stats)
 	require.NoError(t, err)
 
 	cache, err := manager.GetCache("testcache")

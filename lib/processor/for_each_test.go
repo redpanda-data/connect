@@ -25,7 +25,7 @@ func TestForEachEmpty(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -62,7 +62,7 @@ func TestForEachBasic(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -98,7 +98,7 @@ func TestForEachFilterSome(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -138,7 +138,7 @@ func TestForEachMultiProcs(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -172,7 +172,7 @@ func TestForEachFilterAll(t *testing.T) {
 	if res == nil {
 		t.Fatal("expected empty response")
 	}
-	if err = res.Error(); err != nil {
+	if err = res.AckError(); err != nil {
 		t.Error(err)
 	}
 	if len(msgs) != 0 {

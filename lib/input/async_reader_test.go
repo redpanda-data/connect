@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -78,7 +79,7 @@ func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (*message.Batch, 
 
 	return nextMsg.DeepCopy(), func(ctx context.Context, res types.Response) error {
 		r.ackMut.Lock()
-		r.ackRcvd[i] = res.Error()
+		r.ackRcvd[i] = res.AckError()
 		r.ackMut.Unlock()
 		select {
 		case err := <-r.ackChan:
@@ -763,7 +764,7 @@ func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
 	bloblConf.Interval = ""
 	bloblConf.Mapping = `root = "hello world"`
 
-	readerImpl, err := newBloblang(types.NoopMgr(), bloblConf)
+	readerImpl, err := newBloblang(mock.NewManager(), bloblConf)
 	require.NoError(b, err)
 
 	r, err := NewAsyncReader("foo", true, readerImpl, log.Noop(), metrics.Noop())

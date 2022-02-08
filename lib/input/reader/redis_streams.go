@@ -344,7 +344,7 @@ func (r *RedisStreams) ReadWithContext(ctx context.Context) (*message.Batch, Asy
 		}
 	}
 	return msg.payload, func(rctx context.Context, res types.Response) error {
-		if res.Error() != nil {
+		if res.AckError() != nil {
 			r.pendingMsgsMut.Lock()
 			r.pendingMsgs = append(r.pendingMsgs, msg)
 			r.pendingMsgsMut.Unlock()

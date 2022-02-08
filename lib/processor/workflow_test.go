@@ -180,7 +180,7 @@ func TestWorkflowDeps(t *testing.T) {
 				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
 			}
 
-			p, err := processor.NewWorkflow(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+			p, err := processor.NewWorkflow(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			if len(test.err) > 0 {
 				assert.EqualError(t, err, test.err)
 			} else {
@@ -450,7 +450,7 @@ func TestWorkflows(t *testing.T) {
 				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
 			}
 
-			p, err := processor.NewWorkflow(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+			p, err := processor.NewWorkflow(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			inputMsg := message.QuickBatch(nil)
@@ -467,7 +467,7 @@ func TestWorkflows(t *testing.T) {
 			msgs, res := p.ProcessMessage(inputMsg)
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
-				require.EqualError(t, res.Error(), test.err)
+				require.EqualError(t, res.AckError(), test.err)
 			} else {
 				require.Len(t, msgs, 1)
 				assert.Equal(t, len(test.output), msgs[0].Len())
@@ -646,7 +646,7 @@ func TestWorkflowsWithResources(t *testing.T) {
 			msgs, res := p.ProcessMessage(message.QuickBatch(parts))
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
-				require.EqualError(t, res.Error(), test.err)
+				require.EqualError(t, res.AckError(), test.err)
 			} else {
 				require.Len(t, msgs, 1)
 				var output []string
@@ -904,7 +904,7 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 			msgs, res := p.ProcessMessage(message.QuickBatch(parts))
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
-				require.EqualError(t, res.Error(), test.err)
+				require.EqualError(t, res.AckError(), test.err)
 			} else {
 				require.Len(t, msgs, 1)
 				var output []string

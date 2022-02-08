@@ -87,8 +87,8 @@ func TestProcCtor(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	case res := <-resChan:
-		if res.Error() != nil {
-			t.Error(res.Error())
+		if res.AckError() != nil {
+			t.Error(res.AckError())
 		}
 	}
 

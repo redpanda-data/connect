@@ -532,7 +532,7 @@ func sendMessage(
 
 	select {
 	case res := <-resChan:
-		return res.Error()
+		return res.AckError()
 	case <-ctx.Done():
 	}
 	t.Fatal("timed out on response")
@@ -562,7 +562,7 @@ func sendBatch(
 
 	select {
 	case res := <-resChan:
-		return res.Error()
+		return res.AckError()
 	case <-ctx.Done():
 	}
 

@@ -301,7 +301,7 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (*message.Batch, reade
 	msg.Append(parts...)
 
 	return msg, func(ctx context.Context, res types.Response) error {
-		return codecAckFn(ctx, res.Error())
+		return codecAckFn(ctx, res.AckError())
 	}, nil
 }
 

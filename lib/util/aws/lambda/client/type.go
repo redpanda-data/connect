@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -66,7 +67,7 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 		conf:  conf,
 		log:   log.Noop(),
 		stats: metrics.Noop(),
-		mgr:   types.NoopMgr(),
+		mgr:   mock.NewManager(),
 	}
 
 	if tout := conf.Timeout; len(tout) > 0 {

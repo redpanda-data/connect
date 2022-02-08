@@ -106,7 +106,7 @@ func (m *Batcher) loop() {
 				}
 				closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
 				for _, c := range aggregatedTransactions {
-					if err := c.Ack(closeNowCtx, res.Error()); err != nil {
+					if err := c.Ack(closeNowCtx, res.AckError()); err != nil {
 						done()
 						return
 					}

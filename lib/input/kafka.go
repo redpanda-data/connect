@@ -351,7 +351,7 @@ func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(conte
 		case c <- asyncMessage{
 			msg: msg,
 			ackFn: func(ctx context.Context, res types.Response) error {
-				resErr := res.Error()
+				resErr := res.AckError()
 				if resErr == nil {
 					k.cMut.Lock()
 					if k.session != nil {

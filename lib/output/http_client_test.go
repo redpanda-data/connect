@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -45,7 +46,7 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 	conf.Type = TypeHTTPClient
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	tChan := make(chan types.Transaction)
@@ -77,7 +78,7 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		assert.NoError(t, res.Error())
+		assert.NoError(t, res.AckError())
 	case <-time.After(time.Second):
 		t.Fatal("Action timed out")
 	}
@@ -100,7 +101,7 @@ func TestHTTPClientMultipartDisabled(t *testing.T) {
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 	conf.HTTPClient.BatchAsMultipart = false
 
-	h, err := NewHTTPClient(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	tChan := make(chan types.Transaction)
@@ -132,7 +133,7 @@ func TestHTTPClientMultipartDisabled(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		assert.NoError(t, res.Error())
+		assert.NoError(t, res.AckError())
 	case <-time.After(time.Second):
 		t.Fatal("Action timed out")
 	}

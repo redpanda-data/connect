@@ -369,8 +369,8 @@ func (o *Switch) dispatchRetryOnErr(outputTargets [][]*message.Part) error {
 				}
 				select {
 				case res := <-resChan:
-					if res.Error() != nil {
-						o.logger.Errorf("Failed to dispatch switch message: %v\n", res.Error())
+					if res.AckError() != nil {
+						o.logger.Errorf("Failed to dispatch switch message: %v\n", res.AckError())
 						o.mOutputErr.Incr(1)
 						if !throt.Retry() {
 							return component.ErrTypeClosed
@@ -453,9 +453,9 @@ func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage *mes
 			}
 			select {
 			case res := <-resChan:
-				if res.Error() != nil {
+				if res.AckError() != nil {
 					o.mOutputErr.Incr(1)
-					if bErr, ok := res.Error().(*batch.Error); ok {
+					if bErr, ok := res.AckError().(*batch.Error); ok {
 						bErr.WalkParts(func(i int, p *message.Part, e error) bool {
 							if e != nil {
 								setErrForPart(p, e)
@@ -464,7 +464,7 @@ func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage *mes
 						})
 					} else {
 						_ = msgCopy.Iter(func(i int, p *message.Part) error {
-							setErrForPart(p, res.Error())
+							setErrForPart(p, res.AckError())
 							return nil
 						})
 					}

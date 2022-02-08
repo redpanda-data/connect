@@ -25,7 +25,7 @@ func TestCatchEmpty(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -74,7 +74,7 @@ func TestCatchBasic(t *testing.T) {
 	})
 	msgs, res := proc.ProcessMessage(msg)
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -121,7 +121,7 @@ func TestCatchFilterSome(t *testing.T) {
 	})
 	msgs, res := proc.ProcessMessage(msg)
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -172,7 +172,7 @@ func TestCatchMultiProcs(t *testing.T) {
 	})
 	msgs, res := proc.ProcessMessage(msg)
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -218,7 +218,7 @@ func TestCatchNotFails(t *testing.T) {
 	FlagFail(msg.Get(2))
 	msgs, res := proc.ProcessMessage(msg)
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 
 	if len(msgs) != 1 {
@@ -263,7 +263,7 @@ func TestCatchFilterAll(t *testing.T) {
 	if res == nil {
 		t.Fatal("expected empty response")
 	}
-	if err = res.Error(); err != nil {
+	if err = res.AckError(); err != nil {
 		t.Error(err)
 	}
 	if len(msgs) != 0 {

@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -112,7 +113,7 @@ func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]types.Processor,
 //------------------------------------------------------------------------------
 
 func (p *ProcessorsProvider) initProcs(confs cachedConfig) ([]types.Processor, error) {
-	mgr, err := manager.NewV2(confs.mgr, types.NoopMgr(), p.logger, metrics.Noop())
+	mgr, err := manager.NewV2(confs.mgr, mock.NewManager(), p.logger, metrics.Noop())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise resources: %v", err)
 	}

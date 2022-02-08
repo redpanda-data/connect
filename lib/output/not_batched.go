@@ -85,7 +85,7 @@ func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
 			var err error
 			select {
 			case res := <-tmpResChan:
-				err = res.Error()
+				err = res.AckError()
 			case <-n.fullyCloseCtx.Done():
 				err = component.ErrTypeClosed
 			}

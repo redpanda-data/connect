@@ -93,7 +93,7 @@ func (f *Files) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn
 	msg.Get(0).MetaSet("path", path)
 	return msg, func(ctx context.Context, res types.Response) error {
 		if f.delete {
-			if res.Error() == nil {
+			if res.AckError() == nil {
 				return os.Remove(path)
 			}
 		}

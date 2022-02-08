@@ -40,7 +40,7 @@ func TestExecuteAllBasic(t *testing.T) {
 	msg := message.QuickBatch([][]byte{[]byte("test message")})
 	msgs, res := ExecuteAll(procs, msg)
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 	if exp, act := 1, len(msgs); exp != act {
 		t.Fatalf("Wrong count of messages: %v != %v", act, exp)
@@ -71,7 +71,7 @@ func TestExecuteAllBasicBatch(t *testing.T) {
 	})
 	msgs, res := ExecuteAll(procs, msg)
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 	if exp, act := 1, len(msgs); exp != act {
 		t.Fatalf("Wrong count of messages: %v != %v", act, exp)
@@ -99,7 +99,7 @@ func TestExecuteAllMulti(t *testing.T) {
 	msg2 := message.QuickBatch([][]byte{[]byte("test message 2")})
 	msgs, res := ExecuteAll(procs, msg1, msg2)
 	if res != nil {
-		t.Fatal(res.Error())
+		t.Fatal(res.AckError())
 	}
 	if exp, act := 2, len(msgs); exp != act {
 		t.Fatalf("Wrong count of messages: %v != %v", act, exp)
@@ -154,7 +154,7 @@ func TestExecuteAllErrored(t *testing.T) {
 	if len(msgs) > 0 {
 		t.Fatal("received messages after drop")
 	}
-	if res == nil || res.Error() == nil {
+	if res == nil || res.AckError() == nil {
 		t.Fatal("received non noack response")
 	}
 	if exp, act := 2, procs[0].(*passthrough).called; exp != act {

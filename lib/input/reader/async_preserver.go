@@ -87,9 +87,9 @@ func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (*message.Batch,
 	sortGroup, trackedMsg := imessage.NewSortGroup(m.msg)
 
 	return trackedMsg, func(ctx context.Context, res types.Response) error {
-		if res.Error() != nil {
+		if res.AckError() != nil {
 			resendMsg := m.msg
-			if walkable, ok := res.Error().(batch.WalkableError); ok && walkable.IndexedErrors() < m.msg.Len() {
+			if walkable, ok := res.AckError().(batch.WalkableError); ok && walkable.IndexedErrors() < m.msg.Len() {
 				resendMsg = message.QuickBatch(nil)
 				walkable.WalkParts(func(i int, p *message.Part, e error) bool {
 					if e == nil {
@@ -124,7 +124,7 @@ func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (*message.Batch,
 
 func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (*message.Batch, AsyncAckFn) {
 	return m.msg, func(ctx context.Context, res types.Response) error {
-		if res.Error() != nil {
+		if res.AckError() != nil {
 			p.msgsMut.Lock()
 			p.resendMessages = append(p.resendMessages, m)
 			p.resendInterrupt()

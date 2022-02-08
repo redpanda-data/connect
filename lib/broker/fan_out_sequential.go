@@ -157,8 +157,8 @@ func (o *FanOutSequential) loop() {
 					}
 					select {
 					case res := <-resChan:
-						if res.Error() != nil {
-							o.logger.Errorf("Failed to dispatch fan out message to output '%v': %v\n", i, res.Error())
+						if res.AckError() != nil {
+							o.logger.Errorf("Failed to dispatch fan out message to output '%v': %v\n", i, res.AckError())
 							mOutputErr.Incr(1)
 							if !throt.Retry() {
 								return

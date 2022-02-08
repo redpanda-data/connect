@@ -520,10 +520,10 @@ func (r *Sequence) dispatchJoinedMessage(wg *sync.WaitGroup, msg *message.Batch)
 		for {
 			select {
 			case res := <-resChan:
-				if res.Error() == nil {
+				if res.AckError() == nil {
 					return
 				}
-				r.log.Errorf("Failed to send joined message: %v\n", res.Error())
+				r.log.Errorf("Failed to send joined message: %v\n", res.AckError())
 			case <-r.shutSig.CloseNowChan():
 				return
 			}
