@@ -3,6 +3,7 @@ package input
 import (
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -330,5 +331,5 @@ func New(
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats, pipelines...)
 	}
-	return nil, types.ErrInvalidInputType
+	return nil, component.ErrInvalidInputType
 }

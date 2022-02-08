@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -91,7 +92,7 @@ func (a *airGapWriter) ConnectWithContext(ctx context.Context) error {
 func (a *airGapWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	err := a.w.Write(ctx, newMessageFromPart(msg.Get(0)))
 	if err != nil && errors.Is(err, ErrNotConnected) {
-		err = types.ErrNotConnected
+		err = component.ErrNotConnected
 	}
 	return err
 }
@@ -108,7 +109,7 @@ func (a *airGapWriter) WaitForClose(tout time.Duration) error {
 	select {
 	case <-a.sig.HasClosedChan():
 	case <-time.After(tout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }
@@ -138,7 +139,7 @@ func (a *airGapBatchWriter) WriteWithContext(ctx context.Context, msg *message.B
 	})
 	err := a.w.WriteBatch(ctx, parts)
 	if err != nil && errors.Is(err, ErrNotConnected) {
-		err = types.ErrNotConnected
+		err = component.ErrNotConnected
 	}
 	return err
 }
@@ -155,7 +156,7 @@ func (a *airGapBatchWriter) WaitForClose(tout time.Duration) error {
 	select {
 	case <-a.sig.HasClosedChan():
 	case <-time.After(tout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

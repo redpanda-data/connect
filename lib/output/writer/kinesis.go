@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -137,7 +138,7 @@ func (a *Kinesis) toRecords(msg *message.Batch) ([]*kinesis.PutRecordsRequestEnt
 
 		if len(entry.Data) > mebibyte {
 			a.log.Errorf("part %d exceeds the maximum Kinesis payload limit of 1 MiB\n", i)
-			return types.ErrMessageTooLarge
+			return component.ErrMessageTooLarge
 		}
 
 		if hashKey := a.hashKey.String(i, msg); hashKey != "" {
@@ -196,7 +197,7 @@ func (a *Kinesis) Write(msg *message.Batch) error {
 // retried according to the configurable backoff settings.
 func (a *Kinesis) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if a.session == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	backOff := a.backoffCtor()
@@ -262,7 +263,7 @@ func (a *Kinesis) WriteWithContext(ctx context.Context, msg *message.Batch) erro
 			a.mPartsThrottled.Incr(int64(l))
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
-				return types.ErrTimeout
+				return component.ErrTimeout
 			}
 			time.Sleep(wait)
 		}

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/nats-io/nats.go"
@@ -242,14 +243,14 @@ func (n *NATSStream) read(ctx context.Context) (*stan.Msg, error) {
 	select {
 	case msg, open = <-n.msgChan:
 		if !open {
-			return nil, types.ErrNotConnected
+			return nil, component.ErrNotConnected
 		}
 	case <-ctx.Done():
-		return nil, types.ErrTimeout
+		return nil, component.ErrTimeout
 	case <-n.interruptChan:
 		n.unAckMsgs = nil
 		n.disconnect()
-		return nil, types.ErrTypeClosed
+		return nil, component.ErrTypeClosed
 	}
 	return msg, nil
 }

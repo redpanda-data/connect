@@ -3,6 +3,7 @@ package bundle
 import (
 	"sort"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -64,7 +65,7 @@ func (s *CacheSet) Add(constructor CacheConstructor, spec docs.ComponentSpec) er
 func (s *CacheSet) Init(conf cache.Config, mgr NewManagement) (types.Cache, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, types.ErrInvalidCacheType
+		return nil, component.ErrInvalidCacheType
 	}
 	return spec.constructor(conf, mgr)
 }

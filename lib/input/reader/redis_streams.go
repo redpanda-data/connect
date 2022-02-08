@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -234,7 +235,7 @@ func (r *RedisStreams) read() (pendingRedisStreamMsg, error) {
 	r.cMut.Unlock()
 
 	if client == nil {
-		return msg, types.ErrNotConnected
+		return msg, component.ErrNotConnected
 	}
 
 	r.pendingMsgsMut.Lock()
@@ -265,11 +266,11 @@ func (r *RedisStreams) read() (pendingRedisStreamMsg, error) {
 
 	if err != nil && err != redis.Nil {
 		if strings.Contains(err.Error(), "i/o timeout") {
-			return msg, types.ErrTimeout
+			return msg, component.ErrTimeout
 		}
 		r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)
-		return msg, types.ErrNotConnected
+		return msg, component.ErrNotConnected
 	}
 
 	pendingMsgs := []pendingRedisStreamMsg{}
@@ -321,7 +322,7 @@ func (r *RedisStreams) read() (pendingRedisStreamMsg, error) {
 
 	r.pendingMsgs = pendingMsgs
 	if msg.payload == nil {
-		return msg, types.ErrTimeout
+		return msg, component.ErrTimeout
 	}
 	return msg, nil
 }
@@ -330,7 +331,7 @@ func (r *RedisStreams) read() (pendingRedisStreamMsg, error) {
 func (r *RedisStreams) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	msg, err := r.read()
 	if err != nil {
-		if err == types.ErrTimeout {
+		if err == component.ErrTimeout {
 			// Allow for one more attempt in case we asked for backlog.
 			select {
 			case <-ctx.Done():
@@ -381,7 +382,7 @@ func (r *RedisStreams) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-r.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

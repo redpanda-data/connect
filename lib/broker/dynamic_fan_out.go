@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -128,14 +129,14 @@ func (d *DynamicFanOut) SetOutput(ident string, output DynamicOutput, timeout ti
 		Ctx:     ctx,
 	}:
 	case <-ctx.Done():
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	select {
 	case err := <-resChan:
 		return err
 	case <-ctx.Done():
 	}
-	return types.ErrTimeout
+	return component.ErrTimeout
 }
 
 //------------------------------------------------------------------------------
@@ -161,7 +162,7 @@ func OptDynamicFanOutSetOnRemove(onRemoveFunc func(label string)) func(*DynamicF
 // Consume assigns a new transactions channel for the broker to read.
 func (d *DynamicFanOut) Consume(transactions <-chan types.Transaction) error {
 	if d.transactions != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	d.transactions = transactions
 
@@ -343,7 +344,7 @@ func (d *DynamicFanOut) loop() {
 						case output.tsChan <- types.NewTransaction(msgCopy, resChan):
 						case <-d.ctx.Done():
 							d.outputsMut.RUnlock()
-							return types.ErrTypeClosed
+							return component.ErrTypeClosed
 						}
 
 						// Allow outputs to be mutated at this stage in case the
@@ -356,7 +357,7 @@ func (d *DynamicFanOut) loop() {
 								d.log.Errorf("Failed to dispatch dynamic fan out message to '%v': %v\n", name, res.Error())
 								mOutputErr.Incr(1)
 								if cont := throt.Retry(); !cont {
-									return types.ErrTypeClosed
+									return component.ErrTypeClosed
 								}
 							} else {
 								mMsgsSnt.Incr(1)
@@ -365,7 +366,7 @@ func (d *DynamicFanOut) loop() {
 						case <-output.ctx.Done():
 							return nil
 						case <-d.ctx.Done():
-							return types.ErrTypeClosed
+							return component.ErrTypeClosed
 						}
 					}
 				})
@@ -419,7 +420,7 @@ func (d *DynamicFanOut) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-d.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

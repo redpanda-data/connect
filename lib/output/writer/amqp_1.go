@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/Azure/go-amqp"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 )
@@ -182,7 +182,7 @@ func (a *AMQP1) WriteWithContext(ctx context.Context, msg *message.Batch) error 
 	a.connLock.RUnlock()
 
 	if s == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
@@ -197,7 +197,7 @@ func (a *AMQP1) WriteWithContext(ctx context.Context, msg *message.Batch) error 
 		err := s.Send(ctx, m)
 		if err != nil {
 			if err == amqp.ErrTimeout {
-				err = types.ErrTimeout
+				err = component.ErrTimeout
 			} else {
 				if dErr, isDetachError := err.(*amqp.DetachError); isDetachError && dErr.RemoteError != nil {
 					a.log.Errorf("Lost connection due to: %v\n", dErr.RemoteError)
@@ -205,7 +205,7 @@ func (a *AMQP1) WriteWithContext(ctx context.Context, msg *message.Batch) error 
 					a.log.Errorf("Lost connection due to: %v\n", err)
 				}
 				a.disconnect(ctx)
-				err = types.ErrNotConnected
+				err = component.ErrNotConnected
 			}
 		}
 		return err

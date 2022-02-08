@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -47,7 +48,7 @@ func newMockAsyncReader() *mockAsyncReader {
 func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 	cerr, open := <-r.connChan
 	if !open {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 	return cerr
 }
@@ -55,10 +56,10 @@ func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	select {
 	case <-ctx.Done():
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	case err, open := <-r.readChan:
 		if !open {
-			return nil, nil, types.ErrNotConnected
+			return nil, nil, component.ErrNotConnected
 		}
 		if err != nil {
 			return nil, nil, err
@@ -103,10 +104,10 @@ func (r *mockAsyncReader) WaitForClose(time.Duration) error {
 type asyncReaderCantConnect struct{}
 
 func (r asyncReaderCantConnect) ConnectWithContext(ctx context.Context) error {
-	return types.ErrNotConnected
+	return component.ErrNotConnected
 }
 func (r asyncReaderCantConnect) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
-	return nil, nil, types.ErrNotConnected
+	return nil, nil, component.ErrNotConnected
 }
 func (r asyncReaderCantConnect) CloseAsync() {}
 func (r asyncReaderCantConnect) WaitForClose(time.Duration) error {
@@ -141,7 +142,7 @@ func (r *asyncReaderCantRead) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 func (r *asyncReaderCantRead) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
-	return nil, nil, types.ErrNotConnected
+	return nil, nil, component.ErrNotConnected
 }
 func (r *asyncReaderCantRead) CloseAsync() {}
 func (r *asyncReaderCantRead) WaitForClose(time.Duration) error {
@@ -187,7 +188,7 @@ func TestAsyncReaderTypeClosedOnConn(t *testing.T) {
 
 	go func() {
 		select {
-		case readerImpl.connChan <- types.ErrTypeClosed:
+		case readerImpl.connChan <- component.ErrTypeClosed:
 		case <-time.After(time.Second):
 		}
 	}()
@@ -215,11 +216,11 @@ func TestAsyncReaderTypeClosedOnReconn(t *testing.T) {
 		case <-time.After(time.Second):
 		}
 		select {
-		case readerImpl.readChan <- types.ErrNotConnected:
+		case readerImpl.readChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 		}
 		select {
-		case readerImpl.connChan <- types.ErrTypeClosed:
+		case readerImpl.connChan <- component.ErrTypeClosed:
 		case <-time.After(time.Second):
 		}
 	}()
@@ -246,7 +247,7 @@ func TestAsyncReaderTypeClosedOnReread(t *testing.T) {
 		case <-time.After(time.Second):
 		}
 		select {
-		case readerImpl.readChan <- types.ErrNotConnected:
+		case readerImpl.readChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 		}
 		select {
@@ -254,7 +255,7 @@ func TestAsyncReaderTypeClosedOnReread(t *testing.T) {
 		case <-time.After(time.Second):
 		}
 		select {
-		case readerImpl.readChan <- types.ErrTypeClosed:
+		case readerImpl.readChan <- component.ErrTypeClosed:
 		case <-time.After(time.Second):
 		}
 	}()
@@ -284,7 +285,7 @@ func TestAsyncReaderCanReconnect(t *testing.T) {
 		case <-time.After(time.Second):
 		}
 		select {
-		case readerImpl.readChan <- types.ErrNotConnected:
+		case readerImpl.readChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 		}
 		select {
@@ -324,7 +325,7 @@ func TestAsyncReaderCanReconnect(t *testing.T) {
 	go func() {
 		select {
 		case readerImpl.readChan <- nil:
-		case readerImpl.connChan <- types.ErrNotConnected:
+		case readerImpl.connChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 		}
 	}()
@@ -352,11 +353,11 @@ func TestAsyncReaderFailsReconnect(t *testing.T) {
 		case <-time.After(time.Second):
 		}
 		select {
-		case readerImpl.readChan <- types.ErrNotConnected:
+		case readerImpl.readChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 		}
 		select {
-		case readerImpl.connChan <- types.ErrNotConnected:
+		case readerImpl.connChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 		}
 		select {
@@ -422,14 +423,14 @@ func TestAsyncReaderCloseDuringReconnect(t *testing.T) {
 		t.Fatal("Timed out")
 	}
 	select {
-	case readerImpl.readChan <- types.ErrNotConnected:
+	case readerImpl.readChan <- component.ErrNotConnected:
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
 
 	go func() {
 		select {
-		case readerImpl.connChan <- types.ErrNotConnected:
+		case readerImpl.connChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 		}
 		close(readerImpl.connChan)

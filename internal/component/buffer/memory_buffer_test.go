@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 type memoryBuffer struct {
@@ -38,7 +38,7 @@ func (m *memoryBuffer) Read(ctx context.Context) (*message.Batch, AckFunc, error
 				return nil
 			}, nil
 		default:
-			return nil, nil, types.ErrTypeClosed
+			return nil, nil, component.ErrTypeClosed
 		}
 	}
 }

@@ -3,6 +3,7 @@ package bundle
 import (
 	"sort"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -64,7 +65,7 @@ func (s *RateLimitSet) Add(constructor RateLimitConstructor, spec docs.Component
 func (s *RateLimitSet) Init(conf ratelimit.Config, mgr NewManagement) (types.RateLimit, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, types.ErrInvalidRateLimitType
+		return nil, component.ErrInvalidRateLimitType
 	}
 	return spec.constructor(conf, mgr)
 }

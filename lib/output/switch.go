@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -316,7 +317,7 @@ func NewSwitch(
 // Consume assigns a new transactions channel for the broker to read.
 func (o *Switch) Consume(transactions <-chan types.Transaction) error {
 	if o.transactions != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	o.transactions = transactions
 
@@ -361,7 +362,7 @@ func (o *Switch) dispatchRetryOnErr(outputTargets [][]*message.Part) error {
 				select {
 				case o.outputTSChans[i] <- types.NewTransaction(msgCopy, resChan):
 				case <-o.ctx.Done():
-					return types.ErrTypeClosed
+					return component.ErrTypeClosed
 				}
 				select {
 				case res := <-resChan:
@@ -369,14 +370,14 @@ func (o *Switch) dispatchRetryOnErr(outputTargets [][]*message.Part) error {
 						o.logger.Errorf("Failed to dispatch switch message: %v\n", res.Error())
 						o.mOutputErr.Incr(1)
 						if !throt.Retry() {
-							return types.ErrTypeClosed
+							return component.ErrTypeClosed
 						}
 					} else {
 						o.mMsgSnt.Incr(1)
 						return nil
 					}
 				case <-o.ctx.Done():
-					return types.ErrTypeClosed
+					return component.ErrTypeClosed
 				}
 			}
 		})
@@ -444,7 +445,7 @@ func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage *mes
 			select {
 			case o.outputTSChans[i] <- types.NewTransaction(msgCopy, resChan):
 			case <-o.ctx.Done():
-				setErr(types.ErrTypeClosed)
+				setErr(component.ErrTypeClosed)
 				return
 			}
 			select {
@@ -468,7 +469,7 @@ func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage *mes
 					o.mMsgSnt.Incr(1)
 				}
 			case <-o.ctx.Done():
-				setErr(types.ErrTypeClosed)
+				setErr(component.ErrTypeClosed)
 			}
 		}()
 	}
@@ -580,7 +581,7 @@ func (o *Switch) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-o.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

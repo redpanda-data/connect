@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -75,7 +75,7 @@ func TestBatchedSendFatal(t *testing.T) {
 		assert.Equal(t, i, len(seen))
 		seen = append(seen, string(p.Get()))
 		if i == 1 {
-			return types.ErrTypeClosed
+			return component.ErrTypeClosed
 		}
 		return nil
 	})
@@ -88,7 +88,7 @@ func TestBatchedSendFatal(t *testing.T) {
 		assert.Equal(t, i, len(seen))
 		seen = append(seen, string(p.Get()))
 		if i == 1 {
-			return types.ErrNotConnected
+			return component.ErrNotConnected
 		}
 		return nil
 	})
@@ -101,7 +101,7 @@ func TestBatchedSendFatal(t *testing.T) {
 		assert.Equal(t, i, len(seen))
 		seen = append(seen, string(p.Get()))
 		if i == 1 {
-			return types.ErrTimeout
+			return component.ErrTimeout
 		}
 		return nil
 	})

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -68,7 +69,7 @@ func (p *AsyncPreserver) ConnectWithContext(ctx context.Context) error {
 	// If our source has finished but we still have messages in flight then
 	// we act like we're still open. Read will be called and we can either
 	// return the pending messages or wait for them.
-	if err == types.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
+	if err == component.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
 		atomic.StoreInt32(&p.inputClosed, 1)
 		err = nil
 	}
@@ -176,14 +177,14 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (*message.Batch, A
 		err error
 	)
 	if atomic.LoadInt32(&p.inputClosed) > 0 {
-		err = types.ErrTypeClosed
+		err = component.ErrTypeClosed
 	} else {
 		msg, aFn, err = p.r.ReadWithContext(ctx)
 	}
 	if err != nil {
 		// If our source has finished but we still have messages in flight then
 		// we block, ideally until the messages are acked.
-		if err == types.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
+		if err == component.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
 			// The context is cancelled either when new pending messages are
 			// ready, or when the upstream component cancels. If the former
 			// occurs then we still return the cancelled error and let Read get
@@ -191,10 +192,10 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (*message.Batch, A
 			for {
 				select {
 				case <-ctx.Done():
-					return nil, nil, types.ErrTimeout
+					return nil, nil, component.ErrTimeout
 				case <-time.After(time.Millisecond * 10):
 					if atomic.LoadInt64(&p.pendingMessages) <= 0 {
-						return nil, nil, types.ErrTypeClosed
+						return nil, nil, component.ErrTypeClosed
 					}
 				}
 			}

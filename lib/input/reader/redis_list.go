@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -103,7 +103,7 @@ func (r *RedisList) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 	r.cMut.Unlock()
 
 	if client == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	res, err := client.BLPop(r.timeout, r.conf.Key).Result()
@@ -111,11 +111,11 @@ func (r *RedisList) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 	if err != nil && err != redis.Nil {
 		r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	if len(res) < 2 {
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 
 	return message.QuickBatch([][]byte{[]byte(res[1])}), noopAsyncAckFn, nil

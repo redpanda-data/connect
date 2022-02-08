@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -64,7 +65,7 @@ func (a *metricsCache) Get(ctx context.Context, key string) ([]byte, error) {
 	b, err := a.c.Get(ctx, key)
 	a.mGetLatency.Timing(int64(time.Since(started)))
 	if err != nil {
-		if errors.Is(err, types.ErrKeyNotFound) {
+		if errors.Is(err, component.ErrKeyNotFound) {
 			a.mGetNotFound.Incr(1)
 		} else {
 			a.mGetFailed.Incr(1)
@@ -104,7 +105,7 @@ func (a *metricsCache) Add(ctx context.Context, key string, value []byte, ttl *t
 	err := a.c.Add(ctx, key, value, ttl)
 	a.mAddLatency.Timing(int64(time.Since(started)))
 	if err != nil {
-		if errors.Is(err, types.ErrKeyAlreadyExists) {
+		if errors.Is(err, component.ErrKeyAlreadyExists) {
 			a.mAddDupe.Incr(1)
 		} else {
 			a.mAddFailed.Incr(1)

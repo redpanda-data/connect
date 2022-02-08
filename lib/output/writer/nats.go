@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -133,7 +134,7 @@ func (n *NATS) Write(msg *message.Batch) error {
 	n.connMut.RUnlock()
 
 	if conn == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
@@ -154,7 +155,7 @@ func (n *NATS) Write(msg *message.Batch) error {
 			n.connMut.Lock()
 			n.natsConn = nil
 			n.connMut.Unlock()
-			return types.ErrNotConnected
+			return component.ErrNotConnected
 		}
 		return err
 	})

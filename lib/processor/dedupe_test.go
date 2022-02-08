@@ -30,7 +30,7 @@ func TestDedupe(t *testing.T) {
 	testLog := log.Noop()
 
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
@@ -77,7 +77,7 @@ func TestDedupeInterpolation(t *testing.T) {
 	doc4 := []byte(`{"content":"foo"}`)
 
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
@@ -136,7 +136,7 @@ func TestDedupeXXHash(t *testing.T) {
 	testLog := log.Noop()
 
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
@@ -186,7 +186,7 @@ func TestDedupePartSelection(t *testing.T) {
 	testLog := log.Noop()
 
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	conf := NewConfig()
 	conf.Dedupe.Cache = "foocache"
@@ -244,7 +244,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 	testLog := log.Noop()
 
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	proc, err := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err != nil {
@@ -259,7 +259,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 	}
 
 	conf.Dedupe.DropOnCacheErr = false
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	proc, err = NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err != nil {
@@ -282,7 +282,7 @@ func TestDedupeBadHash(t *testing.T) {
 	testLog := log.Noop()
 
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	if _, err := NewDedupe(conf, mgr, testLog, metrics.Noop()); err == nil {
 		t.Error("Expected error from bad hash")
@@ -297,7 +297,7 @@ func TestDedupeBoundsCheck(t *testing.T) {
 	testLog := log.Noop()
 
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err1 != nil {
@@ -323,7 +323,7 @@ func TestDedupeNegBoundsCheck(t *testing.T) {
 	testLog := log.Noop()
 
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]string{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	proc, err1 := NewDedupe(conf, mgr, testLog, metrics.Noop())
 	if err1 != nil {

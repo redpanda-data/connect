@@ -1,4 +1,4 @@
-package types
+package component
 
 import "testing"
 

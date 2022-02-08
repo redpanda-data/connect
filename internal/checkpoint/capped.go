@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/internal/component"
 )
 
 // Capped receives an ordered feed of integer based offsets being tracked, and
@@ -61,7 +61,7 @@ func (c *Capped) Track(ctx context.Context, payload interface{}, batchSize int64
 		c.cond.Wait()
 		select {
 		case <-ctx.Done():
-			return nil, types.ErrTimeout
+			return nil, component.ErrTimeout
 		default:
 		}
 		pending = c.t.Pending()

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -294,7 +295,7 @@ func (d *dropOn) loop() {
 // Consume assigns a messages channel for the output to read.
 func (d *dropOn) Consume(ts <-chan types.Transaction) error {
 	if d.transactionsIn != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	if err := d.wrapped.Consume(d.transactionsOut); err != nil {
 		return err
@@ -324,7 +325,7 @@ func (d *dropOn) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-d.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

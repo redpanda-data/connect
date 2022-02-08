@@ -13,6 +13,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -309,11 +310,11 @@ func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg *messag
 
 	defer func() {
 		if errors.Is(err, io.EOF) {
-			err = types.ErrTypeClosed
+			err = component.ErrTypeClosed
 		} else if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
 			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
 	}()
 

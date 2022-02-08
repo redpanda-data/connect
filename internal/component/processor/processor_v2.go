@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -120,7 +121,7 @@ func (a *v2ToV1Processor) WaitForClose(tout time.Duration) error {
 	select {
 	case <-a.sig.HasClosedChan():
 	case <-time.After(tout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }
@@ -207,7 +208,7 @@ func (a *v2BatchedToV1Processor) WaitForClose(tout time.Duration) error {
 	select {
 	case <-a.sig.HasClosedChan():
 	case <-time.After(tout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

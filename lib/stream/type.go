@@ -6,6 +6,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -212,7 +213,7 @@ func (t *Type) StopGracefully(timeout time.Duration) (err error) {
 		t.bufferLayer.StopConsuming()
 		remaining = timeout - time.Since(started)
 		if remaining < 0 {
-			return types.ErrTimeout
+			return component.ErrTimeout
 		}
 		if err = t.bufferLayer.WaitForClose(remaining); err != nil {
 			return
@@ -224,7 +225,7 @@ func (t *Type) StopGracefully(timeout time.Duration) (err error) {
 		t.pipelineLayer.CloseAsync()
 		remaining = timeout - time.Since(started)
 		if remaining < 0 {
-			return types.ErrTimeout
+			return component.ErrTimeout
 		}
 		if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
 			return
@@ -234,7 +235,7 @@ func (t *Type) StopGracefully(timeout time.Duration) (err error) {
 	t.outputLayer.CloseAsync()
 	remaining = timeout - time.Since(started)
 	if remaining < 0 {
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	if err = t.outputLayer.WaitForClose(remaining); err != nil {
 		return
@@ -260,7 +261,7 @@ func (t *Type) StopOrdered(timeout time.Duration) (err error) {
 		t.bufferLayer.CloseAsync()
 		remaining = timeout - time.Since(started)
 		if remaining < 0 {
-			return types.ErrTimeout
+			return component.ErrTimeout
 		}
 		if err = t.bufferLayer.WaitForClose(remaining); err != nil {
 			return
@@ -271,7 +272,7 @@ func (t *Type) StopOrdered(timeout time.Duration) (err error) {
 		t.pipelineLayer.CloseAsync()
 		remaining = timeout - time.Since(started)
 		if remaining < 0 {
-			return types.ErrTimeout
+			return component.ErrTimeout
 		}
 		if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
 			return
@@ -281,7 +282,7 @@ func (t *Type) StopOrdered(timeout time.Duration) (err error) {
 	t.outputLayer.CloseAsync()
 	remaining = timeout - time.Since(started)
 	if remaining < 0 {
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	if err = t.outputLayer.WaitForClose(remaining); err != nil {
 		return
@@ -313,7 +314,7 @@ func (t *Type) StopUnordered(timeout time.Duration) (err error) {
 	if t.bufferLayer != nil {
 		remaining = timeout - time.Since(started)
 		if remaining < 0 {
-			return types.ErrTimeout
+			return component.ErrTimeout
 		}
 		if err = t.bufferLayer.WaitForClose(remaining); err != nil {
 			return
@@ -323,7 +324,7 @@ func (t *Type) StopUnordered(timeout time.Duration) (err error) {
 	if t.pipelineLayer != nil {
 		remaining = timeout - time.Since(started)
 		if remaining < 0 {
-			return types.ErrTimeout
+			return component.ErrTimeout
 		}
 		if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
 			return
@@ -332,7 +333,7 @@ func (t *Type) StopUnordered(timeout time.Duration) (err error) {
 
 	remaining = timeout - time.Since(started)
 	if remaining < 0 {
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	if err = t.outputLayer.WaitForClose(remaining); err != nil {
 		return
@@ -352,7 +353,7 @@ func (t *Type) Stop(timeout time.Duration) error {
 	if err == nil {
 		return nil
 	}
-	if err == types.ErrTimeout {
+	if err == component.ErrTimeout {
 		t.logger.Infoln("Unable to fully drain buffered messages within target time.")
 	} else {
 		t.logger.Errorf("Encountered error whilst shutting down: %v\n", err)
@@ -362,7 +363,7 @@ func (t *Type) Stop(timeout time.Duration) error {
 	if err == nil {
 		return nil
 	}
-	if err == types.ErrTimeout {
+	if err == component.ErrTimeout {
 		t.logger.Errorln("Failed to stop stream gracefully within target time.")
 
 		dumpBuf := bytes.NewBuffer(nil)

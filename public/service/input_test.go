@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -67,14 +67,14 @@ func TestInputAirGapSad(t *testing.T) {
 	}
 
 	_, _, err = agi.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 
 	i.read = func() (*Message, AckFunc, error) {
 		return nil, nil, ErrEndOfInput
 	}
 
 	_, _, err = agi.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
 func TestInputAirGapHappy(t *testing.T) {
@@ -163,14 +163,14 @@ func TestBatchInputAirGapSad(t *testing.T) {
 	}
 
 	_, _, err = agi.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 
 	i.read = func() (MessageBatch, AckFunc, error) {
 		return nil, nil, ErrEndOfInput
 	}
 
 	_, _, err = agi.ReadWithContext(context.Background())
-	assert.Equal(t, types.ErrTypeClosed, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
 func TestBatchInputAirGapHappy(t *testing.T) {

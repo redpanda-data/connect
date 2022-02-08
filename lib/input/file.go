@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -142,7 +143,7 @@ func (f *fileConsumer) getReader(ctx context.Context) (codec.Reader, string, err
 	}
 
 	if len(f.paths) == 0 {
-		return nil, "", types.ErrTypeClosed
+		return nil, "", component.ErrTypeClosed
 	}
 
 	nextPath := f.paths[0]
@@ -181,9 +182,9 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 		if err != nil {
 			if errors.Is(err, context.Canceled) ||
 				errors.Is(err, context.DeadlineExceeded) {
-				err = types.ErrTimeout
+				err = component.ErrTimeout
 			}
-			if err != types.ErrTimeout {
+			if err != component.ErrTimeout {
 				f.scanner.Close(ctx)
 				f.scanner = nil
 			}
@@ -202,7 +203,7 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 		}
 		if msg.Len() == 0 {
 			_ = codecAckFn(ctx, nil)
-			return nil, nil, types.ErrTimeout
+			return nil, nil, component.ErrTimeout
 		}
 
 		return msg, func(rctx context.Context, res types.Response) error {

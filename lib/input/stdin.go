@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -104,13 +105,13 @@ func (s *stdinConsumer) ReadWithContext(ctx context.Context) (*message.Batch, re
 	if err != nil {
 		if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
-		if err != types.ErrTimeout {
+		if err != component.ErrTimeout {
 			s.scanner.Close(ctx)
 		}
 		if errors.Is(err, io.EOF) {
-			return nil, nil, types.ErrTypeClosed
+			return nil, nil, component.ErrTypeClosed
 		}
 		return nil, nil, err
 	}
@@ -120,7 +121,7 @@ func (s *stdinConsumer) ReadWithContext(ctx context.Context) (*message.Batch, re
 	msg.Append(parts...)
 
 	if msg.Len() == 0 {
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 
 	return msg, func(rctx context.Context, res types.Response) error {

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -78,7 +79,7 @@ func (o *FanOutSequential) WithMaxInFlight(i int) *FanOutSequential {
 // Consume assigns a new transactions channel for the broker to read.
 func (o *FanOutSequential) Consume(transactions <-chan types.Transaction) error {
 	if o.transactions != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	o.transactions = transactions
 
@@ -197,7 +198,7 @@ func (o *FanOutSequential) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-o.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

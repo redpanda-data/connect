@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -549,7 +550,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Ba
 	startedAt := time.Now()
 
 	if !h.waitForAccess(ctx) {
-		return nil, types.ErrTypeClosed
+		return nil, component.ErrTypeClosed
 	}
 
 	rateLimited := false
@@ -582,15 +583,15 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Ba
 		}
 		if rateLimited {
 			if !h.retryThrottle.ExponentialRetryWithContext(ctx) {
-				return nil, types.ErrTypeClosed
+				return nil, component.ErrTypeClosed
 			}
 		} else {
 			if !h.retryThrottle.RetryWithContext(ctx) {
-				return nil, types.ErrTypeClosed
+				return nil, component.ErrTypeClosed
 			}
 		}
 		if !h.waitForAccess(ctx) {
-			return nil, types.ErrTypeClosed
+			return nil, component.ErrTypeClosed
 		}
 		rateLimited = false
 		if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
@@ -627,7 +628,7 @@ func UnexpectedErr(res *http.Response) error {
 	if err != nil {
 		return err
 	}
-	return types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status, Body: body}
+	return component.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status, Body: body}
 }
 
 // Send creates an HTTP request from the client config, a provided message to be

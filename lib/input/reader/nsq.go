@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -177,9 +178,9 @@ func (n *NSQ) read(ctx context.Context) (*nsq.Message, error) {
 		}
 		n.unAckMsgs = nil
 		n.disconnect()
-		return nil, types.ErrTypeClosed
+		return nil, component.ErrTypeClosed
 	}
-	return nil, types.ErrTimeout
+	return nil, component.ErrTimeout
 }
 
 // ReadWithContext attempts to read a new message from NSQ.

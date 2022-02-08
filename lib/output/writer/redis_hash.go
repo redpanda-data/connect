@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -153,7 +154,7 @@ func (r *RedisHash) Write(msg *message.Batch) error {
 	r.connMut.RUnlock()
 
 	if client == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
@@ -178,7 +179,7 @@ func (r *RedisHash) Write(msg *message.Batch) error {
 		if err := client.HMSet(key, fields).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
-			return types.ErrNotConnected
+			return component.ErrNotConnected
 		}
 		return nil
 	})

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -136,7 +137,7 @@ func (i *Inproc) loop() {
 // Consume assigns a messages channel for the output to read.
 func (i *Inproc) Consume(ts <-chan types.Transaction) error {
 	if i.transactionsIn != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	i.transactionsIn = ts
 	go i.loop()
@@ -161,7 +162,7 @@ func (i *Inproc) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-i.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

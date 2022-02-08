@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func TestRateLimitBasic(t *testing.T) {
@@ -60,7 +60,7 @@ func TestRateLimitClosed(t *testing.T) {
 	var hits int32
 	rlFn := func(context.Context) (time.Duration, error) {
 		if i := atomic.AddInt32(&hits, 1); i == 2 {
-			return 0, types.ErrTypeClosed
+			return 0, component.ErrTypeClosed
 		}
 		return 0, nil
 	}

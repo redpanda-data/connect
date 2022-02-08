@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -72,9 +73,9 @@ func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
 		case n.outChan <- types.NewTransaction(tmpMsg, tmpResChan):
 		case <-n.ctx.Done():
 			if index == 0 {
-				return types.ErrTypeClosed
+				return component.ErrTypeClosed
 			}
-			addBatchErr(index, types.ErrTypeClosed)
+			addBatchErr(index, component.ErrTypeClosed)
 			return nil
 		}
 
@@ -86,7 +87,7 @@ func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
 			case res := <-tmpResChan:
 				err = res.Error()
 			case <-n.fullyCloseCtx.Done():
-				err = types.ErrTypeClosed
+				err = component.ErrTypeClosed
 			}
 			addBatchErr(index, err)
 		}()
@@ -130,7 +131,7 @@ func (n *notBatchedOutput) loop() {
 		} else {
 			var res types.Response = response.NewAck()
 			if err := n.breakMessageOut(tran.Payload); err != nil {
-				if err == types.ErrTypeClosed {
+				if err == component.ErrTypeClosed {
 					return
 				}
 				res = response.NewError(err)
@@ -148,7 +149,7 @@ func (n *notBatchedOutput) loop() {
 
 func (n *notBatchedOutput) Consume(ts <-chan types.Transaction) error {
 	if n.inChan != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	if err := n.out.Consume(n.outChan); err != nil {
 		return err
@@ -176,7 +177,7 @@ func (n *notBatchedOutput) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-n.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

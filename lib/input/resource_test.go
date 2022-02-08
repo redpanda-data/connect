@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -41,25 +42,22 @@ type fakeProcMgr struct {
 func (f *fakeProcMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 }
 func (f *fakeProcMgr) GetCache(name string) (types.Cache, error) {
-	return nil, types.ErrCacheNotFound
+	return nil, component.ErrCacheNotFound
 }
 func (f *fakeProcMgr) GetProcessor(name string) (types.Processor, error) {
-	return nil, types.ErrProcessorNotFound
+	return nil, component.ErrProcessorNotFound
 }
 func (f *fakeProcMgr) GetInput(name string) (types.Input, error) {
 	if p, exists := f.ins[name]; exists {
 		return p, nil
 	}
-	return nil, types.ErrInputNotFound
+	return nil, component.ErrInputNotFound
 }
 func (f *fakeProcMgr) GetRateLimit(name string) (types.RateLimit, error) {
-	return nil, types.ErrRateLimitNotFound
-}
-func (f *fakeProcMgr) GetPlugin(name string) (interface{}, error) {
-	return nil, types.ErrPluginNotFound
+	return nil, component.ErrRateLimitNotFound
 }
 func (f *fakeProcMgr) GetPipe(name string) (<-chan types.Transaction, error) {
-	return nil, types.ErrPipeNotFound
+	return nil, component.ErrPipeNotFound
 }
 func (f *fakeProcMgr) SetPipe(name string, prod <-chan types.Transaction)   {}
 func (f *fakeProcMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}

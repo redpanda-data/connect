@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -126,7 +127,7 @@ func (c *GCPPubSub) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 	msgsChan := c.msgsChan
 	c.subMut.Unlock()
 	if msgsChan == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	msg := message.QuickBatch(nil)
@@ -136,10 +137,10 @@ func (c *GCPPubSub) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 	select {
 	case gmsg, open = <-msgsChan:
 	case <-ctx.Done():
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 	if !open {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	part := message.NewPart(gmsg.Data)

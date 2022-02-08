@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/pulsar/auth"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -226,18 +227,18 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 	p.m.RUnlock()
 
 	if r == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	// Receive next message
 	pulMsg, err := r.Receive(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		} else {
 			p.log.Errorf("Lost connection due to: %v\n", err)
 			p.disconnect(ctx)
-			err = types.ErrNotConnected
+			err = component.ErrNotConnected
 		}
 		return nil, nil, err
 	}
@@ -297,7 +298,7 @@ func (p *pulsarReader) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-p.shutSig.HasClosedChan():
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

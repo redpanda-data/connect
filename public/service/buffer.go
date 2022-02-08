@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/buffer"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // BatchBuffer is an interface implemented by Buffers able to read and write
@@ -96,7 +96,7 @@ func (a *airGapBatchBuffer) Read(ctx context.Context) (*message.Batch, buffer.Ac
 	batch, ackFn, err := a.b.ReadBatch(ctx)
 	if err != nil {
 		if errors.Is(err, ErrEndOfBuffer) {
-			err = types.ErrTypeClosed
+			err = component.ErrTypeClosed
 		}
 		return nil, nil, err
 	}

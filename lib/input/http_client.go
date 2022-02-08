@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/http"
 	ihttpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
@@ -214,7 +215,7 @@ func (h *HTTPClient) ConnectWithContext(ctx context.Context) (err error) {
 	res, err := h.client.SendToResponse(context.Background(), h.payload, h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
 		return err
 	}
@@ -250,24 +251,24 @@ func (h *HTTPClient) readStreamed(ctx context.Context) (*message.Batch, reader.A
 	defer h.codecMut.Unlock()
 
 	if h.codec == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	parts, codecAckFn, err := h.codec.Next(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
-		if err != types.ErrTimeout {
+		if err != component.ErrTimeout {
 			h.codec.Close(ctx)
 			h.codec = nil
 		}
 		if errors.Is(err, io.EOF) {
 			if !h.conf.Stream.Reconnect {
-				return nil, nil, types.ErrTypeClosed
+				return nil, nil, component.ErrTypeClosed
 			}
-			return nil, nil, types.ErrTimeout
+			return nil, nil, component.ErrTimeout
 		}
 		return nil, nil, err
 	}
@@ -277,11 +278,11 @@ func (h *HTTPClient) readStreamed(ctx context.Context) (*message.Batch, reader.A
 
 	if msg.Len() == 1 && msg.Get(0).IsEmpty() && h.conf.DropEmptyBodies {
 		_ = codecAckFn(ctx, nil)
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 	if msg.Len() == 0 {
 		_ = codecAckFn(ctx, nil)
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 
 	meta := map[string]string{}
@@ -310,16 +311,16 @@ func (h *HTTPClient) readNotStreamed(ctx context.Context) (*message.Batch, reade
 	msg, err := h.client.Send(ctx, h.payload, h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
 		return nil, nil, err
 	}
 
 	if msg.Len() == 0 {
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 	if msg.Len() == 1 && msg.Get(0).IsEmpty() && h.conf.DropEmptyBodies {
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 
 	h.prevResponse = msg

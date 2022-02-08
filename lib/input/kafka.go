@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/checkpoint"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -309,7 +310,7 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 		}
 		resolveFn, err := cp.Track(ctx, offset, int64(msg.Len()))
 		if err != nil {
-			if err != types.ErrTimeout {
+			if err != component.ErrTimeout {
 				k.log.Errorf("Failed to checkpoint offset: %v\n", err)
 			}
 			return false
@@ -482,18 +483,18 @@ func (k *kafkaReader) ReadWithContext(ctx context.Context) (*message.Batch, read
 	k.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	select {
 	case m, open := <-msgChan:
 		if !open {
-			return nil, nil, types.ErrNotConnected
+			return nil, nil, component.ErrNotConnected
 		}
 		return m.msg, m.ackFn, nil
 	case <-ctx.Done():
 	}
-	return nil, nil, types.ErrTimeout
+	return nil, nil, component.ErrTimeout
 }
 
 // CloseAsync shuts down the kafkaReader input and stops processing requests.
@@ -506,7 +507,7 @@ func (k *kafkaReader) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-k.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

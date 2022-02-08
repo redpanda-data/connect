@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -45,10 +46,10 @@ func (w *mockAsyncWriter) WaitForClose(time.Duration) error {
 type writerCantConnect struct{}
 
 func (w writerCantConnect) ConnectWithContext(ctx context.Context) error {
-	return types.ErrNotConnected
+	return component.ErrNotConnected
 }
 func (w writerCantConnect) WriteWithContext(ctx context.Context, msg *message.Batch) error {
-	return types.ErrNotConnected
+	return component.ErrNotConnected
 }
 func (w writerCantConnect) CloseAsync() {}
 func (w writerCantConnect) WaitForClose(time.Duration) error {
@@ -64,7 +65,7 @@ func (w *writerCantSend) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 func (w *writerCantSend) WriteWithContext(ctx context.Context, msg *message.Batch) error {
-	return types.ErrNotConnected
+	return component.ErrNotConnected
 }
 func (w *writerCantSend) CloseAsync() {}
 func (w *writerCantSend) WaitForClose(time.Duration) error {
@@ -175,7 +176,7 @@ func TestAsyncWriterStartClosed(t *testing.T) {
 	}
 
 	select {
-	case writerImpl.connChan <- types.ErrTypeClosed:
+	case writerImpl.connChan <- component.ErrTypeClosed:
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -214,12 +215,12 @@ func TestAsyncWriterClosesOnReconn(t *testing.T) {
 
 	go func() {
 		select {
-		case writerImpl.writeChan <- types.ErrNotConnected:
+		case writerImpl.writeChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
 		select {
-		case writerImpl.connChan <- types.ErrTypeClosed:
+		case writerImpl.connChan <- component.ErrTypeClosed:
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -265,7 +266,7 @@ func TestAsyncWriterClosesOnResend(t *testing.T) {
 
 	go func() {
 		select {
-		case writerImpl.writeChan <- types.ErrNotConnected:
+		case writerImpl.writeChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -275,7 +276,7 @@ func TestAsyncWriterClosesOnResend(t *testing.T) {
 			t.Error("Timed out")
 		}
 		select {
-		case writerImpl.writeChan <- types.ErrTypeClosed:
+		case writerImpl.writeChan <- component.ErrTypeClosed:
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -323,7 +324,7 @@ func TestAsyncWriterCanReconnect(t *testing.T) {
 
 	go func() {
 		select {
-		case writerImpl.writeChan <- types.ErrNotConnected:
+		case writerImpl.writeChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -393,13 +394,13 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 	go func() {
 		defer close(doneChan)
 		select {
-		case writerImpl.writeChan <- types.ErrNotConnected:
+		case writerImpl.writeChan <- component.ErrNotConnected:
 		case <-time.After(time.Second * 5):
 			t.Error("Timed out")
 			return
 		}
 		select {
-		case writerImpl.writeChan <- types.ErrNotConnected:
+		case writerImpl.writeChan <- component.ErrNotConnected:
 		case <-time.After(time.Second * 5):
 			t.Error("Timed out")
 			return
@@ -505,13 +506,13 @@ func TestAsyncWriterCantReconnect(t *testing.T) {
 		t.Fatal("Timed out")
 	}
 	select {
-	case writerImpl.writeChan <- types.ErrNotConnected:
+	case writerImpl.writeChan <- component.ErrNotConnected:
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
 
 	select {
-	case writerImpl.connChan <- types.ErrNotConnected:
+	case writerImpl.connChan <- component.ErrNotConnected:
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -521,7 +522,7 @@ func TestAsyncWriterCantReconnect(t *testing.T) {
 
 	go func() {
 		select {
-		case writerImpl.connChan <- types.ErrNotConnected:
+		case writerImpl.connChan <- component.ErrNotConnected:
 		case <-time.After(time.Second):
 		}
 	}()

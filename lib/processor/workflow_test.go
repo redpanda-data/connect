@@ -1,4 +1,4 @@
-package processor
+package processor_test
 
 import (
 	"sort"
@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -164,26 +167,26 @@ func TestWorkflowDeps(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			conf := NewConfig()
+			conf := processor.NewConfig()
 			conf.Workflow.Order = test.inputOrdering
 			for j, mappings := range test.branches {
-				branchConf := NewBranchConfig()
+				branchConf := processor.NewBranchConfig()
 				branchConf.RequestMap = mappings[0]
 				branchConf.ResultMap = mappings[1]
-				dudProc := NewConfig()
-				dudProc.Type = TypeBloblang
-				dudProc.Bloblang = BloblangConfig("root = this")
+				dudProc := processor.NewConfig()
+				dudProc.Type = processor.TypeBloblang
+				dudProc.Bloblang = processor.BloblangConfig("root = this")
 				branchConf.Processors = append(branchConf.Processors, dudProc)
 				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
 			}
 
-			p, err := NewWorkflow(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+			p, err := processor.NewWorkflow(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 			if len(test.err) > 0 {
 				assert.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
 
-				dag := p.(*Workflow).children.dag
+				dag := p.(*processor.Workflow).Flow()
 				for _, d := range dag {
 					sort.Strings(d)
 				}
@@ -193,31 +196,30 @@ func TestWorkflowDeps(t *testing.T) {
 	}
 }
 
-func newMockProcProvider(t *testing.T, confs map[string]Config) types.Manager {
+func newMockProcProvider(t *testing.T, confs map[string]processor.Config) types.Manager {
 	t.Helper()
 
-	procs := map[string]Type{}
-
+	resConf := manager.NewResourceConfig()
 	for k, v := range confs {
-		var err error
-		procs[k], err = New(v, nil, log.Noop(), metrics.Noop())
-		require.NoError(t, err)
+		v.Label = k
+		resConf.ResourceProcessors = append(resConf.ResourceProcessors, v)
 	}
 
-	return &fakeProcMgr{
-		procs: procs,
-	}
+	mgr, err := manager.NewV2(resConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	return mgr
 }
 
-func quickTestBranches(branches ...[4]string) map[string]Config {
-	m := map[string]Config{}
+func quickTestBranches(branches ...[4]string) map[string]processor.Config {
+	m := map[string]processor.Config{}
 	for _, b := range branches {
-		blobConf := NewConfig()
-		blobConf.Type = TypeBloblang
-		blobConf.Bloblang = BloblangConfig(b[2])
+		blobConf := processor.NewConfig()
+		blobConf.Type = processor.TypeBloblang
+		blobConf.Bloblang = processor.BloblangConfig(b[2])
 
-		conf := NewConfig()
-		conf.Type = TypeBranch
+		conf := processor.NewConfig()
+		conf.Type = processor.TypeBranch
 		conf.Branch.RequestMap = b[1]
 		conf.Branch.Processors = append(conf.Branch.Processors, blobConf)
 		conf.Branch.ResultMap = b[3]
@@ -228,28 +230,28 @@ func quickTestBranches(branches ...[4]string) map[string]Config {
 }
 
 func TestWorkflowMissingResources(t *testing.T) {
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Workflow.Order = [][]string{
 		{"foo", "bar", "baz"},
 	}
 
-	branchConf := NewConfig()
+	branchConf := processor.NewConfig()
 	branchConf.Branch.RequestMap = "root = this"
 	branchConf.Branch.ResultMap = "root = this"
 
-	blobConf := NewConfig()
-	blobConf.Type = TypeBloblang
+	blobConf := processor.NewConfig()
+	blobConf.Type = processor.TypeBloblang
 	blobConf.Bloblang = "root = this"
 
 	branchConf.Branch.Processors = append(branchConf.Branch.Processors, blobConf)
 
 	conf.Workflow.Branches["bar"] = branchConf.Branch
 
-	mgr := newMockProcProvider(t, map[string]Config{
+	mgr := newMockProcProvider(t, map[string]processor.Config{
 		"baz": branchConf,
 	})
 
-	_, err := NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
+	_, err := processor.NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
 	require.EqualError(t, err, "processor resource 'foo' was not found")
 }
 
@@ -387,7 +389,7 @@ func TestWorkflows(t *testing.T) {
 				msg(`{"meta":{"workflow":{"failed":{"0":"request mapping failed: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","1":"request mapping failed: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","2":"request mapping failed: failed assignment (line 1): field ` + "`this.bar`" + `: value is null"}}}}`),
 				msg(
 					`not even a json object`,
-					FailFlagKey,
+					processor.FailFlagKey,
 					"invalid character 'o' in literal null (expecting 'u')",
 				),
 			},
@@ -408,25 +410,25 @@ func TestWorkflows(t *testing.T) {
 			input: []mockMsg{
 				msg(
 					`{"id":0,"name":"first"}`,
-					FailFlagKey, "this is a pre-existing failure",
+					processor.FailFlagKey, "this is a pre-existing failure",
 				),
 				msg(`{"failme":true,"id":1,"name":"second"}`),
 				msg(
 					`{"failme":true,"id":2,"name":"third"}`,
-					FailFlagKey, "this is a pre-existing failure",
+					processor.FailFlagKey, "this is a pre-existing failure",
 				),
 			},
 			output: []mockMsg{
 				msg(
 					`{"id":0,"meta":{"workflow":{"succeeded":["0"]}},"name":"first","result":"FIRST"}`,
-					FailFlagKey, "this is a pre-existing failure",
+					processor.FailFlagKey, "this is a pre-existing failure",
 				),
 				msg(
 					`{"failme":true,"id":1,"meta":{"workflow":{"failed":{"0":"result mapping failed: failed assignment (line 1): this is a branch error"}}},"name":"second"}`,
 				),
 				msg(
 					`{"failme":true,"id":2,"meta":{"workflow":{"failed":{"0":"result mapping failed: failed assignment (line 1): this is a branch error"}}},"name":"third"}`,
-					FailFlagKey, "this is a pre-existing failure",
+					processor.FailFlagKey, "this is a pre-existing failure",
 				),
 			},
 		},
@@ -435,20 +437,20 @@ func TestWorkflows(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			conf := NewConfig()
+			conf := processor.NewConfig()
 			conf.Workflow.Order = test.order
 			for j, mappings := range test.branches {
-				branchConf := NewBranchConfig()
+				branchConf := processor.NewBranchConfig()
 				branchConf.RequestMap = mappings[0]
 				branchConf.ResultMap = mappings[2]
-				proc := NewConfig()
-				proc.Type = TypeBloblang
-				proc.Bloblang = BloblangConfig(mappings[1])
+				proc := processor.NewConfig()
+				proc.Type = processor.TypeBloblang
+				proc.Bloblang = processor.BloblangConfig(mappings[1])
 				branchConf.Processors = append(branchConf.Processors, proc)
 				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
 			}
 
-			p, err := NewWorkflow(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+			p, err := processor.NewWorkflow(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			inputMsg := message.QuickBatch(nil)
@@ -626,14 +628,14 @@ func TestWorkflowsWithResources(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			conf := NewConfig()
+			conf := processor.NewConfig()
 			conf.Workflow.BranchResources = []string{}
 			for _, b := range test.branches {
 				conf.Workflow.BranchResources = append(conf.Workflow.BranchResources, b[0])
 			}
 
 			mgr := newMockProcProvider(t, quickTestBranches(test.branches...))
-			p, err := NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
+			p, err := processor.NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			var parts [][]byte
@@ -692,7 +694,7 @@ func TestWorkflowsParallel(t *testing.T) {
 		`{"bar":5,"baz":10,"buz":12,"foo":"5","meta":{"workflow":{"succeeded":["0","1","2"]}}}`,
 	}
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Workflow.BranchResources = []string{}
 	for _, b := range branches {
 		conf.Workflow.BranchResources = append(conf.Workflow.BranchResources, b[0])
@@ -700,7 +702,7 @@ func TestWorkflowsParallel(t *testing.T) {
 
 	for loops := 0; loops < 10; loops++ {
 		mgr := newMockProcProvider(t, quickTestBranches(branches...))
-		p, err := NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
+		p, err := processor.NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
 		require.NoError(t, err)
 
 		startChan := make(chan struct{})
@@ -887,11 +889,11 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			conf := NewConfig()
+			conf := processor.NewConfig()
 			conf.Workflow.Order = test.order
 
 			mgr := newMockProcProvider(t, quickTestBranches(test.branches...))
-			p, err := NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
+			p, err := processor.NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			var parts [][]byte

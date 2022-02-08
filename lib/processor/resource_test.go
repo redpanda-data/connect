@@ -1,41 +1,13 @@
 package processor
 
 import (
-	"net/http"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
-
-type fakeProcMgr struct {
-	procs map[string]Type
-}
-
-func (f *fakeProcMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
-}
-func (f *fakeProcMgr) GetCache(name string) (types.Cache, error) {
-	return nil, types.ErrCacheNotFound
-}
-func (f *fakeProcMgr) GetProcessor(name string) (types.Processor, error) {
-	if p, exists := f.procs[name]; exists {
-		return p, nil
-	}
-	return nil, types.ErrProcessorNotFound
-}
-func (f *fakeProcMgr) GetRateLimit(name string) (types.RateLimit, error) {
-	return nil, types.ErrRateLimitNotFound
-}
-func (f *fakeProcMgr) GetPlugin(name string) (interface{}, error) {
-	return nil, types.ErrPluginNotFound
-}
-func (f *fakeProcMgr) GetPipe(name string) (<-chan types.Transaction, error) {
-	return nil, types.ErrPipeNotFound
-}
-func (f *fakeProcMgr) SetPipe(name string, prod <-chan types.Transaction)   {}
-func (f *fakeProcMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}
 
 func TestResourceProc(t *testing.T) {
 	conf := NewConfig()
@@ -47,10 +19,13 @@ func TestResourceProc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mgr := &fakeProcMgr{
-		procs: map[string]Type{
-			"foo": resProc,
-		},
+	mgr := mock.NewManager()
+	mgr.Processors["foo"] = func(b *message.Batch) ([]*message.Batch, error) {
+		msgs, res := resProc.ProcessMessage(b)
+		if res != nil {
+			return nil, res.Error()
+		}
+		return msgs, nil
 	}
 
 	nConf := NewConfig()
@@ -75,9 +50,7 @@ func TestResourceProc(t *testing.T) {
 }
 
 func TestResourceBadName(t *testing.T) {
-	mgr := &fakeProcMgr{
-		procs: map[string]Type{},
-	}
+	mgr := mock.NewManager()
 
 	conf := NewConfig()
 	conf.Type = "resource"

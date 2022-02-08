@@ -3,9 +3,9 @@ package bundle
 import (
 	"sort"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // AllBuffers is a set containing every single buffer that has been imported.
@@ -64,7 +64,7 @@ func (s *BufferSet) Add(constructor BufferConstructor, spec docs.ComponentSpec) 
 func (s *BufferSet) Init(conf buffer.Config, mgr NewManagement) (buffer.Type, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, types.ErrInvalidBufferType
+		return nil, component.ErrInvalidBufferType
 	}
 	return spec.constructor(conf, mgr)
 }

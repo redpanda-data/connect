@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -31,7 +32,7 @@ func AccessCache(ctx context.Context, mgr types.Manager, name string, fn func(ty
 		return err
 	}
 	if c == nil {
-		return types.ErrCacheNotFound
+		return component.ErrCacheNotFound
 	}
 	fn(c)
 	return nil
@@ -69,7 +70,7 @@ func AccessInput(ctx context.Context, mgr types.Manager, name string, fn func(ty
 			return err
 		}
 		if c == nil {
-			return types.ErrInputNotFound
+			return component.ErrInputNotFound
 		}
 		fn(c)
 		return nil
@@ -109,7 +110,7 @@ func AccessOutput(ctx context.Context, mgr types.Manager, name string, fn func(t
 			return err
 		}
 		if o == nil {
-			return types.ErrOutputNotFound
+			return component.ErrOutputNotFound
 		}
 		fn(o)
 		return nil
@@ -150,7 +151,7 @@ func AccessProcessor(ctx context.Context, mgr types.Manager, name string, fn fun
 			return err
 		}
 		if o == nil {
-			return types.ErrProcessorNotFound
+			return component.ErrProcessorNotFound
 		}
 		fn(o)
 		return nil
@@ -182,7 +183,7 @@ func AccessRateLimit(ctx context.Context, mgr types.Manager, name string, fn fun
 		return err
 	}
 	if c == nil {
-		return types.ErrRateLimitNotFound
+		return component.ErrRateLimitNotFound
 	}
 	fn(c)
 	return nil

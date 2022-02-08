@@ -7,13 +7,13 @@ import (
 	"time"
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -121,7 +121,7 @@ func (r *RedisStreams) Write(msg *message.Batch) error {
 	r.connMut.RUnlock()
 
 	if client == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	partToMap := func(p *message.Part) map[string]interface{} {
@@ -143,7 +143,7 @@ func (r *RedisStreams) Write(msg *message.Batch) error {
 		}).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
-			return types.ErrNotConnected
+			return component.ErrNotConnected
 		}
 		return nil
 	}
@@ -162,7 +162,7 @@ func (r *RedisStreams) Write(msg *message.Batch) error {
 	if err != nil {
 		r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	var batchErr *ibatch.Error

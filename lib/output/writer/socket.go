@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -118,7 +119,7 @@ func (s *Socket) WriteWithContext(ctx context.Context, msg *message.Batch) error
 	s.writerMut.Unlock()
 
 	if w == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	err := msg.Iter(func(i int, part *message.Part) error {

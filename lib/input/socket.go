@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -140,16 +141,16 @@ func (s *socketClient) ReadWithContext(ctx context.Context) (*message.Batch, rea
 	s.codecMut.Unlock()
 
 	if codec == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	parts, codecAckFn, err := codec.Next(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
-		if err != types.ErrTimeout {
+		if err != component.ErrTimeout {
 			s.codecMut.Lock()
 			if s.codec != nil && s.codec == codec {
 				s.codec.Close(ctx)
@@ -158,7 +159,7 @@ func (s *socketClient) ReadWithContext(ctx context.Context) (*message.Batch, rea
 			s.codecMut.Unlock()
 		}
 		if errors.Is(err, io.EOF) {
-			return nil, nil, types.ErrTimeout
+			return nil, nil, component.ErrTimeout
 		}
 		return nil, nil, err
 	}
@@ -171,7 +172,7 @@ func (s *socketClient) ReadWithContext(ctx context.Context) (*message.Batch, rea
 	msg.Append(parts...)
 
 	if msg.Len() == 0 {
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 
 	return msg, func(rctx context.Context, res types.Response) error {

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -77,7 +78,7 @@ func (o *FanOut) WithMaxInFlight(i int) *FanOut {
 // Consume assigns a new transactions channel for the broker to read.
 func (o *FanOut) Consume(transactions <-chan types.Transaction) error {
 	if o.transactions != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	o.transactions = transactions
 
@@ -164,7 +165,7 @@ func (o *FanOut) loop() {
 						select {
 						case o.outputTSChans[i] <- types.NewTransaction(msgCopy, resChan):
 						case <-o.ctx.Done():
-							return types.ErrTypeClosed
+							return component.ErrTypeClosed
 						}
 						select {
 						case res := <-resChan:
@@ -172,14 +173,14 @@ func (o *FanOut) loop() {
 								o.logger.Errorf("Failed to dispatch fan out message to output '%v': %v\n", i, res.Error())
 								mOutputErr.Incr(1)
 								if !throt.Retry() {
-									return types.ErrTypeClosed
+									return component.ErrTypeClosed
 								}
 							} else {
 								mMsgsSnt.Incr(1)
 								return nil
 							}
 						case <-o.ctx.Done():
-							return types.ErrTypeClosed
+							return component.ErrTypeClosed
 						}
 					}
 				})
@@ -212,7 +213,7 @@ func (o *FanOut) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-o.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

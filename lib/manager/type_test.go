@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -89,8 +90,8 @@ func TestManagerCache(t *testing.T) {
 	if _, err := mgr.GetCache("bar"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GetCache("baz"); err != types.ErrCacheNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, types.ErrCacheNotFound)
+	if _, err := mgr.GetCache("baz"); err != component.ErrCacheNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, component.ErrCacheNotFound)
 	}
 }
 
@@ -175,8 +176,8 @@ func TestManagerRateLimit(t *testing.T) {
 	if _, err := mgr.GetRateLimit("bar"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GetRateLimit("baz"); err != types.ErrRateLimitNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, types.ErrRateLimitNotFound)
+	if _, err := mgr.GetRateLimit("baz"); err != component.ErrRateLimitNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, component.ErrRateLimitNotFound)
 	}
 }
 
@@ -258,8 +259,8 @@ func TestManagerProcessor(t *testing.T) {
 	if _, err := mgr.GetProcessor("bar"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GetProcessor("baz"); err != types.ErrProcessorNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, types.ErrProcessorNotFound)
+	if _, err := mgr.GetProcessor("baz"); err != component.ErrProcessorNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, component.ErrProcessorNotFound)
 	}
 }
 
@@ -406,8 +407,8 @@ func TestManagerPipeErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err = mgr.GetPipe("does not exist"); err != types.ErrPipeNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, types.ErrPipeNotFound)
+	if _, err = mgr.GetPipe("does not exist"); err != component.ErrPipeNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, component.ErrPipeNotFound)
 	}
 }
 
@@ -449,8 +450,8 @@ func TestManagerPipeGetSet(t *testing.T) {
 	}
 
 	mgr.UnsetPipe("foo", t1)
-	if _, err = mgr.GetPipe("foo"); err != types.ErrPipeNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, types.ErrPipeNotFound)
+	if _, err = mgr.GetPipe("foo"); err != component.ErrPipeNotFound {
+		t.Errorf("Wrong error returned: %v != %v", err, component.ErrPipeNotFound)
 	}
 
 	// Back to before

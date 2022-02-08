@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -236,7 +237,7 @@ func (m *MQTT) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 	m.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	select {
@@ -246,7 +247,7 @@ func (m *MQTT) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 			m.msgChan = nil
 			m.client = nil
 			m.cMut.Unlock()
-			return nil, nil, types.ErrNotConnected
+			return nil, nil, component.ErrNotConnected
 		}
 
 		message := message.QuickBatch([][]byte{msg.Payload()})
@@ -266,9 +267,9 @@ func (m *MQTT) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 		}, nil
 	case <-ctx.Done():
 	case <-m.interruptChan:
-		return nil, nil, types.ErrTypeClosed
+		return nil, nil, component.ErrTypeClosed
 	}
-	return nil, nil, types.ErrTimeout
+	return nil, nil, component.ErrTimeout
 }
 
 // CloseAsync shuts down the MQTT input and stops processing requests.

@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -53,7 +54,7 @@ func NewRoundRobin(outputs []types.Output, stats metrics.Type) (*RoundRobin, err
 // Consume assigns a new messages channel for the broker to read.
 func (o *RoundRobin) Consume(ts <-chan types.Transaction) error {
 	if o.transactions != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	o.transactions = ts
 
@@ -139,7 +140,7 @@ func (o *RoundRobin) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-o.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -356,7 +357,7 @@ func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
 // ReadWithContext attempts to read a new message from the target SQS.
 func (a *awsSQS) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	if a.session == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	var next *sqs.Message
@@ -364,10 +365,10 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (*message.Batch, reader.As
 	select {
 	case next, open = <-a.messagesChan:
 		if !open {
-			return nil, nil, types.ErrTypeClosed
+			return nil, nil, component.ErrTypeClosed
 		}
 	case <-a.closeSignal.CloseAtLeisureChan():
-		return nil, nil, types.ErrTypeClosed
+		return nil, nil, component.ErrTypeClosed
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
@@ -379,7 +380,7 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (*message.Batch, reader.As
 		msg.Append(part)
 	}
 	if msg.Len() == 0 {
-		return nil, nil, types.ErrTimeout
+		return nil, nil, component.ErrTimeout
 	}
 
 	mHandle := sqsMessageHandle{
@@ -439,7 +440,7 @@ func (a *awsSQS) WaitForClose(tout time.Duration) error {
 	}()
 	select {
 	case <-time.After(tout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	case <-a.closeSignal.HasClosedChan():
 		return nil
 	}

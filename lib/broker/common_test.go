@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -41,7 +42,7 @@ func (m MockInputType) WaitForClose(t time.Duration) error {
 			return errors.New("received unexpected message")
 		}
 	case <-time.After(t):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -80,7 +81,7 @@ func (t *TCP) Write(msg *message.Batch) error {
 	t.connMut.Unlock()
 
 	if conn == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	err := msg.Iter(func(i int, part *message.Part) error {

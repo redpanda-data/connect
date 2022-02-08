@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/public/service"
 )
 
@@ -238,20 +238,20 @@ func (m *memoryBuffer) WriteBatch(ctx context.Context, msgBatch service.MessageB
 	}
 
 	if extraBytes > m.cap {
-		return types.ErrMessageTooLarge
+		return component.ErrMessageTooLarge
 	}
 
 	m.cond.L.Lock()
 	defer m.cond.L.Unlock()
 
 	if m.closed {
-		return types.ErrTypeClosed
+		return component.ErrTypeClosed
 	}
 
 	for (m.bytes + extraBytes) > m.cap {
 		m.cond.Wait()
 		if m.closed {
-			return types.ErrTypeClosed
+			return component.ErrTypeClosed
 		}
 	}
 

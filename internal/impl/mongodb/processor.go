@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -386,7 +387,7 @@ func (m *Processor) CloseAsync() {
 func (m *Processor) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	case <-m.shutSig.HasClosedChan():
 	}
 	return nil

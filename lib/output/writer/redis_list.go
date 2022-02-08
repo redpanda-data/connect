@@ -8,6 +8,7 @@ import (
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -111,7 +112,7 @@ func (r *RedisList) WriteWithContext(ctx context.Context, msg *message.Batch) er
 	r.connMut.RUnlock()
 
 	if client == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	if msg.Len() == 1 {
@@ -119,7 +120,7 @@ func (r *RedisList) WriteWithContext(ctx context.Context, msg *message.Batch) er
 		if err := client.RPush(key, msg.Get(0).Get()).Err(); err != nil {
 			r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
-			return types.ErrNotConnected
+			return component.ErrNotConnected
 		}
 		return nil
 	}
@@ -134,7 +135,7 @@ func (r *RedisList) WriteWithContext(ctx context.Context, msg *message.Batch) er
 	if err != nil {
 		r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	var batchErr *ibatch.Error

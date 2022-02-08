@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -160,7 +161,7 @@ func (s *Subprocess) WriteWithContext(ctx context.Context, msg *message.Batch) e
 	s.cmdMut.Lock()
 	defer s.cmdMut.Unlock()
 	if s.stdin == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {

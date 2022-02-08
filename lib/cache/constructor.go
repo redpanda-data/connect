@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -68,5 +69,5 @@ func New(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (t
 	}); ok {
 		return mgrV2.NewCache(conf)
 	}
-	return nil, types.ErrInvalidCacheType
+	return nil, component.ErrInvalidCacheType
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -245,7 +246,7 @@ func (a *AMQP) Write(msg *message.Batch) error {
 	a.connLock.RUnlock()
 
 	if conn == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
@@ -291,23 +292,23 @@ func (a *AMQP) Write(msg *message.Batch) error {
 		if err != nil {
 			a.disconnect()
 			a.log.Errorf("Failed to send message: %v\n", err)
-			return types.ErrNotConnected
+			return component.ErrNotConnected
 		}
 		select {
 		case confirm, open := <-confirmChan:
 			if !open {
 				a.log.Errorln("Failed to send message, ensure your target exchange exists.")
-				return types.ErrNotConnected
+				return component.ErrNotConnected
 			}
 			if !confirm.Ack {
 				a.log.Errorln("Failed to acknowledge message.")
-				return types.ErrNoAck
+				return component.ErrNoAck
 			}
 		case _, open := <-returnChan:
 			if !open {
 				return fmt.Errorf("acknowledgement not supported, ensure server supports immediate and mandatory flags")
 			}
-			return types.ErrNoAck
+			return component.ErrNoAck
 		}
 		return nil
 	})

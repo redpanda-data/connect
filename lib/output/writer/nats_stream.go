@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/nats-io/stan.go"
 )
 
@@ -144,7 +144,7 @@ func (n *NATSStream) Write(msg *message.Batch) error {
 	n.connMut.RUnlock()
 
 	if conn == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
@@ -156,7 +156,7 @@ func (n *NATSStream) Write(msg *message.Batch) error {
 			n.natsConn.Close()
 			n.natsConn = nil
 			n.connMut.Unlock()
-			return types.ErrNotConnected
+			return component.ErrNotConnected
 		}
 		return err
 	})

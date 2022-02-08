@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -214,7 +215,7 @@ func (s *Subprocess) ConnectWithContext(ctx context.Context) error {
 func (s *Subprocess) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	msgChan, errChan := s.msgChan, s.errChan
 	if msgChan == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	select {
@@ -223,9 +224,9 @@ func (s *Subprocess) ReadWithContext(ctx context.Context) (*message.Batch, reade
 			if s.conf.RestartOnExit {
 				s.msgChan = nil
 				s.errChan = nil
-				return nil, nil, types.ErrNotConnected
+				return nil, nil, component.ErrNotConnected
 			}
-			return nil, nil, types.ErrTypeClosed
+			return nil, nil, component.ErrTypeClosed
 		}
 		msg := message.QuickBatch(nil)
 		msg.Append(message.NewPart(b))
@@ -235,15 +236,15 @@ func (s *Subprocess) ReadWithContext(ctx context.Context) (*message.Batch, reade
 			if s.conf.RestartOnExit {
 				s.msgChan = nil
 				s.errChan = nil
-				return nil, nil, types.ErrNotConnected
+				return nil, nil, component.ErrNotConnected
 			}
-			return nil, nil, types.ErrTypeClosed
+			return nil, nil, component.ErrTypeClosed
 		}
 		return nil, nil, err
 	case <-ctx.Done():
 	}
 
-	return nil, nil, types.ErrTimeout
+	return nil, nil, component.ErrTimeout
 }
 
 // CloseAsync shuts down the bloblang reader.

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -249,7 +250,7 @@ func (r *csvReader) ConnectWithContext(ctx context.Context) error {
 	handle, err := r.handleCtor(ctx)
 	if err != nil {
 		if err == io.EOF {
-			return types.ErrTypeClosed
+			return component.ErrTypeClosed
 		}
 		return err
 	}
@@ -272,7 +273,7 @@ func (r *csvReader) readNext(reader *csv.Reader) ([]string, error) {
 			r.scanner = nil
 			r.headers = nil
 			r.mut.Unlock()
-			return nil, types.ErrNotConnected
+			return nil, component.ErrNotConnected
 		}
 		return nil, err
 	}
@@ -287,7 +288,7 @@ func (r *csvReader) ReadWithContext(ctx context.Context) (*message.Batch, reader
 	r.mut.Unlock()
 
 	if scanner == nil {
-		return nil, nil, types.ErrNotConnected
+		return nil, nil, component.ErrNotConnected
 	}
 
 	msg := message.QuickBatch(nil)

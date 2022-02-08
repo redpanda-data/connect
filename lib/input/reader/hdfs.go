@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/colinmarc/hdfs"
 )
 
@@ -96,7 +96,7 @@ func (h *HDFS) ConnectWithContext(ctx context.Context) error {
 // ReadWithContext reads a new HDFS message.
 func (h *HDFS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
 	if len(h.targets) == 0 {
-		return nil, nil, types.ErrTypeClosed
+		return nil, nil, component.ErrTypeClosed
 	}
 
 	fileName := h.targets[0]

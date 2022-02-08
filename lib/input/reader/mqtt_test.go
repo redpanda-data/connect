@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/ory/dockertest/v3"
 )
@@ -175,8 +175,8 @@ func testMQTTDisconnect(urls []string, t *testing.T) {
 		wg.Done()
 	}()
 
-	if _, _, err = m.ReadWithContext(ctx); err != types.ErrTypeClosed {
-		t.Errorf("Wrong error: %v != %v", err, types.ErrTypeClosed)
+	if _, _, err = m.ReadWithContext(ctx); err != component.ErrTypeClosed {
+		t.Errorf("Wrong error: %v != %v", err, component.ErrTypeClosed)
 	}
 
 	wg.Wait()

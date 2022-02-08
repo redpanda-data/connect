@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
@@ -109,7 +109,7 @@ func (a *KinesisFirehose) toRecords(msg *message.Batch) ([]*firehose.Record, err
 
 		if len(entry.Data) > mebibyte {
 			a.log.Errorf("part %d exceeds the maximum Kinesis Firehose payload limit of 1 MiB\n", i)
-			return types.ErrMessageTooLarge
+			return component.ErrMessageTooLarge
 		}
 
 		entries[i] = &entry
@@ -164,7 +164,7 @@ func (a *KinesisFirehose) Write(msg *message.Batch) error {
 // messages are retried according to the configurable backoff settings.
 func (a *KinesisFirehose) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if a.session == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	backOff := a.backoffCtor()
@@ -224,7 +224,7 @@ func (a *KinesisFirehose) WriteWithContext(ctx context.Context, msg *message.Bat
 			a.mPartsThrottled.Incr(int64(l))
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
-				return types.ErrTimeout
+				return component.ErrTimeout
 			}
 			time.Sleep(wait)
 		}

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -66,7 +66,7 @@ func TestOutputAirGapSad(t *testing.T) {
 	}
 
 	err = agi.WriteWithContext(context.Background(), message.QuickBatch(nil))
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 }
 
 func TestOutputAirGapHappy(t *testing.T) {
@@ -149,7 +149,7 @@ func TestBatchOutputAirGapSad(t *testing.T) {
 	}
 
 	err = agi.WriteWithContext(context.Background(), message.QuickBatch(nil))
-	assert.Equal(t, types.ErrNotConnected, err)
+	assert.Equal(t, component.ErrNotConnected, err)
 }
 
 func TestBatchOutputAirGapHappy(t *testing.T) {

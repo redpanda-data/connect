@@ -11,6 +11,7 @@ import (
 
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -232,7 +233,7 @@ func (d *DynamoDB) Write(msg *message.Batch) error {
 // table.
 func (d *DynamoDB) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if d.client == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	boff := d.boffPool.Get().(backoff.BackOff)

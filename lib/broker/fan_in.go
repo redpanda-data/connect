@@ -3,6 +3,7 @@ package broker
 import (
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -117,7 +118,7 @@ func (i *FanIn) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-i.closedChan:
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }
