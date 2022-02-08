@@ -106,6 +106,22 @@ mapping: |
     },
   }
 
+  root.processors."-".switch = [
+    {
+      "check": """root = error().or("").contains("'since_id' must be a tweet id created after")""",
+      "processors": [
+        {
+          "cache": {
+            "resource": this.cache,
+            "operator": "delete",
+            "key": this.cache_key,
+          },
+        },
+        { "bloblang": "root = deleted()" },
+      ],
+    },
+  ]
+
   root.processors."-".bloblang = "root = if (this.data | []).length() > 0 { this.data } else { deleted() }"
 
   root.processors."-".unarchive = {
@@ -180,6 +196,15 @@ tests:
               client_key: fookey
               client_secret: foosecret
 
+        - switch:
+          - check: 'root = error().or("").contains("''since_id'' must be a tweet id created after")'
+            processors:
+              - cache:
+                  resource: foocache
+                  operator: delete
+                  key: last_tweet_id
+              - bloblang: root = deleted()
+
         - bloblang: root = if (this.data | []).length() > 0 { this.data } else { deleted() }
 
         - unarchive:
@@ -241,6 +266,15 @@ tests:
               token_url: https://api.twitter.com/oauth2/token
               client_key: barkey
               client_secret: barsecret
+
+        - switch:
+          - check: 'root = error().or("").contains("''since_id'' must be a tweet id created after")'
+            processors:
+              - cache:
+                  resource: barcache
+                  operator: delete
+                  key: last_tweet_id
+              - bloblang: root = deleted()
 
         - bloblang: root = if (this.data | []).length() > 0 { this.data } else { deleted() }
 
