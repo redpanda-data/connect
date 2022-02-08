@@ -87,7 +87,7 @@ output:
 	require.NoError(t, streamOut.Run(context.Background()))
 
 	// This is where I get stuck because the output is going to change
-	assert.Equal(t, []string{
-		"{\"bar\":0,\"baz\":\"and this\",\"foo\":\"doc-0\"}",
+	assert.Contains(t, []string{
+		"foo,[0],\"{\"\"after\"\": {\"\"a\"\": 0}}",
 	}, outBatches)
 }
