@@ -1,16 +1,15 @@
 package pipeline
 
 import (
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 //------------------------------------------------------------------------------
@@ -178,8 +177,6 @@ func (p *Processor) dispatchMessages(msgs []types.Message, ogResChan chan<- type
 		return
 	}
 }
-
-//------------------------------------------------------------------------------
 
 // Consume assigns a messages channel for the pipeline to read.
 func (p *Processor) Consume(msgs <-chan types.Transaction) error {

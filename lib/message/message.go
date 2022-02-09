@@ -1,9 +1,9 @@
 package message
 
 import (
-	"time"
-
 	"github.com/Jeffail/benthos/v3/lib/types"
+	"sync"
+	"time"
 )
 
 //------------------------------------------------------------------------------
@@ -15,16 +15,26 @@ type Type struct {
 	parts     []types.Part
 }
 
+var typePool *sync.Pool = &sync.Pool{
+	New: func() interface{} {
+		return &Type{}
+	},
+}
+
 // New initializes a new message from a 2D byte slice, the slice can be nil.
 func New(bslice [][]byte) *Type {
 	parts := make([]types.Part, len(bslice))
 	for i, v := range bslice {
 		parts[i] = NewPart(v)
 	}
-	return &Type{
-		createdAt: time.Now(),
-		parts:     parts,
-	}
+	t := typePool.Get().(*Type)
+	t.createdAt = time.Now()
+	t.parts = parts
+	return t
+}
+
+func (m *Type) Close() {
+	typePool.Put(m)
 }
 
 //------------------------------------------------------------------------------
