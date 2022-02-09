@@ -46,7 +46,7 @@ func TestProcCtor(t *testing.T) {
 	}
 
 	tChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	if err = pipe.Consume(tChan); err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestProcCtor(t *testing.T) {
 		select {
 		case <-time.After(time.Second):
 			t.Error("timed out")
-		case tran.ResponseChan <- response.NewAck():
+		case tran.ResponseChan <- response.NewError(nil):
 		}
 	}()
 

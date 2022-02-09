@@ -132,7 +132,7 @@ func (a *airGapReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 	}
 	tMsg := message.QuickBatch(nil)
 	tMsg.Append(msg.part)
-	return tMsg, func(c context.Context, r types.Response) error {
+	return tMsg, func(c context.Context, r response.Error) error {
 		return ackFn(c, r.AckError())
 	}, nil
 }
@@ -189,7 +189,7 @@ func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (*message.Batch
 	for _, msg := range batch {
 		tMsg.Append(msg.part)
 	}
-	return tMsg, func(c context.Context, r types.Response) error {
+	return tMsg, func(c context.Context, r response.Error) error {
 		return ackFn(c, r.AckError())
 	}, nil
 }
@@ -247,11 +247,11 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 	})
 
 	return b, func(actx context.Context, err error) error {
-		var res types.Response
+		var res response.Error
 		if err != nil {
 			res = response.NewError(err)
 		} else {
-			res = response.NewAck()
+			res = response.NewError(nil)
 		}
 		select {
 		case tran.ResponseChan <- res:

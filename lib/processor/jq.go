@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/itchyny/gojq"
 )
@@ -201,7 +200,7 @@ func (j *JQ) getPartValue(part *message.Part, raw bool) (obj interface{}, err er
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (j *JQ) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (j *JQ) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	j.mCount.Incr(1)
 
 	newMsg := msg.Copy()
@@ -275,7 +274,7 @@ func (j *JQ) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Respons
 
 	if newMsg.Len() == 0 {
 		j.mDropped.Incr(1)
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	j.mBatchSent.Incr(1)

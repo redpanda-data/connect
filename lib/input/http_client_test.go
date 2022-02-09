@@ -73,7 +73,7 @@ func TestHTTPClientGET(t *testing.T) {
 		}
 
 		select {
-		case tr.ResponseChan <- response.NewAck():
+		case tr.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
@@ -121,7 +121,7 @@ func TestHTTPClientPagination(t *testing.T) {
 			t.Fatal("Action timed out")
 		}
 		select {
-		case tr.ResponseChan <- response.NewAck():
+		case tr.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
@@ -321,7 +321,7 @@ func TestHTTPClientPOST(t *testing.T) {
 		}
 
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
@@ -405,7 +405,7 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 	}
 
 	select {
-	case tr.ResponseChan <- response.NewAck():
+	case tr.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 	}
@@ -512,7 +512,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 
 		reqMut.Lock()
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
@@ -609,7 +609,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 		}
 
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
@@ -680,7 +680,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- response.NewAck():
+			case ts.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
@@ -743,7 +743,7 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- response.NewAck():
+			case ts.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
@@ -811,7 +811,7 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- response.NewAck():
+			case ts.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
@@ -888,7 +888,7 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 				b.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		}
-		ts.ResponseChan <- response.NewAck()
+		ts.ResponseChan <- response.NewError(nil)
 	}
 
 	b.StopTimer()

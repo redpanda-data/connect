@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -122,11 +121,11 @@ func NewGroupByValue(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (g *GroupByValue) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (g *GroupByValue) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	g.mCount.Incr(1)
 
 	if msg.Len() == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	groupKeys := []string{}
@@ -165,7 +164,7 @@ func (g *GroupByValue) ProcessMessage(msg *message.Batch) ([]*message.Batch, typ
 	g.mGroups.Set(int64(len(groupKeys)))
 
 	if len(msgs) == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	g.mBatchSent.Incr(int64(len(msgs)))

@@ -16,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -206,7 +207,7 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 			return nil, nil, component.ErrTimeout
 		}
 
-		return msg, func(rctx context.Context, res types.Response) error {
+		return msg, func(rctx context.Context, res response.Error) error {
 			return codecAckFn(rctx, res.AckError())
 		}, nil
 	}

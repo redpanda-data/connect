@@ -59,7 +59,7 @@ func TestGroupByValueBasic(t *testing.T) {
 	})
 	msgs, res := proc.ProcessMessage(input)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	for _, msg := range msgs {

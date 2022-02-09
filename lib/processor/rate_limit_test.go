@@ -40,7 +40,7 @@ func TestRateLimitBasic(t *testing.T) {
 
 	output, res := proc.ProcessMessage(input)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(output) != 1 {
@@ -83,7 +83,7 @@ func TestRateLimitClosed(t *testing.T) {
 
 	output, res := proc.ProcessMessage(input)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(output) != 1 {
@@ -124,7 +124,7 @@ func TestRateLimitErroredOut(t *testing.T) {
 	go func() {
 		output, res := proc.ProcessMessage(input)
 		if res != nil {
-			t.Error(res.AckError())
+			t.Error(res)
 		}
 
 		if len(output) != 1 {
@@ -170,7 +170,7 @@ func TestRateLimitBlocked(t *testing.T) {
 	go func() {
 		output, res := proc.ProcessMessage(input)
 		if res != nil {
-			t.Error(res.AckError())
+			t.Error(res)
 		}
 
 		if len(output) != 1 {

@@ -135,7 +135,7 @@ func TestAWKJSONParts(t *testing.T) {
 		t.Fatal("No passthrough on error")
 	}
 	if res != nil {
-		t.Fatalf("Non-nil result: %v", res.AckError())
+		t.Fatalf("Non-nil result: %v", res)
 	}
 	exp := [][]byte{
 		[]byte(`{"foo":{"bar":"first extra"},"init":{"val":"first"}}`),

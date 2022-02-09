@@ -337,7 +337,7 @@ pathLoop:
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	branchMsg, propSpans := tracing.WithChildSpans(TypeBranch, msg.Copy())
 	defer func() {
 		for _, s := range propSpans {
@@ -450,11 +450,11 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 	var procResults []*message.Batch
 	var err error
 	if len(parts) > 0 {
-		var res types.Response
+		var res error
 		msg := message.QuickBatch(nil)
 		msg.SetAll(parts)
-		if procResults, res = ExecuteAll(b.children, msg); res != nil && res.AckError() != nil {
-			err = fmt.Errorf("child processors failed: %v", res.AckError())
+		if procResults, res = ExecuteAll(b.children, msg); res != nil {
+			err = fmt.Errorf("child processors failed: %v", res)
 		}
 		if len(procResults) == 0 {
 			err = errors.New("child processors resulted in zero messages")

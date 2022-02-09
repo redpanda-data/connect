@@ -44,7 +44,7 @@ func TestTryHappyPath(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewTry(outputs, metrics.Noop())
 	if err != nil {
@@ -84,7 +84,7 @@ func TestTryHappyPath(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- response.NewAck():
+			case ts.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -121,7 +121,7 @@ func TestTryHappyishPath(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewTry(outputs, metrics.Noop())
 	if err != nil {
@@ -184,7 +184,7 @@ func TestTryHappyishPath(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- response.NewAck():
+			case ts.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -221,7 +221,7 @@ func TestTryAllFail(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewTry(outputs, metrics.Noop())
 	if err != nil {
@@ -306,9 +306,9 @@ func TestTryAllFailParallel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resChans := make([]chan types.Response, 10)
+	resChans := make([]chan response.Error, 10)
 	for i := range resChans {
-		resChans[i] = make(chan types.Response)
+		resChans[i] = make(chan response.Error)
 	}
 
 	tallies := [3]int32{}

@@ -354,7 +354,7 @@ func NewProtobuf(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *Protobuf) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (p *Protobuf) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	p.mCount.Incr(1)
 	newMsg := msg.Copy()
 

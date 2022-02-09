@@ -212,7 +212,7 @@ func (r *Retry) loop() {
 			return
 		}
 
-		rChan := make(chan types.Response)
+		rChan := make(chan response.Error)
 		select {
 		case r.transactionsOut <- types.NewTransaction(tran.Payload, rChan):
 		case <-r.closeChan:
@@ -220,9 +220,9 @@ func (r *Retry) loop() {
 		}
 
 		wg.Add(1)
-		go func(ts types.Transaction, resChan chan types.Response) {
+		go func(ts types.Transaction, resChan chan response.Error) {
 			var backOff backoff.BackOff
-			var resOut types.Response
+			var resOut response.Error
 			var inErrLoop bool
 
 			defer func() {
@@ -240,7 +240,7 @@ func (r *Retry) loop() {
 			}()
 
 			for atomic.LoadInt32(&r.running) == 1 {
-				var res types.Response
+				var res response.Error
 				select {
 				case res = <-resChan:
 				case <-r.closeChan:
@@ -282,7 +282,7 @@ func (r *Retry) loop() {
 				} else {
 					mSuccess.Incr(1)
 					mPartsSuccess.Incr(int64(ts.Payload.Len()))
-					resOut = response.NewAck()
+					resOut = response.NewError(nil)
 					break
 				}
 			}

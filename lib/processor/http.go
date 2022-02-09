@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
@@ -164,7 +163,7 @@ func NewHTTP(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (h *HTTP) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (h *HTTP) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	h.mCount.Incr(1)
 	var responseMsg *message.Batch
 
@@ -260,9 +259,7 @@ func (h *HTTP) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Respo
 	}
 
 	if responseMsg.Len() < 1 {
-		return nil, response.NewError(fmt.Errorf(
-			"HTTP response from '%v' was empty", h.conf.HTTP.URL,
-		))
+		return nil, fmt.Errorf("HTTP response from '%v' was empty", h.conf.HTTP.URL)
 	}
 
 	msgs := [1]*message.Batch{responseMsg}

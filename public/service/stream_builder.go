@@ -169,7 +169,7 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 	return func(ctx context.Context, m *Message) error {
 		tmpMsg := message.QuickBatch(nil)
 		tmpMsg.Append(m.part)
-		resChan := make(chan types.Response)
+		resChan := make(chan response.Error)
 		select {
 		case tChan <- types.NewTransaction(tmpMsg, resChan):
 		case <-ctx.Done():
@@ -220,7 +220,7 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 		for _, m := range b {
 			tmpMsg.Append(m.part)
 		}
-		resChan := make(chan types.Response)
+		resChan := make(chan response.Error)
 		select {
 		case tChan <- types.NewTransaction(tmpMsg, resChan):
 		case <-ctx.Done():
@@ -664,11 +664,11 @@ func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
 				return nil
 			})
 			err := s.consumerFunc(context.Background(), batch)
-			var res types.Response
+			var res response.Error
 			if err != nil {
 				res = response.NewError(err)
 			} else {
-				res = response.NewAck()
+				res = response.NewError(nil)
 			}
 			tran.ResponseChan <- res
 		}

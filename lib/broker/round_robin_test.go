@@ -44,7 +44,7 @@ func TestBasicRoundRobin(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewRoundRobin(outputs, metrics.Noop())
 	if err != nil {
@@ -84,7 +84,7 @@ func TestBasicRoundRobin(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- response.NewAck():
+			case ts.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -122,7 +122,7 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewRoundRobin(outputs, metrics.Noop())
 	if err != nil {
@@ -141,7 +141,7 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 	for i := 0; i < nMsgs; i++ {
 		readChan <- types.NewTransaction(message.QuickBatch(content), resChan)
 		ts := <-mockOutputs[i%3].TChan
-		ts.ResponseChan <- response.NewAck()
+		ts.ResponseChan <- response.NewError(nil)
 		res := <-resChan
 		if res.AckError() != nil {
 			b.Errorf("Received unexpected errors from broker: %v", res.AckError())

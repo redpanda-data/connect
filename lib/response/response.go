@@ -28,17 +28,3 @@ func NewError(err error) Error {
 		err: err,
 	}
 }
-
-//------------------------------------------------------------------------------
-
-// Ack is a response type that indicates the message has reached a destination
-// and can be acknowledged upstream.
-type Ack struct{}
-
-// AckError returns nil.
-func (a Ack) AckError() error { return nil }
-
-// NewAck returns an Ack response type.
-func NewAck() Ack {
-	return Ack{}
-}

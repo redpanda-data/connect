@@ -193,7 +193,7 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 type mockProc struct {
 }
 
-func (m mockProc) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (m mockProc) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	msgs := [1]*message.Batch{msg}
 	return msgs[:], nil
 }
@@ -229,7 +229,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 		t.Error(err)
 	}
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	msg := message.QuickBatch([][]byte{[]byte("baz")})
 
@@ -303,7 +303,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		t.Error(err)
 	}
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	msg := message.QuickBatch([][]byte{[]byte("baz")})
 

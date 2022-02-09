@@ -95,7 +95,7 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 		}
 
 		select {
-		case tran.ResponseChan <- response.NewAck():
+		case tran.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -135,7 +135,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 	var tran types.Transaction
 	var open bool
 
-	resChans := []chan<- types.Response{}
+	resChans := []chan<- response.Error{}
 	i := 0
 	for len(expMsgs) > 0 && i < 10 {
 		// First try
@@ -199,7 +199,7 @@ remainingLoop:
 		}
 
 		select {
-		case tran.ResponseChan <- response.NewAck():
+		case tran.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}

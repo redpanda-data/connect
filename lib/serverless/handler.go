@@ -17,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -51,7 +52,7 @@ func (h *Handler) Handle(ctx context.Context, obj interface{}) (interface{}, err
 	store := roundtrip.NewResultStore()
 	roundtrip.AddResultStore(msg, store)
 
-	resChan := make(chan types.Response, 1)
+	resChan := make(chan response.Error, 1)
 
 	select {
 	case h.transactionChan <- types.NewTransaction(msg, resChan):

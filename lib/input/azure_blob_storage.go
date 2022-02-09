@@ -23,7 +23,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 )
 
 type azureObjectTarget struct {
@@ -328,7 +328,7 @@ func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg *message.Ba
 		}
 	}
 
-	return blobStorageMsgFromParts(object, parts), func(rctx context.Context, res types.Response) error {
+	return blobStorageMsgFromParts(object, parts), func(rctx context.Context, res response.Error) error {
 		return scnAckFn(rctx, res.AckError())
 	}, nil
 }

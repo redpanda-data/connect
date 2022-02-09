@@ -300,7 +300,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	h.mGetSendSucc.Incr(1)
 
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-h.closeChan:
 		return
 	}

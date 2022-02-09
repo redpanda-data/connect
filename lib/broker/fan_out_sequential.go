@@ -145,7 +145,7 @@ func (o *FanOutSequential) loop() {
 				msgCopy := ts.Payload.Copy()
 
 				throt := throttle.New(throttle.OptCloseChan(o.ctx.Done()))
-				resChan := make(chan types.Response)
+				resChan := make(chan response.Error)
 
 				// Try until success or shutdown.
 			sendLoop:
@@ -174,7 +174,7 @@ func (o *FanOutSequential) loop() {
 			}
 
 			select {
-			case ts.ResponseChan <- response.NewAck():
+			case ts.ResponseChan <- response.NewError(nil):
 			case <-o.ctx.Done():
 				return
 			}

@@ -50,7 +50,7 @@ func TestRetryBasic(t *testing.T) {
 	ret.wrapped = mOut
 
 	tChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	if err = ret.Consume(tChan); err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestRetryBasic(t *testing.T) {
 	}
 
 	select {
-	case tran.ResponseChan <- response.NewAck():
+	case tran.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -121,7 +121,7 @@ func TestRetrySadPath(t *testing.T) {
 	ret.wrapped = mOut
 
 	tChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	if err = ret.Consume(tChan); err != nil {
 		t.Fatal(err)
@@ -171,7 +171,7 @@ func TestRetrySadPath(t *testing.T) {
 	}
 
 	select {
-	case tran.ResponseChan <- response.NewAck():
+	case tran.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -192,7 +192,7 @@ func TestRetrySadPath(t *testing.T) {
 }
 
 func expectFromRetry(
-	resReturn types.Response,
+	resReturn response.Error,
 	tChan <-chan types.Transaction,
 	t *testing.T,
 	responsesSlice ...string) {
@@ -203,7 +203,7 @@ func expectFromRetry(
 		responses[k] = struct{}{}
 	}
 
-	resChans := []chan<- types.Response{}
+	resChans := []chan<- response.Error{}
 
 	for len(responses) > 0 {
 		select {
@@ -232,7 +232,7 @@ func expectFromRetry(
 func sendForRetry(
 	value string,
 	tChan chan types.Transaction,
-	resChan chan types.Response,
+	resChan chan response.Error,
 	t *testing.T,
 ) {
 	t.Helper()
@@ -247,8 +247,8 @@ func sendForRetry(
 }
 
 func ackForRetry(
-	exp types.Response,
-	resChan <-chan types.Response,
+	exp response.Error,
+	resChan <-chan response.Error,
 	t *testing.T,
 ) {
 	t.Helper()
@@ -291,7 +291,7 @@ func TestRetryParallel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resChan1, resChan2 := make(chan types.Response), make(chan types.Response)
+	resChan1, resChan2 := make(chan response.Error), make(chan response.Error)
 	sendForRetry("first", tChan, resChan1, t)
 	expectFromRetry(response.NewError(response.ErrNoAck), mOut.ts, t, "first")
 
@@ -303,19 +303,19 @@ func TestRetryParallel(t *testing.T) {
 		t.Fatal("Accepted transaction during retry loop")
 	default:
 	}
-	expectFromRetry(response.NewAck(), mOut.ts, t, "first", "second")
-	ackForRetry(response.NewAck(), resChan1, t)
-	ackForRetry(response.NewAck(), resChan2, t)
+	expectFromRetry(response.NewError(nil), mOut.ts, t, "first", "second")
+	ackForRetry(response.NewError(nil), resChan1, t)
+	ackForRetry(response.NewError(nil), resChan2, t)
 
 	sendForRetry("third", tChan, resChan1, t)
-	expectFromRetry(response.NewAck(), mOut.ts, t, "third")
-	ackForRetry(response.NewAck(), resChan1, t)
+	expectFromRetry(response.NewError(nil), mOut.ts, t, "third")
+	ackForRetry(response.NewError(nil), resChan1, t)
 
 	sendForRetry("fourth", tChan, resChan2, t)
 	expectFromRetry(response.NewError(response.ErrNoAck), mOut.ts, t, "fourth")
 
-	expectFromRetry(response.NewAck(), mOut.ts, t, "fourth")
-	ackForRetry(response.NewAck(), resChan2, t)
+	expectFromRetry(response.NewError(nil), mOut.ts, t, "fourth")
+	ackForRetry(response.NewError(nil), resChan2, t)
 
 	output.CloseAsync()
 	if err = output.WaitForClose(time.Second); err != nil {

@@ -25,7 +25,7 @@ func TestBasicFanIn(t *testing.T) {
 	Inputs := []types.Producer{}
 	mockInputs := []*MockInputType{}
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
@@ -60,7 +60,7 @@ func TestBasicFanIn(t *testing.T) {
 					t.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
 				}
 				select {
-				case ts.ResponseChan <- response.NewAck():
+				case ts.ResponseChan <- response.NewError(nil):
 				case <-time.After(time.Second * 5):
 					t.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
 				}
@@ -144,7 +144,7 @@ func TestFanInAsync(t *testing.T) {
 
 	for j := 0; j < nInputs; j++ {
 		go func(index int) {
-			rChan := make(chan types.Response)
+			rChan := make(chan response.Error)
 			for i := 0; i < nMsgs; i++ {
 				content := [][]byte{[]byte(fmt.Sprintf("hello world %v %v", i, index))}
 				select {
@@ -191,7 +191,7 @@ func BenchmarkBasicFanIn(b *testing.B) {
 
 	Inputs := []types.Producer{}
 	mockInputs := []*MockInputType{}
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
@@ -233,7 +233,7 @@ func BenchmarkBasicFanIn(b *testing.B) {
 				return
 			}
 			select {
-			case ts.ResponseChan <- response.NewAck():
+			case ts.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second * 5):
 				b.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
 				return

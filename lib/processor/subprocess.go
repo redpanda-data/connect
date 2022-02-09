@@ -499,7 +499,7 @@ var newLineBytes = []byte("\n")
 var commaBytes = []byte(",")
 
 // ProcessMessage logs an event and returns the message unchanged.
-func (e *Subprocess) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (e *Subprocess) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	e.mCount.Incr(1)
 	e.mut.Lock()
 	defer e.mut.Unlock()

@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/stretchr/testify/assert"
 )
 
 //------------------------------------------------------------------------------
@@ -25,7 +26,7 @@ func TestForEachEmpty(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(msgs) != 1 {
@@ -62,7 +63,7 @@ func TestForEachBasic(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(msgs) != 1 {
@@ -98,7 +99,7 @@ func TestForEachFilterSome(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(msgs) != 1 {
@@ -138,7 +139,7 @@ func TestForEachMultiProcs(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(msgs) != 1 {
@@ -169,12 +170,7 @@ func TestForEachFilterAll(t *testing.T) {
 		[]byte("hello world"),
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
-	if res == nil {
-		t.Fatal("expected empty response")
-	}
-	if err = res.AckError(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, res)
 	if len(msgs) != 0 {
 		t.Errorf("Wrong count of result msgs: %v", len(msgs))
 	}

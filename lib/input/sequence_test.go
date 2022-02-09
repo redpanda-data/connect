@@ -64,7 +64,7 @@ consumeLoop:
 			assert.Equal(t, 1, tran.Payload.Len())
 			act = append(act, string(tran.Payload.Get(0).Get()))
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Minute):
 				t.Fatalf("failed to ack after: %v", act)
 			}
@@ -133,7 +133,7 @@ consumeLoop:
 			assert.Equal(t, 1, tran.Payload.Len())
 			act = append(act, string(tran.Payload.Get(0).Get()))
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Minute):
 				t.Fatalf("failed to ack after: %v", act)
 			}
@@ -256,7 +256,7 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 					assert.Equal(t, 1, tran.Payload.Len())
 					act = append(act, string(tran.Payload.Get(0).Get()))
 					select {
-					case tran.ResponseChan <- response.NewAck():
+					case tran.ResponseChan <- response.NewError(nil):
 					case <-time.After(time.Minute):
 						t.Fatalf("failed to ack after: %v", act)
 					}
@@ -342,7 +342,7 @@ consumeLoop:
 			assert.Equal(t, 1, tran.Payload.Len())
 			act = append(act, string(tran.Payload.Get(0).Get()))
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Minute):
 				t.Fatalf("failed to ack after: %v", act)
 			}
@@ -397,7 +397,7 @@ func TestSequenceSad(t *testing.T) {
 			assert.Equal(t, 1, tran.Payload.Len())
 			assert.Equal(t, str, string(tran.Payload.Get(0).Get()))
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Minute):
 				t.Fatalf("failed to ack after: %v", str)
 			}
@@ -427,7 +427,7 @@ func TestSequenceSad(t *testing.T) {
 			assert.Equal(t, 1, tran.Payload.Len())
 			assert.Equal(t, str, string(tran.Payload.Get(0).Get()))
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Minute):
 				t.Fatalf("failed to ack after: %v", str)
 			}

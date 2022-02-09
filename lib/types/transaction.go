@@ -1,6 +1,9 @@
 package types
 
-import "github.com/Jeffail/benthos/v3/lib/message"
+import (
+	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/response"
+)
 
 //------------------------------------------------------------------------------
 
@@ -14,14 +17,14 @@ type Transaction struct {
 	// ResponseChan should receive a response at the end of a transaction (once
 	// the message is no longer owned by the receiver.) The response itself
 	// indicates whether the message has been propagated successfully.
-	ResponseChan chan<- Response
+	ResponseChan chan<- response.Error
 }
 
 //------------------------------------------------------------------------------
 
 // NewTransaction creates a new transaction object from a message payload and a
 // response channel.
-func NewTransaction(payload *message.Batch, resChan chan<- Response) Transaction {
+func NewTransaction(payload *message.Batch, resChan chan<- response.Error) Transaction {
 	return Transaction{
 		Payload:      payload,
 		ResponseChan: resChan,

@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -168,11 +167,11 @@ func NewGroupBy(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	g.mCount.Incr(1)
 
 	if msg.Len() == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	groups := make([]*message.Batch, len(g.groups))
@@ -228,7 +227,7 @@ func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Re
 			msgs = append(msgs, resultMsgs...)
 		}
 		if res != nil {
-			if err := res.AckError(); err != nil {
+			if err := res; err != nil {
 				g.log.Errorf("Processor error: %v\n", err)
 			}
 		}
@@ -239,7 +238,7 @@ func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Re
 	}
 
 	if len(msgs) == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	g.mBatchSent.Incr(int64(len(msgs)))

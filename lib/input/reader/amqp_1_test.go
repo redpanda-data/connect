@@ -118,7 +118,7 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 
 			time.Sleep(6 * time.Second) // Simulate long processing before ack so message lock expires and lock renewal is requires
 
-			assert.NoError(t, ackFn(ctx, response.NewAck()))
+			assert.NoError(t, ackFn(ctx, response.NewError(nil)))
 		}()
 	}
 	wg.Wait()

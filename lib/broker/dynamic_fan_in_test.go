@@ -25,7 +25,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 
 	Inputs := map[string]DynamicInput{}
 	mockInputs := []*MockInputType{}
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
@@ -61,7 +61,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 					return
 				}
 				select {
-				case ts.ResponseChan <- response.NewAck():
+				case ts.ResponseChan <- response.NewError(nil):
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
 					return
@@ -105,7 +105,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	sendAllTestMessages := func(input *MockInputType, label string) {
-		rChan := make(chan types.Response)
+		rChan := make(chan response.Error)
 		for i := 0; i < nMsgs; i++ {
 			content := [][]byte{[]byte(fmt.Sprintf("%v-%v", label, i))}
 			input.TChan <- types.NewTransaction(message.QuickBatch(content), rChan)
@@ -136,7 +136,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return
@@ -160,7 +160,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for response to broker: %v", i)
 			return
@@ -287,7 +287,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 
 	for j := 0; j < nInputs; j++ {
 		go func(index int) {
-			rChan := make(chan types.Response)
+			rChan := make(chan response.Error)
 			for i := 0; i < nMsgs; i++ {
 				content := [][]byte{[]byte(fmt.Sprintf("hello world %v %v", i, index))}
 				select {

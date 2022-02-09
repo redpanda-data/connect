@@ -504,7 +504,7 @@ func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
 }
 
 // ProcessMessage applies workflow stages to each part of a message type.
-func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	w.mCount.Incr(1)
 
 	payload := msg.DeepCopy()

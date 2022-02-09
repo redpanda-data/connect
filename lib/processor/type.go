@@ -15,7 +15,7 @@ type Type interface {
 	// this call returns both a slice of messages in case of success or a
 	// response in case of failure. If the slice of messages is empty the
 	// response should be returned to the source.
-	ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response)
+	ProcessMessage(msg *message.Batch) ([]*message.Batch, error)
 
 	types.Closable
 }

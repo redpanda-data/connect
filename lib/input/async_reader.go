@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/cenkalti/backoff/v4"
 )
@@ -176,7 +177,7 @@ func (r *AsyncReader) loop() {
 
 		startedAt := time.Now()
 
-		resChan := make(chan types.Response)
+		resChan := make(chan response.Error)
 		tracing.InitSpans("input_"+r.typeStr, msg)
 		select {
 		case r.transactions <- types.NewTransaction(msg, resChan):
@@ -188,11 +189,11 @@ func (r *AsyncReader) loop() {
 		go func(
 			m *message.Batch,
 			aFn reader.AsyncAckFn,
-			rChan chan types.Response,
+			rChan chan response.Error,
 		) {
 			defer pendingAcks.Done()
 
-			var res types.Response
+			var res response.Error
 			var open bool
 			select {
 			case res, open = <-rChan:

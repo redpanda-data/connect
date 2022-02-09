@@ -43,7 +43,7 @@ func TestParallelBasic(t *testing.T) {
 		[]byte("quz"),
 	}))
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 5, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
@@ -90,7 +90,7 @@ func TestParallelError(t *testing.T) {
 		[]byte("quz"),
 	}))
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	}
 	if expC, actC := 5, msgs[0].Len(); actC != expC {
 		t.Fatalf("Wrong result count: %v != %v", actC, expC)
@@ -149,7 +149,7 @@ func TestParallelCapped(t *testing.T) {
 		[]byte("quz2"),
 	}))
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 10, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {

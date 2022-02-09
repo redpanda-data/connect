@@ -37,7 +37,7 @@ func TestHTTPClientRetries(t *testing.T) {
 
 	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("test")}))
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 	if len(msgs) != 1 {
 		t.Fatal("Wrong count of error messages")
@@ -88,7 +88,7 @@ func TestHTTPClientBasic(t *testing.T) {
 
 	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
@@ -101,7 +101,7 @@ func TestHTTPClientBasic(t *testing.T) {
 
 	msgs, res = h.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
@@ -117,7 +117,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	msg.Get(0).MetaSet("foo", "bar")
 	msgs, res = h.ProcessMessage(msg)
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
@@ -157,7 +157,7 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 
 	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "", string(message.GetAllBytes(msgs[0])[0]); act != exp {
@@ -168,7 +168,7 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 
 	msgs, res = h.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "", string(message.GetAllBytes(msgs[0])[0]); act != exp {
@@ -182,7 +182,7 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 	msg.Get(0).MetaSet("foo", "bar")
 	msgs, res = h.ProcessMessage(msg)
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "", string(message.GetAllBytes(msgs[0])[0]); act != exp {
@@ -208,7 +208,7 @@ func TestHTTPClientEmpty404Response(t *testing.T) {
 
 	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foo", string(message.GetAllBytes(msgs[0])[0]); act != exp {
@@ -249,7 +249,7 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 
 	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
@@ -291,7 +291,7 @@ func TestHTTPClientParallel(t *testing.T) {
 	inputMsg.Get(0).MetaSet("foo", "bar")
 	msgs, res := h.ProcessMessage(inputMsg)
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	} else if expC, actC := 5, msgs[0].Len(); actC != expC {
 		t.Errorf("Wrong result count: %v != %v", actC, expC)
 	} else if exp, act := "foobar", string(message.GetAllBytes(msgs[0])[0]); act != exp {
@@ -339,7 +339,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 		[]byte("quz"),
 	}))
 	if res != nil {
-		t.Error(res.AckError())
+		t.Error(res)
 	}
 	if expC, actC := 5, msgs[0].Len(); actC != expC {
 		t.Fatalf("Wrong result count: %v != %v", actC, expC)
@@ -410,7 +410,7 @@ func TestHTTPClientFailLogURL(t *testing.T) {
 
 			_, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
 			if res != nil {
-				t.Error(res.AckError())
+				t.Error(res)
 			}
 
 			if !tt.wantError {

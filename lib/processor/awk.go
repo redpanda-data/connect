@@ -660,7 +660,7 @@ func flattenForAWK(path string, data interface{}) map[string]string {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (a *AWK) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (a *AWK) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	a.mCount.Incr(1)
 	newMsg := msg.Copy()
 	mutableJSONParts := make([]interface{}, newMsg.Len())

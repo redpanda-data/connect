@@ -18,7 +18,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/apache/pulsar-client-go/pulsar"
 )
 
@@ -269,7 +269,7 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 
 	msg.Append(part)
 
-	return msg, func(ctx context.Context, res types.Response) error {
+	return msg, func(ctx context.Context, res response.Error) error {
 		var r pulsar.Consumer
 		p.m.RLock()
 		if p.consumer != nil {

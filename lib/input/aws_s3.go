@@ -19,6 +19,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/gabs/v2"
@@ -761,7 +762,7 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn 
 		}
 	}
 
-	return s3MsgFromParts(object, parts), func(rctx context.Context, res types.Response) error {
+	return s3MsgFromParts(object, parts), func(rctx context.Context, res response.Error) error {
 		return scnAckFn(rctx, res.AckError())
 	}, nil
 }

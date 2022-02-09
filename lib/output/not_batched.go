@@ -65,7 +65,7 @@ func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
 	if err := msg.Iter(func(i int, p *message.Part) error {
 		index := i
 
-		tmpResChan := make(chan types.Response)
+		tmpResChan := make(chan response.Error)
 		tmpMsg := message.QuickBatch(nil)
 		tmpMsg.Append(p)
 
@@ -129,7 +129,7 @@ func (n *notBatchedOutput) loop() {
 				return
 			}
 		} else {
-			var res types.Response = response.NewAck()
+			res := response.NewError(nil)
 			if err := n.breakMessageOut(tran.Payload); err != nil {
 				if err == component.ErrTypeClosed {
 					return

@@ -214,7 +214,7 @@ Type: `array`
 Default: `[]`  
 Requires version 3.64.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 nack_reject_patterns:

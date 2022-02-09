@@ -16,7 +16,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -344,11 +343,11 @@ func (d *Archive) createHeaderFunc(msg *message.Batch) func(int, *message.Part) 
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (d *Archive) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (d *Archive) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	d.mCount.Incr(1)
 
 	if msg.Len() == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	d.mSent.Incr(1)

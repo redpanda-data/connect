@@ -15,6 +15,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -161,7 +162,7 @@ func (t *SocketServer) sendMsg(msg *message.Batch) bool {
 	// nolint:staticcheck, gocritic // Ignore SA2001 empty critical section, Ignore badLock
 	t.retriesMut.Unlock()
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	select {
 	case t.transactions <- types.NewTransaction(msg, resChan):
 	case <-t.ctx.Done():
@@ -182,7 +183,7 @@ func (t *SocketServer) sendMsg(msg *message.Batch) bool {
 					return
 				}
 				var sendErr error
-				if res != nil {
+				if res.AckError() != nil {
 					sendErr = res.AckError()
 				}
 				if sendErr == nil || sendErr == component.ErrTypeClosed {

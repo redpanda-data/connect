@@ -10,7 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 )
 
@@ -87,7 +87,7 @@ func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessag
 	a.ackedWG.Add(1)
 	aMsg := asyncMessage{
 		msg: a.flushedMessage,
-		ackFn: func(ctx context.Context, res types.Response) error {
+		ackFn: func(ctx context.Context, res response.Error) error {
 			topSequence := resolveFn()
 			if topSequence != nil {
 				a.ackedMut.Lock()

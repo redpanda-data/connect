@@ -170,7 +170,7 @@ func newLambda(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (l *Lambda) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (l *Lambda) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	l.mCount.Incr(1)
 
 	var resultMsg *message.Batch

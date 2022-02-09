@@ -16,7 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -329,7 +329,7 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckF
 			return nil, nil, component.ErrNotConnected
 		}
 		addPart(data)
-		return msg, func(actx context.Context, res types.Response) error {
+		return msg, func(actx context.Context, res response.Error) error {
 			if a.conf.AutoAck {
 				return nil
 			}

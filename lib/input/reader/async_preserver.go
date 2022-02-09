@@ -10,7 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/cenkalti/backoff/v4"
 )
 
@@ -86,7 +86,7 @@ func (p *AsyncPreserver) wrapAckFn(m asyncPreserverResend) (*message.Batch, Asyn
 func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (*message.Batch, AsyncAckFn) {
 	sortGroup, trackedMsg := imessage.NewSortGroup(m.msg)
 
-	return trackedMsg, func(ctx context.Context, res types.Response) error {
+	return trackedMsg, func(ctx context.Context, res response.Error) error {
 		if res.AckError() != nil {
 			resendMsg := m.msg
 			if walkable, ok := res.AckError().(batch.WalkableError); ok && walkable.IndexedErrors() < m.msg.Len() {
@@ -123,7 +123,7 @@ func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (*message.Batch,
 }
 
 func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (*message.Batch, AsyncAckFn) {
-	return m.msg, func(ctx context.Context, res types.Response) error {
+	return m.msg, func(ctx context.Context, res response.Error) error {
 		if res.AckError() != nil {
 			p.msgsMut.Lock()
 			p.resendMessages = append(p.resendMessages, m)

@@ -38,7 +38,7 @@ func TestPoolBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
+	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestPoolBasic(t *testing.T) {
 	// Respond without error
 	go func() {
 		select {
-		case procT.ResponseChan <- response.NewAck():
+		case procT.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second * 5):
 			t.Error("Timed out")
 		}
@@ -152,7 +152,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
+	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
 	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 
 			// Respond with no error
 			select {
-			case procT.ResponseChan <- response.NewAck():
+			case procT.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second * 5):
 				t.Fatal("Timed out")
 			}
@@ -235,7 +235,7 @@ func TestPoolMultiThreads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
+	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
 	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestPoolMultiThreads(t *testing.T) {
 		go func(tran types.Transaction) {
 			// Respond with no error
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second * 5):
 				t.Error("Timed out")
 			}

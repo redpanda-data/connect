@@ -112,7 +112,7 @@ func TestHTTPBasic(t *testing.T) {
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}
@@ -160,7 +160,7 @@ func TestHTTPBasic(t *testing.T) {
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}
@@ -206,7 +206,7 @@ func TestHTTPBasic(t *testing.T) {
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}
@@ -260,7 +260,7 @@ func TestHTTPServerLifecycle(t *testing.T) {
 		select {
 		case tran = <-in.TransactionChan():
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(timeout):
 				return nil, errors.New("timed out 1")
 			}
@@ -351,7 +351,7 @@ func TestHTTPServerMetadata(t *testing.T) {
 		select {
 		case tran = <-server.TransactionChan():
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(timeout):
 				return nil, errors.New("timed out 1")
 			}
@@ -416,7 +416,7 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 		select {
 		case tran = <-server.TransactionChan():
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out")
 			}
@@ -553,7 +553,7 @@ rate_limit_resources:
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}
@@ -643,7 +643,7 @@ func TestHTTPServerWebsockets(t *testing.T) {
 		t.Errorf("Unexpected message: %v != %v", act, exp)
 	}
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for response")
 	}
@@ -668,7 +668,7 @@ func TestHTTPServerWebsockets(t *testing.T) {
 		t.Errorf("Unexpected message: %v != %v", act, exp)
 	}
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for response")
 	}
@@ -732,7 +732,7 @@ rate_limit_resources:
 			t.Error("Timed out waiting for message")
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for response")
 		}
@@ -851,7 +851,7 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 		t.Fatal("Timed out waiting for message")
 	}
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for response")
 	}
@@ -981,7 +981,7 @@ func TestHTTPSyncResponseMultipart(t *testing.T) {
 		t.Fatal("Timed out waiting for message")
 	}
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for response")
 	}
@@ -1084,7 +1084,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 		t.Fatal("Timed out waiting for message")
 	}
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for response")
 	}
@@ -1101,7 +1101,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 		t.Fatal("Timed out waiting for message")
 	}
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for response")
 	}

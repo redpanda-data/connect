@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -42,7 +43,7 @@ func TestFanOutBroker(t *testing.T) {
 	}
 
 	sendChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	if err = s.Consume(sendChan); err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +127,7 @@ func TestRoundRobinBroker(t *testing.T) {
 	}
 
 	sendChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	if err = s.Consume(sendChan); err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +217,7 @@ func TestGreedyBroker(t *testing.T) {
 	}
 
 	sendChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	if err = s.Consume(sendChan); err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +304,7 @@ func TestTryBroker(t *testing.T) {
 	}
 
 	sendChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	if err = s.Consume(sendChan); err != nil {
 		t.Fatal(err)
 	}

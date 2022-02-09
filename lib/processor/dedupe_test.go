@@ -3,7 +3,6 @@ package processor
 import (
 	"fmt"
 	"math/rand"
-	"reflect"
 	"testing"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/stretchr/testify/assert"
 )
 
 func init() {
@@ -42,8 +41,8 @@ func TestDedupe(t *testing.T) {
 
 	msgIn := message.QuickBatch([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err)
 	}
 	if msgOut == nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
@@ -51,8 +50,8 @@ func TestDedupe(t *testing.T) {
 
 	msgIn = message.QuickBatch([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err)
 	}
 	if msgOut != nil {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
@@ -60,8 +59,8 @@ func TestDedupe(t *testing.T) {
 
 	msgIn = message.QuickBatch([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err)
 	}
 	if msgOut == nil {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate")
@@ -91,8 +90,8 @@ func TestDedupeInterpolation(t *testing.T) {
 
 	msgIn := message.QuickBatch([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err)
 	}
 	if msgOut == nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
@@ -100,8 +99,8 @@ func TestDedupeInterpolation(t *testing.T) {
 
 	msgIn = message.QuickBatch([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 3 told to propagate even if it was expected not to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 3 told to propagate even if it was expected not to propagate. Cache error:", err)
 	}
 	if msgOut != nil {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
@@ -109,8 +108,8 @@ func TestDedupeInterpolation(t *testing.T) {
 
 	msgIn = message.QuickBatch([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 3 told not to propagate even if it was expected to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 3 told not to propagate even if it was expected to propagate. Cache error:", err)
 	}
 	if msgOut == nil {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate")
@@ -118,8 +117,8 @@ func TestDedupeInterpolation(t *testing.T) {
 
 	msgIn = message.QuickBatch([][]byte{doc4})
 	msgOut, err = proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 4 told not to propagate even if it was expected to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 4 told not to propagate even if it was expected to propagate. Cache error:", err)
 	}
 	if msgOut == nil {
 		t.Error("Message 4 told not to propagate even if it was expected to propagate")
@@ -149,8 +148,8 @@ func TestDedupeXXHash(t *testing.T) {
 
 	msgIn := message.QuickBatch([][]byte{doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err)
 	}
 	if msgOut == nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
@@ -158,8 +157,8 @@ func TestDedupeXXHash(t *testing.T) {
 
 	msgIn = message.QuickBatch([][]byte{doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err)
 	}
 	if msgOut != nil {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
@@ -167,8 +166,8 @@ func TestDedupeXXHash(t *testing.T) {
 
 	msgIn = message.QuickBatch([][]byte{doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err)
 	}
 	if msgOut == nil {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate")
@@ -199,8 +198,8 @@ func TestDedupePartSelection(t *testing.T) {
 
 	msgIn := message.QuickBatch([][]byte{hdr, doc1})
 	msgOut, err := proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err)
 	}
 	if msgOut == nil {
 		t.Error("Message 1 told not to propagate even if it was expected to propagate")
@@ -208,8 +207,8 @@ func TestDedupePartSelection(t *testing.T) {
 
 	msgIn = message.QuickBatch([][]byte{hdr, doc2})
 	msgOut, err = proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 1 told to propagate even if it was expected not to propagate. Cache error:", err)
 	}
 	if msgOut != nil {
 		t.Error("Message 2 told to propagate even if it was expected not to propagate")
@@ -217,8 +216,8 @@ func TestDedupePartSelection(t *testing.T) {
 
 	msgIn = message.QuickBatch([][]byte{hdr, doc3})
 	msgOut, err = proc.ProcessMessage(msgIn)
-	if err != nil && err.AckError() != nil {
-		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err.AckError())
+	if err != nil {
+		t.Error("Message 1 told not to propagate even if it was expected to propagate. Cache error:", err)
 	}
 	if msgOut == nil {
 		t.Error("Message 3 told not to propagate even if it was expected to propagate")
@@ -254,9 +253,8 @@ func TestDedupeCacheErrors(t *testing.T) {
 	delete(mgr.Caches, "foocache")
 
 	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar")}))
-	if exp := response.NewAck(); !reflect.DeepEqual(exp, res) || len(msgs) > 0 {
-		t.Errorf("Expected message drop on error: %v - %v", res, len(msgs))
-	}
+	assert.Nil(t, res)
+	assert.Len(t, msgs, 0)
 
 	conf.Dedupe.DropOnCacheErr = false
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
@@ -310,9 +308,7 @@ func TestDedupeBoundsCheck(t *testing.T) {
 		t.Error("OOB message told to propagate")
 	}
 
-	if exp, act := response.NewAck(), res; !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong response returned: %v != %v", act, exp)
-	}
+	assert.Nil(t, res)
 }
 
 func TestDedupeNegBoundsCheck(t *testing.T) {
@@ -336,9 +332,7 @@ func TestDedupeNegBoundsCheck(t *testing.T) {
 		t.Error("OOB message told to propagate")
 	}
 
-	if exp, act := response.NewAck(), res; !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong response returned: %v != %v", act, exp)
-	}
+	assert.Nil(t, res)
 }
 
 func randStringRunes(n int) string {

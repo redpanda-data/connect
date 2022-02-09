@@ -16,7 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/aws/aws-sdk-go/aws"
@@ -497,7 +497,7 @@ func (a *AmazonS3) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAc
 	}
 
 	msg.Append(part)
-	return msg, func(rctx context.Context, res types.Response) error {
+	return msg, func(rctx context.Context, res response.Error) error {
 		if res.AckError() == nil {
 			a.deleteObjects([]objKey{obj})
 		} else {

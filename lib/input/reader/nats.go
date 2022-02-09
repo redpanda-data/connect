@@ -10,12 +10,12 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/nats-io/nats.go"
 )
 
@@ -174,7 +174,7 @@ func (n *NATS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 		}
 	}
 
-	return bmsg, func(ctx context.Context, res types.Response) error {
+	return bmsg, func(ctx context.Context, res response.Error) error {
 		var ackErr error
 		if res.AckError() != nil {
 			ackErr = msg.Nak()

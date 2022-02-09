@@ -16,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/robfig/cron/v3"
 )
@@ -241,7 +242,7 @@ func (b *Bloblang) ReadWithContext(ctx context.Context) (*message.Batch, reader.
 	msg := message.QuickBatch(nil)
 	msg.Append(p)
 
-	return msg, func(context.Context, types.Response) error { return nil }, nil
+	return msg, func(context.Context, response.Error) error { return nil }, nil
 }
 
 // CloseAsync shuts down the bloblang reader.

@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/golang/snappy"
 	"github.com/pierrec/lz4/v4"
@@ -187,7 +186,7 @@ func NewDecompress(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (d *Decompress) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (d *Decompress) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	d.mCount.Incr(1)
 	newMsg := msg.Copy()
 
@@ -203,7 +202,7 @@ func (d *Decompress) ProcessMessage(msg *message.Batch) ([]*message.Batch, types
 	}
 
 	if newMsg.Len() == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	IteratePartsWithSpanV2(TypeDecompress, d.conf.Parts, newMsg, proc)

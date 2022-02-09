@@ -467,7 +467,7 @@ func TestWorkflows(t *testing.T) {
 			msgs, res := p.ProcessMessage(inputMsg)
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
-				require.EqualError(t, res.AckError(), test.err)
+				require.EqualError(t, res, test.err)
 			} else {
 				require.Len(t, msgs, 1)
 				assert.Equal(t, len(test.output), msgs[0].Len())
@@ -646,7 +646,7 @@ func TestWorkflowsWithResources(t *testing.T) {
 			msgs, res := p.ProcessMessage(message.QuickBatch(parts))
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
-				require.EqualError(t, res.AckError(), test.err)
+				require.EqualError(t, res, test.err)
 			} else {
 				require.Len(t, msgs, 1)
 				var output []string
@@ -904,7 +904,7 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 			msgs, res := p.ProcessMessage(message.QuickBatch(parts))
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
-				require.EqualError(t, res.AckError(), test.err)
+				require.EqualError(t, res, test.err)
 			} else {
 				require.Len(t, msgs, 1)
 				var output []string

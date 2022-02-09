@@ -19,6 +19,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -318,7 +319,7 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 		select {
 		case c <- asyncMessage{
 			msg: msg,
-			ackFn: func(ctx context.Context, res types.Response) error {
+			ackFn: func(ctx context.Context, res response.Error) error {
 				maxOffset := resolveFn()
 				if maxOffset == nil {
 					return nil
@@ -350,7 +351,7 @@ func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(conte
 		select {
 		case c <- asyncMessage{
 			msg: msg,
-			ackFn: func(ctx context.Context, res types.Response) error {
+			ackFn: func(ctx context.Context, res response.Error) error {
 				resErr := res.AckError()
 				if resErr == nil {
 					k.cMut.Lock()

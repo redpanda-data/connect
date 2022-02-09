@@ -522,7 +522,7 @@ func sendMessage(
 	msg := message.QuickBatch(nil)
 	msg.Append(p)
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	select {
 	case tranChan <- types.NewTransaction(msg, resChan):
@@ -552,7 +552,7 @@ func sendBatch(
 		msg.Append(message.NewPart([]byte(payload)))
 	}
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	select {
 	case tranChan <- types.NewTransaction(msg, resChan):
@@ -583,12 +583,8 @@ func receiveMessage(
 	return b
 }
 
-func sendResponse(ctx context.Context, t testing.TB, resChan chan<- types.Response, err error) {
-	var res types.Response = response.NewAck()
-	if err != nil {
-		res = response.NewError(err)
-	}
-
+func sendResponse(ctx context.Context, t testing.TB, resChan chan<- response.Error, err error) {
+	res := response.NewError(err)
 	select {
 	case resChan <- res:
 	case <-ctx.Done():
@@ -597,7 +593,7 @@ func sendResponse(ctx context.Context, t testing.TB, resChan chan<- types.Respon
 }
 
 // nolint:gocritic // Ignore unnamedResult false positive
-func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan types.Transaction) (*message.Part, chan<- types.Response) {
+func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan types.Transaction) (*message.Part, chan<- response.Error) {
 	t.Helper()
 
 	var tran types.Transaction

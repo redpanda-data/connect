@@ -393,7 +393,7 @@ func NewUnarchive(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (d *Unarchive) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (d *Unarchive) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	d.mCount.Incr(1)
 
 	newMsg := message.QuickBatch(nil)

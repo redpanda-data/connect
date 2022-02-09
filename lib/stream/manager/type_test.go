@@ -28,7 +28,7 @@ type mockProc struct {
 	mChan chan struct{}
 }
 
-func (m *mockProc) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (m *mockProc) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	m.mChan <- struct{}{}
 	return []*message.Batch{msg}, nil
 }

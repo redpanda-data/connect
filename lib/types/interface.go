@@ -77,7 +77,7 @@ type Processor interface {
 	//
 	// More information about this form of error handling can be found at:
 	// https://www.benthos.dev/docs/configuration/error_handling
-	ProcessMessage(*message.Batch) ([]*message.Batch, Response)
+	ProcessMessage(*message.Batch) ([]*message.Batch, error)
 
 	Closable
 }
@@ -212,15 +212,3 @@ type ProcessorConstructorFunc func() (Processor, error)
 // to increment i by the number of components they contain, and may use the
 // value for metric and logging namespacing.
 type PipelineConstructorFunc func(i *int) (Pipeline, error)
-
-//------------------------------------------------------------------------------
-
-// Response is a response from an output, agent or broker that confirms the
-// input of successful message receipt.
-type Response interface {
-	// AckError returns a non-nil error if the message failed to reach its
-	// destination.
-	AckError() error
-}
-
-//------------------------------------------------------------------------------

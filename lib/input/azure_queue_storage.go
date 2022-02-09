@@ -18,7 +18,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 )
 
 // AzureQueueStorage is a benthos reader.Type implementation that reads messages
@@ -113,7 +113,7 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg *message.B
 			msg.Append(part)
 			dqm[i] = queueMsg
 		}
-		return msg, func(ctx context.Context, res types.Response) error {
+		return msg, func(ctx context.Context, res response.Error) error {
 			for i := int32(0); i < n; i++ {
 				msgIDURL := messageURL.NewMessageIDURL(dqm[i].ID)
 				_, err = msgIDURL.Delete(ctx, dqm[i].PopReceipt)

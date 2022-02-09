@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/require"
 )
@@ -201,7 +202,7 @@ func TestAsyncWriterClosesOnReconn(t *testing.T) {
 	}
 
 	msgChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
@@ -252,7 +253,7 @@ func TestAsyncWriterClosesOnResend(t *testing.T) {
 	}
 
 	msgChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
@@ -310,7 +311,7 @@ func TestAsyncWriterCanReconnect(t *testing.T) {
 	}
 
 	msgChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
@@ -377,8 +378,8 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 	}
 
 	msgChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
-	resChan2 := make(chan types.Response)
+	resChan := make(chan response.Error)
+	resChan2 := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
@@ -486,7 +487,7 @@ func TestAsyncWriterCantReconnect(t *testing.T) {
 	}
 
 	msgChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
@@ -549,7 +550,7 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 	}
 
 	msgChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
@@ -614,7 +615,7 @@ func TestAsyncWriterSadPath(t *testing.T) {
 	}
 
 	msgChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)

@@ -56,7 +56,7 @@ func TestSwitchNoConditions(t *testing.T) {
 	s := newSwitch(t, conf, mockOutputs)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
@@ -68,7 +68,7 @@ func TestSwitchNoConditions(t *testing.T) {
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
-		resChanSlice := []chan<- types.Response{}
+		resChanSlice := []chan<- response.Error{}
 		for j := 0; j < nOutputs; j++ {
 			var ts types.Transaction
 			select {
@@ -84,7 +84,7 @@ func TestSwitchNoConditions(t *testing.T) {
 		}
 		for j := 0; j < nOutputs; j++ {
 			select {
-			case resChanSlice[j] <- response.NewAck():
+			case resChanSlice[j] <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -123,7 +123,7 @@ func TestSwitchNoRetries(t *testing.T) {
 	s := newSwitch(t, conf, mockOutputs)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
@@ -134,7 +134,7 @@ func TestSwitchNoRetries(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("Timed out waiting for broker send")
 		}
-		resChanSlice := []chan<- types.Response{}
+		resChanSlice := []chan<- response.Error{}
 		for j := 0; j < nOutputs; j++ {
 			var ts types.Transaction
 			select {
@@ -148,11 +148,11 @@ func TestSwitchNoRetries(t *testing.T) {
 			}
 		}
 		for j := 0; j < nOutputs; j++ {
-			var res types.Response
+			var res response.Error
 			if j == 1 {
 				res = response.NewError(errors.New("test"))
 			} else {
-				res = response.NewAck()
+				res = response.NewError(nil)
 			}
 			select {
 			case resChanSlice[j] <- res:
@@ -202,7 +202,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 	require.NoError(t, err)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	require.NoError(t, s.Consume(readChan))
 
 	msg := message.QuickBatch([][]byte{
@@ -219,7 +219,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 		t.Fatal("Timed out waiting for broker send")
 	}
 
-	var res types.Response
+	var res response.Error
 	select {
 	case res = <-resChan:
 	case <-time.After(time.Second):
@@ -266,7 +266,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 	s := newSwitch(t, conf, mockOutputs)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	require.NoError(t, s.Consume(readChan))
 
 	msg := message.QuickBatch([][]byte{
@@ -293,14 +293,14 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 		}
 	}
 	for j := 0; j < nOutputs; j++ {
-		var res types.Response
+		var res response.Error
 		if j == 0 {
 			batchErr := batch.NewError(transactions[j].Payload, errors.New("not this"))
 			batchErr.Failed(1, errors.New("err 1"))
 			batchErr.Failed(3, errors.New("err 3"))
 			res = response.NewError(batchErr)
 		} else {
-			res = response.NewAck()
+			res = response.NewError(nil)
 		}
 		select {
 		case transactions[j].ResponseChan <- res:
@@ -354,7 +354,7 @@ func TestSwitchWithConditions(t *testing.T) {
 	s := newSwitch(t, conf, mockOutputs)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
@@ -402,7 +402,7 @@ func TestSwitchWithConditions(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- response.NewAck():
+			case ts.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to output")
 				break outputLoop
@@ -457,7 +457,7 @@ func TestSwitchError(t *testing.T) {
 	s := newSwitch(t, conf, mockOutputs)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
@@ -492,7 +492,7 @@ func TestSwitchError(t *testing.T) {
 			t.Error("Timed out waiting for output to propagate")
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 		}
 	}
@@ -524,7 +524,7 @@ func TestSwitchBatchSplit(t *testing.T) {
 	s := newSwitch(t, conf, mockOutputs)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
@@ -558,7 +558,7 @@ func TestSwitchBatchSplit(t *testing.T) {
 			t.Error("Timed out waiting for output to propagate")
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 		}
 	}
@@ -590,7 +590,7 @@ func TestSwitchBatchGroup(t *testing.T) {
 	s := newSwitch(t, conf, mockOutputs)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
@@ -624,7 +624,7 @@ func TestSwitchBatchGroup(t *testing.T) {
 		t.Error("Timed out waiting for output to propagate")
 	}
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 	}
 
@@ -659,7 +659,7 @@ func TestSwitchNoMatch(t *testing.T) {
 	s := newSwitch(t, conf, mockOutputs)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
@@ -703,7 +703,7 @@ func TestSwitchNoMatchStrict(t *testing.T) {
 	s := newSwitch(t, conf, mockOutputs)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
@@ -747,7 +747,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 	s := newSwitch(t, conf, mockOutputs)
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
@@ -765,7 +765,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 			var ts types.Transaction
 			var ok bool
 
-			resChans := []chan<- types.Response{}
+			resChans := []chan<- response.Error{}
 			for len(resChans) < 1 {
 				select {
 				case ts, ok = <-mockOutputs[0].TChan:
@@ -801,7 +801,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 
 			for i := 0; i < len(resChans); i++ {
 				select {
-				case resChans[i] <- response.NewAck():
+				case resChans[i] <- response.NewError(nil):
 				case <-time.After(time.Second):
 					t.Errorf("Timed out responding to output")
 					break outputLoop
@@ -859,7 +859,7 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	s := newSwitch(t, conf, mockOutputs)
 
@@ -886,7 +886,7 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts1.ResponseChan <- response.NewAck():
+	case ts1.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to output")
 		return
@@ -908,7 +908,7 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts2.ResponseChan <- response.NewAck():
+	case ts2.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to output")
 		return
@@ -941,7 +941,7 @@ func TestSwitchShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
@@ -1003,7 +1003,7 @@ func TestSwitchShutDownFromReceive(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
@@ -1049,7 +1049,7 @@ func TestSwitchShutDownFromSend(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
@@ -1088,7 +1088,7 @@ func TestSwitchBackPressure(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
@@ -1103,7 +1103,7 @@ func TestSwitchBackPressure(t *testing.T) {
 			select {
 			case ts := <-mockOutputs[0].TChan:
 				select {
-				case ts.ResponseChan <- response.NewAck():
+				case ts.ResponseChan <- response.NewError(nil):
 				case <-doneChan:
 					return
 				}

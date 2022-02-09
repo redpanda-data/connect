@@ -314,7 +314,7 @@ func getRedisOperator(opStr string) (redisOperator, error) {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (r *Redis) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (r *Redis) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	r.mCount.Incr(1)
 	newMsg := msg.Copy()
 

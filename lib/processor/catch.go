@@ -130,7 +130,7 @@ func NewCatch(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *Catch) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (p *Catch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	p.mCount.Incr(1)
 
 	resultMsgs := make([]*message.Batch, msg.Len())
@@ -141,8 +141,8 @@ func (p *Catch) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Resp
 		return nil
 	})
 
-	var res types.Response
-	if resultMsgs, res = ExecuteCatchAll(p.children, resultMsgs...); res != nil {
+	var res error
+	if resultMsgs, res = ExecuteCatchAll(p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
 		return nil, res
 	}
 

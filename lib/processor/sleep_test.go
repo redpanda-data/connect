@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSleep(t *testing.T) {
@@ -22,7 +23,7 @@ func TestSleep(t *testing.T) {
 	msgIn := message.QuickBatch(nil)
 	msgsOut, res := slp.ProcessMessage(msgIn)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if exp, act := msgIn, msgsOut[0]; exp != act {
@@ -42,7 +43,7 @@ func TestSleepExit(t *testing.T) {
 
 	doneChan := make(chan struct{})
 	go func() {
-		slp.ProcessMessage(message.QuickBatch(nil))
+		_, _ = slp.ProcessMessage(message.QuickBatch(nil))
 		close(doneChan)
 	}()
 
@@ -66,8 +67,10 @@ func TestSleep200Millisecond(t *testing.T) {
 	}
 
 	tBefore := time.Now()
-	slp.ProcessMessage(message.QuickBatch(nil))
+	batches, err := slp.ProcessMessage(message.QuickBatch(nil))
 	tAfter := time.Now()
+	require.NoError(t, err)
+	require.Len(t, batches, 1)
 
 	if dur := tAfter.Sub(tBefore); dur < (time.Millisecond * 200) {
 		t.Errorf("Message didn't take long enough")
@@ -85,10 +88,12 @@ func TestSleepInterpolated(t *testing.T) {
 	}
 
 	tBefore := time.Now()
-	slp.ProcessMessage(message.QuickBatch([][]byte{
+	batches, err := slp.ProcessMessage(message.QuickBatch([][]byte{
 		[]byte(`{"foo":200}`),
 	}))
 	tAfter := time.Now()
+	require.NoError(t, err)
+	require.Len(t, batches, 1)
 
 	if dur := tAfter.Sub(tBefore); dur < (time.Millisecond * 200) {
 		t.Errorf("Message didn't take long enough")

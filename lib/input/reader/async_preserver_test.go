@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -67,7 +66,7 @@ func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (*message.Batch, 
 		r.msgsToSnd = r.msgsToSnd[1:]
 	}
 
-	return nextMsg.DeepCopy(), func(ctx context.Context, res types.Response) error {
+	return nextMsg.DeepCopy(), func(ctx context.Context, res response.Error) error {
 		r.ackRcvd[i] = res.AckError()
 		return <-r.ackChan
 	}, nil
@@ -206,7 +205,7 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 
 	_, ackFn2, err := pres.ReadWithContext(ctx)
 	assert.NoError(t, err)
-	assert.NoError(t, ackFn2(ctx, response.NewAck()))
+	assert.NoError(t, ackFn2(ctx, response.NewError(nil)))
 
 	_, _, err = pres.ReadWithContext(ctx)
 	assert.Equal(t, component.ErrTypeClosed, err)
@@ -281,7 +280,7 @@ func TestAsyncPreserverCloseThenAck(t *testing.T) {
 
 	go func() {
 		time.Sleep(time.Millisecond * 10)
-		assert.NoError(t, ackFn1(ctx, response.NewAck()))
+		assert.NoError(t, ackFn1(ctx, response.NewError(nil)))
 	}()
 
 	_, _, err = pres.ReadWithContext(ctx)
@@ -374,7 +373,7 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 
 	go func() {
 		time.Sleep(time.Millisecond * 100)
-		assert.NoError(t, ackFn2(ctx, response.NewAck()))
+		assert.NoError(t, ackFn2(ctx, response.NewError(nil)))
 	}()
 
 	_, _, err = pres.ReadWithContext(ctx)
@@ -462,7 +461,7 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 
 	go func() {
 		time.Sleep(time.Millisecond * 100)
-		assert.NoError(t, ackFn1(ctx, response.NewAck()))
+		assert.NoError(t, ackFn1(ctx, response.NewError(nil)))
 	}()
 
 	_, _, err = pres.ReadWithContext(ctx)
@@ -561,7 +560,7 @@ func TestAsyncPreserverErrorProp(t *testing.T) {
 	}
 	if _, aFn, actErr := pres.ReadWithContext(ctx); actErr != nil {
 		t.Fatal(actErr)
-	} else if actErr = aFn(ctx, response.NewAck()); expErr != actErr {
+	} else if actErr = aFn(ctx, response.NewError(nil)); expErr != actErr {
 		t.Errorf("Wrong error returned: %v != %v", actErr, expErr)
 	}
 }
@@ -679,7 +678,7 @@ func TestAsyncPreserverBatchError(t *testing.T) {
 		[]byte("buz"),
 	}, message.GetAllBytes(msg))
 
-	require.EqualError(t, ackFn(ctx, response.NewAck()), "ack propagated")
+	require.EqualError(t, ackFn(ctx, response.NewError(nil)), "ack propagated")
 }
 
 func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
@@ -749,7 +748,7 @@ func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
 		[]byte("foo"),
 	}, message.GetAllBytes(msg))
 
-	require.EqualError(t, ackFn(ctx, response.NewAck()), "ack propagated")
+	require.EqualError(t, ackFn(ctx, response.NewError(nil)), "ack propagated")
 }
 
 //------------------------------------------------------------------------------
@@ -844,8 +843,8 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	go sendAck()
 
 	// Ack all messages.
-	_ = aFn(ctx, response.NewAck())
-	_ = aFn2(ctx, response.NewAck())
+	_ = aFn(ctx, response.NewError(nil))
+	_ = aFn2(ctx, response.NewError(nil))
 
 	msg, _, err = pres.ReadWithContext(ctx)
 	if err != nil {
@@ -922,7 +921,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 	// Ack all messages.
 	go func() {
 		for _, aFn := range ackFns {
-			_ = aFn(ctx, response.NewAck())
+			_ = aFn(ctx, response.NewError(nil))
 		}
 	}()
 

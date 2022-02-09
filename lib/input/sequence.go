@@ -507,7 +507,7 @@ func (r *Sequence) resetTargets() {
 }
 
 func (r *Sequence) dispatchJoinedMessage(wg *sync.WaitGroup, msg *message.Batch) {
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	tran := types.NewTransaction(msg, resChan)
 	select {
 	case r.transactions <- tran:
@@ -618,7 +618,7 @@ runLoop:
 				r.dispatchJoinedMessage(&shardJoinWG, msg)
 			})
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-r.shutSig.CloseNowChan():
 				return
 			}

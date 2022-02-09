@@ -28,7 +28,7 @@ func TestBasicFanOutSequential(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOutSequential(outputs, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -52,7 +52,7 @@ func TestBasicFanOutSequential(t *testing.T) {
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
-		resChanSlice := []chan<- types.Response{}
+		resChanSlice := []chan<- response.Error{}
 		for j := 0; j < nOutputs; j++ {
 			var ts types.Transaction
 			select {
@@ -66,7 +66,7 @@ func TestBasicFanOutSequential(t *testing.T) {
 				return
 			}
 			select {
-			case resChanSlice[j] <- response.NewAck():
+			case resChanSlice[j] <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -96,7 +96,7 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 
 	outputs := []types.Output{&mockOne, &mockTwo}
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOutSequential(outputs, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -122,7 +122,7 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts1.ResponseChan <- response.NewAck():
+	case ts1.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 		return
@@ -150,7 +150,7 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts2.ResponseChan <- response.NewAck():
+	case ts2.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 		return
@@ -178,7 +178,7 @@ func TestFanOutSequentialBlock(t *testing.T) {
 
 	outputs := []types.Output{&mockOne, &mockTwo}
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOutSequential(outputs, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -220,7 +220,7 @@ func TestFanOutSequentialBlock(t *testing.T) {
 		return
 	}
 	select {
-	case ts1.ResponseChan <- response.NewAck():
+	case ts1.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 		return
@@ -233,7 +233,7 @@ func TestFanOutSequentialBlock(t *testing.T) {
 		return
 	}
 	select {
-	case ts2.ResponseChan <- response.NewAck():
+	case ts2.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 		return

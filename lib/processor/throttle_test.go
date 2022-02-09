@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/stretchr/testify/require"
 )
 
 func TestThrottle(t *testing.T) {
@@ -22,7 +23,7 @@ func TestThrottle(t *testing.T) {
 	msgIn := message.QuickBatch(nil)
 	msgsOut, res := throt.ProcessMessage(msgIn)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if exp, act := msgIn, msgsOut[0]; exp != act {
@@ -41,9 +42,13 @@ func TestThrottle200Millisecond(t *testing.T) {
 	}
 
 	tBefore := time.Now()
-	throt.ProcessMessage(message.QuickBatch(nil))
+	batches, err := throt.ProcessMessage(message.QuickBatch(nil))
+	require.NoError(t, err)
+	require.Len(t, batches, 1)
 	tBetween := time.Now()
-	throt.ProcessMessage(message.QuickBatch(nil))
+	batches, err = throt.ProcessMessage(message.QuickBatch(nil))
+	require.NoError(t, err)
+	require.Len(t, batches, 1)
 	tAfter := time.Now()
 
 	if dur := tBetween.Sub(tBefore); dur > (time.Millisecond * 50) {

@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -49,7 +50,7 @@ func TestDropOnNothing(t *testing.T) {
 	})
 
 	tChan := make(chan types.Transaction)
-	rChan := make(chan types.Response)
+	rChan := make(chan response.Error)
 
 	require.NoError(t, d.Consume(tChan))
 
@@ -59,7 +60,7 @@ func TestDropOnNothing(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	var res types.Response
+	var res response.Error
 	select {
 	case res = <-rChan:
 	case <-time.After(time.Second):
@@ -100,7 +101,7 @@ func TestDropOnError(t *testing.T) {
 	})
 
 	tChan := make(chan types.Transaction)
-	rChan := make(chan types.Response)
+	rChan := make(chan response.Error)
 
 	require.NoError(t, d.Consume(tChan))
 
@@ -110,7 +111,7 @@ func TestDropOnError(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	var res types.Response
+	var res response.Error
 	select {
 	case res = <-rChan:
 	case <-time.After(time.Second):
@@ -180,7 +181,7 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 	})
 
 	tChan := make(chan types.Transaction)
-	rChan := make(chan types.Response)
+	rChan := make(chan response.Error)
 
 	require.NoError(t, d.Consume(tChan))
 
@@ -193,7 +194,7 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		var res types.Response
+		var res response.Error
 		select {
 		case res = <-rChan:
 		case <-time.After(time.Second):
@@ -273,7 +274,7 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 	})
 
 	tChan := make(chan types.Transaction)
-	rChan := make(chan types.Response)
+	rChan := make(chan response.Error)
 
 	require.NoError(t, d.Consume(tChan))
 
@@ -286,7 +287,7 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		var res types.Response
+		var res response.Error
 		select {
 		case res = <-rChan:
 		case <-time.After(time.Second):

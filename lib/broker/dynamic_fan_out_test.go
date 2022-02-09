@@ -33,7 +33,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewDynamicFanOut(
 		outputs, log.Noop(), metrics.Noop(),
@@ -65,7 +65,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 					return
 				}
 				select {
-				case ts.ResponseChan <- response.NewAck():
+				case ts.ResponseChan <- response.NewError(nil):
 				case <-time.After(time.Second):
 					t.Errorf("Timed out responding to broker")
 					return
@@ -102,7 +102,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 
 	outputs := map[string]*MockOutputType{}
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewDynamicFanOut(
 		nil, log.Noop(), metrics.Noop(),
@@ -143,7 +143,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 					return
 				}
 				select {
-				case ts.ResponseChan <- response.NewAck():
+				case ts.ResponseChan <- response.NewError(nil):
 				case <-time.After(time.Second):
 					t.Errorf("Timed out responding to broker")
 					return
@@ -190,7 +190,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 					return
 				}
 				select {
-				case ts.ResponseChan <- response.NewAck():
+				case ts.ResponseChan <- response.NewError(nil):
 				case <-time.After(time.Second):
 					t.Errorf("Timed out responding to broker")
 					return
@@ -240,7 +240,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 		"second": &mockTwo,
 	}
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewDynamicFanOut(
 		outputs, log.Noop(), metrics.Noop(),
@@ -262,7 +262,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-mockOne.TChan:
 			t.Error("Received duplicate message to mockOne")
 		case <-time.After(time.Second):
@@ -292,7 +292,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out responding to broker")
 			return
@@ -325,7 +325,7 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 	mockOne := MockOutputType{}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	outputs := map[string]DynamicOutput{}
 
@@ -361,7 +361,7 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 			return
 		}
 		select {
-		case ts.ResponseChan <- response.NewAck():
+		case ts.ResponseChan <- response.NewError(nil):
 		case <-mockOne.TChan:
 			t.Error("Received duplicate message to mockOne")
 		case <-time.After(time.Second):
@@ -392,7 +392,7 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 		"test": mockOutput,
 	}
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	outputAddedList := []string{}
 	outputRemovedList := []string{}
@@ -465,7 +465,7 @@ func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
 		"test": mockOutput,
 	}
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewDynamicFanOut(
 		outputs, log.Noop(), metrics.Noop(),
@@ -515,7 +515,7 @@ func TestDynamicFanOutShutDownFromSend(t *testing.T) {
 		"test": mockOutput,
 	}
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewDynamicFanOut(
 		outputs, log.Noop(), metrics.Noop(),

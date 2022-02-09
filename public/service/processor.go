@@ -146,8 +146,8 @@ func (o *OwnedProcessor) Process(ctx context.Context, msg *Message) (MessageBatc
 	outMsg.Append(msg.part)
 
 	iMsgs, res := o.p.ProcessMessage(outMsg)
-	if res != nil && res.AckError() != nil {
-		return nil, res.AckError()
+	if res != nil {
+		return nil, res
 	}
 
 	var b MessageBatch
@@ -174,8 +174,8 @@ func (o *OwnedProcessor) ProcessBatch(ctx context.Context, batch MessageBatch) (
 	}
 
 	iMsgs, res := o.p.ProcessMessage(outMsg)
-	if res != nil && res.AckError() != nil {
-		return nil, res.AckError()
+	if res != nil {
+		return nil, res
 	}
 
 	var batches []MessageBatch

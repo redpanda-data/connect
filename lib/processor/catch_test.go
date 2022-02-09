@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/stretchr/testify/assert"
 )
 
 //------------------------------------------------------------------------------
@@ -25,7 +26,7 @@ func TestCatchEmpty(t *testing.T) {
 	}
 	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(msgs) != 1 {
@@ -74,7 +75,7 @@ func TestCatchBasic(t *testing.T) {
 	})
 	msgs, res := proc.ProcessMessage(msg)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(msgs) != 1 {
@@ -121,7 +122,7 @@ func TestCatchFilterSome(t *testing.T) {
 	})
 	msgs, res := proc.ProcessMessage(msg)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(msgs) != 1 {
@@ -172,7 +173,7 @@ func TestCatchMultiProcs(t *testing.T) {
 	})
 	msgs, res := proc.ProcessMessage(msg)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(msgs) != 1 {
@@ -218,7 +219,7 @@ func TestCatchNotFails(t *testing.T) {
 	FlagFail(msg.Get(2))
 	msgs, res := proc.ProcessMessage(msg)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(msgs) != 1 {
@@ -260,12 +261,7 @@ func TestCatchFilterAll(t *testing.T) {
 		return nil
 	})
 	msgs, res := proc.ProcessMessage(msg)
-	if res == nil {
-		t.Fatal("expected empty response")
-	}
-	if err = res.AckError(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, res)
 	if len(msgs) != 0 {
 		t.Errorf("Wrong count of result msgs: %v", len(msgs))
 	}

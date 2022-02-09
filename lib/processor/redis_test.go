@@ -99,9 +99,7 @@ func testRedisKeys(t *testing.T, client *redis.Client, url string) {
 	msg := message.QuickBatch([][]byte{[]byte(`ignore me please`)})
 
 	resMsgs, response := r.ProcessMessage(msg)
-	if !assert.Nil(t, response) {
-		require.NoError(t, response.AckError())
-	}
+	require.NoError(t, response)
 
 	require.Len(t, resMsgs, 1)
 	require.Equal(t, 1, resMsgs[0].Len())
@@ -151,12 +149,8 @@ func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
 	msg.Get(5).MetaSet("key", "foo2")
 
 	resMsgs, response := r.ProcessMessage(msg)
-	if response != nil {
-		if response.AckError() != nil {
-			t.Fatal(response.AckError())
-		}
-		t.Fatal("Expected nil response")
-	}
+	require.NoError(t, response)
+
 	if len(resMsgs) != 1 {
 		t.Fatalf("Wrong resulting msgs: %v != %v", len(resMsgs), 1)
 	}
@@ -209,12 +203,8 @@ func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 	})
 
 	resMsgs, response := r.ProcessMessage(msg)
-	if response != nil {
-		if response.AckError() != nil {
-			t.Fatal(response.AckError())
-		}
-		t.Fatal("Expected nil response")
-	}
+	require.NoError(t, response)
+
 	if len(resMsgs) != 1 {
 		t.Fatalf("Wrong resulting msgs: %v != %v", len(resMsgs), 1)
 	}
@@ -249,12 +239,7 @@ func testRedisIncrby(t *testing.T, client *redis.Client, url string) {
 		[]byte(`0`),
 	})
 	resMsgs, response := r.ProcessMessage(msg)
-	if response != nil {
-		if response.AckError() != nil {
-			t.Fatal(response.AckError())
-		}
-		t.Fatal("Expected nil response")
-	}
+	require.NoError(t, response)
 
 	exp := [][]byte{
 		[]byte(`2`),

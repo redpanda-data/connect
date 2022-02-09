@@ -100,7 +100,7 @@ func TestLogLevelTrace(t *testing.T) {
 		expMsgs := []*message.Batch{input}
 		actMsgs, res := l.ProcessMessage(input)
 		if res != nil {
-			t.Fatal(res.AckError())
+			t.Fatal(res)
 		}
 		if !reflect.DeepEqual(expMsgs, actMsgs) {
 			t.Errorf("Wrong message passthrough: %v != %v", actMsgs, expMsgs)
@@ -145,7 +145,7 @@ func TestLogWithFields(t *testing.T) {
 	expMsgs := []*message.Batch{input}
 	actMsgs, res := l.ProcessMessage(input)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 	if !reflect.DeepEqual(expMsgs, actMsgs) {
 		t.Errorf("Wrong message passthrough: %v != %v", actMsgs, expMsgs)
@@ -166,7 +166,7 @@ func TestLogWithFields(t *testing.T) {
 	expMsgs = []*message.Batch{input}
 	actMsgs, res = l.ProcessMessage(input)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 	if !reflect.DeepEqual(expMsgs, actMsgs) {
 		t.Errorf("Wrong message passthrough: %v != %v", actMsgs, expMsgs)

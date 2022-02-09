@@ -13,7 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	nsq "github.com/nsqio/go-nsq"
 )
@@ -190,7 +190,7 @@ func (n *NSQ) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, 
 		return nil, nil, err
 	}
 	n.unAckMsgs = append(n.unAckMsgs, msg)
-	return message.QuickBatch([][]byte{msg.Body}), func(rctx context.Context, res types.Response) error {
+	return message.QuickBatch([][]byte{msg.Body}), func(rctx context.Context, res response.Error) error {
 		if res.AckError() != nil {
 			msg.Requeue(-1)
 		}

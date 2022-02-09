@@ -34,10 +34,10 @@ func TestBatcherStandard(t *testing.T) {
 	batcher := NewBatcher(batchPol, mockInput, log.Noop(), metrics.Noop())
 
 	testMsgs := []string{}
-	testResChans := []chan types.Response{}
+	testResChans := []chan response.Error{}
 	for i := 0; i < 8; i++ {
 		testMsgs = append(testMsgs, fmt.Sprintf("test%v", i))
-		testResChans = append(testResChans, make(chan types.Response))
+		testResChans = append(testResChans, make(chan response.Error))
 	}
 
 	resErrs := []error{}
@@ -54,7 +54,7 @@ func TestBatcherStandard(t *testing.T) {
 		close(doneReadsChan)
 	}()
 
-	resChans := []chan<- types.Response{}
+	resChans := []chan<- response.Error{}
 
 	var tran types.Transaction
 	select {
@@ -167,10 +167,10 @@ func TestBatcherErrorTracking(t *testing.T) {
 	batcher := NewBatcher(batchPol, mockInput, log.Noop(), metrics.Noop())
 
 	testMsgs := []string{}
-	testResChans := []chan types.Response{}
+	testResChans := []chan response.Error{}
 	for i := 0; i < 3; i++ {
 		testMsgs = append(testMsgs, fmt.Sprintf("test%v", i))
-		testResChans = append(testResChans, make(chan types.Response))
+		testResChans = append(testResChans, make(chan response.Error))
 	}
 
 	resErrs := []error{}
@@ -237,7 +237,7 @@ func TestBatcherTiming(t *testing.T) {
 
 	batcher := NewBatcher(batchPol, mockInput, log.Noop(), metrics.Noop())
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	select {
 	case mockInput.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo1")}), resChan):
 	case <-time.After(time.Second):
@@ -326,7 +326,7 @@ func TestBatcherFinalFlush(t *testing.T) {
 
 	batcher := NewBatcher(batchPol, mockInput, log.Noop(), metrics.Noop())
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	select {
 	case mockInput.ts <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo1")}), resChan):
 	case <-time.After(time.Second):
@@ -352,7 +352,7 @@ func TestBatcherFinalFlush(t *testing.T) {
 	batcher.CloseAsync()
 
 	select {
-	case tran.ResponseChan <- response.NewAck():
+	case tran.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}

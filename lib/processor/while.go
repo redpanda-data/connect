@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -144,7 +143,7 @@ func (w *While) checkMsg(msg *message.Batch) bool {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (w *While) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res types.Response) {
+func (w *While) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res error) {
 	w.mCount.Incr(1)
 
 	spans := tracing.CreateChildSpans(TypeWhile, msg)
@@ -154,7 +153,7 @@ func (w *While) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res t
 	condResult := w.atLeastOnce || w.checkMsg(msg)
 	for condResult {
 		if atomic.LoadInt32(&w.running) != 1 {
-			return nil, response.NewError(component.ErrTypeClosed)
+			return nil, component.ErrTypeClosed
 		}
 		if w.maxLoops > 0 && loops >= w.maxLoops {
 			w.log.Traceln("Reached max loops count")

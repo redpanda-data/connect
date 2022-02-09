@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +45,7 @@ func TestFallbackOutputBasic(t *testing.T) {
 	require.NoError(t, err)
 
 	sendChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	require.NoError(t, s.Consume(sendChan))
 
 	t.Cleanup(func() {

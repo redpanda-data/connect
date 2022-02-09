@@ -235,7 +235,7 @@ func StreamTestSendBatchCount(n int) StreamTestDefinition {
 				closeConnectors(t, input, output)
 			})
 
-			resChan := make(chan types.Response)
+			resChan := make(chan response.Error)
 
 			set := map[string][]string{}
 			for i := 0; i < n; i++ {
@@ -284,7 +284,7 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 				closeConnectors(t, nil, output)
 			})
 
-			resChan := make(chan types.Response)
+			resChan := make(chan response.Error)
 
 			set := map[string][]string{}
 			for i := 0; i < n; i++ {
@@ -360,7 +360,7 @@ func StreamTestReceiveBatchCount(n int) StreamTestDefinition {
 			})
 
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-env.ctx.Done():
 				t.Fatal("timed out on response")
 			}
@@ -454,7 +454,7 @@ func StreamTestCheckpointCapture() StreamTestDefinition {
 			}()
 
 			var msg *message.Part
-			responseChans := make([]chan<- types.Response, 5)
+			responseChans := make([]chan<- response.Error, 5)
 
 			msg, responseChans[0] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
 			assert.Equal(t, "A", string(msg.Get()))
@@ -569,7 +569,7 @@ func StreamTestStreamSaturatedUnacked(n int) StreamTestDefinition {
 				require.NoError(t, sendMessage(env.ctx, t, tranChan, payload))
 			}
 
-			resChans := make([]chan<- types.Response, n/2)
+			resChans := make([]chan<- response.Error, n/2)
 			for i := range resChans {
 				var b *message.Part
 				b, resChans[i] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
@@ -613,7 +613,7 @@ func StreamTestAtLeastOnceDelivery() StreamTestDefinition {
 			}()
 
 			var msg *message.Part
-			badResponseChans := []chan<- types.Response{}
+			badResponseChans := []chan<- response.Error{}
 
 			for i := 0; i < len(expectedMessages); i++ {
 				msg, responseChan := receiveMessageNoRes(env.ctx, t, input.TransactionChan())

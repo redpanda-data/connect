@@ -43,7 +43,7 @@ func NewNoop(
 //------------------------------------------------------------------------------
 
 // ProcessMessage does nothing and returns the message unchanged.
-func (c *Noop) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (c *Noop) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	msgs := [1]*message.Batch{msg}
 	return msgs[:], nil
 }

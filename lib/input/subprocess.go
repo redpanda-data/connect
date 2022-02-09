@@ -16,6 +16,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -230,7 +231,7 @@ func (s *Subprocess) ReadWithContext(ctx context.Context) (*message.Batch, reade
 		}
 		msg := message.QuickBatch(nil)
 		msg.Append(message.NewPart(b))
-		return msg, func(context.Context, types.Response) error { return nil }, nil
+		return msg, func(context.Context, response.Error) error { return nil }, nil
 	case err, open := <-errChan:
 		if !open {
 			if s.conf.RestartOnExit {

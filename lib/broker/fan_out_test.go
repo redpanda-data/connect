@@ -32,7 +32,7 @@ func TestBasicFanOut(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
 		outputs, log.Noop(), metrics.Noop(),
@@ -58,7 +58,7 @@ func TestBasicFanOut(t *testing.T) {
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
-		resChanSlice := []chan<- types.Response{}
+		resChanSlice := []chan<- response.Error{}
 		for j := 0; j < nOutputs; j++ {
 			var ts types.Transaction
 			select {
@@ -74,7 +74,7 @@ func TestBasicFanOut(t *testing.T) {
 		}
 		for j := 0; j < nOutputs; j++ {
 			select {
-			case resChanSlice[j] <- response.NewAck():
+			case resChanSlice[j] <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return
@@ -104,7 +104,7 @@ func TestFanOutBackPressure(t *testing.T) {
 
 	outputs := []types.Output{&mockOne, &mockTwo}
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(outputs, log.Noop(), metrics.Noop())
 	if err != nil {
@@ -124,7 +124,7 @@ func TestFanOutBackPressure(t *testing.T) {
 			select {
 			case ts := <-mockOne.TChan:
 				select {
-				case ts.ResponseChan <- response.NewAck():
+				case ts.ResponseChan <- response.NewError(nil):
 				case <-doneChan:
 					return
 				}
@@ -158,7 +158,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 
 	outputs := []types.Output{&mockOne, &mockTwo}
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
 		outputs, log.Noop(), metrics.Noop(),
@@ -195,7 +195,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts1.ResponseChan <- response.NewAck():
+	case ts1.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 		return
@@ -217,7 +217,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 		return
 	}
 	select {
-	case ts2.ResponseChan <- response.NewAck():
+	case ts2.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 		return
@@ -244,7 +244,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
 		outputs, log.Noop(), metrics.Noop(),
@@ -301,7 +301,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
 		outputs, log.Noop(), metrics.Noop(),
@@ -350,7 +350,7 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
 		outputs, log.Noop(), metrics.Noop(),
@@ -399,7 +399,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
 		outputs, log.Noop(), metrics.Noop(),
@@ -414,7 +414,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	}
 
 	content := [][]byte{[]byte("hello world")}
-	rChanSlice := make([]chan<- types.Response, nOutputs)
+	rChanSlice := make([]chan<- response.Error, nOutputs)
 
 	b.ReportAllocs()
 	b.StartTimer()
@@ -426,7 +426,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 			rChanSlice[j] = ts.ResponseChan
 		}
 		for j := 0; j < nOutputs; j++ {
-			rChanSlice[j] <- response.NewAck()
+			rChanSlice[j] <- response.NewError(nil)
 		}
 		res := <-resChan
 		if res.AckError() != nil {

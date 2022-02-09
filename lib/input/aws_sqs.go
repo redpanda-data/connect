@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
@@ -389,7 +390,7 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (*message.Batch, reader.As
 	if next.ReceiptHandle != nil {
 		mHandle.receiptHandle = *next.ReceiptHandle
 	}
-	return msg, func(rctx context.Context, res types.Response) error {
+	return msg, func(rctx context.Context, res response.Error) error {
 		if mHandle.receiptHandle == "" {
 			return nil
 		}

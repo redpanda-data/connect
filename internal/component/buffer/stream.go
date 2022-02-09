@@ -190,7 +190,7 @@ func (m *Stream) outputLoop() {
 		mReadCount.Incr(1)
 		m.errThrottle.Reset()
 
-		resChan := make(chan types.Response, 1)
+		resChan := make(chan response.Error, 1)
 		select {
 		case m.messagesOut <- types.NewTransaction(msg, resChan):
 		case <-m.shutSig.CloseNowChan():

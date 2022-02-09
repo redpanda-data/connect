@@ -11,13 +11,13 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/nats-io/nats.go"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gofrs/uuid"
 	"github.com/nats-io/stan.go"
 )
@@ -268,7 +268,7 @@ func (n *NATSStream) ReadWithContext(ctx context.Context) (*message.Batch, Async
 	part.MetaSet("nats_stream_subject", msg.Subject)
 	part.MetaSet("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
 
-	return bmsg, func(rctx context.Context, res types.Response) error {
+	return bmsg, func(rctx context.Context, res response.Error) error {
 		if res.AckError() == nil {
 			return msg.Ack()
 		}

@@ -9,7 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -148,7 +148,7 @@ func (a *AmazonSQS) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 		return nil, nil, component.ErrTimeout
 	}
 
-	return msg, func(rctx context.Context, res types.Response) error {
+	return msg, func(rctx context.Context, res response.Error) error {
 		// TODO: Replace this with a background process for batching these
 		// requests up more.
 		if res.AckError() == nil {

@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -227,7 +226,7 @@ func reorderFromGroup(group *imessage.SortGroup, parts []*message.Part) {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (s *Switch) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res types.Response) {
+func (s *Switch) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res error) {
 	s.mCount.Incr(1)
 
 	var result []*message.Part
@@ -276,7 +275,7 @@ func (s *Switch) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res 
 			execMsg.SetAll(passed)
 
 			msgs, res := ExecuteAll(switchCase.processors, execMsg)
-			if res != nil && res.AckError() != nil {
+			if res != nil {
 				return nil, res
 			}
 
@@ -302,7 +301,7 @@ func (s *Switch) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res 
 	resMsg.SetAll(result)
 
 	if resMsg.Len() == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	s.mSent.Incr(int64(resMsg.Len()))

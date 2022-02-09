@@ -242,9 +242,7 @@ func (p *Policy) flushAny() []*message.Batch {
 	if len(p.procs) > 0 {
 		resultMsgs, res := processor.ExecuteAll(p.procs, newMsg)
 		if res != nil {
-			if err := res.AckError(); err != nil {
-				p.log.Errorf("Batch processors resulted in error: %v, the batch has been dropped.", err)
-			}
+			p.log.Errorf("Batch processors resulted in error: %v, the batch has been dropped.", res)
 			return nil
 		}
 		return resultMsgs

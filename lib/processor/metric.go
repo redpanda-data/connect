@@ -361,7 +361,7 @@ func (m *Metric) handleTimer(val string, index int, msg *message.Batch) error {
 }
 
 // ProcessMessage applies the processor to a message
-func (m *Metric) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (m *Metric) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	if m.deprecated {
 		value := m.value.String(0, msg)
 		if err := m.handler(value, 0, msg); err != nil {

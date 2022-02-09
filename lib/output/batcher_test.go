@@ -23,7 +23,7 @@ import (
 
 func TestBatcherEarlyTermination(t *testing.T) {
 	tInChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	policyConf := batch.NewPolicyConfig()
 	policyConf.Count = 10
@@ -49,7 +49,7 @@ func TestBatcherEarlyTermination(t *testing.T) {
 
 func TestBatcherBasic(t *testing.T) {
 	tInChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	policyConf := batch.NewPolicyConfig()
 	policyConf.Count = 4
@@ -133,7 +133,7 @@ func TestBatcherBasic(t *testing.T) {
 		}
 	}()
 
-	sendResponse := func(rChan chan<- types.Response, err error) {
+	sendResponse := func(rChan chan<- response.Error, err error) {
 		defer wg.Done()
 		select {
 		case rChan <- response.NewError(err):
@@ -185,7 +185,7 @@ func TestBatcherBasic(t *testing.T) {
 
 func TestBatcherBatchError(t *testing.T) {
 	tInChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	policyConf := batch.NewPolicyConfig()
 	policyConf.Count = 4
@@ -268,7 +268,7 @@ func TestBatcherBatchError(t *testing.T) {
 
 func TestBatcherTimed(t *testing.T) {
 	tInChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	policyConf := batch.NewPolicyConfig()
 	policyConf.Period = "100ms"

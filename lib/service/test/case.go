@@ -181,15 +181,7 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 	inputMsg.SetAll(parts)
 	outputBatches, result := processor.ExecuteAll(procSet, inputMsg)
 	if result != nil {
-		if len(c.OutputBatches) == 0 {
-			return
-		}
-		if result.AckError() != nil {
-			reportFailure(fmt.Sprintf("processors resulted in error: %v", result.AckError()))
-		} else {
-			reportFailure("processors resulted in zero output batches")
-		}
-		return
+		reportFailure(fmt.Sprintf("processors resulted in error: %v", result))
 	}
 
 	if lExp, lAct := len(c.OutputBatches), len(outputBatches); lAct < lExp {

@@ -122,7 +122,7 @@ func NewTry(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *Try) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (p *Try) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	p.mCount.Incr(1)
 
 	resultMsgs := make([]*message.Batch, msg.Len())
@@ -133,8 +133,8 @@ func (p *Try) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Respon
 		return nil
 	})
 
-	var res types.Response
-	if resultMsgs, res = ExecuteTryAll(p.children, resultMsgs...); res != nil {
+	var res error
+	if resultMsgs, res = ExecuteTryAll(p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
 		return nil, res
 	}
 
@@ -144,6 +144,9 @@ func (p *Try) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Respon
 			resMsg.Append(p)
 			return nil
 		})
+	}
+	if resMsg.Len() == 0 {
+		return nil, res
 	}
 
 	p.mBatchSent.Incr(1)

@@ -43,7 +43,7 @@ func TestBasicGreedy(t *testing.T) {
 	}
 
 	readChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	oTM, err := NewGreedy(outputs)
 	if err != nil {
@@ -71,7 +71,7 @@ func TestBasicGreedy(t *testing.T) {
 			}
 
 			select {
-			case ts.ResponseChan <- response.NewAck():
+			case ts.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out responding to broker")
 				return

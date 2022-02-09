@@ -17,6 +17,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/pkg/sftp"
 )
@@ -300,7 +301,7 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (*message.Batch, reade
 	msg := message.QuickBatch(nil)
 	msg.Append(parts...)
 
-	return msg, func(ctx context.Context, res types.Response) error {
+	return msg, func(ctx context.Context, res response.Error) error {
 		return codecAckFn(ctx, res.AckError())
 	}, nil
 }

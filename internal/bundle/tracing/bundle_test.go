@@ -51,7 +51,7 @@ func TestBundleInputTracing(t *testing.T) {
 		select {
 		case tran := <-in.TransactionChan():
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				t.Fatal("timed out")
 			}
@@ -102,7 +102,7 @@ func TestBundleOutputTracing(t *testing.T) {
 	require.NoError(t, out.Consume(tranChan))
 
 	for i := 0; i < 10; i++ {
-		resChan := make(chan types.Response)
+		resChan := make(chan response.Error)
 		tran := types.NewTransaction(message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}), resChan)
 		select {
 		case tranChan <- tran:
@@ -163,7 +163,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 	require.NoError(t, out.Consume(tranChan))
 
 	for i := 0; i < 10; i++ {
-		resChan := make(chan types.Response)
+		resChan := make(chan response.Error)
 		tran := types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world " + strconv.Itoa(i))}), resChan)
 		select {
 		case tranChan <- tran:

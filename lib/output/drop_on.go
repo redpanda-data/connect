@@ -197,7 +197,7 @@ func (d *dropOn) loop() {
 		close(d.closedChan)
 	}()
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	var gotBackPressure bool
 	for {
@@ -212,7 +212,7 @@ func (d *dropOn) loop() {
 			return
 		}
 
-		var res types.Response
+		var res response.Error
 		if d.onBackpressure > 0 {
 			if !func() bool {
 				// Use a ticker here and call Stop explicitly.
@@ -253,7 +253,7 @@ func (d *dropOn) loop() {
 					mDroppedBatch.Incr(1)
 					d.log.Warnln("Message dropped due to back pressure.")
 					if d.onError {
-						res = response.NewAck()
+						res = response.NewError(nil)
 					} else {
 						res = response.NewError(fmt.Errorf("experienced back pressure beyond: %v", d.onBackpressure))
 					}
@@ -281,7 +281,7 @@ func (d *dropOn) loop() {
 			mDropped.Incr(int64(ts.Payload.Len()))
 			mDroppedBatch.Incr(1)
 			d.log.Warnf("Message dropped due to: %v\n", res.AckError())
-			res = response.NewAck()
+			res = response.NewError(nil)
 		}
 
 		select {

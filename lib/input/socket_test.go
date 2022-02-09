@@ -71,7 +71,7 @@ func TestSocketBasic(t *testing.T) {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out")
 			}
@@ -168,7 +168,7 @@ func TestSocketReconnect(t *testing.T) {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out")
 			}
@@ -263,7 +263,7 @@ func TestSocketMultipart(t *testing.T) {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out")
 			}
@@ -350,7 +350,7 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out")
 			}
@@ -438,7 +438,7 @@ func TestSocketMultipartShutdown(t *testing.T) {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out on ack")
 			}
@@ -520,7 +520,7 @@ func TestTCPSocketBasic(t *testing.T) {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out")
 			}
@@ -617,7 +617,7 @@ func TestTCPSocketReconnect(t *testing.T) {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out")
 			}
@@ -712,7 +712,7 @@ func TestTCPSocketMultipart(t *testing.T) {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out")
 			}
@@ -799,7 +799,7 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out")
 			}
@@ -887,7 +887,7 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
 			select {
-			case tran.ResponseChan <- response.NewAck():
+			case tran.ResponseChan <- response.NewError(nil):
 			case <-time.After(time.Second):
 				return nil, errors.New("timed out on ack")
 			}
@@ -963,7 +963,7 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 			payload = string(tran.Payload.Get(0).Get())
 			go func() {
 				select {
-				case tran.ResponseChan <- response.NewAck():
+				case tran.ResponseChan <- response.NewError(nil):
 				case <-time.After(time.Second):
 				}
 			}()
@@ -1033,7 +1033,7 @@ func BenchmarkTCPSocketNoCutOff(b *testing.B) {
 			payload = string(tran.Payload.Get(0).Get())
 			go func() {
 				select {
-				case tran.ResponseChan <- response.NewAck():
+				case tran.ResponseChan <- response.NewError(nil):
 				case <-time.After(time.Second):
 				}
 			}()

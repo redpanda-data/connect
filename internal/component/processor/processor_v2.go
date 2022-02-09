@@ -10,7 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -68,7 +67,7 @@ func NewV2ToV1Processor(typeStr string, p V2, stats metrics.Type) types.Processo
 	}
 }
 
-func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	a.mCount.Incr(1)
 
 	newParts := make([]*message.Part, 0, msg.Len())
@@ -99,7 +98,7 @@ func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, 
 	})
 
 	if len(newParts) == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	newMsg := message.QuickBatch(nil)
@@ -151,7 +150,7 @@ func NewV2BatchedToV1Processor(typeStr string, p V2Batched, stats metrics.Type) 
 	}
 }
 
-func (a *v2BatchedToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (a *v2BatchedToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	a.mCount.Incr(1)
 
 	newMsg, spans := tracing.WithChildSpans(a.typeStr, msg)
@@ -191,7 +190,7 @@ func (a *v2BatchedToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.
 	tracing.FinishSpans(newMsg)
 
 	if len(outputBatches) == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 	return outputBatches, nil
 }

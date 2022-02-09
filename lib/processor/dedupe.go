@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/OneOfOne/xxhash"
 )
@@ -214,7 +213,7 @@ func NewDedupe(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (d *Dedupe) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (d *Dedupe) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	d.mCount.Incr(1)
 
 	extractedHash := false
@@ -250,7 +249,7 @@ func (d *Dedupe) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Res
 	if !extractedHash {
 		if d.conf.Dedupe.DropOnCacheErr {
 			d.mDropped.Incr(1)
-			return nil, response.NewAck()
+			return nil, nil
 		}
 	} else {
 		var err error
@@ -268,7 +267,7 @@ func (d *Dedupe) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Res
 					)
 				}
 				d.mDropped.Incr(1)
-				return nil, response.NewAck()
+				return nil, nil
 			}
 			d.mErrCache.Incr(1)
 			d.mErr.Incr(1)
@@ -281,7 +280,7 @@ func (d *Dedupe) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Res
 			}
 			if d.conf.Dedupe.DropOnCacheErr {
 				d.mDropped.Incr(1)
-				return nil, response.NewAck()
+				return nil, nil
 			}
 		}
 	}

@@ -11,7 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 )
 
 // GCPPubSubConfig contains configuration values for the input type.
@@ -150,7 +150,7 @@ func (c *GCPPubSub) ReadWithContext(ctx context.Context) (*message.Batch, AsyncA
 	part.MetaSet("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
 	msg.Append(part)
 
-	return msg, func(ctx context.Context, res types.Response) error {
+	return msg, func(ctx context.Context, res response.Error) error {
 		if res.AckError() != nil {
 			gmsg.Nack()
 		} else {

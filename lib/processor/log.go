@@ -204,7 +204,7 @@ func (l *Log) levelToLogFn(level string) (func(logger log.Modular, msg string), 
 //------------------------------------------------------------------------------
 
 // ProcessMessage logs an event and returns the message unchanged.
-func (l *Log) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (l *Log) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	targetLog := l.logger
 	if l.fieldsMapping != nil {
 		v, err := l.fieldsMapping.Exec(query.FunctionContext{

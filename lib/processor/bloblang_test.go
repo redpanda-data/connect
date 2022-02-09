@@ -8,7 +8,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -184,7 +183,7 @@ func TestBloblangFilterAll(t *testing.T) {
 
 	outMsgs, res := proc.ProcessMessage(msg)
 	assert.Empty(t, outMsgs)
-	assert.Equal(t, response.NewAck(), res)
+	assert.Equal(t, nil, res)
 }
 
 func TestBloblangJSONError(t *testing.T) {

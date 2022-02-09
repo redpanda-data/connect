@@ -14,7 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 )
@@ -246,7 +246,7 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn
 		done = a.startRenewJob(amqpMsg)
 	}
 
-	return msg, func(ctx context.Context, res types.Response) error {
+	return msg, func(ctx context.Context, res response.Error) error {
 		if done != nil {
 			close(done)
 			done = nil

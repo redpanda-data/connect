@@ -98,7 +98,7 @@ func NewThrottle(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (m *Throttle) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (m *Throttle) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	m.mCount.Incr(1)
 	m.mut.Lock()
 	defer m.mut.Unlock()

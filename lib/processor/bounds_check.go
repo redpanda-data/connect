@@ -8,7 +8,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -93,7 +92,7 @@ func NewBoundsCheck(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (m *BoundsCheck) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (m *BoundsCheck) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	m.mCount.Incr(1)
 
 	lParts := msg.Len()
@@ -104,7 +103,7 @@ func (m *BoundsCheck) ProcessMessage(msg *message.Batch) ([]*message.Batch, type
 		)
 		m.mDropped.Incr(1)
 		m.mDroppedEmpty.Incr(1)
-		return nil, response.NewAck()
+		return nil, nil
 	} else if lParts > m.conf.BoundsCheck.MaxParts {
 		m.log.Debugf(
 			"Rejecting message due to message parts exceeding limit (%v): %v\n",
@@ -112,7 +111,7 @@ func (m *BoundsCheck) ProcessMessage(msg *message.Batch) ([]*message.Batch, type
 		)
 		m.mDropped.Incr(1)
 		m.mDroppedNumParts.Incr(1)
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	var reject bool
@@ -134,7 +133,7 @@ func (m *BoundsCheck) ProcessMessage(msg *message.Batch) ([]*message.Batch, type
 	if reject {
 		m.mDropped.Incr(1)
 		m.mDroppedPartSize.Incr(1)
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	m.mBatchSent.Incr(1)

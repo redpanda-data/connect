@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -149,14 +150,14 @@ func (t *Try) loop() {
 			}
 			mMsgsRcvd.Incr(1)
 
-			rChan := make(chan types.Response)
+			rChan := make(chan response.Error)
 			select {
 			case t.outputTSChans[0] <- types.NewTransaction(tran.Payload, rChan):
 			case <-t.ctx.Done():
 				return
 			}
 
-			var res types.Response
+			var res response.Error
 			var lOpen bool
 
 		triesLoop:

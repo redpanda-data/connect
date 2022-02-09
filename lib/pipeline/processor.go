@@ -27,7 +27,7 @@ type Processor struct {
 	msgProcessors []types.Processor
 
 	messagesOut chan types.Transaction
-	responsesIn chan types.Response
+	responsesIn chan response.Error
 
 	messagesIn <-chan types.Transaction
 
@@ -46,7 +46,7 @@ func NewProcessor(
 		msgProcessors: msgProcessors,
 		stats:         stats,
 		messagesOut:   make(chan types.Transaction),
-		responsesIn:   make(chan types.Response),
+		responsesIn:   make(chan response.Error),
 		closeChan:     make(chan struct{}),
 		closed:        make(chan struct{}),
 	}
@@ -80,11 +80,8 @@ func (p *Processor) loop() {
 
 		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
-			if resultRes == nil {
-				resultRes = response.NewAck()
-			}
 			select {
-			case tran.ResponseChan <- resultRes:
+			case tran.ResponseChan <- response.NewError(resultRes):
 			case <-p.closeChan:
 				return
 			}
@@ -105,11 +102,11 @@ func (p *Processor) loop() {
 
 // dispatchMessages attempts to send a multiple messages results of processors
 // over the shared messages channel. This send is retried until success.
-func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- types.Response) {
+func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- response.Error) {
 	throt := throttle.New(throttle.OptCloseChan(p.closeChan))
 
 	sendMsg := func(m *message.Batch) {
-		resChan := make(chan types.Response)
+		resChan := make(chan response.Error)
 		transac := types.NewTransaction(m, resChan)
 
 		for {
@@ -120,7 +117,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- typ
 			}
 
 			var open bool
-			var res types.Response
+			var res response.Error
 			select {
 			case res, open = <-resChan:
 				if !open {
@@ -155,7 +152,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- typ
 	throt.Reset()
 
 	select {
-	case ogResChan <- response.NewAck():
+	case ogResChan <- response.NewError(nil):
 	case <-p.closeChan:
 		return
 	}

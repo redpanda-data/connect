@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -190,7 +191,7 @@ func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
 	payload := message.QuickBatch(nil)
 	payload.Append(m.part)
 
-	resChan := make(chan types.Response, 1)
+	resChan := make(chan response.Error, 1)
 	select {
 	case o.t <- types.NewTransaction(payload, resChan):
 	case <-ctx.Done():
@@ -213,7 +214,7 @@ func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
 		payload.Append(m.part)
 	}
 
-	resChan := make(chan types.Response, 1)
+	resChan := make(chan response.Error, 1)
 	select {
 	case o.t <- types.NewTransaction(payload, resChan):
 	case <-ctx.Done():

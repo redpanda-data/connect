@@ -24,9 +24,9 @@ type mockMsgProcessor struct {
 	mut               sync.Mutex
 }
 
-func (m *mockMsgProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (m *mockMsgProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	if drop := <-m.dropChan; drop {
-		return nil, response.NewError(errMockProc)
+		return nil, errMockProc
 	}
 	newMsg := message.QuickBatch([][]byte{
 		[]byte("foo"),
@@ -65,7 +65,7 @@ func TestProcessorPipeline(t *testing.T) {
 		mockProc,
 	)
 
-	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
+	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
@@ -141,7 +141,7 @@ func TestProcessorPipeline(t *testing.T) {
 	// Respond without error
 	go func() {
 		select {
-		case procT.ResponseChan <- response.NewAck():
+		case procT.ResponseChan <- response.NewError(nil):
 		case _, open := <-resChan:
 			if !open {
 				t.Error("Closed early")
@@ -184,7 +184,7 @@ type mockMultiMsgProcessor struct {
 	mut               sync.Mutex
 }
 
-func (m *mockMultiMsgProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (m *mockMultiMsgProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	var msgs []*message.Batch
 	for i := 0; i < m.N; i++ {
 		newMsg := message.QuickBatch([][]byte{
@@ -219,7 +219,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 		mockProc,
 	)
 
-	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
+	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
@@ -237,7 +237,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 		expMsgs[fmt.Sprintf("test%v", i)] = struct{}{}
 	}
 
-	resChans := []chan<- types.Response{}
+	resChans := []chan<- response.Error{}
 
 	// Receive N messages
 	for i := 0; i < mockProc.N; i++ {
@@ -265,7 +265,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 	// Respond without error N times
 	for i := 0; i < mockProc.N; i++ {
 		select {
-		case resChans[i] <- response.NewAck():
+		case resChans[i] <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -304,7 +304,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		mockProc,
 	)
 
-	tChan, resChan := make(chan types.Transaction), make(chan types.Response)
+	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
@@ -322,7 +322,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		t.Error("Timed out")
 	}
 
-	var errResChan chan<- types.Response
+	var errResChan chan<- response.Error
 
 	// Receive 1 message
 	select {
@@ -346,7 +346,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		t.Error("Timed out")
 	}
 
-	resChans := []chan<- types.Response{}
+	resChans := []chan<- response.Error{}
 
 	// Receive N messages
 	for i := 0; i < mockProc.N; i++ {
@@ -374,7 +374,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	// Respond without error N times
 	for i := 0; i < mockProc.N; i++ {
 		select {
-		case resChans[i] <- response.NewAck():
+		case resChans[i] <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}

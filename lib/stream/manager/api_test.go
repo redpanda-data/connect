@@ -20,6 +20,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/stream/manager"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -893,9 +894,9 @@ func TestTypeAPISetResources(t *testing.T) {
 file:
   directory: %v
 `, dir1))
-	response := httptest.NewRecorder()
-	r.ServeHTTP(response, request)
-	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	hResponse := httptest.NewRecorder()
+	r.ServeHTTP(hResponse, request)
+	assert.Equal(t, http.StatusOK, hResponse.Code, hResponse.Body.String())
 
 	streamConf := stream.NewConfig()
 	streamConf.Input.Type = input.TypeInproc
@@ -905,11 +906,11 @@ file:
 	streamConf.Output.Cache.Target = "foocache"
 
 	request = genYAMLRequest("POST", "/streams/foo?chilled=true", streamConf)
-	response = httptest.NewRecorder()
-	r.ServeHTTP(response, request)
-	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	hResponse = httptest.NewRecorder()
+	r.ServeHTTP(hResponse, request)
+	assert.Equal(t, http.StatusOK, hResponse.Code, hResponse.Body.String())
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 	select {
 	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(`{"id":"first","content":"hello world"}`)}), resChan):
 	case <-time.After(time.Second * 5):
@@ -925,9 +926,9 @@ file:
 file:
   directory: %v
 `, dir2))
-	response = httptest.NewRecorder()
-	r.ServeHTTP(response, request)
-	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	hResponse = httptest.NewRecorder()
+	r.ServeHTTP(hResponse, request)
+	assert.Equal(t, http.StatusOK, hResponse.Code, hResponse.Body.String())
 
 	select {
 	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(`{"id":"second","content":"hello world 2"}`)}), resChan):

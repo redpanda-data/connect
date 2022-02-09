@@ -158,7 +158,7 @@ func (o *FanOut) loop() {
 				msgCopy, i := ts.Payload.Copy(), target
 				owg.Go(func() error {
 					throt := throttle.New(throttle.OptCloseChan(o.ctx.Done()))
-					resChan := make(chan types.Response)
+					resChan := make(chan response.Error)
 
 					// Try until success or shutdown.
 					for {
@@ -188,7 +188,7 @@ func (o *FanOut) loop() {
 
 			if owg.Wait() == nil {
 				select {
-				case ts.ResponseChan <- response.NewAck():
+				case ts.ResponseChan <- response.NewError(nil):
 				case <-o.ctx.Done():
 					return
 				}

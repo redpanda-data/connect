@@ -7,7 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBoundsCheck(t *testing.T) {
@@ -78,10 +78,8 @@ func TestBoundsCheck(t *testing.T) {
 	}
 
 	for _, parts := range badParts {
-		if msgs, res := proc.ProcessMessage(message.QuickBatch(parts)); len(msgs) > 0 {
-			t.Errorf("Bounds check didnt fail on: %s", parts)
-		} else if _, ok := res.(response.Ack); !ok {
-			t.Error("Expected simple response from bad message")
-		}
+		msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+		assert.Len(t, msgs, 0)
+		assert.Nil(t, res)
 	}
 }

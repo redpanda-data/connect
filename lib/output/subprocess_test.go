@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,7 +35,7 @@ func sendMsg(t *testing.T, msg string, tChan chan types.Transaction) {
 	m := message.QuickBatch(nil)
 	m.Append(message.NewPart([]byte(msg)))
 
-	resChan := make(chan types.Response)
+	resChan := make(chan response.Error)
 
 	select {
 	case tChan <- types.NewTransaction(m, resChan):

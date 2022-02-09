@@ -12,7 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -343,7 +343,7 @@ func (r *RedisStreams) ReadWithContext(ctx context.Context) (*message.Batch, Asy
 			return nil, nil, err
 		}
 	}
-	return msg.payload, func(rctx context.Context, res types.Response) error {
+	return msg.payload, func(rctx context.Context, res response.Error) error {
 		if res.AckError() != nil {
 			r.pendingMsgsMut.Lock()
 			r.pendingMsgs = append(r.pendingMsgs, msg)

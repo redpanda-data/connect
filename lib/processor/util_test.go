@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/response"
-
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -17,7 +15,7 @@ type passthrough struct {
 	called int
 }
 
-func (p *passthrough) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (p *passthrough) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	p.called++
 	return []*message.Batch{msg}, nil
 }
@@ -40,7 +38,7 @@ func TestExecuteAllBasic(t *testing.T) {
 	msg := message.QuickBatch([][]byte{[]byte("test message")})
 	msgs, res := ExecuteAll(procs, msg)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 	if exp, act := 1, len(msgs); exp != act {
 		t.Fatalf("Wrong count of messages: %v != %v", act, exp)
@@ -71,7 +69,7 @@ func TestExecuteAllBasicBatch(t *testing.T) {
 	})
 	msgs, res := ExecuteAll(procs, msg)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 	if exp, act := 1, len(msgs); exp != act {
 		t.Fatalf("Wrong count of messages: %v != %v", act, exp)
@@ -99,7 +97,7 @@ func TestExecuteAllMulti(t *testing.T) {
 	msg2 := message.QuickBatch([][]byte{[]byte("test message 2")})
 	msgs, res := ExecuteAll(procs, msg1, msg2)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 	if exp, act := 2, len(msgs); exp != act {
 		t.Fatalf("Wrong count of messages: %v != %v", act, exp)
@@ -127,9 +125,9 @@ type errored struct {
 	called int
 }
 
-func (p *errored) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (p *errored) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	p.called++
-	return nil, response.NewError(errors.New("test error"))
+	return nil, errors.New("test error")
 }
 
 // CloseAsync shuts down the processor and stops processing requests.
@@ -154,7 +152,7 @@ func TestExecuteAllErrored(t *testing.T) {
 	if len(msgs) > 0 {
 		t.Fatal("received messages after drop")
 	}
-	if res == nil || res.AckError() == nil {
+	if res == nil {
 		t.Fatal("received non noack response")
 	}
 	if exp, act := 2, procs[0].(*passthrough).called; exp != act {

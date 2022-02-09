@@ -34,7 +34,7 @@ func TestCacheSet(t *testing.T) {
 
 	output, res := proc.ProcessMessage(input)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(output) != 1 {
@@ -77,7 +77,7 @@ func TestCacheSetParts(t *testing.T) {
 
 	output, res := proc.ProcessMessage(input)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(output) != 1 {
@@ -120,7 +120,7 @@ func TestCacheAdd(t *testing.T) {
 
 	output, res := proc.ProcessMessage(input)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(output) != 1 {
@@ -180,7 +180,7 @@ func TestCacheGet(t *testing.T) {
 
 	output, res := proc.ProcessMessage(input)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(output) != 1 {
@@ -228,7 +228,7 @@ func TestCacheDelete(t *testing.T) {
 
 	output, res := proc.ProcessMessage(input)
 	if res != nil {
-		t.Fatal(res.AckError())
+		t.Fatal(res)
 	}
 
 	if len(output) != 1 {

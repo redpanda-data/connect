@@ -92,7 +92,7 @@ func NewRateLimit(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (r *RateLimit) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (r *RateLimit) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	r.mCount.Incr(1)
 
 	_ = msg.Iter(func(i int, p *message.Part) error {

@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -138,14 +139,14 @@ func (m *Batcher) loop() {
 			continue
 		}
 
-		resChan := make(chan types.Response)
+		resChan := make(chan response.Error)
 		select {
 		case m.messagesOut <- types.NewTransaction(sendMsg, resChan):
 		case <-m.shutSig.CloseAtLeisureChan():
 			return
 		}
 
-		go func(rChan chan types.Response, upstreamTrans []*transaction.Tracked) {
+		go func(rChan chan response.Error, upstreamTrans []*transaction.Tracked) {
 			select {
 			case <-m.shutSig.CloseAtLeisureChan():
 				return

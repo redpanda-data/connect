@@ -126,7 +126,7 @@ func TestFilesFile(t *testing.T) {
 			t.Errorf("Received duplicate message: %v", resStr)
 		}
 		act[resStr] = struct{}{}
-		if err = ackFn(context.Background(), response.NewAck()); err != nil {
+		if err = ackFn(context.Background(), response.NewError(nil)); err != nil {
 			t.Error(err)
 		}
 	}

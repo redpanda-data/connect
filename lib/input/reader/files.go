@@ -10,7 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 )
 
 //------------------------------------------------------------------------------
@@ -91,7 +91,7 @@ func (f *Files) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn
 
 	msg := message.QuickBatch([][]byte{msgBytes})
 	msg.Get(0).MetaSet("path", path)
-	return msg, func(ctx context.Context, res types.Response) error {
+	return msg, func(ctx context.Context, res response.Error) error {
 		if f.delete {
 			if res.AckError() == nil {
 				return os.Remove(path)

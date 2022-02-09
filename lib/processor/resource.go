@@ -9,7 +9,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -88,7 +87,7 @@ func NewResource(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (r *Resource) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res types.Response) {
+func (r *Resource) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res error) {
 	r.mCount.Incr(1)
 	if err := interop.AccessProcessor(context.Background(), r.mgr, r.name, func(p types.Processor) {
 		msgs, res = p.ProcessMessage(msg)
@@ -96,7 +95,7 @@ func (r *Resource) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, re
 		r.log.Debugf("Failed to obtain processor resource '%v': %v", r.name, err)
 		r.mErrNotFound.Incr(1)
 		r.mErr.Incr(1)
-		return nil, response.NewError(err)
+		return nil, err
 	}
 	return msgs, res
 }

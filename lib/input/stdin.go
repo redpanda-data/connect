@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -124,7 +125,7 @@ func (s *stdinConsumer) ReadWithContext(ctx context.Context) (*message.Batch, re
 		return nil, nil, component.ErrTimeout
 	}
 
-	return msg, func(rctx context.Context, res types.Response) error {
+	return msg, func(rctx context.Context, res response.Error) error {
 		return nil
 	}, nil
 }

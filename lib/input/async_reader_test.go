@@ -77,7 +77,7 @@ func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (*message.Batch, 
 		r.msgsToSnd = r.msgsToSnd[1:]
 	}
 
-	return nextMsg.DeepCopy(), func(ctx context.Context, res types.Response) error {
+	return nextMsg.DeepCopy(), func(ctx context.Context, res response.Error) error {
 		r.ackMut.Lock()
 		r.ackRcvd[i] = res.AckError()
 		r.ackMut.Unlock()
@@ -315,7 +315,7 @@ func TestAsyncReaderCanReconnect(t *testing.T) {
 	}
 
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -387,7 +387,7 @@ func TestAsyncReaderFailsReconnect(t *testing.T) {
 	}
 
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -494,7 +494,7 @@ func TestAsyncReaderHappyPath(t *testing.T) {
 	}
 
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -548,7 +548,7 @@ func TestAsyncReaderCloseWithPendingAcks(t *testing.T) {
 	}
 
 	select {
-	case ts.ResponseChan <- response.NewAck():
+	case ts.ResponseChan <- response.NewError(nil):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -690,7 +690,7 @@ func TestAsyncReaderParallel(t *testing.T) {
 		expErrs = append(expErrs, fmt.Errorf("err %v", i))
 	}
 
-	resChans := make([]chan<- types.Response, len(expMsgs))
+	resChans := make([]chan<- response.Error, len(expMsgs))
 	for i, mStr := range expMsgs {
 		var ts types.Transaction
 		var open bool
@@ -778,7 +778,7 @@ func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
 		}
 	})
 
-	resChans := make([]chan<- types.Response, capacity)
+	resChans := make([]chan<- response.Error, capacity)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -796,7 +796,7 @@ func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
 
 		for j := 0; j < capacity; j++ {
 			select {
-			case resChans[j] <- response.NewAck():
+			case resChans[j] <- response.NewError(nil):
 			case <-time.After(time.Second):
 				b.Fatal("Timed out")
 			}

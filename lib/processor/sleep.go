@@ -107,7 +107,7 @@ func NewSleep(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (s *Sleep) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (s *Sleep) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	s.mCount.Incr(1)
 
 	spans := tracing.CreateChildSpans(TypeSleep, msg)

@@ -24,7 +24,7 @@ func traceProcessor(e *events, errCtr *uint64, p types.Processor) types.Processo
 	return t
 }
 
-func (t *tracedProcessor) ProcessMessage(m *message.Batch) ([]*message.Batch, types.Response) {
+func (t *tracedProcessor) ProcessMessage(m *message.Batch) ([]*message.Batch, error) {
 	prevErrs := make([]string, m.Len())
 	_ = m.Iter(func(i int, part *message.Part) error {
 		t.e.Add(EventConsume, string(part.Get()))

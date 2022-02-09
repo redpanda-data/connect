@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 
 	"github.com/Jeffail/benthos/v3/lib/types"
 	jsonschema "github.com/xeipuuv/gojsonschema"
@@ -169,7 +168,7 @@ func NewJSONSchema(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (s *JSONSchema) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (s *JSONSchema) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	s.mCount.Incr(1)
 	newMsg := msg.Copy()
 	proc := func(i int, span *tracing.Span, part *message.Part) error {
@@ -211,7 +210,7 @@ func (s *JSONSchema) ProcessMessage(msg *message.Batch) ([]*message.Batch, types
 	}
 
 	if newMsg.Len() == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	IteratePartsWithSpanV2(TypeJSONSchema, s.conf.Parts, newMsg, proc)

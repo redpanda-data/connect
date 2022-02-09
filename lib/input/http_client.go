@@ -18,6 +18,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
@@ -302,7 +303,7 @@ func (h *HTTPClient) readStreamed(ctx context.Context) (*message.Batch, reader.A
 	})
 	h.prevResponse.SetAll(resParts)
 
-	return msg, func(rctx context.Context, res types.Response) error {
+	return msg, func(rctx context.Context, res response.Error) error {
 		return codecAckFn(rctx, res.AckError())
 	}, nil
 }
@@ -324,7 +325,7 @@ func (h *HTTPClient) readNotStreamed(ctx context.Context) (*message.Batch, reade
 	}
 
 	h.prevResponse = msg
-	return msg.Copy(), func(context.Context, types.Response) error {
+	return msg.Copy(), func(context.Context, response.Error) error {
 		return nil
 	}, nil
 }

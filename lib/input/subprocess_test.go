@@ -31,7 +31,7 @@ func readMsg(t *testing.T, tranChan <-chan types.Transaction) *message.Batch {
 	select {
 	case tran := <-tranChan:
 		select {
-		case tran.ResponseChan <- response.NewAck():
+		case tran.ResponseChan <- response.NewError(nil):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}

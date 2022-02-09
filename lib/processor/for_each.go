@@ -9,7 +9,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -114,7 +113,7 @@ func NewProcessBatch(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *ForEach) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (p *ForEach) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	p.mCount.Incr(1)
 
 	individualMsgs := make([]*message.Batch, msg.Len())
@@ -128,7 +127,7 @@ func (p *ForEach) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Re
 	resMsg := message.QuickBatch(nil)
 	for _, tmpMsg := range individualMsgs {
 		resultMsgs, res := ExecuteAll(p.children, tmpMsg)
-		if res != nil && res.AckError() != nil {
+		if res != nil {
 			return nil, res
 		}
 		for _, m := range resultMsgs {
@@ -140,7 +139,7 @@ func (p *ForEach) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Re
 	}
 
 	if resMsg.Len() == 0 {
-		return nil, response.NewAck()
+		return nil, nil
 	}
 
 	p.mBatchSent.Incr(1)

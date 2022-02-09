@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -86,7 +87,7 @@ func (m *Batcher) loop() {
 			return
 		}
 
-		resChan := make(chan types.Response)
+		resChan := make(chan response.Error)
 		select {
 		case m.messagesOut <- types.NewTransaction(sendMsg, resChan):
 		case <-m.shutSig.CloseNowChan():
@@ -94,7 +95,7 @@ func (m *Batcher) loop() {
 		}
 
 		pendingAcks.Add(1)
-		go func(rChan <-chan types.Response, aggregatedTransactions []*transaction.Tracked) {
+		go func(rChan <-chan response.Error, aggregatedTransactions []*transaction.Tracked) {
 			defer pendingAcks.Done()
 
 			select {

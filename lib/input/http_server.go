@@ -27,6 +27,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	httputil "github.com/Jeffail/benthos/v3/lib/util/http"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
@@ -446,7 +447,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	h.mRcvd.Incr(1)
 	h.log.Tracef("Consumed %v messages from POST to '%v'.\n", msg.Len(), h.conf.Path)
 
-	resChan := make(chan types.Response, 1)
+	resChan := make(chan response.Error, 1)
 	select {
 	case h.transactions <- types.NewTransaction(msg, resChan):
 	case <-time.After(h.timeout):
@@ -589,7 +590,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
-	resChan := make(chan types.Response, 1)
+	resChan := make(chan response.Error, 1)
 	throt := throttle.New(throttle.OptCloseChan(h.shutSig.CloseAtLeisureChan()))
 
 	if welMsg := h.conf.WSWelcomeMessage; len(welMsg) > 0 {

@@ -64,7 +64,7 @@ func NewSyncResponse(
 //------------------------------------------------------------------------------
 
 // ProcessMessage logs an event and returns the message unchanged.
-func (s *SyncResponse) ProcessMessage(msg *message.Batch) ([]*message.Batch, types.Response) {
+func (s *SyncResponse) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	if err := roundtrip.SetAsResponse(msg); err != nil {
 		s.log.Debugf("Failed to store message as a sync response: %v\n", err)
 	}

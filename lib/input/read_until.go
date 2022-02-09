@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/cenkalti/backoff/v4"
 )
@@ -287,7 +288,7 @@ runLoop:
 		tran.Payload.Get(0).MetaSet("benthos_read_until", "final")
 
 		// If this transaction succeeds we shut down.
-		tmpRes := make(chan types.Response)
+		tmpRes := make(chan response.Error)
 		select {
 		case r.transactions <- types.NewTransaction(tran.Payload, tmpRes):
 			mFinalPropagated.Incr(1)
@@ -295,7 +296,7 @@ runLoop:
 			return
 		}
 
-		var res types.Response
+		var res response.Error
 		select {
 		case res, open = <-tmpRes:
 			if !open {

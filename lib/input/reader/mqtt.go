@@ -13,7 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	gonanoid "github.com/matoous/go-nanoid/v2"
@@ -259,7 +259,7 @@ func (m *MQTT) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 		p.MetaSet("mqtt_topic", msg.Topic())
 		p.MetaSet("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
 
-		return message, func(ctx context.Context, res types.Response) error {
+		return message, func(ctx context.Context, res response.Error) error {
 			if res.AckError() == nil {
 				msg.Ack()
 			}

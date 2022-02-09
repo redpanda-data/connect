@@ -4,15 +4,16 @@ import (
 	"context"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // AsyncAckFn is a function used to acknowledge receipt of a message batch. The
 // provided response indicates whether the message batch was successfully
 // delivered. Returns an error if the acknowledge was not propagated.
-type AsyncAckFn func(context.Context, types.Response) error
+type AsyncAckFn func(context.Context, response.Error) error
 
-var noopAsyncAckFn AsyncAckFn = func(context.Context, types.Response) error {
+var noopAsyncAckFn AsyncAckFn = func(context.Context, response.Error) error {
 	return nil
 }
 
