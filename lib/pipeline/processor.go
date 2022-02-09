@@ -161,13 +161,13 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- typ
 			msgBatch = msgs[start:end]
 		}
 
-        go func(batch []*message.Batch) {
-            for _, m := range batch {
-                sendMsg(m)
+		go func(batch []*message.Batch) {
+			for _, m := range batch {
+				sendMsg(m)
 			}
 			wg.Done()
 		}(msgBatch)
-		
+
 	}
 
 	wg.Wait()
