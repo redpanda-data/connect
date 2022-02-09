@@ -1,6 +1,10 @@
 package pipeline
 
 import (
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -9,9 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 //------------------------------------------------------------------------------
