@@ -5,15 +5,14 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-// V2 is a simpler interface to implement than types.Processor.
+// V2 is a simpler interface to implement than V1.
 type V2 interface {
 	// Process a message into one or more resulting messages, or return an error
 	// if the message could not be processed. If zero messages are returned and
@@ -26,8 +25,8 @@ type V2 interface {
 	Close(ctx context.Context) error
 }
 
-// V2Batched is a simpler interface to implement than types.Processor and allows
-// batch-wide processing.
+// V2Batched is a simpler interface to implement than V1 and allows batch-wide
+// processing.
 type V2Batched interface {
 	// Process a batch of messages into one or more resulting batches, or return
 	// an error if the entire batch could not be processed. If zero messages are
@@ -42,7 +41,23 @@ type V2Batched interface {
 
 //------------------------------------------------------------------------------
 
-// Implements types.Processor
+// FlagErr marks a message part as having failed at a processing step with an
+// error message. If the error is nil the message part remains unchanged.
+func FlagErr(part *message.Part, err error) {
+	if err != nil {
+		part.MetaSet(imessage.FailFlagKey, err.Error())
+	}
+}
+
+// GetFail returns an error string for a message part if it has failed, or an
+// empty string if not.
+func GetFail(part *message.Part) string {
+	return part.MetaGet(imessage.FailFlagKey)
+}
+
+//------------------------------------------------------------------------------
+
+// Implements V1
 type v2ToV1Processor struct {
 	typeStr string
 	p       V2
@@ -54,9 +69,8 @@ type v2ToV1Processor struct {
 	mSent    metrics.StatCounter
 }
 
-// NewV2ToV1Processor wraps a processor.V2 with a struct that implements
-// types.Processor.
-func NewV2ToV1Processor(typeStr string, p V2, stats metrics.Type) types.Processor {
+// NewV2ToV1Processor wraps a processor.V2 with a struct that implements V1.
+func NewV2ToV1Processor(typeStr string, p V2, stats metrics.Type) V1 {
 	return &v2ToV1Processor{
 		typeStr: typeStr, p: p, sig: shutdown.NewSignaller(),
 
@@ -79,7 +93,7 @@ func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, 
 		if err != nil {
 			newPart := part.Copy()
 			a.mErr.Incr(1)
-			processor.FlagErr(newPart, err)
+			FlagErr(newPart, err)
 			span.SetTag("error", true)
 			span.LogKV(
 				"event", "error",
@@ -140,7 +154,7 @@ type v2BatchedToV1Processor struct {
 
 // NewV2BatchedToV1Processor wraps a processor.V2Batched with a struct that
 // implements types.Processor.
-func NewV2BatchedToV1Processor(typeStr string, p V2Batched, stats metrics.Type) types.Processor {
+func NewV2BatchedToV1Processor(typeStr string, p V2Batched, stats metrics.Type) V1 {
 	return &v2BatchedToV1Processor{
 		typeStr: typeStr, p: p, sig: shutdown.NewSignaller(),
 
@@ -167,7 +181,7 @@ func (a *v2BatchedToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.
 		a.mErr.Incr(1)
 		for i, p := range parts {
 			parts[i] = p.Copy()
-			processor.FlagErr(parts[i], err)
+			FlagErr(parts[i], err)
 		}
 		for _, s := range spans {
 			s.SetTag("error", true)

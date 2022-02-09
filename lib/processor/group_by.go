@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -101,7 +102,7 @@ func NewGroupByConfig() GroupByConfig {
 
 type group struct {
 	Check      *mapping.Executor
-	Processors []types.Processor
+	Processors []processor.V1
 }
 
 // GroupBy is a processor that group_bys messages into a message per part.

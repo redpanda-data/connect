@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -72,7 +72,7 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 	}
 
 	for i, expMsg := range expMsgs {
-		var tran types.Transaction
+		var tran message.Transaction
 		var open bool
 		select {
 		case tran, open = <-in.TransactionChan():
@@ -132,7 +132,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 		"bar": {},
 	}
 
-	var tran types.Transaction
+	var tran message.Transaction
 	var open bool
 
 	resChans := []chan<- response.Error{}

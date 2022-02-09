@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -71,9 +72,9 @@ func New(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-) (types.RateLimit, error) {
+) (ratelimit.V1, error) {
 	if mgrV2, ok := mgr.(interface {
-		NewRateLimit(conf Config) (types.RateLimit, error)
+		NewRateLimit(conf Config) (ratelimit.V1, error)
 	}); ok {
 		return mgrV2.NewRateLimit(conf)
 	}

@@ -4,9 +4,9 @@ import (
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // AllProcessors is a set containing every single processor that has been
@@ -24,7 +24,7 @@ func (e *Environment) ProcessorAdd(constructor ProcessorConstructor, spec docs.C
 }
 
 // ProcessorInit attempts to initialise a processor from a config.
-func (e *Environment) ProcessorInit(conf processor.Config, mgr NewManagement) (types.Processor, error) {
+func (e *Environment) ProcessorInit(conf processor.Config, mgr NewManagement) (iprocessor.V1, error) {
 	return e.processors.Init(conf, mgr)
 }
 
@@ -64,7 +64,7 @@ func (s *ProcessorSet) Add(constructor ProcessorConstructor, spec docs.Component
 }
 
 // Init attempts to initialise an processor from a config.
-func (s *ProcessorSet) Init(conf processor.Config, mgr NewManagement) (types.Processor, error) {
+func (s *ProcessorSet) Init(conf processor.Config, mgr NewManagement) (iprocessor.V1, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidProcessorType

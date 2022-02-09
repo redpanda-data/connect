@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,7 +53,7 @@ func TestHTTPClientGET(t *testing.T) {
 		return
 	}
 
-	var tr types.Transaction
+	var tr message.Transaction
 	var open bool
 
 	for _, expPart := range inputs {
@@ -107,7 +107,7 @@ func TestHTTPClientPagination(t *testing.T) {
 	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	var tr types.Transaction
+	var tr message.Transaction
 	var open bool
 
 	for i := 0; i < 10; i++ {
@@ -302,7 +302,7 @@ func TestHTTPClientPOST(t *testing.T) {
 	}
 
 	for _, expPart := range inputs {
-		var ts types.Transaction
+		var ts message.Transaction
 		var open bool
 
 		select {
@@ -380,7 +380,7 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 		return
 	}
 
-	var tr types.Transaction
+	var tr message.Transaction
 	var open bool
 
 	select {
@@ -489,7 +489,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 
 	reqMut.Lock()
 	for _, test := range tests {
-		var ts types.Transaction
+		var ts message.Transaction
 		var open bool
 
 		reqMut.Unlock()
@@ -588,7 +588,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		var ts types.Transaction
+		var ts message.Transaction
 		var open bool
 
 		select {
@@ -660,7 +660,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		for _, testMsg := range msgs {
-			var ts types.Transaction
+			var ts message.Transaction
 			var open bool
 			select {
 			case ts, open = <-h.TransactionChan():
@@ -725,7 +725,7 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		for _, testMsg := range msgs {
-			var ts types.Transaction
+			var ts message.Transaction
 			var open bool
 			select {
 			case ts, open = <-h.TransactionChan():
@@ -799,7 +799,7 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 		}
 
 		for _, testMsg := range msgs {
-			var ts types.Transaction
+			var ts message.Transaction
 			var open bool
 			select {
 			case ts, open = <-h.TransactionChan():

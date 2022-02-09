@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -25,8 +27,8 @@ type Pool struct {
 	log   log.Modular
 	stats metrics.Type
 
-	messagesIn  <-chan types.Transaction
-	messagesOut chan types.Transaction
+	messagesIn  <-chan message.Transaction
+	messagesOut chan message.Transaction
 
 	closeChan chan struct{}
 	closed    chan struct{}
@@ -48,7 +50,7 @@ func newTestPool(
 		workers:     make([]types.Pipeline, threads),
 		log:         log,
 		stats:       stats,
-		messagesOut: make(chan types.Transaction),
+		messagesOut: make(chan message.Transaction),
 		closeChan:   make(chan struct{}),
 		closed:      make(chan struct{}),
 	}
@@ -68,7 +70,7 @@ func newPoolV2(
 	threads int,
 	log log.Modular,
 	stats metrics.Type,
-	msgProcessors ...types.Processor,
+	msgProcessors ...iprocessor.V1,
 ) (*Pool, error) {
 	if threads <= 0 {
 		threads = runtime.NumCPU()
@@ -79,7 +81,7 @@ func newPoolV2(
 		workers:     make([]types.Pipeline, threads),
 		log:         log,
 		stats:       stats,
-		messagesOut: make(chan types.Transaction),
+		messagesOut: make(chan message.Transaction),
 		closeChan:   make(chan struct{}),
 		closed:      make(chan struct{}),
 	}
@@ -113,7 +115,7 @@ func (p *Pool) loop() {
 		close(p.closed)
 	}()
 
-	internalMessages := make(chan types.Transaction)
+	internalMessages := make(chan message.Transaction)
 	remainingWorkers := int64(len(p.workers))
 
 	for _, worker := range p.workers {
@@ -129,7 +131,7 @@ func (p *Pool) loop() {
 				}
 			}()
 			for {
-				var t types.Transaction
+				var t message.Transaction
 				var open bool
 				select {
 				case t, open = <-w.TransactionChan():
@@ -168,7 +170,7 @@ func (p *Pool) loop() {
 //------------------------------------------------------------------------------
 
 // Consume assigns a messages channel for the pipeline to read.
-func (p *Pool) Consume(msgs <-chan types.Transaction) error {
+func (p *Pool) Consume(msgs <-chan message.Transaction) error {
 	if p.messagesIn != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -179,7 +181,7 @@ func (p *Pool) Consume(msgs <-chan types.Transaction) error {
 
 // TransactionChan returns the channel used for consuming messages from this
 // pipeline.
-func (p *Pool) TransactionChan() <-chan types.Transaction {
+func (p *Pool) TransactionChan() <-chan message.Transaction {
 	return p.messagesOut
 }
 

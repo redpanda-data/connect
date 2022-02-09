@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -56,7 +57,7 @@ type Inproc struct {
 	stats metrics.Type
 	log   log.Modular
 
-	transactions chan types.Transaction
+	transactions chan message.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -75,7 +76,7 @@ func NewInproc(
 		mgr:          mgr,
 		log:          log,
 		stats:        stats,
-		transactions: make(chan types.Transaction),
+		transactions: make(chan message.Transaction),
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
@@ -105,7 +106,7 @@ func (i *Inproc) loop() {
 	}()
 	mRunning.Incr(1)
 
-	var inprocChan <-chan types.Transaction
+	var inprocChan <-chan message.Transaction
 
 messageLoop:
 	for atomic.LoadInt32(&i.running) == 1 {
@@ -150,7 +151,7 @@ messageLoop:
 
 // TransactionChan returns a transactions channel for consuming messages from
 // this input type.
-func (i *Inproc) TransactionChan() <-chan types.Transaction {
+func (i *Inproc) TransactionChan() <-chan message.Transaction {
 	return i.transactions
 }
 

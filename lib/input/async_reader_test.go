@@ -18,7 +18,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -303,7 +302,7 @@ func TestAsyncReaderCanReconnect(t *testing.T) {
 		}
 	}()
 
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 	select {
 	case ts, open = <-r.TransactionChan():
@@ -375,7 +374,7 @@ func TestAsyncReaderFailsReconnect(t *testing.T) {
 		}
 	}()
 
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 	select {
 	case ts, open = <-r.TransactionChan():
@@ -478,7 +477,7 @@ func TestAsyncReaderHappyPath(t *testing.T) {
 		}
 	}()
 
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 
 	select {
@@ -536,7 +535,7 @@ func TestAsyncReaderCloseWithPendingAcks(t *testing.T) {
 		}
 	}()
 
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 
 	select {
@@ -616,7 +615,7 @@ func TestAsyncReaderSadPath(t *testing.T) {
 		}
 	}()
 
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 
 	select {
@@ -692,7 +691,7 @@ func TestAsyncReaderParallel(t *testing.T) {
 
 	resChans := make([]chan<- response.Error, len(expMsgs))
 	for i, mStr := range expMsgs {
-		var ts types.Transaction
+		var ts message.Transaction
 		var open bool
 		select {
 		case ts, open = <-r.TransactionChan():

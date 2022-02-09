@@ -53,7 +53,7 @@ type AsyncWriter struct {
 	log   log.Modular
 	stats metrics.Type
 
-	transactions <-chan types.Transaction
+	transactions <-chan message.Transaction
 
 	shutSig *shutdown.Signaller
 }
@@ -252,7 +252,7 @@ func (w *AsyncWriter) loop() {
 		defer wg.Done()
 
 		for {
-			var ts types.Transaction
+			var ts message.Transaction
 			var open bool
 			select {
 			case ts, open = <-w.transactions:
@@ -315,7 +315,7 @@ func (w *AsyncWriter) loop() {
 }
 
 // Consume assigns a messages channel for the output to read.
-func (w *AsyncWriter) Consume(ts <-chan types.Transaction) error {
+func (w *AsyncWriter) Consume(ts <-chan message.Transaction) error {
 	if w.transactions != nil {
 		return component.ErrAlreadyStarted
 	}

@@ -27,7 +27,7 @@ func TestBasicFanOutSequential(t *testing.T) {
 		outputs = append(outputs, mockOutputs[i])
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOutSequential(outputs, log.Noop(), metrics.Noop())
@@ -47,14 +47,14 @@ func TestBasicFanOutSequential(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
 		resChanSlice := []chan<- response.Error{}
 		for j := 0; j < nOutputs; j++ {
-			var ts types.Transaction
+			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[j].TChan:
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -95,7 +95,7 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 	mockTwo := MockOutputType{}
 
 	outputs := []types.Output{&mockOne, &mockTwo}
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOutSequential(outputs, log.Noop(), metrics.Noop())
@@ -109,12 +109,12 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for broker send")
 		return
 	}
-	var ts1, ts2 types.Transaction
+	var ts1, ts2 message.Transaction
 	select {
 	case ts1 = <-mockOne.TChan:
 	case <-time.After(time.Second):
@@ -177,7 +177,7 @@ func TestFanOutSequentialBlock(t *testing.T) {
 	mockTwo := MockOutputType{}
 
 	outputs := []types.Output{&mockOne, &mockTwo}
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOutSequential(outputs, log.Noop(), metrics.Noop())
@@ -191,12 +191,12 @@ func TestFanOutSequentialBlock(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for broker send")
 		return
 	}
-	var ts1, ts2 types.Transaction
+	var ts1, ts2 message.Transaction
 	select {
 	case ts1 = <-mockOne.TChan:
 	case <-time.After(time.Second):

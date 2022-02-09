@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -94,7 +95,7 @@ func NewResource(
 
 // TransactionChan returns a transactions channel for consuming messages from
 // this input type.
-func (r *Resource) TransactionChan() (tChan <-chan types.Transaction) {
+func (r *Resource) TransactionChan() (tChan <-chan message.Transaction) {
 	if err := interop.AccessInput(context.Background(), r.mgr, r.name, func(i types.Input) {
 		tChan = i.TransactionChan()
 	}); err != nil {

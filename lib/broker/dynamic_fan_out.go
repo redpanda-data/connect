@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -34,7 +35,7 @@ type wrappedOutput struct {
 // outputWithTSChan is a struct containing both an output and the transaction
 // chan it reads from.
 type outputWithTSChan struct {
-	tsChan chan types.Transaction
+	tsChan chan message.Transaction
 	output DynamicOutput
 	ctx    context.Context
 	done   func()
@@ -53,7 +54,7 @@ type DynamicFanOut struct {
 	onAdd    func(label string)
 	onRemove func(label string)
 
-	transactions <-chan types.Transaction
+	transactions <-chan message.Transaction
 
 	outputsMut    sync.RWMutex
 	newOutputChan chan wrappedOutput
@@ -160,7 +161,7 @@ func OptDynamicFanOutSetOnRemove(onRemoveFunc func(label string)) func(*DynamicF
 //------------------------------------------------------------------------------
 
 // Consume assigns a new transactions channel for the broker to read.
-func (d *DynamicFanOut) Consume(transactions <-chan types.Transaction) error {
+func (d *DynamicFanOut) Consume(transactions <-chan message.Transaction) error {
 	if d.transactions != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -178,7 +179,7 @@ func (d *DynamicFanOut) addOutput(ident string, output DynamicOutput) error {
 	}
 
 	ow := outputWithTSChan{
-		tsChan: make(chan types.Transaction),
+		tsChan: make(chan message.Transaction),
 		output: output,
 	}
 
@@ -296,7 +297,7 @@ func (d *DynamicFanOut) loop() {
 		defer wg.Done()
 
 		for {
-			var ts types.Transaction
+			var ts message.Transaction
 			var open bool
 			select {
 			case ts, open = <-d.transactions:
@@ -341,7 +342,7 @@ func (d *DynamicFanOut) loop() {
 						}
 
 						select {
-						case output.tsChan <- types.NewTransaction(msgCopy, resChan):
+						case output.tsChan <- message.NewTransaction(msgCopy, resChan):
 						case <-d.ctx.Done():
 							d.outputsMut.RUnlock()
 							return component.ErrTypeClosed

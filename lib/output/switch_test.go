@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +33,7 @@ func newSwitch(t *testing.T, conf Config, mockOutputs []*MockOutputType) *Switch
 	for i := 0; i < len(mockOutputs); i++ {
 		close(rType.outputTSChans[i])
 		rType.outputs[i] = mockOutputs[i]
-		rType.outputTSChans[i] = make(chan types.Transaction)
+		rType.outputTSChans[i] = make(chan message.Transaction)
 		mockOutputs[i].Consume(rType.outputTSChans[i])
 	}
 	return rType
@@ -55,7 +54,7 @@ func TestSwitchNoConditions(t *testing.T) {
 
 	s := newSwitch(t, conf, mockOutputs)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
@@ -63,14 +62,14 @@ func TestSwitchNoConditions(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
 		resChanSlice := []chan<- response.Error{}
 		for j := 0; j < nOutputs; j++ {
-			var ts types.Transaction
+			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[j].TChan:
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -122,7 +121,7 @@ func TestSwitchNoRetries(t *testing.T) {
 
 	s := newSwitch(t, conf, mockOutputs)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
@@ -130,13 +129,13 @@ func TestSwitchNoRetries(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Fatal("Timed out waiting for broker send")
 		}
 		resChanSlice := []chan<- response.Error{}
 		for j := 0; j < nOutputs; j++ {
-			var ts types.Transaction
+			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[j].TChan:
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -201,7 +200,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 	s, err := NewSwitch(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 	require.NoError(t, s.Consume(readChan))
 
@@ -214,7 +213,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 	})
 
 	select {
-	case readChan <- types.NewTransaction(msg, resChan):
+	case readChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for broker send")
 	}
@@ -265,7 +264,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 
 	s := newSwitch(t, conf, mockOutputs)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 	require.NoError(t, s.Consume(readChan))
 
@@ -278,12 +277,12 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 	})
 
 	select {
-	case readChan <- types.NewTransaction(msg, resChan):
+	case readChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for broker send")
 	}
 
-	transactions := []types.Transaction{}
+	transactions := []message.Transaction{}
 	for j := 0; j < nOutputs; j++ {
 		select {
 		case ts := <-mockOutputs[j].TChan:
@@ -353,7 +352,7 @@ func TestSwitchWithConditions(t *testing.T) {
 
 	s := newSwitch(t, conf, mockOutputs)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
@@ -368,7 +367,7 @@ func TestSwitchWithConditions(t *testing.T) {
 
 	outputLoop:
 		for closed < len(mockOutputs) {
-			var ts types.Transaction
+			var ts message.Transaction
 			var ok bool
 
 			select {
@@ -419,7 +418,7 @@ func TestSwitchWithConditions(t *testing.T) {
 		}
 		content := [][]byte{[]byte(fmt.Sprintf("{\"foo\":%q}", foo))}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for output send")
 			return
@@ -456,7 +455,7 @@ func TestSwitchError(t *testing.T) {
 
 	s := newSwitch(t, conf, mockOutputs)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
@@ -470,12 +469,12 @@ func TestSwitchError(t *testing.T) {
 	})
 
 	select {
-	case readChan <- types.NewTransaction(msg, resChan):
+	case readChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("timed out waiting to send")
 	}
 
-	var ts types.Transaction
+	var ts message.Transaction
 
 	for i := 0; i < len(mockOutputs); i++ {
 		select {
@@ -523,7 +522,7 @@ func TestSwitchBatchSplit(t *testing.T) {
 
 	s := newSwitch(t, conf, mockOutputs)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
@@ -536,12 +535,12 @@ func TestSwitchBatchSplit(t *testing.T) {
 	})
 
 	select {
-	case readChan <- types.NewTransaction(msg, resChan):
+	case readChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("timed out waiting to send")
 	}
 
-	var ts types.Transaction
+	var ts message.Transaction
 
 	for i := 0; i < len(mockOutputs); i++ {
 		select {
@@ -589,7 +588,7 @@ func TestSwitchBatchGroup(t *testing.T) {
 
 	s := newSwitch(t, conf, mockOutputs)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
@@ -602,12 +601,12 @@ func TestSwitchBatchGroup(t *testing.T) {
 	})
 
 	select {
-	case readChan <- types.NewTransaction(msg, resChan):
+	case readChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("timed out waiting to send")
 	}
 
-	var ts types.Transaction
+	var ts message.Transaction
 
 	select {
 	case ts = <-mockOutputs[0].TChan:
@@ -658,14 +657,14 @@ func TestSwitchNoMatch(t *testing.T) {
 
 	s := newSwitch(t, conf, mockOutputs)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
 	msg := message.QuickBatch([][]byte{[]byte(`{"foo":"qux"}`)})
 	select {
-	case readChan <- types.NewTransaction(msg, resChan):
+	case readChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for output send")
 		return
@@ -702,14 +701,14 @@ func TestSwitchNoMatchStrict(t *testing.T) {
 
 	s := newSwitch(t, conf, mockOutputs)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
 
 	msg := message.QuickBatch([][]byte{[]byte(`{"foo":"qux"}`)})
 	select {
-	case readChan <- types.NewTransaction(msg, resChan):
+	case readChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Errorf("Timed out waiting for output send")
 		return
@@ -746,7 +745,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 
 	s := newSwitch(t, conf, mockOutputs)
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	require.NoError(t, s.Consume(readChan))
@@ -762,7 +761,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 
 	outputLoop:
 		for closed < len(mockOutputs) {
-			var ts types.Transaction
+			var ts message.Transaction
 			var ok bool
 
 			resChans := []chan<- response.Error{}
@@ -817,7 +816,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 		}
 		content := [][]byte{[]byte(fmt.Sprintf("{\"foo\":%q}", foo))}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for output send")
 			return
@@ -858,7 +857,7 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	s := newSwitch(t, conf, mockOutputs)
@@ -867,12 +866,12 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 	require.Error(t, s.Consume(readChan))
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for output send")
 		return
 	}
-	var ts1, ts2 types.Transaction
+	var ts1, ts2 message.Transaction
 	select {
 	case ts1 = <-mockOne.TChan:
 	case <-time.After(time.Second):
@@ -940,19 +939,19 @@ func TestSwitchShutDownFromErrorResponse(t *testing.T) {
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
 
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 	select {
 	case ts, open = <-mockOutputs[0].TChan:
@@ -1002,14 +1001,14 @@ func TestSwitchShutDownFromReceive(t *testing.T) {
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -1048,14 +1047,14 @@ func TestSwitchShutDownFromSend(t *testing.T) {
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	s := newSwitch(t, conf, mockOutputs)
 	require.NoError(t, s.Consume(readChan))
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -1087,7 +1086,7 @@ func TestSwitchBackPressure(t *testing.T) {
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	s := newSwitch(t, conf, mockOutputs)
@@ -1117,7 +1116,7 @@ func TestSwitchBackPressure(t *testing.T) {
 bpLoop:
 	for ; i < 1000; i++ {
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 		case <-time.After(time.Millisecond * 200):
 			break bpLoop
 		}

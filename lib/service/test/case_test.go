@@ -7,33 +7,33 @@ import (
 	"reflect"
 	"testing"
 
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/fatih/color"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 )
 
-type mockProvider map[string][]types.Processor
+type mockProvider map[string][]iprocessor.V1
 
-func (m mockProvider) Provide(ptr string, env map[string]string) ([]types.Processor, error) {
+func (m mockProvider) Provide(ptr string, env map[string]string) ([]iprocessor.V1, error) {
 	if procs, ok := m[ptr]; ok {
 		return procs, nil
 	}
 	return nil, errors.New("processors not found")
 }
 
-func (m mockProvider) ProvideMocked(ptr string, env map[string]string, mocks map[string]yaml.Node) ([]types.Processor, error) {
+func (m mockProvider) ProvideMocked(ptr string, env map[string]string, mocks map[string]yaml.Node) ([]iprocessor.V1, error) {
 	if procs, ok := m[ptr]; ok {
 		return procs, nil
 	}
 	return nil, errors.New("processors not found")
 }
 
-func (m mockProvider) ProvideBloblang(name string) ([]types.Processor, error) {
+func (m mockProvider) ProvideBloblang(name string) ([]iprocessor.V1, error) {
 	if procs, ok := m[name]; ok {
 		return procs, nil
 	}
@@ -51,7 +51,7 @@ func TestCase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider["/pipeline/processors"] = []types.Processor{proc}
+	provider["/pipeline/processors"] = []iprocessor.V1{proc}
 
 	procConf = processor.NewConfig()
 	procConf.Type = processor.TypeBloblang
@@ -59,7 +59,7 @@ func TestCase(t *testing.T) {
 	if proc, err = processor.New(procConf, nil, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
-	provider["/input/broker/inputs/0/processors"] = []types.Processor{proc}
+	provider["/input/broker/inputs/0/processors"] = []iprocessor.V1{proc}
 
 	procConf = processor.NewConfig()
 	procConf.Type = processor.TypeBloblang
@@ -67,7 +67,7 @@ func TestCase(t *testing.T) {
 	if proc, err = processor.New(procConf, nil, log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
-	provider["/input/broker/inputs/1/processors"] = []types.Processor{proc}
+	provider["/input/broker/inputs/1/processors"] = []iprocessor.V1{proc}
 
 	type testCase struct {
 		name     string
@@ -218,7 +218,7 @@ func TestFileCaseInputs(t *testing.T) {
 	proc, err := processor.New(procConf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	provider["/pipeline/processors"] = []types.Processor{proc}
+	provider["/pipeline/processors"] = []iprocessor.V1{proc}
 
 	tmpDir := t.TempDir()
 
@@ -277,7 +277,7 @@ func TestFileCaseConditions(t *testing.T) {
 	proc, err := processor.New(procConf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	provider["/pipeline/processors"] = []types.Processor{proc}
+	provider["/pipeline/processors"] = []iprocessor.V1{proc}
 
 	tmpDir := t.TempDir()
 

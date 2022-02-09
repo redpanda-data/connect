@@ -5,11 +5,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 type metricsRateLimit struct {
-	r types.RateLimit
+	r V1
 
 	mChecked metrics.StatCounter
 	mLimited metrics.StatCounter
@@ -18,7 +17,7 @@ type metricsRateLimit struct {
 
 // MetricsForRateLimit wraps a ratelimit.V2 with a struct that implements
 // types.RateLimit.
-func MetricsForRateLimit(r types.RateLimit, stats metrics.Type) types.RateLimit {
+func MetricsForRateLimit(r V1, stats metrics.Type) V1 {
 	return &metricsRateLimit{
 		r: r,
 

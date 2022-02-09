@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +21,7 @@ import (
 //------------------------------------------------------------------------------
 
 func TestBatcherEarlyTermination(t *testing.T) {
-	tInChan := make(chan types.Transaction)
+	tInChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	policyConf := batch.NewPolicyConfig()
@@ -39,7 +38,7 @@ func TestBatcherEarlyTermination(t *testing.T) {
 	require.Error(t, b.WaitForClose(time.Millisecond*100))
 
 	select {
-	case tInChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
+	case tInChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("unexpected")
 	}
@@ -48,7 +47,7 @@ func TestBatcherEarlyTermination(t *testing.T) {
 }
 
 func TestBatcherBasic(t *testing.T) {
-	tInChan := make(chan types.Transaction)
+	tInChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	policyConf := batch.NewPolicyConfig()
@@ -87,7 +86,7 @@ func TestBatcherBasic(t *testing.T) {
 		defer wg.Done()
 		for _, batch := range firstBatchExpected {
 			select {
-			case tInChan <- types.NewTransaction(message.QuickBatch([][]byte{batch}), resChan):
+			case tInChan <- message.NewTransaction(message.QuickBatch([][]byte{batch}), resChan):
 			case <-time.After(time.Second):
 				t.Error("timed out")
 			}
@@ -102,7 +101,7 @@ func TestBatcherBasic(t *testing.T) {
 		}
 		for _, batch := range secondBatchExpected {
 			select {
-			case tInChan <- types.NewTransaction(message.QuickBatch([][]byte{batch}), resChan):
+			case tInChan <- message.NewTransaction(message.QuickBatch([][]byte{batch}), resChan):
 			case <-time.After(time.Second):
 				t.Error("timed out")
 			}
@@ -117,7 +116,7 @@ func TestBatcherBasic(t *testing.T) {
 		}
 		for _, batch := range finalBatchExpected {
 			select {
-			case tInChan <- types.NewTransaction(message.QuickBatch([][]byte{batch}), resChan):
+			case tInChan <- message.NewTransaction(message.QuickBatch([][]byte{batch}), resChan):
 			case <-time.After(time.Second):
 				t.Error("timed out")
 			}
@@ -143,7 +142,7 @@ func TestBatcherBasic(t *testing.T) {
 	}
 
 	// Receive first batch on output
-	var outTr types.Transaction
+	var outTr message.Transaction
 	select {
 	case outTr = <-tOutChan:
 	case <-time.After(time.Second):
@@ -184,7 +183,7 @@ func TestBatcherBasic(t *testing.T) {
 }
 
 func TestBatcherBatchError(t *testing.T) {
-	tInChan := make(chan types.Transaction)
+	tInChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	policyConf := batch.NewPolicyConfig()
@@ -208,7 +207,7 @@ func TestBatcherBatchError(t *testing.T) {
 		thirdErr := errors.New("third error")
 
 		// Receive first batch on output
-		var outTr types.Transaction
+		var outTr message.Transaction
 		select {
 		case outTr = <-tOutChan:
 		case <-time.After(time.Second):
@@ -234,7 +233,7 @@ func TestBatcherBatchError(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		data := []byte(fmt.Sprintf("foo%v", i))
 		select {
-		case tInChan <- types.NewTransaction(message.QuickBatch([][]byte{data}), resChan):
+		case tInChan <- message.NewTransaction(message.QuickBatch([][]byte{data}), resChan):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -267,7 +266,7 @@ func TestBatcherBatchError(t *testing.T) {
 }
 
 func TestBatcherTimed(t *testing.T) {
-	tInChan := make(chan types.Transaction)
+	tInChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	policyConf := batch.NewPolicyConfig()
@@ -293,13 +292,13 @@ func TestBatcherTimed(t *testing.T) {
 	}
 
 	select {
-	case tInChan <- types.NewTransaction(message.QuickBatch(batchExpected), resChan):
+	case tInChan <- message.NewTransaction(message.QuickBatch(batchExpected), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message send")
 	}
 
 	// Receive first batch on output
-	var outTr types.Transaction
+	var outTr message.Transaction
 	select {
 	case outTr = <-tOutChan:
 	case <-time.After(time.Second):

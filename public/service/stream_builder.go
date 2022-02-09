@@ -25,7 +25,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/stream"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
@@ -53,7 +52,7 @@ type StreamBuilder struct {
 	metrics    metrics.Config
 	logger     log.Config
 
-	producerChan chan types.Transaction
+	producerChan chan message.Transaction
 	producerID   string
 	consumerFunc MessageBatchHandlerFunc
 	consumerID   string
@@ -157,7 +156,7 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 		return nil, fmt.Errorf("failed to generate a producer uuid: %w", err)
 	}
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	s.producerChan = tChan
 	s.producerID = uuid.String()
 
@@ -171,7 +170,7 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 		tmpMsg.Append(m.part)
 		resChan := make(chan response.Error)
 		select {
-		case tChan <- types.NewTransaction(tmpMsg, resChan):
+		case tChan <- message.NewTransaction(tmpMsg, resChan):
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -206,7 +205,7 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 		return nil, fmt.Errorf("failed to generate a producer uuid: %w", err)
 	}
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	s.producerChan = tChan
 	s.producerID = uuid.String()
 
@@ -222,7 +221,7 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 		}
 		resChan := make(chan response.Error)
 		select {
-		case tChan <- types.NewTransaction(tmpMsg, resChan):
+		case tChan <- message.NewTransaction(tmpMsg, resChan):
 		case <-ctx.Done():
 			return ctx.Err()
 		}

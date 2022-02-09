@@ -11,12 +11,16 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
 	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
+	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -59,10 +63,10 @@ type Type struct {
 	apiReg APIReg
 
 	inputs       map[string]types.Input
-	caches       map[string]types.Cache
-	processors   map[string]types.Processor
+	caches       map[string]icache.V1
+	processors   map[string]iprocessor.V1
 	outputs      map[string]types.OutputWriter
-	rateLimits   map[string]types.RateLimit
+	rateLimits   map[string]iratelimit.V1
 	plugins      map[string]interface{}
 	resourceLock *sync.RWMutex
 
@@ -73,7 +77,7 @@ type Type struct {
 	logger log.Modular
 	stats  *imetrics.Namespaced
 
-	pipes    map[string]<-chan types.Transaction
+	pipes    map[string]<-chan message.Transaction
 	pipeLock *sync.RWMutex
 }
 
@@ -103,10 +107,10 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		apiReg: apiReg,
 
 		inputs:       map[string]types.Input{},
-		caches:       map[string]types.Cache{},
-		processors:   map[string]types.Processor{},
+		caches:       map[string]icache.V1{},
+		processors:   map[string]iprocessor.V1{},
 		outputs:      map[string]types.OutputWriter{},
-		rateLimits:   map[string]types.RateLimit{},
+		rateLimits:   map[string]iratelimit.V1{},
 		plugins:      map[string]interface{}{},
 		resourceLock: &sync.RWMutex{},
 
@@ -117,7 +121,7 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		logger: log,
 		stats:  imetrics.NewNamespaced(stats),
 
-		pipes:    map[string]<-chan types.Transaction{},
+		pipes:    map[string]<-chan message.Transaction{},
 		pipeLock: &sync.RWMutex{},
 	}
 
@@ -292,14 +296,14 @@ func (t *Type) RegisterEndpoint(apiPath, desc string, h http.HandlerFunc) {
 }
 
 // SetPipe registers a new transaction chan to a named pipe.
-func (t *Type) SetPipe(name string, tran <-chan types.Transaction) {
+func (t *Type) SetPipe(name string, tran <-chan message.Transaction) {
 	t.pipeLock.Lock()
 	t.pipes[name] = tran
 	t.pipeLock.Unlock()
 }
 
 // GetPipe attempts to obtain and return a named output Pipe
-func (t *Type) GetPipe(name string) (<-chan types.Transaction, error) {
+func (t *Type) GetPipe(name string) (<-chan message.Transaction, error) {
 	t.pipeLock.RLock()
 	pipe, exists := t.pipes[name]
 	t.pipeLock.RUnlock()
@@ -310,7 +314,7 @@ func (t *Type) GetPipe(name string) (<-chan types.Transaction, error) {
 }
 
 // UnsetPipe removes a named pipe transaction chan.
-func (t *Type) UnsetPipe(name string, tran <-chan types.Transaction) {
+func (t *Type) UnsetPipe(name string, tran <-chan message.Transaction) {
 	t.pipeLock.Lock()
 	if otran, exists := t.pipes[name]; exists && otran == tran {
 		delete(t.pipes, name)
@@ -389,7 +393,7 @@ func (t *Type) NewBuffer(conf buffer.Config) (buffer.Type, error) {
 // During the execution of the provided closure it is guaranteed that the
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
-func (t *Type) AccessCache(ctx context.Context, name string, fn func(types.Cache)) error {
+func (t *Type) AccessCache(ctx context.Context, name string, fn func(icache.V1)) error {
 	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
 	// profiling for heavy use within a busy loop.
 	t.resourceLock.RLock()
@@ -403,7 +407,7 @@ func (t *Type) AccessCache(ctx context.Context, name string, fn func(types.Cache
 }
 
 // NewCache attempts to create a new cache component from a config.
-func (t *Type) NewCache(conf cache.Config) (types.Cache, error) {
+func (t *Type) NewCache(conf cache.Config) (icache.V1, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
@@ -516,7 +520,7 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 // During the execution of the provided closure it is guaranteed that the
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
-func (t *Type) AccessProcessor(ctx context.Context, name string, fn func(types.Processor)) error {
+func (t *Type) AccessProcessor(ctx context.Context, name string, fn func(iprocessor.V1)) error {
 	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
 	// profiling for heavy use within a busy loop.
 	t.resourceLock.RLock()
@@ -530,7 +534,7 @@ func (t *Type) AccessProcessor(ctx context.Context, name string, fn func(types.P
 }
 
 // NewProcessor attempts to create a new processor component from a config.
-func (t *Type) NewProcessor(conf processor.Config) (types.Processor, error) {
+func (t *Type) NewProcessor(conf processor.Config) (iprocessor.V1, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
@@ -650,7 +654,7 @@ func (t *Type) StoreOutput(ctx context.Context, name string, conf output.Config)
 // During the execution of the provided closure it is guaranteed that the
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
-func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(types.RateLimit)) error {
+func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(iratelimit.V1)) error {
 	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
 	// profiling for heavy use within a busy loop.
 	t.resourceLock.RLock()
@@ -664,7 +668,7 @@ func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(types.R
 }
 
 // NewRateLimit attempts to create a new rate limit component from a config.
-func (t *Type) NewRateLimit(conf ratelimit.Config) (types.RateLimit, error) {
+func (t *Type) NewRateLimit(conf ratelimit.Config) (iratelimit.V1, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
@@ -802,7 +806,7 @@ func (t *Type) GetInput(name string) (types.Input, error) {
 }
 
 // GetCache attempts to find a service wide cache by its name.
-func (t *Type) GetCache(name string) (types.Cache, error) {
+func (t *Type) GetCache(name string) (icache.V1, error) {
 	if c, exists := t.caches[name]; exists {
 		return c, nil
 	}
@@ -810,7 +814,7 @@ func (t *Type) GetCache(name string) (types.Cache, error) {
 }
 
 // GetProcessor attempts to find a service wide processor by its name.
-func (t *Type) GetProcessor(name string) (types.Processor, error) {
+func (t *Type) GetProcessor(name string) (iprocessor.V1, error) {
 	if p, exists := t.processors[name]; exists {
 		return p, nil
 	}
@@ -818,7 +822,7 @@ func (t *Type) GetProcessor(name string) (types.Processor, error) {
 }
 
 // GetRateLimit attempts to find a service wide rate limit by its name.
-func (t *Type) GetRateLimit(name string) (types.RateLimit, error) {
+func (t *Type) GetRateLimit(name string) (iratelimit.V1, error) {
 	if rl, exists := t.rateLimits[name]; exists {
 		return rl, nil
 	}

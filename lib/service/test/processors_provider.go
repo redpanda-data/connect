@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -15,7 +16,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	yaml "gopkg.in/yaml.v3"
 )
@@ -71,7 +71,7 @@ func OptProcessorsProviderSetLogger(logger log.Modular) func(*ProcessorsProvider
 // Provide attempts to extract an array of processors from a Benthos config. If
 // the JSON Pointer targets a single processor config it will be constructed and
 // returned as an array of one element.
-func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]string) ([]types.Processor, error) {
+func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]string) ([]iprocessor.V1, error) {
 	return p.ProvideMocked(jsonPtr, environment, nil)
 }
 
@@ -79,7 +79,7 @@ func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]stri
 // config. Supports injected mocked components in the parsed config. If the JSON
 // Pointer targets a single processor config it will be constructed and returned
 // as an array of one element.
-func (p *ProcessorsProvider) ProvideMocked(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]types.Processor, error) {
+func (p *ProcessorsProvider) ProvideMocked(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]iprocessor.V1, error) {
 	confs, err := p.getConfs(jsonPtr, environment, mocks)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (p *ProcessorsProvider) ProvideMocked(jsonPtr string, environment map[strin
 
 // ProvideBloblang attempts to parse a Bloblang mapping and returns a processor
 // slice that executes it.
-func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]types.Processor, error) {
+func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]iprocessor.V1, error) {
 	if !filepath.IsAbs(pathStr) {
 		pathStr = filepath.Join(filepath.Dir(p.targetPath), pathStr)
 	}
@@ -105,20 +105,20 @@ func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]types.Processor,
 		return nil, mapErr
 	}
 
-	return []types.Processor{
+	return []iprocessor.V1{
 		processor.NewBloblangFromExecutor(exec, p.logger, metrics.Noop()),
 	}, nil
 }
 
 //------------------------------------------------------------------------------
 
-func (p *ProcessorsProvider) initProcs(confs cachedConfig) ([]types.Processor, error) {
+func (p *ProcessorsProvider) initProcs(confs cachedConfig) ([]iprocessor.V1, error) {
 	mgr, err := manager.NewV2(confs.mgr, mock.NewManager(), p.logger, metrics.Noop())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise resources: %v", err)
 	}
 
-	procs := make([]types.Processor, len(confs.procs))
+	procs := make([]iprocessor.V1, len(confs.procs))
 	for i, conf := range confs.procs {
 		if procs[i], err = processor.New(conf, mgr, p.logger, metrics.Noop()); err != nil {
 			return nil, fmt.Errorf("failed to initialise processor index '%v': %v", i, err)

@@ -7,9 +7,9 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/types"
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
@@ -34,18 +34,18 @@ func TestInproc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tinchan := make(chan types.Transaction)
+	tinchan := make(chan message.Transaction)
 	if err = ip.Consume(tinchan); err != nil {
 		t.Fatal(err)
 	}
 
 	select {
-	case tinchan <- types.NewTransaction(nil, nil):
+	case tinchan <- message.NewTransaction(nil, nil):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 
-	var toutchan <-chan types.Transaction
+	var toutchan <-chan message.Transaction
 	if toutchan, err = mgr.GetPipe("foo"); err != nil {
 		t.Error(err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -89,7 +90,7 @@ func NewResource(
 // resulting messages or a response to be sent back to the message source.
 func (r *Resource) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res error) {
 	r.mCount.Incr(1)
-	if err := interop.AccessProcessor(context.Background(), r.mgr, r.name, func(p types.Processor) {
+	if err := interop.AccessProcessor(context.Background(), r.mgr, r.name, func(p processor.V1) {
 		msgs, res = p.ProcessMessage(msg)
 	}); err != nil {
 		r.log.Debugf("Failed to obtain processor resource '%v': %v", r.name, err)

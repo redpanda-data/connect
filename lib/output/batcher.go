@@ -26,8 +26,8 @@ type Batcher struct {
 	child   Type
 	batcher *batch.Policy
 
-	messagesIn  <-chan types.Transaction
-	messagesOut chan types.Transaction
+	messagesIn  <-chan message.Transaction
+	messagesOut chan message.Transaction
 
 	shutSig *shutdown.Signaller
 }
@@ -65,7 +65,7 @@ func NewBatcher(
 		log:         log,
 		child:       child,
 		batcher:     batcher,
-		messagesOut: make(chan types.Transaction),
+		messagesOut: make(chan message.Transaction),
 		shutSig:     shutdown.NewSignaller(),
 	}
 	return &m
@@ -141,7 +141,7 @@ func (m *Batcher) loop() {
 
 		resChan := make(chan response.Error)
 		select {
-		case m.messagesOut <- types.NewTransaction(sendMsg, resChan):
+		case m.messagesOut <- message.NewTransaction(sendMsg, resChan):
 		case <-m.shutSig.CloseAtLeisureChan():
 			return
 		}
@@ -182,7 +182,7 @@ func (m *Batcher) MaxInFlight() (int, bool) {
 }
 
 // Consume assigns a messages channel for the output to read.
-func (m *Batcher) Consume(msgs <-chan types.Transaction) error {
+func (m *Batcher) Consume(msgs <-chan message.Transaction) error {
 	if m.messagesIn != nil {
 		return component.ErrAlreadyStarted
 	}

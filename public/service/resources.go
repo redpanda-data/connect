@@ -4,11 +4,12 @@ import (
 	"context"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Resources provides access to service-wide resources.
@@ -53,7 +54,7 @@ func (r *Resources) Metrics() *Metrics {
 // AccessCache attempts to access a cache resource by name. This action can
 // block if CRUD operations are being actively performed on the resource.
 func (r *Resources) AccessCache(ctx context.Context, name string, fn func(c Cache)) error {
-	return r.mgr.AccessCache(ctx, name, func(c types.Cache) {
+	return r.mgr.AccessCache(ctx, name, func(c cache.V1) {
 		fn(newReverseAirGapCache(c))
 	})
 }
@@ -61,7 +62,7 @@ func (r *Resources) AccessCache(ctx context.Context, name string, fn func(c Cach
 // AccessRateLimit attempts to access a rate limit resource by name. This action
 // can block if CRUD operations are being actively performed on the resource.
 func (r *Resources) AccessRateLimit(ctx context.Context, name string, fn func(r RateLimit)) error {
-	return r.mgr.AccessRateLimit(ctx, name, func(r types.RateLimit) {
+	return r.mgr.AccessRateLimit(ctx, name, func(r ratelimit.V1) {
 		fn(newReverseAirGapRateLimit(r))
 	})
 }

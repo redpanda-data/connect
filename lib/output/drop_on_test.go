@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,13 +48,13 @@ func TestDropOnNothing(t *testing.T) {
 		assert.NoError(t, d.WaitForClose(time.Second*5))
 	})
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	rChan := make(chan response.Error)
 
 	require.NoError(t, d.Consume(tChan))
 
 	select {
-	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foobar")}), rChan):
+	case tChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foobar")}), rChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -100,13 +99,13 @@ func TestDropOnError(t *testing.T) {
 		assert.NoError(t, d.WaitForClose(time.Second*5))
 	})
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	rChan := make(chan response.Error)
 
 	require.NoError(t, d.Consume(tChan))
 
 	select {
-	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foobar")}), rChan):
+	case tChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foobar")}), rChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -180,7 +179,7 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 		assert.NoError(t, d.WaitForClose(time.Second*5))
 	})
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	rChan := make(chan response.Error)
 
 	require.NoError(t, d.Consume(tChan))
@@ -189,7 +188,7 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 		t.Helper()
 
 		select {
-		case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(msg)}), rChan):
+		case tChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte(msg)}), rChan):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -273,7 +272,7 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 		assert.NoError(t, d.WaitForClose(time.Second*5))
 	})
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	rChan := make(chan response.Error)
 
 	require.NoError(t, d.Consume(tChan))
@@ -282,7 +281,7 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 		t.Helper()
 
 		select {
-		case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(msg)}), rChan):
+		case tChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte(msg)}), rChan):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}

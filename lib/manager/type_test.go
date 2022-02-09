@@ -5,11 +5,15 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
+	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -108,13 +112,13 @@ func TestManagerCacheList(t *testing.T) {
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	err = mgr.AccessCache(context.Background(), "foo", func(types.Cache) {})
+	err = mgr.AccessCache(context.Background(), "foo", func(icache.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessCache(context.Background(), "bar", func(types.Cache) {})
+	err = mgr.AccessCache(context.Background(), "bar", func(icache.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessCache(context.Background(), "baz", func(types.Cache) {})
+	err = mgr.AccessCache(context.Background(), "baz", func(icache.V1) {})
 	assert.EqualError(t, err, "unable to locate resource: baz")
 }
 
@@ -194,13 +198,13 @@ func TestManagerRateLimitList(t *testing.T) {
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	err = mgr.AccessRateLimit(context.Background(), "foo", func(types.RateLimit) {})
+	err = mgr.AccessRateLimit(context.Background(), "foo", func(iratelimit.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessRateLimit(context.Background(), "bar", func(types.RateLimit) {})
+	err = mgr.AccessRateLimit(context.Background(), "bar", func(iratelimit.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessRateLimit(context.Background(), "baz", func(types.RateLimit) {})
+	err = mgr.AccessRateLimit(context.Background(), "baz", func(iratelimit.V1) {})
 	assert.EqualError(t, err, "unable to locate resource: baz")
 }
 
@@ -277,13 +281,13 @@ func TestManagerProcessorList(t *testing.T) {
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	err = mgr.AccessProcessor(context.Background(), "foo", func(types.Processor) {})
+	err = mgr.AccessProcessor(context.Background(), "foo", func(iprocessor.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessProcessor(context.Background(), "bar", func(types.Processor) {})
+	err = mgr.AccessProcessor(context.Background(), "bar", func(iprocessor.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessProcessor(context.Background(), "baz", func(types.Processor) {})
+	err = mgr.AccessProcessor(context.Background(), "baz", func(iprocessor.V1) {})
 	assert.EqualError(t, err, "unable to locate resource: baz")
 }
 
@@ -419,14 +423,14 @@ func TestManagerPipeGetSet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t1 := make(chan types.Transaction)
-	t2 := make(chan types.Transaction)
-	t3 := make(chan types.Transaction)
+	t1 := make(chan message.Transaction)
+	t2 := make(chan message.Transaction)
+	t3 := make(chan message.Transaction)
 
 	mgr.SetPipe("foo", t1)
 	mgr.SetPipe("bar", t3)
 
-	var p <-chan types.Transaction
+	var p <-chan message.Transaction
 	if p, err = mgr.GetPipe("foo"); err != nil {
 		t.Fatal(err)
 	}

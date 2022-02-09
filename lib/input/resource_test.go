@@ -7,7 +7,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
@@ -15,14 +19,14 @@ import (
 
 type fakeInput struct {
 	connected bool
-	ts        chan types.Transaction
+	ts        chan message.Transaction
 }
 
 func (f *fakeInput) Connected() bool {
 	return f.connected
 }
 
-func (f *fakeInput) TransactionChan() <-chan types.Transaction {
+func (f *fakeInput) TransactionChan() <-chan message.Transaction {
 	return f.ts
 }
 
@@ -41,10 +45,10 @@ type fakeProcMgr struct {
 
 func (f *fakeProcMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
 }
-func (f *fakeProcMgr) GetCache(name string) (types.Cache, error) {
+func (f *fakeProcMgr) GetCache(name string) (cache.V1, error) {
 	return nil, component.ErrCacheNotFound
 }
-func (f *fakeProcMgr) GetProcessor(name string) (types.Processor, error) {
+func (f *fakeProcMgr) GetProcessor(name string) (iprocessor.V1, error) {
 	return nil, component.ErrProcessorNotFound
 }
 func (f *fakeProcMgr) GetInput(name string) (types.Input, error) {
@@ -53,14 +57,14 @@ func (f *fakeProcMgr) GetInput(name string) (types.Input, error) {
 	}
 	return nil, component.ErrInputNotFound
 }
-func (f *fakeProcMgr) GetRateLimit(name string) (types.RateLimit, error) {
+func (f *fakeProcMgr) GetRateLimit(name string) (ratelimit.V1, error) {
 	return nil, component.ErrRateLimitNotFound
 }
-func (f *fakeProcMgr) GetPipe(name string) (<-chan types.Transaction, error) {
+func (f *fakeProcMgr) GetPipe(name string) (<-chan message.Transaction, error) {
 	return nil, component.ErrPipeNotFound
 }
-func (f *fakeProcMgr) SetPipe(name string, prod <-chan types.Transaction)   {}
-func (f *fakeProcMgr) UnsetPipe(name string, prod <-chan types.Transaction) {}
+func (f *fakeProcMgr) SetPipe(name string, prod <-chan message.Transaction)   {}
+func (f *fakeProcMgr) UnsetPipe(name string, prod <-chan message.Transaction) {}
 
 //------------------------------------------------------------------------------
 
@@ -89,7 +93,7 @@ func TestResourceProc(t *testing.T) {
 
 	assert.Nil(t, p.TransactionChan())
 
-	in.ts = make(chan types.Transaction)
+	in.ts = make(chan message.Transaction)
 	assert.NotNil(t, p.TransactionChan())
 
 	p.CloseAsync()

@@ -29,7 +29,7 @@ const ServerlessResponseType = "sync_response"
 // Handler contains a live Benthos pipeline and wraps it within an invoke
 // handler.
 type Handler struct {
-	transactionChan chan types.Transaction
+	transactionChan chan message.Transaction
 	done            func(exitTimeout time.Duration) error
 }
 
@@ -55,7 +55,7 @@ func (h *Handler) Handle(ctx context.Context, obj interface{}) (interface{}, err
 	resChan := make(chan response.Error, 1)
 
 	select {
-	case h.transactionChan <- types.NewTransaction(msg, resChan):
+	case h.transactionChan <- message.NewTransaction(msg, resChan):
 	case <-ctx.Done():
 		return nil, errors.New("request cancelled")
 	}
@@ -135,7 +135,7 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	var pipelineLayer types.Pipeline
 	var outputLayer types.Output
 
-	transactionChan := make(chan types.Transaction, 1)
+	transactionChan := make(chan message.Transaction, 1)
 
 	pMgr, pLog, pStats := interop.LabelChild("pipeline", manager, logger, stats)
 	if pipelineLayer, err = pipeline.New(conf.Pipeline, pMgr, pLog, pStats); err != nil {

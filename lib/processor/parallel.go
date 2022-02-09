@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -59,7 +60,7 @@ func NewParallelConfig() ParallelConfig {
 // Parallel is a processor that applies a list of child processors to each
 // message of a batch individually.
 type Parallel struct {
-	children []types.Processor
+	children []processor.V1
 	cap      int
 
 	log log.Modular
@@ -74,7 +75,7 @@ type Parallel struct {
 func NewParallel(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	var children []types.Processor
+	var children []processor.V1
 	for i, pconf := range conf.Parallel.Processors {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
 		proc, err := New(pconf, pMgr, pLog, pStats)

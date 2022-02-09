@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
@@ -24,12 +24,12 @@ type Processor struct {
 	running int32
 	stats   metrics.Type
 
-	msgProcessors []types.Processor
+	msgProcessors []iprocessor.V1
 
-	messagesOut chan types.Transaction
+	messagesOut chan message.Transaction
 	responsesIn chan response.Error
 
-	messagesIn <-chan types.Transaction
+	messagesIn <-chan message.Transaction
 
 	closeChan chan struct{}
 	closed    chan struct{}
@@ -39,13 +39,13 @@ type Processor struct {
 func NewProcessor(
 	log log.Modular,
 	stats metrics.Type,
-	msgProcessors ...types.Processor,
+	msgProcessors ...iprocessor.V1,
 ) *Processor {
 	return &Processor{
 		running:       1,
 		msgProcessors: msgProcessors,
 		stats:         stats,
-		messagesOut:   make(chan types.Transaction),
+		messagesOut:   make(chan message.Transaction),
 		responsesIn:   make(chan response.Error),
 		closeChan:     make(chan struct{}),
 		closed:        make(chan struct{}),
@@ -68,7 +68,7 @@ func (p *Processor) loop() {
 
 	var open bool
 	for atomic.LoadInt32(&p.running) == 1 {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran, open = <-p.messagesIn:
 			if !open {
@@ -92,7 +92,7 @@ func (p *Processor) loop() {
 			p.dispatchMessages(resultMsgs, tran.ResponseChan)
 		} else {
 			select {
-			case p.messagesOut <- types.NewTransaction(resultMsgs[0], tran.ResponseChan):
+			case p.messagesOut <- message.NewTransaction(resultMsgs[0], tran.ResponseChan):
 			case <-p.closeChan:
 				return
 			}
@@ -107,7 +107,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- res
 
 	sendMsg := func(m *message.Batch) {
 		resChan := make(chan response.Error)
-		transac := types.NewTransaction(m, resChan)
+		transac := message.NewTransaction(m, resChan)
 
 		for {
 			select {
@@ -161,7 +161,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- res
 //------------------------------------------------------------------------------
 
 // Consume assigns a messages channel for the pipeline to read.
-func (p *Processor) Consume(msgs <-chan types.Transaction) error {
+func (p *Processor) Consume(msgs <-chan message.Transaction) error {
 	if p.messagesIn != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -172,7 +172,7 @@ func (p *Processor) Consume(msgs <-chan types.Transaction) error {
 
 // TransactionChan returns the channel used for consuming messages from this
 // pipeline.
-func (p *Processor) TransactionChan() <-chan types.Transaction {
+func (p *Processor) TransactionChan() <-chan message.Transaction {
 	return p.messagesOut
 }
 

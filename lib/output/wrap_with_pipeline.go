@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -51,7 +52,7 @@ func WrapWithPipelines(out Type, pipeConstructors ...types.PipelineConstructorFu
 
 // Consume starts the type listening to a message channel from a
 // producer.
-func (i *WithPipeline) Consume(tsChan <-chan types.Transaction) error {
+func (i *WithPipeline) Consume(tsChan <-chan message.Transaction) error {
 	return i.pipe.Consume(tsChan)
 }
 

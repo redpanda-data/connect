@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -52,7 +51,7 @@ func TestSocketServerBasic(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -119,7 +118,7 @@ func TestSocketServerRetries(t *testing.T) {
 	}()
 
 	readNextMsg := func(reject bool) (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			res := response.NewError(nil)
@@ -235,7 +234,7 @@ func TestSocketServerRecon(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -308,7 +307,7 @@ func TestSocketServerMpart(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -375,7 +374,7 @@ func TestSocketServerMpartCDelim(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -444,7 +443,7 @@ func TestSocketServerMpartSdown(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -507,7 +506,7 @@ func TestSocketUDPServerBasic(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -576,7 +575,7 @@ func TestSocketUDPServerRetries(t *testing.T) {
 	}()
 
 	readNextMsg := func(reject bool) (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			res := response.NewError(nil)
@@ -691,7 +690,7 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -764,7 +763,7 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -842,7 +841,7 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -915,7 +914,7 @@ func TestTCPSocketServerBasic(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -989,7 +988,7 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -1062,7 +1061,7 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -1130,7 +1129,7 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {
@@ -1199,7 +1198,7 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
 			select {

@@ -4,6 +4,10 @@ import (
 	"net/http"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -15,7 +19,7 @@ type Manager struct {
 	RateLimits map[string]RateLimit
 	Outputs    map[string]OutputWriter
 	Processors map[string]Processor
-	Pipes      map[string]<-chan types.Transaction
+	Pipes      map[string]<-chan message.Transaction
 }
 
 // NewManager provides a new mock manager.
@@ -26,7 +30,7 @@ func NewManager() *Manager {
 		RateLimits: map[string]RateLimit{},
 		Outputs:    map[string]OutputWriter{},
 		Processors: map[string]Processor{},
-		Pipes:      map[string]<-chan types.Transaction{},
+		Pipes:      map[string]<-chan message.Transaction{},
 	}
 }
 
@@ -34,7 +38,7 @@ func NewManager() *Manager {
 func (m *Manager) RegisterEndpoint(path, desc string, h http.HandlerFunc) {}
 
 // GetCache attempts to find a service wide cache by its name.
-func (m *Manager) GetCache(name string) (types.Cache, error) {
+func (m *Manager) GetCache(name string) (cache.V1, error) {
 	values, ok := m.Caches[name]
 	if !ok {
 		return nil, component.ErrCacheNotFound
@@ -43,7 +47,7 @@ func (m *Manager) GetCache(name string) (types.Cache, error) {
 }
 
 // GetRateLimit attempts to find a service wide rate limit by its name.
-func (m *Manager) GetRateLimit(name string) (types.RateLimit, error) {
+func (m *Manager) GetRateLimit(name string) (ratelimit.V1, error) {
 	fn, ok := m.RateLimits[name]
 	if !ok {
 		return nil, component.ErrRateLimitNotFound
@@ -60,7 +64,7 @@ func (m *Manager) GetInput(name string) (types.Input, error) {
 }
 
 // GetProcessor attempts to find a service wide processor by its name.
-func (m *Manager) GetProcessor(name string) (types.Processor, error) {
+func (m *Manager) GetProcessor(name string) (processor.V1, error) {
 	fn, ok := m.Processors[name]
 	if !ok {
 		return nil, component.ErrProcessorNotFound
@@ -77,7 +81,7 @@ func (m *Manager) GetOutput(name string) (types.OutputWriter, error) {
 }
 
 // GetPipe attempts to find a service wide transaction chan by its name.
-func (m *Manager) GetPipe(name string) (<-chan types.Transaction, error) {
+func (m *Manager) GetPipe(name string) (<-chan message.Transaction, error) {
 	if p, ok := m.Pipes[name]; ok {
 		return p, nil
 	}
@@ -85,11 +89,11 @@ func (m *Manager) GetPipe(name string) (<-chan types.Transaction, error) {
 }
 
 // SetPipe registers a transaction chan under a name.
-func (m *Manager) SetPipe(name string, t <-chan types.Transaction) {
+func (m *Manager) SetPipe(name string, t <-chan message.Transaction) {
 	m.Pipes[name] = t
 }
 
 // UnsetPipe removes a named transaction chan.
-func (m *Manager) UnsetPipe(name string, t <-chan types.Transaction) {
+func (m *Manager) UnsetPipe(name string, t <-chan message.Transaction) {
 	delete(m.Pipes, name)
 }

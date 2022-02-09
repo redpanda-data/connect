@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 
+	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
+	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -57,7 +60,7 @@ func TestMissingProbesNewIface(t *testing.T) {
 	assert.NoError(t, interop.ProbeRateLimit(ctx, mgr, "bev"))
 
 	var ccalled, icalled, ocalled, pcalled, rcalled bool
-	assert.NoError(t, interop.AccessCache(ctx, mgr, "foo", func(c types.Cache) {
+	assert.NoError(t, interop.AccessCache(ctx, mgr, "foo", func(c icache.V1) {
 		ccalled = true
 	}))
 	assert.True(t, ccalled)
@@ -69,11 +72,11 @@ func TestMissingProbesNewIface(t *testing.T) {
 		ocalled = true
 	}))
 	assert.True(t, ocalled)
-	assert.NoError(t, interop.AccessProcessor(ctx, mgr, "buz", func(p types.Processor) {
+	assert.NoError(t, interop.AccessProcessor(ctx, mgr, "buz", func(p iprocessor.V1) {
 		pcalled = true
 	}))
 	assert.True(t, pcalled)
-	assert.NoError(t, interop.AccessRateLimit(ctx, mgr, "bev", func(rl types.RateLimit) {
+	assert.NoError(t, interop.AccessRateLimit(ctx, mgr, "bev", func(rl iratelimit.V1) {
 		rcalled = true
 	}))
 	assert.True(t, rcalled)

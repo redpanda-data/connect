@@ -6,7 +6,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // RateLimit is an interface implemented by Benthos rate limits.
@@ -22,7 +21,7 @@ type RateLimit interface {
 
 //------------------------------------------------------------------------------
 
-func newAirGapRateLimit(c RateLimit, stats metrics.Type) types.RateLimit {
+func newAirGapRateLimit(c RateLimit, stats metrics.Type) ratelimit.V1 {
 	return ratelimit.MetricsForRateLimit(c, stats)
 }
 
@@ -30,10 +29,10 @@ func newAirGapRateLimit(c RateLimit, stats metrics.Type) types.RateLimit {
 
 // Implements RateLimit around a types.RateLimit
 type reverseAirGapRateLimit struct {
-	r types.RateLimit
+	r ratelimit.V1
 }
 
-func newReverseAirGapRateLimit(r types.RateLimit) *reverseAirGapRateLimit {
+func newReverseAirGapRateLimit(r ratelimit.V1) *reverseAirGapRateLimit {
 	return &reverseAirGapRateLimit{r}
 }
 

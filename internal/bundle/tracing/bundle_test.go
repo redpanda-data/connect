@@ -17,7 +17,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -98,12 +97,12 @@ func TestBundleOutputTracing(t *testing.T) {
 	out, err := mgr.NewOutput(outConfig)
 	require.NoError(t, err)
 
-	tranChan := make(chan types.Transaction)
+	tranChan := make(chan message.Transaction)
 	require.NoError(t, out.Consume(tranChan))
 
 	for i := 0; i < 10; i++ {
 		resChan := make(chan response.Error)
-		tran := types.NewTransaction(message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}), resChan)
+		tran := message.NewTransaction(message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}), resChan)
 		select {
 		case tranChan <- tran:
 			select {
@@ -159,12 +158,12 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 	out, err := mgr.NewOutput(outConfig)
 	require.NoError(t, err)
 
-	tranChan := make(chan types.Transaction)
+	tranChan := make(chan message.Transaction)
 	require.NoError(t, out.Consume(tranChan))
 
 	for i := 0; i < 10; i++ {
 		resChan := make(chan response.Error)
-		tran := types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world " + strconv.Itoa(i))}), resChan)
+		tran := message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world " + strconv.Itoa(i))}), resChan)
 		select {
 		case tranChan <- tran:
 			select {

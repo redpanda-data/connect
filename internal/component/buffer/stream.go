@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
@@ -61,8 +60,8 @@ type Stream struct {
 	errThrottle *throttle.Type
 	shutSig     *shutdown.Signaller
 
-	messagesIn  <-chan types.Transaction
-	messagesOut chan types.Transaction
+	messagesIn  <-chan message.Transaction
+	messagesOut chan message.Transaction
 
 	closedWG sync.WaitGroup
 }
@@ -75,7 +74,7 @@ func NewStream(typeStr string, buffer ReaderWriter, log log.Modular, stats metri
 		log:         log,
 		buffer:      buffer,
 		shutSig:     shutdown.NewSignaller(),
-		messagesOut: make(chan types.Transaction),
+		messagesOut: make(chan message.Transaction),
 	}
 	m.errThrottle = throttle.New(throttle.OptCloseChan(m.shutSig.CloseAtLeisureChan()))
 	return &m
@@ -107,7 +106,7 @@ func (m *Stream) inputLoop() {
 	defer doneNow()
 
 	for {
-		var tr types.Transaction
+		var tr message.Transaction
 		var open bool
 		select {
 		case tr, open = <-m.messagesIn:
@@ -192,7 +191,7 @@ func (m *Stream) outputLoop() {
 
 		resChan := make(chan response.Error, 1)
 		select {
-		case m.messagesOut <- types.NewTransaction(msg, resChan):
+		case m.messagesOut <- message.NewTransaction(msg, resChan):
 		case <-m.shutSig.CloseNowChan():
 			return
 		}
@@ -223,7 +222,7 @@ func (m *Stream) outputLoop() {
 }
 
 // Consume assigns a messages channel for the output to read.
-func (m *Stream) Consume(msgs <-chan types.Transaction) error {
+func (m *Stream) Consume(msgs <-chan message.Transaction) error {
 	if m.messagesIn != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -241,7 +240,7 @@ func (m *Stream) Consume(msgs <-chan types.Transaction) error {
 
 // TransactionChan returns the channel used for consuming messages from this
 // buffer.
-func (m *Stream) TransactionChan() <-chan types.Transaction {
+func (m *Stream) TransactionChan() <-chan message.Transaction {
 	return m.messagesOut
 }
 

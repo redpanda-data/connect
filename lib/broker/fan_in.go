@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -15,7 +16,7 @@ import (
 type FanIn struct {
 	stats metrics.Type
 
-	transactions chan types.Transaction
+	transactions chan message.Transaction
 
 	closables       []types.Closable
 	inputClosedChan chan int
@@ -29,7 +30,7 @@ func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
 	i := &FanIn{
 		stats: stats,
 
-		transactions: make(chan types.Transaction),
+		transactions: make(chan message.Transaction),
 
 		inputClosedChan: make(chan int),
 		inputMap:        make(map[int]struct{}),
@@ -70,7 +71,7 @@ func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
 
 // TransactionChan returns the channel used for consuming transactions from this
 // broker.
-func (i *FanIn) TransactionChan() <-chan types.Transaction {
+func (i *FanIn) TransactionChan() <-chan message.Transaction {
 	return i.transactions
 }
 

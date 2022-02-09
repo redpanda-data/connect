@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -20,7 +21,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -122,7 +122,7 @@ type Processor struct {
 // NewProcessor returns a MongoDB processor.
 func NewProcessor(
 	conf processor.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type,
-) (types.Processor, error) {
+) (iprocessor.V1, error) {
 	// TODO: Remove this after V4 lands and #972 is fixed
 	operation := client.NewOperation(conf.MongoDB.Operation)
 	if operation == client.OperationInvalid {

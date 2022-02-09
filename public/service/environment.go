@@ -6,6 +6,8 @@ import (
 	ibloblang "github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
+	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
@@ -13,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
 )
 
@@ -118,7 +119,7 @@ func (e *Environment) RegisterCache(name string, spec *ConfigSpec, ctor CacheCon
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeCache
-	return e.internal.CacheAdd(func(conf cache.Config, nm bundle.NewManagement) (types.Cache, error) {
+	return e.internal.CacheAdd(func(conf cache.Config, nm bundle.NewManagement) (icache.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -353,7 +354,7 @@ func (e *Environment) RegisterRateLimit(name string, spec *ConfigSpec, ctor Rate
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeRateLimit
-	return e.internal.RateLimitAdd(func(conf ratelimit.Config, nm bundle.NewManagement) (types.RateLimit, error) {
+	return e.internal.RateLimitAdd(func(conf ratelimit.Config, nm bundle.NewManagement) (iratelimit.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err

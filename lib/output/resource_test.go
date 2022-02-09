@@ -11,17 +11,16 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestResourceOutput(t *testing.T) {
 	var outLock sync.Mutex
-	var outTS []types.Transaction
+	var outTS []message.Transaction
 
 	mgr := mock.NewManager()
-	mgr.Outputs["foo"] = func(c context.Context, t types.Transaction) error {
+	mgr.Outputs["foo"] = func(c context.Context, t message.Transaction) error {
 		outLock.Lock()
 		defer outLock.Unlock()
 		outTS = append(outTS, t)
@@ -37,13 +36,13 @@ func TestResourceOutput(t *testing.T) {
 
 	assert.True(t, p.Connected())
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	assert.NoError(t, p.Consume(tChan))
 
 	for i := 0; i < 10; i++ {
 		msg := fmt.Sprintf("foo:%v", i)
 		select {
-		case tChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte(msg)}), nil):
+		case tChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte(msg)}), nil):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}

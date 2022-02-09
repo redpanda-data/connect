@@ -11,14 +11,13 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 type notBatchedOutput struct {
 	out Type
 
-	inChan  <-chan types.Transaction
-	outChan chan types.Transaction
+	inChan  <-chan message.Transaction
+	outChan chan message.Transaction
 
 	ctx   context.Context
 	close func()
@@ -36,7 +35,7 @@ type notBatchedOutput struct {
 func OnlySinglePayloads(out Type) Type {
 	n := &notBatchedOutput{
 		out:        out,
-		outChan:    make(chan types.Transaction),
+		outChan:    make(chan message.Transaction),
 		closedChan: make(chan struct{}),
 	}
 	n.ctx, n.close = context.WithCancel(context.Background())
@@ -70,7 +69,7 @@ func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
 		tmpMsg.Append(p)
 
 		select {
-		case n.outChan <- types.NewTransaction(tmpMsg, tmpResChan):
+		case n.outChan <- message.NewTransaction(tmpMsg, tmpResChan):
 		case <-n.ctx.Done():
 			if index == 0 {
 				return component.ErrTypeClosed
@@ -111,7 +110,7 @@ func (n *notBatchedOutput) loop() {
 	}()
 
 	for {
-		var tran types.Transaction
+		var tran message.Transaction
 		var open bool
 		select {
 		case tran, open = <-n.inChan:
@@ -147,7 +146,7 @@ func (n *notBatchedOutput) loop() {
 
 //------------------------------------------------------------------------------
 
-func (n *notBatchedOutput) Consume(ts <-chan types.Transaction) error {
+func (n *notBatchedOutput) Consume(ts <-chan message.Transaction) error {
 	if n.inChan != nil {
 		return component.ErrAlreadyStarted
 	}

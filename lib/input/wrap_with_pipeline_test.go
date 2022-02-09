@@ -18,10 +18,10 @@ import (
 
 type mockInput struct {
 	closeOnce sync.Once
-	ts        chan types.Transaction
+	ts        chan message.Transaction
 }
 
-func (m *mockInput) TransactionChan() <-chan types.Transaction {
+func (m *mockInput) TransactionChan() <-chan message.Transaction {
 	return m.ts
 }
 
@@ -42,16 +42,16 @@ func (m *mockInput) WaitForClose(time.Duration) error {
 //------------------------------------------------------------------------------
 
 type mockPipe struct {
-	tsIn <-chan types.Transaction
-	ts   chan types.Transaction
+	tsIn <-chan message.Transaction
+	ts   chan message.Transaction
 }
 
-func (m *mockPipe) Consume(ts <-chan types.Transaction) error {
+func (m *mockPipe) Consume(ts <-chan message.Transaction) error {
 	m.tsIn = ts
 	return nil
 }
 
-func (m *mockPipe) TransactionChan() <-chan types.Transaction {
+func (m *mockPipe) TransactionChan() <-chan message.Transaction {
 	return m.ts
 }
 
@@ -66,9 +66,9 @@ func (m *mockPipe) WaitForClose(time.Duration) error {
 //------------------------------------------------------------------------------
 
 func TestBasicWrapPipeline(t *testing.T) {
-	mockIn := &mockInput{ts: make(chan types.Transaction)}
+	mockIn := &mockInput{ts: make(chan message.Transaction)}
 	mockPi := &mockPipe{
-		ts: make(chan types.Transaction),
+		ts: make(chan message.Transaction),
 	}
 
 	procs := 0
@@ -115,7 +115,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 }
 
 func TestWrapZeroPipelines(t *testing.T) {
-	mockIn := &mockInput{ts: make(chan types.Transaction)}
+	mockIn := &mockInput{ts: make(chan message.Transaction)}
 	newInput, err := WrapWithPipelines(mockIn)
 	if err != nil {
 		t.Error(err)
@@ -127,12 +127,12 @@ func TestWrapZeroPipelines(t *testing.T) {
 }
 
 func TestBasicWrapMultiPipelines(t *testing.T) {
-	mockIn := &mockInput{ts: make(chan types.Transaction)}
+	mockIn := &mockInput{ts: make(chan message.Transaction)}
 	mockPi1 := &mockPipe{
-		ts: make(chan types.Transaction),
+		ts: make(chan message.Transaction),
 	}
 	mockPi2 := &mockPipe{
-		ts: make(chan types.Transaction),
+		ts: make(chan message.Transaction),
 	}
 
 	_, err := WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
@@ -212,7 +212,7 @@ func (m mockProc) WaitForClose(timeout time.Duration) error {
 //------------------------------------------------------------------------------
 
 func TestBasicWrapProcessors(t *testing.T) {
-	mockIn := &mockInput{ts: make(chan types.Transaction)}
+	mockIn := &mockInput{ts: make(chan message.Transaction)}
 
 	l := log.Noop()
 	s := metrics.Noop()
@@ -234,13 +234,13 @@ func TestBasicWrapProcessors(t *testing.T) {
 	msg := message.QuickBatch([][]byte{[]byte("baz")})
 
 	select {
-	case mockIn.ts <- types.NewTransaction(msg, resChan):
+	case mockIn.ts <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
 
 	// Message should not be discarded
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 	select {
 	case res, open := <-resChan:
@@ -289,7 +289,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 }
 
 func TestBasicWrapDoubleProcessors(t *testing.T) {
-	mockIn := &mockInput{ts: make(chan types.Transaction)}
+	mockIn := &mockInput{ts: make(chan message.Transaction)}
 
 	l := log.Noop()
 	s := metrics.Noop()
@@ -308,13 +308,13 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 	msg := message.QuickBatch([][]byte{[]byte("baz")})
 
 	select {
-	case mockIn.ts <- types.NewTransaction(msg, resChan):
+	case mockIn.ts <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("action timed out")
 	}
 
 	// Message should not be discarded
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 	select {
 	case res, open := <-resChan:

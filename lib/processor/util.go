@@ -1,10 +1,10 @@
 package processor
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -12,7 +12,7 @@ import (
 // ExecuteAll attempts to execute a slice of processors to a message. Returns
 // N resulting messages or a response. The response may indicate either a NoAck
 // in the event of the message being buffered or an unrecoverable error.
-func ExecuteAll(procs []types.Processor, msgs ...*message.Batch) ([]*message.Batch, error) {
+func ExecuteAll(procs []processor.V1, msgs ...*message.Batch) ([]*message.Batch, error) {
 	resultMsgs := make([]*message.Batch, len(msgs))
 	copy(resultMsgs, msgs)
 
@@ -38,7 +38,7 @@ func ExecuteAll(procs []types.Processor, msgs ...*message.Batch) ([]*message.Bat
 // subsequent processors. Returns N resulting messages or a response. The
 // response may indicate either a NoAck in the event of the message being
 // buffered or an unrecoverable error.
-func ExecuteTryAll(procs []types.Processor, msgs ...*message.Batch) ([]*message.Batch, error) {
+func ExecuteTryAll(procs []processor.V1, msgs ...*message.Batch) ([]*message.Batch, error) {
 	resultMsgs := make([]*message.Batch, len(msgs))
 	copy(resultMsgs, msgs)
 
@@ -72,7 +72,7 @@ type catchMessage struct {
 // ExecuteCatchAll attempts to execute a slice of processors to only messages
 // that have failed a processing step. Returns N resulting messages or a
 // response.
-func ExecuteCatchAll(procs []types.Processor, msgs ...*message.Batch) ([]*message.Batch, error) {
+func ExecuteCatchAll(procs []processor.V1, msgs ...*message.Batch) ([]*message.Batch, error) {
 	// Preserves the original order of messages before entering the catch block.
 	// Only processors that have failed a previous stage are "caught", and will
 	// remain caught until all catch processors are executed.

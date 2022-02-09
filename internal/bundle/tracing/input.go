@@ -13,7 +13,7 @@ type tracedInput struct {
 	e       *events
 	ctr     *uint64
 	wrapped types.Input
-	tChan   chan types.Transaction
+	tChan   chan message.Transaction
 	shutSig *shutdown.Signaller
 }
 
@@ -22,7 +22,7 @@ func traceInput(e *events, counter *uint64, i types.Input) types.Input {
 		e:       e,
 		ctr:     counter,
 		wrapped: i,
-		tChan:   make(chan types.Transaction),
+		tChan:   make(chan message.Transaction),
 		shutSig: shutdown.NewSignaller(),
 	}
 	go t.loop()
@@ -51,7 +51,7 @@ func (t *tracedInput) loop() {
 	}
 }
 
-func (t *tracedInput) TransactionChan() <-chan types.Transaction {
+func (t *tracedInput) TransactionChan() <-chan message.Transaction {
 	return t.tChan
 }
 

@@ -10,7 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +25,7 @@ func testProgram(t *testing.T, program string) string {
 	return pathStr
 }
 
-func readMsg(t *testing.T, tranChan <-chan types.Transaction) *message.Batch {
+func readMsg(t *testing.T, tranChan <-chan message.Transaction) *message.Batch {
 	t.Helper()
 	select {
 	case tran := <-tranChan:

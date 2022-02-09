@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -72,7 +73,7 @@ type Resource struct {
 	log   log.Modular
 	stats metrics.Type
 
-	transactions <-chan types.Transaction
+	transactions <-chan message.Transaction
 
 	ctx  context.Context
 	done func()
@@ -107,7 +108,7 @@ func (r *Resource) loop() {
 		mCount = r.stats.GetCounter("count")
 	)
 
-	var ts *types.Transaction
+	var ts *message.Transaction
 	for {
 		if ts == nil {
 			select {
@@ -146,7 +147,7 @@ func (r *Resource) loop() {
 //------------------------------------------------------------------------------
 
 // Consume assigns a messages channel for the output to read.
-func (r *Resource) Consume(ts <-chan types.Transaction) error {
+func (r *Resource) Consume(ts <-chan message.Transaction) error {
 	if r.transactions != nil {
 		return component.ErrAlreadyStarted
 	}

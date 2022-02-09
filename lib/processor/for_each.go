@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -51,7 +52,7 @@ func NewForEachConfig() ForEachConfig {
 // ForEach is a processor that applies a list of child processors to each
 // message of a batch individually.
 type ForEach struct {
-	children []types.Processor
+	children []processor.V1
 
 	log log.Modular
 
@@ -65,7 +66,7 @@ type ForEach struct {
 func NewForEach(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	var children []types.Processor
+	var children []processor.V1
 	for i, pconf := range conf.ForEach {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
 		proc, err := New(pconf, pMgr, pLog, pStats)
@@ -89,7 +90,7 @@ func NewForEach(
 func NewProcessBatch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	var children []types.Processor
+	var children []processor.V1
 	for i, pconf := range conf.ProcessBatch {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
 		proc, err := New(pconf, pMgr, pLog, pStats)

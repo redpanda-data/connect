@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -77,7 +78,7 @@ type While struct {
 	maxLoops    int
 	atLeastOnce bool
 	check       *mapping.Executor
-	children    []types.Processor
+	children    []processor.V1
 
 	log log.Modular
 
@@ -103,7 +104,7 @@ func NewWhile(
 		return nil, errors.New("a check query is required")
 	}
 
-	var children []types.Processor
+	var children []processor.V1
 	for i, pconf := range conf.While.Processors {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("while.%v", i), mgr, log, stats)
 		var proc Type

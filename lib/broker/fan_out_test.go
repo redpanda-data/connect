@@ -31,7 +31,7 @@ func TestBasicFanOut(t *testing.T) {
 		outputs = append(outputs, mockOutputs[i])
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
@@ -53,14 +53,14 @@ func TestBasicFanOut(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
 		resChanSlice := []chan<- response.Error{}
 		for j := 0; j < nOutputs; j++ {
-			var ts types.Transaction
+			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[j].TChan:
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -103,7 +103,7 @@ func TestFanOutBackPressure(t *testing.T) {
 	mockTwo := MockOutputType{}
 
 	outputs := []types.Output{&mockOne, &mockTwo}
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(outputs, log.Noop(), metrics.Noop())
@@ -138,7 +138,7 @@ func TestFanOutBackPressure(t *testing.T) {
 bpLoop:
 	for ; i < 1000; i++ {
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 		case <-time.After(time.Millisecond * 200):
 			break bpLoop
 		}
@@ -157,7 +157,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	mockTwo := MockOutputType{}
 
 	outputs := []types.Output{&mockOne, &mockTwo}
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
@@ -176,12 +176,12 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for broker send")
 		return
 	}
-	var ts1, ts2 types.Transaction
+	var ts1, ts2 message.Transaction
 	select {
 	case ts1 = <-mockOne.TChan:
 	case <-time.After(time.Second):
@@ -243,7 +243,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	outputs := []types.Output{}
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
@@ -259,12 +259,12 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
 
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 	select {
 	case ts, open = <-mockOutput.TChan:
@@ -300,7 +300,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 	outputs := []types.Output{}
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
@@ -316,7 +316,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -349,7 +349,7 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 	outputs := []types.Output{}
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
@@ -365,7 +365,7 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -398,7 +398,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 		outputs = append(outputs, mockOutputs[i])
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewFanOut(
@@ -420,7 +420,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < nMsgs; i++ {
-		readChan <- types.NewTransaction(message.QuickBatch(content), resChan)
+		readChan <- message.NewTransaction(message.QuickBatch(content), resChan)
 		for j := 0; j < nOutputs; j++ {
 			ts := <-mockOutputs[j].TChan
 			rChanSlice[j] = ts.ResponseChan

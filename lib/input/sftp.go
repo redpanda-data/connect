@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/impl/sftp"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -277,7 +278,7 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (*message.Batch, reade
 		if err != component.ErrTimeout {
 			if s.conf.Watcher.Enabled {
 				var setErr error
-				if cerr := interop.AccessCache(ctx, s.mgr, s.conf.Watcher.Cache, func(cache types.Cache) {
+				if cerr := interop.AccessCache(ctx, s.mgr, s.conf.Watcher.Cache, func(cache cache.V1) {
 					setErr = cache.Set(ctx, s.currentPath, []byte("@"), nil)
 				}); cerr != nil {
 					return nil, nil, fmt.Errorf("failed to get the cache for sftp watcher mode: %v", cerr)
@@ -343,7 +344,7 @@ func (s *sftpReader) getFilePaths(ctx context.Context) ([]string, error) {
 		return filepaths, nil
 	}
 
-	if cerr := interop.AccessCache(ctx, s.mgr, s.conf.Watcher.Cache, func(cache types.Cache) {
+	if cerr := interop.AccessCache(ctx, s.mgr, s.conf.Watcher.Cache, func(cache cache.V1) {
 		for _, p := range s.conf.Paths {
 			paths, err := s.client.Glob(p)
 			if err != nil {

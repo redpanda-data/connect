@@ -5,84 +5,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/message"
 )
-
-// CacheTTLItem contains a value to cache along with an optional TTL.
-type CacheTTLItem struct {
-	Value []byte
-	TTL   *time.Duration
-}
-
-// Cache is a key/value store that can be shared across components and executing
-// threads of a Benthos service.
-type Cache interface {
-	// Get attempts to locate and return a cached value by its key, returns an
-	// error if the key does not exist or if the command fails.
-	Get(ctx context.Context, key string) ([]byte, error)
-
-	// Set attempts to set the value of a key, returns an error if the command
-	// fails.
-	Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error
-
-	// SetMulti attempts to set the value of multiple keys, returns an error if
-	// any of the keys fail.
-	SetMulti(ctx context.Context, items map[string]CacheTTLItem) error
-
-	// Add attempts to set the value of a key only if the key does not already
-	// exist, returns an error if the key already exists or if the command
-	// fails.
-	Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error
-
-	// Delete attempts to remove a key. Returns an error if a failure occurs.
-	Delete(ctx context.Context, key string) error
-
-	// Close the component, blocks until either the underlying resources are
-	// cleaned up or the context is cancelled. Returns an error if the context
-	// is cancelled.
-	Close(ctx context.Context) error
-}
-
-//------------------------------------------------------------------------------
-
-// RateLimit is a strategy for limiting access to a shared resource, this
-// strategy can be safely used by components in parallel.
-type RateLimit interface {
-	// Access the rate limited resource. Returns a duration or an error if the
-	// rate limit check fails. The returned duration is either zero (meaning the
-	// resource may be accessed) or a reasonable length of time to wait before
-	// requesting again.
-	Access(ctx context.Context) (time.Duration, error)
-
-	// Close the component, blocks until either the underlying resources are
-	// cleaned up or the context is cancelled. Returns an error if the context
-	// is cancelled.
-	Close(ctx context.Context) error
-}
-
-//------------------------------------------------------------------------------
-
-// Processor reads a message, performs some form of data processing to the
-// message, and returns either a slice of >= 1 resulting messages or a response
-// to return to the message origin.
-type Processor interface {
-	// ProcessMessage attempts to process a message. This method returns both a
-	// slice of messages or a response indicating whether messages were dropped
-	// due to an intermittent error (response.NewError) or were intentionally
-	// filtered (response.NewAck).
-	//
-	// If an error occurs due to the contents of a message being invalid and you
-	// wish to expose this as a recoverable fault you can use processor.FlagErr
-	// to flag a message as having failed without dropping it.
-	//
-	// More information about this form of error handling can be found at:
-	// https://www.benthos.dev/docs/configuration/error_handling
-	ProcessMessage(*message.Batch) ([]*message.Batch, error)
-
-	Closable
-}
-
-//------------------------------------------------------------------------------
 
 // Manager is an interface expected by Benthos components that allows them to
 // register their service wide behaviours such as HTTP endpoints and event
@@ -96,27 +23,27 @@ type Manager interface {
 	// GetInput(name string) (Input, error)
 
 	// GetCache attempts to find a service wide cache by its name.
-	GetCache(name string) (Cache, error)
+	GetCache(name string) (cache.V1, error)
 
 	// GetProcessor attempts to find a service wide processor by its name.
 	// TODO: V4 Add this
 	// GetProcessor(name string) (Processor, error)
 
 	// GetRateLimit attempts to find a service wide rate limit by its name.
-	GetRateLimit(name string) (RateLimit, error)
+	GetRateLimit(name string) (ratelimit.V1, error)
 
 	// GetOutput attempts to find a service wide output by its name.
 	// TODO: V4 Add this
 	// GetOutput(name string) (OutputWriter, error)
 
 	// GetPipe attempts to find a service wide transaction chan by its name.
-	GetPipe(name string) (<-chan Transaction, error)
+	GetPipe(name string) (<-chan message.Transaction, error)
 
 	// SetPipe registers a transaction chan under a name.
-	SetPipe(name string, t <-chan Transaction)
+	SetPipe(name string, t <-chan message.Transaction)
 
 	// UnsetPipe removes a named transaction chan.
-	UnsetPipe(name string, t <-chan Transaction)
+	UnsetPipe(name string, t <-chan message.Transaction)
 }
 
 //------------------------------------------------------------------------------
@@ -144,13 +71,13 @@ type Producer interface {
 	// TransactionChan returns a channel used for consuming transactions from
 	// this type. Every transaction received must be resolved before another
 	// transaction will be sent.
-	TransactionChan() <-chan Transaction
+	TransactionChan() <-chan message.Transaction
 }
 
 // Consumer is the higher level consumer type.
 type Consumer interface {
 	// Consume starts the type receiving transactions from a Transactor.
-	Consume(<-chan Transaction) error
+	Consume(<-chan message.Transaction) error
 }
 
 //------------------------------------------------------------------------------
@@ -160,7 +87,7 @@ type OutputWriter interface {
 	Closable
 
 	// WriteTransaction attempts to write a transaction to an output.
-	WriteTransaction(context.Context, Transaction) error
+	WriteTransaction(context.Context, message.Transaction) error
 
 	// Connected returns a boolean indicating whether this output is currently
 	// connected to its target.
@@ -201,7 +128,7 @@ type Pipeline interface {
 // ProcessorConstructorFunc is a constructor to be called for each parallel
 // stream pipeline thread in order to construct a custom processor
 // implementation.
-type ProcessorConstructorFunc func() (Processor, error)
+type ProcessorConstructorFunc func() (processor.V1, error)
 
 // PipelineConstructorFunc is a constructor to be called for each parallel
 // stream pipeline thread in order to construct a custom pipeline

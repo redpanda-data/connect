@@ -11,6 +11,9 @@ import (
 	"context"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
+	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -37,24 +40,24 @@ type NewManagement interface {
 	BloblEnvironment() *bloblang.Environment
 
 	NewBuffer(conf buffer.Config) (buffer.Type, error)
-	NewCache(conf cache.Config) (types.Cache, error)
+	NewCache(conf cache.Config) (icache.V1, error)
 	NewInput(conf input.Config, pipelines ...types.PipelineConstructorFunc) (types.Input, error)
-	NewProcessor(conf processor.Config) (types.Processor, error)
+	NewProcessor(conf processor.Config) (iprocessor.V1, error)
 	NewOutput(conf output.Config, pipelines ...types.PipelineConstructorFunc) (types.Output, error)
-	NewRateLimit(conf ratelimit.Config) (types.RateLimit, error)
+	NewRateLimit(conf ratelimit.Config) (iratelimit.V1, error)
 
-	AccessCache(ctx context.Context, name string, fn func(types.Cache)) error
+	AccessCache(ctx context.Context, name string, fn func(icache.V1)) error
 	StoreCache(ctx context.Context, name string, conf cache.Config) error
 
 	AccessInput(ctx context.Context, name string, fn func(types.Input)) error
 	StoreInput(ctx context.Context, name string, conf input.Config) error
 
-	AccessProcessor(ctx context.Context, name string, fn func(types.Processor)) error
+	AccessProcessor(ctx context.Context, name string, fn func(iprocessor.V1)) error
 	StoreProcessor(ctx context.Context, name string, conf processor.Config) error
 
 	AccessOutput(ctx context.Context, name string, fn func(types.OutputWriter)) error
 	StoreOutput(ctx context.Context, name string, conf output.Config) error
 
-	AccessRateLimit(ctx context.Context, name string, fn func(types.RateLimit)) error
+	AccessRateLimit(ctx context.Context, name string, fn func(iratelimit.V1)) error
 	StoreRateLimit(ctx context.Context, name string, conf ratelimit.Config) error
 }

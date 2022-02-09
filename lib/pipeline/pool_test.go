@@ -38,7 +38,7 @@ func TestPoolBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestPoolBasic(t *testing.T) {
 
 	// First message should be dropped and return immediately
 	select {
-	case tChan <- types.NewTransaction(msg, resChan):
+	case tChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
@@ -83,12 +83,12 @@ func TestPoolBasic(t *testing.T) {
 
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(msg, resChan):
+	case tChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
 	}
 
-	var procT types.Transaction
+	var procT message.Transaction
 	var open bool
 
 	// Receive new message
@@ -152,7 +152,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
 	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
@@ -165,14 +165,14 @@ func TestPoolMultiMsgs(t *testing.T) {
 
 		// Send message
 		select {
-		case tChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+		case tChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
 		}
 
 		for i := 0; i < mockProc.N; i++ {
 			// Receive messages
-			var procT types.Transaction
+			var procT message.Transaction
 			var open bool
 			select {
 			case procT, open = <-proc.TransactionChan():
@@ -235,7 +235,7 @@ func TestPoolMultiThreads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
 	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
@@ -248,14 +248,14 @@ func TestPoolMultiThreads(t *testing.T) {
 	for j := 0; j < conf.Threads; j++ {
 		// Send message
 		select {
-		case tChan <- types.NewTransaction(msg, resChan):
+		case tChan <- message.NewTransaction(msg, resChan):
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
 		}
 	}
 	for j := 0; j < conf.Threads; j++ {
 		// Receive messages
-		var procT types.Transaction
+		var procT message.Transaction
 		var open bool
 		select {
 		case procT, open = <-proc.TransactionChan():
@@ -269,7 +269,7 @@ func TestPoolMultiThreads(t *testing.T) {
 			t.Fatal("Timed out")
 		}
 
-		go func(tran types.Transaction) {
+		go func(tran message.Transaction) {
 			// Respond with no error
 			select {
 			case tran.ResponseChan <- response.NewError(nil):
@@ -312,7 +312,7 @@ func TestPoolMultiNaturalClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}

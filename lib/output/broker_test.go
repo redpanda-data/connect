@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func TestFanOutBroker(t *testing.T) {
@@ -42,7 +41,7 @@ func TestFanOutBroker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sendChan := make(chan types.Transaction)
+	sendChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 	if err = s.Consume(sendChan); err != nil {
 		t.Fatal(err)
@@ -70,7 +69,7 @@ func TestFanOutBroker(t *testing.T) {
 	for _, input := range inputs {
 		testMsg := message.QuickBatch([][]byte{[]byte(input)})
 		select {
-		case sendChan <- types.NewTransaction(testMsg, resChan):
+		case sendChan <- message.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
@@ -126,7 +125,7 @@ func TestRoundRobinBroker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sendChan := make(chan types.Transaction)
+	sendChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 	if err = s.Consume(sendChan); err != nil {
 		t.Fatal(err)
@@ -152,7 +151,7 @@ func TestRoundRobinBroker(t *testing.T) {
 	for _, input := range inputs {
 		testMsg := message.QuickBatch([][]byte{[]byte(input)})
 		select {
-		case sendChan <- types.NewTransaction(testMsg, resChan):
+		case sendChan <- message.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
@@ -216,7 +215,7 @@ func TestGreedyBroker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sendChan := make(chan types.Transaction)
+	sendChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 	if err = s.Consume(sendChan); err != nil {
 		t.Fatal(err)
@@ -242,7 +241,7 @@ func TestGreedyBroker(t *testing.T) {
 	for _, input := range inputs {
 		testMsg := message.QuickBatch([][]byte{[]byte(input)})
 		select {
-		case sendChan <- types.NewTransaction(testMsg, resChan):
+		case sendChan <- message.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
@@ -303,7 +302,7 @@ func TestTryBroker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sendChan := make(chan types.Transaction)
+	sendChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 	if err = s.Consume(sendChan); err != nil {
 		t.Fatal(err)
@@ -329,7 +328,7 @@ func TestTryBroker(t *testing.T) {
 	for _, input := range inputs {
 		testMsg := message.QuickBatch([][]byte{[]byte(input)})
 		select {
-		case sendChan <- types.NewTransaction(testMsg, resChan):
+		case sendChan <- message.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second * 2):
 			t.Fatal("Action timed out")
 		}

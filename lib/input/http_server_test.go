@@ -25,7 +25,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -100,7 +99,7 @@ func TestHTTPBasic(t *testing.T) {
 			}
 		}(testStr, testResponse)
 
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts = <-h.TransactionChan():
 			if res := string(ts.Payload.Get(0).Get()); res != testStr {
@@ -146,7 +145,7 @@ func TestHTTPBasic(t *testing.T) {
 			}
 		}()
 
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts = <-h.TransactionChan():
 			if exp, actual := 2, ts.Payload.Len(); exp != actual {
@@ -194,7 +193,7 @@ func TestHTTPBasic(t *testing.T) {
 			}
 		}(testStr, testResponse)
 
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts = <-h.TransactionChan():
 			if res := string(ts.Payload.Get(0).Get()); res != testStr {
@@ -256,7 +255,7 @@ func TestHTTPServerLifecycle(t *testing.T) {
 	timeout := time.Second * 5
 	readNextMsg := func(in input.Type) (*message.Batch, error) {
 		t.Helper()
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-in.TransactionChan():
 			select {
@@ -347,7 +346,7 @@ func TestHTTPServerMetadata(t *testing.T) {
 	timeout := time.Second * 5
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-server.TransactionChan():
 			select {
@@ -412,7 +411,7 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 	}()
 
 	readNextMsg := func() (*message.Batch, error) {
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran = <-server.TransactionChan():
 			select {
@@ -546,7 +545,7 @@ rate_limit_resources:
 	defer server.Close()
 
 	go func() {
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts = <-h.TransactionChan():
 		case <-time.After(time.Second):
@@ -633,7 +632,7 @@ func TestHTTPServerWebsockets(t *testing.T) {
 		wg.Done()
 	}()
 
-	var ts types.Transaction
+	var ts message.Transaction
 	select {
 	case ts = <-h.TransactionChan():
 	case <-time.After(time.Second):
@@ -725,7 +724,7 @@ rate_limit_resources:
 	}
 
 	go func() {
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts = <-h.TransactionChan():
 		case <-time.After(time.Second):
@@ -840,7 +839,7 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 		}
 	}()
 
-	var ts types.Transaction
+	var ts message.Transaction
 	select {
 	case ts = <-h.TransactionChan():
 		if res := string(ts.Payload.Get(0).Get()); res != input {
@@ -967,7 +966,7 @@ func TestHTTPSyncResponseMultipart(t *testing.T) {
 		assert.Equal(t, output, act)
 	}()
 
-	var ts types.Transaction
+	var ts message.Transaction
 	select {
 	case ts = <-h.TransactionChan():
 		for i, in := range input {
@@ -1073,7 +1072,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 	}()
 
 	// Non errored message
-	var ts types.Transaction
+	var ts message.Transaction
 	select {
 	case ts = <-h.TransactionChan():
 		if res := string(ts.Payload.Get(0).Get()); res != input {

@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 // OutputWriter provides a mock implementation of types.OutputWriter.
-type OutputWriter func(context.Context, types.Transaction) error
+type OutputWriter func(context.Context, message.Transaction) error
 
 // WriteTransaction attempts to write a transaction to an output.
-func (o OutputWriter) WriteTransaction(ctx context.Context, t types.Transaction) error {
+func (o OutputWriter) WriteTransaction(ctx context.Context, t message.Transaction) error {
 	return o(ctx, t)
 }
 

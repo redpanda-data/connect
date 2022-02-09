@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -211,7 +212,7 @@ type Branch struct {
 
 	requestMap *mapping.Executor
 	resultMap  *mapping.Executor
-	children   []types.Processor
+	children   []processor.V1
 
 	// Metrics
 	mCount     metrics.StatCounter
@@ -235,7 +236,7 @@ func NewBranch(
 func newBranch(
 	conf BranchConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (*Branch, error) {
-	children := make([]types.Processor, 0, len(conf.Processors))
+	children := make([]processor.V1, 0, len(conf.Processors))
 	for i, pconf := range conf.Processors {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("processor.%v", i), mgr, log, stats)
 		proc, err := New(pconf, pMgr, pLog, pStats)

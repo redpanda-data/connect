@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +28,7 @@ func testProgram(t *testing.T, program string) string {
 	return pathStr
 }
 
-func sendMsg(t *testing.T, msg string, tChan chan types.Transaction) {
+func sendMsg(t *testing.T, msg string, tChan chan message.Transaction) {
 	t.Helper()
 
 	m := message.QuickBatch(nil)
@@ -38,7 +37,7 @@ func sendMsg(t *testing.T, msg string, tChan chan types.Transaction) {
 	resChan := make(chan response.Error)
 
 	select {
-	case tChan <- types.NewTransaction(m, resChan):
+	case tChan <- message.NewTransaction(m, resChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -97,7 +96,7 @@ func main() {
 	o, err := output.New(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	tranChan := make(chan types.Transaction)
+	tranChan := make(chan message.Transaction)
 	o.Consume(tranChan)
 
 	sendMsg(t, "foo", tranChan)
@@ -157,7 +156,7 @@ func main() {
 	o, err := output.New(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	tranChan := make(chan types.Transaction)
+	tranChan := make(chan message.Transaction)
 	o.Consume(tranChan)
 
 	sendMsg(t, "foo", tranChan)

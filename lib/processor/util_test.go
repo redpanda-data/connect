@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -30,7 +30,7 @@ func (p *passthrough) WaitForClose(timeout time.Duration) error {
 }
 
 func TestExecuteAllBasic(t *testing.T) {
-	procs := []types.Processor{
+	procs := []processor.V1{
 		&passthrough{},
 		&passthrough{},
 	}
@@ -57,7 +57,7 @@ func TestExecuteAllBasic(t *testing.T) {
 }
 
 func TestExecuteAllBasicBatch(t *testing.T) {
-	procs := []types.Processor{
+	procs := []processor.V1{
 		&passthrough{},
 		&passthrough{},
 	}
@@ -88,7 +88,7 @@ func TestExecuteAllBasicBatch(t *testing.T) {
 }
 
 func TestExecuteAllMulti(t *testing.T) {
-	procs := []types.Processor{
+	procs := []processor.V1{
 		&passthrough{},
 		&passthrough{},
 	}
@@ -140,7 +140,7 @@ func (p *errored) WaitForClose(timeout time.Duration) error {
 }
 
 func TestExecuteAllErrored(t *testing.T) {
-	procs := []types.Processor{
+	procs := []processor.V1{
 		&passthrough{},
 		&errored{},
 		&passthrough{},

@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -136,7 +137,7 @@ type ReadUntil struct {
 	stats metrics.Type
 	log   log.Modular
 
-	transactions chan types.Transaction
+	transactions chan message.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -184,7 +185,7 @@ func NewReadUntil(
 		stats:        rStats,
 		wrapped:      wrapped,
 		check:        check,
-		transactions: make(chan types.Transaction),
+		transactions: make(chan message.Transaction),
 		closeChan:    make(chan struct{}),
 		closedChan:   make(chan struct{}),
 	}
@@ -256,7 +257,7 @@ runLoop:
 			}
 		}
 
-		var tran types.Transaction
+		var tran message.Transaction
 		select {
 		case tran, open = <-r.wrapped.TransactionChan():
 			if !open {
@@ -290,7 +291,7 @@ runLoop:
 		// If this transaction succeeds we shut down.
 		tmpRes := make(chan response.Error)
 		select {
-		case r.transactions <- types.NewTransaction(tran.Payload, tmpRes):
+		case r.transactions <- message.NewTransaction(tran.Payload, tmpRes):
 			mFinalPropagated.Incr(1)
 		case <-r.closeChan:
 			return
@@ -322,7 +323,7 @@ runLoop:
 
 // TransactionChan returns a transactions channel for consuming messages from
 // this input type.
-func (r *ReadUntil) TransactionChan() <-chan types.Transaction {
+func (r *ReadUntil) TransactionChan() <-chan message.Transaction {
 	return r.transactions
 }
 

@@ -84,7 +84,7 @@ type SocketServer struct {
 	conn      net.PacketConn
 
 	retriesMut   sync.RWMutex
-	transactions chan types.Transaction
+	transactions chan message.Transaction
 
 	ctx        context.Context
 	closeFn    func()
@@ -129,7 +129,7 @@ func NewSocketServer(conf Config, mgr types.Manager, log log.Modular, stats metr
 		listener:  ln,
 		conn:      cn,
 
-		transactions: make(chan types.Transaction),
+		transactions: make(chan message.Transaction),
 		closedChan:   make(chan struct{}),
 
 		mLatency: stats.GetTimer("latency"),
@@ -164,7 +164,7 @@ func (t *SocketServer) sendMsg(msg *message.Batch) bool {
 
 	resChan := make(chan response.Error)
 	select {
-	case t.transactions <- types.NewTransaction(msg, resChan):
+	case t.transactions <- message.NewTransaction(msg, resChan):
 	case <-t.ctx.Done():
 		return false
 	}
@@ -207,7 +207,7 @@ func (t *SocketServer) sendMsg(msg *message.Batch) bool {
 
 				// And then resend the transaction
 				select {
-				case t.transactions <- types.NewTransaction(msg, resChan):
+				case t.transactions <- message.NewTransaction(msg, resChan):
 				case <-t.ctx.Done():
 					return
 				}
@@ -366,7 +366,7 @@ func (t *SocketServer) udpLoop() {
 
 // TransactionChan returns a transactions channel for consuming messages from
 // this input.
-func (t *SocketServer) TransactionChan() <-chan types.Transaction {
+func (t *SocketServer) TransactionChan() <-chan message.Transaction {
 	return t.transactions
 }
 

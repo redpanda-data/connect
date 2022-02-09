@@ -7,7 +7,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,7 +42,7 @@ func (c *closableCache) Set(ctx context.Context, key string, value []byte, ttl *
 	return nil
 }
 
-func (c *closableCache) SetMulti(ctx context.Context, keyValues map[string]types.CacheTTLItem) error {
+func (c *closableCache) SetMulti(ctx context.Context, keyValues map[string]TTLItem) error {
 	if c.err != nil {
 		return c.err
 	}
@@ -146,7 +145,7 @@ func TestCacheAirGapSetMultiWithTTL(t *testing.T) {
 
 	ttl1, ttl2 := time.Second, time.Millisecond
 
-	err := agrl.SetMulti(ctx, map[string]types.CacheTTLItem{
+	err := agrl.SetMulti(ctx, map[string]TTLItem{
 		"first": {
 			Value: []byte("bar"),
 			TTL:   &ttl1,

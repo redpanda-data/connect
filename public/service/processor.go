@@ -7,7 +7,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Processor is a Benthos processor implementation that works against single
@@ -69,7 +68,7 @@ type airGapProcessor struct {
 	p Processor
 }
 
-func newAirGapProcessor(typeStr string, p Processor, stats metrics.Type) types.Processor {
+func newAirGapProcessor(typeStr string, p Processor, stats metrics.Type) processor.V1 {
 	return processor.NewV2ToV1Processor(typeStr, &airGapProcessor{p}, stats)
 }
 
@@ -96,7 +95,7 @@ type airGapBatchProcessor struct {
 	p BatchProcessor
 }
 
-func newAirGapBatchProcessor(typeStr string, p BatchProcessor, stats metrics.Type) types.Processor {
+func newAirGapBatchProcessor(typeStr string, p BatchProcessor, stats metrics.Type) processor.V1 {
 	return processor.NewV2BatchedToV1Processor(typeStr, &airGapBatchProcessor{p}, stats)
 }
 
@@ -132,7 +131,7 @@ func (a *airGapBatchProcessor) Close(ctx context.Context) error {
 // OwnedProcessor provides direct ownership of a processor extracted from a
 // plugin config.
 type OwnedProcessor struct {
-	p types.Processor
+	p processor.V1
 }
 
 // Process a single message, returns either a batch of zero or more resulting

@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/cenkalti/backoff/v4"
 )
 
@@ -34,7 +33,7 @@ type AsyncReader struct {
 	stats metrics.Type
 	log   log.Modular
 
-	transactions chan types.Transaction
+	transactions chan message.Transaction
 	shutSig      *shutdown.Signaller
 }
 
@@ -58,7 +57,7 @@ func NewAsyncReader(
 		reader:        r,
 		log:           log,
 		stats:         stats,
-		transactions:  make(chan types.Transaction),
+		transactions:  make(chan message.Transaction),
 		shutSig:       shutdown.NewSignaller(),
 	}
 
@@ -180,7 +179,7 @@ func (r *AsyncReader) loop() {
 		resChan := make(chan response.Error)
 		tracing.InitSpans("input_"+r.typeStr, msg)
 		select {
-		case r.transactions <- types.NewTransaction(msg, resChan):
+		case r.transactions <- message.NewTransaction(msg, resChan):
 		case <-r.shutSig.CloseAtLeisureChan():
 			return
 		}
@@ -219,7 +218,7 @@ func (r *AsyncReader) loop() {
 
 // TransactionChan returns a transactions channel for consuming messages from
 // this input type.
-func (r *AsyncReader) TransactionChan() <-chan types.Transaction {
+func (r *AsyncReader) TransactionChan() <-chan message.Transaction {
 	return r.transactions
 }
 

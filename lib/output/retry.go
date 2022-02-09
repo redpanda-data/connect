@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -116,8 +117,8 @@ type Retry struct {
 	stats metrics.Type
 	log   log.Modular
 
-	transactionsIn  <-chan types.Transaction
-	transactionsOut chan types.Transaction
+	transactionsIn  <-chan message.Transaction
+	transactionsOut chan message.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -152,7 +153,7 @@ func NewRetry(
 		stats:           stats,
 		wrapped:         wrapped,
 		backoffCtor:     boffCtor,
-		transactionsOut: make(chan types.Transaction),
+		transactionsOut: make(chan message.Transaction),
 
 		closeChan:  make(chan struct{}),
 		closedChan: make(chan struct{}),
@@ -200,7 +201,7 @@ func (r *Retry) loop() {
 			}
 		}
 
-		var tran types.Transaction
+		var tran message.Transaction
 		var open bool
 		select {
 		case tran, open = <-r.transactionsIn:
@@ -214,13 +215,13 @@ func (r *Retry) loop() {
 
 		rChan := make(chan response.Error)
 		select {
-		case r.transactionsOut <- types.NewTransaction(tran.Payload, rChan):
+		case r.transactionsOut <- message.NewTransaction(tran.Payload, rChan):
 		case <-r.closeChan:
 			return
 		}
 
 		wg.Add(1)
-		go func(ts types.Transaction, resChan chan response.Error) {
+		go func(ts message.Transaction, resChan chan response.Error) {
 			var backOff backoff.BackOff
 			var resOut response.Error
 			var inErrLoop bool
@@ -275,7 +276,7 @@ func (r *Retry) loop() {
 					}
 
 					select {
-					case r.transactionsOut <- types.NewTransaction(ts.Payload, resChan):
+					case r.transactionsOut <- message.NewTransaction(ts.Payload, resChan):
 					case <-r.closeChan:
 						return
 					}
@@ -297,7 +298,7 @@ func (r *Retry) loop() {
 }
 
 // Consume assigns a messages channel for the output to read.
-func (r *Retry) Consume(ts <-chan types.Transaction) error {
+func (r *Retry) Consume(ts <-chan message.Transaction) error {
 	if r.transactionsIn != nil {
 		return component.ErrAlreadyStarted
 	}

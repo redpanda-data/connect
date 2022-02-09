@@ -6,18 +6,19 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 type outputWrapper struct {
 	output types.Output
 
-	tranChan  chan types.Transaction
+	tranChan  chan message.Transaction
 	closeOnce sync.Once
 }
 
 func wrapOutput(o types.Output) (*outputWrapper, error) {
-	tranChan := make(chan types.Transaction)
+	tranChan := make(chan message.Transaction)
 	if err := o.Consume(tranChan); err != nil {
 		return nil, err
 	}
@@ -27,7 +28,7 @@ func wrapOutput(o types.Output) (*outputWrapper, error) {
 	}, nil
 }
 
-func (w *outputWrapper) WriteTransaction(ctx context.Context, t types.Transaction) error {
+func (w *outputWrapper) WriteTransaction(ctx context.Context, t message.Transaction) error {
 	select {
 	case w.tranChan <- t:
 	case <-ctx.Done():

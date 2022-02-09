@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -320,7 +321,7 @@ func New(
 	stats metrics.Type,
 ) (Type, error) {
 	if mgrV2, ok := mgr.(interface {
-		NewProcessor(conf Config) (types.Processor, error)
+		NewProcessor(conf Config) (processor.V1, error)
 	}); ok {
 		return mgrV2.NewProcessor(conf)
 	}

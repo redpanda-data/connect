@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -94,7 +95,7 @@ type Policy struct {
 	count     int
 	period    time.Duration
 	check     *mapping.Executor
-	procs     []types.Processor
+	procs     []iprocessor.V1
 	sizeTally int
 	parts     []*message.Part
 
@@ -134,7 +135,7 @@ func NewPolicy(
 			return nil, fmt.Errorf("failed to parse duration string: %v", err)
 		}
 	}
-	var procs []types.Processor
+	var procs []iprocessor.V1
 	for i, pconf := range conf.Processors {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
 		proc, err := processor.New(pconf, pMgr, pLog, pStats)

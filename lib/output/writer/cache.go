@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -88,8 +89,8 @@ func (c *Cache) Connect() error {
 
 func (c *Cache) writeMulti(ctx context.Context, msg *message.Batch) error {
 	var err error
-	if cerr := interop.AccessCache(ctx, c.mgr, c.conf.Target, func(cache types.Cache) {
-		items := map[string]types.CacheTTLItem{}
+	if cerr := interop.AccessCache(ctx, c.mgr, c.conf.Target, func(ac cache.V1) {
+		items := map[string]cache.TTLItem{}
 		if err = msg.Iter(func(i int, p *message.Part) error {
 			var ttl *time.Duration
 			if ttls := c.ttl.String(i, msg); ttls != "" {
@@ -100,7 +101,7 @@ func (c *Cache) writeMulti(ctx context.Context, msg *message.Batch) error {
 				}
 				ttl = &t
 			}
-			items[c.key.String(i, msg)] = types.CacheTTLItem{
+			items[c.key.String(i, msg)] = cache.TTLItem{
 				Value: p.Get(),
 				TTL:   ttl,
 			}
@@ -108,7 +109,7 @@ func (c *Cache) writeMulti(ctx context.Context, msg *message.Batch) error {
 		}); err != nil {
 			return
 		}
-		err = cache.SetMulti(ctx, items)
+		err = ac.SetMulti(ctx, items)
 	}); cerr != nil {
 		err = cerr
 	}
@@ -121,7 +122,7 @@ func (c *Cache) WriteWithContext(ctx context.Context, msg *message.Batch) error 
 		return c.writeMulti(ctx, msg)
 	}
 	var err error
-	if cerr := interop.AccessCache(ctx, c.mgr, c.conf.Target, func(cache types.Cache) {
+	if cerr := interop.AccessCache(ctx, c.mgr, c.conf.Target, func(cache cache.V1) {
 		var ttl *time.Duration
 		if ttls := c.ttl.String(0, msg); ttls != "" {
 			t, terr := time.ParseDuration(ttls)

@@ -171,11 +171,11 @@ func (a *airGapBatchWriter) WaitForClose(tout time.Duration) error {
 type OwnedOutput struct {
 	o         types.Output
 	closeOnce sync.Once
-	t         chan types.Transaction
+	t         chan message.Transaction
 }
 
 func newOwnedOutput(o types.Output) (*OwnedOutput, error) {
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	if err := o.Consume(tChan); err != nil {
 		return nil, err
 	}
@@ -193,7 +193,7 @@ func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
 
 	resChan := make(chan response.Error, 1)
 	select {
-	case o.t <- types.NewTransaction(payload, resChan):
+	case o.t <- message.NewTransaction(payload, resChan):
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -216,7 +216,7 @@ func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
 
 	resChan := make(chan response.Error, 1)
 	select {
-	case o.t <- types.NewTransaction(payload, resChan):
+	case o.t <- message.NewTransaction(payload, resChan):
 	case <-ctx.Done():
 		return ctx.Err()
 	}

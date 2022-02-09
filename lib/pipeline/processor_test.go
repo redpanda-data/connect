@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 var errMockProc = errors.New("this is an error from mock processor")
@@ -65,7 +64,7 @@ func TestProcessorPipeline(t *testing.T) {
 		mockProc,
 	)
 
-	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
@@ -81,7 +80,7 @@ func TestProcessorPipeline(t *testing.T) {
 
 	// First message should be dropped and return immediately
 	select {
-	case tChan <- types.NewTransaction(msg, resChan):
+	case tChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -110,12 +109,12 @@ func TestProcessorPipeline(t *testing.T) {
 
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(msg, resChan):
+	case tChan <- message.NewTransaction(msg, resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 
-	var procT types.Transaction
+	var procT message.Transaction
 	var open bool
 	select {
 	case procT, open = <-proc.TransactionChan():
@@ -219,7 +218,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 		mockProc,
 	)
 
-	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
@@ -227,7 +226,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case tChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -304,7 +303,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		mockProc,
 	)
 
-	tChan, resChan := make(chan types.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
@@ -317,7 +316,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 
 	// Send message
 	select {
-	case tChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case tChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}

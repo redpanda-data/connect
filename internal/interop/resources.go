@@ -6,6 +6,9 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -21,9 +24,9 @@ func ProbeCache(ctx context.Context, mgr types.Manager, name string) error {
 // AccessCache attempts to access a cache resource by a unique identifier and
 // executes a closure function with the cache as an argument. Returns an error
 // if the cache does not exist (or is otherwise inaccessible).
-func AccessCache(ctx context.Context, mgr types.Manager, name string, fn func(types.Cache)) error {
+func AccessCache(ctx context.Context, mgr types.Manager, name string, fn func(cache.V1)) error {
 	if nm, ok := mgr.(interface {
-		AccessCache(ctx context.Context, name string, fn func(types.Cache)) error
+		AccessCache(ctx context.Context, name string, fn func(cache.V1)) error
 	}); ok {
 		return nm.AccessCache(ctx, name, fn)
 	}
@@ -122,7 +125,7 @@ func AccessOutput(ctx context.Context, mgr types.Manager, name string, fn func(t
 // returns an error if not.
 func ProbeProcessor(ctx context.Context, mgr types.Manager, name string) error {
 	if gi, ok := mgr.(interface {
-		GetProcessor(name string) (types.Processor, error)
+		GetProcessor(name string) (processor.V1, error)
 	}); ok {
 		if _, err := gi.GetProcessor(name); err != nil {
 			return fmt.Errorf("processor resource '%v' was not found", name)
@@ -137,14 +140,14 @@ func ProbeProcessor(ctx context.Context, mgr types.Manager, name string) error {
 // identifier and executes a closure function with the processor as an argument.
 // Returns an error if the processor does not exist (or is otherwise
 // inaccessible).
-func AccessProcessor(ctx context.Context, mgr types.Manager, name string, fn func(types.Processor)) error {
+func AccessProcessor(ctx context.Context, mgr types.Manager, name string, fn func(processor.V1)) error {
 	if nm, ok := mgr.(interface {
-		AccessProcessor(ctx context.Context, name string, fn func(types.Processor)) error
+		AccessProcessor(ctx context.Context, name string, fn func(processor.V1)) error
 	}); ok {
 		return nm.AccessProcessor(ctx, name, fn)
 	}
 	if gi, ok := mgr.(interface {
-		GetProcessor(name string) (types.Processor, error)
+		GetProcessor(name string) (processor.V1, error)
 	}); ok {
 		o, err := gi.GetProcessor(name)
 		if err != nil {
@@ -172,9 +175,9 @@ func ProbeRateLimit(ctx context.Context, mgr types.Manager, name string) error {
 // identifier and executes a closure function with the rate limit as an
 // argument. Returns an error if the rate limit does not exist (or is otherwise
 // inaccessible).
-func AccessRateLimit(ctx context.Context, mgr types.Manager, name string, fn func(types.RateLimit)) error {
+func AccessRateLimit(ctx context.Context, mgr types.Manager, name string, fn func(ratelimit.V1)) error {
 	if nm, ok := mgr.(interface {
-		AccessRateLimit(ctx context.Context, name string, fn func(types.RateLimit)) error
+		AccessRateLimit(ctx context.Context, name string, fn func(ratelimit.V1)) error
 	}); ok {
 		return nm.AccessRateLimit(ctx, name, fn)
 	}

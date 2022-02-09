@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -253,7 +254,7 @@ func (d *Dedupe) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		}
 	} else {
 		var err error
-		if cerr := interop.AccessCache(context.Background(), d.mgr, d.cacheName, func(cache types.Cache) {
+		if cerr := interop.AccessCache(context.Background(), d.mgr, d.cacheName, func(cache cache.V1) {
 			err = cache.Add(context.Background(), string(hasher.Bytes()), []byte{'t'}, nil)
 		}); cerr != nil {
 			err = cerr

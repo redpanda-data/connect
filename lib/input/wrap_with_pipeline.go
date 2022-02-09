@@ -3,6 +3,7 @@ package input
 import (
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -49,7 +50,7 @@ func WrapWithPipelines(in Type, pipeConstructors ...types.PipelineConstructorFun
 
 // TransactionChan returns the channel used for consuming transactions from this
 // input.
-func (i *WithPipeline) TransactionChan() <-chan types.Transaction {
+func (i *WithPipeline) TransactionChan() <-chan message.Transaction {
 	return i.pipe.TransactionChan()
 }
 

@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -128,12 +128,12 @@ func (c CaseFailure) String() string {
 // ProcProvider returns compiled processors extracted from a Benthos config
 // using a JSON Pointer.
 type ProcProvider interface {
-	Provide(jsonPtr string, environment map[string]string) ([]types.Processor, error)
-	ProvideBloblang(path string) ([]types.Processor, error)
+	Provide(jsonPtr string, environment map[string]string) ([]iprocessor.V1, error)
+	ProvideBloblang(path string) ([]iprocessor.V1, error)
 }
 
 type mockedProcProvider interface {
-	ProvideMocked(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]types.Processor, error)
+	ProvideMocked(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]iprocessor.V1, error)
 }
 
 // Execute attempts to execute a test case against a Benthos configuration.
@@ -142,7 +142,7 @@ func (c *Case) Execute(provider ProcProvider) (failures []CaseFailure, err error
 }
 
 func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFailure, err error) {
-	var procSet []types.Processor
+	var procSet []iprocessor.V1
 	if c.TargetMapping != "" {
 		if procSet, err = provider.ProvideBloblang(c.TargetMapping); err != nil {
 			return nil, fmt.Errorf("failed to initialise Bloblang mapping '%v': %v", c.TargetMapping, err)

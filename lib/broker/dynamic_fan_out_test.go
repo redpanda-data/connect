@@ -32,7 +32,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 		outputs[fmt.Sprintf("out-%v", i)] = mockOutputs[i]
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewDynamicFanOut(
@@ -54,7 +54,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 		for j := 0; j < nOutputs; j++ {
 			go func(index int) {
 				defer wg.Done()
-				var ts types.Transaction
+				var ts message.Transaction
 				select {
 				case ts = <-mockOutputs[index].TChan:
 					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -73,7 +73,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 			}(j)
 		}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -101,7 +101,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 	nOutputs := 10
 
 	outputs := map[string]*MockOutputType{}
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewDynamicFanOut(
@@ -132,7 +132,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		for k, v := range outputs {
 			go func(name string, out *MockOutputType) {
 				defer wg.Done()
-				var ts types.Transaction
+				var ts message.Transaction
 				select {
 				case ts = <-out.TChan:
 					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -152,7 +152,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		}
 
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -179,7 +179,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		for k, v := range outputs {
 			go func(name string, out *MockOutputType) {
 				defer wg.Done()
-				var ts types.Transaction
+				var ts message.Transaction
 				select {
 				case ts = <-out.TChan:
 					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -199,7 +199,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		}
 
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
@@ -239,7 +239,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 		"first":  &mockOne,
 		"second": &mockTwo,
 	}
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewDynamicFanOut(
@@ -254,7 +254,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts = <-mockOne.TChan:
 		case <-time.After(time.Second):
@@ -272,7 +272,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts = <-mockTwo.TChan:
 		case <-time.After(time.Second):
@@ -300,7 +300,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 	}()
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for broker send")
 	}
@@ -324,7 +324,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 func TestDynamicFanOutStartEmpty(t *testing.T) {
 	mockOne := MockOutputType{}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	outputs := map[string]DynamicOutput{}
@@ -343,7 +343,7 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 		defer wg.Done()
 
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world")}), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for broker send")
 		}
@@ -353,7 +353,7 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts = <-mockOne.TChan:
 		case <-time.After(time.Second):
@@ -391,7 +391,7 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 	outputs := map[string]DynamicOutput{
 		"test": mockOutput,
 	}
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	outputAddedList := []string{}
@@ -415,12 +415,12 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
 
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 	select {
 	case ts, open = <-mockOutput.TChan:
@@ -464,7 +464,7 @@ func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
 	outputs := map[string]DynamicOutput{
 		"test": mockOutput,
 	}
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewDynamicFanOut(
@@ -480,7 +480,7 @@ func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}
@@ -514,7 +514,7 @@ func TestDynamicFanOutShutDownFromSend(t *testing.T) {
 	outputs := map[string]DynamicOutput{
 		"test": mockOutput,
 	}
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewDynamicFanOut(
@@ -530,7 +530,7 @@ func TestDynamicFanOutShutDownFromSend(t *testing.T) {
 	}
 
 	select {
-	case readChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case readChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg send")
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -37,7 +38,7 @@ type DynamicFanIn struct {
 	stats metrics.Type
 	log   log.Modular
 
-	transactionChan chan types.Transaction
+	transactionChan chan message.Transaction
 
 	onAdd    func(label string)
 	onRemove func(label string)
@@ -63,7 +64,7 @@ func NewDynamicFanIn(
 		stats:   stats,
 		log:     logger,
 
-		transactionChan: make(chan types.Transaction),
+		transactionChan: make(chan message.Transaction),
 
 		onAdd:    func(l string) {},
 		onRemove: func(l string) {},
@@ -115,7 +116,7 @@ func (d *DynamicFanIn) SetInput(ident string, input DynamicInput, timeout time.D
 
 // TransactionChan returns the channel used for consuming messages from this
 // broker.
-func (d *DynamicFanIn) TransactionChan() <-chan types.Transaction {
+func (d *DynamicFanIn) TransactionChan() <-chan message.Transaction {
 	return d.transactionChan
 }
 

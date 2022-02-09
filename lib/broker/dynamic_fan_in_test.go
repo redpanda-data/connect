@@ -29,7 +29,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
-			TChan: make(chan types.Transaction),
+			TChan: make(chan message.Transaction),
 		})
 		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
 	}
@@ -44,13 +44,13 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 		for j := 0; j < nInputs; j++ {
 			content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 			select {
-			case mockInputs[j].TChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+			case mockInputs[j].TChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for broker send: %v, %v", i, j)
 				return
 			}
 			go func() {
-				var ts types.Transaction
+				var ts message.Transaction
 				select {
 				case ts = <-fanIn.TransactionChan():
 					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -87,10 +87,10 @@ func TestBasicDynamicFanIn(t *testing.T) {
 	nMsgs := 1000
 
 	inputOne := &MockInputType{
-		TChan: make(chan types.Transaction),
+		TChan: make(chan message.Transaction),
 	}
 	inputTwo := &MockInputType{
-		TChan: make(chan types.Transaction),
+		TChan: make(chan message.Transaction),
 	}
 
 	fanIn, err := NewDynamicFanIn(nil, log.Noop(), metrics.Noop())
@@ -108,7 +108,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 		rChan := make(chan response.Error)
 		for i := 0; i < nMsgs; i++ {
 			content := [][]byte{[]byte(fmt.Sprintf("%v-%v", label, i))}
-			input.TChan <- types.NewTransaction(message.QuickBatch(content), rChan)
+			input.TChan <- message.NewTransaction(message.QuickBatch(content), rChan)
 			select {
 			case <-rChan:
 			case <-time.After(time.Second):
@@ -124,7 +124,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 	go sendAllTestMessages(inputTwo, "inputTwo")
 
 	for i := 0; i < nMsgs; i++ {
-		var ts types.Transaction
+		var ts message.Transaction
 		expContent := fmt.Sprintf("inputOne-%v", i)
 		select {
 		case ts = <-fanIn.TransactionChan():
@@ -148,7 +148,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 	}
 
 	for i := 0; i < nMsgs; i++ {
-		var ts types.Transaction
+		var ts message.Transaction
 		expContent := fmt.Sprintf("inputTwo-%v", i)
 		select {
 		case ts = <-fanIn.TransactionChan():
@@ -186,7 +186,7 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 	expInputRemovedList := []string{}
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
-			TChan: make(chan types.Transaction),
+			TChan: make(chan message.Transaction),
 		})
 		label := fmt.Sprintf("testinput%v", i)
 		Inputs[label] = mockInputs[i]
@@ -270,7 +270,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
-			TChan: make(chan types.Transaction),
+			TChan: make(chan message.Transaction),
 		})
 		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
 	}
@@ -291,7 +291,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 			for i := 0; i < nMsgs; i++ {
 				content := [][]byte{[]byte(fmt.Sprintf("hello world %v %v", i, index))}
 				select {
-				case mockInputs[index].TChan <- types.NewTransaction(message.QuickBatch(content), rChan):
+				case mockInputs[index].TChan <- message.NewTransaction(message.QuickBatch(content), rChan):
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for broker send: %v, %v", i, index)
 					return
@@ -311,7 +311,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 	}
 
 	for i := 0; i < nMsgs*nInputs; i++ {
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts = <-fanIn.TransactionChan():
 		case <-time.After(time.Second):

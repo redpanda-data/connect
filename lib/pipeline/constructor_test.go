@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
@@ -33,7 +33,7 @@ func TestProcCtor(t *testing.T) {
 		conf, nil,
 		log.Noop(),
 		metrics.Noop(),
-		func() (types.Processor, error) {
+		func() (iprocessor.V1, error) {
 			return processor.New(
 				secondProc, nil,
 				log.Noop(),
@@ -45,7 +45,7 @@ func TestProcCtor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	if err = pipe.Consume(tChan); err != nil {
@@ -55,12 +55,12 @@ func TestProcCtor(t *testing.T) {
 	select {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
-	case tChan <- types.NewTransaction(
+	case tChan <- message.NewTransaction(
 		message.QuickBatch([][]byte{[]byte("foo bar baz")}), resChan,
 	):
 	}
 
-	var tran types.Transaction
+	var tran message.Transaction
 	select {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")

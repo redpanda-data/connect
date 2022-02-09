@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -179,7 +179,7 @@ func namedCacheTest(name string, test cacheTestDefinitionFn) CacheTestDefinition
 
 //------------------------------------------------------------------------------
 
-func initCache(t *testing.T, env *cacheTestEnvironment) types.Cache {
+func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -202,6 +202,6 @@ func initCache(t *testing.T, env *cacheTestEnvironment) types.Cache {
 	return cache
 }
 
-func closeCache(t *testing.T, cache types.Cache) {
+func closeCache(t *testing.T, cache cache.V1) {
 	require.NoError(t, cache.Close(context.Background()))
 }

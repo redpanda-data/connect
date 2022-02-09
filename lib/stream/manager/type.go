@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
@@ -90,7 +91,7 @@ func (s *StreamStatus) setClosed() {
 
 // StreamProcConstructorFunc is a closure type that constructs a processor type
 // for new streams, where the id of the stream is provided as an argument.
-type StreamProcConstructorFunc func(streamID string) (types.Processor, error)
+type StreamProcConstructorFunc func(streamID string) (processor.V1, error)
 
 //------------------------------------------------------------------------------
 
@@ -206,7 +207,7 @@ func (m *Type) Create(id string, conf stream.Config) error {
 	var procCtors []types.ProcessorConstructorFunc
 	for _, ctor := range m.pipelineProcCtors {
 		func(c StreamProcConstructorFunc) {
-			procCtors = append(procCtors, func() (types.Processor, error) {
+			procCtors = append(procCtors, func() (processor.V1, error) {
 				return c(id)
 			})
 		}(ctor)

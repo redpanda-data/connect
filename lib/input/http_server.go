@@ -17,6 +17,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	httpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -198,7 +199,7 @@ type HTTPServer struct {
 	metaFilter      *imetadata.IncludeFilter
 
 	handlerWG    sync.WaitGroup
-	transactions chan types.Transaction
+	transactions chan message.Transaction
 
 	shutSig *shutdown.Signaller
 
@@ -260,7 +261,7 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		server:          server,
 		timeout:         timeout,
 		responseHeaders: map[string]*field.Expression{},
-		transactions:    make(chan types.Transaction),
+		transactions:    make(chan message.Transaction),
 
 		allowedVerbs: verbs,
 
@@ -410,7 +411,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	if h.conf.RateLimit != "" {
 		var tUntil time.Duration
 		var err error
-		if rerr := interop.AccessRateLimit(r.Context(), h.mgr, h.conf.RateLimit, func(rl types.RateLimit) {
+		if rerr := interop.AccessRateLimit(r.Context(), h.mgr, h.conf.RateLimit, func(rl ratelimit.V1) {
 			tUntil, err = rl.Access(r.Context())
 		}); rerr != nil {
 			http.Error(w, "Server error", http.StatusBadGateway)
@@ -449,7 +450,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 
 	resChan := make(chan response.Error, 1)
 	select {
-	case h.transactions <- types.NewTransaction(msg, resChan):
+	case h.transactions <- message.NewTransaction(msg, resChan):
 	case <-time.After(h.timeout):
 		h.mTimeout.Incr(1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
@@ -611,7 +612,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 		if h.conf.RateLimit != "" {
 			var tUntil time.Duration
-			if rerr := interop.AccessRateLimit(r.Context(), h.mgr, h.conf.RateLimit, func(rl types.RateLimit) {
+			if rerr := interop.AccessRateLimit(r.Context(), h.mgr, h.conf.RateLimit, func(rl ratelimit.V1) {
 				tUntil, err = rl.Access(r.Context())
 			}); rerr != nil {
 				h.log.Warnf("Failed to access rate limit: %v\n", rerr)
@@ -658,7 +659,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		roundtrip.AddResultStore(msg, store)
 
 		select {
-		case h.transactions <- types.NewTransaction(msg, resChan):
+		case h.transactions <- message.NewTransaction(msg, resChan):
 		case <-h.shutSig.CloseAtLeisureChan():
 			return
 		}
@@ -751,7 +752,7 @@ func (h *HTTPServer) loop() {
 
 // TransactionChan returns a transactions channel for consuming messages from
 // this input.
-func (h *HTTPServer) TransactionChan() <-chan types.Transaction {
+func (h *HTTPServer) TransactionChan() <-chan message.Transaction {
 	return h.transactions
 }
 

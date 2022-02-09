@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
@@ -13,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/stream"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -62,32 +62,32 @@ func TestTypeProcsAndPipes(t *testing.T) {
 		OptSetLogger(logger),
 		OptSetStats(stats),
 		OptSetManager(res),
-		OptAddProcessors(func(id string) (types.Processor, error) {
+		OptAddProcessors(func(id string) (processor.V1, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}
 			return mockProcs[0], nil
-		}, func(id string) (types.Processor, error) {
+		}, func(id string) (processor.V1, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}
 			return mockProcs[1], nil
-		}, func(id string) (types.Processor, error) {
+		}, func(id string) (processor.V1, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}
 			return mockProcs[2], nil
-		}, func(id string) (types.Processor, error) {
+		}, func(id string) (processor.V1, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}
 			return mockProcs[3], nil
-		}, func(id string) (types.Processor, error) {
+		}, func(id string) (processor.V1, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}
 			return mockProcs[4], nil
-		}, func(id string) (types.Processor, error) {
+		}, func(id string) (processor.V1, error) {
 			if id != "foo" {
 				t.Errorf("Wrong id: %v != %v", id, "foo")
 			}

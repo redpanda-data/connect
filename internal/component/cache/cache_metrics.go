@@ -8,11 +8,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 type metricsCache struct {
-	c   types.Cache
+	c   V1
 	sig *shutdown.Signaller
 
 	mGetNotFound metrics.StatCounter
@@ -36,7 +35,7 @@ type metricsCache struct {
 
 // MetricsForCache wraps a cache with a struct that adds standard metrics over
 // each method.
-func MetricsForCache(c types.Cache, stats metrics.Type) types.Cache {
+func MetricsForCache(c V1, stats metrics.Type) V1 {
 	return &metricsCache{
 		c: c, sig: shutdown.NewSignaller(),
 
@@ -88,7 +87,7 @@ func (a *metricsCache) Set(ctx context.Context, key string, value []byte, ttl *t
 	return err
 }
 
-func (a *metricsCache) SetMulti(ctx context.Context, items map[string]types.CacheTTLItem) error {
+func (a *metricsCache) SetMulti(ctx context.Context, items map[string]TTLItem) error {
 	started := time.Now()
 	err := a.c.SetMulti(ctx, items)
 	a.mSetLatency.Timing(int64(time.Since(started)))

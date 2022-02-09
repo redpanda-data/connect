@@ -4,18 +4,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 type tracedProcessor struct {
 	e       *events
 	errCtr  *uint64
-	wrapped types.Processor
+	wrapped iprocessor.V1
 }
 
-func traceProcessor(e *events, errCtr *uint64, p types.Processor) types.Processor {
+func traceProcessor(e *events, errCtr *uint64, p iprocessor.V1) iprocessor.V1 {
 	t := &tracedProcessor{
 		e:       e,
 		errCtr:  errCtr,

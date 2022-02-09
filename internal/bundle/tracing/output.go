@@ -13,7 +13,7 @@ type tracedOutput struct {
 	e       *events
 	ctr     *uint64
 	wrapped types.Output
-	tChan   chan types.Transaction
+	tChan   chan message.Transaction
 	shutSig *shutdown.Signaller
 }
 
@@ -22,13 +22,13 @@ func traceOutput(e *events, ctr *uint64, i types.Output) types.Output {
 		e:       e,
 		ctr:     ctr,
 		wrapped: i,
-		tChan:   make(chan types.Transaction),
+		tChan:   make(chan message.Transaction),
 		shutSig: shutdown.NewSignaller(),
 	}
 	return t
 }
 
-func (t *tracedOutput) loop(inChan <-chan types.Transaction) {
+func (t *tracedOutput) loop(inChan <-chan message.Transaction) {
 	defer close(t.tChan)
 	for {
 		tran, open := <-inChan
@@ -49,7 +49,7 @@ func (t *tracedOutput) loop(inChan <-chan types.Transaction) {
 	}
 }
 
-func (t *tracedOutput) Consume(inChan <-chan types.Transaction) error {
+func (t *tracedOutput) Consume(inChan <-chan message.Transaction) error {
 	go t.loop(inChan)
 	return t.wrapped.Consume(t.tChan)
 }

@@ -43,7 +43,7 @@ func TestTryHappyPath(t *testing.T) {
 		outputs = append(outputs, o)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewTry(outputs, metrics.Noop())
@@ -59,14 +59,14 @@ func TestTryHappyPath(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
 
 		go func() {
-			var ts types.Transaction
+			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[0].TChan:
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -120,7 +120,7 @@ func TestTryHappyishPath(t *testing.T) {
 		outputs = append(outputs, o)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewTry(outputs, metrics.Noop())
@@ -136,14 +136,14 @@ func TestTryHappyishPath(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
 
 		go func() {
-			var ts types.Transaction
+			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[0].TChan:
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -220,7 +220,7 @@ func TestTryAllFail(t *testing.T) {
 		outputs = append(outputs, o)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewTry(outputs, metrics.Noop())
@@ -234,7 +234,7 @@ func TestTryAllFail(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for broker send")
 		}
@@ -242,7 +242,7 @@ func TestTryAllFail(t *testing.T) {
 		testErr := errors.New("test error")
 		go func() {
 			for j := 0; j < 3; j++ {
-				var ts types.Transaction
+				var ts message.Transaction
 				select {
 				case ts = <-mockOutputs[j%3].TChan:
 					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -295,7 +295,7 @@ func TestTryAllFailParallel(t *testing.T) {
 		outputs = append(outputs, o)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 
 	oTM, err := NewTry(outputs, metrics.Noop())
 	if err != nil {
@@ -322,7 +322,7 @@ func TestTryAllFailParallel(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 3; j++ {
-				var ts types.Transaction
+				var ts message.Transaction
 				var index int
 				select {
 				case ts = <-mockOutputs[j%3].TChan:
@@ -353,7 +353,7 @@ func TestTryAllFailParallel(t *testing.T) {
 			}
 		}()
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for broker send")
 		}

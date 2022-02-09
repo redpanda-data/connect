@@ -7,7 +7,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
+	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -155,7 +157,7 @@ func WithMetricsMapping(nm bundle.NewManagement, m *metrics.Mapping) bundle.NewM
 }
 
 func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
-	return set.Add(func(c cache.Config, nm bundle.NewManagement) (types.Cache, error) {
+	return set.Add(func(c cache.Config, nm bundle.NewManagement) (icache.V1, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -237,7 +239,7 @@ func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
 }
 
 func registerRateLimitTemplate(tmpl *compiled, set *bundle.RateLimitSet) error {
-	return set.Add(func(c ratelimit.Config, nm bundle.NewManagement) (types.RateLimit, error) {
+	return set.Add(func(c ratelimit.Config, nm bundle.NewManagement) (iratelimit.V1, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err

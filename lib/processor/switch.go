@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
@@ -143,7 +144,7 @@ func NewSwitchConfig() SwitchConfig {
 // individual case in the Switch processor.
 type switchCase struct {
 	check       *mapping.Executor
-	processors  []types.Processor
+	processors  []processor.V1
 	fallThrough bool
 }
 
@@ -167,7 +168,7 @@ func NewSwitch(
 
 		var err error
 		var check *mapping.Executor
-		var procs []types.Processor
+		var procs []processor.V1
 
 		if len(caseConf.Check) > 0 {
 			if check, err = interop.NewBloblangMapping(mgr, caseConf.Check); err != nil {
@@ -181,7 +182,7 @@ func NewSwitch(
 
 		for j, procConf := range caseConf.Processors {
 			pMgr, pLog, pStats := interop.LabelChild(prefix+"."+strconv.Itoa(j), mgr, log, stats)
-			var proc types.Processor
+			var proc processor.V1
 			if proc, err = New(procConf, pMgr, pLog, pStats); err != nil {
 				return nil, fmt.Errorf("case [%v] processor [%v]: %w", i, j, err)
 			}

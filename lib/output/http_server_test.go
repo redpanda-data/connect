@@ -10,7 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func TestHTTPBasic(t *testing.T) {
@@ -26,7 +25,7 @@ func TestHTTPBasic(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	if err = h.Consume(msgChan); err != nil {
@@ -46,7 +45,7 @@ func TestHTTPBasic(t *testing.T) {
 		go func() {
 			testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 			select {
-			case msgChan <- types.NewTransaction(testMsg, resChan):
+			case msgChan <- message.NewTransaction(testMsg, resChan):
 			case <-time.After(time.Second):
 				t.Error("Timed out waiting for message")
 				return
@@ -90,7 +89,7 @@ func TestHTTPBadRequests(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 
 	if err = h.Consume(msgChan); err != nil {
 		t.Error(err)
@@ -122,7 +121,7 @@ func TestHTTPTimeout(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 
 	if err = h.Consume(msgChan); err != nil {
 		t.Error(err)

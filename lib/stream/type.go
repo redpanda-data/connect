@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
@@ -164,7 +165,7 @@ func (t *Type) start() (err error) {
 	}
 
 	// Start chaining components
-	var nextTranChan <-chan types.Transaction
+	var nextTranChan <-chan message.Transaction
 
 	nextTranChan = t.inputLayer.TransactionChan()
 	if t.bufferLayer != nil {

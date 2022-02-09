@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -84,7 +85,7 @@ func NewTryConfig() TryConfig {
 // a batch individually, where processors are skipped for messages that failed a
 // previous processor step.
 type Try struct {
-	children []types.Processor
+	children []processor.V1
 
 	log log.Modular
 
@@ -98,7 +99,7 @@ type Try struct {
 func NewTry(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
 ) (Type, error) {
-	var children []types.Processor
+	var children []processor.V1
 	for i, pconf := range conf.Try {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
 		proc, err := New(pconf, pMgr, pLog, pStats)

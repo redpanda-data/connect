@@ -5,23 +5,22 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Input provides a mocked input implementation.
 type Input struct {
-	ts chan types.Transaction
+	ts chan message.Transaction
 }
 
 // NewInput creates a new mock input that will return transactions containing a
 // list of batches, then exit.
 func NewInput(batches []*message.Batch) *Input {
-	ts := make(chan types.Transaction, len(batches))
+	ts := make(chan message.Transaction, len(batches))
 	resChan := make(chan response.Error, len(batches))
 	go func() {
 		defer close(ts)
 		for _, b := range batches {
-			ts <- types.NewTransaction(b, resChan)
+			ts <- message.NewTransaction(b, resChan)
 		}
 	}()
 	return &Input{ts: ts}
@@ -33,7 +32,7 @@ func (f *Input) Connected() bool {
 }
 
 // TransactionChan returns a transaction channel.
-func (f *Input) TransactionChan() <-chan types.Transaction {
+func (f *Input) TransactionChan() <-chan message.Transaction {
 	return f.ts
 }
 

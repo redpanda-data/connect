@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -41,7 +42,7 @@ func New(
 	stats metrics.Type,
 	processorCtors ...types.ProcessorConstructorFunc,
 ) (Type, error) {
-	processors := make([]types.Processor, len(conf.Processors)+len(processorCtors))
+	processors := make([]iprocessor.V1, len(conf.Processors)+len(processorCtors))
 	for j, procConf := range conf.Processors {
 		pMgr, pLog, pMetrics := interop.LabelChild(fmt.Sprintf("processor.%v", j), mgr, log, stats)
 		var err error

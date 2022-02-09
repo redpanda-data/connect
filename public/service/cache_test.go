@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -154,7 +154,7 @@ func TestCacheAirGapSetMultiWithTTL(t *testing.T) {
 
 	ttl1, ttl2 := time.Second, time.Millisecond
 
-	err := agrl.SetMulti(ctx, map[string]types.CacheTTLItem{
+	err := agrl.SetMulti(ctx, map[string]cache.TTLItem{
 		"first": {
 			Value: []byte("bar"),
 			TTL:   &ttl1,
@@ -189,7 +189,7 @@ func TestCacheAirGapSetMultiWithTTLPassthrough(t *testing.T) {
 
 	ttl1, ttl2 := time.Second, time.Millisecond
 
-	err := agrl.SetMulti(ctx, map[string]types.CacheTTLItem{
+	err := agrl.SetMulti(ctx, map[string]cache.TTLItem{
 		"first": {
 			Value: []byte("bar"),
 			TTL:   &ttl1,
@@ -326,7 +326,7 @@ func (c *closableCacheType) Set(ctx context.Context, key string, value []byte, t
 	return nil
 }
 
-func (c *closableCacheType) SetMulti(ctx context.Context, items map[string]types.CacheTTLItem) error {
+func (c *closableCacheType) SetMulti(ctx context.Context, items map[string]cache.TTLItem) error {
 	return errors.New("not implemented")
 }
 

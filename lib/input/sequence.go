@@ -400,7 +400,7 @@ type Sequence struct {
 	stats metrics.Type
 	log   log.Modular
 
-	transactions chan types.Transaction
+	transactions chan message.Transaction
 
 	shutSig *shutdown.Signaller
 }
@@ -441,7 +441,7 @@ func NewSequence(
 
 		log:          rLog,
 		stats:        rStats,
-		transactions: make(chan types.Transaction),
+		transactions: make(chan message.Transaction),
 		shutSig:      shutdown.NewSignaller(),
 	}
 
@@ -508,7 +508,7 @@ func (r *Sequence) resetTargets() {
 
 func (r *Sequence) dispatchJoinedMessage(wg *sync.WaitGroup, msg *message.Batch) {
 	resChan := make(chan response.Error)
-	tran := types.NewTransaction(msg, resChan)
+	tran := message.NewTransaction(msg, resChan)
 	select {
 	case r.transactions <- tran:
 	case <-r.shutSig.CloseNowChan():
@@ -600,7 +600,7 @@ runLoop:
 			}
 		}
 
-		var tran types.Transaction
+		var tran message.Transaction
 		var open bool
 		select {
 		case tran, open = <-target.TransactionChan():
@@ -634,7 +634,7 @@ runLoop:
 
 // TransactionChan returns a transactions channel for consuming messages from
 // this input type.
-func (r *Sequence) TransactionChan() <-chan types.Transaction {
+func (r *Sequence) TransactionChan() <-chan message.Transaction {
 	return r.transactions
 }
 

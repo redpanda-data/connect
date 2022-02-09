@@ -6,6 +6,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
@@ -20,9 +21,9 @@ type RoundRobin struct {
 
 	stats metrics.Type
 
-	transactions <-chan types.Transaction
+	transactions <-chan message.Transaction
 
-	outputTSChans []chan types.Transaction
+	outputTSChans []chan message.Transaction
 	outputs       []types.Output
 
 	closedChan chan struct{}
@@ -39,9 +40,9 @@ func NewRoundRobin(outputs []types.Output, stats metrics.Type) (*RoundRobin, err
 		closedChan:   make(chan struct{}),
 		closeChan:    make(chan struct{}),
 	}
-	o.outputTSChans = make([]chan types.Transaction, len(o.outputs))
+	o.outputTSChans = make([]chan message.Transaction, len(o.outputs))
 	for i := range o.outputTSChans {
-		o.outputTSChans[i] = make(chan types.Transaction)
+		o.outputTSChans[i] = make(chan message.Transaction)
 		if err := o.outputs[i].Consume(o.outputTSChans[i]); err != nil {
 			return nil, err
 		}
@@ -52,7 +53,7 @@ func NewRoundRobin(outputs []types.Output, stats metrics.Type) (*RoundRobin, err
 //------------------------------------------------------------------------------
 
 // Consume assigns a new messages channel for the broker to read.
-func (o *RoundRobin) Consume(ts <-chan types.Transaction) error {
+func (o *RoundRobin) Consume(ts <-chan message.Transaction) error {
 	if o.transactions != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -105,7 +106,7 @@ func (o *RoundRobin) loop() {
 	i := 0
 	var open bool
 	for atomic.LoadInt32(&o.running) == 1 {
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts, open = <-o.transactions:
 			if !open {

@@ -29,7 +29,7 @@ func TestBasicFanIn(t *testing.T) {
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
-			TChan: make(chan types.Transaction),
+			TChan: make(chan message.Transaction),
 		})
 		Inputs = append(Inputs, mockInputs[i])
 	}
@@ -44,13 +44,13 @@ func TestBasicFanIn(t *testing.T) {
 		for j := 0; j < nInputs; j++ {
 			content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 			select {
-			case mockInputs[j].TChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+			case mockInputs[j].TChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 			case <-time.After(time.Second * 5):
 				t.Errorf("Timed out waiting for broker send: %v, %v", i, j)
 				return
 			}
 			go func() {
-				var ts types.Transaction
+				var ts message.Transaction
 				select {
 				case ts = <-fanIn.TransactionChan():
 					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -89,7 +89,7 @@ func TestFanInShutdown(t *testing.T) {
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
-			TChan: make(chan types.Transaction),
+			TChan: make(chan message.Transaction),
 		})
 		Inputs = append(Inputs, mockInputs[i])
 	}
@@ -128,7 +128,7 @@ func TestFanInAsync(t *testing.T) {
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
-			TChan: make(chan types.Transaction),
+			TChan: make(chan message.Transaction),
 		})
 		Inputs = append(Inputs, mockInputs[i])
 	}
@@ -148,7 +148,7 @@ func TestFanInAsync(t *testing.T) {
 			for i := 0; i < nMsgs; i++ {
 				content := [][]byte{[]byte(fmt.Sprintf("hello world %v %v", i, index))}
 				select {
-				case mockInputs[index].TChan <- types.NewTransaction(message.QuickBatch(content), rChan):
+				case mockInputs[index].TChan <- message.NewTransaction(message.QuickBatch(content), rChan):
 				case <-time.After(time.Second * 5):
 					t.Errorf("Timed out waiting for broker send: %v, %v", i, index)
 					return
@@ -168,7 +168,7 @@ func TestFanInAsync(t *testing.T) {
 	}
 
 	for i := 0; i < nMsgs*nInputs; i++ {
-		var ts types.Transaction
+		var ts message.Transaction
 		select {
 		case ts = <-fanIn.TransactionChan():
 		case <-time.After(time.Second * 5):
@@ -195,7 +195,7 @@ func BenchmarkBasicFanIn(b *testing.B) {
 
 	for i := 0; i < nInputs; i++ {
 		mockInputs = append(mockInputs, &MockInputType{
-			TChan: make(chan types.Transaction),
+			TChan: make(chan message.Transaction),
 		})
 		Inputs = append(Inputs, mockInputs[i])
 	}
@@ -217,12 +217,12 @@ func BenchmarkBasicFanIn(b *testing.B) {
 		for j := 0; j < nInputs; j++ {
 			content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 			select {
-			case mockInputs[j].TChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+			case mockInputs[j].TChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 			case <-time.After(time.Second * 5):
 				b.Errorf("Timed out waiting for broker send: %v, %v", i, j)
 				return
 			}
-			var ts types.Transaction
+			var ts message.Transaction
 			select {
 			case ts = <-fanIn.TransactionChan():
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {

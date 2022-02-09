@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -24,9 +25,9 @@ type Try struct {
 	outputsPrefix string
 
 	maxInFlight  int
-	transactions <-chan types.Transaction
+	transactions <-chan message.Transaction
 
-	outputTSChans []chan types.Transaction
+	outputTSChans []chan message.Transaction
 	outputs       []types.Output
 
 	ctx        context.Context
@@ -50,9 +51,9 @@ func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
 	if len(outputs) == 0 {
 		return nil, errors.New("missing outputs")
 	}
-	t.outputTSChans = make([]chan types.Transaction, len(t.outputs))
+	t.outputTSChans = make([]chan message.Transaction, len(t.outputs))
 	for i := range t.outputTSChans {
-		t.outputTSChans[i] = make(chan types.Transaction)
+		t.outputTSChans[i] = make(chan message.Transaction)
 		if err := t.outputs[i].Consume(t.outputTSChans[i]); err != nil {
 			return nil, err
 		}
@@ -83,7 +84,7 @@ func (t *Try) WithOutputMetricsPrefix(prefix string) *Try {
 }
 
 // Consume assigns a new messages channel for the broker to read.
-func (t *Try) Consume(ts <-chan types.Transaction) error {
+func (t *Try) Consume(ts <-chan message.Transaction) error {
 	if t.transactions != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -138,7 +139,7 @@ func (t *Try) loop() {
 		defer wg.Done()
 		for {
 			var open bool
-			var tran types.Transaction
+			var tran message.Transaction
 
 			select {
 			case tran, open = <-t.transactions:
@@ -152,7 +153,7 @@ func (t *Try) loop() {
 
 			rChan := make(chan response.Error)
 			select {
-			case t.outputTSChans[0] <- types.NewTransaction(tran.Payload, rChan):
+			case t.outputTSChans[0] <- message.NewTransaction(tran.Payload, rChan):
 			case <-t.ctx.Done():
 				return
 			}
@@ -178,7 +179,7 @@ func (t *Try) loop() {
 
 				if i < len(t.outputTSChans) {
 					select {
-					case t.outputTSChans[i] <- types.NewTransaction(tran.Payload, rChan):
+					case t.outputTSChans[i] <- message.NewTransaction(tran.Payload, rChan):
 					case <-t.ctx.Done():
 						return
 					}

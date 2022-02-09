@@ -1,8 +1,8 @@
 package mock_test
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var _ types.RateLimit = mock.RateLimit(nil)
+var _ ratelimit.V1 = mock.RateLimit(nil)

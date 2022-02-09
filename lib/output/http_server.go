@@ -104,7 +104,7 @@ type HTTPServer struct {
 	server  *http.Server
 	timeout time.Duration
 
-	transactions <-chan types.Transaction
+	transactions <-chan message.Transaction
 
 	closeChan  chan struct{}
 	closedChan chan struct{}
@@ -253,7 +253,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 
 	tStart := time.Now()
 
-	var ts types.Transaction
+	var ts message.Transaction
 	var open bool
 	var err error
 
@@ -324,7 +324,7 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for atomic.LoadInt32(&h.running) == 1 {
-		var ts types.Transaction
+		var ts message.Transaction
 		var open bool
 
 		select {
@@ -390,7 +390,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	defer ws.Close()
 
 	for atomic.LoadInt32(&h.running) == 1 {
-		var ts types.Transaction
+		var ts message.Transaction
 		var open bool
 
 		select {
@@ -434,7 +434,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 //------------------------------------------------------------------------------
 
 // Consume assigns a messages channel for the output to read.
-func (h *HTTPServer) Consume(ts <-chan types.Transaction) error {
+func (h *HTTPServer) Consume(ts <-chan message.Transaction) error {
 	if h.transactions != nil {
 		return component.ErrAlreadyStarted
 	}

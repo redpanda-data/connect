@@ -229,7 +229,7 @@ type OwnedInput struct {
 // If this method returns ErrEndOfInput then that indicates that the input has
 // finished and will no longer yield new messages.
 func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, error) {
-	var tran types.Transaction
+	var tran message.Transaction
 	var open bool
 	select {
 	case tran, open = <-o.i.TransactionChan():

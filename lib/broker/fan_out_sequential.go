@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -25,9 +26,9 @@ type FanOutSequential struct {
 	stats  metrics.Type
 
 	maxInFlight  int
-	transactions <-chan types.Transaction
+	transactions <-chan message.Transaction
 
-	outputTSChans []chan types.Transaction
+	outputTSChans []chan message.Transaction
 	outputs       []types.Output
 
 	ctx        context.Context
@@ -51,9 +52,9 @@ func NewFanOutSequential(
 		close:        done,
 	}
 
-	o.outputTSChans = make([]chan types.Transaction, len(o.outputs))
+	o.outputTSChans = make([]chan message.Transaction, len(o.outputs))
 	for i := range o.outputTSChans {
-		o.outputTSChans[i] = make(chan types.Transaction)
+		o.outputTSChans[i] = make(chan message.Transaction)
 		if err := o.outputs[i].Consume(o.outputTSChans[i]); err != nil {
 			return nil, err
 		}
@@ -77,7 +78,7 @@ func (o *FanOutSequential) WithMaxInFlight(i int) *FanOutSequential {
 //------------------------------------------------------------------------------
 
 // Consume assigns a new transactions channel for the broker to read.
-func (o *FanOutSequential) Consume(transactions <-chan types.Transaction) error {
+func (o *FanOutSequential) Consume(transactions <-chan message.Transaction) error {
 	if o.transactions != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -128,7 +129,7 @@ func (o *FanOutSequential) loop() {
 	sendLoop := func() {
 		defer wg.Done()
 		for {
-			var ts types.Transaction
+			var ts message.Transaction
 			var open bool
 
 			select {
@@ -151,7 +152,7 @@ func (o *FanOutSequential) loop() {
 			sendLoop:
 				for {
 					select {
-					case o.outputTSChans[i] <- types.NewTransaction(msgCopy, resChan):
+					case o.outputTSChans[i] <- message.NewTransaction(msgCopy, resChan):
 					case <-o.ctx.Done():
 						return
 					}

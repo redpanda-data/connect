@@ -8,7 +8,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func TestRetryConfigErrs(t *testing.T) {
@@ -45,11 +44,11 @@ func TestRetryBasic(t *testing.T) {
 	}
 
 	mOut := &mockOutput{
-		ts: make(chan types.Transaction),
+		ts: make(chan message.Transaction),
 	}
 	ret.wrapped = mOut
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	if err = ret.Consume(tChan); err != nil {
@@ -59,13 +58,13 @@ func TestRetryBasic(t *testing.T) {
 	testMsg := message.QuickBatch(nil)
 	go func() {
 		select {
-		case tChan <- types.NewTransaction(testMsg, resChan):
+		case tChan <- message.NewTransaction(testMsg, resChan):
 		case <-time.After(time.Second):
 			t.Error("timed out")
 		}
 	}()
 
-	var tran types.Transaction
+	var tran message.Transaction
 	select {
 	case tran = <-mOut.ts:
 	case <-time.After(time.Second):
@@ -116,11 +115,11 @@ func TestRetrySadPath(t *testing.T) {
 	}
 
 	mOut := &mockOutput{
-		ts: make(chan types.Transaction),
+		ts: make(chan message.Transaction),
 	}
 	ret.wrapped = mOut
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	if err = ret.Consume(tChan); err != nil {
@@ -128,7 +127,7 @@ func TestRetrySadPath(t *testing.T) {
 	}
 
 	testMsg := message.QuickBatch(nil)
-	tran := types.NewTransaction(testMsg, resChan)
+	tran := message.NewTransaction(testMsg, resChan)
 
 	go func() {
 		select {
@@ -193,7 +192,7 @@ func TestRetrySadPath(t *testing.T) {
 
 func expectFromRetry(
 	resReturn response.Error,
-	tChan <-chan types.Transaction,
+	tChan <-chan message.Transaction,
 	t *testing.T,
 	responsesSlice ...string) {
 	t.Helper()
@@ -231,14 +230,14 @@ func expectFromRetry(
 
 func sendForRetry(
 	value string,
-	tChan chan types.Transaction,
+	tChan chan message.Transaction,
 	resChan chan response.Error,
 	t *testing.T,
 ) {
 	t.Helper()
 
 	select {
-	case tChan <- types.NewTransaction(message.QuickBatch(
+	case tChan <- message.NewTransaction(message.QuickBatch(
 		[][]byte{[]byte(value)},
 	), resChan):
 	case <-time.After(time.Second):
@@ -282,11 +281,11 @@ func TestRetryParallel(t *testing.T) {
 	}
 
 	mOut := &mockOutput{
-		ts: make(chan types.Transaction),
+		ts: make(chan message.Transaction),
 	}
 	ret.wrapped = mOut
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	if err = ret.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +298,7 @@ func TestRetryParallel(t *testing.T) {
 	expectFromRetry(response.NewError(response.ErrNoAck), mOut.ts, t, "first", "second")
 
 	select {
-	case tChan <- types.NewTransaction(nil, nil):
+	case tChan <- message.NewTransaction(nil, nil):
 		t.Fatal("Accepted transaction during retry loop")
 	default:
 	}

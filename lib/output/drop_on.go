@@ -12,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -148,8 +149,8 @@ type dropOn struct {
 	onBackpressure time.Duration
 	wrapped        Type
 
-	transactionsIn  <-chan types.Transaction
-	transactionsOut chan types.Transaction
+	transactionsIn  <-chan message.Transaction
+	transactionsOut chan message.Transaction
 
 	ctx        context.Context
 	done       func()
@@ -170,7 +171,7 @@ func newDropOn(conf DropOnConditions, wrapped Type, log log.Modular, stats metri
 		log:             log,
 		stats:           stats,
 		wrapped:         wrapped,
-		transactionsOut: make(chan types.Transaction),
+		transactionsOut: make(chan message.Transaction),
 
 		onError:        conf.Error,
 		onBackpressure: backPressure,
@@ -201,7 +202,7 @@ func (d *dropOn) loop() {
 
 	var gotBackPressure bool
 	for {
-		var ts types.Transaction
+		var ts message.Transaction
 		var open bool
 		select {
 		case ts, open = <-d.transactionsIn:
@@ -221,13 +222,13 @@ func (d *dropOn) loop() {
 
 				if gotBackPressure {
 					select {
-					case d.transactionsOut <- types.NewTransaction(ts.Payload, resChan):
+					case d.transactionsOut <- message.NewTransaction(ts.Payload, resChan):
 						gotBackPressure = false
 					default:
 					}
 				} else {
 					select {
-					case d.transactionsOut <- types.NewTransaction(ts.Payload, resChan):
+					case d.transactionsOut <- message.NewTransaction(ts.Payload, resChan):
 					case <-ticker.C:
 						gotBackPressure = true
 					case <-d.ctx.Done():
@@ -266,7 +267,7 @@ func (d *dropOn) loop() {
 			// Push data as usual, if the output blocks due to a disconnect then
 			// we wait as long as it takes.
 			select {
-			case d.transactionsOut <- types.NewTransaction(ts.Payload, resChan):
+			case d.transactionsOut <- message.NewTransaction(ts.Payload, resChan):
 			case <-d.ctx.Done():
 				return
 			}
@@ -293,7 +294,7 @@ func (d *dropOn) loop() {
 }
 
 // Consume assigns a messages channel for the output to read.
-func (d *dropOn) Consume(ts <-chan types.Transaction) error {
+func (d *dropOn) Consume(ts <-chan message.Transaction) error {
 	if d.transactionsIn != nil {
 		return component.ErrAlreadyStarted
 	}

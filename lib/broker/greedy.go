@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
@@ -27,7 +28,7 @@ func NewGreedy(outputs []types.Output) (*Greedy, error) {
 //------------------------------------------------------------------------------
 
 // Consume assigns a new messages channel for the broker to read.
-func (g *Greedy) Consume(ts <-chan types.Transaction) error {
+func (g *Greedy) Consume(ts <-chan message.Transaction) error {
 	for _, out := range g.outputs {
 		if err := out.Consume(ts); err != nil {
 			return err

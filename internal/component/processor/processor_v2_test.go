@@ -9,7 +9,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -86,7 +85,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 	assert.Equal(t, 1, msgs[0].Len())
 	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
 	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "invalid character 'o' in literal null (expecting 'u')", processor.GetFail(msgs[0].Get(0)))
+	assert.Equal(t, "invalid character 'o' in literal null (expecting 'u')", GetFail(msgs[0].Get(0)))
 }
 
 func TestProcessorAirGapOneToMany(t *testing.T) {
@@ -182,7 +181,7 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 	assert.Equal(t, 1, msgs[0].Len())
 	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
 	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "invalid character 'o' in literal null (expecting 'u')", processor.GetFail(msgs[0].Get(0)))
+	assert.Equal(t, "invalid character 'o' in literal null (expecting 'u')", GetFail(msgs[0].Get(0)))
 }
 
 func TestBatchProcessorAirGapOneToMany(t *testing.T) {

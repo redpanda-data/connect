@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -26,7 +25,7 @@ type Batcher struct {
 	child   Type
 	batcher *batch.Policy
 
-	messagesOut chan types.Transaction
+	messagesOut chan message.Transaction
 
 	shutSig *shutdown.Signaller
 }
@@ -43,7 +42,7 @@ func NewBatcher(
 		log:         log,
 		child:       child,
 		batcher:     batcher,
-		messagesOut: make(chan types.Transaction),
+		messagesOut: make(chan message.Transaction),
 		shutSig:     shutdown.NewSignaller(),
 	}
 	go b.loop()
@@ -89,7 +88,7 @@ func (m *Batcher) loop() {
 
 		resChan := make(chan response.Error)
 		select {
-		case m.messagesOut <- types.NewTransaction(sendMsg, resChan):
+		case m.messagesOut <- message.NewTransaction(sendMsg, resChan):
 		case <-m.shutSig.CloseNowChan():
 			return
 		}
@@ -180,7 +179,7 @@ func (m *Batcher) Connected() bool {
 
 // TransactionChan returns the channel used for consuming messages from this
 // buffer.
-func (m *Batcher) TransactionChan() <-chan types.Transaction {
+func (m *Batcher) TransactionChan() <-chan message.Transaction {
 	return m.messagesOut
 }
 

@@ -42,7 +42,7 @@ func TestBasicGreedy(t *testing.T) {
 		outputs = append(outputs, o)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewGreedy(outputs)
@@ -59,7 +59,7 @@ func TestBasicGreedy(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		go func() {
-			var ts types.Transaction
+			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[0].TChan:
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -79,7 +79,7 @@ func TestBasicGreedy(t *testing.T) {
 		}()
 
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return

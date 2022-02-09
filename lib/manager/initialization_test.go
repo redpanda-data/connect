@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
@@ -30,7 +32,7 @@ func TestInitialization(t *testing.T) {
 		Name: "testbuffer",
 	}))
 
-	require.NoError(t, env.CacheAdd(func(c cache.Config, mgr bundle.NewManagement) (types.Cache, error) {
+	require.NoError(t, env.CacheAdd(func(c cache.Config, mgr bundle.NewManagement) (icache.V1, error) {
 		return nil, errors.New("not this cache")
 	}, docs.ComponentSpec{
 		Name: "testcache",
@@ -58,7 +60,7 @@ func TestInitialization(t *testing.T) {
 		Name: "testprocessor",
 	}))
 
-	require.NoError(t, env.RateLimitAdd(func(c ratelimit.Config, mgr bundle.NewManagement) (types.RateLimit, error) {
+	require.NoError(t, env.RateLimitAdd(func(c ratelimit.Config, mgr bundle.NewManagement) (iratelimit.V1, error) {
 		return nil, errors.New("not this rate limit")
 	}, docs.ComponentSpec{
 		Name: "testratelimit",
@@ -127,7 +129,7 @@ func TestInitializationOrdering(t *testing.T) {
 	require.NoError(t, env.InputAdd(func(c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
 		go func() {
 			defer wg.Done()
-			err := mgr.AccessRateLimit(context.Background(), "testratelimit", func(rl types.RateLimit) {})
+			err := mgr.AccessRateLimit(context.Background(), "testratelimit", func(rl iratelimit.V1) {})
 			_ = assert.Error(t, err) && assert.Contains(t, err.Error(), "unable to locate")
 		}()
 		return nil, nil
@@ -138,7 +140,7 @@ func TestInitializationOrdering(t *testing.T) {
 	require.NoError(t, env.ProcessorAdd(func(c processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
 		go func() {
 			defer wg.Done()
-			err := mgr.AccessRateLimit(context.Background(), "fooratelimit", func(rl types.RateLimit) {})
+			err := mgr.AccessRateLimit(context.Background(), "fooratelimit", func(rl iratelimit.V1) {})
 			_ = assert.Error(t, err) && assert.Contains(t, err.Error(), "unable to locate")
 		}()
 		return nil, nil
@@ -146,7 +148,7 @@ func TestInitializationOrdering(t *testing.T) {
 		Name: "testprocessor",
 	}))
 
-	require.NoError(t, env.RateLimitAdd(func(c ratelimit.Config, mgr bundle.NewManagement) (types.RateLimit, error) {
+	require.NoError(t, env.RateLimitAdd(func(c ratelimit.Config, mgr bundle.NewManagement) (iratelimit.V1, error) {
 		return nil, nil
 	}, docs.ComponentSpec{
 		Name: "testratelimit",

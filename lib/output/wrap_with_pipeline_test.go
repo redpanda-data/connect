@@ -18,10 +18,10 @@ import (
 //------------------------------------------------------------------------------
 
 type mockOutput struct {
-	ts <-chan types.Transaction
+	ts <-chan message.Transaction
 }
 
-func (m *mockOutput) Consume(ts <-chan types.Transaction) error {
+func (m *mockOutput) Consume(ts <-chan message.Transaction) error {
 	m.ts = ts
 	return nil
 }
@@ -49,16 +49,16 @@ func (m *mockOutput) WaitForClose(dur time.Duration) error {
 //------------------------------------------------------------------------------
 
 type mockPipe struct {
-	tsIn <-chan types.Transaction
-	ts   chan types.Transaction
+	tsIn <-chan message.Transaction
+	ts   chan message.Transaction
 }
 
-func (m *mockPipe) Consume(ts <-chan types.Transaction) error {
+func (m *mockPipe) Consume(ts <-chan message.Transaction) error {
 	m.tsIn = ts
 	return nil
 }
 
-func (m *mockPipe) TransactionChan() <-chan types.Transaction {
+func (m *mockPipe) TransactionChan() <-chan message.Transaction {
 	return m.ts
 }
 
@@ -75,7 +75,7 @@ func (m *mockPipe) WaitForClose(time.Duration) error {
 func TestBasicWrapPipeline(t *testing.T) {
 	mockOut := &mockOutput{}
 	mockPi := &mockPipe{
-		ts: make(chan types.Transaction),
+		ts: make(chan message.Transaction),
 	}
 
 	procs := 0
@@ -93,7 +93,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dudMsgChan := make(chan types.Transaction)
+	dudMsgChan := make(chan message.Transaction)
 	if err = newOutput.Consume(dudMsgChan); err != nil {
 		t.Error(err)
 	}
@@ -163,7 +163,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 	if err = newOutput.Consume(tChan); err != nil {
 		t.Error(err)
@@ -172,12 +172,12 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 	select {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
-	case tChan <- types.NewTransaction(
+	case tChan <- message.NewTransaction(
 		message.QuickBatch([][]byte{[]byte("bar")}), resChan,
 	):
 	}
 
-	var tran types.Transaction
+	var tran message.Transaction
 	select {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")

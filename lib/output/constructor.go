@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -68,7 +69,7 @@ func AppendProcessorsFromConfig(
 				procs := 0
 				i = &procs
 			}
-			processors := make([]types.Processor, len(conf.Processors))
+			processors := make([]iprocessor.V1, len(conf.Processors))
 			for j, procConf := range conf.Processors {
 				pMgr, pLog, pMetrics := interop.LabelChild(fmt.Sprintf("processor.%v", *i), mgr, log, stats)
 				var err error

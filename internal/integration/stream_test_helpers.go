@@ -424,7 +424,7 @@ func namedBench(name string, test streamBenchDefinitionFn) StreamBenchDefinition
 
 func initConnectors(
 	t testing.TB,
-	trans <-chan types.Transaction,
+	trans <-chan message.Transaction,
 	env *streamTestEnvironment,
 ) (types.Input, types.Output) {
 	t.Helper()
@@ -463,7 +463,7 @@ func initInput(t testing.TB, env *streamTestEnvironment) types.Input {
 	return input
 }
 
-func initOutput(t testing.TB, trans <-chan types.Transaction, env *streamTestEnvironment) types.Output {
+func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) types.Output {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -509,7 +509,7 @@ func closeConnectors(t testing.TB, input types.Input, output types.Output) {
 func sendMessage(
 	ctx context.Context,
 	t testing.TB,
-	tranChan chan types.Transaction,
+	tranChan chan message.Transaction,
 	content string,
 	metadata ...string,
 ) error {
@@ -525,7 +525,7 @@ func sendMessage(
 	resChan := make(chan response.Error)
 
 	select {
-	case tranChan <- types.NewTransaction(msg, resChan):
+	case tranChan <- message.NewTransaction(msg, resChan):
 	case <-ctx.Done():
 		t.Fatal("timed out on send")
 	}
@@ -542,7 +542,7 @@ func sendMessage(
 func sendBatch(
 	ctx context.Context,
 	t testing.TB,
-	tranChan chan types.Transaction,
+	tranChan chan message.Transaction,
 	content []string,
 ) error {
 	t.Helper()
@@ -555,7 +555,7 @@ func sendBatch(
 	resChan := make(chan response.Error)
 
 	select {
-	case tranChan <- types.NewTransaction(msg, resChan):
+	case tranChan <- message.NewTransaction(msg, resChan):
 	case <-ctx.Done():
 		t.Fatal("timed out on send")
 	}
@@ -573,7 +573,7 @@ func sendBatch(
 func receiveMessage(
 	ctx context.Context,
 	t testing.TB,
-	tranChan <-chan types.Transaction,
+	tranChan <-chan message.Transaction,
 	err error,
 ) *message.Part {
 	t.Helper()
@@ -593,10 +593,10 @@ func sendResponse(ctx context.Context, t testing.TB, resChan chan<- response.Err
 }
 
 // nolint:gocritic // Ignore unnamedResult false positive
-func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan types.Transaction) (*message.Part, chan<- response.Error) {
+func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, chan<- response.Error) {
 	t.Helper()
 
-	var tran types.Transaction
+	var tran message.Transaction
 	var open bool
 	select {
 	case tran, open = <-tranChan:

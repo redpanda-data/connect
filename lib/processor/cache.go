@@ -8,6 +8,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -226,31 +227,31 @@ func NewCache(
 
 //------------------------------------------------------------------------------
 
-type cacheOperator func(ctx context.Context, cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error)
+type cacheOperator func(ctx context.Context, cache cache.V1, key string, value []byte, ttl *time.Duration) ([]byte, bool, error)
 
 func newCacheSetOperator() cacheOperator {
-	return func(ctx context.Context, cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
+	return func(ctx context.Context, cache cache.V1, key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
 		err := cache.Set(ctx, key, value, ttl)
 		return nil, false, err
 	}
 }
 
 func newCacheAddOperator() cacheOperator {
-	return func(ctx context.Context, cache types.Cache, key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
+	return func(ctx context.Context, cache cache.V1, key string, value []byte, ttl *time.Duration) ([]byte, bool, error) {
 		err := cache.Add(ctx, key, value, ttl)
 		return nil, false, err
 	}
 }
 
 func newCacheGetOperator() cacheOperator {
-	return func(ctx context.Context, cache types.Cache, key string, _ []byte, _ *time.Duration) ([]byte, bool, error) {
+	return func(ctx context.Context, cache cache.V1, key string, _ []byte, _ *time.Duration) ([]byte, bool, error) {
 		result, err := cache.Get(ctx, key)
 		return result, true, err
 	}
 }
 
 func newCacheDeleteOperator() cacheOperator {
-	return func(ctx context.Context, cache types.Cache, key string, _ []byte, ttl *time.Duration) ([]byte, bool, error) {
+	return func(ctx context.Context, cache cache.V1, key string, _ []byte, ttl *time.Duration) ([]byte, bool, error) {
 		err := cache.Delete(ctx, key)
 		return nil, false, err
 	}
@@ -296,7 +297,7 @@ func (c *Cache) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		var result []byte
 		var useResult bool
 		var err error
-		if cerr := interop.AccessCache(context.Background(), c.mgr, c.cacheName, func(cache types.Cache) {
+		if cerr := interop.AccessCache(context.Background(), c.mgr, c.cacheName, func(cache cache.V1) {
 			result, useResult, err = c.operator(context.Background(), cache, key, value, ttl)
 		}); cerr != nil {
 			err = cerr

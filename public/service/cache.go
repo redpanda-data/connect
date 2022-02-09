@@ -8,7 +8,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Errors returned by cache types.
@@ -64,7 +63,7 @@ type airGapCache struct {
 	cm batchedCache
 }
 
-func newAirGapCache(c Cache, stats metrics.Type) types.Cache {
+func newAirGapCache(c Cache, stats metrics.Type) cache.V1 {
 	ag := &airGapCache{c, nil}
 	ag.cm, _ = c.(batchedCache)
 	return cache.MetricsForCache(ag, stats)
@@ -82,7 +81,7 @@ func (a *airGapCache) Set(ctx context.Context, key string, value []byte, ttl *ti
 	return a.c.Set(ctx, key, value, ttl)
 }
 
-func (a *airGapCache) SetMulti(ctx context.Context, keyValues map[string]types.CacheTTLItem) error {
+func (a *airGapCache) SetMulti(ctx context.Context, keyValues map[string]cache.TTLItem) error {
 	if a.cm != nil {
 		items := make([]CacheItem, 0, len(keyValues))
 		for k, v := range keyValues {
@@ -122,10 +121,10 @@ func (a *airGapCache) Close(ctx context.Context) error {
 
 // Implements Cache around a types.Cache
 type reverseAirGapCache struct {
-	c types.Cache
+	c cache.V1
 }
 
-func newReverseAirGapCache(c types.Cache) *reverseAirGapCache {
+func newReverseAirGapCache(c cache.V1) *reverseAirGapCache {
 	return &reverseAirGapCache{c}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -123,7 +124,7 @@ func newCacheAccessTokenProvider(mgr types.Manager, cache, key string) (*cacheAc
 func (c *cacheAccessTokenProvider) Token() (*sarama.AccessToken, error) {
 	var tok []byte
 	var terr error
-	if err := interop.AccessCache(context.Background(), c.mgr, c.cacheName, func(cache types.Cache) {
+	if err := interop.AccessCache(context.Background(), c.mgr, c.cacheName, func(cache cache.V1) {
 		tok, terr = cache.Get(context.Background(), c.key)
 	}); err != nil {
 		return nil, fmt.Errorf("failed to obtain cache resource '%v': %v", c.cacheName, err)

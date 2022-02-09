@@ -7,8 +7,8 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -21,7 +21,7 @@ func TestInprocDryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mgr.SetPipe("foo", make(chan types.Transaction))
+	mgr.SetPipe("foo", make(chan message.Transaction))
 
 	conf := input.NewConfig()
 	conf.Inproc = "foo"

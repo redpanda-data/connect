@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +19,7 @@ func StreamBenchSend(batchSize, parallelism int) StreamBenchDefinition {
 		func(b *testing.B, env *streamTestEnvironment) {
 			require.Greater(b, parallelism, 0)
 
-			tranChan := make(chan types.Transaction)
+			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(b, tranChan, env)
 			b.Cleanup(func() {
 				closeConnectors(b, input, output)
@@ -83,7 +83,7 @@ func StreamBenchWrite(batchSize int) StreamBenchDefinition {
 	return namedBench(
 		fmt.Sprintf("write message batches %v without reading", batchSize),
 		func(b *testing.B, env *streamTestEnvironment) {
-			tranChan := make(chan types.Transaction)
+			tranChan := make(chan message.Transaction)
 			output := initOutput(b, tranChan, env)
 			b.Cleanup(func() {
 				closeConnectors(b, nil, output)

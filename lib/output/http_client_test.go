@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -50,12 +49,12 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	require.NoError(t, h.Consume(tChan))
 
 	resChan := make(chan response.Error)
 	select {
-	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{
+	case tChan <- message.NewTransaction(message.QuickBatch([][]byte{
 		[]byte("PART-A"),
 		[]byte("PART-B"),
 		[]byte("PART-C"),
@@ -105,12 +104,12 @@ func TestHTTPClientMultipartDisabled(t *testing.T) {
 	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	require.NoError(t, h.Consume(tChan))
 
 	resChan := make(chan response.Error)
 	select {
-	case tChan <- types.NewTransaction(message.QuickBatch([][]byte{
+	case tChan <- message.NewTransaction(message.QuickBatch([][]byte{
 		[]byte("PART-A"),
 		[]byte("PART-B"),
 		[]byte("PART-C"),

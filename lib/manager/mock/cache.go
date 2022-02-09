@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 )
 
 // CacheItem represents a cached key/ttl pair.
@@ -38,7 +38,7 @@ func (c *Cache) Set(ctx context.Context, key string, value []byte, ttl *time.Dur
 }
 
 // SetMulti sets multiple mock cache items
-func (c *Cache) SetMulti(ctx context.Context, kvs map[string]types.CacheTTLItem) error {
+func (c *Cache) SetMulti(ctx context.Context, kvs map[string]cache.TTLItem) error {
 	for k, v := range kvs {
 		c.Values[k] = CacheItem{
 			Value: string(v.Value),

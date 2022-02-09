@@ -4,9 +4,9 @@ import (
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // AllRateLimits is a set containing every single ratelimit that has been imported.
@@ -23,7 +23,7 @@ func (e *Environment) RateLimitAdd(constructor RateLimitConstructor, spec docs.C
 }
 
 // RateLimitInit attempts to initialise a ratelimit from a config.
-func (e *Environment) RateLimitInit(conf ratelimit.Config, mgr NewManagement) (types.RateLimit, error) {
+func (e *Environment) RateLimitInit(conf ratelimit.Config, mgr NewManagement) (iratelimit.V1, error) {
 	return e.rateLimits.Init(conf, mgr)
 }
 
@@ -35,7 +35,7 @@ func (e *Environment) RateLimitDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // RateLimitConstructor constructs an ratelimit component.
-type RateLimitConstructor func(ratelimit.Config, NewManagement) (types.RateLimit, error)
+type RateLimitConstructor func(ratelimit.Config, NewManagement) (iratelimit.V1, error)
 
 type rateLimitSpec struct {
 	constructor RateLimitConstructor
@@ -62,7 +62,7 @@ func (s *RateLimitSet) Add(constructor RateLimitConstructor, spec docs.Component
 }
 
 // Init attempts to initialise an ratelimit from a config.
-func (s *RateLimitSet) Init(conf ratelimit.Config, mgr NewManagement) (types.RateLimit, error) {
+func (s *RateLimitSet) Init(conf ratelimit.Config, mgr NewManagement) (iratelimit.V1, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidRateLimitType

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
@@ -140,7 +141,7 @@ func (l *Type) waitForAccess(ctx context.Context) bool {
 	for {
 		var period time.Duration
 		var err error
-		if rerr := interop.AccessRateLimit(ctx, l.mgr, l.conf.RateLimit, func(rl types.RateLimit) {
+		if rerr := interop.AccessRateLimit(ctx, l.mgr, l.conf.RateLimit, func(rl ratelimit.V1) {
 			period, err = rl.Access(ctx)
 		}); rerr != nil {
 			err = rerr

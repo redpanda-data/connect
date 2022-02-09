@@ -3,16 +3,16 @@ package output
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 // MockOutputType implements the output.Type interface.
 type MockOutputType struct {
-	TChan <-chan types.Transaction
+	TChan <-chan message.Transaction
 }
 
 // Consume sets the read channel. This implementation is NOT thread safe.
-func (m *MockOutputType) Consume(msgs <-chan types.Transaction) error {
+func (m *MockOutputType) Consume(msgs <-chan message.Transaction) error {
 	m.TChan = msgs
 	return nil
 }

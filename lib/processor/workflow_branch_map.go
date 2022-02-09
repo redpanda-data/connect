@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -184,7 +185,7 @@ func (r *resourcedBranch) lock() (branch *Branch, unlockFn func()) {
 	}
 
 	go func() {
-		_ = interop.AccessProcessor(context.Background(), r.mgr, r.name, func(p types.Processor) {
+		_ = interop.AccessProcessor(context.Background(), r.mgr, r.name, func(p processor.V1) {
 			branch, _ = p.(*Branch)
 			openOnce.Do(func() {
 				close(open)

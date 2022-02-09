@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -86,7 +85,7 @@ func TestAsyncWriterCantConnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = w.Consume(make(chan types.Transaction)); err != nil {
+	if err = w.Consume(make(chan message.Transaction)); err != nil {
 		t.Error(err)
 	}
 	if err = w.Consume(nil); err == nil {
@@ -116,7 +115,7 @@ func TestAsyncWriterCantSendClosed(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 
 	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
@@ -142,7 +141,7 @@ func TestAsyncWriterCantSendClosedChan(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 
 	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
@@ -170,7 +169,7 @@ func TestAsyncWriterStartClosed(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 
 	if err = w.Consume(msgChan); err != nil {
 		t.Error(err)
@@ -201,7 +200,7 @@ func TestAsyncWriterClosesOnReconn(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
@@ -228,7 +227,7 @@ func TestAsyncWriterClosesOnReconn(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case msgChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -252,7 +251,7 @@ func TestAsyncWriterClosesOnResend(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
@@ -284,7 +283,7 @@ func TestAsyncWriterClosesOnResend(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case msgChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -310,7 +309,7 @@ func TestAsyncWriterCanReconnect(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
@@ -342,7 +341,7 @@ func TestAsyncWriterCanReconnect(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case msgChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -377,7 +376,7 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 	resChan2 := make(chan response.Error)
 
@@ -432,12 +431,12 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 	}()
 
 	select {
-	case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+	case msgChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 	select {
-	case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan2):
+	case msgChan <- message.NewTransaction(message.QuickBatch(nil), resChan2):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
@@ -486,7 +485,7 @@ func TestAsyncWriterCantReconnect(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
@@ -495,7 +494,7 @@ func TestAsyncWriterCantReconnect(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(message.QuickBatch(nil), resChan):
+		case msgChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -549,7 +548,7 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
@@ -558,7 +557,7 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(message.QuickBatch(exp), resChan):
+		case msgChan <- message.NewTransaction(message.QuickBatch(exp), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -614,7 +613,7 @@ func TestAsyncWriterSadPath(t *testing.T) {
 		return
 	}
 
-	msgChan := make(chan types.Transaction)
+	msgChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	if err = w.Consume(msgChan); err != nil {
@@ -623,7 +622,7 @@ func TestAsyncWriterSadPath(t *testing.T) {
 
 	go func() {
 		select {
-		case msgChan <- types.NewTransaction(message.QuickBatch(exp), resChan):
+		case msgChan <- message.NewTransaction(message.QuickBatch(exp), resChan):
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}

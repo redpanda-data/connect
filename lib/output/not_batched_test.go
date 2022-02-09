@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -77,12 +76,12 @@ func TestNotBatchedSingleMessages(t *testing.T) {
 	nbOut := OnlySinglePayloads(out)
 
 	resChan := make(chan response.Error)
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	require.NoError(t, nbOut.Consume(tChan))
 
 	for i := 0; i < 5; i++ {
 		select {
-		case tChan <- types.NewTransaction(msg(fmt.Sprintf("foo%v", i)), resChan):
+		case tChan <- message.NewTransaction(msg(fmt.Sprintf("foo%v", i)), resChan):
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -116,11 +115,11 @@ func TestShutdown(t *testing.T) {
 	nbOut := OnlySinglePayloads(out)
 
 	resChan := make(chan response.Error)
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	require.NoError(t, nbOut.Consume(tChan))
 
 	select {
-	case tChan <- types.NewTransaction(msg("foo"), resChan):
+	case tChan <- message.NewTransaction(msg("foo"), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -164,11 +163,11 @@ func TestNotBatchedBreakOutMessages(t *testing.T) {
 	nbOut := OnlySinglePayloads(out)
 
 	resChan := make(chan response.Error)
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	require.NoError(t, nbOut.Consume(tChan))
 
 	select {
-	case tChan <- types.NewTransaction(msg(
+	case tChan <- message.NewTransaction(msg(
 		"foo0", "foo1", "foo2", "foo3", "foo4",
 	), resChan):
 	case <-time.After(time.Second):
@@ -205,11 +204,11 @@ func TestNotBatchedBreakOutMessagesErrors(t *testing.T) {
 	nbOut := OnlySinglePayloads(out)
 
 	resChan := make(chan response.Error)
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	require.NoError(t, nbOut.Consume(tChan))
 
 	select {
-	case tChan <- types.NewTransaction(msg(
+	case tChan <- message.NewTransaction(msg(
 		"foo0", "foo1", "foo2", "foo3", "foo4",
 	), resChan):
 	case <-time.After(time.Second):
@@ -262,11 +261,11 @@ func TestNotBatchedBreakOutMessagesErrorsAsync(t *testing.T) {
 	nbOut := OnlySinglePayloads(out)
 
 	resChan := make(chan response.Error)
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	require.NoError(t, nbOut.Consume(tChan))
 
 	select {
-	case tChan <- types.NewTransaction(msg(
+	case tChan <- message.NewTransaction(msg(
 		"foo0", "foo1", "foo2", "foo3", "foo4",
 	), resChan):
 	case <-time.After(time.Second):

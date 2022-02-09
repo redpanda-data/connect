@@ -43,7 +43,7 @@ func TestBasicRoundRobin(t *testing.T) {
 		outputs = append(outputs, o)
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewRoundRobin(outputs, metrics.Noop())
@@ -59,14 +59,14 @@ func TestBasicRoundRobin(t *testing.T) {
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
-		case readChan <- types.NewTransaction(message.QuickBatch(content), resChan):
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
 
 		go func() {
-			var ts types.Transaction
+			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[i%3].TChan:
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
@@ -121,7 +121,7 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 		outputs = append(outputs, mockOutputs[i])
 	}
 
-	readChan := make(chan types.Transaction)
+	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
 	oTM, err := NewRoundRobin(outputs, metrics.Noop())
@@ -139,7 +139,7 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < nMsgs; i++ {
-		readChan <- types.NewTransaction(message.QuickBatch(content), resChan)
+		readChan <- message.NewTransaction(message.QuickBatch(content), resChan)
 		ts := <-mockOutputs[i%3].TChan
 		ts.ResponseChan <- response.NewError(nil)
 		res := <-resChan
