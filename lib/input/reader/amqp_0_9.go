@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -40,16 +41,17 @@ type AMQP09BindingConfig struct {
 
 // AMQP09Config contains configuration for the AMQP09 input type.
 type AMQP09Config struct {
-	URL             string                   `json:"url" yaml:"url"`
-	URLs            []string                 `json:"urls" yaml:"urls"`
-	Queue           string                   `json:"queue" yaml:"queue"`
-	QueueDeclare    AMQP09QueueDeclareConfig `json:"queue_declare" yaml:"queue_declare"`
-	BindingsDeclare []AMQP09BindingConfig    `json:"bindings_declare" yaml:"bindings_declare"`
-	ConsumerTag     string                   `json:"consumer_tag" yaml:"consumer_tag"`
-	AutoAck         bool                     `json:"auto_ack" yaml:"auto_ack"`
-	PrefetchCount   int                      `json:"prefetch_count" yaml:"prefetch_count"`
-	PrefetchSize    int                      `json:"prefetch_size" yaml:"prefetch_size"`
-	TLS             btls.Config              `json:"tls" yaml:"tls"`
+	URL                string                   `json:"url" yaml:"url"`
+	URLs               []string                 `json:"urls" yaml:"urls"`
+	Queue              string                   `json:"queue" yaml:"queue"`
+	QueueDeclare       AMQP09QueueDeclareConfig `json:"queue_declare" yaml:"queue_declare"`
+	BindingsDeclare    []AMQP09BindingConfig    `json:"bindings_declare" yaml:"bindings_declare"`
+	ConsumerTag        string                   `json:"consumer_tag" yaml:"consumer_tag"`
+	AutoAck            bool                     `json:"auto_ack" yaml:"auto_ack"`
+	NackRejectPatterns []string                 `json:"nack_reject_patterns" yaml:"nack_reject_patterns"`
+	PrefetchCount      int                      `json:"prefetch_count" yaml:"prefetch_count"`
+	PrefetchSize       int                      `json:"prefetch_size" yaml:"prefetch_size"`
+	TLS                btls.Config              `json:"tls" yaml:"tls"`
 
 	// TODO: V4 remove this (maybe in V5 to allow a grace period)
 	Batching batch.PolicyConfig `json:"batching" yaml:"batching"`
@@ -65,13 +67,14 @@ func NewAMQP09Config() AMQP09Config {
 			Enabled: false,
 			Durable: true,
 		},
-		ConsumerTag:     "benthos-consumer",
-		AutoAck:         false,
-		PrefetchCount:   10,
-		PrefetchSize:    0,
-		TLS:             btls.NewConfig(),
-		Batching:        batch.NewPolicyConfig(),
-		BindingsDeclare: []AMQP09BindingConfig{},
+		ConsumerTag:        "benthos-consumer",
+		AutoAck:            false,
+		NackRejectPatterns: []string{},
+		PrefetchCount:      10,
+		PrefetchSize:       0,
+		TLS:                btls.NewConfig(),
+		Batching:           batch.NewPolicyConfig(),
+		BindingsDeclare:    []AMQP09BindingConfig{},
 	}
 }
 
@@ -85,6 +88,8 @@ type AMQP09 struct {
 
 	urls    []string
 	tlsConf *tls.Config
+
+	nackRejectPattens []*regexp.Regexp
 
 	conf  AMQP09Config
 	stats metrics.Type
@@ -115,6 +120,14 @@ func NewAMQP09(conf AMQP09Config, log log.Modular, stats metrics.Type) (*AMQP09,
 				a.urls = append(a.urls, trimmed)
 			}
 		}
+	}
+
+	for _, p := range conf.NackRejectPatterns {
+		r, err := regexp.Compile(p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compile nack reject pattern: %w", err)
+		}
+		a.nackRejectPattens = append(a.nackRejectPattens, r)
 	}
 
 	if conf.TLS.Enabled {
@@ -287,6 +300,12 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn
 				return nil
 			}
 			if res.Error() != nil {
+				errStr := res.Error().Error()
+				for _, p := range a.nackRejectPattens {
+					if p.MatchString(errStr) {
+						return data.Nack(false, false)
+					}
+				}
 				return data.Nack(false, true)
 			}
 			return data.Ack(false)

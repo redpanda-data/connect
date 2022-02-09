@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `nack_reject_patterns` added to the `amqp_0_9` input.
+
 ## 3.63.0 - 2022-02-08
 
 ### Added

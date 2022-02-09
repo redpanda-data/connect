@@ -54,6 +54,7 @@ input:
     bindings_declare: []
     consumer_tag: benthos-consumer
     auto_ack: false
+    nack_reject_patterns: []
     prefetch_count: 10
     prefetch_size: 0
     tls:
@@ -203,6 +204,22 @@ Acknowledge messages automatically as they are consumed rather than waiting for 
 
 Type: `bool`  
 Default: `false`  
+
+### `nack_reject_patterns`
+
+A list of regular expression patterns whereby if a message that has failed to be delivered by Benthos has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.
+
+
+Type: `array`  
+Default: `[]`  
+Requires version 3.64.0 or newer  
+
+```yaml
+# Examples
+
+nack_reject_patterns:
+  - ^reject me please:.+$
+```
 
 ### `prefetch_count`
 
