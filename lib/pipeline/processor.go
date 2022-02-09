@@ -1,10 +1,6 @@
 package pipeline
 
 import (
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -13,6 +9,9 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 //------------------------------------------------------------------------------
@@ -139,14 +138,35 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- typ
 		}
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(len(msgs))
+	var msgBatch []*message.Batch
+	nMessages := len(msgs)
+	nBatches := 16
+	batchSize := nMessages / nBatches
 
-	for _, msg := range msgs {
-		go func(m *message.Batch) {
-			sendMsg(m)
+	if batchSize == 0 {
+		batchSize = 1
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(nBatches)
+
+	for i := 0; i < nBatches; i++ {
+		start := i * batchSize
+		end := (i * batchSize) + batchSize - 1
+
+		if i == (nBatches - 1) {
+			msgBatch = msgs[start:]
+		} else {
+			msgBatch = msgs[start:end]
+		}
+
+        go func(batch []*message.Batch) {
+            for _, m := range batch {
+                sendMsg(m)
+			}
 			wg.Done()
-		}(msg)
+		}(msgBatch)
+		
 	}
 
 	wg.Wait()
@@ -160,8 +180,6 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- typ
 		return
 	}
 }
-
-//------------------------------------------------------------------------------
 
 // Consume assigns a messages channel for the pipeline to read.
 func (p *Processor) Consume(msgs <-chan types.Transaction) error {
