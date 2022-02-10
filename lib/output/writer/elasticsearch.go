@@ -254,7 +254,7 @@ type pendingBulkIndex struct {
 	Routing  string
 	Type     string
 	Doc      interface{}
-	Id       string
+	ID       string
 }
 
 // WriteWithContext will attempt to write a message to Elasticsearch, wait for
@@ -287,7 +287,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			Routing:  e.routingStr.String(i, msg),
 			Type:     e.conf.Type,
 			Doc:      jObj,
-			Id:       e.idStr.String(i, msg),
+			ID:       e.idStr.String(i, msg),
 		}
 		return nil
 	}); err != nil {
@@ -342,7 +342,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 							requests[errorCount] = requests[i]
 						}
 					}
-					errorCount += 1
+					errorCount++
 				}
 			}
 		}
@@ -377,13 +377,13 @@ func (e *Elasticsearch) buildBulkableRequest(p *pendingBulkIndex) (elastic.Bulka
 			Index(p.Index).
 			Routing(p.Routing).
 			Type(p.Type).
-			Id(p.Id).
+			Id(p.ID).
 			Doc(p.Doc), nil
 	case "delete":
 		return elastic.NewBulkDeleteRequest().
 			Index(p.Index).
 			Routing(p.Routing).
-			Id(p.Id).
+			Id(p.ID).
 			Type(p.Type), nil
 	case "index":
 		return elastic.NewBulkIndexRequest().
@@ -391,7 +391,7 @@ func (e *Elasticsearch) buildBulkableRequest(p *pendingBulkIndex) (elastic.Bulka
 			Pipeline(p.Pipeline).
 			Routing(p.Routing).
 			Type(p.Type).
-			Id(p.Id).
+			Id(p.ID).
 			Doc(p.Doc), nil
 	default:
 		return nil, fmt.Errorf("elasticsearch action '%s' is not allowed", p.Action)

@@ -282,11 +282,11 @@ func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.
 	}()
 
 	if err = m.Write(message.New([][]byte{[]byte(`{"message":true}`)})); err == nil {
-		t.Log("Expected error")
+		t.Error("Expected error")
 	}
 
 	if err = m.Write(message.New([][]byte{[]byte(`{"message":"foo"}`), []byte(`{"message":"bar"}`)})); err == nil {
-		t.Log("Expected error")
+		t.Error("Expected error")
 	}
 }
 
