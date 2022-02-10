@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -16,7 +18,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -64,11 +65,11 @@ func TestMissingProbesNewIface(t *testing.T) {
 		ccalled = true
 	}))
 	assert.True(t, ccalled)
-	assert.NoError(t, interop.AccessInput(ctx, mgr, "bar", func(i types.Input) {
+	assert.NoError(t, interop.AccessInput(ctx, mgr, "bar", func(i iinput.Streamed) {
 		icalled = true
 	}))
 	assert.True(t, icalled)
-	assert.NoError(t, interop.AccessOutput(ctx, mgr, "baz", func(ow types.OutputWriter) {
+	assert.NoError(t, interop.AccessOutput(ctx, mgr, "baz", func(ow ioutput.Sync) {
 		ocalled = true
 	}))
 	assert.True(t, ocalled)

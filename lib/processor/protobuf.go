@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -328,7 +329,7 @@ type Protobuf struct {
 // NewProtobuf returns an Protobuf processor.
 func NewProtobuf(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	p := &Protobuf{
 		parts: conf.Protobuf.Parts,
 		conf:  conf,

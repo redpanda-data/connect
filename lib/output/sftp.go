@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/impl/sftp"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -26,7 +27,7 @@ import (
 
 func init() {
 	Constructors[TypeSFTP] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 			sftp, err := newSFTPWriter(conf.SFTP, mgr, log, stats)
 			if err != nil {
 				return nil, err

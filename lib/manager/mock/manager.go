@@ -5,10 +5,11 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Manager provides a mock benthos manager that components can use to test
@@ -56,7 +57,7 @@ func (m *Manager) GetRateLimit(name string) (ratelimit.V1, error) {
 }
 
 // GetInput attempts to find a service wide input by its name.
-func (m *Manager) GetInput(name string) (types.Input, error) {
+func (m *Manager) GetInput(name string) (input.Streamed, error) {
 	if i, exists := m.Inputs[name]; exists {
 		return i, nil
 	}
@@ -73,7 +74,7 @@ func (m *Manager) GetProcessor(name string) (processor.V1, error) {
 }
 
 // GetOutput attempts to find a service wide output by its name.
-func (m *Manager) GetOutput(name string) (types.OutputWriter, error) {
+func (m *Manager) GetOutput(name string) (output.Sync, error) {
 	if o, exists := m.Outputs[name]; exists {
 		return o, nil
 	}

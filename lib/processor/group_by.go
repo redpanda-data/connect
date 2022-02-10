@@ -122,7 +122,7 @@ type GroupBy struct {
 // NewGroupBy returns a GroupBy processor.
 func NewGroupBy(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	var err error
 	groups := make([]group, len(conf.GroupBy))
 	groupCtrs := make([]metrics.StatCounter, len(conf.GroupBy))
@@ -140,7 +140,7 @@ func NewGroupBy(
 
 		for j, pConf := range gConf.Processors {
 			pMgr, pLog, pStats := interop.LabelChild(groupPrefix+fmt.Sprintf(".processor.%v", j), mgr, log, stats)
-			var proc Type
+			var proc processor.V1
 			if proc, err = New(pConf, pMgr, pLog, pStats); err != nil {
 				return nil, fmt.Errorf("failed to create processor '%v' for group '%v': %v", j, i, err)
 			}

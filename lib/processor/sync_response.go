@@ -3,6 +3,7 @@ package processor
 import (
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -54,7 +55,7 @@ type SyncResponse struct {
 // NewSyncResponse returns a SyncResponse processor.
 func NewSyncResponse(
 	conf Config, mgr types.Manager, logger log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	s := &SyncResponse{
 		log: logger,
 	}

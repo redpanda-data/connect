@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -56,7 +57,7 @@ In order to create a unique ` + "`key`" + ` value per item you should use functi
 //------------------------------------------------------------------------------
 
 // NewCache creates a new Cache output type.
-func NewCache(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewCache(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	c, err := writer.NewCache(conf.Cache, mgr, log, stats)
 	if err != nil {
 		return nil, err

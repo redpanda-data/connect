@@ -28,3 +28,33 @@ type V1 interface {
 	// shutting down and cleaning up resources.
 	WaitForClose(timeout time.Duration) error
 }
+
+// Pipeline is an interface that implements channel based based consumer and
+// producer methods for streaming data through a processing pipeline.
+type Pipeline interface {
+	// TransactionChan returns a channel used for consuming transactions from
+	// this type. Every transaction received must be resolved before another
+	// transaction will be sent.
+	TransactionChan() <-chan message.Transaction
+
+	// Consume starts the type receiving transactions from a Transactor.
+	Consume(<-chan message.Transaction) error
+
+	// CloseAsync triggers the shut down of this component but should not block
+	// the calling goroutine.
+	CloseAsync()
+
+	// WaitForClose is a blocking call to wait until the component has finished
+	// shutting down and cleaning up resources.
+	WaitForClose(timeout time.Duration) error
+}
+
+// PipelineConstructorFunc is a constructor to be called for each parallel
+// stream pipeline thread in order to construct a custom pipeline
+// implementation.
+//
+// An integer pointer is provided to pipeline constructors that tracks the
+// number of components spanning multiple pipelines. Each pipeline is expected
+// to increment i by the number of components they contain, and may use the
+// value for metric and logging namespacing.
+type PipelineConstructorFunc func(i *int) (Pipeline, error)

@@ -1,6 +1,7 @@
 package input
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -41,7 +42,7 @@ as metadata fields.`,
 //------------------------------------------------------------------------------
 
 // NewRedisStreams creates a new Redis List input type.
-func NewRedisStreams(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewRedisStreams(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var c reader.Async
 	var err error
 	if c, err = reader.NewRedisStreams(conf.RedisStreams, log, stats); err != nil {

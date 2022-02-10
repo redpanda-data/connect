@@ -1,6 +1,7 @@
 package input
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -34,7 +35,7 @@ Subscribe to an NSQ instance topic and channel.`,
 //------------------------------------------------------------------------------
 
 // NewNSQ creates a new NSQ input type.
-func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNSQ(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var n reader.Async
 	var err error
 	if n, err = reader.NewNSQ(conf.NSQ, log, stats); err != nil {

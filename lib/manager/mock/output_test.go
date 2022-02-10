@@ -1,8 +1,8 @@
 package mock_test
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var _ types.OutputWriter = mock.OutputWriter(nil)
+var _ output.Sync = mock.OutputWriter(nil)

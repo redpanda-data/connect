@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
@@ -29,7 +28,7 @@ type FanOutSequential struct {
 	transactions <-chan message.Transaction
 
 	outputTSChans []chan message.Transaction
-	outputs       []types.Output
+	outputs       []output.Streamed
 
 	ctx        context.Context
 	close      func()
@@ -38,7 +37,7 @@ type FanOutSequential struct {
 
 // NewFanOutSequential creates a new FanOutSequential type by providing outputs.
 func NewFanOutSequential(
-	outputs []types.Output, logger log.Modular, stats metrics.Type,
+	outputs []output.Streamed, logger log.Modular, stats metrics.Type,
 ) (*FanOutSequential, error) {
 	ctx, done := context.WithCancel(context.Background())
 	o := &FanOutSequential{

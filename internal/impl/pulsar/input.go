@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/pulsar/auth"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -27,7 +28,7 @@ const (
 )
 
 func init() {
-	bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (input.Type, error) {
+	bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
 		var a reader.Async
 		var err error
 		if a, err = newPulsarReader(c.Pulsar, nm.Logger(), nm.Metrics()); err != nil {

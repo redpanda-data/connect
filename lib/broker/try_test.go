@@ -9,17 +9,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var _ types.Consumer = &Try{}
-var _ types.Closable = &Try{}
+var _ output.Streamed = &Try{}
 
 func TestTryDoubleClose(t *testing.T) {
-	oTM, err := NewTry([]types.Output{&MockOutputType{}}, metrics.Noop())
+	oTM, err := NewTry([]output.Streamed{&MockOutputType{}}, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +31,7 @@ func TestTryDoubleClose(t *testing.T) {
 //------------------------------------------------------------------------------
 
 func TestTryHappyPath(t *testing.T) {
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{
 		{},
 		{},
@@ -109,7 +108,7 @@ func TestTryHappyPath(t *testing.T) {
 }
 
 func TestTryHappyishPath(t *testing.T) {
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{
 		{},
 		{},
@@ -209,7 +208,7 @@ func TestTryHappyishPath(t *testing.T) {
 }
 
 func TestTryAllFail(t *testing.T) {
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{
 		{},
 		{},
@@ -284,7 +283,7 @@ func TestTryAllFail(t *testing.T) {
 }
 
 func TestTryAllFailParallel(t *testing.T) {
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{
 		{},
 		{},

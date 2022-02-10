@@ -11,6 +11,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -369,7 +370,7 @@ type Unarchive struct {
 // NewUnarchive returns a Unarchive processor.
 func NewUnarchive(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	dcor, err := strToUnarchiver(conf.Unarchive.Format)
 	if err != nil {
 		return nil, err

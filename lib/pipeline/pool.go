@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -22,7 +21,7 @@ import (
 type Pool struct {
 	running uint32
 
-	workers []types.Pipeline
+	workers []iprocessor.Pipeline
 
 	log   log.Modular
 	stats metrics.Type
@@ -36,7 +35,7 @@ type Pool struct {
 
 // TODO: V4 Remove this
 func newTestPool(
-	constructor types.PipelineConstructorFunc,
+	constructor iprocessor.PipelineConstructorFunc,
 	threads int,
 	log log.Modular,
 	stats metrics.Type,
@@ -47,7 +46,7 @@ func newTestPool(
 
 	p := &Pool{
 		running:     1,
-		workers:     make([]types.Pipeline, threads),
+		workers:     make([]iprocessor.Pipeline, threads),
 		log:         log,
 		stats:       stats,
 		messagesOut: make(chan message.Transaction),
@@ -78,7 +77,7 @@ func newPoolV2(
 
 	p := &Pool{
 		running:     1,
-		workers:     make([]types.Pipeline, threads),
+		workers:     make([]iprocessor.Pipeline, threads),
 		log:         log,
 		stats:       stats,
 		messagesOut: make(chan message.Transaction),
@@ -124,7 +123,7 @@ func (p *Pool) loop() {
 			atomic.AddInt64(&remainingWorkers, -1)
 			continue
 		}
-		go func(w types.Pipeline) {
+		go func(w iprocessor.Pipeline) {
 			defer func() {
 				if atomic.AddInt64(&remainingWorkers, -1) == 0 {
 					close(internalMessages)

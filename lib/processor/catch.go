@@ -106,7 +106,7 @@ type Catch struct {
 // NewCatch returns a Catch processor.
 func NewCatch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	var children []processor.V1
 	for i, pconf := range conf.Catch {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)

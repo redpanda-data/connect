@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -426,7 +428,7 @@ func initConnectors(
 	t testing.TB,
 	trans <-chan message.Transaction,
 	env *streamTestEnvironment,
-) (types.Input, types.Output) {
+) (input iinput.Streamed, output ioutput.Streamed) {
 	t.Helper()
 
 	out := initOutput(t, trans, env)
@@ -434,7 +436,7 @@ func initConnectors(
 	return in, out
 }
 
-func initInput(t testing.TB, env *streamTestEnvironment) types.Input {
+func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -463,7 +465,7 @@ func initInput(t testing.TB, env *streamTestEnvironment) types.Input {
 	return input
 }
 
-func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) types.Output {
+func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) ioutput.Streamed {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -495,7 +497,7 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	return output
 }
 
-func closeConnectors(t testing.TB, input types.Input, output types.Output) {
+func closeConnectors(t testing.TB, input iinput.Streamed, output ioutput.Streamed) {
 	if output != nil {
 		output.CloseAsync()
 		require.NoError(t, output.WaitForClose(time.Second*10))

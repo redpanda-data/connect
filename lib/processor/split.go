@@ -3,6 +3,7 @@ package processor
 import (
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -68,7 +69,7 @@ type Split struct {
 // NewSplit returns a Split processor.
 func NewSplit(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	return &Split{
 		log:   log,
 		stats: stats,

@@ -1,4 +1,4 @@
-package input
+package span
 
 import (
 	"context"
@@ -70,7 +70,7 @@ func TestSpanReader(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var connCalled, closeCalled, waitCalled bool
 
-			r, err := NewSpanReader("foo", test.mapping, &fnReader{
+			r, err := NewReader("foo", test.mapping, &fnReader{
 				connectWithContext: func(ctx context.Context) error {
 					connCalled = true
 					return nil

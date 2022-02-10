@@ -6,6 +6,8 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -18,7 +20,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -327,13 +328,13 @@ func TestManagerInputList(t *testing.T) {
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	err = mgr.AccessInput(context.Background(), "foo", func(i types.Input) {})
+	err = mgr.AccessInput(context.Background(), "foo", func(i iinput.Streamed) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessInput(context.Background(), "bar", func(i types.Input) {})
+	err = mgr.AccessInput(context.Background(), "bar", func(i iinput.Streamed) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessInput(context.Background(), "baz", func(i types.Input) {})
+	err = mgr.AccessInput(context.Background(), "baz", func(i iinput.Streamed) {})
 	assert.EqualError(t, err, "unable to locate resource: baz")
 }
 
@@ -373,13 +374,13 @@ func TestManagerOutputList(t *testing.T) {
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	err = mgr.AccessOutput(context.Background(), "foo", func(ow types.OutputWriter) {})
+	err = mgr.AccessOutput(context.Background(), "foo", func(ow ioutput.Sync) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessOutput(context.Background(), "bar", func(ow types.OutputWriter) {})
+	err = mgr.AccessOutput(context.Background(), "bar", func(ow ioutput.Sync) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessOutput(context.Background(), "baz", func(ow types.OutputWriter) {})
+	err = mgr.AccessOutput(context.Background(), "baz", func(ow ioutput.Sync) {})
 	assert.EqualError(t, err, "unable to locate resource: baz")
 }
 

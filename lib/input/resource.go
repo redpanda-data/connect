@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -79,7 +80,7 @@ type Resource struct {
 // NewResource returns a resource input.
 func NewResource(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (input.Streamed, error) {
 	if err := interop.ProbeInput(context.Background(), mgr, conf.Resource); err != nil {
 		return nil, err
 	}
@@ -96,7 +97,7 @@ func NewResource(
 // TransactionChan returns a transactions channel for consuming messages from
 // this input type.
 func (r *Resource) TransactionChan() (tChan <-chan message.Transaction) {
-	if err := interop.AccessInput(context.Background(), r.mgr, r.name, func(i types.Input) {
+	if err := interop.AccessInput(context.Background(), r.mgr, r.name, func(i input.Streamed) {
 		tChan = i.TransactionChan()
 	}); err != nil {
 		r.log.Debugf("Failed to obtain input resource '%v': %v", r.name, err)
@@ -108,7 +109,7 @@ func (r *Resource) TransactionChan() (tChan <-chan message.Transaction) {
 // Connected returns a boolean indicating whether this input is currently
 // connected to its target.
 func (r *Resource) Connected() (isConnected bool) {
-	if err := interop.AccessInput(context.Background(), r.mgr, r.name, func(i types.Input) {
+	if err := interop.AccessInput(context.Background(), r.mgr, r.name, func(i input.Streamed) {
 		isConnected = i.Connected()
 	}); err != nil {
 		r.log.Debugf("Failed to obtain input resource '%v': %v", r.name, err)

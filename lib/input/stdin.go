@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -59,7 +60,7 @@ func NewSTDINConfig() STDINConfig {
 //------------------------------------------------------------------------------
 
 // NewSTDIN creates a new STDIN input type.
-func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewSTDIN(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	rdr, err := newStdinConsumer(conf.STDIN)
 	if err != nil {
 		return nil, err

@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -28,7 +27,7 @@ type Try struct {
 	transactions <-chan message.Transaction
 
 	outputTSChans []chan message.Transaction
-	outputs       []types.Output
+	outputs       []output.Streamed
 
 	ctx        context.Context
 	close      func()
@@ -36,7 +35,7 @@ type Try struct {
 }
 
 // NewTry creates a new Try type by providing consumers.
-func NewTry(outputs []types.Output, stats metrics.Type) (*Try, error) {
+func NewTry(outputs []output.Streamed, stats metrics.Type) (*Try, error) {
 	ctx, done := context.WithCancel(context.Background())
 	t := &Try{
 		maxInFlight:   1,

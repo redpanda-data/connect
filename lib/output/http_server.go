@@ -14,6 +14,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	httpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -138,7 +139,7 @@ type HTTPServer struct {
 }
 
 // NewHTTPServer creates a new HTTPServer output type.
-func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	var mux *http.ServeMux
 	var server *http.Server
 

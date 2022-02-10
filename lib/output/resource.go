@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -84,7 +85,7 @@ type Resource struct {
 // NewResource returns a resource output.
 func NewResource(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (output.Streamed, error) {
 	if err := interop.ProbeOutput(context.Background(), mgr, conf.Resource); err != nil {
 		return nil, err
 	}
@@ -125,7 +126,7 @@ func (r *Resource) loop() {
 		mCount.Incr(1)
 
 		var err error
-		if oerr := interop.AccessOutput(context.Background(), r.mgr, r.name, func(o types.OutputWriter) {
+		if oerr := interop.AccessOutput(context.Background(), r.mgr, r.name, func(o output.Sync) {
 			err = o.WriteTransaction(r.ctx, *ts)
 		}); oerr != nil {
 			err = oerr
@@ -160,7 +161,7 @@ func (r *Resource) Consume(ts <-chan message.Transaction) error {
 // connected to its target.
 func (r *Resource) Connected() (isConnected bool) {
 	var err error
-	if err = interop.AccessOutput(context.Background(), r.mgr, r.name, func(o types.OutputWriter) {
+	if err = interop.AccessOutput(context.Background(), r.mgr, r.name, func(o output.Sync) {
 		isConnected = o.Connected()
 	}); err != nil {
 		r.log.Debugf("Failed to obtain output resource '%v': %v", r.name, err)

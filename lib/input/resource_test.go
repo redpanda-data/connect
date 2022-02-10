@@ -8,12 +8,12 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -40,7 +40,7 @@ func (f *fakeInput) WaitForClose(time.Duration) error {
 //------------------------------------------------------------------------------
 
 type fakeProcMgr struct {
-	ins map[string]types.Input
+	ins map[string]input.Streamed
 }
 
 func (f *fakeProcMgr) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
@@ -51,7 +51,7 @@ func (f *fakeProcMgr) GetCache(name string) (cache.V1, error) {
 func (f *fakeProcMgr) GetProcessor(name string) (iprocessor.V1, error) {
 	return nil, component.ErrProcessorNotFound
 }
-func (f *fakeProcMgr) GetInput(name string) (types.Input, error) {
+func (f *fakeProcMgr) GetInput(name string) (input.Streamed, error) {
 	if p, exists := f.ins[name]; exists {
 		return p, nil
 	}
@@ -72,7 +72,7 @@ func TestResourceProc(t *testing.T) {
 	in := &fakeInput{}
 
 	mgr := &fakeProcMgr{
-		ins: map[string]types.Input{
+		ins: map[string]input.Streamed{
 			"foo": in,
 		},
 	}
@@ -102,7 +102,7 @@ func TestResourceProc(t *testing.T) {
 
 func TestResourceBadName(t *testing.T) {
 	mgr := &fakeProcMgr{
-		ins: map[string]types.Input{},
+		ins: map[string]input.Streamed{},
 	}
 
 	conf := NewConfig()

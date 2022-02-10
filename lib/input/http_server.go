@@ -17,6 +17,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	httpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
@@ -223,7 +224,7 @@ type HTTPServer struct {
 }
 
 // NewHTTPServer creates a new HTTPServer input type.
-func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var mux *http.ServeMux
 	var server *http.Server
 

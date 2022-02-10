@@ -13,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/checkpoint"
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/input"
+	"github.com/Jeffail/benthos/v3/internal/component/input/span"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -91,7 +92,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			).AtVersion("3.33.0"),
 			docs.FieldAdvanced("commit_period", "The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown."),
 			docs.FieldAdvanced("max_processing_period", "A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization."),
-			input.ExtractTracingSpanMappingDocs,
+			span.ExtractTracingSpanMappingDocs,
 			docs.FieldAdvanced("group", "Tuning parameters for consumer group synchronization.").WithChildren(
 				docs.FieldAdvanced("session_timeout", "A period after which a consumer of the group is kicked after no heartbeats."),
 				docs.FieldAdvanced("heartbeat_interval", "A period in which heartbeats should be sent out."),
@@ -113,14 +114,14 @@ Unfortunately this error message will appear for a wide range of connection prob
 //------------------------------------------------------------------------------
 
 // NewKafka creates a new Kafka input type.
-func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var rdr reader.Async
 	var err error
 	if rdr, err = newKafkaReader(conf.Kafka, mgr, log, stats); err != nil {
 		return nil, err
 	}
 	if conf.Kafka.ExtractTracingMap != "" {
-		if rdr, err = input.NewSpanReader(TypeKafka, conf.Kafka.ExtractTracingMap, rdr, mgr, log); err != nil {
+		if rdr, err = span.NewReader(TypeKafka, conf.Kafka.ExtractTracingMap, rdr, mgr, log); err != nil {
 			return nil, err
 		}
 	}

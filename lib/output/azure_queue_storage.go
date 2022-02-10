@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -46,7 +47,7 @@ In order to set the ` + "`queue_name`" + ` you can use function interpolations d
 //------------------------------------------------------------------------------
 
 // NewAzureQueueStorage creates a new AzureQueueStorage output type.
-func NewAzureQueueStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewAzureQueueStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	s, err := writer.NewAzureQueueStorageV2(conf.AzureQueueStorage, mgr, log, stats)
 	if err != nil {
 		return nil, err

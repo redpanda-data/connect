@@ -4,9 +4,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -18,7 +18,7 @@ type FanIn struct {
 
 	transactions chan message.Transaction
 
-	closables       []types.Closable
+	closables       []input.Streamed
 	inputClosedChan chan int
 	inputMap        map[int]struct{}
 
@@ -26,7 +26,7 @@ type FanIn struct {
 }
 
 // NewFanIn creates a new FanIn type by providing inputs.
-func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
+func NewFanIn(inputs []input.Streamed, stats metrics.Type) (*FanIn, error) {
 	i := &FanIn{
 		stats: stats,
 
@@ -35,14 +35,12 @@ func NewFanIn(inputs []types.Producer, stats metrics.Type) (*FanIn, error) {
 		inputClosedChan: make(chan int),
 		inputMap:        make(map[int]struct{}),
 
-		closables:  []types.Closable{},
+		closables:  []input.Streamed{},
 		closedChan: make(chan struct{}),
 	}
 
 	for n, input := range inputs {
-		if closable, ok := input.(types.Closable); ok {
-			i.closables = append(i.closables, closable)
-		}
+		i.closables = append(i.closables, input)
 
 		// Keep track of # open inputs
 		i.inputMap[n] = struct{}{}

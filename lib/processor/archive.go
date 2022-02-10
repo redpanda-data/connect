@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -277,7 +278,7 @@ type Archive struct {
 // NewArchive returns a Archive processor.
 func NewArchive(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	path, err := interop.NewBloblangField(mgr, conf.Archive.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)

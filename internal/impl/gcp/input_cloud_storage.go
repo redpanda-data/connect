@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -25,7 +26,7 @@ import (
 )
 
 func init() {
-	bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (input.Type, error) {
+	bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
 		r, err := newGCPCloudStorageInput(c.GCPCloudStorage, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err

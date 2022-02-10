@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -428,7 +429,7 @@ type AWK struct {
 // NewAWK returns a AWK processor.
 func NewAWK(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	program, err := parser.ParseProgram([]byte(conf.AWK.Program), &parser.ParserConfig{
 		Funcs: awkFunctionsMap,
 	})

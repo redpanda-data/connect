@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/buffer"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -58,9 +59,9 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 }
 
 // New creates a buffer type based on a buffer configuration.
-func New(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func New(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (buffer.Streamed, error) {
 	if mgrV2, ok := mgr.(interface {
-		NewBuffer(conf Config) (Type, error)
+		NewBuffer(conf Config) (buffer.Streamed, error)
 	}); ok {
 		return mgrV2.NewBuffer(conf)
 	}

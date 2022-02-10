@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -174,7 +175,7 @@ type Dedupe struct {
 // NewDedupe returns a Dedupe processor.
 func NewDedupe(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	hFunc, err := strToHasher(conf.Dedupe.HashType)
 	if err != nil {
 		return nil, err

@@ -6,11 +6,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
-	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/stream"
@@ -22,98 +20,6 @@ func harmlessConf() stream.Config {
 	c.Input.Type = "http_server"
 	c.Output.Type = "http_server"
 	return c
-}
-
-type mockProc struct {
-	mChan chan struct{}
-}
-
-func (m *mockProc) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	m.mChan <- struct{}{}
-	return []*message.Batch{msg}, nil
-}
-
-// CloseAsync shuts down the processor and stops processing requests.
-func (m mockProc) CloseAsync() {
-	// Do nothing as our processor doesn't require resource cleanup.
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (m mockProc) WaitForClose(timeout time.Duration) error {
-	// Do nothing as our processor doesn't require resource cleanup.
-	return nil
-}
-
-func TestTypeProcsAndPipes(t *testing.T) {
-	var mockProcs []*mockProc
-	for i := 0; i < 6; i++ {
-		mockProcs = append(mockProcs, &mockProc{
-			mChan: make(chan struct{}),
-		})
-	}
-
-	logger := log.Noop()
-	stats := metrics.Noop()
-
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
-	require.NoError(t, err)
-
-	mgr := New(
-		OptSetLogger(logger),
-		OptSetStats(stats),
-		OptSetManager(res),
-		OptAddProcessors(func(id string) (processor.V1, error) {
-			if id != "foo" {
-				t.Errorf("Wrong id: %v != %v", id, "foo")
-			}
-			return mockProcs[0], nil
-		}, func(id string) (processor.V1, error) {
-			if id != "foo" {
-				t.Errorf("Wrong id: %v != %v", id, "foo")
-			}
-			return mockProcs[1], nil
-		}, func(id string) (processor.V1, error) {
-			if id != "foo" {
-				t.Errorf("Wrong id: %v != %v", id, "foo")
-			}
-			return mockProcs[2], nil
-		}, func(id string) (processor.V1, error) {
-			if id != "foo" {
-				t.Errorf("Wrong id: %v != %v", id, "foo")
-			}
-			return mockProcs[3], nil
-		}, func(id string) (processor.V1, error) {
-			if id != "foo" {
-				t.Errorf("Wrong id: %v != %v", id, "foo")
-			}
-			return mockProcs[4], nil
-		}, func(id string) (processor.V1, error) {
-			if id != "foo" {
-				t.Errorf("Wrong id: %v != %v", id, "foo")
-			}
-			return mockProcs[5], nil
-		}),
-	)
-
-	conf := harmlessConf()
-	conf.Input.Type = "file"
-	conf.Input.File.Paths = []string{"./package.go"}
-
-	if err := mgr.Create("foo", conf); err != nil {
-		t.Fatal(err)
-	}
-
-	for i, proc := range mockProcs {
-		select {
-		case <-proc.mChan:
-		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for message to reach pipe: %v", i)
-		}
-	}
-
-	if err := mgr.Stop(time.Second * 5); err != nil {
-		t.Error(err)
-	}
 }
 
 func TestTypeBasicOperations(t *testing.T) {

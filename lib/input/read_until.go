@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -127,7 +128,7 @@ type ReadUntil struct {
 	running int32
 	conf    ReadUntilConfig
 
-	wrapped Type
+	wrapped input.Streamed
 	check   *mapping.Executor
 
 	wrapperMgr   types.Manager
@@ -149,7 +150,7 @@ func NewReadUntil(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-) (Type, error) {
+) (input.Streamed, error) {
 	if conf.ReadUntil.Input == nil {
 		return nil, errors.New("cannot create read_until input without a child")
 	}

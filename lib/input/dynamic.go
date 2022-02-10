@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/input"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/api"
@@ -25,8 +27,8 @@ func init() {
 			mgr types.Manager,
 			log log.Modular,
 			stats metrics.Type,
-			pipelines ...types.PipelineConstructorFunc,
-		) (Type, error) {
+			pipelines ...iprocessor.PipelineConstructorFunc,
+		) (input.Streamed, error) {
 			pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
 			return NewDynamic(conf, mgr, log, stats, pipelines...)
 		},
@@ -78,8 +80,8 @@ func NewDynamic(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (Type, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (input.Streamed, error) {
 	dynAPI := api.NewDynamic()
 
 	inputs := map[string]broker.DynamicInput{}

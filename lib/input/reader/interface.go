@@ -2,10 +2,10 @@ package reader
 
 import (
 	"context"
+	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // AsyncAckFn is a function used to acknowledge receipt of a message batch. The
@@ -31,5 +31,11 @@ type Async interface {
 	// returned message and read the next message asynchronously.
 	ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error)
 
-	types.Closable
+	// CloseAsync triggers the shut down of this component but should not block
+	// the calling goroutine.
+	CloseAsync()
+
+	// WaitForClose is a blocking call to wait until the component has finished
+	// shutting down and cleaning up resources.
+	WaitForClose(timeout time.Duration) error
 }

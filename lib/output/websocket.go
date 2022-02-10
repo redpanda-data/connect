@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -30,7 +31,7 @@ Sends messages to an HTTP server via a websocket connection.`,
 //------------------------------------------------------------------------------
 
 // NewWebsocket creates a new Websocket output type.
-func NewWebsocket(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewWebsocket(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	w, err := writer.NewWebsocket(conf.Websocket, log, stats)
 	if err != nil {
 		return nil, err

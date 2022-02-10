@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -387,7 +388,7 @@ type Sequence struct {
 	conf SequenceConfig
 
 	targetMut sync.Mutex
-	target    Type
+	target    input.Streamed
 	remaining []sequenceTarget
 	spent     []sequenceTarget
 
@@ -416,7 +417,7 @@ func NewSequence(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-) (Type, error) {
+) (input.Streamed, error) {
 	if len(conf.Sequence.Inputs) == 0 {
 		return nil, errors.New("requires at least one child input")
 	}
@@ -462,7 +463,7 @@ func NewSequence(
 
 //------------------------------------------------------------------------------
 
-func (r *Sequence) getTarget() (Type, bool) {
+func (r *Sequence) getTarget() (input.Streamed, bool) {
 	r.targetMut.Lock()
 	target := r.target
 	final := len(r.remaining) == 0
@@ -470,8 +471,8 @@ func (r *Sequence) getTarget() (Type, bool) {
 	return target, final
 }
 
-func (r *Sequence) createNextTarget() (Type, bool, error) {
-	var target Type
+func (r *Sequence) createNextTarget() (input.Streamed, bool, error) {
+	var target input.Streamed
 	var err error
 
 	r.targetMut.Lock()

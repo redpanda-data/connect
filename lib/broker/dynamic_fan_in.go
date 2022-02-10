@@ -5,18 +5,17 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
 // DynamicInput is an interface of input types that must be closable.
 type DynamicInput interface {
-	types.Producer
-	types.Closable
+	input.Streamed
 }
 
 // wrappedInput is a struct that wraps a DynamicInput with an identifying name.

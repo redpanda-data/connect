@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -16,7 +17,7 @@ import (
 
 func init() {
 	Constructors[TypeSyncResponse] = TypeSpec{
-		constructor: fromSimpleConstructor(func(_ Config, _ types.Manager, logger log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(_ Config, _ types.Manager, logger log.Modular, stats metrics.Type) (output.Streamed, error) {
 			return NewAsyncWriter(TypeSyncResponse, 1, SyncResponseWriter{}, logger, stats)
 		}),
 		Summary: `

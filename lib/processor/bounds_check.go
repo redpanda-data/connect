@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -72,7 +73,7 @@ type BoundsCheck struct {
 // NewBoundsCheck returns a BoundsCheck processor.
 func NewBoundsCheck(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	return &BoundsCheck{
 		conf:  conf,
 		log:   log,

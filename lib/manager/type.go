@@ -11,8 +11,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -62,12 +65,11 @@ type Type struct {
 
 	apiReg APIReg
 
-	inputs       map[string]types.Input
+	inputs       map[string]iinput.Streamed
 	caches       map[string]icache.V1
 	processors   map[string]iprocessor.V1
-	outputs      map[string]types.OutputWriter
+	outputs      map[string]ioutput.Sync
 	rateLimits   map[string]iratelimit.V1
-	plugins      map[string]interface{}
 	resourceLock *sync.RWMutex
 
 	// Collections of component constructors
@@ -106,12 +108,11 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 	t := &Type{
 		apiReg: apiReg,
 
-		inputs:       map[string]types.Input{},
+		inputs:       map[string]iinput.Streamed{},
 		caches:       map[string]icache.V1{},
 		processors:   map[string]iprocessor.V1{},
-		outputs:      map[string]types.OutputWriter{},
+		outputs:      map[string]ioutput.Sync{},
 		rateLimits:   map[string]iratelimit.V1{},
-		plugins:      map[string]interface{}{},
 		resourceLock: &sync.RWMutex{},
 
 		// Environment defaults to global (everything that was imported).
@@ -363,7 +364,12 @@ func (t *Type) GetDocs(name string, ctype docs.Type) (docs.ComponentSpec, bool) 
 
 //------------------------------------------------------------------------------
 
-func closeWithContext(ctx context.Context, c types.Closable) error {
+type oldClosable interface {
+	CloseAsync()
+	WaitForClose(timeout time.Duration) error
+}
+
+func closeWithContext(ctx context.Context, c oldClosable) error {
 	c.CloseAsync()
 	waitFor := time.Second
 	deadline, hasDeadline := ctx.Deadline()
@@ -380,7 +386,7 @@ func closeWithContext(ctx context.Context, c types.Closable) error {
 //------------------------------------------------------------------------------
 
 // NewBuffer attempts to create a new buffer component from a config.
-func (t *Type) NewBuffer(conf buffer.Config) (buffer.Type, error) {
+func (t *Type) NewBuffer(conf buffer.Config) (ibuffer.Streamed, error) {
 	return t.env.BufferInit(conf, t)
 }
 
@@ -454,7 +460,7 @@ func (t *Type) StoreCache(ctx context.Context, name string, conf cache.Config) e
 // During the execution of the provided closure it is guaranteed that the
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
-func (t *Type) AccessInput(ctx context.Context, name string, fn func(types.Input)) error {
+func (t *Type) AccessInput(ctx context.Context, name string, fn func(iinput.Streamed)) error {
 	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
 	// profiling for heavy use within a busy loop.
 	t.resourceLock.RLock()
@@ -468,7 +474,7 @@ func (t *Type) AccessInput(ctx context.Context, name string, fn func(types.Input
 }
 
 // NewInput attempts to create a new input component from a config.
-func (t *Type) NewInput(conf input.Config, pipelines ...types.PipelineConstructorFunc) (types.Input, error) {
+func (t *Type) NewInput(conf input.Config, pipelines ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
@@ -585,7 +591,7 @@ func (t *Type) StoreProcessor(ctx context.Context, name string, conf processor.C
 // During the execution of the provided closure it is guaranteed that the
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
-func (t *Type) AccessOutput(ctx context.Context, name string, fn func(types.OutputWriter)) error {
+func (t *Type) AccessOutput(ctx context.Context, name string, fn func(ioutput.Sync)) error {
 	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
 	// profiling for heavy use within a busy loop.
 	t.resourceLock.RLock()
@@ -599,7 +605,7 @@ func (t *Type) AccessOutput(ctx context.Context, name string, fn func(types.Outp
 }
 
 // NewOutput attempts to create a new output component from a config.
-func (t *Type) NewOutput(conf output.Config, pipelines ...types.PipelineConstructorFunc) (types.Output, error) {
+func (t *Type) NewOutput(conf output.Config, pipelines ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
 	mgr := t
 	// A configured label overrides any previously set component label.
 	if len(conf.Label) > 0 && t.component != conf.Label {
@@ -720,11 +726,6 @@ func (t *Type) CloseAsync() {
 	for _, p := range t.processors {
 		p.CloseAsync()
 	}
-	for _, c := range t.plugins {
-		if closer, ok := c.(types.Closable); ok {
-			closer.CloseAsync()
-		}
-	}
 	for _, c := range t.outputs {
 		c.CloseAsync()
 	}
@@ -770,14 +771,6 @@ func (t *Type) WaitForClose(timeout time.Duration) error {
 		}
 		delete(t.outputs, k)
 	}
-	for k, c := range t.plugins {
-		if closer, ok := c.(types.Closable); ok {
-			if err := closer.WaitForClose(time.Until(timesOut)); err != nil {
-				return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
-			}
-		}
-		delete(t.plugins, k)
-	}
 	return nil
 }
 
@@ -798,7 +791,7 @@ func SwapMetrics(mgr types.Manager, stats metrics.Type) types.Manager {
 }
 
 // GetInput attempts to find a service wide input by its name.
-func (t *Type) GetInput(name string) (types.Input, error) {
+func (t *Type) GetInput(name string) (iinput.Streamed, error) {
 	if c, exists := t.inputs[name]; exists {
 		return c, nil
 	}
@@ -830,7 +823,7 @@ func (t *Type) GetRateLimit(name string) (iratelimit.V1, error) {
 }
 
 // GetOutput attempts to find a service wide output by its name.
-func (t *Type) GetOutput(name string) (types.OutputWriter, error) {
+func (t *Type) GetOutput(name string) (ioutput.Sync, error) {
 	if c, exists := t.outputs[name]; exists {
 		return c, nil
 	}

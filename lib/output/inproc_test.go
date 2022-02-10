@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
+	"github.com/stretchr/testify/require"
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
@@ -29,10 +30,8 @@ func TestInproc(t *testing.T) {
 	conf := output.NewConfig()
 	conf.Inproc = "foo"
 
-	var ip output.Type
-	if ip, err = output.NewInproc(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
-		t.Fatal(err)
-	}
+	ip, err := output.NewInproc(conf, mgr, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
 
 	tinchan := make(chan message.Transaction)
 	if err = ip.Consume(tinchan); err != nil {

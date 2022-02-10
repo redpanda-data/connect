@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -169,7 +170,7 @@ type Compress struct {
 // NewCompress returns a Compress processor.
 func NewCompress(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	cor, err := strToCompressor(conf.Compress.Algorithm)
 	if err != nil {
 		return nil, err

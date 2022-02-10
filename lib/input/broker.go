@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Jeffail/benthos/v3/internal/component/input"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/broker"
@@ -192,8 +194,8 @@ func NewBroker(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (Type, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (input.Streamed, error) {
 	pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
 
 	lInputs := len(conf.Broker.Inputs) * conf.Broker.Copies
@@ -203,13 +205,13 @@ func NewBroker(
 	}
 
 	var err error
-	var b Type
+	var b input.Streamed
 	if lInputs == 1 {
 		if b, err = New(conf.Broker.Inputs[0], mgr, log, stats, pipelines...); err != nil {
 			return nil, err
 		}
 	} else {
-		inputs := make([]types.Producer, lInputs)
+		inputs := make([]input.Streamed, lInputs)
 
 		for j := 0; j < conf.Broker.Copies; j++ {
 			for i, iConf := range conf.Broker.Inputs {

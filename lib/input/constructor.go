@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -47,7 +48,7 @@ type TypeSpec struct {
 }
 
 // ConstructorFunc is a func signature able to construct an input.
-type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type, ...types.PipelineConstructorFunc) (Type, error)
+type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type, ...iprocessor.PipelineConstructorFunc) (input.Streamed, error)
 
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
@@ -88,10 +89,10 @@ func AppendProcessorsFromConfig(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) []types.PipelineConstructorFunc {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) []iprocessor.PipelineConstructorFunc {
 	if len(conf.Processors) > 0 {
-		pipelines = append([]types.PipelineConstructorFunc{func(i *int) (types.Pipeline, error) {
+		pipelines = append([]iprocessor.PipelineConstructorFunc{func(i *int) (iprocessor.Pipeline, error) {
 			if i == nil {
 				procs := 0
 				i = &procs
@@ -112,14 +113,14 @@ func AppendProcessorsFromConfig(
 	return pipelines
 }
 
-func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)) ConstructorFunc {
+func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.Type) (input.Streamed, error)) ConstructorFunc {
 	return func(
 		conf Config,
 		mgr types.Manager,
 		log log.Modular,
 		stats metrics.Type,
-		pipelines ...types.PipelineConstructorFunc,
-	) (Type, error) {
+		pipelines ...iprocessor.PipelineConstructorFunc,
+	) (input.Streamed, error) {
 		input, err := fn(conf, mgr, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create input '%v': %w", conf.Type, err)
@@ -322,10 +323,10 @@ func New(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (Type, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (input.Streamed, error) {
 	if mgrV2, ok := mgr.(interface {
-		NewInput(Config, ...types.PipelineConstructorFunc) (types.Input, error)
+		NewInput(Config, ...iprocessor.PipelineConstructorFunc) (input.Streamed, error)
 	}); ok {
 		return mgrV2.NewInput(conf, pipelines...)
 	}

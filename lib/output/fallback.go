@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/broker"
@@ -82,8 +83,8 @@ func newFallback(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (Type, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (output.Streamed, error) {
 	pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
 
 	outputConfs := conf.Fallback
@@ -91,7 +92,7 @@ func newFallback(
 	if len(outputConfs) == 0 {
 		return nil, ErrBrokerNoOutputs
 	}
-	outputs := make([]types.Output, len(outputConfs))
+	outputs := make([]output.Streamed, len(outputConfs))
 
 	maxInFlight := 1
 

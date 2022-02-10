@@ -5,9 +5,10 @@ import (
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // AllInputs is a set containing every single input that has been imported.
@@ -27,8 +28,8 @@ func (e *Environment) InputAdd(constructor InputConstructor, spec docs.Component
 func (e *Environment) InputInit(
 	conf input.Config,
 	mgr NewManagement,
-	pipelines ...types.PipelineConstructorFunc,
-) (types.Input, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (iinput.Streamed, error) {
 	return e.inputs.Init(conf, mgr, pipelines...)
 }
 
@@ -41,8 +42,8 @@ func (e *Environment) InputDocs() []docs.ComponentSpec {
 
 // InputConstructorFromSimple provides a way to define an input constructor
 // without manually initializing processors of the config.
-func InputConstructorFromSimple(fn func(input.Config, NewManagement) (input.Type, error)) InputConstructor {
-	return func(c input.Config, nm NewManagement, pcf ...types.PipelineConstructorFunc) (input.Type, error) {
+func InputConstructorFromSimple(fn func(input.Config, NewManagement) (iinput.Streamed, error)) InputConstructor {
+	return func(c input.Config, nm NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 		i, err := fn(c, nm)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create input '%v': %w", c.Type, err)
@@ -55,7 +56,7 @@ func InputConstructorFromSimple(fn func(input.Config, NewManagement) (input.Type
 //------------------------------------------------------------------------------
 
 // InputConstructor constructs an input component.
-type InputConstructor func(input.Config, NewManagement, ...types.PipelineConstructorFunc) (input.Type, error)
+type InputConstructor func(input.Config, NewManagement, ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error)
 
 type inputSpec struct {
 	constructor InputConstructor
@@ -81,7 +82,7 @@ func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) er
 }
 
 // Init attempts to initialise an input from a config.
-func (s *InputSet) Init(conf input.Config, mgr NewManagement, pipelines ...types.PipelineConstructorFunc) (types.Input, error) {
+func (s *InputSet) Init(conf input.Config, mgr NewManagement, pipelines ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidInputType

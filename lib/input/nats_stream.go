@@ -1,6 +1,7 @@
 package input
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -69,7 +70,7 @@ You can access these metadata fields using
 //------------------------------------------------------------------------------
 
 // NewNATSStream creates a new NATSStream input type.
-func NewNATSStream(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNATSStream(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var c reader.Async
 	var err error
 	if c, err = reader.NewNATSStream(conf.NATSStream, log, stats); err != nil {

@@ -76,7 +76,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 //------------------------------------------------------------------------------
 
 // NewKafka creates a new Kafka output type.
-func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	k, err := writer.NewKafka(conf.Kafka, mgr, log, stats)
 	if err != nil {
 		return nil, err

@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -172,7 +173,7 @@ type Cache struct {
 // NewCache returns a Cache processor.
 func NewCache(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	cacheName := conf.Cache.Resource
 	if cacheName == "" {
 		return nil, errors.New("cache name must be specified")

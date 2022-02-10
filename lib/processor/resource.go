@@ -69,7 +69,7 @@ type Resource struct {
 // NewResource returns a resource processor.
 func NewResource(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	if err := interop.ProbeProcessor(context.Background(), mgr, conf.Resource); err != nil {
 		return nil, err
 	}

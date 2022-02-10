@@ -30,7 +30,7 @@ type procConstructor func(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-) (Type, error)
+) (processor.V1, error)
 
 // TypeSpec Constructor and a usage description for each processor type.
 type TypeSpec struct {
@@ -52,7 +52,7 @@ type TypeSpec struct {
 }
 
 // ConstructorFunc is a func signature able to construct a processor.
-type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)
+type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type) (processor.V1, error)
 
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
@@ -109,7 +109,7 @@ func Block(typeStr, reason string) {
 		mgr types.Manager,
 		log log.Modular,
 		stats metrics.Type,
-	) (Type, error) {
+	) (processor.V1, error) {
 		return nil, fmt.Errorf("processor '%v' is blocked due to: %v", typeStr, reason)
 	}
 	Constructors[typeStr] = ctor
@@ -319,7 +319,7 @@ func New(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	if mgrV2, ok := mgr.(interface {
 		NewProcessor(conf Config) (processor.V1, error)
 	}); ok {

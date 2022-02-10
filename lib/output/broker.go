@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/broker"
@@ -138,8 +139,8 @@ func NewBroker(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (Type, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (output.Streamed, error) {
 	pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
 
 	outputConfs := conf.Broker.Outputs
@@ -160,7 +161,7 @@ func NewBroker(
 		return b, nil
 	}
 
-	outputs := make([]types.Output, lOutputs)
+	outputs := make([]output.Streamed, lOutputs)
 
 	_, isThreaded := map[string]struct{}{
 		"round_robin": {},
@@ -170,7 +171,7 @@ func NewBroker(
 	var err error
 	for j := 0; j < conf.Broker.Copies; j++ {
 		for i, oConf := range outputConfs {
-			var pipes []types.PipelineConstructorFunc
+			var pipes []iprocessor.PipelineConstructorFunc
 			if isThreaded {
 				pipes = pipelines
 			}
@@ -189,7 +190,7 @@ func NewBroker(
 		}
 	}
 
-	var b Type
+	var b output.Streamed
 	switch conf.Broker.Pattern {
 	case "fan_out":
 		var bTmp *broker.FanOut

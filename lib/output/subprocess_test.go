@@ -97,7 +97,7 @@ func main() {
 	require.NoError(t, err)
 
 	tranChan := make(chan message.Transaction)
-	o.Consume(tranChan)
+	require.NoError(t, o.Consume(tranChan))
 
 	sendMsg(t, "foo", tranChan)
 	sendMsg(t, "bar", tranChan)
@@ -157,7 +157,7 @@ func main() {
 	require.NoError(t, err)
 
 	tranChan := make(chan message.Transaction)
-	o.Consume(tranChan)
+	require.NoError(t, o.Consume(tranChan))
 
 	sendMsg(t, "foo", tranChan)
 

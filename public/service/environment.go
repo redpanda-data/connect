@@ -7,6 +7,9 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
@@ -88,7 +91,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeBuffer
-	return e.internal.BufferAdd(func(conf buffer.Config, nm bundle.NewManagement) (buffer.Type, error) {
+	return e.internal.BufferAdd(func(conf buffer.Config, nm bundle.NewManagement) (ibuffer.Streamed, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -154,7 +157,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
-	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
+	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -181,7 +184,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
-	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
+	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -214,7 +217,7 @@ func (e *Environment) RegisterOutput(name string, spec *ConfigSpec, ctor OutputC
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeOutput
 	return e.internal.OutputAdd(bundle.OutputConstructorFromSimple(
-		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
+		func(conf output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 			if err != nil {
 				return nil, err
@@ -253,7 +256,7 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeOutput
 	return e.internal.OutputAdd(bundle.OutputConstructorFromSimple(
-		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
+		func(conf output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 			if err != nil {
 				return nil, err
@@ -298,7 +301,7 @@ func (e *Environment) RegisterProcessor(name string, spec *ConfigSpec, ctor Proc
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
-	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
+	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -323,7 +326,7 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
-	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
+	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err

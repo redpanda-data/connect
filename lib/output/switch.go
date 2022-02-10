@@ -242,7 +242,7 @@ type Switch struct {
 	retryUntilSuccess bool
 	strictMode        bool
 	outputTSChans     []chan message.Transaction
-	outputs           []types.Output
+	outputs           []output.Streamed
 	checks            []*mapping.Executor
 	continues         []bool
 	fallthroughs      []bool
@@ -259,7 +259,7 @@ func NewSwitch(
 	mgr types.Manager,
 	logger log.Modular,
 	stats metrics.Type,
-) (Type, error) {
+) (output.Streamed, error) {
 	ctx, done := context.WithCancel(context.Background())
 	o := &Switch{
 		stats:             stats,
@@ -281,7 +281,7 @@ func NewSwitch(
 		return nil, ErrSwitchNoOutputs
 	}
 	if lCases > 0 {
-		o.outputs = make([]types.Output, lCases)
+		o.outputs = make([]output.Streamed, lCases)
 		o.checks = make([]*mapping.Executor, lCases)
 		o.continues = make([]bool, lCases)
 		o.fallthroughs = make([]bool, lCases)

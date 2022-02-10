@@ -9,7 +9,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -67,7 +66,7 @@ type Stream struct {
 }
 
 // NewStream creates a new Producer/Consumer around a buffer.
-func NewStream(typeStr string, buffer ReaderWriter, log log.Modular, stats metrics.Type) buffer.Type {
+func NewStream(typeStr string, buffer ReaderWriter, log log.Modular, stats metrics.Type) Streamed {
 	m := Stream{
 		typeStr:     typeStr,
 		stats:       stats,

@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Output is an interface implemented by Benthos outputs that support single
@@ -169,12 +169,12 @@ func (a *airGapBatchWriter) WaitForClose(tout time.Duration) error {
 // of this type should only be concerned with writing messages and eventually
 // calling Close to terminate the output.
 type OwnedOutput struct {
-	o         types.Output
+	o         ioutput.Streamed
 	closeOnce sync.Once
 	t         chan message.Transaction
 }
 
-func newOwnedOutput(o types.Output) (*OwnedOutput, error) {
+func newOwnedOutput(o ioutput.Streamed) (*OwnedOutput, error) {
 	tChan := make(chan message.Transaction)
 	if err := o.Consume(tChan); err != nil {
 		return nil, err

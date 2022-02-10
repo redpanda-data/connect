@@ -6,16 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var _ types.Consumer = &Greedy{}
-var _ types.Closable = &Greedy{}
+var _ output.Streamed = &Greedy{}
 
 func TestGreedyDoubleClose(t *testing.T) {
-	oTM, err := NewGreedy([]types.Output{})
+	oTM, err := NewGreedy([]output.Streamed{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -31,7 +30,7 @@ func TestGreedyDoubleClose(t *testing.T) {
 func TestBasicGreedy(t *testing.T) {
 	nMsgs := 1000
 
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{
 		{},
 		{},

@@ -92,7 +92,7 @@ type While struct {
 // NewWhile returns a While processor.
 func NewWhile(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	var check *mapping.Executor
 	var err error
 
@@ -107,7 +107,7 @@ func NewWhile(
 	var children []processor.V1
 	for i, pconf := range conf.While.Processors {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("while.%v", i), mgr, log, stats)
-		var proc Type
+		var proc processor.V1
 		if proc, err = New(pconf, pMgr, pLog, pStats); err != nil {
 			return nil, err
 		}

@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -37,7 +38,7 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 //------------------------------------------------------------------------------
 
 // NewRedisPubSub creates a new RedisPubSub output type.
-func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	w, err := writer.NewRedisPubSubV2(conf.RedisPubSub, mgr, log, stats)
 	if err != nil {
 		return nil, err

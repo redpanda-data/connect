@@ -3,6 +3,7 @@ package input
 import (
 	"errors"
 
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -44,7 +45,7 @@ You can access these metadata fields using
 //------------------------------------------------------------------------------
 
 // NewHDFS creates a new Files input type.
-func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	if conf.HDFS.Directory == "" {
 		return nil, errors.New("invalid directory (cannot be empty)")
 	}

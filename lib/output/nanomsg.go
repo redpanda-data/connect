@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -34,7 +35,7 @@ Currently only PUSH and PUB sockets are supported.`,
 //------------------------------------------------------------------------------
 
 // NewNanomsg creates a new Nanomsg output type.
-func NewNanomsg(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewNanomsg(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	s, err := writer.NewNanomsg(conf.Nanomsg, log, stats)
 	if err != nil {
 		return nil, err

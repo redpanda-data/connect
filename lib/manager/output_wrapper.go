@@ -6,18 +6,18 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 type outputWrapper struct {
-	output types.Output
+	output ioutput.Streamed
 
 	tranChan  chan message.Transaction
 	closeOnce sync.Once
 }
 
-func wrapOutput(o types.Output) (*outputWrapper, error) {
+func wrapOutput(o ioutput.Streamed) (*outputWrapper, error) {
 	tranChan := make(chan message.Transaction)
 	if err := o.Consume(tranChan); err != nil {
 		return nil, err

@@ -7,6 +7,8 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/types"
@@ -45,7 +47,7 @@ func AccessCache(ctx context.Context, mgr types.Manager, name string, fn func(ca
 // an error if not.
 func ProbeInput(ctx context.Context, mgr types.Manager, name string) error {
 	if gi, ok := mgr.(interface {
-		GetInput(name string) (types.Input, error)
+		GetInput(name string) (input.Streamed, error)
 	}); ok {
 		if _, err := gi.GetInput(name); err != nil {
 			return fmt.Errorf("input resource '%v' was not found", name)
@@ -59,14 +61,14 @@ func ProbeInput(ctx context.Context, mgr types.Manager, name string) error {
 // AccessInput attempts to access an input resource by a unique identifier and
 // executes a closure function with the input as an argument. Returns an error
 // if the input does not exist (or is otherwise inaccessible).
-func AccessInput(ctx context.Context, mgr types.Manager, name string, fn func(types.Input)) error {
+func AccessInput(ctx context.Context, mgr types.Manager, name string, fn func(input.Streamed)) error {
 	if nm, ok := mgr.(interface {
-		AccessInput(ctx context.Context, name string, fn func(types.Input)) error
+		AccessInput(ctx context.Context, name string, fn func(input.Streamed)) error
 	}); ok {
 		return nm.AccessInput(ctx, name, fn)
 	}
 	if gi, ok := mgr.(interface {
-		GetInput(name string) (types.Input, error)
+		GetInput(name string) (input.Streamed, error)
 	}); ok {
 		c, err := gi.GetInput(name)
 		if err != nil {
@@ -85,7 +87,7 @@ func AccessInput(ctx context.Context, mgr types.Manager, name string, fn func(ty
 // returns an error if not.
 func ProbeOutput(ctx context.Context, mgr types.Manager, name string) error {
 	if gi, ok := mgr.(interface {
-		GetOutput(name string) (types.OutputWriter, error)
+		GetOutput(name string) (output.Sync, error)
 	}); ok {
 		if _, err := gi.GetOutput(name); err != nil {
 			return fmt.Errorf("output resource '%v' was not found", name)
@@ -99,14 +101,14 @@ func ProbeOutput(ctx context.Context, mgr types.Manager, name string) error {
 // AccessOutput attempts to access an output resource by a unique identifier and
 // executes a closure function with the output as an argument. Returns an error
 // if the output does not exist (or is otherwise inaccessible).
-func AccessOutput(ctx context.Context, mgr types.Manager, name string, fn func(types.OutputWriter)) error {
+func AccessOutput(ctx context.Context, mgr types.Manager, name string, fn func(output.Sync)) error {
 	if nm, ok := mgr.(interface {
-		AccessOutput(ctx context.Context, name string, fn func(types.OutputWriter)) error
+		AccessOutput(ctx context.Context, name string, fn func(output.Sync)) error
 	}); ok {
 		return nm.AccessOutput(ctx, name, fn)
 	}
 	if gi, ok := mgr.(interface {
-		GetOutput(name string) (types.OutputWriter, error)
+		GetOutput(name string) (output.Sync, error)
 	}); ok {
 		o, err := gi.GetOutput(name)
 		if err != nil {

@@ -31,7 +31,7 @@ import (
 )
 
 func init() {
-	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
+	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 		return NewOutput(c.MongoDB, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    output.TypeMongoDB,
@@ -88,12 +88,12 @@ func init() {
 //------------------------------------------------------------------------------
 
 // NewOutput creates a new MongoDB output type.
-func NewOutput(conf output.MongoDBConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Type, error) {
+func NewOutput(conf output.MongoDBConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (ioutput.Streamed, error) {
 	m, err := NewWriter(mgr, conf, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	var w output.Type
+	var w ioutput.Streamed
 	if w, err = output.NewAsyncWriter(output.TypeMongoDB, conf.MaxInFlight, m, log, stats); err != nil {
 		return w, err
 	}

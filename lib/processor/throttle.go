@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -75,7 +76,7 @@ type Throttle struct {
 // NewThrottle returns a Throttle processor.
 func NewThrottle(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	t := &Throttle{
 		conf:  conf,
 		log:   log,

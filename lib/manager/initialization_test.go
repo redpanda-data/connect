@@ -7,7 +7,11 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
@@ -18,7 +22,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +29,7 @@ import (
 func TestInitialization(t *testing.T) {
 	env := bundle.NewEnvironment()
 
-	require.NoError(t, env.BufferAdd(func(c buffer.Config, mgr bundle.NewManagement) (buffer.Type, error) {
+	require.NoError(t, env.BufferAdd(func(c buffer.Config, mgr bundle.NewManagement) (ibuffer.Streamed, error) {
 		return nil, errors.New("not this buffer")
 	}, docs.ComponentSpec{
 		Name: "testbuffer",
@@ -39,7 +42,7 @@ func TestInitialization(t *testing.T) {
 	}))
 
 	lenInputProcs := 0
-	require.NoError(t, env.InputAdd(func(c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
+	require.NoError(t, env.InputAdd(func(c input.Config, mgr bundle.NewManagement, p ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 		lenInputProcs = len(p)
 		return nil, errors.New("not this input")
 	}, docs.ComponentSpec{
@@ -47,14 +50,14 @@ func TestInitialization(t *testing.T) {
 	}))
 
 	lenOutputProcs := 0
-	require.NoError(t, env.OutputAdd(func(c output.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (output.Type, error) {
+	require.NoError(t, env.OutputAdd(func(c output.Config, mgr bundle.NewManagement, p ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
 		lenOutputProcs = len(p)
 		return nil, errors.New("not this output")
 	}, docs.ComponentSpec{
 		Name: "testoutput",
 	}))
 
-	require.NoError(t, env.ProcessorAdd(func(c processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
+	require.NoError(t, env.ProcessorAdd(func(c processor.Config, mgr bundle.NewManagement) (iprocessor.V1, error) {
 		return nil, errors.New("not this processor")
 	}, docs.ComponentSpec{
 		Name: "testprocessor",
@@ -126,7 +129,7 @@ func TestInitializationOrdering(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	require.NoError(t, env.InputAdd(func(c input.Config, mgr bundle.NewManagement, p ...types.PipelineConstructorFunc) (input.Type, error) {
+	require.NoError(t, env.InputAdd(func(c input.Config, mgr bundle.NewManagement, p ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 		go func() {
 			defer wg.Done()
 			err := mgr.AccessRateLimit(context.Background(), "testratelimit", func(rl iratelimit.V1) {})
@@ -137,7 +140,7 @@ func TestInitializationOrdering(t *testing.T) {
 		Name: "testinput",
 	}))
 
-	require.NoError(t, env.ProcessorAdd(func(c processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
+	require.NoError(t, env.ProcessorAdd(func(c processor.Config, mgr bundle.NewManagement) (iprocessor.V1, error) {
 		go func() {
 			defer wg.Done()
 			err := mgr.AccessRateLimit(context.Background(), "fooratelimit", func(rl iratelimit.V1) {})

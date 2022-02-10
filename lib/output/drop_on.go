@@ -22,7 +22,7 @@ import (
 
 func init() {
 	Constructors[TypeDropOn] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 			if conf.DropOn.Output == nil {
 				return nil, errors.New("cannot create a drop_on output without a child")
 			}
@@ -147,7 +147,7 @@ type dropOn struct {
 
 	onError        bool
 	onBackpressure time.Duration
-	wrapped        Type
+	wrapped        output.Streamed
 
 	transactionsIn  <-chan message.Transaction
 	transactionsOut chan message.Transaction
@@ -157,7 +157,7 @@ type dropOn struct {
 	closedChan chan struct{}
 }
 
-func newDropOn(conf DropOnConditions, wrapped Type, log log.Modular, stats metrics.Type) (*dropOn, error) {
+func newDropOn(conf DropOnConditions, wrapped output.Streamed, log log.Modular, stats metrics.Type) (*dropOn, error) {
 	var backPressure time.Duration
 	if len(conf.BackPressure) > 0 {
 		var err error

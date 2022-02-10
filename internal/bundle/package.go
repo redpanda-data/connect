@@ -11,7 +11,10 @@ import (
 	"context"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
@@ -39,23 +42,23 @@ type NewManagement interface {
 	Logger() log.Modular
 	BloblEnvironment() *bloblang.Environment
 
-	NewBuffer(conf buffer.Config) (buffer.Type, error)
+	NewBuffer(conf buffer.Config) (ibuffer.Streamed, error)
 	NewCache(conf cache.Config) (icache.V1, error)
-	NewInput(conf input.Config, pipelines ...types.PipelineConstructorFunc) (types.Input, error)
+	NewInput(conf input.Config, pipelines ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error)
 	NewProcessor(conf processor.Config) (iprocessor.V1, error)
-	NewOutput(conf output.Config, pipelines ...types.PipelineConstructorFunc) (types.Output, error)
+	NewOutput(conf output.Config, pipelines ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error)
 	NewRateLimit(conf ratelimit.Config) (iratelimit.V1, error)
 
 	AccessCache(ctx context.Context, name string, fn func(icache.V1)) error
 	StoreCache(ctx context.Context, name string, conf cache.Config) error
 
-	AccessInput(ctx context.Context, name string, fn func(types.Input)) error
+	AccessInput(ctx context.Context, name string, fn func(iinput.Streamed)) error
 	StoreInput(ctx context.Context, name string, conf input.Config) error
 
 	AccessProcessor(ctx context.Context, name string, fn func(iprocessor.V1)) error
 	StoreProcessor(ctx context.Context, name string, conf processor.Config) error
 
-	AccessOutput(ctx context.Context, name string, fn func(types.OutputWriter)) error
+	AccessOutput(ctx context.Context, name string, fn func(ioutput.Sync)) error
 	StoreOutput(ctx context.Context, name string, conf output.Config) error
 
 	AccessRateLimit(ctx context.Context, name string, fn func(iratelimit.V1)) error

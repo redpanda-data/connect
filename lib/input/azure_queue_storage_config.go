@@ -1,6 +1,7 @@
 package input
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -9,7 +10,7 @@ import (
 
 func init() {
 	Constructors[TypeAzureQueueStorage] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 			r, err := newAzureQueueStorage(conf.AzureQueueStorage, mgr, log, stats)
 			if err != nil {
 				return nil, err

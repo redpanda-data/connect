@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -44,7 +45,7 @@ func NewAsyncReader(
 	r reader.Async,
 	log log.Modular,
 	stats metrics.Type,
-) (Type, error) {
+) (input.Streamed, error) {
 	boff := backoff.NewExponentialBackOff()
 	boff.InitialInterval = time.Millisecond * 100
 	boff.MaxInterval = time.Second

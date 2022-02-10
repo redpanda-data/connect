@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -140,7 +141,7 @@ type Log struct {
 // NewLog returns a Log processor.
 func NewLog(
 	conf Config, mgr types.Manager, logger log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	message, err := interop.NewBloblangField(mgr, conf.Log.Message)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message expression: %v", err)

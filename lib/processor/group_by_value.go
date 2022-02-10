@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -99,7 +100,7 @@ type GroupByValue struct {
 // NewGroupByValue returns a GroupByValue processor.
 func NewGroupByValue(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	value, err := interop.NewBloblangField(mgr, conf.GroupByValue.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)

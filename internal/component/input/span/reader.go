@@ -1,4 +1,4 @@
-package input
+package span
 
 import (
 	"context"
@@ -21,9 +21,9 @@ var ExtractTracingSpanMappingDocs = docs.FieldBloblang(
 	`root = this.meta.span`,
 ).AtVersion("3.45.0").Advanced()
 
-// SpanReader wraps an async reader with a mechanism for extracting tracing
+// Reader wraps an async reader with a mechanism for extracting tracing
 // spans from the consumed message using a Bloblang mapping.
-type SpanReader struct {
+type Reader struct {
 	inputName string
 
 	mgr types.Manager
@@ -33,20 +33,20 @@ type SpanReader struct {
 	rdr     reader.Async
 }
 
-// NewSpanReader wraps an async reader with a mechanism for extracting tracing
+// NewReader wraps an async reader with a mechanism for extracting tracing
 // spans from the consumed message using a Bloblang mapping.
-func NewSpanReader(inputName, mapping string, rdr reader.Async, mgr types.Manager, logger log.Modular) (reader.Async, error) {
+func NewReader(inputName, mapping string, rdr reader.Async, mgr types.Manager, logger log.Modular) (reader.Async, error) {
 	exe, err := interop.NewBloblangMapping(mgr, mapping)
 	if err != nil {
 		return nil, err
 	}
-	return &SpanReader{inputName, mgr, logger, exe, rdr}, nil
+	return &Reader{inputName, mgr, logger, exe, rdr}, nil
 }
 
 // ConnectWithContext attempts to establish a connection to the source, if
 // unsuccessful returns an error. If the attempt is successful (or not
 // necessary) returns nil.
-func (s *SpanReader) ConnectWithContext(ctx context.Context) error {
+func (s *Reader) ConnectWithContext(ctx context.Context) error {
 	return s.rdr.ConnectWithContext(ctx)
 }
 
@@ -54,7 +54,7 @@ func (s *SpanReader) ConnectWithContext(ctx context.Context) error {
 // successful a message is returned along with a function used to
 // acknowledge receipt of the returned message. It's safe to process the
 // returned message and read the next message asynchronously.
-func (s *SpanReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (s *Reader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	m, afn, err := s.rdr.ReadWithContext(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -86,12 +86,12 @@ func (s *SpanReader) ReadWithContext(ctx context.Context) (*message.Batch, reade
 
 // CloseAsync triggers the shut down of this component but should not block
 // the calling goroutine.
-func (s *SpanReader) CloseAsync() {
+func (s *Reader) CloseAsync() {
 	s.rdr.CloseAsync()
 }
 
 // WaitForClose is a blocking call to wait until the component has finished
 // shutting down and cleaning up resources.
-func (s *SpanReader) WaitForClose(timeout time.Duration) error {
+func (s *Reader) WaitForClose(timeout time.Duration) error {
 	return s.rdr.WaitForClose(timeout)
 }

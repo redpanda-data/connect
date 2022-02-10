@@ -111,7 +111,7 @@ type Retry struct {
 	running int32
 	conf    RetryConfig
 
-	wrapped     Type
+	wrapped     output.Streamed
 	backoffCtor func() backoff.BackOff
 
 	stats metrics.Type
@@ -130,7 +130,7 @@ func NewRetry(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-) (Type, error) {
+) (output.Streamed, error) {
 	if conf.Retry.Output == nil {
 		return nil, errors.New("cannot create retry output without a child")
 	}

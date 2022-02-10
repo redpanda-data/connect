@@ -23,7 +23,7 @@ type Batcher struct {
 	stats metrics.Type
 	log   log.Modular
 
-	child   Type
+	child   output.Streamed
 	batcher *batch.Policy
 
 	messagesIn  <-chan message.Transaction
@@ -36,11 +36,10 @@ type Batcher struct {
 // that enforces a given batching policy configuration.
 func NewBatcherFromConfig(
 	conf batch.PolicyConfig,
-	child Type,
-	mgr types.Manager,
+	child output.Streamed, mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-) (Type, error) {
+) (output.Streamed, error) {
 	if !conf.IsNoop() {
 		bMgr, bLog, bStats := interop.LabelChild("batching", mgr, log, stats)
 		policy, err := batch.NewPolicy(conf, bMgr, bLog, bStats)
@@ -56,10 +55,9 @@ func NewBatcherFromConfig(
 // enforces a given batching policy.
 func NewBatcher(
 	batcher *batch.Policy,
-	child Type,
-	log log.Modular,
+	child output.Streamed, log log.Modular,
 	stats metrics.Type,
-) Type {
+) output.Streamed {
 	m := Batcher{
 		stats:       stats,
 		log:         log,

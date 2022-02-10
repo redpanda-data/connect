@@ -107,8 +107,6 @@ type Type struct {
 	apiTimeout time.Duration
 	apiEnabled bool
 
-	pipelineProcCtors []StreamProcConstructorFunc
-
 	lock sync.Mutex
 }
 
@@ -171,15 +169,6 @@ func OptSetAPITimeout(tout time.Duration) func(*Type) {
 	}
 }
 
-// OptAddProcessors adds processor constructors that will be called for every
-// new stream and attached to the processor pipelines. The constructor is given
-// the name of the stream as an argument.
-func OptAddProcessors(procs ...StreamProcConstructorFunc) func(*Type) {
-	return func(t *Type) {
-		t.pipelineProcCtors = append(t.pipelineProcCtors, procs...)
-	}
-}
-
 //------------------------------------------------------------------------------
 
 // Errors specifically returned by a stream manager.
@@ -204,15 +193,6 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		return ErrStreamExists
 	}
 
-	var procCtors []types.ProcessorConstructorFunc
-	for _, ctor := range m.pipelineProcCtors {
-		func(c StreamProcConstructorFunc) {
-			procCtors = append(procCtors, func() (processor.V1, error) {
-				return c(id)
-			})
-		}(ctor)
-	}
-
 	sMgr, sLog, sStats := interop.LabelStream(id, m.manager, m.logger, m.stats)
 	if u, ok := sStats.(interface {
 		Unwrap() metrics.Type
@@ -227,7 +207,6 @@ func (m *Type) Create(id string, conf stream.Config) error {
 	var wrapper *StreamStatus
 	strm, err := stream.New(
 		conf,
-		stream.OptAddProcessors(procCtors...),
 		stream.OptSetLogger(sLog),
 		stream.OptSetStats(sStats),
 		stream.OptSetManager(sMgr),

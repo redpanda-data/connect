@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -71,7 +72,7 @@ type RateLimit struct {
 // NewRateLimit returns a RateLimit processor.
 func NewRateLimit(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	if err := interop.ProbeRateLimit(context.Background(), mgr, conf.RateLimit.Resource); err != nil {
 		return nil, err
 	}

@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -72,7 +72,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 	}
 
 	procs := 0
-	_, err := WrapWithPipeline(&procs, mockIn, func(i *int) (types.Pipeline, error) {
+	_, err := WrapWithPipeline(&procs, mockIn, func(i *int) (iprocessor.Pipeline, error) {
 		return nil, errors.New("nope")
 	})
 
@@ -80,7 +80,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 		t.Error("Expected error from back constructor")
 	}
 
-	newInput, err := WrapWithPipeline(&procs, mockIn, func(i *int) (types.Pipeline, error) {
+	newInput, err := WrapWithPipeline(&procs, mockIn, func(i *int) (iprocessor.Pipeline, error) {
 		return mockPi, nil
 	})
 	if err != nil {
@@ -135,16 +135,16 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 		ts: make(chan message.Transaction),
 	}
 
-	_, err := WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
+	_, err := WrapWithPipelines(mockIn, func(i *int) (iprocessor.Pipeline, error) {
 		return nil, errors.New("nope")
 	})
 	if err == nil {
 		t.Error("Expected error from back constructor")
 	}
 
-	newInput, err := WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
+	newInput, err := WrapWithPipelines(mockIn, func(i *int) (iprocessor.Pipeline, error) {
 		return mockPi1, nil
-	}, func(i *int) (types.Pipeline, error) {
+	}, func(i *int) (iprocessor.Pipeline, error) {
 		return mockPi2, nil
 	})
 	if err != nil {
@@ -220,9 +220,9 @@ func TestBasicWrapProcessors(t *testing.T) {
 	pipe1 := pipeline.NewProcessor(l, s, mockProc{})
 	pipe2 := pipeline.NewProcessor(l, s, mockProc{})
 
-	newInput, err := WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
+	newInput, err := WrapWithPipelines(mockIn, func(i *int) (iprocessor.Pipeline, error) {
 		return pipe1, nil
-	}, func(i *int) (types.Pipeline, error) {
+	}, func(i *int) (iprocessor.Pipeline, error) {
 		return pipe2, nil
 	})
 	if err != nil {
@@ -296,7 +296,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 
 	pipe1 := pipeline.NewProcessor(l, s, mockProc{}, mockProc{})
 
-	newInput, err := WrapWithPipelines(mockIn, func(i *int) (types.Pipeline, error) {
+	newInput, err := WrapWithPipelines(mockIn, func(i *int) (iprocessor.Pipeline, error) {
 		return pipe1, nil
 	})
 	if err != nil {

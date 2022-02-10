@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------
@@ -26,10 +27,8 @@ func TestInprocDryRun(t *testing.T) {
 	conf := input.NewConfig()
 	conf.Inproc = "foo"
 
-	var ip input.Type
-	if ip, err = input.NewInproc(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
-		t.Fatal(err)
-	}
+	ip, err := input.NewInproc(conf, mgr, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
 
 	<-time.After(time.Millisecond * 100)
 
@@ -50,10 +49,8 @@ func TestInprocDryRunNoConn(t *testing.T) {
 	conf := input.NewConfig()
 	conf.Inproc = "foo"
 
-	var ip input.Type
-	if ip, err = input.NewInproc(conf, mgr, log.Noop(), metrics.Noop()); err != nil {
-		t.Fatal(err)
-	}
+	ip, err := input.NewInproc(conf, mgr, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
 
 	<-time.After(time.Millisecond * 100)
 

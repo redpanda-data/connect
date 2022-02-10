@@ -8,7 +8,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -24,14 +23,14 @@ type RoundRobin struct {
 	transactions <-chan message.Transaction
 
 	outputTSChans []chan message.Transaction
-	outputs       []types.Output
+	outputs       []output.Streamed
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
 
 // NewRoundRobin creates a new RoundRobin type by providing consumers.
-func NewRoundRobin(outputs []types.Output, stats metrics.Type) (*RoundRobin, error) {
+func NewRoundRobin(outputs []output.Streamed, stats metrics.Type) (*RoundRobin, error) {
 	o := &RoundRobin{
 		running:      1,
 		stats:        stats,

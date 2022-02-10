@@ -4,20 +4,20 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 type tracedOutput struct {
 	e       *events
 	ctr     *uint64
-	wrapped types.Output
+	wrapped output.Streamed
 	tChan   chan message.Transaction
 	shutSig *shutdown.Signaller
 }
 
-func traceOutput(e *events, ctr *uint64, i types.Output) types.Output {
+func traceOutput(e *events, ctr *uint64, i output.Streamed) output.Streamed {
 	t := &tracedOutput{
 		e:       e,
 		ctr:     ctr,

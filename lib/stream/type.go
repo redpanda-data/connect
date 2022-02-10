@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -29,12 +32,10 @@ import (
 type Type struct {
 	conf Config
 
-	inputLayer    input.Type
-	bufferLayer   buffer.Type
+	inputLayer    iinput.Streamed
+	bufferLayer   ibuffer.Streamed
 	pipelineLayer pipeline.Type
-	outputLayer   output.Type
-
-	complementaryProcs []types.ProcessorConstructorFunc
+	outputLayer   ioutput.Streamed
 
 	manager types.Manager
 	stats   metrics.Type
@@ -84,14 +85,6 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 }
 
 //------------------------------------------------------------------------------
-
-// OptAddProcessors adds additional processors that will be constructed for each
-// logical thread of the processing pipeline layer of the Benthos stream.
-func OptAddProcessors(procs ...types.ProcessorConstructorFunc) func(*Type) {
-	return func(t *Type) {
-		t.complementaryProcs = append(t.complementaryProcs, procs...)
-	}
-}
 
 // OptSetStats sets the metrics aggregator to be used by all components of the
 // stream.
@@ -153,9 +146,9 @@ func (t *Type) start() (err error) {
 			return
 		}
 	}
-	if tLen := len(t.complementaryProcs) + len(t.conf.Pipeline.Processors); tLen > 0 {
+	if tLen := len(t.conf.Pipeline.Processors); tLen > 0 {
 		pMgr, pLog, pStats := interop.LabelChild("pipeline", t.manager, t.logger, t.stats)
-		if t.pipelineLayer, err = pipeline.New(t.conf.Pipeline, pMgr, pLog, pStats, t.complementaryProcs...); err != nil {
+		if t.pipelineLayer, err = pipeline.New(t.conf.Pipeline, pMgr, pLog, pStats); err != nil {
 			return
 		}
 	}
@@ -184,7 +177,7 @@ func (t *Type) start() (err error) {
 		return
 	}
 
-	go func(out output.Type) {
+	go func(out ioutput.Streamed) {
 		for {
 			if err := out.WaitForClose(time.Second); err == nil {
 				t.onClose()

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -148,7 +149,7 @@ type Bloblang struct {
 // NewBloblang returns a Bloblang processor.
 func NewBloblang(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	exec, err := interop.NewBloblangMapping(mgr, string(conf.Bloblang))
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
@@ -160,7 +161,7 @@ func NewBloblang(
 }
 
 // NewBloblangFromExecutor returns a Bloblang processor.
-func NewBloblangFromExecutor(exec *mapping.Executor, log log.Modular, stats metrics.Type) Type {
+func NewBloblangFromExecutor(exec *mapping.Executor, log log.Modular, stats metrics.Type) processor.V1 {
 	return &Bloblang{
 		exec: exec,
 

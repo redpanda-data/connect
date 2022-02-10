@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -218,7 +219,7 @@ type Avro struct {
 // NewAvro returns an Avro processor.
 func NewAvro(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	a := &Avro{
 		parts: conf.Avro.Parts,
 		conf:  conf,

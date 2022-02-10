@@ -34,13 +34,18 @@ func NewConfig() Config {
 
 //------------------------------------------------------------------------------
 
+// ProcessorConstructorFunc is a constructor to be called for each parallel
+// stream pipeline thread in order to construct a custom processor
+// implementation.
+type ProcessorConstructorFunc func() (iprocessor.V1, error)
+
 // New creates an input type based on an input configuration.
 func New(
 	conf Config,
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	processorCtors ...types.ProcessorConstructorFunc,
+	processorCtors ...ProcessorConstructorFunc,
 ) (Type, error) {
 	processors := make([]iprocessor.V1, len(conf.Processors)+len(processorCtors))
 	for j, procConf := range conf.Processors {

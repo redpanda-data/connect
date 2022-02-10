@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	sftpSetup "github.com/Jeffail/benthos/v3/internal/impl/sftp"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -46,7 +47,7 @@ func init() {
 	}
 
 	Constructors[TypeSFTP] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 			r, err := newSFTPReader(conf.SFTP, mgr, log, stats)
 			if err != nil {
 				return nil, err

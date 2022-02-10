@@ -5,13 +5,15 @@ package legacy
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func init() {
@@ -19,8 +21,8 @@ func init() {
 		if err := bundle.AllInputs.Add(func(
 			conf input.Config,
 			mgr bundle.NewManagement,
-			pipes ...types.PipelineConstructorFunc,
-		) (input.Type, error) {
+			pipes ...iprocessor.PipelineConstructorFunc,
+		) (iinput.Streamed, error) {
 			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics(), pipes...)
 		}, spec); err != nil {
 			panic(err)
@@ -35,15 +37,15 @@ func init() {
 		if err := bundle.AllOutputs.Add(func(
 			conf output.Config,
 			mgr bundle.NewManagement,
-			pipes ...types.PipelineConstructorFunc,
-		) (output.Type, error) {
+			pipes ...iprocessor.PipelineConstructorFunc,
+		) (ioutput.Streamed, error) {
 			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics(), pipes...)
 		}, spec); err != nil {
 			panic(err)
 		}
 	})
 	processor.WalkConstructors(func(ctor processor.ConstructorFunc, spec docs.ComponentSpec) {
-		if err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.Type, error) {
+		if err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (iprocessor.V1, error) {
 			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
 		}, spec); err != nil {
 			panic(err)

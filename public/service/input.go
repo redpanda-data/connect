@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // AckFunc is a common function returned by inputs that must be called once for
@@ -218,7 +218,7 @@ func (a *airGapBatchReader) WaitForClose(tout time.Duration) error {
 // of this type should only be concerned with reading messages and eventually
 // calling Close to terminate the input.
 type OwnedInput struct {
-	i types.Input
+	i input.Streamed
 }
 
 // ReadBatch attemps to read a message batch from the input, along with a

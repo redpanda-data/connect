@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -168,7 +169,7 @@ type Redis struct {
 // NewRedis returns a Redis processor.
 func NewRedis(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	var retryPeriod time.Duration
 	if tout := conf.Redis.RetryPeriod; len(tout) > 0 {
 		var err error

@@ -31,7 +31,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (processor.Type, error) {
+	bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
 		return NewProcessor(c, nm, nm.Logger(), nm.Metrics())
 	}, docs.ComponentSpec{
 		Name:    processor.TypeMongoDB,

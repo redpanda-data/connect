@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/http"
 	ihttpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
@@ -133,7 +134,7 @@ type HTTP struct {
 // NewHTTP returns a HTTP processor.
 func NewHTTP(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	g := &HTTP{
 		conf:  conf,
 		log:   log,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -109,7 +110,7 @@ type JMESPath struct {
 // NewJMESPath returns a JMESPath processor.
 func NewJMESPath(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	query, err := jmespath.Compile(conf.JMESPath.Query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile JMESPath query: %v", err)

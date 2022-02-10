@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -19,7 +19,7 @@ import (
 func TestBasicFanOutSequential(t *testing.T) {
 	nOutputs, nMsgs := 10, 1000
 
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{}
 
 	for i := 0; i < nOutputs; i++ {
@@ -94,7 +94,7 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
-	outputs := []types.Output{&mockOne, &mockTwo}
+	outputs := []output.Streamed{&mockOne, &mockTwo}
 	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
@@ -176,7 +176,7 @@ func TestFanOutSequentialBlock(t *testing.T) {
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
-	outputs := []types.Output{&mockOne, &mockTwo}
+	outputs := []output.Streamed{&mockOne, &mockTwo}
 	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 

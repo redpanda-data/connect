@@ -4,9 +4,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -15,13 +15,13 @@ import (
 // by routing the pipeline through the output, and implements the output.Type
 // interface in order to act like an ordinary output.
 type WithPipeline struct {
-	out  Type
-	pipe types.Pipeline
+	out  output.Streamed
+	pipe iprocessor.Pipeline
 }
 
 // WrapWithPipeline routes a processing pipeline directly into an output and
 // returns a type that manages both and acts like an ordinary output.
-func WrapWithPipeline(i *int, out Type, pipeConstructor types.PipelineConstructorFunc) (*WithPipeline, error) {
+func WrapWithPipeline(i *int, out output.Streamed, pipeConstructor iprocessor.PipelineConstructorFunc) (*WithPipeline, error) {
 	pipe, err := pipeConstructor(i)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func WrapWithPipeline(i *int, out Type, pipeConstructor types.PipelineConstructo
 }
 
 // WrapWithPipelines wraps an output with a variadic number of pipelines.
-func WrapWithPipelines(out Type, pipeConstructors ...types.PipelineConstructorFunc) (Type, error) {
+func WrapWithPipelines(out output.Streamed, pipeConstructors ...iprocessor.PipelineConstructorFunc) (output.Streamed, error) {
 	procs := 0
 	var err error
 	for i := len(pipeConstructors) - 1; i >= 0; i-- {

@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"golang.org/x/sync/errgroup"
 )
@@ -20,7 +20,7 @@ import (
 
 // DynamicOutput is an interface of output types that must be closable.
 type DynamicOutput interface {
-	types.Output
+	output.Streamed
 }
 
 // wrappedOutput is a struct that wraps a DynamicOutput with an identifying

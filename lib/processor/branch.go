@@ -229,7 +229,7 @@ type Branch struct {
 // NewBranch creates a new branch processor.
 func NewBranch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	return newBranch(conf.Branch, mgr, log, stats)
 }
 

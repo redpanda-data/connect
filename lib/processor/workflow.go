@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -306,7 +307,7 @@ type Workflow struct {
 // NewWorkflow returns a new workflow processor.
 func NewWorkflow(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	w := &Workflow{
 		log:         log,
 		stats:       stats,

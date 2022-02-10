@@ -10,15 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var _ types.Producer = &DynamicFanIn{}
-var _ types.Closable = &DynamicFanIn{}
+var _ input.Streamed = &DynamicFanIn{}
 
 func TestStaticBasicDynamicFanIn(t *testing.T) {
 	nInputs, nMsgs := 10, 1000

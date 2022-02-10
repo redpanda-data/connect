@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -128,7 +129,7 @@ type Grok struct {
 // NewGrok returns a Grok processor.
 func NewGrok(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	grokConf := grok.Config{
 		RemoveEmptyValues:   conf.Grok.RemoveEmpty,
 		NamedCapturesOnly:   conf.Grok.NamedOnly,

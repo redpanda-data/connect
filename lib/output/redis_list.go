@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/redis/old"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -41,7 +42,7 @@ you to create a unique key for each message.`,
 //------------------------------------------------------------------------------
 
 // NewRedisList creates a new RedisList output type.
-func NewRedisList(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewRedisList(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	w, err := writer.NewRedisListV2(conf.RedisList, mgr, log, stats)
 	if err != nil {
 		return nil, err

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -82,7 +83,7 @@ type Sleep struct {
 // NewSleep returns a Sleep processor.
 func NewSleep(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	durationStr, err := interop.NewBloblangField(mgr, conf.Sleep.Duration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse duration expression: %v", err)

@@ -10,6 +10,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -164,7 +165,7 @@ type Decompress struct {
 // NewDecompress returns a Decompress processor.
 func NewDecompress(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	dcor, err := strToDecompressor(conf.Decompress.Algorithm)
 	if err != nil {
 		return nil, err

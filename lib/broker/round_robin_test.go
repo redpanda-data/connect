@@ -6,17 +6,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var _ types.Consumer = &RoundRobin{}
-var _ types.Closable = &RoundRobin{}
+var _ output.Streamed = &RoundRobin{}
 
 func TestRoundRobinDoubleClose(t *testing.T) {
-	oTM, err := NewRoundRobin([]types.Output{}, metrics.Noop())
+	oTM, err := NewRoundRobin([]output.Streamed{}, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -32,7 +31,7 @@ func TestRoundRobinDoubleClose(t *testing.T) {
 func TestBasicRoundRobin(t *testing.T) {
 	nMsgs := 1000
 
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{
 		{},
 		{},
@@ -113,7 +112,7 @@ func TestBasicRoundRobin(t *testing.T) {
 func BenchmarkBasicRoundRobin(b *testing.B) {
 	nOutputs, nMsgs := 3, b.N
 
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{}
 
 	for i := 0; i < nOutputs; i++ {

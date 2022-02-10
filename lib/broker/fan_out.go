@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"golang.org/x/sync/errgroup"
 )
@@ -28,7 +27,7 @@ type FanOut struct {
 	transactions <-chan message.Transaction
 
 	outputTSChans []chan message.Transaction
-	outputs       []types.Output
+	outputs       []output.Streamed
 
 	ctx        context.Context
 	close      func()
@@ -37,7 +36,7 @@ type FanOut struct {
 
 // NewFanOut creates a new FanOut type by providing outputs.
 func NewFanOut(
-	outputs []types.Output, logger log.Modular, stats metrics.Type,
+	outputs []output.Streamed, logger log.Modular, stats metrics.Type,
 ) (*FanOut, error) {
 	ctx, done := context.WithCancel(context.Background())
 	o := &FanOut{
@@ -107,7 +106,7 @@ func (o *FanOut) MaxInFlight() (int, bool) {
 
 //------------------------------------------------------------------------------
 
-func closeAllOutputs(outputs []types.Output) {
+func closeAllOutputs(outputs []output.Streamed) {
 	for _, o := range outputs {
 		o.CloseAsync()
 	}

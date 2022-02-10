@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -19,7 +21,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // ServerlessResponseType is an output type that redirects pipeline outputs back
@@ -132,8 +133,8 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	}
 
 	// Create pipeline and output layers.
-	var pipelineLayer types.Pipeline
-	var outputLayer types.Output
+	var pipelineLayer processor.Pipeline
+	var outputLayer ioutput.Streamed
 
 	transactionChan := make(chan message.Transaction, 1)
 

@@ -8,22 +8,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var _ types.Consumer = &FanOut{}
-var _ types.Closable = &FanOut{}
+var _ output.Streamed = &FanOut{}
 
 //------------------------------------------------------------------------------
 
 func TestBasicFanOut(t *testing.T) {
 	nOutputs, nMsgs := 10, 1000
 
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{}
 
 	for i := 0; i < nOutputs; i++ {
@@ -102,7 +101,7 @@ func TestFanOutBackPressure(t *testing.T) {
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
-	outputs := []types.Output{&mockOne, &mockTwo}
+	outputs := []output.Streamed{&mockOne, &mockTwo}
 	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
@@ -156,7 +155,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
-	outputs := []types.Output{&mockOne, &mockTwo}
+	outputs := []output.Streamed{&mockOne, &mockTwo}
 	readChan := make(chan message.Transaction)
 	resChan := make(chan response.Error)
 
@@ -240,7 +239,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 }
 
 func TestFanOutShutDownFromErrorResponse(t *testing.T) {
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
 	readChan := make(chan message.Transaction)
@@ -297,7 +296,7 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 }
 
 func TestFanOutShutDownFromReceive(t *testing.T) {
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
 	readChan := make(chan message.Transaction)
@@ -346,7 +345,7 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 }
 
 func TestFanOutShutDownFromSend(t *testing.T) {
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutput := &MockOutputType{}
 	outputs = append(outputs, mockOutput)
 	readChan := make(chan message.Transaction)
@@ -390,7 +389,7 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 func BenchmarkBasicFanOut(b *testing.B) {
 	nOutputs, nMsgs := 3, b.N
 
-	outputs := []types.Output{}
+	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{}
 
 	for i := 0; i < nOutputs; i++ {

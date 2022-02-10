@@ -74,7 +74,7 @@ type Parallel struct {
 // NewParallel returns a Parallel processor.
 func NewParallel(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	var children []processor.V1
 	for i, pconf := range conf.Parallel.Processors {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)

@@ -5,9 +5,10 @@ import (
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // AllOutputs is a set containing every single output that has been imported.
@@ -27,8 +28,8 @@ func (e *Environment) OutputAdd(constructor OutputConstructor, spec docs.Compone
 func (e *Environment) OutputInit(
 	conf output.Config,
 	mgr NewManagement,
-	pipelines ...types.PipelineConstructorFunc,
-) (types.Output, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (ioutput.Streamed, error) {
 	return e.outputs.Init(conf, mgr, pipelines...)
 }
 
@@ -41,8 +42,8 @@ func (e *Environment) OutputDocs() []docs.ComponentSpec {
 
 // OutputConstructorFromSimple provides a way to define an output constructor
 // without manually initializing processors of the config.
-func OutputConstructorFromSimple(fn func(output.Config, NewManagement) (output.Type, error)) OutputConstructor {
-	return func(c output.Config, nm NewManagement, pcf ...types.PipelineConstructorFunc) (output.Type, error) {
+func OutputConstructorFromSimple(fn func(output.Config, NewManagement) (ioutput.Streamed, error)) OutputConstructor {
+	return func(c output.Config, nm NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
 		o, err := fn(c, nm)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create output '%v': %w", c.Type, err)
@@ -55,7 +56,7 @@ func OutputConstructorFromSimple(fn func(output.Config, NewManagement) (output.T
 //------------------------------------------------------------------------------
 
 // OutputConstructor constructs an output component.
-type OutputConstructor func(output.Config, NewManagement, ...types.PipelineConstructorFunc) (output.Type, error)
+type OutputConstructor func(output.Config, NewManagement, ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error)
 
 type outputSpec struct {
 	constructor OutputConstructor
@@ -85,8 +86,8 @@ func (s *OutputSet) Add(constructor OutputConstructor, spec docs.ComponentSpec) 
 func (s *OutputSet) Init(
 	conf output.Config,
 	mgr NewManagement,
-	pipelines ...types.PipelineConstructorFunc,
-) (types.Output, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (ioutput.Streamed, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidOutputType

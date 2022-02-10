@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func TestPoolBasic(t *testing.T) {
@@ -21,7 +21,7 @@ func TestPoolBasic(t *testing.T) {
 		mockProc.dropChan <- true
 	}()
 
-	constr := func(i *int) (types.Pipeline, error) {
+	constr := func(i *int) (iprocessor.Pipeline, error) {
 		return NewProcessor(
 			log.Noop(),
 			metrics.Noop(),
@@ -135,7 +135,7 @@ func TestPoolBasic(t *testing.T) {
 func TestPoolMultiMsgs(t *testing.T) {
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
-	constr := func(i *int) (types.Pipeline, error) {
+	constr := func(i *int) (iprocessor.Pipeline, error) {
 		return NewProcessor(
 			log.Noop(),
 			metrics.Noop(),

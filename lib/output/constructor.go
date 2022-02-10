@@ -61,10 +61,10 @@ func AppendProcessorsFromConfig(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) []types.PipelineConstructorFunc {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) []iprocessor.PipelineConstructorFunc {
 	if len(conf.Processors) > 0 {
-		pipelines = append(pipelines, []types.PipelineConstructorFunc{func(i *int) (types.Pipeline, error) {
+		pipelines = append(pipelines, []iprocessor.PipelineConstructorFunc{func(i *int) (iprocessor.Pipeline, error) {
 			if i == nil {
 				procs := 0
 				i = &procs
@@ -85,14 +85,14 @@ func AppendProcessorsFromConfig(
 	return pipelines
 }
 
-func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.Type) (Type, error)) ConstructorFunc {
+func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.Type) (output.Streamed, error)) ConstructorFunc {
 	return func(
 		conf Config,
 		mgr types.Manager,
 		log log.Modular,
 		stats metrics.Type,
-		pipelines ...types.PipelineConstructorFunc,
-	) (Type, error) {
+		pipelines ...iprocessor.PipelineConstructorFunc,
+	) (output.Streamed, error) {
 		output, err := fn(conf, mgr, log, stats)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create output '%v': %w", conf.Type, err)
@@ -103,7 +103,7 @@ func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.T
 }
 
 // ConstructorFunc is a func signature able to construct an output.
-type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type, ...types.PipelineConstructorFunc) (Type, error)
+type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type, ...iprocessor.PipelineConstructorFunc) (output.Streamed, error)
 
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
@@ -363,10 +363,10 @@ func New(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-	pipelines ...types.PipelineConstructorFunc,
-) (Type, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (output.Streamed, error) {
 	if mgrV2, ok := mgr.(interface {
-		NewOutput(Config, ...types.PipelineConstructorFunc) (types.Output, error)
+		NewOutput(Config, ...iprocessor.PipelineConstructorFunc) (output.Streamed, error)
 	}); ok {
 		return mgrV2.NewOutput(conf, pipelines...)
 	}

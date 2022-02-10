@@ -9,6 +9,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
@@ -35,7 +36,13 @@ type AsyncSink interface {
 	// the Type is closed.
 	WriteWithContext(ctx context.Context, msg *message.Batch) error
 
-	types.Closable
+	// CloseAsync triggers the shut down of this component but should not block
+	// the calling goroutine.
+	CloseAsync()
+
+	// WaitForClose is a blocking call to wait until the component has finished
+	// shutting down and cleaning up resources.
+	WaitForClose(timeout time.Duration) error
 }
 
 // AsyncWriter is an output type that writes messages to a writer.Type.
@@ -66,7 +73,7 @@ func NewAsyncWriter(
 	w AsyncSink,
 	log log.Modular,
 	stats metrics.Type,
-) (Type, error) {
+) (output.Streamed, error) {
 	return newAsyncWriter(typeStr, maxInflight, w, mock.NewManager(), log, stats)
 }
 
@@ -77,7 +84,7 @@ func newAsyncWriter(
 	mgr types.Manager,
 	log log.Modular,
 	stats metrics.Type,
-) (Type, error) {
+) (output.Streamed, error) {
 	aWriter := &AsyncWriter{
 		typeStr:      typeStr,
 		maxInflight:  maxInflight,

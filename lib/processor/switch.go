@@ -161,7 +161,7 @@ type Switch struct {
 // NewSwitch returns a Switch processor.
 func NewSwitch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	var cases []switchCase
 	for i, caseConf := range conf.Switch {
 		prefix := strconv.Itoa(i)

@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -23,7 +24,7 @@ func init() {
 	}.Merge(session.FieldSpecs())
 
 	Constructors[TypeAWSSNS] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 			return newAmazonSNS(TypeAWSSNS, conf.AWSSNS, mgr, log, stats)
 		}),
 		Version: "3.36.0",
@@ -47,7 +48,7 @@ allowing you to transfer data across accounts. You can find out more
 
 //------------------------------------------------------------------------------
 
-func newAmazonSNS(name string, conf writer.SNSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func newAmazonSNS(name string, conf writer.SNSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	s, err := writer.NewSNSV2(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err

@@ -8,21 +8,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-var _ types.Producer = &FanIn{}
-var _ types.Closable = &FanIn{}
+var _ input.Streamed = &FanIn{}
 
 //------------------------------------------------------------------------------
 
 func TestBasicFanIn(t *testing.T) {
 	nInputs, nMsgs := 10, 1000
 
-	Inputs := []types.Producer{}
+	Inputs := []input.Streamed{}
 	mockInputs := []*MockInputType{}
 
 	resChan := make(chan response.Error)
@@ -84,7 +83,7 @@ func TestBasicFanIn(t *testing.T) {
 func TestFanInShutdown(t *testing.T) {
 	nInputs := 10
 
-	Inputs := []types.Producer{}
+	Inputs := []input.Streamed{}
 	mockInputs := []*MockInputType{}
 
 	for i := 0; i < nInputs; i++ {
@@ -123,7 +122,7 @@ func TestFanInShutdown(t *testing.T) {
 func TestFanInAsync(t *testing.T) {
 	nInputs, nMsgs := 10, 1000
 
-	Inputs := []types.Producer{}
+	Inputs := []input.Streamed{}
 	mockInputs := []*MockInputType{}
 
 	for i := 0; i < nInputs; i++ {
@@ -189,7 +188,7 @@ func TestFanInAsync(t *testing.T) {
 func BenchmarkBasicFanIn(b *testing.B) {
 	nInputs := 10
 
-	Inputs := []types.Producer{}
+	Inputs := []input.Streamed{}
 	mockInputs := []*MockInputType{}
 	resChan := make(chan response.Error)
 

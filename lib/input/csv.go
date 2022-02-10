@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -95,7 +96,7 @@ func NewCSVFileConfig() CSVFileConfig {
 //------------------------------------------------------------------------------
 
 // NewCSVFile creates a new CSV file input type.
-func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewCSVFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	delimRunes := []rune(conf.CSVFile.Delim)
 	if len(delimRunes) != 1 {
 		return nil, errors.New("delimiter value must be exactly one character")

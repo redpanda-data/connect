@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -79,14 +79,14 @@ func TestBasicWrapPipeline(t *testing.T) {
 	}
 
 	procs := 0
-	_, err := WrapWithPipeline(&procs, mockOut, func(i *int) (types.Pipeline, error) {
+	_, err := WrapWithPipeline(&procs, mockOut, func(i *int) (iprocessor.Pipeline, error) {
 		return nil, errors.New("nope")
 	})
 	if err == nil {
 		t.Error("expected error from back constructor")
 	}
 
-	newOutput, err := WrapWithPipeline(&procs, mockOut, func(i *int) (types.Pipeline, error) {
+	newOutput, err := WrapWithPipeline(&procs, mockOut, func(i *int) (iprocessor.Pipeline, error) {
 		return mockPi, nil
 	})
 	if err != nil {
@@ -128,7 +128,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 
 	newOutput, err := WrapWithPipelines(
 		mockOut,
-		func(i *int) (types.Pipeline, error) {
+		func(i *int) (iprocessor.Pipeline, error) {
 			proc, err := processor.New(
 				firstProc, nil,
 				log.Noop(),
@@ -143,7 +143,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 				proc,
 			), nil
 		},
-		func(i *int) (types.Pipeline, error) {
+		func(i *int) (iprocessor.Pipeline, error) {
 			proc, err := processor.New(
 				secondProc, nil,
 				log.Noop(),

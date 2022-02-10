@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	ihttpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -56,7 +57,7 @@ these propagated responses.`,
 }
 
 // NewHTTPClient creates a new HTTPClient output type.
-func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	h, err := writer.NewHTTPClient(conf.HTTPClient, mgr, log, stats)
 	if err != nil {
 		return nil, err

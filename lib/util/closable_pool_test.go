@@ -7,8 +7,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 )
 
-//------------------------------------------------------------------------------
-
 type closable struct {
 	globalCloseCounter *int
 	globalWaitCounter  *int
@@ -126,5 +124,3 @@ func TestClosablePoolTierOrdering(t *testing.T) {
 		}
 	}
 }
-
-//------------------------------------------------------------------------------

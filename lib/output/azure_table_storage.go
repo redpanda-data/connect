@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -97,7 +98,7 @@ properties:
 //------------------------------------------------------------------------------
 
 // NewAzureTableStorage creates a new NewAzureTableStorage output type.
-func NewAzureTableStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewAzureTableStorage(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	tableStorage, err := writer.NewAzureTableStorageV2(conf.AzureTableStorage, mgr, log, stats)
 	if err != nil {
 		return nil, err

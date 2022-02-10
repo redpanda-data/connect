@@ -24,7 +24,7 @@ import (
 )
 
 func init() {
-	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
+	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 		g, err := newGCPCloudStorageOutput(nm, c.GCPCloudStorage, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err

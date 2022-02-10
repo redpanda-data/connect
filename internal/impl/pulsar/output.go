@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/pulsar/auth"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -24,7 +25,7 @@ import (
 )
 
 func init() {
-	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
+	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 		w, err := newPulsarWriter(c.Pulsar, nm, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err

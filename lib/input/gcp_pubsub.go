@@ -1,6 +1,7 @@
 package input
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -47,7 +48,7 @@ You can access these metadata fields using
 //------------------------------------------------------------------------------
 
 // NewGCPPubSub creates a new GCP Cloud Pub/Sub input type.
-func NewGCPPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewGCPPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var c reader.Async
 	var err error
 	if c, err = reader.NewGCPPubSub(conf.GCPPubSub, log, stats); err != nil {

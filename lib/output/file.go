@@ -11,6 +11,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/codec"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
@@ -64,7 +65,7 @@ func NewFileConfig() FileConfig {
 //------------------------------------------------------------------------------
 
 // NewFile creates a new File output type.
-func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	f, err := newFileWriter(conf.File.Path, conf.File.Codec, mgr, log, stats)
 	if err != nil {
 		return nil, err

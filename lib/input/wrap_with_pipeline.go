@@ -3,8 +3,9 @@ package input
 import (
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/input"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -13,13 +14,13 @@ import (
 // by routing the input through the pipeline, and implements the input.Type
 // interface in order to act like an ordinary input.
 type WithPipeline struct {
-	in   Type
-	pipe types.Pipeline
+	in   input.Streamed
+	pipe iprocessor.Pipeline
 }
 
 // WrapWithPipeline routes an input directly into a processing pipeline and
 // returns a type that manages both and acts like an ordinary input.
-func WrapWithPipeline(procs *int, in Type, pipeConstructor types.PipelineConstructorFunc) (*WithPipeline, error) {
+func WrapWithPipeline(procs *int, in input.Streamed, pipeConstructor iprocessor.PipelineConstructorFunc) (*WithPipeline, error) {
 	pipe, err := pipeConstructor(procs)
 	if err != nil {
 		return nil, err
@@ -35,7 +36,7 @@ func WrapWithPipeline(procs *int, in Type, pipeConstructor types.PipelineConstru
 }
 
 // WrapWithPipelines wraps an input with a variadic number of pipelines.
-func WrapWithPipelines(in Type, pipeConstructors ...types.PipelineConstructorFunc) (Type, error) {
+func WrapWithPipelines(in input.Streamed, pipeConstructors ...iprocessor.PipelineConstructorFunc) (input.Streamed, error) {
 	procs := 0
 	var err error
 	for _, ctor := range pipeConstructors {

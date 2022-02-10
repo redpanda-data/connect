@@ -1,6 +1,7 @@
 package output
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
@@ -13,7 +14,7 @@ import (
 
 func init() {
 	Constructors[TypeAWSKinesis] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 			return newKinesis(TypeAWSKinesis, conf.AWSKinesis, mgr, log, stats)
 		}),
 		Version: "3.36.0",
@@ -49,7 +50,7 @@ allowing you to transfer data across accounts. You can find out more
 
 //------------------------------------------------------------------------------
 
-func newKinesis(name string, conf writer.KinesisConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
+func newKinesis(name string, conf writer.KinesisConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	kin, err := writer.NewKinesisV2(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err

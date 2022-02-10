@@ -14,7 +14,7 @@ import (
 )
 
 type notBatchedOutput struct {
-	out Type
+	out output.Streamed
 
 	inChan  <-chan message.Transaction
 	outChan chan message.Transaction
@@ -32,7 +32,7 @@ type notBatchedOutput struct {
 // respecting the max in flight of the wrapped output. This is a more efficient
 // way of feeding messages into an output that handles its own batching
 // mechanism internally, or does not support batching at all.
-func OnlySinglePayloads(out Type) Type {
+func OnlySinglePayloads(out output.Streamed) output.Streamed {
 	n := &notBatchedOutput{
 		out:        out,
 		outChan:    make(chan message.Transaction),

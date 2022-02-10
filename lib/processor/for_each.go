@@ -65,7 +65,7 @@ type ForEach struct {
 // NewForEach returns a ForEach processor.
 func NewForEach(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	var children []processor.V1
 	for i, pconf := range conf.ForEach {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
@@ -89,7 +89,7 @@ func NewForEach(
 // NewProcessBatch returns a ForEach processor.
 func NewProcessBatch(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	var children []processor.V1
 	for i, pconf := range conf.ProcessBatch {
 		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)

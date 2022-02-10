@@ -8,7 +8,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
+	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
+	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/cache"
@@ -18,7 +21,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/template"
 	"gopkg.in/yaml.v3"
 )
@@ -176,7 +178,7 @@ func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
 }
 
 func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
-	return set.Add(func(c input.Config, nm bundle.NewManagement, pcf ...types.PipelineConstructorFunc) (input.Type, error) {
+	return set.Add(func(c input.Config, nm bundle.NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -198,7 +200,7 @@ func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
 }
 
 func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
-	return set.Add(func(c output.Config, nm bundle.NewManagement, pcf ...types.PipelineConstructorFunc) (output.Type, error) {
+	return set.Add(func(c output.Config, nm bundle.NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -220,7 +222,7 @@ func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
 }
 
 func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
-	return set.Add(func(c processor.Config, nm bundle.NewManagement) (processor.Type, error) {
+	return set.Add(func(c processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err

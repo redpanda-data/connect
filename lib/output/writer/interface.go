@@ -1,8 +1,9 @@
 package writer
 
 import (
+	"time"
+
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Type is a type that writes Benthos messages to a third party sink. If the
@@ -19,5 +20,11 @@ type Type interface {
 	// closed.
 	Write(msg *message.Batch) error
 
-	types.Closable
+	// CloseAsync triggers the shut down of this component but should not block
+	// the calling goroutine.
+	CloseAsync()
+
+	// WaitForClose is a blocking call to wait until the component has finished
+	// shutting down and cleaning up resources.
+	WaitForClose(timeout time.Duration) error
 }

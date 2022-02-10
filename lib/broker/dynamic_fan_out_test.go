@@ -9,17 +9,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var _ types.Consumer = &DynamicFanOut{}
-var _ types.Closable = &DynamicFanOut{}
+var _ output.Streamed = &DynamicFanOut{}
 
 func TestBasicDynamicFanOut(t *testing.T) {
 	nOutputs, nMsgs := 10, 1000

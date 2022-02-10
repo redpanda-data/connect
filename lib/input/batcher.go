@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/transaction"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -22,7 +23,7 @@ type Batcher struct {
 	stats metrics.Type
 	log   log.Modular
 
-	child   Type
+	child   input.Streamed
 	batcher *batch.Policy
 
 	messagesOut chan message.Transaction
@@ -33,10 +34,9 @@ type Batcher struct {
 // NewBatcher creates a new Batcher around an input.
 func NewBatcher(
 	batcher *batch.Policy,
-	child Type,
-	log log.Modular,
+	child input.Streamed, log log.Modular,
 	stats metrics.Type,
-) Type {
+) input.Streamed {
 	b := Batcher{
 		stats:       stats,
 		log:         log,

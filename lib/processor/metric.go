@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -228,7 +229,7 @@ func unwrapMetric(t metrics.Type) metrics.Type {
 // NewMetric returns a Metric processor.
 func NewMetric(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	value, err := interop.NewBloblangField(mgr, conf.Metric.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)

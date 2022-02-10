@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -140,7 +141,7 @@ type JQ struct {
 // NewJQ returns a JQ processor.
 func NewJQ(
 	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
-) (Type, error) {
+) (processor.V1, error) {
 	j := &JQ{
 		conf:  conf.JQ,
 		stats: stats,

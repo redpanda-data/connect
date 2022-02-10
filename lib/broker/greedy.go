@@ -6,7 +6,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -15,11 +14,11 @@ import (
 // out to a single consumer chosen from an array in round-robin fashion.
 // Consumers that apply backpressure will block all consumers.
 type Greedy struct {
-	outputs []types.Output
+	outputs []output.Streamed
 }
 
 // NewGreedy creates a new Greedy type by providing consumers.
-func NewGreedy(outputs []types.Output) (*Greedy, error) {
+func NewGreedy(outputs []output.Streamed) (*Greedy, error) {
 	return &Greedy{
 		outputs: outputs,
 	}, nil

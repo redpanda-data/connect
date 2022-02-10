@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -253,7 +254,7 @@ func TestHTTPServerLifecycle(t *testing.T) {
 	conf.HTTPServer.Path = "/foo/bar"
 
 	timeout := time.Second * 5
-	readNextMsg := func(in input.Type) (*message.Batch, error) {
+	readNextMsg := func(in iinput.Streamed) (*message.Batch, error) {
 		t.Helper()
 		var tran message.Transaction
 		select {
