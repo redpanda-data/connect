@@ -3,6 +3,7 @@ package mongodb
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
+	"github.com/Jeffail/benthos/v3/public/service"
 )
 
 func processorOperationDocs(defaultOperation client.Operation) docs.FieldSpec {
@@ -35,3 +36,12 @@ func mapExamples() []interface{} {
 	examples := []interface{}{"root.a = this.foo\nroot.b = this.bar"}
 	return examples
 }
+
+var urlField = service.NewStringField("url").
+	Description("The URL of the target MongoDB DB.").
+	Example("mongodb://localhost:27017")
+
+var queryField = service.NewBloblangField("query").Description("Bloblang expression describing MongoDB query.").Example(`
+      root.from = {"$lte": timestamp_unix()}
+      root.to = {"$gte": timestamp_unix()}
+`)
