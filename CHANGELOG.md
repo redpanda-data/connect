@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Field `nack_reject_patterns` added to the `amqp_0_9` input.
 
+### Fixed
+
+- Fixed an issue where manually clearing errors within a `catch` processor would result in subsequent processors in the block being skipped.
+
 ## 3.63.0 - 2022-02-08
 
 ### Added

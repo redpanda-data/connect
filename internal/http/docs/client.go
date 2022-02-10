@@ -46,6 +46,9 @@ func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.Field
 
 	return docs.FieldComponent().WithChildren(httpSpecs...).
 		Linter((func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
+			if _, ok := value.(map[string]interface{}); !ok {
+				return nil
+			}
 			gObj := gabs.Wrap(value)
 			copyResponseHeaders, copyResponseHeadersSet := gObj.S("copy_response_headers").Data().(bool)
 			metaPrefixCount, _ := gObj.ArrayCountP("extract_headers.include_prefixes")

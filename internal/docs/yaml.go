@@ -552,6 +552,11 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		lints = append(lints, NewLintError(node.Line, fmt.Sprintf("field %v is deprecated", f.Name)))
 	}
 
+	// Execute custom linters, if the kind is non-scalar this means we execute
+	// the linter from the perspective of both the scalar and higher level types
+	// and it's up to the linting implementation to distinguish between them.
+	lints = append(lints, customLintFromYAML(ctx, f, node)...)
+
 	// Check basic kind matches, and execute custom linters
 	switch f.Kind {
 	case Kind2DArray:
@@ -582,9 +587,6 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		}
 		return lints
 	}
-
-	// Execute custom linters
-	lints = append(lints, customLintFromYAML(ctx, f, node)...)
 
 	// If we're a core type then execute component specific linting
 	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
