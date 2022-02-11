@@ -45,6 +45,61 @@ func TestMethodImmutability(t *testing.T) {
 				"baz": "buz",
 			},
 		},
+		{
+			name:   "merge collision",
+			method: "merge",
+			target: map[string]interface{}{"foo": "bar", "baz": "buz"},
+			args: []interface{}{
+				map[string]interface{}{"foo": "qux"},
+			},
+			exp: map[string]interface{}{
+				"foo": []interface{}{"bar", "qux"},
+				"baz": "buz",
+			},
+		},
+
+		{
+			name:   "assign arrays",
+			method: "assign",
+			target: []interface{}{"foo", "bar"},
+			args: []interface{}{
+				[]interface{}{"baz", "buz"},
+			},
+			exp: []interface{}{"foo", "bar", "baz", "buz"},
+		},
+		{
+			name:   "assign into an array",
+			method: "assign",
+			target: []interface{}{"foo", "bar"},
+			args: []interface{}{
+				map[string]interface{}{"baz": "buz"},
+			},
+			exp: []interface{}{"foo", "bar", map[string]interface{}{"baz": "buz"}},
+		},
+		{
+			name:   "assign objects",
+			method: "assign",
+			target: map[string]interface{}{"foo": "bar"},
+			args: []interface{}{
+				map[string]interface{}{"baz": "buz"},
+			},
+			exp: map[string]interface{}{
+				"foo": "bar",
+				"baz": "buz",
+			},
+		},
+		{
+			name:   "assign collision",
+			method: "assign",
+			target: map[string]interface{}{"foo": "bar", "baz": "buz"},
+			args: []interface{}{
+				map[string]interface{}{"foo": "qux"},
+			},
+			exp: map[string]interface{}{
+				"foo": "qux",
+				"baz": "buz",
+			},
+		},
 	}
 
 	for _, test := range testCases {
