@@ -328,25 +328,24 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 							}
 							reason = item.Error.Reason
 						}
+						e.log.Errorf("Elasticsearch message '%v' rejected with code [%v]: %v\n", item.Id, item.Status, reason)
 						if !shouldRetry(item.Status) {
-							e.log.Errorf("Elasticsearch message '%v' rejected with code [%v]: %v\n", item.Id, item.Status, reason)
 							returnedErr = item.Error
 						} else {
-							e.log.Errorf("Elasticsearch message '%v' failed with code [%v]: %v\n", item.Id, item.Status, reason)
 							req := requests[i]
 							bulkReq, err := e.buildBulkableRequest(req)
 							if err != nil {
 								return err
 							}
 							b.Add(bulkReq)
-							requests[errorCount] = requests[i]
+							requests[errorCount] = req
 						}
 					}
 					errorCount++
 				}
 			}
 		}
-		if wait == backoff.Stop {
+		if wait == backoff.Stop || returnedErr != nil {
 			reason := "no reason given"
 			if returnedErr != nil {
 				reason = returnedErr.Reason
