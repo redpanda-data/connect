@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -82,9 +81,9 @@ type Sleep struct {
 
 // NewSleep returns a Sleep processor.
 func NewSleep(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
-	durationStr, err := interop.NewBloblangField(mgr, conf.Sleep.Duration)
+	durationStr, err := mgr.BloblEnvironment().NewField(conf.Sleep.Duration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse duration expression: %v", err)
 	}

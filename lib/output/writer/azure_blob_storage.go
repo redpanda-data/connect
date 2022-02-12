@@ -19,7 +19,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -39,7 +38,7 @@ type AzureBlobStorage struct {
 
 // NewAzureBlobStorageV2 creates a new AzureBlobStorage writer.Type.
 func NewAzureBlobStorageV2(
-	mgr types.Manager,
+	mgr interop.Manager,
 	conf AzureBlobStorageConfig,
 	log log.Modular,
 	stats metrics.Type,
@@ -75,16 +74,16 @@ func NewAzureBlobStorageV2(
 		stats:  stats,
 		client: client.GetBlobService(),
 	}
-	if a.container, err = interop.NewBloblangField(mgr, conf.Container); err != nil {
+	if a.container, err = mgr.BloblEnvironment().NewField(conf.Container); err != nil {
 		return nil, fmt.Errorf("failed to parse container expression: %v", err)
 	}
-	if a.path, err = interop.NewBloblangField(mgr, conf.Path); err != nil {
+	if a.path, err = mgr.BloblEnvironment().NewField(conf.Path); err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
-	if a.blobType, err = interop.NewBloblangField(mgr, conf.BlobType); err != nil {
+	if a.blobType, err = mgr.BloblEnvironment().NewField(conf.BlobType); err != nil {
 		return nil, fmt.Errorf("failed to parse blob type expression: %v", err)
 	}
-	if a.accessLevel, err = interop.NewBloblangField(mgr, conf.PublicAccessLevel); err != nil {
+	if a.accessLevel, err = mgr.BloblEnvironment().NewField(conf.PublicAccessLevel); err != nil {
 		return nil, fmt.Errorf("failed to parse public access level expression: %v", err)
 	}
 	return a, nil

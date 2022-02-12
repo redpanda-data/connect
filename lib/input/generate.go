@@ -18,7 +18,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/robfig/cron/v3"
 )
 
@@ -26,7 +25,7 @@ import (
 
 func init() {
 	Constructors[TypeGenerate] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 			b, err := newBloblang(mgr, conf.Generate)
 			if err != nil {
 				return nil, err
@@ -132,7 +131,7 @@ type Bloblang struct {
 }
 
 // newBloblang creates a new bloblang input reader type.
-func newBloblang(mgr types.Manager, conf BloblangConfig) (*Bloblang, error) {
+func newBloblang(mgr interop.Manager, conf BloblangConfig) (*Bloblang, error) {
 	var (
 		duration    time.Duration
 		timer       *time.Ticker
@@ -156,7 +155,7 @@ func newBloblang(mgr types.Manager, conf BloblangConfig) (*Bloblang, error) {
 			timer = time.NewTicker(duration)
 		}
 	}
-	exec, err := interop.NewBloblangMapping(mgr, conf.Mapping)
+	exec, err := mgr.BloblEnvironment().NewMapping(conf.Mapping)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("failed to parse mapping: %v", perr.ErrorAtPosition([]rune(conf.Mapping)))

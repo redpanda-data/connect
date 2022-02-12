@@ -9,11 +9,11 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 
 	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
 	"github.com/golang/protobuf/jsonpb"
@@ -328,7 +328,7 @@ type Protobuf struct {
 
 // NewProtobuf returns an Protobuf processor.
 func NewProtobuf(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	p := &Protobuf{
 		parts: conf.Protobuf.Parts,

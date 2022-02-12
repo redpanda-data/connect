@@ -10,6 +10,7 @@ import (
 
 	batchInternal "github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -27,7 +28,7 @@ func TestBatcherEarlyTermination(t *testing.T) {
 	policyConf := batch.NewPolicyConfig()
 	policyConf.Count = 10
 	policyConf.Period = "50ms"
-	batcher, err := batch.NewPolicy(policyConf, nil, log.Noop(), metrics.Noop())
+	batcher, err := batch.NewPolicy(policyConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	out := &mockOutput{}
@@ -52,7 +53,7 @@ func TestBatcherBasic(t *testing.T) {
 
 	policyConf := batch.NewPolicyConfig()
 	policyConf.Count = 4
-	batcher, err := batch.NewPolicy(policyConf, nil, log.Noop(), metrics.Noop())
+	batcher, err := batch.NewPolicy(policyConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	out := &mockOutput{}
@@ -188,7 +189,7 @@ func TestBatcherBatchError(t *testing.T) {
 
 	policyConf := batch.NewPolicyConfig()
 	policyConf.Count = 4
-	batcher, err := batch.NewPolicy(policyConf, nil, log.Noop(), metrics.Noop())
+	batcher, err := batch.NewPolicy(policyConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	out := &mockOutput{}
@@ -271,7 +272,7 @@ func TestBatcherTimed(t *testing.T) {
 
 	policyConf := batch.NewPolicyConfig()
 	policyConf.Period = "100ms"
-	batcher, err := batch.NewPolicy(policyConf, nil, log.Noop(), metrics.Noop())
+	batcher, err := batch.NewPolicy(policyConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -45,11 +44,11 @@ type Files struct {
 // NewFilesV2 creates a new file based writer.Type.
 func NewFilesV2(
 	conf FilesConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*Files, error) {
-	path, err := interop.NewBloblangField(mgr, conf.Path)
+	path, err := mgr.BloblEnvironment().NewField(conf.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}

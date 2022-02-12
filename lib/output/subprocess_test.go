@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
@@ -93,7 +94,7 @@ func main() {
 	conf.Subprocess.Name = "go"
 	conf.Subprocess.Args = []string{"run", filePath}
 
-	o, err := output.New(conf, nil, log.Noop(), metrics.Noop())
+	o, err := output.New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	tranChan := make(chan message.Transaction)
@@ -153,7 +154,7 @@ func main() {
 	conf.Subprocess.Name = "go"
 	conf.Subprocess.Args = []string{"run", filePath}
 
-	o, err := output.New(conf, nil, log.Noop(), metrics.Noop())
+	o, err := output.New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	tranChan := make(chan message.Transaction)

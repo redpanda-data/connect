@@ -17,6 +17,7 @@ import (
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -25,7 +26,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
@@ -113,7 +113,7 @@ type streamTestEnvironment struct {
 	ctx     context.Context
 	log     log.Modular
 	stats   metrics.Type
-	mgr     types.Manager
+	mgr     interop.Manager
 
 	allowDuplicateMessages bool
 

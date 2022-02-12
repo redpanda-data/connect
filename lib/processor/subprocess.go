@@ -18,11 +18,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -112,13 +112,13 @@ type Subprocess struct {
 
 // NewSubprocess returns a Subprocess processor.
 func NewSubprocess(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	return newSubprocess(conf.Subprocess, mgr, log, stats)
 }
 
 func newSubprocess(
-	conf SubprocessConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf SubprocessConfig, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	e := &Subprocess{
 		log:        log,

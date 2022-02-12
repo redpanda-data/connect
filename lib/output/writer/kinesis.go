@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
@@ -91,7 +90,7 @@ type Kinesis struct {
 // NewKinesisV2 creates a new Amazon Kinesis writer.Type.
 func NewKinesisV2(
 	conf KinesisConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*Kinesis, error) {
@@ -108,10 +107,10 @@ func NewKinesisV2(
 		streamName:      aws.String(conf.Stream),
 	}
 	var err error
-	if k.hashKey, err = interop.NewBloblangField(mgr, conf.HashKey); err != nil {
+	if k.hashKey, err = mgr.BloblEnvironment().NewField(conf.HashKey); err != nil {
 		return nil, fmt.Errorf("failed to parse hash key expression: %v", err)
 	}
-	if k.partitionKey, err = interop.NewBloblangField(mgr, conf.PartitionKey); err != nil {
+	if k.partitionKey, err = mgr.BloblEnvironment().NewField(conf.PartitionKey); err != nil {
 		return nil, fmt.Errorf("failed to parse partition key expression: %v", err)
 	}
 	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {

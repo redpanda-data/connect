@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -196,7 +196,7 @@ func TestWorkflowDeps(t *testing.T) {
 	}
 }
 
-func newMockProcProvider(t *testing.T, confs map[string]processor.Config) types.Manager {
+func newMockProcProvider(t *testing.T, confs map[string]processor.Config) interop.Manager {
 	t.Helper()
 
 	resConf := manager.NewResourceConfig()

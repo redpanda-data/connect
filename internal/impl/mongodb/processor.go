@@ -14,7 +14,6 @@ import (
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
-	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -227,7 +226,7 @@ func NewProcessor(
 		return nil, fmt.Errorf("write_concern validation error: %w", err)
 	}
 
-	if m.collection, err = interop.NewBloblangField(mgr, m.conf.MongoDB.Collection); err != nil {
+	if m.collection, err = mgr.BloblEnvironment().NewField(m.conf.MongoDB.Collection); err != nil {
 		return nil, fmt.Errorf("failed to parse collection expression: %v", err)
 	}
 

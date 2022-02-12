@@ -8,7 +8,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Config is a configuration struct for creating parallel processing pipelines.
@@ -42,7 +41,7 @@ type ProcessorConstructorFunc func() (iprocessor.V1, error)
 // New creates an input type based on an input configuration.
 func New(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	processorCtors ...ProcessorConstructorFunc,

@@ -15,13 +15,13 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/component/input/span"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
@@ -114,7 +114,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 //------------------------------------------------------------------------------
 
 // NewKafka creates a new Kafka input type.
-func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func NewKafka(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var rdr reader.Async
 	var err error
 	if rdr, err = newKafkaReader(conf.Kafka, mgr, log, stats); err != nil {
@@ -165,7 +165,7 @@ type kafkaReader struct {
 	conf  reader.KafkaConfig
 	stats metrics.Type
 	log   log.Modular
-	mgr   types.Manager
+	mgr   interop.Manager
 
 	closeOnce  sync.Once
 	closedChan chan struct{}
@@ -204,7 +204,7 @@ func parsePartitions(expr string) ([]int32, error) {
 }
 
 func newKafkaReader(
-	conf reader.KafkaConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf reader.KafkaConfig, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (*kafkaReader, error) {
 	if conf.Batching.IsNoop() {
 		conf.Batching.Count = 1

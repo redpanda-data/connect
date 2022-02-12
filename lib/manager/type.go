@@ -19,6 +19,7 @@ import (
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/input"
@@ -28,7 +29,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // ErrResourceNotFound represents an error where a named resource could not be
@@ -218,7 +218,7 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 
 // ForStream returns a variant of this manager to be used by a particular stream
 // identifer, where APIs registered will be namespaced by that id.
-func (t *Type) ForStream(id string) types.Manager {
+func (t *Type) ForStream(id string) interop.Manager {
 	return t.forStream(id)
 }
 
@@ -235,7 +235,7 @@ func (t *Type) forStream(id string) *Type {
 // ForComponent returns a variant of this manager to be used by a particular
 // component identifer, where observability components will be automatically
 // tagged with the label.
-func (t *Type) ForComponent(id string) types.Manager {
+func (t *Type) ForComponent(id string) interop.Manager {
 	return t.forComponent(id)
 }
 
@@ -257,7 +257,7 @@ func (t *Type) forComponent(id string) *Type {
 // ForChildComponent returns a variant of this manager to be used by a
 // particular component identifer, which is a child of the current component,
 // where observability components will be automatically tagged with the label.
-func (t *Type) ForChildComponent(id string) types.Manager {
+func (t *Type) ForChildComponent(id string) interop.Manager {
 	return t.forChildComponent(id)
 }
 
@@ -392,6 +392,12 @@ func (t *Type) NewBuffer(conf buffer.Config) (ibuffer.Streamed, error) {
 
 //------------------------------------------------------------------------------
 
+// ProbeCache returns true if a cache resource exists under the provided name.
+func (t *Type) ProbeCache(name string) bool {
+	_, exists := t.caches[name]
+	return exists
+}
+
 // AccessCache attempts to access a cache resource by a unique identifier and
 // executes a closure function with the cache as an argument. Returns an error
 // if the cache does not exist (or is otherwise inaccessible).
@@ -452,6 +458,12 @@ func (t *Type) StoreCache(ctx context.Context, name string, conf cache.Config) e
 }
 
 //------------------------------------------------------------------------------
+
+// ProbeInput returns true if an input resource exists under the provided name.
+func (t *Type) ProbeInput(name string) bool {
+	_, exists := t.inputs[name]
+	return exists
+}
 
 // AccessInput attempts to access an input resource by a unique identifier and
 // executes a closure function with the input as an argument. Returns an error
@@ -518,6 +530,13 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 
 //------------------------------------------------------------------------------
 
+// ProbeProcessor returns true if a processor resource exists under the provided
+// name.
+func (t *Type) ProbeProcessor(name string) bool {
+	_, exists := t.processors[name]
+	return exists
+}
+
 // AccessProcessor attempts to access a processor resource by a unique
 // identifier and executes a closure function with the processor as an argument.
 // Returns an error if the processor does not exist (or is otherwise
@@ -583,6 +602,13 @@ func (t *Type) StoreProcessor(ctx context.Context, name string, conf processor.C
 }
 
 //------------------------------------------------------------------------------
+
+// ProbeOutput returns true if an output resource exists under the provided
+// name.
+func (t *Type) ProbeOutput(name string) bool {
+	_, exists := t.outputs[name]
+	return exists
+}
 
 // AccessOutput attempts to access an output resource by a unique identifier and
 // executes a closure function with the output as an argument. Returns an error
@@ -651,6 +677,13 @@ func (t *Type) StoreOutput(ctx context.Context, name string, conf output.Config)
 }
 
 //------------------------------------------------------------------------------
+
+// ProbeRateLimit returns true if a rate limit resource exists under the
+// provided name.
+func (t *Type) ProbeRateLimit(name string) bool {
+	_, exists := t.rateLimits[name]
+	return exists
+}
 
 // AccessRateLimit attempts to access a rate limit resource by a unique
 // identifier and executes a closure function with the rate limit as an
@@ -781,51 +814,11 @@ func (t *Type) WaitForClose(timeout time.Duration) error {
 
 // SwapMetrics attempts to swap the underlying metrics implementation of a
 // manager. This function does nothing if the manager type is not a *Type.
-func SwapMetrics(mgr types.Manager, stats metrics.Type) types.Manager {
+func SwapMetrics(mgr interop.Manager, stats metrics.Type) interop.Manager {
 	if t, ok := mgr.(*Type); ok {
 		newMgr := *t
 		newMgr.stats = t.stats.WithStats(stats)
 		return &newMgr
 	}
 	return mgr
-}
-
-// GetInput attempts to find a service wide input by its name.
-func (t *Type) GetInput(name string) (iinput.Streamed, error) {
-	if c, exists := t.inputs[name]; exists {
-		return c, nil
-	}
-	return nil, component.ErrInputNotFound
-}
-
-// GetCache attempts to find a service wide cache by its name.
-func (t *Type) GetCache(name string) (icache.V1, error) {
-	if c, exists := t.caches[name]; exists {
-		return c, nil
-	}
-	return nil, component.ErrCacheNotFound
-}
-
-// GetProcessor attempts to find a service wide processor by its name.
-func (t *Type) GetProcessor(name string) (iprocessor.V1, error) {
-	if p, exists := t.processors[name]; exists {
-		return p, nil
-	}
-	return nil, component.ErrProcessorNotFound
-}
-
-// GetRateLimit attempts to find a service wide rate limit by its name.
-func (t *Type) GetRateLimit(name string) (iratelimit.V1, error) {
-	if rl, exists := t.rateLimits[name]; exists {
-		return rl, nil
-	}
-	return nil, component.ErrRateLimitNotFound
-}
-
-// GetOutput attempts to find a service wide output by its name.
-func (t *Type) GetOutput(name string) (ioutput.Sync, error) {
-	if c, exists := t.outputs[name]; exists {
-		return c, nil
-	}
-	return nil, component.ErrOutputNotFound
 }

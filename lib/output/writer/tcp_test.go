@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -24,7 +25,7 @@ func TestTCPBasic(t *testing.T) {
 	conf := NewTCPConfig()
 	conf.Address = ln.Addr().String()
 
-	wtr, err := NewTCP(conf, nil, log.Noop(), metrics.Noop())
+	wtr, err := NewTCP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +89,7 @@ func TestTCPMultipart(t *testing.T) {
 	conf := NewTCPConfig()
 	conf.Address = ln.Addr().String()
 
-	wtr, err := NewTCP(conf, nil, log.Noop(), metrics.Noop())
+	wtr, err := NewTCP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

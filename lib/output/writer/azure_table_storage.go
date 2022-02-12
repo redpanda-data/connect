@@ -17,7 +17,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -39,7 +38,7 @@ type AzureTableStorage struct {
 // NewAzureTableStorageV2 creates a new Azure Table Storage writer Type.
 func NewAzureTableStorageV2(
 	conf AzureTableStorageConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*AzureTableStorage, error) {
@@ -73,18 +72,18 @@ func NewAzureTableStorageV2(
 		timeout: timeout,
 		client:  client.GetTableService(),
 	}
-	if a.tableName, err = interop.NewBloblangField(mgr, conf.TableName); err != nil {
+	if a.tableName, err = mgr.BloblEnvironment().NewField(conf.TableName); err != nil {
 		return nil, fmt.Errorf("failed to parse table name expression: %v", err)
 	}
-	if a.partitionKey, err = interop.NewBloblangField(mgr, conf.PartitionKey); err != nil {
+	if a.partitionKey, err = mgr.BloblEnvironment().NewField(conf.PartitionKey); err != nil {
 		return nil, fmt.Errorf("failed to parse partition key expression: %v", err)
 	}
-	if a.rowKey, err = interop.NewBloblangField(mgr, conf.RowKey); err != nil {
+	if a.rowKey, err = mgr.BloblEnvironment().NewField(conf.RowKey); err != nil {
 		return nil, fmt.Errorf("failed to parse row key expression: %v", err)
 	}
 	a.properties = make(map[string]*field.Expression)
 	for property, value := range conf.Properties {
-		if a.properties[property], err = interop.NewBloblangField(mgr, value); err != nil {
+		if a.properties[property], err = mgr.BloblEnvironment().NewField(value); err != nil {
 			return nil, fmt.Errorf("failed to parse property expression: %v", err)
 		}
 	}

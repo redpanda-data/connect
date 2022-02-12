@@ -17,7 +17,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/nats-io/nats.go"
 )
 
@@ -61,18 +60,18 @@ type NATS struct {
 }
 
 // NewNATSV2 creates a new NATS output type.
-func NewNATSV2(conf NATSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*NATS, error) {
+func NewNATSV2(conf NATSConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*NATS, error) {
 	n := NATS{
 		log:     log,
 		conf:    conf,
 		headers: make(map[string]*field.Expression),
 	}
 	var err error
-	if n.subjectStr, err = interop.NewBloblangField(mgr, conf.Subject); err != nil {
+	if n.subjectStr, err = mgr.BloblEnvironment().NewField(conf.Subject); err != nil {
 		return nil, fmt.Errorf("failed to parse subject expression: %v", err)
 	}
 	for k, v := range conf.Headers {
-		if n.headers[k], err = interop.NewBloblangField(mgr, v); err != nil {
+		if n.headers[k], err = mgr.BloblEnvironment().NewField(v); err != nil {
 			return nil, fmt.Errorf("failed to parse header '%s' expresion: %v", k, err)
 		}
 	}

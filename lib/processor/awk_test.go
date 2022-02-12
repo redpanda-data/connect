@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -15,7 +16,7 @@ func TestAWKValidation(t *testing.T) {
 	conf.AWK.Codec = "json"
 	conf.AWK.Program = "{ print foo_bar }"
 
-	a, err := NewAWK(conf, nil, log.Noop(), metrics.Noop())
+	a, err := NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +38,7 @@ func TestAWKValidation(t *testing.T) {
 
 	conf.AWK.Parts = []int{5}
 
-	if a, err = NewAWK(conf, nil, log.Noop(), metrics.Noop()); err != nil {
+	if a, err = NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -54,7 +55,7 @@ func TestAWKValidation(t *testing.T) {
 	}
 
 	conf.AWK.Codec = "not valid"
-	if _, err = NewAWK(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err = NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error from bad codec")
 	}
 }
@@ -65,7 +66,7 @@ func TestAWKBadExitStatus(t *testing.T) {
 	conf.AWK.Codec = "none"
 	conf.AWK.Program = "{ exit 1; print foo }"
 
-	a, err := NewAWK(conf, nil, log.Noop(), metrics.Noop())
+	a, err := NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestAWKBadDateString(t *testing.T) {
 	conf.AWK.Codec = "none"
 	conf.AWK.Program = `{ print timestamp_unix("this isnt a date string") }`
 
-	a, err := NewAWK(conf, nil, log.Noop(), metrics.Noop())
+	a, err := NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +120,7 @@ func TestAWKJSONParts(t *testing.T) {
 		json_set("foo.bar", json_get("foo.bar") " extra");
 	}`
 
-	a, err := NewAWK(conf, nil, log.Noop(), metrics.Noop())
+	a, err := NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -609,7 +610,7 @@ func TestAWK(t *testing.T) {
 		conf.AWK.Codec = test.codec
 		conf.AWK.Program = test.program
 
-		a, err := NewAWK(conf, nil, log.Noop(), metrics.Noop())
+		a, err := NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 		if err != nil {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}

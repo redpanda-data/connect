@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +17,7 @@ func TestWhileErrs(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeWhile
 
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	_, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.EqualError(t, err, "a check query is required")
 }
 
@@ -32,7 +33,7 @@ func TestWhileWithCount(t *testing.T) {
 
 	conf.While.Processors = append(conf.While.Processors, procConf)
 
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	exp := [][]byte{
@@ -59,7 +60,7 @@ func TestWhileWithContentCheck(t *testing.T) {
 
 	conf.While.Processors = append(conf.While.Processors, procConf)
 
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func TestWhileWithCountALO(t *testing.T) {
 
 	conf.While.Processors = append(conf.While.Processors, procConf)
 
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +128,7 @@ func TestWhileMaxLoops(t *testing.T) {
 
 	conf.While.Processors = append(conf.While.Processors, procConf)
 
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func TestWhileWithStaticTrue(t *testing.T) {
 
 	conf.While.Processors = append(conf.While.Processors, procConf)
 
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -58,7 +57,7 @@ type TypeSpec struct {
 // provided output configuration will also be initialized.
 func AppendProcessorsFromConfig(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...iprocessor.PipelineConstructorFunc,
@@ -85,10 +84,10 @@ func AppendProcessorsFromConfig(
 	return pipelines
 }
 
-func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.Type) (output.Streamed, error)) ConstructorFunc {
+func fromSimpleConstructor(fn func(Config, interop.Manager, log.Modular, metrics.Type) (output.Streamed, error)) ConstructorFunc {
 	return func(
 		conf Config,
-		mgr types.Manager,
+		mgr interop.Manager,
 		log log.Modular,
 		stats metrics.Type,
 		pipelines ...iprocessor.PipelineConstructorFunc,
@@ -103,7 +102,7 @@ func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.T
 }
 
 // ConstructorFunc is a func signature able to construct an output.
-type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type, ...iprocessor.PipelineConstructorFunc) (output.Streamed, error)
+type ConstructorFunc func(Config, interop.Manager, log.Modular, metrics.Type, ...iprocessor.PipelineConstructorFunc) (output.Streamed, error)
 
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
@@ -360,7 +359,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 // New creates an output type based on an output configuration.
 func New(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...iprocessor.PipelineConstructorFunc,

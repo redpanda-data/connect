@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -30,7 +31,7 @@ func TestParallelBasic(t *testing.T) {
 	conf := NewConfig()
 	conf.Parallel.Processors = []Config{httpConf}
 
-	h, err := NewParallel(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewParallel(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +78,7 @@ func TestParallelError(t *testing.T) {
 	conf := NewConfig()
 	conf.Parallel.Processors = []Config{httpConf}
 
-	h, err := NewParallel(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewParallel(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +132,7 @@ func TestParallelCapped(t *testing.T) {
 	conf.Parallel.Processors = []Config{httpConf}
 	conf.Parallel.Cap = 5
 
-	h, err := NewParallel(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewParallel(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/fatih/color"
@@ -47,7 +48,7 @@ func TestCase(t *testing.T) {
 
 	procConf := processor.NewConfig()
 	procConf.Type = processor.TypeNoop
-	proc, err := processor.New(procConf, nil, log.Noop(), metrics.Noop())
+	proc, err := processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +57,7 @@ func TestCase(t *testing.T) {
 	procConf = processor.NewConfig()
 	procConf.Type = processor.TypeBloblang
 	procConf.Bloblang = `root = content().uppercase()`
-	if proc, err = processor.New(procConf, nil, log.Noop(), metrics.Noop()); err != nil {
+	if proc, err = processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
 	provider["/input/broker/inputs/0/processors"] = []iprocessor.V1{proc}
@@ -64,7 +65,7 @@ func TestCase(t *testing.T) {
 	procConf = processor.NewConfig()
 	procConf.Type = processor.TypeBloblang
 	procConf.Bloblang = `root = deleted()`
-	if proc, err = processor.New(procConf, nil, log.Noop(), metrics.Noop()); err != nil {
+	if proc, err = processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop()); err != nil {
 		t.Fatal(err)
 	}
 	provider["/input/broker/inputs/1/processors"] = []iprocessor.V1{proc}
@@ -215,7 +216,7 @@ func TestFileCaseInputs(t *testing.T) {
 
 	procConf.Type = processor.TypeBloblang
 	procConf.Bloblang = processor.BloblangConfig(`root = "hello world " + content().string()`)
-	proc, err := processor.New(procConf, nil, log.Noop(), metrics.Noop())
+	proc, err := processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	provider["/pipeline/processors"] = []iprocessor.V1{proc}
@@ -274,7 +275,7 @@ func TestFileCaseConditions(t *testing.T) {
 
 	procConf.Type = processor.TypeBloblang
 	procConf.Bloblang = processor.BloblangConfig(`root = content().uppercase()`)
-	proc, err := processor.New(procConf, nil, log.Noop(), metrics.Noop())
+	proc, err := processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	provider["/pipeline/processors"] = []iprocessor.V1{proc}

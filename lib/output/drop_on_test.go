@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -31,7 +32,7 @@ func TestDropOnNothing(t *testing.T) {
 	childConf.HTTPClient.URL = ts.URL
 	childConf.HTTPClient.DropOn = []int{http.StatusForbidden}
 
-	child, err := New(childConf, nil, log.Noop(), metrics.Noop())
+	child, err := New(childConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		child.CloseAsync()
@@ -82,7 +83,7 @@ func TestDropOnError(t *testing.T) {
 	childConf.HTTPClient.URL = ts.URL
 	childConf.HTTPClient.DropOn = []int{http.StatusForbidden}
 
-	child, err := New(childConf, nil, log.Noop(), metrics.Noop())
+	child, err := New(childConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		child.CloseAsync()
@@ -162,7 +163,7 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 	childConf.Type = TypeWebsocket
 	childConf.Websocket.URL = "ws://" + strings.TrimPrefix(ts.URL, "http://")
 
-	child, err := New(childConf, nil, log.Noop(), metrics.Noop())
+	child, err := New(childConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		child.CloseAsync()
@@ -254,7 +255,7 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 	childConf.Type = TypeWebsocket
 	childConf.Websocket.URL = "ws://" + strings.TrimPrefix(ts.URL, "http://")
 
-	child, err := New(childConf, nil, log.Noop(), metrics.Noop())
+	child, err := New(childConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		child.CloseAsync()

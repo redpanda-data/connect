@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // ExtractTracingSpanMappingDocs returns a docs spec for a mapping field.
@@ -26,7 +25,7 @@ var ExtractTracingSpanMappingDocs = docs.FieldBloblang(
 type Reader struct {
 	inputName string
 
-	mgr types.Manager
+	mgr interop.Manager
 	log log.Modular
 
 	mapping *mapping.Executor
@@ -35,8 +34,8 @@ type Reader struct {
 
 // NewReader wraps an async reader with a mechanism for extracting tracing
 // spans from the consumed message using a Bloblang mapping.
-func NewReader(inputName, mapping string, rdr reader.Async, mgr types.Manager, logger log.Modular) (reader.Async, error) {
-	exe, err := interop.NewBloblangMapping(mgr, mapping)
+func NewReader(inputName, mapping string, rdr reader.Async, mgr interop.Manager, logger log.Modular) (reader.Async, error) {
+	exe, err := mgr.BloblEnvironment().NewMapping(mapping)
 	if err != nil {
 		return nil, err
 	}

@@ -5,11 +5,11 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ type SyncResponse struct {
 
 // NewSyncResponse returns a SyncResponse processor.
 func NewSyncResponse(
-	conf Config, mgr types.Manager, logger log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, logger log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	s := &SyncResponse{
 		log: logger,

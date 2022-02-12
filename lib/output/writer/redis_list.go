@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -57,7 +56,7 @@ type RedisList struct {
 // NewRedisListV2 creates a new RedisList output type.
 func NewRedisListV2(
 	conf RedisListConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*RedisList, error) {
@@ -68,7 +67,7 @@ func NewRedisListV2(
 	}
 
 	var err error
-	if r.keyStr, err = interop.NewBloblangField(mgr, conf.Key); err != nil {
+	if r.keyStr, err = mgr.BloblEnvironment().NewField(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 	if _, err := conf.Config.Client(); err != nil {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -14,7 +15,7 @@ func TestSelectParts(t *testing.T) {
 	conf.SelectParts.Parts = []int{1, 3}
 
 	testLog := log.Noop()
-	proc, err := NewSelectParts(conf, nil, testLog, metrics.Noop())
+	proc, err := NewSelectParts(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -106,7 +107,7 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 
 	for i, exp := range tests {
 		conf.SelectParts.Parts = []int{i}
-		proc, err := NewSelectParts(conf, nil, testLog, metrics.Noop())
+		proc, err := NewSelectParts(conf, mock.NewManager(), testLog, metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -128,7 +129,7 @@ func TestSelectPartsEmpty(t *testing.T) {
 	conf.SelectParts.Parts = []int{3}
 
 	testLog := log.Noop()
-	proc, err := NewSelectParts(conf, nil, testLog, metrics.Noop())
+	proc, err := NewSelectParts(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

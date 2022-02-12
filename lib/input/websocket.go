@@ -3,10 +3,10 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 )
@@ -36,7 +36,7 @@ first established.`,
 //------------------------------------------------------------------------------
 
 // NewWebsocket creates a new Websocket input type.
-func NewWebsocket(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func NewWebsocket(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	ws, err := reader.NewWebsocket(conf.Websocket, log, stats)
 	if err != nil {
 		return nil, err

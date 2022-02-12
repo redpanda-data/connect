@@ -16,7 +16,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/cenkalti/backoff/v4"
 )
 
@@ -131,7 +130,7 @@ type ReadUntil struct {
 	wrapped input.Streamed
 	check   *mapping.Executor
 
-	wrapperMgr   types.Manager
+	wrapperMgr   interop.Manager
 	wrapperLog   log.Modular
 	wrapperStats metrics.Type
 
@@ -147,7 +146,7 @@ type ReadUntil struct {
 // NewReadUntil creates a new ReadUntil input type.
 func NewReadUntil(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (input.Streamed, error) {
@@ -164,7 +163,7 @@ func NewReadUntil(
 
 	var check *mapping.Executor
 	if len(conf.ReadUntil.Check) > 0 {
-		if check, err = interop.NewBloblangMapping(mgr, conf.ReadUntil.Check); err != nil {
+		if check, err = mgr.BloblEnvironment().NewMapping(conf.ReadUntil.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
 	}

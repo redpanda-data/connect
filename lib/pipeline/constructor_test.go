@@ -7,6 +7,7 @@ import (
 
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
@@ -29,18 +30,9 @@ func TestProcCtor(t *testing.T) {
 	conf := pipeline.NewConfig()
 	conf.Processors = append(conf.Processors, firstProc)
 
-	pipe, err := pipeline.New(
-		conf, nil,
-		log.Noop(),
-		metrics.Noop(),
-		func() (iprocessor.V1, error) {
-			return processor.New(
-				secondProc, nil,
-				log.Noop(),
-				metrics.Noop(),
-			)
-		},
-	)
+	pipe, err := pipeline.New(conf, mock.NewManager(), log.Noop(), metrics.Noop(), func() (iprocessor.V1, error) {
+		return processor.New(secondProc, mock.NewManager(), log.Noop(), metrics.Noop())
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

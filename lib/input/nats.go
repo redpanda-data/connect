@@ -4,10 +4,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
@@ -54,7 +54,7 @@ You can access these metadata fields using
 //------------------------------------------------------------------------------
 
 // NewNATS creates a new NATS input type.
-func NewNATS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func NewNATS(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	n, err := reader.NewNATS(conf.NATS, log, stats)
 	if err != nil {
 		return nil, err

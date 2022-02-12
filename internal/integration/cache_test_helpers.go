@@ -196,10 +196,11 @@ func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 	manager, err := manager.NewV2(s.ResourceConfig, mock.NewManager(), env.log, env.stats)
 	require.NoError(t, err)
 
-	cache, err := manager.GetCache("testcache")
-	require.NoError(t, err)
-
-	return cache
+	var c cache.V1
+	require.NoError(t, manager.AccessCache(env.ctx, "testcache", func(v cache.V1) {
+		c = v
+	}))
+	return c
 }
 
 func closeCache(t *testing.T, cache cache.V1) {

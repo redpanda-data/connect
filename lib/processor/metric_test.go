@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -49,12 +50,12 @@ func TestMetricBad(t *testing.T) {
 	conf.Type = "metric"
 	conf.Metric.Type = "bad type"
 	conf.Metric.Name = "some.path"
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	_, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.Error(t, err)
 
 	conf = NewConfig()
 	conf.Type = "metric"
-	_, err = New(conf, nil, log.Noop(), metrics.Noop())
+	_, err = New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.Error(t, err)
 }
 
@@ -69,7 +70,7 @@ func TestMetricCounter(t *testing.T) {
 	conf.Metric.Name = "foo.bar"
 	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
-	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.WrapFlat(mockStats))
 	require.NoError(t, err)
 
 	inputs := [][][]byte{
@@ -115,7 +116,7 @@ func TestMetricCounterBy(t *testing.T) {
 	conf.Metric.Name = "foo.bar"
 	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
-	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.WrapFlat(mockStats))
 	require.NoError(t, err)
 
 	inputs := [][][]byte{
@@ -164,7 +165,7 @@ func TestMetricGauge(t *testing.T) {
 	conf.Metric.Name = "foo.bar"
 	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
-	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.WrapFlat(mockStats))
 	require.NoError(t, err)
 
 	inputs := [][][]byte{
@@ -213,7 +214,7 @@ func TestMetricTiming(t *testing.T) {
 	conf.Metric.Name = "foo.bar"
 	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
-	proc, err := New(conf, nil, log.Noop(), metrics.WrapFlat(mockStats))
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.WrapFlat(mockStats))
 	require.NoError(t, err)
 
 	inputs := [][][]byte{

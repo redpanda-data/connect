@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -57,7 +56,7 @@ type RedisPubSub struct {
 // NewRedisPubSubV2 creates a new RedisPubSub output type.
 func NewRedisPubSubV2(
 	conf RedisPubSubConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*RedisPubSub, error) {
@@ -67,7 +66,7 @@ func NewRedisPubSubV2(
 		conf:  conf,
 	}
 	var err error
-	if r.channelStr, err = interop.NewBloblangField(mgr, conf.Channel); err != nil {
+	if r.channelStr, err = mgr.BloblEnvironment().NewField(conf.Channel); err != nil {
 		return nil, fmt.Errorf("failed to parse channel expression: %v", err)
 	}
 	if _, err = conf.Config.Client(); err != nil {

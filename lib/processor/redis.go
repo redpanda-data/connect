@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -168,7 +167,7 @@ type Redis struct {
 
 // NewRedis returns a Redis processor.
 func NewRedis(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	var retryPeriod time.Duration
 	if tout := conf.Redis.RetryPeriod; len(tout) > 0 {
@@ -183,7 +182,7 @@ func NewRedis(
 		return nil, err
 	}
 
-	key, err := interop.NewBloblangField(mgr, conf.Redis.Key)
+	key, err := mgr.BloblEnvironment().NewField(conf.Redis.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}

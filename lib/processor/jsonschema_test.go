@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -85,7 +86,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 			conf.Type = "jsonschema"
 			conf.JSONSchema.SchemaPath = tt.fields.schemaPath
 
-			c, err := NewJSONSchema(conf, nil, testLog, testMet)
+			c, err := NewJSONSchema(conf, mock.NewManager(), testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
@@ -178,7 +179,7 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 			conf.JSONSchema.Schema = tt.fields.schema
 			conf.JSONSchema.Parts = []int{0}
 
-			c, err := NewJSONSchema(conf, nil, testLog, testMet)
+			c, err := NewJSONSchema(conf, mock.NewManager(), testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
@@ -284,7 +285,7 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 			conf.JSONSchema.Schema = tt.fields.schema
 			conf.JSONSchema.Parts = []int{0}
 
-			c, err := NewJSONSchema(conf, nil, testLog, testMet)
+			c, err := NewJSONSchema(conf, mock.NewManager(), testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
@@ -317,7 +318,7 @@ func TestJSONSchemaPathNotExist(t *testing.T) {
 	conf.Type = "jsonschema"
 	conf.JSONSchema.SchemaPath = "file://path_does_not_exist"
 
-	_, err := NewJSONSchema(conf, nil, testLog, testMet)
+	_, err := NewJSONSchema(conf, mock.NewManager(), testLog, testMet)
 	if err == nil {
 		t.Error("expected error from loading non existant schema file")
 	}
@@ -347,7 +348,7 @@ func TestJSONSchemaInvalidSchema(t *testing.T) {
 	conf.Type = "jsonschema"
 	conf.JSONSchema.SchemaPath = fmt.Sprintf("file://%s", tmpSchemaFile.Name())
 
-	_, err = NewJSONSchema(conf, nil, testLog, testMet)
+	_, err = NewJSONSchema(conf, mock.NewManager(), testLog, testMet)
 	if err == nil {
 		t.Error("expected error from loading bad schema")
 	}

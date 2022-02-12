@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
@@ -117,7 +116,7 @@ type Elasticsearch struct {
 }
 
 // NewElasticsearchV2 creates a new Elasticsearch writer type.
-func NewElasticsearchV2(conf ElasticsearchConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
+func NewElasticsearchV2(conf ElasticsearchConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
 	e := Elasticsearch{
 		log:         log,
 		stats:       stats,
@@ -128,19 +127,19 @@ func NewElasticsearchV2(conf ElasticsearchConfig, mgr types.Manager, log log.Mod
 	}
 
 	var err error
-	if e.actionStr, err = interop.NewBloblangField(mgr, conf.Action); err != nil {
+	if e.actionStr, err = mgr.BloblEnvironment().NewField(conf.Action); err != nil {
 		return nil, fmt.Errorf("failed to parse action expression: %v", err)
 	}
-	if e.idStr, err = interop.NewBloblangField(mgr, conf.ID); err != nil {
+	if e.idStr, err = mgr.BloblEnvironment().NewField(conf.ID); err != nil {
 		return nil, fmt.Errorf("failed to parse id expression: %v", err)
 	}
-	if e.indexStr, err = interop.NewBloblangField(mgr, conf.Index); err != nil {
+	if e.indexStr, err = mgr.BloblEnvironment().NewField(conf.Index); err != nil {
 		return nil, fmt.Errorf("failed to parse index expression: %v", err)
 	}
-	if e.pipelineStr, err = interop.NewBloblangField(mgr, conf.Pipeline); err != nil {
+	if e.pipelineStr, err = mgr.BloblEnvironment().NewField(conf.Pipeline); err != nil {
 		return nil, fmt.Errorf("failed to parse pipeline expression: %v", err)
 	}
-	if e.routingStr, err = interop.NewBloblangField(mgr, conf.Routing); err != nil {
+	if e.routingStr, err = mgr.BloblEnvironment().NewField(conf.Routing); err != nil {
 		return nil, fmt.Errorf("failed to parse routing key expression: %v", err)
 	}
 

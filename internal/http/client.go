@@ -26,7 +26,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
@@ -61,7 +60,7 @@ type Client struct {
 
 	log   log.Modular
 	stats metrics.Type
-	mgr   types.Manager
+	mgr   interop.Manager
 
 	mCount         metrics.StatCounter
 	mErr           metrics.StatCounter
@@ -155,17 +154,17 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 	}
 
 	var err error
-	if h.url, err = interop.NewBloblangField(h.mgr, conf.URL); err != nil {
+	if h.url, err = h.mgr.BloblEnvironment().NewField(conf.URL); err != nil {
 		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
 	}
 
 	for k, v := range conf.Headers {
 		if strings.EqualFold(k, "host") {
-			if h.host, err = interop.NewBloblangField(h.mgr, v); err != nil {
+			if h.host, err = h.mgr.BloblEnvironment().NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse header 'host' expression: %v", err)
 			}
 		} else {
-			if h.headers[k], err = interop.NewBloblangField(h.mgr, v); err != nil {
+			if h.headers[k], err = h.mgr.BloblEnvironment().NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
 			}
 		}
@@ -206,8 +205,8 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 	}
 
 	if conf.RateLimit != "" {
-		if err := interop.ProbeRateLimit(context.Background(), h.mgr, conf.RateLimit); err != nil {
-			return nil, err
+		if !h.mgr.ProbeRateLimit(conf.RateLimit) {
+			return nil, fmt.Errorf("rate limit resource '%v' was not found", conf.RateLimit)
 		}
 	}
 
@@ -244,7 +243,7 @@ func OptSetStats(stats metrics.Type) func(*Client) {
 }
 
 // OptSetManager sets the manager to use.
-func OptSetManager(mgr types.Manager) func(*Client) {
+func OptSetManager(mgr interop.Manager) func(*Client) {
 	return func(t *Client) {
 		t.mgr = mgr
 	}
@@ -285,7 +284,7 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 	for {
 		var period time.Duration
 		var err error
-		if rerr := interop.AccessRateLimit(ctx, h.mgr, h.conf.RateLimit, func(rl ratelimit.V1) {
+		if rerr := h.mgr.AccessRateLimit(ctx, h.conf.RateLimit, func(rl ratelimit.V1) {
 			period, err = rl.Access(ctx)
 		}); rerr != nil {
 			err = rerr

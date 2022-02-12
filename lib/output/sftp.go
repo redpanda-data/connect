@@ -19,7 +19,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/pkg/sftp"
 )
 
@@ -27,7 +26,7 @@ import (
 
 func init() {
 	Constructors[TypeSFTP] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 			sftp, err := newSFTPWriter(conf.SFTP, mgr, log, stats)
 			if err != nil {
 				return nil, err
@@ -114,7 +113,7 @@ type sftpWriter struct {
 
 func newSFTPWriter(
 	conf SFTPConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*sftpWriter, error) {
@@ -128,7 +127,7 @@ func newSFTPWriter(
 	if s.codec, s.codecConf, err = codec.GetWriter(conf.Codec); err != nil {
 		return nil, err
 	}
-	if s.path, err = interop.NewBloblangField(mgr, conf.Path); err != nil {
+	if s.path, err = mgr.BloblEnvironment().NewField(conf.Path); err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %w", err)
 	}
 

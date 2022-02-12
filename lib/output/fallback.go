@@ -10,7 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/broker"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // TryConfig contains configuration fields for the Try output type.
@@ -80,7 +79,7 @@ However, depending on the output and the error returned it is sometimes not poss
 
 func newFallback(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...iprocessor.PipelineConstructorFunc,

@@ -18,7 +18,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
@@ -92,7 +91,7 @@ type AmazonSQS struct {
 // NewAmazonSQSV2 creates a new Amazon SQS writer.Type.
 func NewAmazonSQSV2(
 	conf AmazonSQSConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*AmazonSQS, error) {
@@ -105,12 +104,12 @@ func NewAmazonSQSV2(
 
 	var err error
 	if id := conf.MessageGroupID; len(id) > 0 {
-		if s.groupID, err = interop.NewBloblangField(mgr, id); err != nil {
+		if s.groupID, err = mgr.BloblEnvironment().NewField(id); err != nil {
 			return nil, fmt.Errorf("failed to parse group ID expression: %v", err)
 		}
 	}
 	if id := conf.MessageDeduplicationID; len(id) > 0 {
-		if s.dedupeID, err = interop.NewBloblangField(mgr, id); err != nil {
+		if s.dedupeID, err = mgr.BloblEnvironment().NewField(id); err != nil {
 			return nil, fmt.Errorf("failed to parse dedupe ID expression: %v", err)
 		}
 	}

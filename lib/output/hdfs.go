@@ -3,11 +3,11 @@ package output
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ described [here](/docs/configuration/interpolation#bloblang-queries).`,
 //------------------------------------------------------------------------------
 
 // NewHDFS creates a new HDFS output type.
-func NewHDFS(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func NewHDFS(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	h, err := writer.NewHDFSV2(conf.HDFS, mgr, log, stats)
 	if err != nil {
 		return nil, err

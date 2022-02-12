@@ -10,7 +10,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -64,7 +63,7 @@ type ForEach struct {
 
 // NewForEach returns a ForEach processor.
 func NewForEach(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	var children []processor.V1
 	for i, pconf := range conf.ForEach {
@@ -88,7 +87,7 @@ func NewForEach(
 
 // NewProcessBatch returns a ForEach processor.
 func NewProcessBatch(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	var children []processor.V1
 	for i, pconf := range conf.ProcessBatch {

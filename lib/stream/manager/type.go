@@ -16,7 +16,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/stream"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -101,7 +100,7 @@ type Type struct {
 	closed  bool
 	streams map[string]*StreamStatus
 
-	manager    types.Manager
+	manager    interop.Manager
 	stats      metrics.Type
 	logger     log.Modular
 	apiTimeout time.Duration
@@ -156,7 +155,7 @@ func OptSetLogger(log log.Modular) func(*Type) {
 
 // OptSetManager sets the service manager to be used by the stream manager and
 // all child streams.
-func OptSetManager(mgr types.Manager) func(*Type) {
+func OptSetManager(mgr interop.Manager) func(*Type) {
 	return func(t *Type) {
 		t.manager = manager.SwapMetrics(mgr, t.stats)
 	}
@@ -193,7 +192,8 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		return ErrStreamExists
 	}
 
-	sMgr, sLog, sStats := interop.LabelStream(id, m.manager, m.logger, m.stats)
+	sMgr := m.manager.ForStream(id)
+	sLog, sStats := sMgr.Logger(), sMgr.Metrics()
 	if u, ok := sStats.(interface {
 		Unwrap() metrics.Type
 	}); ok {

@@ -18,7 +18,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/cenkalti/backoff/v4"
 )
 
@@ -56,7 +55,7 @@ type AsyncWriter struct {
 
 	injectTracingMap *mapping.Executor
 
-	mgr   types.Manager
+	mgr   interop.Manager
 	log   log.Modular
 	stats metrics.Type
 
@@ -81,7 +80,7 @@ func newAsyncWriter(
 	typeStr string,
 	maxInflight int,
 	w AsyncSink,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (output.Streamed, error) {
@@ -102,7 +101,7 @@ func newAsyncWriter(
 // into messages.
 func (w *AsyncWriter) SetInjectTracingMap(mapping string) error {
 	var err error
-	w.injectTracingMap, err = interop.NewBloblangMapping(w.mgr, mapping)
+	w.injectTracingMap, err = w.mgr.BloblEnvironment().NewMapping(mapping)
 	return err
 }
 

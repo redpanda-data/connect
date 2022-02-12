@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // Batcher wraps an output with a batching policy.
@@ -36,7 +35,7 @@ type Batcher struct {
 // that enforces a given batching policy configuration.
 func NewBatcherFromConfig(
 	conf batch.PolicyConfig,
-	child output.Streamed, mgr types.Manager,
+	child output.Streamed, mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (output.Streamed, error) {

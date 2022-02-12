@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	yaml "gopkg.in/yaml.v3"
 
@@ -15,7 +16,7 @@ func TestConstructorBadType(t *testing.T) {
 	conf := cache.NewConfig()
 	conf.Type = "not_exist"
 
-	if _, err := cache.New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := cache.New(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error, received nil for invalid type")
 	}
 }

@@ -3,18 +3,18 @@ package output
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
 )
 
 func init() {
 	Constructors[TypeAWSS3] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 			return newAmazonS3(TypeAWSS3, conf.AWSS3, mgr, log, stats)
 		}),
 		Version: "3.36.0",
@@ -134,7 +134,7 @@ output:
 
 //------------------------------------------------------------------------------
 
-func newAmazonS3(name string, conf writer.AmazonS3Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newAmazonS3(name string, conf writer.AmazonS3Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	sthree, err := writer.NewAmazonS3V2(conf, mgr, log, stats)
 	if err != nil {
 		return nil, err

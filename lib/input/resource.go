@@ -2,6 +2,7 @@ package input
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/input"
@@ -10,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -71,7 +71,7 @@ You can find out more about resources [in this document.](/docs/configuration/re
 
 // Resource is an input that wraps an input resource.
 type Resource struct {
-	mgr          types.Manager
+	mgr          interop.Manager
 	name         string
 	log          log.Modular
 	mErrNotFound metrics.StatCounter
@@ -79,10 +79,10 @@ type Resource struct {
 
 // NewResource returns a resource input.
 func NewResource(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (input.Streamed, error) {
-	if err := interop.ProbeInput(context.Background(), mgr, conf.Resource); err != nil {
-		return nil, err
+	if !mgr.ProbeInput(conf.Resource) {
+		return nil, fmt.Errorf("input resource '%v' was not found", conf.Resource)
 	}
 	return &Resource{
 		mgr:          mgr,
@@ -97,7 +97,7 @@ func NewResource(
 // TransactionChan returns a transactions channel for consuming messages from
 // this input type.
 func (r *Resource) TransactionChan() (tChan <-chan message.Transaction) {
-	if err := interop.AccessInput(context.Background(), r.mgr, r.name, func(i input.Streamed) {
+	if err := r.mgr.AccessInput(context.Background(), r.name, func(i input.Streamed) {
 		tChan = i.TransactionChan()
 	}); err != nil {
 		r.log.Debugf("Failed to obtain input resource '%v': %v", r.name, err)
@@ -109,7 +109,7 @@ func (r *Resource) TransactionChan() (tChan <-chan message.Transaction) {
 // Connected returns a boolean indicating whether this input is currently
 // connected to its target.
 func (r *Resource) Connected() (isConnected bool) {
-	if err := interop.AccessInput(context.Background(), r.mgr, r.name, func(i input.Streamed) {
+	if err := r.mgr.AccessInput(context.Background(), r.name, func(i input.Streamed) {
 		isConnected = i.Connected()
 	}); err != nil {
 		r.log.Debugf("Failed to obtain input resource '%v': %v", r.name, err)

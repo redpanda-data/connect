@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/gabs/v2"
@@ -17,7 +18,7 @@ func TestJMESPathAllParts(t *testing.T) {
 
 	testLog := log.Noop()
 
-	jSet, err := NewJMESPath(conf, nil, testLog, metrics.Noop())
+	jSet, err := NewJMESPath(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +49,7 @@ func TestJMESPathValidation(t *testing.T) {
 
 	testLog := log.Noop()
 
-	jSet, err := NewJMESPath(conf, nil, testLog, metrics.Noop())
+	jSet, err := NewJMESPath(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +68,7 @@ func TestJMESPathValidation(t *testing.T) {
 
 	conf.JMESPath.Parts = []int{5}
 
-	jSet, err = NewJMESPath(conf, nil, testLog, metrics.Noop())
+	jSet, err = NewJMESPath(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func TestJMESPathMutation(t *testing.T) {
 	conf := NewConfig()
 	conf.JMESPath.Query = "{foo: merge(foo, {bar:'baz'})}"
 
-	jSet, err := NewJMESPath(conf, nil, log.Noop(), metrics.Noop())
+	jSet, err := NewJMESPath(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +184,7 @@ func TestJMESPath(t *testing.T) {
 		conf.JMESPath.Parts = []int{0}
 		conf.JMESPath.Query = test.path
 
-		jSet, err := NewJMESPath(conf, nil, tLog, tStats)
+		jSet, err := NewJMESPath(conf, mock.NewManager(), tLog, tStats)
 		if err != nil {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}

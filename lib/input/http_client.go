@@ -20,7 +20,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
 
@@ -150,7 +149,7 @@ type HTTPClient struct {
 }
 
 // NewHTTPClient creates a new HTTPClient input type.
-func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func NewHTTPClient(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	rdr, err := newHTTPClient(conf.HTTPClient, mgr, log, stats)
 	if err != nil {
 		return nil, err
@@ -158,7 +157,7 @@ func NewHTTPClient(conf Config, mgr types.Manager, log log.Modular, stats metric
 	return NewAsyncReader(TypeHTTPClient, true, reader.NewAsyncPreserver(rdr), log, stats)
 }
 
-func newHTTPClient(conf HTTPClientConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*HTTPClient, error) {
+func newHTTPClient(conf HTTPClientConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*HTTPClient, error) {
 	var codecCtor codec.ReaderConstructor
 
 	if conf.Stream.Enabled {

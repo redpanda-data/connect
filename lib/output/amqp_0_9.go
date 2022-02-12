@@ -3,11 +3,11 @@ package output
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
@@ -68,7 +68,7 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 //------------------------------------------------------------------------------
 
 // NewAMQP09 creates a new AMQP output type.
-func NewAMQP09(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func NewAMQP09(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	a, err := writer.NewAMQPV2(mgr, conf.AMQP09, log, stats)
 	if err != nil {
 		return nil, err

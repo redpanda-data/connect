@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +31,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	conf.HTTP.Config.Retry = "1ms"
 	conf.HTTP.Config.NumRetries = 3
 
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +82,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	conf := NewConfig()
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +151,7 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 	conf := NewConfig()
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +202,7 @@ func TestHTTPClientEmpty404Response(t *testing.T) {
 	conf := NewConfig()
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +243,7 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 	conf.HTTP.Config.CopyResponseHeaders = true
 
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +277,7 @@ func TestHTTPClientParallel(t *testing.T) {
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 	conf.HTTP.Parallel = true
 
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +327,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 	conf.HTTP.Parallel = true
 	conf.HTTP.Config.NumRetries = 0
 
-	h, err := NewHTTP(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +404,7 @@ func TestHTTPClientFailLogURL(t *testing.T) {
 			conf.HTTP.Config.URL = tt.url
 
 			logMock := &mockLog{}
-			h, err := NewHTTP(conf, nil, logMock, metrics.Noop())
+			h, err := NewHTTP(conf, mock.NewManager(), logMock, metrics.Noop())
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -91,13 +90,13 @@ type While struct {
 
 // NewWhile returns a While processor.
 func NewWhile(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	var check *mapping.Executor
 	var err error
 
 	if len(conf.While.Check) > 0 {
-		if check, err = interop.NewBloblangMapping(mgr, conf.While.Check); err != nil {
+		if check, err = mgr.BloblEnvironment().NewMapping(conf.While.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
 	} else {

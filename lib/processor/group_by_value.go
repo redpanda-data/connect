@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -99,9 +98,9 @@ type GroupByValue struct {
 
 // NewGroupByValue returns a GroupByValue processor.
 func NewGroupByValue(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
-	value, err := interop.NewBloblangField(mgr, conf.GroupByValue.Value)
+	value, err := mgr.BloblEnvironment().NewField(conf.GroupByValue.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}

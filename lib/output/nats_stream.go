@@ -4,10 +4,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
@@ -43,7 +43,7 @@ Publish to a NATS Stream subject.`,
 //------------------------------------------------------------------------------
 
 // NewNATSStream creates a new NATSStream output type.
-func NewNATSStream(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func NewNATSStream(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	w, err := writer.NewNATSStream(conf.NATSStream, log, stats)
 	if err != nil {
 		return nil, err

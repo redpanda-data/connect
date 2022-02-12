@@ -19,7 +19,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
-	"github.com/Jeffail/benthos/v3/lib/types"
 
 	// TODO: V4 Remove this as it's a temporary work around to ensure current
 	// plugin users automatically import all components.
@@ -37,7 +36,7 @@ type Type struct {
 	pipelineLayer pipeline.Type
 	outputLayer   ioutput.Streamed
 
-	manager types.Manager
+	manager interop.Manager
 	stats   metrics.Type
 	logger  log.Modular
 
@@ -113,7 +112,7 @@ func OptSetLogSimple(l log.PrintFormatter) func(*Type) {
 
 // OptSetManager sets the service manager to be used by all components of the
 // stream.
-func OptSetManager(mgr types.Manager) func(*Type) {
+func OptSetManager(mgr interop.Manager) func(*Type) {
 	return func(t *Type) {
 		t.manager = mgr
 	}

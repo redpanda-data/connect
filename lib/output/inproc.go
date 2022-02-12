@@ -8,10 +8,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ type Inproc struct {
 	running int32
 
 	pipe  string
-	mgr   types.Manager
+	mgr   interop.Manager
 	log   log.Modular
 	stats metrics.Type
 
@@ -66,7 +66,7 @@ type Inproc struct {
 }
 
 // NewInproc creates a new Inproc output type.
-func NewInproc(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func NewInproc(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	i := &Inproc{
 		running:         1,
 		pipe:            string(conf.Inproc),

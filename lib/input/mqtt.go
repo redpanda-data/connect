@@ -3,11 +3,11 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/mqttconf"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
@@ -58,7 +58,7 @@ You can access these metadata fields using
 //------------------------------------------------------------------------------
 
 // NewMQTT creates a new MQTT input type.
-func NewMQTT(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func NewMQTT(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	m, err := reader.NewMQTT(conf.MQTT, log, stats)
 	if err != nil {
 		return nil, err

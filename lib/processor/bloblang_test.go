@@ -6,6 +6,7 @@ import (
 
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/gabs/v2"
@@ -38,7 +39,7 @@ func TestBloblangCrossfire(t *testing.T) {
 	meta bar = meta("bar").from(0)
 	meta baz = "new meta"
 `
-	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewBloblang(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func TestBloblangContext(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Bloblang = `result = foo.bar.baz.uppercase()`
-	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewBloblang(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +126,7 @@ func TestBloblangCustomObject(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Bloblang = `root.foos = this.foos`
-	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewBloblang(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	outMsgs, res := proc.ProcessMessage(msg)
@@ -151,7 +152,7 @@ func TestBloblangFiltering(t *testing.T) {
 		(foo | bar).delete.or(false) => deleted(),
 	}
 	`
-	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewBloblang(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +177,7 @@ func TestBloblangFilterAll(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Bloblang = `root = deleted()`
-	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewBloblang(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +196,7 @@ func TestBloblangJSONError(t *testing.T) {
 	conf.Bloblang = `
 	foo = json().bar
 `
-	proc, err := NewBloblang(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewBloblang(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

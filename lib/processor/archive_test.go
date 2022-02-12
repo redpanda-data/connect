@@ -11,6 +11,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/require"
@@ -22,7 +23,7 @@ func TestArchiveBadAlgo(t *testing.T) {
 
 	testLog := log.Noop()
 
-	_, err := NewArchive(conf, nil, testLog, metrics.Noop())
+	_, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -43,7 +44,7 @@ func TestArchiveTar(t *testing.T) {
 		[]byte("5"),
 	}
 
-	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
+	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestArchiveZip(t *testing.T) {
 		[]byte("5"),
 	}
 
-	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
+	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +160,7 @@ func TestArchiveLines(t *testing.T) {
 
 	testLog := log.Noop()
 
-	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
+	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +200,7 @@ func TestArchiveConcatenate(t *testing.T) {
 
 	testLog := log.Noop()
 
-	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
+	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +234,7 @@ func TestArchiveJSONArray(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "json_array"
 
-	proc, err := NewArchive(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewArchive(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +269,7 @@ func TestArchiveBinary(t *testing.T) {
 	conf.Archive.Format = "binary"
 
 	testLog := log.Noop()
-	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
+	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -293,7 +294,7 @@ func TestArchiveEmpty(t *testing.T) {
 	conf := NewConfig()
 
 	testLog := log.Noop()
-	proc, err := NewArchive(conf, nil, testLog, metrics.Noop())
+	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -90,7 +91,7 @@ func TestXMLCases(t *testing.T) {
 	}
 
 	conf := NewConfig()
-	proc, err := NewXML(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewXML(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

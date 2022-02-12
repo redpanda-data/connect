@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -94,7 +95,7 @@ foo6,bar6,baz6
 		path.Join(dir, "b.csv"),
 	}
 
-	f, err := New(conf, nil, log.Noop(), metrics.Noop())
+	f, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -132,7 +133,7 @@ foo6,bar6,baz6
 	conf.Type = TypeCSVFile
 	conf.CSVFile.Paths = []string{dir + "/*.csv"}
 
-	f, err := New(conf, nil, log.Noop(), metrics.Noop())
+	f, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

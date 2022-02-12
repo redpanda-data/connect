@@ -22,7 +22,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/gocql/gocql"
@@ -32,7 +31,7 @@ import (
 
 func init() {
 	Constructors[TypeCassandra] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 			c, err := newCassandraWriter(conf.Cassandra, mgr, log, stats)
 			if err != nil {
 				return nil, err
@@ -204,7 +203,7 @@ type cassandraWriter struct {
 	argsMapping *mapping.Executor
 }
 
-func newCassandraWriter(conf CassandraConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
+func newCassandraWriter(conf CassandraConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
 	c := cassandraWriter{
 		log:           log,
 		stats:         stats,
@@ -231,10 +230,10 @@ func newCassandraWriter(conf CassandraConfig, mgr types.Manager, log log.Modular
 	return &c, nil
 }
 
-func (c *cassandraWriter) parseArgs(mgr types.Manager) error {
+func (c *cassandraWriter) parseArgs(mgr interop.Manager) error {
 	if c.conf.ArgsMapping != "" {
 		var err error
-		if c.argsMapping, err = interop.NewBloblangMapping(mgr, c.conf.ArgsMapping); err != nil {
+		if c.argsMapping, err = mgr.BloblEnvironment().NewMapping(c.conf.ArgsMapping); err != nil {
 			return fmt.Errorf("parsing args_mapping: %w", err)
 		}
 	}

@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -228,13 +227,13 @@ type Branch struct {
 
 // NewBranch creates a new branch processor.
 func NewBranch(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	return newBranch(conf.Branch, mgr, log, stats)
 }
 
 func newBranch(
-	conf BranchConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf BranchConfig, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (*Branch, error) {
 	children := make([]processor.V1, 0, len(conf.Processors))
 	for i, pconf := range conf.Processors {
@@ -267,12 +266,12 @@ func newBranch(
 
 	var err error
 	if len(conf.RequestMap) > 0 {
-		if b.requestMap, err = interop.NewBloblangMapping(mgr, conf.RequestMap); err != nil {
+		if b.requestMap, err = mgr.BloblEnvironment().NewMapping(conf.RequestMap); err != nil {
 			return nil, fmt.Errorf("failed to parse request mapping: %w", err)
 		}
 	}
 	if len(conf.ResultMap) > 0 {
-		if b.resultMap, err = interop.NewBloblangMapping(mgr, conf.ResultMap); err != nil {
+		if b.resultMap, err = mgr.BloblEnvironment().NewMapping(conf.ResultMap); err != nil {
 			return nil, fmt.Errorf("failed to parse result mapping: %w", err)
 		}
 	}

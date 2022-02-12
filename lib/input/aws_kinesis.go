@@ -12,12 +12,12 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
@@ -32,7 +32,7 @@ import (
 
 func init() {
 	Constructors[TypeAWSKinesis] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 			rdr, err := newKinesisReader(conf.AWSKinesis, mgr, log, stats)
 			if err != nil {
 				return nil, err
@@ -120,7 +120,7 @@ type kinesisReader struct {
 
 	stats metrics.Type
 	log   log.Modular
-	mgr   types.Manager
+	mgr   interop.Manager
 
 	backoffCtor func() backoff.BackOff
 	boffPool    sync.Pool
@@ -150,7 +150,7 @@ type kinesisReader struct {
 var errCannotMixBalancedShards = errors.New("it is not currently possible to include balanced and explicit shard streams in the same kinesis input")
 
 func newKinesisReader(
-	conf AWSKinesisConfig, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf AWSKinesisConfig, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (*kinesisReader, error) {
 	if conf.Batching.IsNoop() {
 		conf.Batching.Count = 1

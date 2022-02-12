@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -115,7 +116,7 @@ func TestProtobuf(t *testing.T) {
 			conf.Protobuf.Message = test.message
 			conf.Protobuf.ImportPaths = []string{test.importPath}
 
-			proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+			proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			input := message.QuickBatch(nil)
@@ -175,7 +176,7 @@ func TestProtobufErrors(t *testing.T) {
 			conf.Protobuf.Message = test.message
 			conf.Protobuf.ImportPaths = []string{test.importPath}
 
-			proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+			proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			input := message.QuickBatch(nil)

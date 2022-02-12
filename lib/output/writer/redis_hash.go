@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/go-redis/redis/v7"
 )
 
@@ -62,7 +61,7 @@ type RedisHash struct {
 // NewRedisHashV2 creates a new RedisHash output type.
 func NewRedisHashV2(
 	conf RedisHashConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*RedisHash, error) {
@@ -74,12 +73,12 @@ func NewRedisHashV2(
 	}
 
 	var err error
-	if r.keyStr, err = interop.NewBloblangField(mgr, conf.Key); err != nil {
+	if r.keyStr, err = mgr.BloblEnvironment().NewField(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
 	for k, v := range conf.Fields {
-		if r.fields[k], err = interop.NewBloblangField(mgr, v); err != nil {
+		if r.fields[k], err = mgr.BloblEnvironment().NewField(v); err != nil {
 			return nil, fmt.Errorf("failed to parse field '%v' expression: %v", k, err)
 		}
 	}

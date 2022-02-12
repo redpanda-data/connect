@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
@@ -11,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func init() {
@@ -69,7 +69,7 @@ You can find out more about resources [in this document.](/docs/configuration/re
 
 // Resource is a processor that returns the result of a output resource.
 type Resource struct {
-	mgr   types.Manager
+	mgr   interop.Manager
 	name  string
 	log   log.Modular
 	stats metrics.Type
@@ -84,10 +84,10 @@ type Resource struct {
 
 // NewResource returns a resource output.
 func NewResource(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (output.Streamed, error) {
-	if err := interop.ProbeOutput(context.Background(), mgr, conf.Resource); err != nil {
-		return nil, err
+	if !mgr.ProbeOutput(conf.Resource) {
+		return nil, fmt.Errorf("output resource '%v' was not found", conf.Resource)
 	}
 	ctx, done := context.WithCancel(context.Background())
 	return &Resource{
@@ -126,7 +126,7 @@ func (r *Resource) loop() {
 		mCount.Incr(1)
 
 		var err error
-		if oerr := interop.AccessOutput(context.Background(), r.mgr, r.name, func(o output.Sync) {
+		if oerr := r.mgr.AccessOutput(context.Background(), r.name, func(o output.Sync) {
 			err = o.WriteTransaction(r.ctx, *ts)
 		}); oerr != nil {
 			err = oerr
@@ -161,7 +161,7 @@ func (r *Resource) Consume(ts <-chan message.Transaction) error {
 // connected to its target.
 func (r *Resource) Connected() (isConnected bool) {
 	var err error
-	if err = interop.AccessOutput(context.Background(), r.mgr, r.name, func(o output.Sync) {
+	if err = r.mgr.AccessOutput(context.Background(), r.name, func(o output.Sync) {
 		isConnected = o.Connected()
 	}); err != nil {
 		r.log.Debugf("Failed to obtain output resource '%v': %v", r.name, err)

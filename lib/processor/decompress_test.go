@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/golang/snappy"
@@ -21,7 +22,7 @@ func TestDecompressBadAlgo(t *testing.T) {
 
 	testLog := log.Noop()
 
-	_, err := NewDecompress(conf, nil, testLog, metrics.Noop())
+	_, err := NewDecompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -59,7 +60,7 @@ func TestDecompressGZIP(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecompress(conf, nil, testLog, metrics.Noop())
+	proc, err := NewDecompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +99,7 @@ func TestDecompressSnappy(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecompress(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewDecompress(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +147,7 @@ func TestDecompressZLIB(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecompress(conf, nil, testLog, metrics.Noop())
+	proc, err := NewDecompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +198,7 @@ func TestDecompressFlate(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecompress(conf, nil, testLog, metrics.Noop())
+	proc, err := NewDecompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +246,7 @@ func TestDecompressLZ4(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecompress(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewDecompress(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +335,7 @@ func TestDecompressIndexBounds(t *testing.T) {
 
 	for i, result := range tests {
 		conf.Decompress.Parts = []int{i}
-		proc, err := NewDecompress(conf, nil, testLog, metrics.Noop())
+		proc, err := NewDecompress(conf, mock.NewManager(), testLog, metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}

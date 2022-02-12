@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	gonanoid "github.com/matoous/go-nanoid/v2"
@@ -82,7 +81,7 @@ type MQTT struct {
 // NewMQTTV2 creates a new MQTT output type.
 func NewMQTTV2(
 	conf MQTTConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*MQTT, error) {
@@ -100,12 +99,12 @@ func NewMQTTV2(
 		return nil, fmt.Errorf("unable to parse write timeout duration string: %w", err)
 	}
 
-	if m.topic, err = interop.NewBloblangField(mgr, conf.Topic); err != nil {
+	if m.topic, err = mgr.BloblEnvironment().NewField(conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 
 	if conf.RetainedInterpolated != "" {
-		if m.retained, err = interop.NewBloblangField(mgr, conf.RetainedInterpolated); err != nil {
+		if m.retained, err = mgr.BloblEnvironment().NewField(conf.RetainedInterpolated); err != nil {
 			return nil, fmt.Errorf("failed to parse retained expression: %v", err)
 		}
 	}

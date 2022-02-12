@@ -17,7 +17,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/Jeffail/gabs/v2"
@@ -87,7 +86,7 @@ type DynamoDB struct {
 // NewDynamoDBV2 creates a new Amazon SQS writer.Type.
 func NewDynamoDBV2(
 	conf DynamoDBConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*DynamoDB, error) {
@@ -104,7 +103,7 @@ func NewDynamoDBV2(
 	}
 	var err error
 	for k, v := range conf.StringColumns {
-		if db.strColumns[k], err = interop.NewBloblangField(mgr, v); err != nil {
+		if db.strColumns[k], err = mgr.BloblEnvironment().NewField(v); err != nil {
 			return nil, fmt.Errorf("failed to parse column '%v' expression: %v", k, err)
 		}
 	}

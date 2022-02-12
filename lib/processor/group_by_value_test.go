@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -16,7 +17,7 @@ func TestGroupByValueBasic(t *testing.T) {
 	conf.Type = TypeGroupByValue
 	conf.GroupByValue.Value = "${!json(\"foo\")}"
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

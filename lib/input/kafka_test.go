@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
 )
@@ -39,7 +40,7 @@ func TestKafkaBadParams(t *testing.T) {
 			conf.Kafka.Addresses = []string{"example.com:1234"}
 			conf.Kafka.Topics = test.topics
 
-			_, err := New(conf, nil, log.Noop(), metrics.Noop())
+			_, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			assert.EqualError(t, err, test.errStr)
 		})
 	}

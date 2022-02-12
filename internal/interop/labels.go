@@ -1,92 +1,69 @@
 package interop
 
 import (
+	"context"
+	"net/http"
+
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/input"
+	"github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/component/processor"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/gofrs/uuid"
 )
 
-func unwrapMetric(t metrics.Type) metrics.Type {
-	u, ok := t.(interface {
-		Unwrap() metrics.Type
-	})
-	if ok {
-		t = u.Unwrap()
-	}
-	return t
-}
-
-// LabelRoot replaces the label of the provided observability components.
-func LabelRoot(label string, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Manager, log.Modular, metrics.Type) {
-	if m, ok := mgr.(interface {
-		ForComponent(string) types.Manager
-	}); ok {
-		newMgr := m.ForComponent(label)
-		if m2, ok := newMgr.(interface {
-			Logger() log.Modular
-			Metrics() metrics.Type
-		}); ok {
-			return newMgr, m2.Logger(), m2.Metrics()
-		}
-	}
-	newLog := logger.WithFields(map[string]string{
-		"component": label,
-	})
-	newStats := metrics.Namespaced(unwrapMetric(stats), label)
-	return mgr, newLog, newStats
-}
-
 // LabelChild expands the label of the provided observability components.
-func LabelChild(label string, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Manager, log.Modular, metrics.Type) {
-	if m, ok := mgr.(interface {
-		ForChildComponent(string) types.Manager
-	}); ok {
-		newMgr := m.ForChildComponent(label)
-		if m2, ok := newMgr.(interface {
-			Logger() log.Modular
-			Metrics() metrics.Type
-		}); ok {
-			return newMgr, m2.Logger(), m2.Metrics()
-		}
-	}
-	newLog := logger.NewModule("." + label)
-	newStats := metrics.Namespaced(stats, label)
-	return mgr, newLog, newStats
+func LabelChild(label string, mgr Manager, logger log.Modular, stats metrics.Type) (Manager, log.Modular, metrics.Type) {
+	newMgr := mgr.ForChildComponent(label)
+	return newMgr, newMgr.Logger(), newMgr.Metrics()
 }
 
-// GetLabel attempts the extract the current label of a component by obtaining
-// it from a manager. If the manager does not support label methods then it
-// instead falls back to a UUID, and somehow failing that returns an empty
-// string.
-func GetLabel(mgr types.Manager) string {
-	if m, ok := mgr.(interface {
-		Label() string
-	}); ok {
-		return m.Label()
-	}
-	b, err := uuid.NewV4()
-	if err == nil {
-		return b.String()
-	}
-	return ""
-}
+// Manager is an interface expected by Benthos components that allows them to
+// register their service wide behaviours such as HTTP endpoints and event
+// listeners, and obtain service wide shared resources such as caches.
+type Manager interface {
+	ForStream(id string) Manager
+	ForComponent(id string) Manager
+	ForChildComponent(id string) Manager
+	Label() string
 
-// LabelStream expands the label of the provided observability components with
-// a stream identifier.
-func LabelStream(label string, mgr types.Manager, logger log.Modular, stats metrics.Type) (types.Manager, log.Modular, metrics.Type) {
-	if m, ok := mgr.(interface {
-		ForStream(id string) types.Manager
-	}); ok {
-		newMgr := m.ForStream(label)
-		if m2, ok := newMgr.(interface {
-			Logger() log.Modular
-			Metrics() metrics.Type
-		}); ok {
-			return newMgr, m2.Logger(), m2.Metrics()
-		}
-	}
-	newLog := logger.NewModule("." + label)
-	newStats := metrics.Namespaced(stats, label)
-	return mgr, newLog, newStats
+	Metrics() metrics.Type
+	Logger() log.Modular
+	BloblEnvironment() *bloblang.Environment
+
+	RegisterEndpoint(path, desc string, h http.HandlerFunc)
+
+	// NewBuffer(conf buffer.Config) (buffer.Streamed, error)
+	// NewCache(conf cache.Config) (cache.V1, error)
+	// NewInput(conf input.Config, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error)
+	// NewProcessor(conf processor.Config) (processor.V1, error)
+	// NewOutput(conf output.Config, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error)
+	// NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error)
+
+	ProbeCache(name string) bool
+	AccessCache(ctx context.Context, name string, fn func(cache.V1)) error
+	// StoreCache(ctx context.Context, name string, conf cache.Config) error
+
+	ProbeInput(name string) bool
+	AccessInput(ctx context.Context, name string, fn func(input.Streamed)) error
+	// StoreInput(ctx context.Context, name string, conf input.Config) error
+
+	ProbeProcessor(name string) bool
+	AccessProcessor(ctx context.Context, name string, fn func(processor.V1)) error
+	// StoreProcessor(ctx context.Context, name string, conf processor.Config) error
+
+	ProbeOutput(name string) bool
+	AccessOutput(ctx context.Context, name string, fn func(output.Sync)) error
+	// StoreOutput(ctx context.Context, name string, conf output.Config) error
+
+	ProbeRateLimit(name string) bool
+	AccessRateLimit(ctx context.Context, name string, fn func(ratelimit.V1)) error
+	// StoreRateLimit(ctx context.Context, name string, conf ratelimit.Config) error
+
+	GetPipe(name string) (<-chan message.Transaction, error)
+	SetPipe(name string, t <-chan message.Transaction)
+	UnsetPipe(name string, t <-chan message.Transaction)
 }

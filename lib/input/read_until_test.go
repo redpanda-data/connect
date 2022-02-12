@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -20,7 +21,7 @@ func TestReadUntilErrs(t *testing.T) {
 	inConf := NewConfig()
 	conf.ReadUntil.Input = &inConf
 
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	_, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	assert.EqualError(t, err, "failed to create input 'read_until': a check query is required")
 }
 
@@ -61,7 +62,7 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Check = `content() == "bar"`
 
-	in, err := New(rConf, nil, log.Noop(), metrics.Noop())
+	in, err := New(rConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +123,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Check = `content() == "bar"`
 
-	in, err := New(rConf, nil, log.Noop(), metrics.Noop())
+	in, err := New(rConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

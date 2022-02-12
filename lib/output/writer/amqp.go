@@ -18,7 +18,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -107,7 +106,7 @@ type AMQP struct {
 }
 
 // NewAMQPV2 creates a new AMQP writer type.
-func NewAMQPV2(mgr types.Manager, conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
+func NewAMQPV2(mgr interop.Manager, conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
 	a := AMQP{
 		log:          log,
 		stats:        stats,
@@ -118,19 +117,19 @@ func NewAMQPV2(mgr types.Manager, conf AMQPConfig, log log.Modular, stats metric
 	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
-	if a.key, err = interop.NewBloblangField(mgr, conf.BindingKey); err != nil {
+	if a.key, err = mgr.BloblEnvironment().NewField(conf.BindingKey); err != nil {
 		return nil, fmt.Errorf("failed to parse binding key expression: %v", err)
 	}
-	if a.msgType, err = interop.NewBloblangField(mgr, conf.Type); err != nil {
+	if a.msgType, err = mgr.BloblEnvironment().NewField(conf.Type); err != nil {
 		return nil, fmt.Errorf("failed to parse type property expression: %v", err)
 	}
-	if a.contentType, err = interop.NewBloblangField(mgr, conf.ContentType); err != nil {
+	if a.contentType, err = mgr.BloblEnvironment().NewField(conf.ContentType); err != nil {
 		return nil, fmt.Errorf("failed to parse content_type property expression: %v", err)
 	}
-	if a.contentEncoding, err = interop.NewBloblangField(mgr, conf.ContentEncoding); err != nil {
+	if a.contentEncoding, err = mgr.BloblEnvironment().NewField(conf.ContentEncoding); err != nil {
 		return nil, fmt.Errorf("failed to parse content_encoding property expression: %v", err)
 	}
-	if a.priority, err = interop.NewBloblangField(mgr, conf.Priority); err != nil {
+	if a.priority, err = mgr.BloblEnvironment().NewField(conf.Priority); err != nil {
 		return nil, fmt.Errorf("failed to parse priority property expression: %w", err)
 	}
 	if conf.Persistent {

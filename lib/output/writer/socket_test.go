@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -26,7 +27,7 @@ func TestSocketBasic(t *testing.T) {
 	conf.Network = ln.Addr().Network()
 	conf.Address = ln.Addr().String()
 
-	wtr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +92,7 @@ func TestSocketMultipart(t *testing.T) {
 	conf.Network = ln.Addr().Network()
 	conf.Address = ln.Addr().String()
 
-	wtr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +163,7 @@ func TestUDPSocketBasic(t *testing.T) {
 	conf.Network = "udp"
 	conf.Address = conn.LocalAddr().String()
 
-	wtr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +221,7 @@ func TestUDPSocketMultipart(t *testing.T) {
 	conf.Network = "udp"
 	conf.Address = conn.LocalAddr().String()
 
-	wtr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +276,7 @@ func TestTCPSocketBasic(t *testing.T) {
 	conf.Network = "tcp"
 	conf.Address = ln.Addr().String()
 
-	wtr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +341,7 @@ func TestTCPSocketMultipart(t *testing.T) {
 	conf.Network = "tcp"
 	conf.Address = ln.Addr().String()
 
-	wtr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +404,7 @@ func TestSocketCustomDelimeter(t *testing.T) {
 	conf.Address = ln.Addr().String()
 	conf.Codec = "delim:\t"
 
-	wtr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

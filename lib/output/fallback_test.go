@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -40,7 +41,7 @@ func TestFallbackOutputBasic(t *testing.T) {
 	conf.Type = TypeFallback
 	conf.Fallback = append(conf.Fallback, outOne, outTwo, outThree)
 
-	s, err := New(conf, nil, log.Noop(), metrics.Noop())
+	s, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	sendChan := make(chan message.Transaction)

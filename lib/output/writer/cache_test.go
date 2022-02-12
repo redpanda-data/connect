@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
@@ -166,10 +167,11 @@ func TestCacheBasic(t *testing.T) {
 		}
 	}
 
-	memCache, err := mgr.GetCache("foo")
-	if err != nil {
-		t.Fatal(err)
-	}
+	var memCache icache.V1
+	require.NoError(t, mgr.AccessCache(context.Background(), "foo", func(v icache.V1) {
+		memCache = v
+	}))
+
 	for k, v := range exp {
 		res, err := memCache.Get(context.Background(), k)
 		if err != nil {
@@ -217,10 +219,11 @@ func TestCacheBatches(t *testing.T) {
 		}
 	}
 
-	memCache, err := mgr.GetCache("foo")
-	if err != nil {
-		t.Fatal(err)
-	}
+	var memCache icache.V1
+	require.NoError(t, mgr.AccessCache(context.Background(), "foo", func(v icache.V1) {
+		memCache = v
+	}))
+
 	for k, v := range exp {
 		res, err := memCache.Get(context.Background(), k)
 		if err != nil {

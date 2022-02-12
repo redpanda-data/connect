@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -48,7 +47,7 @@ type TypeSpec struct {
 }
 
 // ConstructorFunc is a func signature able to construct an input.
-type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type, ...iprocessor.PipelineConstructorFunc) (input.Streamed, error)
+type ConstructorFunc func(Config, interop.Manager, log.Modular, metrics.Type, ...iprocessor.PipelineConstructorFunc) (input.Streamed, error)
 
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
@@ -86,7 +85,7 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 // provided input configuration will also be initialized.
 func AppendProcessorsFromConfig(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...iprocessor.PipelineConstructorFunc,
@@ -113,10 +112,10 @@ func AppendProcessorsFromConfig(
 	return pipelines
 }
 
-func fromSimpleConstructor(fn func(Config, types.Manager, log.Modular, metrics.Type) (input.Streamed, error)) ConstructorFunc {
+func fromSimpleConstructor(fn func(Config, interop.Manager, log.Modular, metrics.Type) (input.Streamed, error)) ConstructorFunc {
 	return func(
 		conf Config,
-		mgr types.Manager,
+		mgr interop.Manager,
 		log log.Modular,
 		stats metrics.Type,
 		pipelines ...iprocessor.PipelineConstructorFunc,
@@ -320,7 +319,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 // New creates an input type based on an input configuration.
 func New(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...iprocessor.PipelineConstructorFunc,

@@ -20,7 +20,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/apache/pulsar-client-go/pulsar"
 )
 
@@ -77,7 +76,7 @@ type pulsarWriter struct {
 	shutSig *shutdown.Signaller
 }
 
-func newPulsarWriter(conf output.PulsarConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*pulsarWriter, error) {
+func newPulsarWriter(conf output.PulsarConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*pulsarWriter, error) {
 	var err error
 	var key, orderingKey *field.Expression
 
@@ -87,10 +86,10 @@ func newPulsarWriter(conf output.PulsarConfig, mgr types.Manager, log log.Modula
 	if conf.Topic == "" {
 		return nil, errors.New("field topic must not be empty")
 	}
-	if key, err = interop.NewBloblangField(mgr, conf.Key); err != nil {
+	if key, err = mgr.BloblEnvironment().NewField(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
-	if orderingKey, err = interop.NewBloblangField(mgr, conf.OrderingKey); err != nil {
+	if orderingKey, err = mgr.BloblEnvironment().NewField(conf.OrderingKey); err != nil {
 		return nil, fmt.Errorf("failed to parse ordering_key expression: %v", err)
 	}
 

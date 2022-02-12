@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // PolicyConfig contains configuration parameters for a batch policy.
@@ -112,7 +111,7 @@ type Policy struct {
 // NewPolicy creates an empty policy with default rules.
 func NewPolicy(
 	conf PolicyConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*Policy, error) {
@@ -125,7 +124,7 @@ func NewPolicy(
 	var err error
 	var check *mapping.Executor
 	if len(conf.Check) > 0 {
-		if check, err = interop.NewBloblangMapping(mgr, conf.Check); err != nil {
+		if check, err = mgr.BloblEnvironment().NewMapping(conf.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check: %v", err)
 		}
 	}

@@ -7,9 +7,9 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -27,7 +27,7 @@ var (
 
 type procConstructor func(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (processor.V1, error)
@@ -52,7 +52,7 @@ type TypeSpec struct {
 }
 
 // ConstructorFunc is a func signature able to construct a processor.
-type ConstructorFunc func(Config, types.Manager, log.Modular, metrics.Type) (processor.V1, error)
+type ConstructorFunc func(Config, interop.Manager, log.Modular, metrics.Type) (processor.V1, error)
 
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
@@ -106,7 +106,7 @@ func Block(typeStr, reason string) {
 	}
 	ctor.constructor = func(
 		conf Config,
-		mgr types.Manager,
+		mgr interop.Manager,
 		log log.Modular,
 		stats metrics.Type,
 	) (processor.V1, error) {
@@ -316,7 +316,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 // New creates a processor type based on a processor configuration.
 func New(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (processor.V1, error) {

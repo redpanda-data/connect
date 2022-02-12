@@ -16,7 +16,6 @@ import (
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
-	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -173,7 +172,7 @@ func NewWriter(
 	if db.wcTimeout, err = time.ParseDuration(conf.WriteConcern.WTimeout); err != nil {
 		return nil, fmt.Errorf("failed to parse write concern wtimeout string: %v", err)
 	}
-	if db.collection, err = interop.NewBloblangField(mgr, conf.MongoConfig.Collection); err != nil {
+	if db.collection, err = mgr.BloblEnvironment().NewField(conf.MongoConfig.Collection); err != nil {
 		return nil, fmt.Errorf("failed to parse collection expression: %v", err)
 	}
 

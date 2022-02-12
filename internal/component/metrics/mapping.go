@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // MappingFieldSpec is a field spec that describes a Bloblang mapping for
@@ -32,11 +31,11 @@ type Mapping struct {
 }
 
 // NewMapping parses a Bloblang mapping and returns a metrics mapping.
-func NewMapping(mgr types.Manager, mapping string, logger log.Modular) (*Mapping, error) {
+func NewMapping(mgr interop.Manager, mapping string, logger log.Modular) (*Mapping, error) {
 	if mapping == "" {
 		return &Mapping{m: nil, logger: logger}, nil
 	}
-	m, err := interop.NewBloblangMapping(mgr, mapping)
+	m, err := mgr.BloblEnvironment().NewMapping(mapping)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(mapping)))

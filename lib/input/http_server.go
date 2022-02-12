@@ -30,7 +30,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	httputil "github.com/Jeffail/benthos/v3/lib/util/http"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/gorilla/mux"
@@ -189,7 +188,7 @@ type HTTPServer struct {
 	conf  HTTPServerConfig
 	stats metrics.Type
 	log   log.Modular
-	mgr   types.Manager
+	mgr   interop.Manager
 
 	mux     *http.ServeMux
 	server  *http.Server
@@ -224,7 +223,7 @@ type HTTPServer struct {
 }
 
 // NewHTTPServer creates a new HTTPServer input type.
-func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func NewHTTPServer(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var mux *http.ServeMux
 	var server *http.Server
 
@@ -282,11 +281,11 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 		mAsyncSucc:     stats.GetCounter("send.async_success"),
 	}
 
-	if h.responseStatus, err = interop.NewBloblangField(mgr, h.conf.Response.Status); err != nil {
+	if h.responseStatus, err = mgr.BloblEnvironment().NewField(h.conf.Response.Status); err != nil {
 		return nil, fmt.Errorf("failed to parse response status expression: %v", err)
 	}
 	for k, v := range h.conf.Response.Headers {
-		if h.responseHeaders[strings.ToLower(k)], err = interop.NewBloblangField(mgr, v); err != nil {
+		if h.responseHeaders[strings.ToLower(k)], err = mgr.BloblEnvironment().NewField(v); err != nil {
 			return nil, fmt.Errorf("failed to parse response header '%v' expression: %v", k, err)
 		}
 	}
@@ -318,8 +317,8 @@ func NewHTTPServer(conf Config, mgr types.Manager, log log.Modular, stats metric
 	}
 
 	if h.conf.RateLimit != "" {
-		if err := interop.ProbeRateLimit(context.Background(), h.mgr, h.conf.RateLimit); err != nil {
-			return nil, err
+		if !h.mgr.ProbeRateLimit(h.conf.RateLimit) {
+			return nil, fmt.Errorf("rate limit resource '%v' was not found", h.conf.RateLimit)
 		}
 	}
 
@@ -412,7 +411,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	if h.conf.RateLimit != "" {
 		var tUntil time.Duration
 		var err error
-		if rerr := interop.AccessRateLimit(r.Context(), h.mgr, h.conf.RateLimit, func(rl ratelimit.V1) {
+		if rerr := h.mgr.AccessRateLimit(r.Context(), h.conf.RateLimit, func(rl ratelimit.V1) {
 			tUntil, err = rl.Access(r.Context())
 		}); rerr != nil {
 			http.Error(w, "Server error", http.StatusBadGateway)
@@ -613,7 +612,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 		if h.conf.RateLimit != "" {
 			var tUntil time.Duration
-			if rerr := interop.AccessRateLimit(r.Context(), h.mgr, h.conf.RateLimit, func(rl ratelimit.V1) {
+			if rerr := h.mgr.AccessRateLimit(r.Context(), h.conf.RateLimit, func(rl ratelimit.V1) {
 				tUntil, err = rl.Access(r.Context())
 			}); rerr != nil {
 				h.log.Warnf("Failed to access rate limit: %v\n", rerr)

@@ -13,7 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -191,7 +190,7 @@ func parseInputConfsWithDefaults(rawInputs []interface{}) ([]Config, error) {
 // NewBroker creates a new Broker input type.
 func NewBroker(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...iprocessor.PipelineConstructorFunc,

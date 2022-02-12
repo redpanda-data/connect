@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,7 @@ func TestGrokAllParts(t *testing.T) {
 
 	testLog := log.Noop()
 
-	gSet, err := NewGrok(conf, nil, testLog, metrics.Noop())
+	gSet, err := NewGrok(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +95,7 @@ func TestGrok(t *testing.T) {
 			conf.Grok.Expressions = []string{test.pattern}
 			conf.Grok.PatternDefinitions = test.definitions
 
-			gSet, err := NewGrok(conf, nil, tLog, tStats)
+			gSet, err := NewGrok(conf, mock.NewManager(), tLog, tStats)
 			require.NoError(t, err)
 
 			inMsg := message.QuickBatch([][]byte{[]byte(test.input)})
@@ -112,7 +113,7 @@ func TestGrok(t *testing.T) {
 			conf.Grok.Expressions = []string{test.pattern}
 			conf.Grok.PatternDefinitions = test.definitions
 
-			gSet, err := NewGrok(conf, nil, tLog, tStats)
+			gSet, err := NewGrok(conf, mock.NewManager(), tLog, tStats)
 			require.NoError(t, err)
 
 			inMsg := message.QuickBatch([][]byte{[]byte(test.input)})
@@ -138,7 +139,7 @@ FOONESTED %{INT:nested.first:int} %{WORD:nested.second} %{WORD:nested.third}
 	conf.Grok.Expressions = []string{`%{FOONESTED}`, `%{FOOFLAT}`}
 	conf.Grok.PatternPaths = []string{tmpDir}
 
-	gSet, err := NewGrok(conf, nil, log.Noop(), metrics.Noop())
+	gSet, err := NewGrok(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	inMsg := message.QuickBatch([][]byte{[]byte(`hello foo bar`)})

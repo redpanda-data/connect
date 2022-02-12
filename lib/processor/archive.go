@@ -17,7 +17,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -277,9 +276,9 @@ type Archive struct {
 
 // NewArchive returns a Archive processor.
 func NewArchive(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
-	path, err := interop.NewBloblangField(mgr, conf.Archive.Path)
+	path, err := mgr.BloblEnvironment().NewField(conf.Archive.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}

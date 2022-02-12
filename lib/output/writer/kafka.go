@@ -18,7 +18,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/hash/murmur2"
 	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
@@ -90,7 +89,7 @@ func NewKafkaConfig() KafkaConfig {
 // Kafka is a writer type that writes messages into kafka.
 type Kafka struct {
 	log   log.Modular
-	mgr   types.Manager
+	mgr   interop.Manager
 	stats metrics.Type
 
 	backoffCtor func() backoff.BackOff
@@ -117,7 +116,7 @@ type Kafka struct {
 }
 
 // NewKafka creates a new Kafka writer type.
-func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*Kafka, error) {
+func NewKafka(conf KafkaConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*Kafka, error) {
 	compression, err := strToCompressionCodec(conf.Compression)
 	if err != nil {
 		return nil, err
@@ -149,13 +148,13 @@ func NewKafka(conf KafkaConfig, mgr types.Manager, log log.Modular, stats metric
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
-	if k.key, err = interop.NewBloblangField(mgr, conf.Key); err != nil {
+	if k.key, err = mgr.BloblEnvironment().NewField(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
-	if k.topic, err = interop.NewBloblangField(mgr, conf.Topic); err != nil {
+	if k.topic, err = mgr.BloblEnvironment().NewField(conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
-	if k.partition, err = interop.NewBloblangField(mgr, conf.Partition); err != nil {
+	if k.partition, err = mgr.BloblEnvironment().NewField(conf.Partition); err != nil {
 		return nil, fmt.Errorf("failed to parse parition expression: %v", err)
 	}
 	if k.backoffCtor, err = conf.Config.GetCtor(); err != nil {

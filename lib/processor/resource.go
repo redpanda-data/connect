@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
@@ -10,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func init() {
@@ -57,7 +57,7 @@ You can find out more about resources [in this document.](/docs/configuration/re
 
 // Resource is a processor that returns the result of a processor resource.
 type Resource struct {
-	mgr  types.Manager
+	mgr  interop.Manager
 	name string
 	log  log.Modular
 
@@ -68,10 +68,10 @@ type Resource struct {
 
 // NewResource returns a resource processor.
 func NewResource(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
-	if err := interop.ProbeProcessor(context.Background(), mgr, conf.Resource); err != nil {
-		return nil, err
+	if !mgr.ProbeProcessor(conf.Resource) {
+		return nil, fmt.Errorf("processor resource '%v' was not found", conf.Resource)
 	}
 	return &Resource{
 		mgr:  mgr,
@@ -90,7 +90,7 @@ func NewResource(
 // resulting messages or a response to be sent back to the message source.
 func (r *Resource) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res error) {
 	r.mCount.Incr(1)
-	if err := interop.AccessProcessor(context.Background(), r.mgr, r.name, func(p processor.V1) {
+	if err := r.mgr.AccessProcessor(context.Background(), r.name, func(p processor.V1) {
 		msgs, res = p.ProcessMessage(msg)
 	}); err != nil {
 		r.log.Debugf("Failed to obtain processor resource '%v': %v", r.name, err)

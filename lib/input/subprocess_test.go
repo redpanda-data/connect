@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -60,7 +61,7 @@ func main() {
 	conf.Subprocess.Name = "go"
 	conf.Subprocess.Args = []string{"run", filePath}
 
-	i, err := New(conf, nil, log.Noop(), metrics.Noop())
+	i, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	msg := readMsg(t, i.TransactionChan())
@@ -103,7 +104,7 @@ func main() {
 	conf.Subprocess.RestartOnExit = true
 	conf.Subprocess.Args = []string{"run", filePath}
 
-	i, err := New(conf, nil, log.Noop(), metrics.Noop())
+	i, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	msg := readMsg(t, i.TransactionChan())
@@ -155,7 +156,7 @@ func main() {
 	conf.Subprocess.Name = "go"
 	conf.Subprocess.Args = []string{"run", filePath}
 
-	i, err := New(conf, nil, log.Noop(), metrics.Noop())
+	i, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	msg := readMsg(t, i.TransactionChan())

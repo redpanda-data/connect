@@ -5,12 +5,12 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
@@ -76,7 +76,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 //------------------------------------------------------------------------------
 
 // NewKafka creates a new Kafka output type.
-func NewKafka(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func NewKafka(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	k, err := writer.NewKafka(conf.Kafka, mgr, log, stats)
 	if err != nil {
 		return nil, err

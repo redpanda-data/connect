@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/OneOfOne/xxhash"
 )
@@ -394,7 +393,7 @@ type Sequence struct {
 
 	joiner *messageJoiner
 
-	wrapperMgr   types.Manager
+	wrapperMgr   interop.Manager
 	wrapperLog   log.Modular
 	wrapperStats metrics.Type
 
@@ -414,7 +413,7 @@ type sequenceTarget struct {
 // NewSequence creates a new Sequence input type.
 func NewSequence(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (input.Streamed, error) {

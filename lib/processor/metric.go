@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -228,9 +227,9 @@ func unwrapMetric(t metrics.Type) metrics.Type {
 
 // NewMetric returns a Metric processor.
 func NewMetric(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
-	value, err := interop.NewBloblangField(mgr, conf.Metric.Value)
+	value, err := mgr.BloblEnvironment().NewField(conf.Metric.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
@@ -258,7 +257,7 @@ func NewMetric(
 	sort.Strings(labelNames)
 
 	for _, n := range labelNames {
-		v, err := interop.NewBloblangField(mgr, conf.Metric.Labels[n])
+		v, err := mgr.BloblEnvironment().NewField(conf.Metric.Labels[n])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse label '%v' expression: %v", n, err)
 		}

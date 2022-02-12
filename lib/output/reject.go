@@ -13,14 +13,13 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
 
 func init() {
 	Constructors[TypeReject] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 			f, err := newRejectWriter(mgr, string(conf.Reject))
 			if err != nil {
 				return nil, err
@@ -76,11 +75,11 @@ type rejectWriter struct {
 	errExpr *field.Expression
 }
 
-func newRejectWriter(mgr types.Manager, errorString string) (*rejectWriter, error) {
+func newRejectWriter(mgr interop.Manager, errorString string) (*rejectWriter, error) {
 	if errorString == "" {
 		return nil, errors.New("an error message must be provided in order to provide context for the rejection")
 	}
-	errExpr, err := interop.NewBloblangField(mgr, errorString)
+	errExpr, err := mgr.BloblEnvironment().NewField(errorString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse error expression: %w", err)
 	}

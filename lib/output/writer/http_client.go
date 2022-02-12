@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
 
@@ -67,7 +66,7 @@ type HTTPClient struct {
 // NewHTTPClient creates a new HTTPClient writer type.
 func NewHTTPClient(
 	conf HTTPClientConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*HTTPClient, error) {
@@ -90,13 +89,13 @@ func NewHTTPClient(
 		for i, p := range conf.Multipart {
 			var exprPart http.MultipartExpressions
 			var err error
-			if exprPart.ContentDisposition, err = interop.NewBloblangField(mgr, p.ContentDisposition); err != nil {
+			if exprPart.ContentDisposition, err = mgr.BloblEnvironment().NewField(p.ContentDisposition); err != nil {
 				return nil, fmt.Errorf("failed to parse multipart %v field content_disposition: %v", i, err)
 			}
-			if exprPart.ContentType, err = interop.NewBloblangField(mgr, p.ContentType); err != nil {
+			if exprPart.ContentType, err = mgr.BloblEnvironment().NewField(p.ContentType); err != nil {
 				return nil, fmt.Errorf("failed to parse multipart %v field content_type: %v", i, err)
 			}
-			if exprPart.Body, err = interop.NewBloblangField(mgr, p.Body); err != nil {
+			if exprPart.Body, err = mgr.BloblEnvironment().NewField(p.Body); err != nil {
 				return nil, fmt.Errorf("failed to parse multipart %v field data: %v", i, err)
 			}
 			parts[i] = exprPart

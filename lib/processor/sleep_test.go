@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/require"
@@ -15,7 +16,7 @@ func TestSleep(t *testing.T) {
 	conf.Type = TypeSleep
 	conf.Sleep.Duration = "1ns"
 
-	slp, err := New(conf, nil, log.Noop(), metrics.Noop())
+	slp, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +37,7 @@ func TestSleepExit(t *testing.T) {
 	conf.Type = TypeSleep
 	conf.Sleep.Duration = "10s"
 
-	slp, err := New(conf, nil, log.Noop(), metrics.Noop())
+	slp, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +62,7 @@ func TestSleep200Millisecond(t *testing.T) {
 	conf.Type = TypeSleep
 	conf.Sleep.Duration = "200ms"
 
-	slp, err := New(conf, nil, log.Noop(), metrics.Noop())
+	slp, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +83,7 @@ func TestSleepInterpolated(t *testing.T) {
 	conf.Type = TypeSleep
 	conf.Sleep.Duration = "${!json(\"foo\")}ms"
 
-	slp, err := New(conf, nil, log.Noop(), metrics.Noop())
+	slp, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

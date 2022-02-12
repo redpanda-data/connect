@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/quipo/dependencysolver"
 )
 
@@ -98,7 +97,7 @@ func (w *workflowBranchMap) WaitForClose(timeout time.Duration) error {
 
 var processDAGStageName = regexp.MustCompile("[a-zA-Z0-9-_]+")
 
-func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*workflowBranchMap, error) {
+func newWorkflowBranchMap(conf WorkflowConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*workflowBranchMap, error) {
 	dynamicBranches, staticBranches := map[string]workflowBranch{}, map[string]*Branch{}
 	for k, v := range conf.Branches {
 		if len(processDAGStageName.FindString(k)) != len(k) {
@@ -119,8 +118,8 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 		if _, exists := dynamicBranches[k]; exists {
 			return nil, fmt.Errorf("branch resource name '%v' collides with an explicit branch", k)
 		}
-		if err := interop.ProbeProcessor(context.Background(), mgr, k); err != nil {
-			return nil, err
+		if !mgr.ProbeProcessor(k) {
+			return nil, fmt.Errorf("processor resource '%v' was not found", k)
 		}
 		dynamicBranches[k] = &resourcedBranch{
 			name: k,
@@ -133,8 +132,8 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 	for _, tier := range conf.Order {
 		for _, k := range tier {
 			if _, exists := dynamicBranches[k]; !exists {
-				if err := interop.ProbeProcessor(context.Background(), mgr, k); err != nil {
-					return nil, err
+				if !mgr.ProbeProcessor(k) {
+					return nil, fmt.Errorf("processor resource '%v' was not found", k)
 				}
 				dynamicBranches[k] = &resourcedBranch{
 					name: k,
@@ -172,7 +171,7 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr types.Manager, log log.Modula
 
 type resourcedBranch struct {
 	name string
-	mgr  types.Manager
+	mgr  interop.Manager
 }
 
 func (r *resourcedBranch) lock() (branch *Branch, unlockFn func()) {
@@ -185,7 +184,7 @@ func (r *resourcedBranch) lock() (branch *Branch, unlockFn func()) {
 	}
 
 	go func() {
-		_ = interop.AccessProcessor(context.Background(), r.mgr, r.name, func(p processor.V1) {
+		_ = r.mgr.AccessProcessor(context.Background(), r.name, func(p processor.V1) {
 			branch, _ = p.(*Branch)
 			openOnce.Do(func() {
 				close(open)

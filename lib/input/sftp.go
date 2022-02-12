@@ -20,7 +20,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/pkg/sftp"
 )
 
@@ -47,7 +46,7 @@ func init() {
 	}
 
 	Constructors[TypeSFTP] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 			r, err := newSFTPReader(conf.SFTP, mgr, log, stats)
 			if err != nil {
 				return nil, err
@@ -144,7 +143,7 @@ type sftpReader struct {
 
 	log   log.Modular
 	stats metrics.Type
-	mgr   types.Manager
+	mgr   interop.Manager
 
 	client *sftp.Client
 
@@ -159,7 +158,7 @@ type sftpReader struct {
 	watcherMinAge       time.Duration
 }
 
-func newSFTPReader(conf SFTPConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*sftpReader, error) {
+func newSFTPReader(conf SFTPConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*sftpReader, error) {
 	codecConf := codec.NewReaderConfig()
 	codecConf.MaxScanTokenSize = conf.MaxBuffer
 	ctor, err := codec.GetReader(conf.Codec, codecConf)
@@ -181,8 +180,8 @@ func newSFTPReader(conf SFTPConfig, mgr types.Manager, log log.Modular, stats me
 			return nil, errors.New("a cache must be specified when watcher mode is enabled")
 		}
 
-		if err := interop.ProbeCache(context.Background(), mgr, conf.Watcher.Cache); err != nil {
-			return nil, err
+		if !mgr.ProbeCache(conf.Watcher.Cache) {
+			return nil, fmt.Errorf("cache resource '%v' was not found", conf.Watcher.Cache)
 		}
 	}
 
@@ -279,7 +278,7 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (*message.Batch, reade
 		if err != component.ErrTimeout {
 			if s.conf.Watcher.Enabled {
 				var setErr error
-				if cerr := interop.AccessCache(ctx, s.mgr, s.conf.Watcher.Cache, func(cache cache.V1) {
+				if cerr := s.mgr.AccessCache(ctx, s.conf.Watcher.Cache, func(cache cache.V1) {
 					setErr = cache.Set(ctx, s.currentPath, []byte("@"), nil)
 				}); cerr != nil {
 					return nil, nil, fmt.Errorf("failed to get the cache for sftp watcher mode: %v", cerr)
@@ -345,7 +344,7 @@ func (s *sftpReader) getFilePaths(ctx context.Context) ([]string, error) {
 		return filepaths, nil
 	}
 
-	if cerr := interop.AccessCache(ctx, s.mgr, s.conf.Watcher.Cache, func(cache cache.V1) {
+	if cerr := s.mgr.AccessCache(ctx, s.conf.Watcher.Cache, func(cache cache.V1) {
 		for _, p := range s.conf.Paths {
 			paths, err := s.client.Glob(p)
 			if err != nil {

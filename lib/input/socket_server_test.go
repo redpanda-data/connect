@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -24,7 +25,7 @@ func TestSocketServerBasic(t *testing.T) {
 	conf.SocketServer.Network = "unix"
 	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	defer func() {
@@ -91,7 +92,7 @@ func TestSocketServerRetries(t *testing.T) {
 	conf.SocketServer.Network = "unix"
 	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	defer func() {
@@ -173,7 +174,7 @@ func TestSocketServerWriteClosed(t *testing.T) {
 	conf.SocketServer.Network = "unix"
 	conf.SocketServer.Address = filepath.Join(tmpDir, "b.sock")
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	conn, err := net.Dial("unix", conf.SocketServer.Address)
@@ -200,7 +201,7 @@ func TestSocketServerRecon(t *testing.T) {
 	conf.SocketServer.Network = "unix"
 	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -276,7 +277,7 @@ func TestSocketServerMpart(t *testing.T) {
 	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
 	conf.SocketServer.Codec = "lines/multipart"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	defer func() {
@@ -343,7 +344,7 @@ func TestSocketServerMpartCDelim(t *testing.T) {
 	conf.SocketServer.Address = filepath.Join(tmpDir, "b.sock")
 	conf.SocketServer.Codec = "delim:@/multipart"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	defer func() {
@@ -410,7 +411,7 @@ func TestSocketServerMpartSdown(t *testing.T) {
 	conf.SocketServer.Address = filepath.Join(tmpDir, "b.sock")
 	conf.SocketServer.Codec = "lines/multipart"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	defer func() {
@@ -475,7 +476,7 @@ func TestSocketUDPServerBasic(t *testing.T) {
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -544,7 +545,7 @@ func TestSocketUDPServerRetries(t *testing.T) {
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -628,7 +629,7 @@ func TestUDPServerWriteToClosed(t *testing.T) {
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -655,7 +656,7 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -729,7 +730,7 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 	conf.SocketServer.Address = "127.0.0.1:0"
 	conf.SocketServer.Codec = "delim:@"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -806,7 +807,7 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -883,7 +884,7 @@ func TestTCPSocketServerBasic(t *testing.T) {
 	conf.SocketServer.Network = "tcp"
 	conf.SocketServer.Address = "127.0.0.1:0"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -952,7 +953,7 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 	conf.SocketServer.Network = "tcp"
 	conf.SocketServer.Address = "127.0.0.1:0"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -1027,7 +1028,7 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 	conf.SocketServer.Address = "127.0.0.1:0"
 	conf.SocketServer.Codec = "lines/multipart"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -1095,7 +1096,7 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 	conf.SocketServer.Address = "127.0.0.1:0"
 	conf.SocketServer.Codec = "delim:@/multipart"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()
@@ -1163,7 +1164,7 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 	conf.SocketServer.Address = "127.0.0.1:0"
 	conf.SocketServer.Codec = "lines/multipart"
 
-	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocketServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	addr := rdr.(*SocketServer).Addr()

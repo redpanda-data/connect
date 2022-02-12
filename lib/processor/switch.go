@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -160,7 +159,7 @@ type Switch struct {
 
 // NewSwitch returns a Switch processor.
 func NewSwitch(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	var cases []switchCase
 	for i, caseConf := range conf.Switch {
@@ -171,7 +170,7 @@ func NewSwitch(
 		var procs []processor.V1
 
 		if len(caseConf.Check) > 0 {
-			if check, err = interop.NewBloblangMapping(mgr, caseConf.Check); err != nil {
+			if check, err = mgr.BloblEnvironment().NewMapping(caseConf.Check); err != nil {
 				return nil, fmt.Errorf("failed to parse case %v check: %w", i, err)
 			}
 		}

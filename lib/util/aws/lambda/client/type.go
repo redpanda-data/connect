@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/lambda"
@@ -49,7 +48,7 @@ type Type struct {
 	conf  Config
 	log   log.Modular
 	stats metrics.Type
-	mgr   types.Manager
+	mgr   interop.Manager
 
 	timeout time.Duration
 
@@ -100,8 +99,8 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	}
 
 	if conf.RateLimit != "" {
-		if err := interop.ProbeRateLimit(context.Background(), l.mgr, conf.RateLimit); err != nil {
-			return nil, err
+		if !l.mgr.ProbeRateLimit(conf.RateLimit) {
+			return nil, fmt.Errorf("rate limit resource '%v' was not found", conf.RateLimit)
 		}
 	}
 
@@ -126,7 +125,7 @@ func OptSetStats(stats metrics.Type) func(*Type) {
 }
 
 // OptSetManager sets the manager to use.
-func OptSetManager(mgr types.Manager) func(*Type) {
+func OptSetManager(mgr interop.Manager) func(*Type) {
 	return func(t *Type) {
 		t.mgr = mgr
 	}
@@ -141,7 +140,7 @@ func (l *Type) waitForAccess(ctx context.Context) bool {
 	for {
 		var period time.Duration
 		var err error
-		if rerr := interop.AccessRateLimit(ctx, l.mgr, l.conf.RateLimit, func(rl ratelimit.V1) {
+		if rerr := l.mgr.AccessRateLimit(ctx, l.conf.RateLimit, func(rl ratelimit.V1) {
 			period, err = rl.Access(ctx)
 		}); rerr != nil {
 			err = rerr

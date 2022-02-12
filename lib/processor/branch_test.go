@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -280,7 +281,7 @@ func TestBranchBasic(t *testing.T) {
 			conf.Branch.Processors = append(conf.Branch.Processors, procConf)
 			conf.Branch.ResultMap = test.resultMap
 
-			proc, err := NewBranch(conf, nil, log.Noop(), metrics.Noop())
+			proc, err := NewBranch(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			msg := message.QuickBatch(nil)

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -12,7 +13,7 @@ func TestSplitToSingleParts(t *testing.T) {
 	conf := NewConfig()
 
 	testLog := log.Noop()
-	proc, err := NewSplit(conf, nil, testLog, metrics.Noop())
+	proc, err := NewSplit(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -61,7 +62,7 @@ func TestSplitToMultipleParts(t *testing.T) {
 	conf.Type = TypeSplit
 	conf.Split.Size = 2
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -99,7 +100,7 @@ func TestSplitByBytes(t *testing.T) {
 	conf.Split.Size = 0
 	conf.Split.ByteSize = 6
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestSplitByBytesTooLarge(t *testing.T) {
 	conf.Split.Size = 0
 	conf.Split.ByteSize = 2
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,6 +8,7 @@ import (
 
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -226,11 +227,7 @@ func TestPoolMultiThreads(t *testing.T) {
 	conf.Threads = 2
 	conf.Processors = append(conf.Processors, processor.NewConfig())
 
-	proc, err := New(
-		conf, nil,
-		log.Noop(),
-		metrics.Noop(),
-	)
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,11 +300,7 @@ func TestPoolMultiNaturalClose(t *testing.T) {
 	conf.Threads = 2
 	conf.Processors = append(conf.Processors, processor.NewConfig())
 
-	proc, err := New(
-		conf, nil,
-		log.Noop(),
-		metrics.Noop(),
-	)
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

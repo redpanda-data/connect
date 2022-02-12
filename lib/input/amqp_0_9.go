@@ -3,10 +3,10 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
@@ -90,7 +90,7 @@ then the declaration passively verifies that they match the target fields.`,
 //------------------------------------------------------------------------------
 
 // NewAMQP09 creates a new AMQP09 input type.
-func NewAMQP09(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func NewAMQP09(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var a reader.Async
 	var err error
 	if a, err = reader.NewAMQP09(conf.AMQP09, log, stats); err != nil {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -32,7 +33,7 @@ func TestSocketBasic(t *testing.T) {
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func TestSocketReconnect(t *testing.T) {
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +222,7 @@ func TestSocketMultipart(t *testing.T) {
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +309,7 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +396,7 @@ func TestSocketMultipartShutdown(t *testing.T) {
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +482,7 @@ func TestTCPSocketBasic(t *testing.T) {
 	conf.Socket.Network = "tcp"
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +573,7 @@ func TestTCPSocketReconnect(t *testing.T) {
 	conf.Socket.Network = "tcp"
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -670,7 +671,7 @@ func TestTCPSocketMultipart(t *testing.T) {
 	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -757,7 +758,7 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 	conf.Socket.Codec = "delim:@/multipart"
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -844,7 +845,7 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, nil, log.Noop(), metrics.Noop())
+	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

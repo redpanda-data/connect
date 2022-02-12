@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -55,7 +55,7 @@ func NewRateLimitConfig() RateLimitConfig {
 // request body, and returns the response.
 type RateLimit struct {
 	rlName string
-	mgr    types.Manager
+	mgr    interop.Manager
 
 	log log.Modular
 
@@ -71,10 +71,10 @@ type RateLimit struct {
 
 // NewRateLimit returns a RateLimit processor.
 func NewRateLimit(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
-	if err := interop.ProbeRateLimit(context.Background(), mgr, conf.RateLimit.Resource); err != nil {
-		return nil, err
+	if !mgr.ProbeRateLimit(conf.RateLimit.Resource) {
+		return nil, fmt.Errorf("rate limit resource '%v' was not found", conf.RateLimit.Resource)
 	}
 	r := &RateLimit{
 		rlName:       conf.RateLimit.Resource,
@@ -100,7 +100,7 @@ func (r *RateLimit) ProcessMessage(msg *message.Batch) ([]*message.Batch, error)
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		var waitFor time.Duration
 		var err error
-		if rerr := interop.AccessRateLimit(context.Background(), r.mgr, r.rlName, func(rl ratelimit.V1) {
+		if rerr := r.mgr.AccessRateLimit(context.Background(), r.rlName, func(rl ratelimit.V1) {
 			waitFor, err = rl.Access(context.Background())
 		}); rerr != nil {
 			err = rerr
@@ -121,7 +121,7 @@ func (r *RateLimit) ProcessMessage(msg *message.Batch) ([]*message.Batch, error)
 			case <-r.closeChan:
 				return component.ErrTypeClosed
 			}
-			if rerr := interop.AccessRateLimit(context.Background(), r.mgr, r.rlName, func(rl ratelimit.V1) {
+			if rerr := r.mgr.AccessRateLimit(context.Background(), r.rlName, func(rl ratelimit.V1) {
 				waitFor, err = rl.Access(context.Background())
 			}); rerr != nil {
 				err = rerr

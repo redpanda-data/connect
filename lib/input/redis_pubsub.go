@@ -4,10 +4,10 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/redis/old"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ verbatim.`,
 //------------------------------------------------------------------------------
 
 // NewRedisPubSub creates a new RedisPubSub input type.
-func NewRedisPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func NewRedisPubSub(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	r, err := reader.NewRedisPubSub(conf.RedisPubSub, log, stats)
 	if err != nil {
 		return nil, err

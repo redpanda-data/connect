@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -14,7 +15,7 @@ func TestRetryConfigErrs(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "retry"
 
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error from bad retry output")
 	}
 
@@ -22,7 +23,7 @@ func TestRetryConfigErrs(t *testing.T) {
 	conf.Retry.Output = &oConf
 	conf.Retry.Backoff.InitialInterval = "not a time period"
 
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error from bad initial period")
 	}
 }
@@ -33,7 +34,7 @@ func TestRetryBasic(t *testing.T) {
 	childConf := NewConfig()
 	conf.Retry.Output = &childConf
 
-	output, err := NewRetry(conf, nil, log.Noop(), metrics.Noop())
+	output, err := NewRetry(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +105,7 @@ func TestRetrySadPath(t *testing.T) {
 	conf.Retry.Backoff.InitialInterval = "10us"
 	conf.Retry.Backoff.MaxInterval = "10us"
 
-	output, err := NewRetry(conf, nil, log.Noop(), metrics.Noop())
+	output, err := NewRetry(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +271,7 @@ func TestRetryParallel(t *testing.T) {
 	conf.Retry.Backoff.InitialInterval = "10us"
 	conf.Retry.Backoff.MaxInterval = "10us"
 
-	output, err := NewRetry(conf, nil, log.Noop(), metrics.Noop())
+	output, err := NewRetry(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

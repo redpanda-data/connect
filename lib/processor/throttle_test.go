@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/require"
@@ -15,7 +16,7 @@ func TestThrottle(t *testing.T) {
 	conf.Type = TypeThrottle
 	conf.Throttle.Period = "1ns"
 
-	throt, err := New(conf, nil, log.Noop(), metrics.Noop())
+	throt, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +37,7 @@ func TestThrottle200Millisecond(t *testing.T) {
 	conf.Type = TypeThrottle
 	conf.Throttle.Period = "200ms"
 
-	throt, err := New(conf, nil, log.Noop(), metrics.Noop())
+	throt, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +65,7 @@ func TestThrottleBadPeriod(t *testing.T) {
 	conf.Type = TypeThrottle
 	conf.Throttle.Period = "1gfdfgfdns"
 
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	_, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad duration")
 	}

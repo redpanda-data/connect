@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -67,7 +66,7 @@ type GCPPubSub struct {
 // NewGCPPubSubV2 creates a new GCP Cloud Pub/Sub writer.Type.
 func NewGCPPubSubV2(
 	conf GCPPubSubConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*GCPPubSub, error) {
@@ -75,11 +74,11 @@ func NewGCPPubSubV2(
 	if err != nil {
 		return nil, err
 	}
-	topic, err := interop.NewBloblangField(mgr, conf.TopicID)
+	topic, err := mgr.BloblEnvironment().NewField(conf.TopicID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
-	orderingKey, err := interop.NewBloblangField(mgr, conf.OrderingKey)
+	orderingKey, err := mgr.BloblEnvironment().NewField(conf.OrderingKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ordering key: %v", err)
 	}

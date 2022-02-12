@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -20,7 +21,7 @@ func TestInsertBoundaries(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		for j := -5; j <= 5; j++ {
 			conf.InsertPart.Index = j
-			proc, err := NewInsertPart(conf, nil, testLog, metrics.Noop())
+			proc, err := NewInsertPart(conf, mock.NewManager(), testLog, metrics.Noop())
 			if err != nil {
 				t.Error(err)
 				return
@@ -164,7 +165,7 @@ func TestInsertPart(t *testing.T) {
 
 	for _, test := range tests {
 		conf.InsertPart.Index = test.index
-		proc, err := NewInsertPart(conf, nil, testLog, metrics.Noop())
+		proc, err := NewInsertPart(conf, mock.NewManager(), testLog, metrics.Noop())
 		if err != nil {
 			t.Error(err)
 			return
@@ -189,7 +190,7 @@ func TestInsertPartInterpolation(t *testing.T) {
 	hostname, _ := os.Hostname()
 
 	testLog := log.Noop()
-	proc, err := NewInsertPart(conf, nil, testLog, metrics.Noop())
+	proc, err := NewInsertPart(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

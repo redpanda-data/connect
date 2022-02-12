@@ -24,7 +24,7 @@ func newSwitch(t *testing.T, conf Config, mockOutputs []*MockOutputType) *Switch
 	t.Helper()
 
 	conf.Type = TypeSwitch
-	genType, err := New(conf, nil, log.Noop(), metrics.Noop())
+	genType, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	rType, ok := genType.(*Switch)

@@ -8,6 +8,7 @@ import (
 
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
@@ -129,34 +130,18 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 	newOutput, err := WrapWithPipelines(
 		mockOut,
 		func(i *int) (iprocessor.Pipeline, error) {
-			proc, err := processor.New(
-				firstProc, nil,
-				log.Noop(),
-				metrics.Noop(),
-			)
+			proc, err := processor.New(firstProc, mock.NewManager(), log.Noop(), metrics.Noop())
 			if err != nil {
 				return nil, err
 			}
-			return pipeline.NewProcessor(
-				log.Noop(),
-				metrics.Noop(),
-				proc,
-			), nil
+			return pipeline.NewProcessor(log.Noop(), metrics.Noop(), proc), nil
 		},
 		func(i *int) (iprocessor.Pipeline, error) {
-			proc, err := processor.New(
-				secondProc, nil,
-				log.Noop(),
-				metrics.Noop(),
-			)
+			proc, err := processor.New(secondProc, mock.NewManager(), log.Noop(), metrics.Noop())
 			if err != nil {
 				return nil, err
 			}
-			return pipeline.NewProcessor(
-				log.Noop(),
-				metrics.Noop(),
-				proc,
-			), nil
+			return pipeline.NewProcessor(log.Noop(), metrics.Noop(), proc), nil
 		},
 	)
 	if err != nil {

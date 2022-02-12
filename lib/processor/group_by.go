@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -121,7 +120,7 @@ type GroupBy struct {
 
 // NewGroupBy returns a GroupBy processor.
 func NewGroupBy(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	var err error
 	groups := make([]group, len(conf.GroupBy))
@@ -131,7 +130,7 @@ func NewGroupBy(
 		groupPrefix := fmt.Sprintf("groups.%v", i)
 
 		if len(gConf.Check) > 0 {
-			if groups[i].Check, err = interop.NewBloblangMapping(mgr, gConf.Check); err != nil {
+			if groups[i].Check, err = mgr.BloblEnvironment().NewMapping(gConf.Check); err != nil {
 				return nil, fmt.Errorf("failed to parse check for group '%v': %v", i, err)
 			}
 		} else {

@@ -7,6 +7,7 @@ import (
 
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -47,7 +48,7 @@ func TestSwitchCases(t *testing.T) {
 		Fallthrough: false,
 	})
 
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	defer func() {
@@ -153,7 +154,7 @@ func TestSwitchError(t *testing.T) {
 		Fallthrough: false,
 	})
 
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	defer func() {
@@ -222,7 +223,7 @@ func BenchmarkSwitch10(b *testing.B) {
 		Fallthrough: false,
 	})
 
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(b, err)
 	defer func() {
 		c.CloseAsync()
@@ -298,7 +299,7 @@ func BenchmarkSwitch1(b *testing.B) {
 		Fallthrough: false,
 	})
 
-	c, err := New(conf, nil, log.Noop(), metrics.Noop())
+	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(b, err)
 	defer func() {
 		c.CloseAsync()

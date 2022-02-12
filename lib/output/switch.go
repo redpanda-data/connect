@@ -19,7 +19,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/Jeffail/gabs/v2"
 	"golang.org/x/sync/errgroup"
@@ -256,7 +255,7 @@ type Switch struct {
 // sent to a subset of outputs according to condition and fallthrough settings.
 func NewSwitch(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	logger log.Modular,
 	stats metrics.Type,
 ) (output.Streamed, error) {
@@ -295,7 +294,7 @@ func NewSwitch(
 			return nil, fmt.Errorf("failed to create case '%v' output type '%v': %v", i, cConf.Output.Type, err)
 		}
 		if len(cConf.Check) > 0 {
-			if o.checks[i], err = interop.NewBloblangMapping(mgr, cConf.Check); err != nil {
+			if o.checks[i], err = mgr.BloblEnvironment().NewMapping(cConf.Check); err != nil {
 				return nil, fmt.Errorf("failed to parse case '%v' check mapping: %v", i, err)
 			}
 		}

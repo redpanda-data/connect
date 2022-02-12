@@ -19,7 +19,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 func init() {
@@ -65,7 +64,7 @@ func NewFileConfig() FileConfig {
 //------------------------------------------------------------------------------
 
 // NewFile creates a new File output type.
-func NewFile(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func NewFile(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	f, err := newFileWriter(conf.File.Path, conf.File.Codec, mgr, log, stats)
 	if err != nil {
 		return nil, err
@@ -97,12 +96,12 @@ type fileWriter struct {
 	shutSig *shutdown.Signaller
 }
 
-func newFileWriter(pathStr, codecStr string, mgr types.Manager, log log.Modular, stats metrics.Type) (*fileWriter, error) {
+func newFileWriter(pathStr, codecStr string, mgr interop.Manager, log log.Modular, stats metrics.Type) (*fileWriter, error) {
 	codec, codecConf, err := codec.GetWriter(codecStr)
 	if err != nil {
 		return nil, err
 	}
-	path, err := interop.NewBloblangField(mgr, pathStr)
+	path, err := mgr.BloblEnvironment().NewField(pathStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %w", err)
 	}

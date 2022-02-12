@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/golang/snappy"
@@ -21,7 +22,7 @@ func TestCompressBadAlgo(t *testing.T) {
 
 	testLog := log.Noop()
 
-	_, err := NewCompress(conf, nil, testLog, metrics.Noop())
+	_, err := NewCompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -57,7 +58,7 @@ func TestCompressGZIP(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
+	proc, err := NewCompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +104,7 @@ func TestCompressZLIB(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
+	proc, err := NewCompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +153,7 @@ func TestCompressFlate(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
+	proc, err := NewCompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +194,7 @@ func TestCompressSnappy(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
+	proc, err := NewCompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +243,7 @@ func TestCompressLZ4(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
+	proc, err := NewCompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +299,7 @@ func TestCompressIndexBounds(t *testing.T) {
 
 	for i, expIndex := range tests {
 		conf.Compress.Parts = []int{i}
-		proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
+		proc, err := NewCompress(conf, mock.NewManager(), testLog, metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -323,7 +324,7 @@ func TestCompressEmpty(t *testing.T) {
 	conf.Compress.Parts = []int{0, 1}
 
 	testLog := log.Noop()
-	proc, err := NewCompress(conf, nil, testLog, metrics.Noop())
+	proc, err := NewCompress(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

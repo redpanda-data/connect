@@ -16,7 +16,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -159,7 +158,7 @@ type Cache struct {
 	value *field.Expression
 	ttl   *field.Expression
 
-	mgr       types.Manager
+	mgr       interop.Manager
 	cacheName string
 	operator  cacheOperator
 
@@ -172,7 +171,7 @@ type Cache struct {
 
 // NewCache returns a Cache processor.
 func NewCache(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	cacheName := conf.Cache.Resource
 	if cacheName == "" {
@@ -184,23 +183,23 @@ func NewCache(
 		return nil, err
 	}
 
-	key, err := interop.NewBloblangField(mgr, conf.Cache.Key)
+	key, err := mgr.BloblEnvironment().NewField(conf.Cache.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
-	value, err := interop.NewBloblangField(mgr, conf.Cache.Value)
+	value, err := mgr.BloblEnvironment().NewField(conf.Cache.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
 
-	ttl, err := interop.NewBloblangField(mgr, conf.Cache.TTL)
+	ttl, err := mgr.BloblEnvironment().NewField(conf.Cache.TTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ttl expression: %v", err)
 	}
 
-	if err := interop.ProbeCache(context.Background(), mgr, cacheName); err != nil {
-		return nil, err
+	if !mgr.ProbeCache(cacheName) {
+		return nil, fmt.Errorf("cache resource '%v' was not found", cacheName)
 	}
 
 	return &Cache{
@@ -298,7 +297,7 @@ func (c *Cache) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		var result []byte
 		var useResult bool
 		var err error
-		if cerr := interop.AccessCache(context.Background(), c.mgr, c.cacheName, func(cache cache.V1) {
+		if cerr := c.mgr.AccessCache(context.Background(), c.cacheName, func(cache cache.V1) {
 			result, useResult, err = c.operator(context.Background(), cache, key, value, ttl)
 		}); cerr != nil {
 			err = cerr

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +17,7 @@ func TestForEachEmpty(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "for_each"
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +47,7 @@ func TestForEachBasic(t *testing.T) {
 	conf.Type = "for_each"
 	conf.ForEach = append(conf.ForEach, encodeConf)
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +84,7 @@ func TestForEachFilterSome(t *testing.T) {
 	conf.Type = "for_each"
 	conf.ForEach = append(conf.ForEach, filterConf)
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func TestForEachMultiProcs(t *testing.T) {
 	conf.Type = "for_each"
 	conf.ForEach = append(conf.ForEach, filterConf, encodeConf)
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +160,7 @@ func TestForEachFilterAll(t *testing.T) {
 	conf.Type = "for_each"
 	conf.ForEach = append(conf.ForEach, filterConf)
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

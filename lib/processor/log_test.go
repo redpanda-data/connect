@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -76,7 +77,7 @@ func TestLogBadLevel(t *testing.T) {
 	conf.Type = TypeLog
 	conf.Log.Level = "does not exist"
 
-	if _, err := New(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err == nil {
 		t.Error("expected err from bad log level")
 	}
 }
@@ -91,7 +92,7 @@ func TestLogLevelTrace(t *testing.T) {
 	levels := []string{"TRACE", "DEBUG", "INFO", "WARN", "ERROR"}
 	for _, level := range levels {
 		conf.Log.Level = level
-		l, err := New(conf, nil, logMock, metrics.Noop())
+		l, err := New(conf, mock.NewManager(), logMock, metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -136,7 +137,7 @@ func TestLogWithFields(t *testing.T) {
 	logMock := &mockLog{}
 
 	conf.Log.Level = "INFO"
-	l, err := New(conf, nil, logMock, metrics.Noop())
+	l, err := New(conf, mock.NewManager(), logMock, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +200,7 @@ root.is_cool = this.is_cool`
 	logMock := &mockLog{}
 
 	conf.Log.Level = "INFO"
-	l, err := New(conf, nil, logMock, metrics.Noop())
+	l, err := New(conf, mock.NewManager(), logMock, metrics.Noop())
 	require.NoError(t, err)
 
 	input := message.QuickBatch([][]byte{[]byte(

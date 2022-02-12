@@ -14,7 +14,7 @@ func TestResourceProc(t *testing.T) {
 	conf.Type = TypeBloblang
 	conf.Bloblang = `root = "foo: " + content()`
 
-	resProc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	resProc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

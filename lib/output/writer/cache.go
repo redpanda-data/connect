@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -39,7 +38,7 @@ func NewCacheConfig() CacheConfig {
 // Cache directory.
 type Cache struct {
 	conf CacheConfig
-	mgr  types.Manager
+	mgr  interop.Manager
 
 	key *field.Expression
 	ttl *field.Expression
@@ -51,20 +50,20 @@ type Cache struct {
 // NewCache creates a new Cache writer.Type.
 func NewCache(
 	conf CacheConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*Cache, error) {
-	key, err := interop.NewBloblangField(mgr, conf.Key)
+	key, err := mgr.BloblEnvironment().NewField(conf.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
-	ttl, err := interop.NewBloblangField(mgr, conf.TTL)
+	ttl, err := mgr.BloblEnvironment().NewField(conf.TTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ttl expression: %v", err)
 	}
-	if err := interop.ProbeCache(context.Background(), mgr, conf.Target); err != nil {
-		return nil, err
+	if !mgr.ProbeCache(conf.Target) {
+		return nil, fmt.Errorf("cache resource '%v' was not found", conf.Target)
 	}
 	return &Cache{
 		conf:  conf,
@@ -89,7 +88,7 @@ func (c *Cache) Connect() error {
 
 func (c *Cache) writeMulti(ctx context.Context, msg *message.Batch) error {
 	var err error
-	if cerr := interop.AccessCache(ctx, c.mgr, c.conf.Target, func(ac cache.V1) {
+	if cerr := c.mgr.AccessCache(ctx, c.conf.Target, func(ac cache.V1) {
 		items := map[string]cache.TTLItem{}
 		if err = msg.Iter(func(i int, p *message.Part) error {
 			var ttl *time.Duration
@@ -122,7 +121,7 @@ func (c *Cache) WriteWithContext(ctx context.Context, msg *message.Batch) error 
 		return c.writeMulti(ctx, msg)
 	}
 	var err error
-	if cerr := interop.AccessCache(ctx, c.mgr, c.conf.Target, func(cache cache.V1) {
+	if cerr := c.mgr.AccessCache(ctx, c.conf.Target, func(cache cache.V1) {
 		var ttl *time.Duration
 		if ttls := c.ttl.String(0, msg); ttls != "" {
 			t, terr := time.ParseDuration(ttls)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -19,7 +20,7 @@ func TestHTTPBasic(t *testing.T) {
 	conf.HTTPServer.Address = "localhost:1237"
 	conf.HTTPServer.Path = "/testpost"
 
-	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -83,7 +84,7 @@ func TestHTTPBadRequests(t *testing.T) {
 	conf.HTTPServer.Address = "localhost:1236"
 	conf.HTTPServer.Path = "/testpost"
 
-	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -115,7 +116,7 @@ func TestHTTPTimeout(t *testing.T) {
 	conf.HTTPServer.Path = "/testpost"
 	conf.HTTPServer.Timeout = "1ms"
 
-	h, err := NewHTTPServer(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPServer(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

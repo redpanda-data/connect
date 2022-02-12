@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // AzureQueueStorage is a benthos writer.Type implementation that writes messages to an
@@ -34,7 +33,7 @@ type AzureQueueStorage struct {
 // NewAzureQueueStorageV2 creates a new Azure Queue Storage writer type.
 func NewAzureQueueStorageV2(
 	conf AzureQueueStorageConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*AzureQueueStorage, error) {
@@ -49,11 +48,11 @@ func NewAzureQueueStorageV2(
 		serviceURL: serviceURL,
 	}
 
-	if s.ttl, err = interop.NewBloblangField(mgr, conf.TTL); err != nil {
+	if s.ttl, err = mgr.BloblEnvironment().NewField(conf.TTL); err != nil {
 		return nil, fmt.Errorf("failed to parse ttl expression: %v", err)
 	}
 
-	if s.queueName, err = interop.NewBloblangField(mgr, conf.QueueName); err != nil {
+	if s.queueName, err = mgr.BloblEnvironment().NewField(conf.QueueName); err != nil {
 		return nil, fmt.Errorf("failed to parse queue name expression: %v", err)
 	}
 

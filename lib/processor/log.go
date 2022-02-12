@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -140,9 +139,9 @@ type Log struct {
 
 // NewLog returns a Log processor.
 func NewLog(
-	conf Config, mgr types.Manager, logger log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, logger log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
-	message, err := interop.NewBloblangField(mgr, conf.Log.Message)
+	message, err := mgr.BloblEnvironment().NewField(conf.Log.Message)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message expression: %v", err)
 	}
@@ -154,7 +153,7 @@ func NewLog(
 	}
 	if len(conf.Log.Fields) > 0 {
 		for k, v := range conf.Log.Fields {
-			if l.fields[k], err = interop.NewBloblangField(mgr, v); err != nil {
+			if l.fields[k], err = mgr.BloblEnvironment().NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse field '%v' expression: %v", k, err)
 			}
 		}
@@ -164,7 +163,7 @@ func NewLog(
 		if l.loggerWith, ok = logger.(logWith); !ok {
 			return nil, errors.New("the provided logger does not support structured fields required for `fields_mapping`")
 		}
-		if l.fieldsMapping, err = interop.NewBloblangMapping(mgr, conf.Log.FieldsMapping); err != nil {
+		if l.fieldsMapping, err = mgr.BloblEnvironment().NewMapping(conf.Log.FieldsMapping); err != nil {
 			return nil, fmt.Errorf("failed to parse fields mapping: %w", err)
 		}
 	}

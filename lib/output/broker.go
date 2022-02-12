@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -136,7 +135,7 @@ func NewBrokerConfig() BrokerConfig {
 // list of outputs according to the chosen broker pattern.
 func NewBroker(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...iprocessor.PipelineConstructorFunc,

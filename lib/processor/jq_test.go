@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/gabs/v2"
@@ -16,7 +17,7 @@ func TestJQAllParts(t *testing.T) {
 	conf := NewConfig()
 	conf.JQ.Query = ".foo.bar"
 
-	jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
+	jSet, err := NewJQ(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	msgIn := message.QuickBatch([][]byte{
@@ -36,7 +37,7 @@ func TestJQValidation(t *testing.T) {
 	conf := NewConfig()
 	conf.JQ.Query = ".foo.bar"
 
-	jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
+	jSet, err := NewJQ(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	msgIn := message.QuickBatch([][]byte{[]byte("this is bad json")})
@@ -52,7 +53,7 @@ func TestJQMutation(t *testing.T) {
 	conf := NewConfig()
 	conf.JQ.Query = `{foo: .foo} | .foo.bar = "baz"`
 
-	jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
+	jSet, err := NewJQ(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	ogObj := gabs.New()
@@ -146,7 +147,7 @@ func TestJQ(t *testing.T) {
 			conf := NewConfig()
 			conf.JQ.Query = test.path
 
-			jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
+			jSet, err := NewJQ(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			inMsg := message.QuickBatch(
@@ -238,7 +239,7 @@ func TestJQ_OutputRaw(t *testing.T) {
 			conf.JQ.Query = test.path
 			conf.JQ.OutputRaw = true
 
-			jSet, err := NewJQ(conf, nil, log.Noop(), metrics.Noop())
+			jSet, err := NewJQ(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			inMsg := message.QuickBatch(

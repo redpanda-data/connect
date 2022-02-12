@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/broker"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,7 +23,7 @@ func init() {
 	Constructors[TypeDynamic] = TypeSpec{
 		constructor: func(
 			conf Config,
-			mgr types.Manager,
+			mgr interop.Manager,
 			log log.Modular,
 			stats metrics.Type,
 			pipelines ...iprocessor.PipelineConstructorFunc,
@@ -77,7 +76,7 @@ func NewDynamicConfig() DynamicConfig {
 // NewDynamic creates a new Dynamic input type.
 func NewDynamic(
 	conf Config,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 	pipelines ...iprocessor.PipelineConstructorFunc,

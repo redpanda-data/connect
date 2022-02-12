@@ -16,7 +16,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -77,7 +76,7 @@ func NewSNS(conf SNSConfig, log log.Modular, stats metrics.Type) (*SNS, error) {
 }
 
 // NewSNSV2 creates a new AWS SNS writer.
-func NewSNSV2(conf SNSConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*SNS, error) {
+func NewSNSV2(conf SNSConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*SNS, error) {
 	s := &SNS{
 		conf:  conf,
 		log:   log,
@@ -86,12 +85,12 @@ func NewSNSV2(conf SNSConfig, mgr types.Manager, log log.Modular, stats metrics.
 
 	var err error
 	if id := conf.MessageGroupID; len(id) > 0 {
-		if s.groupID, err = interop.NewBloblangField(mgr, id); err != nil {
+		if s.groupID, err = mgr.BloblEnvironment().NewField(id); err != nil {
 			return nil, fmt.Errorf("failed to parse group ID expression: %v", err)
 		}
 	}
 	if id := conf.MessageDeduplicationID; len(id) > 0 {
-		if s.dedupeID, err = interop.NewBloblangField(mgr, id); err != nil {
+		if s.dedupeID, err = mgr.BloblEnvironment().NewField(id); err != nil {
 			return nil, fmt.Errorf("failed to parse dedupe ID expression: %v", err)
 		}
 	}

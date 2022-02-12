@@ -17,7 +17,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -159,7 +158,7 @@ type Dedupe struct {
 
 	key *field.Expression
 
-	mgr        types.Manager
+	mgr        interop.Manager
 	cacheName  string
 	hasherFunc hasherFunc
 
@@ -174,20 +173,20 @@ type Dedupe struct {
 
 // NewDedupe returns a Dedupe processor.
 func NewDedupe(
-	conf Config, mgr types.Manager, log log.Modular, stats metrics.Type,
+	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (processor.V1, error) {
 	hFunc, err := strToHasher(conf.Dedupe.HashType)
 	if err != nil {
 		return nil, err
 	}
 
-	key, err := interop.NewBloblangField(mgr, conf.Dedupe.Key)
+	key, err := mgr.BloblEnvironment().NewField(conf.Dedupe.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
-	if err := interop.ProbeCache(context.Background(), mgr, conf.Dedupe.Cache); err != nil {
-		return nil, err
+	if !mgr.ProbeCache(conf.Dedupe.Cache) {
+		return nil, fmt.Errorf("cache resource '%v' was not found", conf.Dedupe.Cache)
 	}
 
 	return &Dedupe{
@@ -255,7 +254,7 @@ func (d *Dedupe) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		}
 	} else {
 		var err error
-		if cerr := interop.AccessCache(context.Background(), d.mgr, d.cacheName, func(cache cache.V1) {
+		if cerr := d.mgr.AccessCache(context.Background(), d.cacheName, func(cache cache.V1) {
 			err = cache.Add(context.Background(), string(hasher.Bytes()), []byte{'t'}, nil)
 		}); cerr != nil {
 			err = cerr

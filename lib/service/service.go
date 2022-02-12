@@ -16,6 +16,7 @@ import (
 
 	iconfig "github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -24,7 +25,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/v3/lib/stream/manager"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -79,10 +79,10 @@ type stoppable interface {
 // which manages resources shared across all components, is initialised. This is
 // a useful time to add additional resources that might be required for custom
 // plugins. If a non-nil error is returned the service will terminate.
-type ManagerInitFunc func(manager types.Manager, logger log.Modular, stats metrics.Type) error
+type ManagerInitFunc func(manager interop.Manager, logger log.Modular, stats metrics.Type) error
 
 // TODO: V4 remove this
-var onManagerInit ManagerInitFunc = func(manager types.Manager, logger log.Modular, stats metrics.Type) error {
+var onManagerInit ManagerInitFunc = func(manager interop.Manager, logger log.Modular, stats metrics.Type) error {
 	return nil
 }
 

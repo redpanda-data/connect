@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -20,7 +21,7 @@ func TestUnarchiveBadAlgo(t *testing.T) {
 
 	testLog := log.Noop()
 
-	_, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
+	_, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -73,7 +74,7 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
+	proc, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestUnarchiveZip(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
+	proc, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +172,7 @@ func TestUnarchiveLines(t *testing.T) {
 		[]byte("5"),
 	}
 
-	proc, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
+	proc, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +207,7 @@ func TestUnarchiveJSONDocuments(t *testing.T) {
 		[]byte(`true`),
 	}
 
-	proc, err := NewUnarchive(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewUnarchive(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +237,7 @@ func TestUnarchiveJSONArray(t *testing.T) {
 		[]byte(`true`),
 	}
 
-	proc, err := NewUnarchive(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewUnarchive(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +270,7 @@ func TestUnarchiveJSONMap(t *testing.T) {
 		"a", "b", "c", "d", "e",
 	}
 
-	proc, err := NewUnarchive(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewUnarchive(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +320,7 @@ func TestUnarchiveBinary(t *testing.T) {
 	conf.Unarchive.Format = "binary"
 
 	testLog := log.Noop()
-	proc, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
+	proc, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -437,7 +438,7 @@ func TestUnarchiveIndexBounds(t *testing.T) {
 
 	for i, result := range tests {
 		conf.Unarchive.Parts = []int{i}
-		proc, err := NewUnarchive(conf, nil, testLog, metrics.Noop())
+		proc, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -467,7 +468,7 @@ func TestUnarchiveCSV(t *testing.T) {
 		map[string]interface{}{"id": "3", "name": "baz", "color": "red"},
 	}
 
-	proc, err := NewUnarchive(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewUnarchive(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

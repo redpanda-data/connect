@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
@@ -25,6 +26,8 @@ import (
 
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
+
+var _ bundle.NewManagement = &manager.Type{}
 
 //------------------------------------------------------------------------------
 
@@ -89,15 +92,9 @@ func TestManagerCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := mgr.GetCache("foo"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := mgr.GetCache("bar"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := mgr.GetCache("baz"); err != component.ErrCacheNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, component.ErrCacheNotFound)
-	}
+	require.True(t, mgr.ProbeCache("foo"))
+	require.True(t, mgr.ProbeCache("bar"))
+	require.False(t, mgr.ProbeCache("baz"))
 }
 
 func TestManagerCacheList(t *testing.T) {
@@ -175,15 +172,9 @@ func TestManagerRateLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := mgr.GetRateLimit("foo"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := mgr.GetRateLimit("bar"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := mgr.GetRateLimit("baz"); err != component.ErrRateLimitNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, component.ErrRateLimitNotFound)
-	}
+	require.True(t, mgr.ProbeRateLimit("foo"))
+	require.True(t, mgr.ProbeRateLimit("bar"))
+	require.False(t, mgr.ProbeRateLimit("baz"))
 }
 
 func TestManagerRateLimitList(t *testing.T) {
@@ -258,15 +249,9 @@ func TestManagerProcessor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := mgr.GetProcessor("foo"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := mgr.GetProcessor("bar"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := mgr.GetProcessor("baz"); err != component.ErrProcessorNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, component.ErrProcessorNotFound)
-	}
+	require.True(t, mgr.ProbeProcessor("foo"))
+	require.True(t, mgr.ProbeProcessor("bar"))
+	require.False(t, mgr.ProbeProcessor("baz"))
 }
 
 func TestManagerProcessorList(t *testing.T) {

@@ -14,7 +14,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/colinmarc/hdfs"
 )
 
@@ -60,11 +59,11 @@ type HDFS struct {
 // NewHDFSV2 creates a new HDFS writer.Type.
 func NewHDFSV2(
 	conf HDFSConfig,
-	mgr types.Manager,
+	mgr interop.Manager,
 	log log.Modular,
 	stats metrics.Type,
 ) (*HDFS, error) {
-	path, err := interop.NewBloblangField(mgr, conf.Path)
+	path, err := mgr.BloblEnvironment().NewField(conf.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}

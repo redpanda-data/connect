@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
@@ -36,7 +37,7 @@ func TestFanOutBroker(t *testing.T) {
 	conf.Broker.Pattern = "fan_out"
 	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
 
-	s, err := New(conf, nil, log.Noop(), metrics.Noop())
+	s, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +121,7 @@ func TestRoundRobinBroker(t *testing.T) {
 	conf.Broker.Pattern = "round_robin"
 	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
 
-	s, err := New(conf, nil, log.Noop(), metrics.Noop())
+	s, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +211,7 @@ func TestGreedyBroker(t *testing.T) {
 	conf.Broker.Pattern = "greedy"
 	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
 
-	s, err := New(conf, nil, log.Noop(), metrics.Noop())
+	s, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +298,7 @@ func TestTryBroker(t *testing.T) {
 	conf.Broker.Pattern = "try"
 	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo, outThree)
 
-	s, err := New(conf, nil, log.Noop(), metrics.Noop())
+	s, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

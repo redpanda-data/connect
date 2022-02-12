@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -41,7 +42,7 @@ func TestGroupBy(t *testing.T) {
 		},
 	})
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	exp := [][][]byte{
@@ -95,6 +96,6 @@ func TestGroupByErrs(t *testing.T) {
 		},
 	})
 
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	_, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.EqualError(t, err, "a group definition must have a check query")
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -18,7 +19,7 @@ func TestBoundsCheck(t *testing.T) {
 	conf.BoundsCheck.MinPartSize = 1
 
 	testLog := log.Noop()
-	proc, err := NewBoundsCheck(conf, nil, testLog, metrics.Noop())
+	proc, err := NewBoundsCheck(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

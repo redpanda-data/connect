@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -123,7 +124,7 @@ func TestAvroBasic(t *testing.T) {
 			conf.Avro.Encoding = test.encoding
 			conf.Avro.Schema = schema
 
-			proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+			proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			if err != nil {
 				tt.Fatal(err)
 			}
@@ -282,7 +283,7 @@ func TestAvroSchemaPath(t *testing.T) {
 			conf.Avro.Encoding = test.encoding
 			conf.Avro.SchemaPath = fmt.Sprintf("file://%s", tmpSchemaFile.Name())
 
-			proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+			proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			if err != nil {
 				tt.Fatal(err)
 			}
@@ -324,7 +325,7 @@ func TestAvroSchemaPathNotExist(t *testing.T) {
 	conf.Type = TypeAvro
 	conf.Avro.SchemaPath = "file://path_does_not_exist"
 
-	_, err := New(conf, nil, log.Noop(), metrics.Noop())
+	_, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err == nil {
 		t.Error("expected error from loading non existant schema file")
 	}

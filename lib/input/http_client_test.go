@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -47,7 +48,7 @@ func TestHTTPClientGET(t *testing.T) {
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -104,7 +105,7 @@ func TestHTTPClientPagination(t *testing.T) {
 	conf.HTTPClient.URL = ts.URL + "/${!content()}"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	var tr message.Transaction
@@ -158,7 +159,7 @@ func TestHTTPClientGETError(t *testing.T) {
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -185,7 +186,7 @@ func TestHTTPClientGETNotExist(t *testing.T) {
 	conf.HTTPClient.URL = "jgljksdfhjgkldfjglkf"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -207,7 +208,7 @@ func TestHTTPClientGETStreamNotExist(t *testing.T) {
 	conf.HTTPClient.Retry = "1ms"
 	conf.HTTPClient.Stream.Enabled = true
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -239,7 +240,7 @@ func TestHTTPClientGETStreamError(t *testing.T) {
 	conf.HTTPClient.Retry = "1ms"
 	conf.HTTPClient.Stream.Enabled = true
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -295,7 +296,7 @@ func TestHTTPClientPOST(t *testing.T) {
 	conf.HTTPClient.Payload = "foobar"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -374,7 +375,7 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -481,7 +482,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -581,7 +582,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 	conf.HTTPClient.Stream.Codec = "lines/multipart"
 	conf.HTTPClient.Stream.Enabled = true
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -652,7 +653,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 	conf.HTTPClient.Stream.Enabled = true
 	conf.HTTPClient.Stream.Codec = "lines/multipart"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -717,7 +718,7 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 	conf.HTTPClient.Retry = "1ms"
 	conf.HTTPClient.Stream.Enabled = true
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -788,7 +789,7 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 	conf.HTTPClient.Retry = "1ms"
 	conf.HTTPClient.Stream.Enabled = true
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
@@ -866,7 +867,7 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 	conf.HTTPClient.URL = tserve.URL + "/testpost"
 	conf.HTTPClient.Retry = "1ms"
 
-	h, err := NewHTTPClient(conf, nil, log.Noop(), metrics.Noop())
+	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		b.Error(err)
 		return

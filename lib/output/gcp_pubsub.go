@@ -3,11 +3,11 @@ package output
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 //------------------------------------------------------------------------------
@@ -59,7 +59,7 @@ pipeline:
 //------------------------------------------------------------------------------
 
 // NewGCPPubSub creates a new GCPPubSub output type.
-func NewGCPPubSub(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func NewGCPPubSub(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	a, err := writer.NewGCPPubSubV2(conf.GCPPubSub, mgr, log, stats)
 	if err != nil {
 		return nil, err

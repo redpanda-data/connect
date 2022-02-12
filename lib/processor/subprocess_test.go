@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,7 @@ func TestSubprocessWithSed(t *testing.T) {
 	conf.Subprocess.Name = "sed"
 	conf.Subprocess.Args = []string{"s/foo/bar/g", "-u"}
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Skipf("Not sure if this is due to missing executable: %v", err)
 	}
@@ -62,7 +63,7 @@ func TestSubprocessWithCat(t *testing.T) {
 	conf.Type = TypeSubprocess
 	conf.Subprocess.Name = "cat"
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Skipf("Not sure if this is due to missing executable: %v", err)
 	}
@@ -103,7 +104,7 @@ func TestSubprocessLineBreaks(t *testing.T) {
 	conf.Subprocess.Name = "sed"
 	conf.Subprocess.Args = []string{`s/\(^$\)\|\(foo\)/bar/`, "-u"}
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Skipf("Not sure if this is due to missing executable: %v", err)
 	}
@@ -146,7 +147,7 @@ func TestSubprocessWithErrors(t *testing.T) {
 	conf.Subprocess.Name = "sh"
 	conf.Subprocess.Args = []string{"-c", "cat 1>&2"}
 
-	proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Skipf("Not sure if this is due to missing executable: %v", err)
 	}
@@ -253,7 +254,7 @@ func main() {
 		conf.Subprocess.CodecSend = formatSend
 		conf.Subprocess.CodecRecv = formatRecv
 
-		proc, err := New(conf, nil, log.Noop(), metrics.Noop())
+		proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 		require.NoError(t, err)
 
 		exp := [][]byte{

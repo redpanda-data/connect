@@ -15,7 +15,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	nsq "github.com/nsqio/go-nsq"
 )
@@ -58,13 +57,13 @@ type NSQ struct {
 }
 
 // NewNSQV2 creates a new NSQ output type.
-func NewNSQV2(conf NSQConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*NSQ, error) {
+func NewNSQV2(conf NSQConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*NSQ, error) {
 	n := NSQ{
 		log:  log,
 		conf: conf,
 	}
 	var err error
-	if n.topicStr, err = interop.NewBloblangField(mgr, conf.Topic); err != nil {
+	if n.topicStr, err = mgr.BloblEnvironment().NewField(conf.Topic); err != nil {
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 	if conf.TLS.Enabled {

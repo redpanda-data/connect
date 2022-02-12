@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -51,7 +52,7 @@ func TestParseLogCases(t *testing.T) {
 		conf.ParseLog.Format = test.format
 		conf.ParseLog.Codec = test.codec
 		conf.ParseLog.BestEffort = test.bestEff
-		proc, err := NewParseLog(conf, nil, log.Noop(), metrics.Noop())
+		proc, err := NewParseLog(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -92,7 +93,7 @@ func TestParseLogRFC5424(t *testing.T) {
 	conf := NewConfig()
 	conf.ParseLog.Format = "syslog_rfc5424"
 	conf.ParseLog.BestEffort = true
-	proc, err := NewParseLog(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := NewParseLog(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
