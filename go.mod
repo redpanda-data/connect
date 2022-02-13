@@ -23,7 +23,7 @@ require (
 	github.com/Shopify/sarama v1.30.1
 	github.com/apache/arrow/go/arrow v0.0.0-20211112161151-bc219186db40 // indirect
 	github.com/apache/pulsar-client-go v0.7.0
-	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20220106104305-ff7a962be6b4 // indirect
+	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20220210221528-5daa17b02bff // indirect
 	github.com/apache/thrift v0.15.0 // indirect
 	github.com/armon/go-metrics v0.3.4 // indirect
 	github.com/armon/go-radix v1.0.0
@@ -37,19 +37,16 @@ require (
 	github.com/colinmarc/hdfs v1.1.3
 	github.com/containerd/continuity v0.2.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
-	github.com/danieljoos/wincred v1.1.2 // indirect
 	github.com/denisenkom/go-mssqldb v0.11.0
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
 	github.com/docker/cli v20.10.12+incompatible // indirect
 	github.com/docker/docker v20.10.12+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.0
-	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/edsrzf/mmap-go v1.1.0
 	github.com/fatih/color v1.13.0
 	github.com/felixge/httpsnoop v1.0.2 // indirect
-	github.com/form3tech-oss/jwt-go v3.2.5+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/go-redis/redis/v7 v7.4.1
 	github.com/go-sql-driver/mysql v1.6.0
@@ -73,7 +70,6 @@ require (
 	github.com/itchyny/timefmt-go v0.1.3
 	github.com/jhump/protoreflect v1.10.1
 	github.com/jmespath/go-jmespath v0.4.0
-	github.com/keybase/go-keychain v0.0.0-20211119201326-e02f34051621 // indirect
 	github.com/lib/pq v1.10.4
 	github.com/linkedin/goavro/v2 v2.11.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
@@ -126,22 +122,16 @@ require (
 	go.mongodb.org/mongo-driver v1.8.2
 	go.nanomsg.org/mangos/v3 v3.3.0
 	go.uber.org/atomic v1.9.0 // indirect
-	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
+	golang.org/x/crypto v0.0.0-20220131195533-30dcbda58838
 	golang.org/x/exp v0.0.0-20200331195152-e8c3332aa8e5 // indirect
-	golang.org/x/net v0.0.0-20220107192237-5cfca573fb4d
+	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220110181412-a018aaa089fe // indirect
-	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7
 	google.golang.org/api v0.64.0
 	google.golang.org/genproto v0.0.0-20220107163113-42d7afdf6368 // indirect
 	google.golang.org/grpc v1.43.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )
-
-// This stinks, and is due to https://github.com/99designs/keyring/issues/64
-// More info here: https://github.com/Jeffail/benthos/issues/999
-replace github.com/keybase/go-keychain => github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4
 
 go 1.16
