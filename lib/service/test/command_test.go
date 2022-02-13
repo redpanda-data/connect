@@ -88,7 +88,7 @@ func TestGetBothPaths(t *testing.T) {
 }
 
 func TestGetTargetsSingle(t *testing.T) {
-	testDir, err := initTestFiles(map[string]string{
+	testDir, err := initTestFiles(t, map[string]string{
 		"foo.yaml":              `tests: [{}]`,
 		"foo_benthos_test.yaml": `tests: [{}]`,
 	})
@@ -121,7 +121,7 @@ func TestGetTargetsSingle(t *testing.T) {
 }
 
 func TestGetTargetsSingleError(t *testing.T) {
-	testDir, err := initTestFiles(map[string]string{
+	testDir, err := initTestFiles(t, map[string]string{
 		"foo.yaml":              `foobar: {}`,
 		"bar_benthos_test.yaml": `tests: [{}]`,
 	})
@@ -142,7 +142,7 @@ func TestGetTargetsSingleError(t *testing.T) {
 }
 
 func TestGetTargetsDir(t *testing.T) {
-	testDir, err := initTestFiles(map[string]string{
+	testDir, err := initTestFiles(t, map[string]string{
 		"foo.yaml":                     `foobar: {}`,
 		"foo_benthos_test.yaml":        `tests: [{}]`,
 		"bar.yaml":                     `tests: [{}]`,
@@ -190,7 +190,7 @@ func TestGetTargetsDir(t *testing.T) {
 }
 
 func TestGetTargetsDirError(t *testing.T) {
-	testDir, err := initTestFiles(map[string]string{
+	testDir, err := initTestFiles(t, map[string]string{
 		"foo_benthos_test.yaml": `tests: [{}]`,
 		"bar.yaml":              `foobar: {}`,
 		"bar_benthos_test.yaml": `tests: [{}]`,
@@ -206,7 +206,7 @@ func TestGetTargetsDirError(t *testing.T) {
 }
 
 func TestGetTargetsDirRecurseError(t *testing.T) {
-	testDir, err := initTestFiles(map[string]string{
+	testDir, err := initTestFiles(t, map[string]string{
 		"foo.yaml":                     `foobar: {}`,
 		"foo_benthos_test.yaml":        `tests: [{}]`,
 		"bar.yaml":                     `foobar: {}`,
@@ -224,7 +224,7 @@ func TestGetTargetsDirRecurseError(t *testing.T) {
 }
 
 func TestCommandRunHappy(t *testing.T) {
-	testDir, err := initTestFiles(map[string]string{
+	testDir, err := initTestFiles(t, map[string]string{
 		"foo.yaml": `
 pipeline:
   processors:

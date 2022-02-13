@@ -11,21 +11,13 @@ import (
 //------------------------------------------------------------------------------
 
 func TestConfigRefs(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_config_ref_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err = os.RemoveAll(tmpDir); err != nil {
-			t.Error(err)
-		}
-	}()
+	tmpDir := t.TempDir()
 
 	rootPath := filepath.Join(tmpDir, "root.yaml")
 	secondPath := filepath.Join(tmpDir, "nest", "second.yaml")
 	thirdPath := filepath.Join(tmpDir, "third.yaml")
 
-	if err = os.Mkdir(filepath.Join(tmpDir, "nest"), 0o777); err != nil {
+	if err := os.Mkdir(filepath.Join(tmpDir, "nest"), 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -33,13 +25,13 @@ func TestConfigRefs(t *testing.T) {
 	secondFile := []byte(`["foo",{"$ref":"../third.yaml"},"bar"]`)
 	thirdFile := []byte(`{"c":[9,8,7]}`)
 
-	if err = os.WriteFile(rootPath, rootFile, 0o777); err != nil {
+	if err := os.WriteFile(rootPath, rootFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(secondPath, secondFile, 0o777); err != nil {
+	if err := os.WriteFile(secondPath, secondFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(thirdPath, thirdFile, 0o777); err != nil {
+	if err := os.WriteFile(thirdPath, thirdFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -65,21 +57,13 @@ d: bar
 }
 
 func TestConfigRefsRootExpansion(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_config_ref_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err = os.RemoveAll(tmpDir); err != nil {
-			t.Error(err)
-		}
-	}()
+	tmpDir := t.TempDir()
 
 	rootPath := filepath.Join(tmpDir, "root.yaml")
 	secondPath := filepath.Join(tmpDir, "nest", "second.yaml")
 	thirdPath := filepath.Join(tmpDir, "third.yaml")
 
-	if err = os.Mkdir(filepath.Join(tmpDir, "nest"), 0o777); err != nil {
+	if err := os.Mkdir(filepath.Join(tmpDir, "nest"), 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -87,13 +71,13 @@ func TestConfigRefsRootExpansion(t *testing.T) {
 	secondFile := []byte(`{"$ref":"../third.yaml"}`)
 	thirdFile := []byte(`{"c":[9,8,7]}`)
 
-	if err = os.WriteFile(rootPath, rootFile, 0o777); err != nil {
+	if err := os.WriteFile(rootPath, rootFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(secondPath, secondFile, 0o777); err != nil {
+	if err := os.WriteFile(secondPath, secondFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(thirdPath, thirdFile, 0o777); err != nil {
+	if err := os.WriteFile(thirdPath, thirdFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -256,20 +240,12 @@ func TestJSONPointer(t *testing.T) {
 }
 
 func TestLocalRefs(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_config_ref_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err = os.RemoveAll(tmpDir); err != nil {
-			t.Error(err)
-		}
-	}()
+	tmpDir := t.TempDir()
 
 	rootPath := filepath.Join(tmpDir, "root.yaml")
 	rootFile := []byte(`{"a":{"bar":"baz"},"b":{"$ref":"#/a/bar"},"c":{"$ref":"#/b"}}`)
 
-	if err = os.WriteFile(rootPath, rootFile, 0o777); err != nil {
+	if err := os.WriteFile(rootPath, rootFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -289,15 +265,7 @@ c: baz
 }
 
 func TestRecursiveRefs(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_config_ref_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err = os.RemoveAll(tmpDir); err != nil {
-			t.Error(err)
-		}
-	}()
+	tmpDir := t.TempDir()
 
 	fooPath := filepath.Join(tmpDir, "foo.yaml")
 	barPath := filepath.Join(tmpDir, "foo.yaml")
@@ -305,34 +273,26 @@ func TestRecursiveRefs(t *testing.T) {
 	fooFile := []byte(`{"a":{"$ref":"./bar.yaml"}}`)
 	barFile := []byte(`{"b":{"$ref":"./foo.yaml"}}`)
 
-	if err = os.WriteFile(fooPath, fooFile, 0o777); err != nil {
+	if err := os.WriteFile(fooPath, fooFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(barPath, barFile, 0o777); err != nil {
+	if err := os.WriteFile(barPath, barFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = ReadWithJSONPointers(fooPath, true)
+	_, err := ReadWithJSONPointers(fooPath, true)
 	if exp, act := ErrExceededRefLimit, err; exp != act {
 		t.Errorf("Wrong error returned: %v != %v", act, exp)
 	}
 }
 
 func TestConfigNoRefs(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_config_ref_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err = os.RemoveAll(tmpDir); err != nil {
-			t.Error(err)
-		}
-	}()
+	tmpDir := t.TempDir()
 
 	rootPath := filepath.Join(tmpDir, "root.yaml")
 	rootFile := []byte(`{"foo":{ "bar":"baz"}}`)
 
-	if err = os.WriteFile(rootPath, rootFile, 0o777); err != nil {
+	if err := os.WriteFile(rootPath, rootFile, 0o777); err != nil {
 		t.Fatal(err)
 	}
 

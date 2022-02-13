@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -22,11 +21,7 @@ import (
 )
 
 func TestSocketBasic(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
@@ -117,11 +112,7 @@ func TestSocketBasic(t *testing.T) {
 }
 
 func TestSocketReconnect(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
@@ -218,11 +209,7 @@ func TestSocketReconnect(t *testing.T) {
 }
 
 func TestSocketMultipart(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
@@ -309,11 +296,7 @@ func TestSocketMultipart(t *testing.T) {
 }
 
 func TestSocketMultipartCustomDelim(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
@@ -401,11 +384,7 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 }
 
 func TestSocketMultipartShutdown(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {

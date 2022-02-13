@@ -3,7 +3,6 @@ package input
 import (
 	"errors"
 	"net"
-	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -20,12 +19,7 @@ import (
 )
 
 func TestSocketServerBasic(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
@@ -92,12 +86,7 @@ func TestSocketServerBasic(t *testing.T) {
 }
 
 func TestSocketServerRetries(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
@@ -179,12 +168,7 @@ func TestSocketServerRetries(t *testing.T) {
 }
 
 func TestSocketServerWriteToClosed(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
@@ -211,12 +195,7 @@ func TestSocketServerWriteToClosed(t *testing.T) {
 }
 
 func TestSocketServerReconnect(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
@@ -291,12 +270,7 @@ func TestSocketServerReconnect(t *testing.T) {
 }
 
 func TestSocketServerMultipart(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
@@ -363,12 +337,7 @@ func TestSocketServerMultipart(t *testing.T) {
 }
 
 func TestSocketServerMultipartCustomDelim(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
@@ -436,12 +405,7 @@ func TestSocketServerMultipartCustomDelim(t *testing.T) {
 }
 
 func TestSocketServerMultipartShutdown(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"

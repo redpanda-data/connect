@@ -14,11 +14,7 @@ import (
 )
 
 func TestFanOutBroker(t *testing.T) {
-	dir, err := os.MkdirTemp("", "benthos_fan_out_broker_tests")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	outOne, outTwo := NewConfig(), NewConfig()
 	outOne.Type, outTwo.Type = TypeFiles, TypeFiles
@@ -102,13 +98,7 @@ func TestFanOutBroker(t *testing.T) {
 }
 
 func TestRoundRobinBroker(t *testing.T) {
-	dir, err := os.MkdirTemp("", "benthos_round_robin_broker_tests")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	outOne, outTwo := NewConfig(), NewConfig()
 	outOne.Type, outTwo.Type = TypeFiles, TypeFiles
@@ -190,11 +180,7 @@ func TestRoundRobinBroker(t *testing.T) {
 }
 
 func TestGreedyBroker(t *testing.T) {
-	dir, err := os.MkdirTemp("", "benthos_broker_greedy_tests")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	outOne, outTwo := NewConfig(), NewConfig()
 	outOne.Type, outTwo.Type = TypeFiles, TypeFiles
@@ -284,11 +270,7 @@ func TestGreedyBroker(t *testing.T) {
 }
 
 func TestTryBroker(t *testing.T) {
-	dir, err := os.MkdirTemp("", "benthos_try_broker_tests")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	outOne, outTwo, outThree := NewConfig(), NewConfig(), NewConfig()
 	outOne.Type, outTwo.Type, outThree.Type = TypeHTTPClient, TypeFiles, TypeFile

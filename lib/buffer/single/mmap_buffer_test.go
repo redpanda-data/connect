@@ -3,7 +3,6 @@ package single
 import (
 	"fmt"
 	"math/rand"
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -12,20 +11,10 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
-func cleanUpMmapDir(dir string) {
-	os.RemoveAll(dir)
-}
-
 func TestMmapBufferBasic(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := os.MkdirTemp("", "benthos_test_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	defer cleanUpMmapDir(dir)
+	dir := t.TempDir()
 
 	n := 100
 
@@ -75,13 +64,7 @@ func TestMmapBufferBasic(t *testing.T) {
 func TestMmapBufferBacklogCounter(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := os.MkdirTemp("", "benthos_test_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	defer cleanUpMmapDir(dir)
+	dir := t.TempDir()
 
 	conf := NewMmapBufferConfig()
 	conf.FileSize = 100000
@@ -141,13 +124,7 @@ func TestMmapBufferBacklogCounter(t *testing.T) {
 func TestMmapBufferLoopingRandom(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := os.MkdirTemp("", "benthos_test_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	defer cleanUpMmapDir(dir)
+	dir := t.TempDir()
 
 	conf := NewMmapBufferConfig()
 	conf.FileSize = 8000
@@ -201,13 +178,7 @@ func TestMmapBufferLoopingRandom(t *testing.T) {
 func TestMmapBufferMultiFiles(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := os.MkdirTemp("", "benthos_test_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	defer cleanUpMmapDir(dir)
+	dir := t.TempDir()
 
 	n := 100
 
@@ -257,13 +228,7 @@ func TestMmapBufferMultiFiles(t *testing.T) {
 func TestMmapBufferRecoverFiles(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := os.MkdirTemp("", "benthos_test_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	defer cleanUpMmapDir(dir)
+	dir := t.TempDir()
 
 	n := 100
 
@@ -325,13 +290,7 @@ func TestMmapBufferRecoverFiles(t *testing.T) {
 func TestMmapBufferRejectLargeMessage(t *testing.T) {
 	t.Skip("DEPRECATED")
 
-	dir, err := os.MkdirTemp("", "benthos_test_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	defer cleanUpMmapDir(dir)
+	dir := t.TempDir()
 
 	tMsg := message.New(make([][]byte, 1))
 	tMsg.Get(0).Set([]byte("hello world this message is too long!"))
@@ -353,13 +312,7 @@ func TestMmapBufferRejectLargeMessage(t *testing.T) {
 }
 
 func BenchmarkMmapBufferBasic(b *testing.B) {
-	dir, err := os.MkdirTemp("", "benthos_test_")
-	if err != nil {
-		b.Error(err)
-		return
-	}
-
-	defer cleanUpMmapDir(dir)
+	dir := b.TempDir()
 
 	conf := NewMmapBufferConfig()
 	conf.FileSize = 1000
