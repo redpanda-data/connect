@@ -254,6 +254,7 @@ type pendingBulkIndex struct {
 	Routing  string
 	Type     string
 	Doc      interface{}
+	ID       string
 }
 
 // WriteWithContext will attempt to write a message to Elasticsearch, wait for
@@ -271,7 +272,7 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 
 	boff := e.backoffCtor()
 
-	requests := map[string]*pendingBulkIndex{}
+	requests := make([]*pendingBulkIndex, msg.Len())
 	if err := msg.Iter(func(i int, part types.Part) error {
 		jObj, ierr := part.JSON()
 		if ierr != nil {
@@ -279,13 +280,14 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
 			return fmt.Errorf("failed to marshal message into JSON document: %w", ierr)
 		}
-		requests[e.idStr.String(i, msg)] = &pendingBulkIndex{
+		requests[i] = &pendingBulkIndex{
 			Action:   e.actionStr.String(i, msg),
 			Index:    e.indexStr.String(i, msg),
 			Pipeline: e.pipelineStr.String(i, msg),
 			Routing:  e.routingStr.String(i, msg),
 			Type:     e.conf.Type,
 			Doc:      jObj,
+			ID:       e.idStr.String(i, msg),
 		}
 		return nil
 	}); err != nil {
@@ -293,8 +295,8 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 	}
 
 	b := e.client.Bulk()
-	for k, v := range requests {
-		bulkReq, err := e.buildBulkableRequest(k, v)
+	for _, v := range requests {
+		bulkReq, err := e.buildBulkableRequest(v)
 		if err != nil {
 			return err
 		}
@@ -307,36 +309,48 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 			return err
 		}
 
-		failed := result.Failed()
-		if len(failed) == 0 {
+		if !result.Errors {
+			requests = requests[:len(result.Items)]
 			continue
 		}
 
 		wait := boff.NextBackOff()
-		for i := 0; i < len(failed); i++ {
-			reason := "no reason given"
-			if fErr := failed[i].Error; fErr != nil {
-				reason = fErr.Reason
+		errorCount := 0
+		var returnedErr *elastic.ErrorDetails
+		for i, resp := range result.Items {
+			for _, item := range resp {
+				if item.Status < 200 || item.Status > 299 {
+					if returnedErr == nil {
+						reason := "no reason given"
+						if item.Error != nil {
+							if i == 0 {
+								returnedErr = item.Error
+							}
+							reason = item.Error.Reason
+						}
+						e.log.Errorf("Elasticsearch message '%v' rejected with code [%v]: %v\n", item.Id, item.Status, reason)
+						if !shouldRetry(item.Status) {
+							returnedErr = item.Error
+						} else {
+							req := requests[i]
+							bulkReq, err := e.buildBulkableRequest(req)
+							if err != nil {
+								return err
+							}
+							b.Add(bulkReq)
+							requests[errorCount] = req
+						}
+					}
+					errorCount++
+				}
 			}
-			if !shouldRetry(failed[i].Status) {
-				e.log.Errorf("Elasticsearch message '%v' rejected with code [%v]: %v\n", failed[i].Id, failed[i].Status, reason)
-				return fmt.Errorf("failed to send %v parts from message: [%v]: %v", len(failed), failed[i].Status, reason)
-			}
-			e.log.Errorf("Elasticsearch message '%v' failed with code [%v]: %v\n", failed[i].Id, failed[i].Status, reason)
-			id := failed[i].Id
-			req := requests[id]
-			bulkReq, err := e.buildBulkableRequest(id, req)
-			if err != nil {
-				return err
-			}
-			b.Add(bulkReq)
 		}
-		if wait == backoff.Stop {
+		if wait == backoff.Stop || returnedErr != nil {
 			reason := "no reason given"
-			if fErr := failed[0].Error; fErr != nil {
-				reason = fErr.Reason
+			if returnedErr != nil {
+				reason = returnedErr.Reason
 			}
-			return fmt.Errorf("failed to send %v parts from message: %v", len(failed), reason)
+			return fmt.Errorf("failed to send %v parts from message: %v", errorCount, reason)
 		}
 		time.Sleep(wait)
 	}
@@ -354,7 +368,7 @@ func (e *Elasticsearch) WaitForClose(timeout time.Duration) error {
 }
 
 // Build a bulkable request for a given pending bulk index item.
-func (e *Elasticsearch) buildBulkableRequest(id string, p *pendingBulkIndex) (elastic.BulkableRequest, error) {
+func (e *Elasticsearch) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequest, error) {
 	// TODO: V4 the type field should be optional and not used
 	switch p.Action {
 	case "update":
@@ -362,13 +376,13 @@ func (e *Elasticsearch) buildBulkableRequest(id string, p *pendingBulkIndex) (el
 			Index(p.Index).
 			Routing(p.Routing).
 			Type(p.Type).
-			Id(id).
+			Id(p.ID).
 			Doc(p.Doc), nil
 	case "delete":
 		return elastic.NewBulkDeleteRequest().
 			Index(p.Index).
 			Routing(p.Routing).
-			Id(id).
+			Id(p.ID).
 			Type(p.Type), nil
 	case "index":
 		return elastic.NewBulkIndexRequest().
@@ -376,7 +390,7 @@ func (e *Elasticsearch) buildBulkableRequest(id string, p *pendingBulkIndex) (el
 			Pipeline(p.Pipeline).
 			Routing(p.Routing).
 			Type(p.Type).
-			Id(id).
+			Id(p.ID).
 			Doc(p.Doc), nil
 	default:
 		return nil, fmt.Errorf("elasticsearch action '%s' is not allowed", p.Action)

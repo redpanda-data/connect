@@ -2,6 +2,7 @@ package writer
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -80,6 +81,14 @@ func TestElasticIntegration(t *testing.T) {
 				Timeout("20s").
 				Body(index).
 				Do(context.Background())
+			if cerr == nil {
+				_, cerr = client.
+					CreateIndex("test_conn_index_2").
+					Timeout("20s").
+					Body(index).
+					Do(context.Background())
+			}
+
 		}
 		return cerr
 	}); err != nil {
@@ -118,6 +127,10 @@ func TestElasticIntegration(t *testing.T) {
 
 	t.Run("TestElasticBatchDelete", func(te *testing.T) {
 		testElasticBatchDelete(urls, client, te)
+	})
+
+	t.Run("TestElasticBatchIDCollision", func(te *testing.T) {
+		testElasticBatchIDCollision(urls, client, te)
 	})
 }
 
@@ -558,5 +571,126 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 		} else if partAction != "deleted" && !get.Found {
 			t.Errorf("document %v was not found", i)
 		}
+	}
+}
+
+func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testing.T) {
+	conf := NewElasticsearchConfig()
+	conf.Index = `${!meta("index")}`
+	conf.ID = "bar-id"
+	conf.URLs = urls
+	conf.Sniff = false
+	conf.Type = "_doc"
+
+	m, err := NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = m.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		m.CloseAsync()
+		if cErr := m.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	N := 2
+
+	testMsg := [][]byte{}
+	for i := 0; i < N; i++ {
+		testMsg = append(testMsg,
+			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
+		)
+	}
+
+	msg := message.New(testMsg)
+	msg.Get(0).Metadata().Set("index", "test_conn_index")
+	msg.Get(1).Metadata().Set("index", "test_conn_index_2")
+
+	if err = m.Write(msg); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < N; i++ {
+		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		get, err := client.Get().
+			Index(msg.Get(i).Metadata().Get("index")).
+			Type("_doc").
+			Id(conf.ID).
+			Do(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to get doc '%v': %v", conf.ID, err)
+		}
+		if !get.Found {
+			t.Errorf("document %v not found", i)
+		}
+
+		var sourceBytes []byte
+		sourceBytes, err = get.Source.MarshalJSON()
+		if err != nil {
+			t.Error(err)
+		} else if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
+			t.Errorf("wrong user field returned: %v != %v", act, exp)
+		}
+	}
+
+	// testing sequential updates to a document created above
+	conf.Action = "update"
+	conf.Index = "test_conn_index"
+	conf.ID = "bar-id"
+
+	m, err = NewElasticsearch(conf, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = m.Connect(); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		m.CloseAsync()
+		if cErr := m.WaitForClose(time.Second); cErr != nil {
+			t.Error(cErr)
+		}
+	}()
+
+	testMsg = [][]byte{
+		[]byte(`{"message":"goodbye"}`),
+		[]byte(`{"user": "updated"}`),
+	}
+	msg = message.New(testMsg)
+	if err = m.Write(msg); err != nil {
+		t.Fatal(err)
+	}
+
+	// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+	get, err := client.Get().
+		Index("test_conn_index").
+		Type("_doc").
+		Id(conf.ID).
+		Do(context.Background())
+
+	if err != nil {
+		t.Fatalf("Failed to get doc '%v': %v", conf.ID, err)
+	}
+	if !get.Found {
+		t.Errorf("document not found")
+	}
+
+	var doc struct {
+		Message string `json:"message"`
+		User    string `json:"user"`
+	}
+	err = json.Unmarshal(get.Source, &doc)
+	if err != nil {
+		t.Error(err)
+	} else if doc.User != "updated" {
+		t.Errorf("wrong user field returned: %v != %v", doc.User, "updated")
+	} else if doc.Message != "goodbye" {
+		t.Errorf("wrong message field returned: %v != %v", doc.Message, "goodbye")
 	}
 }
