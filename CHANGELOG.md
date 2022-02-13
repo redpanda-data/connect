@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `mongodb` input.
 - Field `cast` added to the `xml` processor and `parse_xml` bloblang method.
 - New experimental `gcp_bigquery_select` processor.
+- New `assign` bloblang method.
 
 ### Fixed
 

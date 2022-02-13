@@ -1276,7 +1276,7 @@ root.foo = this.foo.append("and", "this")
 
 ### `assign`
 
-Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the value in the destination object will be overwritten by that of source object.
+Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the value in the destination object will be overwritten by that of source object. In order to preserve both values on collision use the [`merge`](#merge) method.
 
 #### Parameters
 
@@ -1689,7 +1689,7 @@ root = this.map_each_key(key -> if key.contains("kafka") { "_" + key })
 
 ### `merge`
 
-Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array.
+Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array. In order to simply override destination fields on collision use the [`assign`](#assign) method.
 
 #### Parameters
 
