@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Field `nack_reject_patterns` added to the `amqp_0_9` input.
 - New experimental `mongodb` input.
+- Field `cast` added to the `xml` processor and `parse_xml` bloblang method.
 
 ### Fixed
 

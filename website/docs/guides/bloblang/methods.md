@@ -2013,14 +2013,14 @@ root.doc = this.doc.parse_xml()
 ```
 
 ```coffee
-root.doc = this.doc.parse_xml(false)
+root.doc = this.doc.parse_xml(cast: false)
 
 # In:  {"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}
 # Out: {"doc":{"root":{"bool":"True","number":{"#text":"123","-id":"99"},"title":"This is a title"}}}
 ```
 
 ```coffee
-root.doc = this.doc.parse_xml(true)
+root.doc = this.doc.parse_xml(cast: true)
 
 # In:  {"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}
 # Out: {"doc":{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}}
