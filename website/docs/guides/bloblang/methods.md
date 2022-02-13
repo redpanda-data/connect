@@ -1996,6 +1996,11 @@ Attempts to parse a string as an XML document and returns a structured result, w
 - If the element is a simple element and has attributes, the element value is given the key `#text`.
 - XML comments, directives, and process instructions are ignored.
 - When elements are repeated the resulting JSON value is an array.
+- If cast is true, try to cast values to numbers and booleans instead of returning strings.
+
+#### Parameters
+
+**`cast`** &lt;(optional) bool&gt; whether to try to cast values that are numbers and booleans to the right type. default: false  
 
 #### Examples
 
@@ -2005,6 +2010,20 @@ root.doc = this.doc.parse_xml()
 
 # In:  {"doc":"<root><title>This is a title</title><content>This is some content</content></root>"}
 # Out: {"doc":{"root":{"content":"This is some content","title":"This is a title"}}}
+```
+
+```coffee
+root.doc = this.doc.parse_xml(false)
+
+# In:  {"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}
+# Out: {"doc":{"root":{"bool":"True","number":{"#text":"123","-id":"99"},"title":"This is a title"}}}
+```
+
+```coffee
+root.doc = this.doc.parse_xml(true)
+
+# In:  {"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}
+# Out: {"doc":{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}}
 ```
 
 ### `parse_yaml`

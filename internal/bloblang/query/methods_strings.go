@@ -1013,14 +1013,33 @@ var _ = registerSimpleMethod(
 - If an element contains attributes they are parsed by prefixing a hyphen, `+"`-`"+`, to the attribute label.
 - If the element is a simple element and has attributes, the element value is given the key `+"`#text`"+`.
 - XML comments, directives, and process instructions are ignored.
-- When elements are repeated the resulting JSON value is an array.`,
+- When elements are repeated the resulting JSON value is an array.
+- If cast is true, try to cast values to numbers and booleans instead of returning strings.`,
 		NewExampleSpec("",
 			`root.doc = this.doc.parse_xml()`,
 			`{"doc":"<root><title>This is a title</title><content>This is some content</content></root>"}`,
 			`{"doc":{"root":{"content":"This is some content","title":"This is a title"}}}`,
 		),
-	).Beta(),
-	func(*ParsedParams) (simpleMethod, error) {
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_xml(false)`,
+			`{"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}`,
+			`{"doc":{"root":{"bool":"True","number":{"#text":"123","-id":"99"},"title":"This is a title"}}}`,
+		),
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_xml(true)`,
+			`{"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}`,
+			`{"doc":{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}}`,
+		),
+	).Param(ParamBool("cast", "whether to try to cast values that are numbers and booleans to the right type. default: false").Optional()).Beta(),
+	func(args *ParsedParams) (simpleMethod, error) {
+		castOpt, err := args.FieldOptionalBool("cast")
+		if err != nil {
+			return nil, err
+		}
+		cast := false
+		if castOpt != nil {
+			cast = *castOpt
+		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var xmlBytes []byte
 			switch t := v.(type) {
@@ -1031,7 +1050,7 @@ var _ = registerSimpleMethod(
 			default:
 				return nil, NewTypeError(v, ValueString)
 			}
-			xmlObj, err := xml.ToMap(xmlBytes)
+			xmlObj, err := xml.ToMap(xmlBytes, cast)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse value as XML: %w", err)
 			}
