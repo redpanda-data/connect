@@ -10,7 +10,7 @@ import (
 
 func TestSQLSelectInputEmptyShutdown(t *testing.T) {
 	conf := `
-dsn: "mongodb://foouser:foopass@localhost"
+url: "mongodb://foouser:foopass@localhost"
 database: "foo"
 collection: "bar"
 query: |

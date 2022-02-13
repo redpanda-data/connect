@@ -27,9 +27,9 @@ input:
   mongodb:
     url: ""
     database: ""
+    collection: ""
     username: ""
     password: ""
-    collection: ""
     query: ""
 ```
 
@@ -52,21 +52,7 @@ url: mongodb://localhost:27017
 
 ### `database`
 
-The name of the target MongoDB DB.
-
-
-Type: `string`  
-
-### `username`
-
-The username to connect to the database.
-
-
-Type: `string`  
-
-### `password`
-
-The password to connect to the database.
+The name of the target MongoDB database.
 
 
 Type: `string`  
@@ -77,6 +63,22 @@ The collection to select from.
 
 
 Type: `string`  
+
+### `username`
+
+The username to connect to the database.
+
+
+Type: `string`  
+Default: `""`  
+
+### `password`
+
+The password to connect to the database.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `query`
 

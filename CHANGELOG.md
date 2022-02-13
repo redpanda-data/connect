@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `nack_reject_patterns` added to the `amqp_0_9` input.
-- The `mongodb` input
+- New experimental `mongodb` input.
 
 ### Fixed
 
