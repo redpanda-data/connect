@@ -298,7 +298,7 @@ func TestSocketMultipart(t *testing.T) {
 func TestSocketMultipartCustomDelim(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
+	ln, err := net.Listen("unix", filepath.Join(tmpDir, "b.sock"))
 	if err != nil {
 		t.Fatalf("failed to listen on address: %v", err)
 	}

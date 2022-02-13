@@ -167,12 +167,12 @@ func TestSocketServerRetries(t *testing.T) {
 	conn.Close()
 }
 
-func TestSocketServerWriteToClosed(t *testing.T) {
+func TestSocketServerWriteClosed(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
+	conf.SocketServer.Address = filepath.Join(tmpDir, "b.sock")
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -194,7 +194,7 @@ func TestSocketServerWriteToClosed(t *testing.T) {
 	conn.Close()
 }
 
-func TestSocketServerReconnect(t *testing.T) {
+func TestSocketServerRecon(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
@@ -269,7 +269,7 @@ func TestSocketServerReconnect(t *testing.T) {
 	conn.Close()
 }
 
-func TestSocketServerMultipart(t *testing.T) {
+func TestSocketServerMpart(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
@@ -336,12 +336,12 @@ func TestSocketServerMultipart(t *testing.T) {
 	conn.Close()
 }
 
-func TestSocketServerMultipartCustomDelim(t *testing.T) {
+func TestSocketServerMpartCDelim(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
+	conf.SocketServer.Address = filepath.Join(tmpDir, "b.sock")
 	conf.SocketServer.Multipart = true
 	conf.SocketServer.Delim = "@"
 
@@ -404,12 +404,12 @@ func TestSocketServerMultipartCustomDelim(t *testing.T) {
 	conn.Close()
 }
 
-func TestSocketServerMultipartShutdown(t *testing.T) {
+func TestSocketServerMpartSdown(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
 	conf.SocketServer.Network = "unix"
-	conf.SocketServer.Address = filepath.Join(tmpDir, "benthos.sock")
+	conf.SocketServer.Address = filepath.Join(tmpDir, "b.sock")
 	conf.SocketServer.Multipart = true
 
 	rdr, err := NewSocketServer(conf, nil, log.Noop(), metrics.Noop())
