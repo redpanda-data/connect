@@ -9,13 +9,17 @@ import (
 )
 
 type mockBQIterator struct {
-	err  error
+	err error
+
 	rows []string
-	idx  int
+
+	idx int
+	// the index at which to return an error
+	errIdx int
 }
 
 func (ti *mockBQIterator) Next(dst interface{}) error {
-	if ti.err != nil {
+	if ti.err != nil && ti.idx == ti.errIdx {
 		return ti.err
 	}
 
