@@ -1274,6 +1274,24 @@ root.foo = this.foo.append("and", "this")
 # Out: {"foo":["bar","baz","and","this"]}
 ```
 
+### `assign`
+
+Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the value in the destination object will be overwritten by that of source object.
+
+#### Parameters
+
+**`with`** &lt;unknown&gt; A value to merge the target value with.  
+
+#### Examples
+
+
+```coffee
+root = this.foo.assign(this.bar)
+
+# In:  {"foo":{"first_name":"fooer","likes":"bars"},"bar":{"second_name":"barer","likes":"foos"}}
+# Out: {"first_name":"fooer","likes":"foos","second_name":"barer"}
+```
+
 ### `collapse`
 
 Collapse an array or object into an object of key/value pairs for each field, where the key is the full path of the structured field in dot path notation. Empty arrays an objects are ignored by default.
