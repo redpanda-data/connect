@@ -19,12 +19,7 @@ func TestGlobPatterns(t *testing.T) {
 		`src/cats/meows/c.js.tmp`,
 	}
 
-	tmpDir, err := os.MkdirTemp("", "test_glob_patterns")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		assert.NoError(t, os.RemoveAll(tmpDir))
-	})
+	tmpDir := t.TempDir()
 
 	for _, path := range dirStructure {
 		tmpPath := filepath.Join(tmpDir, path)

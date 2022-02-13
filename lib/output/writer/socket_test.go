@@ -3,7 +3,6 @@ package writer
 import (
 	"bytes"
 	"net"
-	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -12,15 +11,10 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSocketBasic(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
@@ -85,11 +79,7 @@ func TestSocketBasic(t *testing.T) {
 }
 
 func TestSocketMultipart(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {
@@ -400,11 +390,7 @@ func TestTCPSocketMultipart(t *testing.T) {
 }
 
 func TestSocketCustomDelimeter(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_socket_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
 	if err != nil {

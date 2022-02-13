@@ -73,12 +73,7 @@ func TestSetOverrideErrors(t *testing.T) {
 }
 
 func TestSetOverridesOfFile(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_set_overrides_of_file")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	fullPath := filepath.Join(dir, "main.yaml")
 	require.NoError(t, os.WriteFile(fullPath, []byte(`
@@ -112,12 +107,7 @@ input:
 }
 
 func TestResources(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	fullPath := filepath.Join(dir, "main.yaml")
 	require.NoError(t, os.WriteFile(fullPath, []byte(`
@@ -175,12 +165,7 @@ tests:
 }
 
 func TestLints(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	fullPath := filepath.Join(dir, "main.yaml")
 	require.NoError(t, os.WriteFile(fullPath, []byte(`
@@ -235,12 +220,7 @@ cache_resources:
 }
 
 func TestLintsOfOldPlugins(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	fullPath := filepath.Join(dir, "main.yaml")
 	require.NoError(t, os.WriteFile(fullPath, []byte(`

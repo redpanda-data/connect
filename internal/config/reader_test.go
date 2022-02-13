@@ -29,12 +29,7 @@ output:
   aws_s3: {}
 `)
 
-	confDir, err := os.MkdirTemp("", "test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(confDir)
-	})
+	confDir := t.TempDir()
 
 	// Create an empty config file in the config folder
 	confFilePath := filepath.Join(confDir, "main.yaml")
@@ -77,12 +72,7 @@ output:
   aws_s3: {}
 `)
 
-	rootDir, err := os.MkdirTemp("", "test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(rootDir)
-	})
+	rootDir := t.TempDir()
 
 	// Create a config folder
 	confDir := filepath.Join(rootDir, "config")

@@ -10,7 +10,7 @@ import (
 )
 
 func TestGenerateDefinitions(t *testing.T) {
-	testDir, err := initTestFiles(map[string]string{
+	testDir, err := initTestFiles(t, map[string]string{
 		"foo.yaml": `
 pipeline:
   processors:
@@ -75,7 +75,7 @@ tests:
 }
 
 func TestGenerateDefinitionFile(t *testing.T) {
-	testDir, err := initTestFiles(map[string]string{
+	testDir, err := initTestFiles(t, map[string]string{
 		"foo.yaml": `
 pipeline:
   processors:

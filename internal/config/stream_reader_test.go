@@ -15,12 +15,7 @@ import (
 )
 
 func TestStreamsLints(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_stream_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	streamOnePath := filepath.Join(dir, "first.yaml")
 	require.NoError(t, os.WriteFile(streamOnePath, []byte(`
@@ -66,12 +61,7 @@ cache_resources:
 }
 
 func TestStreamsDirectoryWalk(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_stream_walk")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	streamOnePath := filepath.Join(dir, "first.yaml")
 	require.NoError(t, os.WriteFile(streamOnePath, []byte(`

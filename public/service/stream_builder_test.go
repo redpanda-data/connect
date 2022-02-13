@@ -47,11 +47,7 @@ func TestStreamBuilderDefault(t *testing.T) {
 }
 
 func TestStreamBuilderProducerFunc(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "stream_builder_producer_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	outFilePath := filepath.Join(tmpDir, "out.txt")
 
@@ -102,11 +98,7 @@ file:
 }
 
 func TestStreamBuilderBatchProducerFunc(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "stream_builder_batch_producer_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	outFilePath := filepath.Join(tmpDir, "out.txt")
 
@@ -208,11 +200,7 @@ logger:
 }
 
 func TestStreamBuilderConsumerFunc(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "stream_builder_consumer_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	inFilePath := filepath.Join(tmpDir, "in.txt")
 	require.NoError(t, os.WriteFile(inFilePath, []byte(`HELLO WORLD 1
@@ -245,7 +233,7 @@ file:
 	require.Error(t, b.AddConsumerFunc(handler))
 
 	// Don't allow output overrides now.
-	err = b.SetYAML(`output: {}`)
+	err := b.SetYAML(`output: {}`)
 	require.Error(t, err)
 
 	strm, err := b.Build()
@@ -263,11 +251,7 @@ file:
 }
 
 func TestStreamBuilderBatchConsumerFunc(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "stream_builder_batch_consumer_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	inFilePath := filepath.Join(tmpDir, "in.txt")
 	require.NoError(t, os.WriteFile(inFilePath, []byte(`HELLO WORLD 1
@@ -310,7 +294,7 @@ file:
 	require.Error(t, b.AddBatchConsumerFunc(handler))
 
 	// Don't allow output overrides now.
-	err = b.SetYAML(`output: {}`)
+	err := b.SetYAML(`output: {}`)
 	require.Error(t, err)
 
 	strm, err := b.Build()

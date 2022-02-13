@@ -73,12 +73,7 @@ func TestCSVReaderHappy(t *testing.T) {
 }
 
 func TestCSVGPaths(t *testing.T) {
-	dir, err := os.MkdirTemp("", "csv_glob_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.csv"), []byte(`header1,header2,header3
 foo1,bar1,baz1
@@ -119,12 +114,7 @@ foo6,bar6,baz6
 }
 
 func TestCSVGlobPaths(t *testing.T) {
-	dir, err := os.MkdirTemp("", "csv_glob_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.csv"), []byte(`header1,header2,header3
 foo1,bar1,baz1

@@ -13,14 +13,10 @@ import (
 )
 
 func TestFromPathHappy(t *testing.T) {
-	testDir, err := os.MkdirTemp("", "streams_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(testDir)
+	testDir := t.TempDir()
 
 	barDir := filepath.Join(testDir, "bar")
-	if err = os.Mkdir(barDir, 0o777); err != nil {
+	if err := os.Mkdir(barDir, 0o777); err != nil {
 		t.Fatal(err)
 	}
 
@@ -40,6 +36,7 @@ func TestFromPathHappy(t *testing.T) {
 	}
 
 	var fooBytes []byte
+	var err error
 	if fooBytes, err = json.Marshal(fooConf); err != nil {
 		t.Fatal(err)
 	}

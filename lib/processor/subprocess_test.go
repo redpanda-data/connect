@@ -170,12 +170,7 @@ func TestSubprocessWithErrors(t *testing.T) {
 func testProgram(t *testing.T, program string) string {
 	t.Helper()
 
-	dir, err := os.MkdirTemp("", "benthos_subprocessor_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	pathStr := path.Join(dir, "main.go")
 	require.NoError(t, os.WriteFile(pathStr, []byte(program), 0o666))

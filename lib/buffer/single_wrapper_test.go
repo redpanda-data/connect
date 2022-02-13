@@ -1,7 +1,6 @@
 package buffer
 
 import (
-	"os"
 	"testing"
 	"time"
 
@@ -309,11 +308,7 @@ func BenchmarkSingleMem(b *testing.B) {
 }
 
 func BenchmarkSingleMmap(b *testing.B) {
-	dir, err := os.MkdirTemp("", "benthos_mmap_test")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := b.TempDir()
 
 	tChan := make(chan types.Transaction)
 	resChan := make(chan types.Response)

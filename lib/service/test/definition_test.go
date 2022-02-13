@@ -12,7 +12,7 @@ import (
 func TestDefinitionFail(t *testing.T) {
 	color.NoColor = true
 
-	testDir, err := initTestFiles(map[string]string{
+	testDir, err := initTestFiles(t, map[string]string{
 		"config1.yaml": `
 pipeline:
   processors:
@@ -84,7 +84,7 @@ pipeline:
 func TestDefinitionParallel(t *testing.T) {
 	color.NoColor = true
 
-	testDir, err := initTestFiles(map[string]string{
+	testDir, err := initTestFiles(t, map[string]string{
 		"config1.yaml": `
 pipeline:
   processors:
