@@ -583,7 +583,7 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 	conf.Sniff = false
 	conf.Type = "_doc"
 
-	m, err := NewElasticsearchV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	m, err := NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -643,7 +643,7 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 	conf.Index = "test_conn_index"
 	conf.ID = "bar-id"
 
-	m, err = NewElasticsearchV2(conf, types.NoopMgr(), log.Noop(), metrics.Noop())
+	m, err = NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
