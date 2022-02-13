@@ -72,7 +72,7 @@ func bigQuerySelectProcessorConfigFromParsed(inConf *service.ParsedConfig) (conf
 
 func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Version("3.63.0").
+		Version("3.64.0").
 		Categories(
 			string(processor.CategoryIntegration),
 		).

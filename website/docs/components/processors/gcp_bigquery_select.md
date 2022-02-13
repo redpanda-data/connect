@@ -20,7 +20,7 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Executes a `SELECT` query against BigQuery and replaces messages with the rows returned.
 
-Introduced in version 3.63.0.
+Introduced in version 3.64.0.
 
 ```yaml
 # Config fields, showing default values

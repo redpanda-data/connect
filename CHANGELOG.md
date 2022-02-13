@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Field `nack_reject_patterns` added to the `amqp_0_9` input.
 - New experimental `mongodb` input.
 - Field `cast` added to the `xml` processor and `parse_xml` bloblang method.
+- New experimental `gcp_bigquery_select` processor.
 
 ### Fixed
 
@@ -26,7 +27,7 @@ All notable changes to this project will be documented in this file.
 - Experimental field `multipart` added to the `http_client` output.
 - Codec `regex` added to inputs.
 - Field `timeout` added to the `cassandra` output.
-- New `gcp_bigquery_select` input.
+- New experimental `gcp_bigquery_select` input.
 - Field `ack_wait` added to the `nats_jetstream` input.
 
 ### Changed
