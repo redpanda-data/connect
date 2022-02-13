@@ -29,6 +29,10 @@ linters-settings:
     include-go-root: true
     packages:
       - "io/ioutil"
+  forbidigo:
+    forbid:
+      - "os.MkdirTemp"
+    exclude_godoc_examples: false
 
 linters:
   disable-all: true
@@ -54,6 +58,7 @@ linters:
     - durationcheck
     - wastedassign
     - depguard
+    - forbidigo
     # - bodyclose
     # - gosec
     # - misspell

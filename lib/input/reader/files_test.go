@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -16,13 +17,13 @@ import (
 func TestFilesDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	tmpInnerDir, err := os.MkdirTemp(tmpDir, "benthos_inner")
-	if err != nil {
+	tmpInnerDir := filepath.Join(tmpDir, "benthos_inner")
+	if err := os.Mkdir(tmpInnerDir, os.ModePerm); err != nil {
 		t.Fatal(err)
 	}
 
-	var tmpFile *os.File
-	if tmpFile, err = os.CreateTemp(tmpDir, "f1"); err != nil {
+	tmpFile, err := os.CreateTemp(tmpDir, "f1")
+	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(tmpFile.Name())
