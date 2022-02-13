@@ -148,15 +148,10 @@ func TestFileMultiPartDeprecated(t *testing.T) {
 }
 
 func TestFileDirectory(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_file_input_test")
-	require.NoError(t, err)
+	tmpDir := t.TempDir()
 
 	tmpInnerDir, err := os.MkdirTemp(tmpDir, "benthos_inner")
 	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
 
 	tmpFile, err := os.CreateTemp(tmpDir, "f1*.txt")
 	require.NoError(t, err)

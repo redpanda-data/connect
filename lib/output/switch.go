@@ -114,6 +114,9 @@ behavior is false, which will drop the message.`,
 				return "field outputs is deprecated in favour of cases", ok && len(arr) == 0
 			}),
 		).Linter(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
+			if _, ok := value.(map[string]interface{}); !ok {
+				return nil
+			}
 			gObj := gabs.Wrap(value)
 			retry, exists := gObj.S("retry_until_success").Data().(bool)
 			// TODO: V4 Is retry_until_success going to be false by default now?

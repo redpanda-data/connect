@@ -82,6 +82,11 @@ func TestXMLCases(t *testing.T) {
 <a><b>Hello world!</b></a>`,
 			output: `{"a":{"b":"Hello world!"}}`,
 		},
+		{
+			name:   "with numbers and bools without casting",
+			input:  `<root><title>This is a title</title><number id="99">123</number><bool>True</bool></root>`,
+			output: `{"root":{"bool":"True","number":{"#text":"123","-id":"99"},"title":"This is a title"}}`,
+		},
 	}
 
 	conf := NewConfig()
@@ -105,5 +110,31 @@ func TestXMLCases(t *testing.T) {
 				tt.Error(errStr)
 			}
 		})
+	}
+}
+
+func TestXMLWithCast(t *testing.T) {
+	conf := NewConfig()
+	conf.XML.Cast = true
+
+	testString := `<root><title>This is a title</title><number id="99">123</number><bool>True</bool></root>`
+
+	proc, err := NewXML(conf, nil, log.Noop(), metrics.Noop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgsOut, res := proc.ProcessMessage(message.New([][]byte{[]byte(testString)}))
+	if res != nil {
+		t.Fatal(res.Error())
+	}
+	if len(msgsOut) != 1 {
+		t.Fatalf("Wrong count of result messages: %v != 1", len(msgsOut))
+	}
+	if exp, act := `{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}`, string(msgsOut[0].Get(0).Get()); exp != act {
+		t.Errorf("Wrong result: %v != %v", act, exp)
+	}
+	if errStr := GetFail(msgsOut[0].Get(0)); len(errStr) > 0 {
+		t.Error(errStr)
 	}
 }

@@ -6,6 +6,9 @@ import (
 )
 
 func lintResource(ctx docs.LintContext, line, col int, v interface{}) []docs.Lint {
+	if _, ok := v.(map[string]interface{}); !ok {
+		return nil
+	}
 	gObj := gabs.Wrap(v)
 	label, _ := gObj.S("label").Data().(string)
 	if label == "" {

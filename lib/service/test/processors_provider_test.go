@@ -16,11 +16,8 @@ import (
 	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
-func initTestFiles(files map[string]string) (string, error) {
-	testDir, err := os.MkdirTemp("", "benthos_config_test_test")
-	if err != nil {
-		return "", err
-	}
+func initTestFiles(t *testing.T, files map[string]string) (string, error) {
+	testDir := t.TempDir()
 
 	for k, v := range files {
 		fp := filepath.Join(testDir, k)
@@ -51,7 +48,7 @@ pipeline:
   - type: doesnotexist`,
 	}
 
-	testDir, err := initTestFiles(files)
+	testDir, err := initTestFiles(t, files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +105,7 @@ pipeline:
     $ref: ./config1.yaml#/pipeline/processors`,
 	}
 
-	testDir, err := initTestFiles(files)
+	testDir, err := initTestFiles(t, files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +212,7 @@ pipeline:
 `,
 	}
 
-	testDir, err := initTestFiles(files)
+	testDir, err := initTestFiles(t, files)
 	require.NoError(t, err)
 	defer os.RemoveAll(testDir)
 
@@ -266,7 +263,7 @@ pipeline:
 `,
 	}
 
-	testDir, err := initTestFiles(files)
+	testDir, err := initTestFiles(t, files)
 	require.NoError(t, err)
 	defer os.RemoveAll(testDir)
 
@@ -316,7 +313,7 @@ pipeline:
     $ref: ./config1.yaml#/pipeline/processors`,
 	}
 
-	testDir, err := initTestFiles(files)
+	testDir, err := initTestFiles(t, files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +396,7 @@ pipeline:
 `,
 	}
 
-	testDir, err := initTestFiles(files)
+	testDir, err := initTestFiles(t, files)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -446,7 +443,7 @@ pipeline:
 `,
 	}
 
-	testDir, err := initTestFiles(files)
+	testDir, err := initTestFiles(t, files)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -493,7 +490,7 @@ pipeline:
 `,
 	}
 
-	testDir, err := initTestFiles(files)
+	testDir, err := initTestFiles(t, files)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -559,7 +556,7 @@ pipeline:
 `,
 	}
 
-	testDir, err := initTestFiles(files)
+	testDir, err := initTestFiles(t, files)
 	require.NoError(t, err)
 	defer os.RemoveAll(testDir)
 
@@ -607,7 +604,7 @@ pipeline:
 `,
 	}
 
-	testDir, err := initTestFiles(files)
+	testDir, err := initTestFiles(t, files)
 	require.NoError(t, err)
 	defer os.RemoveAll(testDir)
 

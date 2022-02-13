@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -14,12 +13,7 @@ import (
 func TestFileCache(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = TypeFile
-	dir, err := os.MkdirTemp("", "benthos_file_cache_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	conf.File.Directory = dir
+	conf.File.Directory = t.TempDir()
 
 	c, err := New(conf, nil, log.Noop(), metrics.Noop())
 	if err != nil {

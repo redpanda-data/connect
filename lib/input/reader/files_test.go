@@ -14,15 +14,12 @@ import (
 //------------------------------------------------------------------------------
 
 func TestFilesDirectory(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_file_input_test")
+	tmpDir := t.TempDir()
+
+	tmpInnerDir, err := os.MkdirTemp(tmpDir, "benthos_inner")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var tmpInnerDir string
-	if tmpInnerDir, err = os.MkdirTemp(tmpDir, "benthos_inner"); err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
 
 	var tmpFile *os.File
 	if tmpFile, err = os.CreateTemp(tmpDir, "f1"); err != nil {
@@ -155,14 +152,10 @@ func TestFilesBadPath(t *testing.T) {
 }
 
 func TestFilesDirectoryDelete(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "benthos_file_input_delete_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
-	var tmpFile *os.File
-	if tmpFile, err = os.CreateTemp(tmpDir, "f1"); err != nil {
+	tmpFile, err := os.CreateTemp(tmpDir, "f1")
+	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = tmpFile.WriteString("foo"); err != nil {

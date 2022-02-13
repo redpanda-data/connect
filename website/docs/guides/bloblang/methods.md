@@ -1274,6 +1274,24 @@ root.foo = this.foo.append("and", "this")
 # Out: {"foo":["bar","baz","and","this"]}
 ```
 
+### `assign`
+
+Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the value in the destination object will be overwritten by that of source object. In order to preserve both values on collision use the [`merge`](#merge) method.
+
+#### Parameters
+
+**`with`** &lt;unknown&gt; A value to merge the target value with.  
+
+#### Examples
+
+
+```coffee
+root = this.foo.assign(this.bar)
+
+# In:  {"foo":{"first_name":"fooer","likes":"bars"},"bar":{"second_name":"barer","likes":"foos"}}
+# Out: {"first_name":"fooer","likes":"foos","second_name":"barer"}
+```
+
 ### `collapse`
 
 Collapse an array or object into an object of key/value pairs for each field, where the key is the full path of the structured field in dot path notation. Empty arrays an objects are ignored by default.
@@ -1671,7 +1689,7 @@ root = this.map_each_key(key -> if key.contains("kafka") { "_" + key })
 
 ### `merge`
 
-Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array.
+Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array. In order to simply override destination fields on collision use the [`assign`](#assign) method.
 
 #### Parameters
 
@@ -1996,6 +2014,11 @@ Attempts to parse a string as an XML document and returns a structured result, w
 - If the element is a simple element and has attributes, the element value is given the key `#text`.
 - XML comments, directives, and process instructions are ignored.
 - When elements are repeated the resulting JSON value is an array.
+- If cast is true, try to cast values to numbers and booleans instead of returning strings.
+
+#### Parameters
+
+**`cast`** &lt;(optional) bool&gt; whether to try to cast values that are numbers and booleans to the right type. default: false  
 
 #### Examples
 
@@ -2005,6 +2028,20 @@ root.doc = this.doc.parse_xml()
 
 # In:  {"doc":"<root><title>This is a title</title><content>This is some content</content></root>"}
 # Out: {"doc":{"root":{"content":"This is some content","title":"This is a title"}}}
+```
+
+```coffee
+root.doc = this.doc.parse_xml(cast: false)
+
+# In:  {"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}
+# Out: {"doc":{"root":{"bool":"True","number":{"#text":"123","-id":"99"},"title":"This is a title"}}}
+```
+
+```coffee
+root.doc = this.doc.parse_xml(cast: true)
+
+# In:  {"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}
+# Out: {"doc":{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}}
 ```
 
 ### `parse_yaml`

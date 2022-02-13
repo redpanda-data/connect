@@ -18,12 +18,7 @@ import (
 func testProgram(t *testing.T, program string) string {
 	t.Helper()
 
-	dir, err := os.MkdirTemp("", "benthos_subprocess_output_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	pathStr := path.Join(dir, "main.go")
 	require.NoError(t, os.WriteFile(pathStr, []byte(program), 0o666))
@@ -59,11 +54,7 @@ func TestSubprocessBasic(t *testing.T) {
 
 	t.Parallel()
 
-	dir, err := os.MkdirTemp("", "benthos_subprocess_output_happy")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	filePath := testProgram(t, fmt.Sprintf(`package main
 
@@ -129,11 +120,7 @@ func TestSubprocessEarlyExit(t *testing.T) {
 
 	t.Parallel()
 
-	dir, err := os.MkdirTemp("", "benthos_subprocess_output_early_exit")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	filePath := testProgram(t, fmt.Sprintf(`package main
 

@@ -49,7 +49,30 @@ is useful for when it's possible to recover failed messages, or when special
 actions (such as logging/metrics) are required before dropping them.
 
 More information about error handing can be found [here](/docs/configuration/error_handling).`,
-		config: docs.FieldComponent().Array().HasType(docs.FieldTypeProcessor),
+		config: docs.FieldComponent().Array().HasType(docs.FieldTypeProcessor).
+			Linter(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
+				childProcs, ok := value.([]interface{})
+				if !ok {
+					return nil
+				}
+				for _, child := range childProcs {
+					childObj, ok := child.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					if _, exists := childObj["catch"]; exists {
+						// No need to lint as a nested catch will clear errors,
+						// allowing nested try blocks to work as expected.
+						return nil
+					}
+					if _, exists := childObj["try"]; exists {
+						return []docs.Lint{
+							docs.NewLintError(line, "`catch` block contains a `try` block which will never execute due to errors only being cleared at the end of the `catch`, for more information about nesting `try` within `catch` read: https://www.benthos.dev/docs/components/processors/try#nesting-within-a-catch-block"),
+						}
+					}
+				}
+				return nil
+			}),
 	}
 }
 

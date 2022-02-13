@@ -80,41 +80,59 @@ func ExecuteTryAll(procs []types.Processor, msgs ...types.Message) ([]types.Mess
 	return resultMsgs, nil
 }
 
+type catchMessage struct {
+	batches []types.Message
+	caught  bool
+}
+
 // ExecuteCatchAll attempts to execute a slice of processors to only messages
 // that have failed a processing step. Returns N resulting messages or a
-// response. The response may indicate either a NoAck in the event of the
-// message being buffered or an unrecoverable error.
+// response.
 func ExecuteCatchAll(procs []types.Processor, msgs ...types.Message) ([]types.Message, types.Response) {
-	resultMsgs := make([]types.Message, len(msgs))
-	copy(resultMsgs, msgs)
-
-	var resultRes types.Response
-	for i := 0; len(resultMsgs) > 0 && i < len(procs); i++ {
-		var nextResultMsgs []types.Message
-		for _, m := range resultMsgs {
-			// Skip messages that haven't failed a prior stage.
-			if !HasFailed(m.Get(0)) {
-				nextResultMsgs = append(nextResultMsgs, m)
-				continue
-			}
-			var rMsgs []types.Message
-			if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.Error() != nil {
-				// We immediately return if a processor hits an unrecoverable
-				// error on a message.
-				return nil, resultRes
-			}
-			nextResultMsgs = append(nextResultMsgs, rMsgs...)
+	// Preserves the original order of messages before entering the catch block.
+	// Only processors that have failed a previous stage are "caught", and will
+	// remain caught until all catch processors are executed.
+	catchBatches := make([]catchMessage, len(msgs))
+	for i, m := range msgs {
+		catchBatches[i] = catchMessage{
+			batches: []types.Message{m},
+			caught:  HasFailed(m.Get(0)),
 		}
-		resultMsgs = nextResultMsgs
 	}
 
-	if len(resultMsgs) == 0 {
+	var resultRes types.Response
+	for i := 0; i < len(procs); i++ {
+		for j := 0; j < len(catchBatches); j++ {
+			if !catchBatches[j].caught || len(catchBatches[j].batches) == 0 {
+				continue
+			}
+
+			var nextResultBatches []types.Message
+			for _, m := range catchBatches[j].batches {
+				var rMsgs []types.Message
+				if rMsgs, resultRes = procs[i].ProcessMessage(m); resultRes != nil && resultRes.Error() != nil {
+					// We immediately return if a processor hits an unrecoverable
+					// error on a message.
+					return nil, resultRes
+				}
+				nextResultBatches = append(nextResultBatches, rMsgs...)
+			}
+			catchBatches[j].batches = nextResultBatches
+		}
+	}
+
+	var resultBatches []types.Message
+	for _, b := range catchBatches {
+		resultBatches = append(resultBatches, b.batches...)
+	}
+
+	if len(resultBatches) == 0 {
 		if resultRes == nil {
 			resultRes = response.NewUnack()
 		}
 		return nil, resultRes
 	}
-	return resultMsgs, nil
+	return resultBatches, nil
 }
 
 //------------------------------------------------------------------------------

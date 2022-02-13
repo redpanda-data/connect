@@ -268,7 +268,7 @@ func (f FieldSpec) LintOptions() FieldSpec {
 	f.customLintFn = func(ctx LintContext, line, col int, value interface{}) []Lint {
 		str, ok := value.(string)
 		if !ok {
-			return []Lint{NewLintWarning(line, fmt.Sprintf("expected string value, got %T", value))}
+			return nil
 		}
 		if len(f.Options) > 0 {
 			for _, optStr := range f.Options {

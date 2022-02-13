@@ -423,12 +423,7 @@ func TestJSONContainsCondition(t *testing.T) {
 func TestFileEqualsCondition(t *testing.T) {
 	color.NoColor = true
 
-	tmpDir, err := os.MkdirTemp("", "test_file_condition")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		_ = os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	uppercasedPath := filepath.Join(tmpDir, "inner", "uppercased.txt")
 	notUppercasedPath := filepath.Join(tmpDir, "not_uppercased.txt")

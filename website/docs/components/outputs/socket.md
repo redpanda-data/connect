@@ -28,7 +28,7 @@ output:
     codec: lines
 ```
 
-## Batches and Mulipart Messages
+## Batches and Multipart Messages
 
 When writing multipart (batched) messages using the `lines` codec the last message ends with double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 

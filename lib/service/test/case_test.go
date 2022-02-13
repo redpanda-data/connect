@@ -222,12 +222,7 @@ func TestFileCaseInputs(t *testing.T) {
 
 	provider["/pipeline/processors"] = []types.Processor{proc}
 
-	tmpDir, err := os.MkdirTemp("", "test_file_content")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		_ = os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	uppercasedPath := filepath.Join(tmpDir, "inner", "uppercased.txt")
 	notUppercasedPath := filepath.Join(tmpDir, "not_uppercased.txt")
@@ -286,12 +281,7 @@ func TestFileCaseConditions(t *testing.T) {
 
 	provider["/pipeline/processors"] = []types.Processor{proc}
 
-	tmpDir, err := os.MkdirTemp("", "test_file_case")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		_ = os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	uppercasedPath := filepath.Join(tmpDir, "inner", "uppercased.txt")
 	notUppercasedPath := filepath.Join(tmpDir, "not_uppercased.txt")

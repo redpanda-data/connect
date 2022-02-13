@@ -538,8 +538,14 @@ func (g genericValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 			return nil, err
 		}
 		return gocql.Marshal(info, t)
-	case gocql.TypeFloat, gocql.TypeDouble:
+	case gocql.TypeDouble:
 		f, err := query.IGetNumber(g.v)
+		if err != nil {
+			return nil, err
+		}
+		return gocql.Marshal(info, f)
+	case gocql.TypeFloat:
+		f, err := query.IGetFloat32(g.v)
 		if err != nil {
 			return nil, err
 		}

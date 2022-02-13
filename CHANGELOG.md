@@ -8,7 +8,16 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `nack_reject_patterns` added to the `amqp_0_9` input.
-- The `mongodb` input
+- New experimental `mongodb` input.
+- Field `cast` added to the `xml` processor and `parse_xml` bloblang method.
+- New experimental `gcp_bigquery_select` processor.
+- New `assign` bloblang method.
+
+### Fixed
+
+- Fixed an issue where manually clearing errors within a `catch` processor would result in subsequent processors in the block being skipped.
+- The `cassandra` output should now automatically match `float` columns.
+- Fixed an issue where the `elasticsearch` output would collapse batched messages of matching ID rather than send as individual items.
 
 ## 3.63.0 - 2022-02-08
 
@@ -21,7 +30,7 @@ All notable changes to this project will be documented in this file.
 - Experimental field `multipart` added to the `http_client` output.
 - Codec `regex` added to inputs.
 - Field `timeout` added to the `cassandra` output.
-- New `gcp_bigquery_select` input.
+- New experimental `gcp_bigquery_select` input.
 - Field `ack_wait` added to the `nats_jetstream` input.
 
 ### Changed

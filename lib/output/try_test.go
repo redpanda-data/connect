@@ -15,11 +15,7 @@ import (
 )
 
 func TestTryOutputBasic(t *testing.T) {
-	dir, err := os.MkdirTemp("", "benthos_try_output_tests")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	outOne, outTwo, outThree := NewConfig(), NewConfig(), NewConfig()
 	outOne.Type, outTwo.Type, outThree.Type = TypeHTTPClient, TypeFiles, TypeFile

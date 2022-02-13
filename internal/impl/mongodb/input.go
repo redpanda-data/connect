@@ -13,14 +13,15 @@ import (
 func mongoConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
+		Version("3.64.0").
 		Categories("Services").
 		Summary("Executes a find query and creates a message for each row received.").
 		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
 		Field(urlField).
-		Field(service.NewStringField("database").Description("The name of the target MongoDB DB.")).
-		Field(service.NewStringField("username").Description("The username to connect to the database.")).
-		Field(service.NewStringField("password").Description("The password to connect to the database.")).
+		Field(service.NewStringField("database").Description("The name of the target MongoDB database.")).
 		Field(service.NewStringField("collection").Description("The collection to select from.")).
+		Field(service.NewStringField("username").Description("The username to connect to the database.").Default("")).
+		Field(service.NewStringField("password").Description("The password to connect to the database.").Default("")).
 		Field(queryField)
 }
 

@@ -846,12 +846,7 @@ func TestTypeAPISetResources(t *testing.T) {
 		manager.OptSetAPITimeout(time.Millisecond*100),
 	)
 
-	tmpDir, err := os.MkdirTemp("", "resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	dir1 := filepath.Join(tmpDir, "dir1")
 	require.NoError(t, os.MkdirAll(dir1, 0o750))

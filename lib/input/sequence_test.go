@@ -27,10 +27,7 @@ func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
 func TestSequenceHappy(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "benthos_sequence_input_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	tmpDir := t.TempDir()
 
 	files := map[string]string{
 		"f1": "foo\nbar\nbaz",
@@ -85,10 +82,7 @@ consumeLoop:
 func TestSequenceJoins(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "benthos_sequence_joins_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	tmpDir := t.TempDir()
 
 	files := map[string]string{
 		"csv1": "id,name,age\naaa,A,20\nbbb,B,21\nccc,B,22\n",
@@ -217,10 +211,7 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 	for _, test := range testCases {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			tmpDir, err := os.MkdirTemp("", "benthos_sequence_joins_test")
-			require.NoError(t, err)
-
-			t.Cleanup(func() { os.RemoveAll(tmpDir) })
+			tmpDir := t.TempDir()
 
 			writeFiles(t, tmpDir, test.files)
 			writeFiles(t, tmpDir, map[string]string{
@@ -288,10 +279,7 @@ func TestSequenceJoinsBig(t *testing.T) {
 	t.Skip()
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "benthos_sequence_joins_big_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	tmpDir := t.TempDir()
 
 	jsonPath := filepath.Join(tmpDir, "one.ndjson")
 	csvPath := filepath.Join(tmpDir, "two.csv")
@@ -374,10 +362,7 @@ consumeLoop:
 func TestSequenceSad(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "benthos_sequence_input_test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	tmpDir := t.TempDir()
 
 	files := map[string]string{
 		"f1": "foo\nbar\nbaz",
@@ -458,10 +443,7 @@ func TestSequenceSad(t *testing.T) {
 func TestSequenceEarlyTermination(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "benthos_sequence_early_termination")
-	require.NoError(t, err)
-
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	tmpDir := t.TempDir()
 
 	writeFiles(t, tmpDir, map[string]string{
 		"f1": "foo\nbar\nbaz",

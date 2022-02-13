@@ -12,11 +12,7 @@ import (
 )
 
 func TestContextImportIsolation(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "context_import_isolation")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	content := `map foo { root = this }`
 	fileName := "foo.blobl"
@@ -28,7 +24,7 @@ func TestContextImportIsolation(t *testing.T) {
 		isoCtx := srcCtx.DisabledImports()
 
 		// Source context only works with full path
-		_, err = srcCtx.importer.Import(fileName)
+		_, err := srcCtx.importer.Import(fileName)
 		assert.Error(t, err)
 
 		out, err := srcCtx.importer.Import(fullPath)
@@ -54,11 +50,7 @@ func TestContextImportIsolation(t *testing.T) {
 }
 
 func TestContextImportRelativity(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "context_import_relativity")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	for path, content := range map[string]string{
 		"mappings/foo.blobl":              `map foo { root.foo = this.foo }`,
