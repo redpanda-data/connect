@@ -42,7 +42,7 @@ var _ = registerIntegrationTest("elasticsearch", func(t *testing.T) {
 	require.NoError(t, err)
 
 	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("elasticsearch", "7.13.4", []string{
+	resource, err := pool.Run("elasticsearch", "7.17.0", []string{
 		"discovery.type=single-node",
 	})
 	require.NoError(t, err)

@@ -303,54 +303,51 @@ func (e *Elasticsearch) Write(msg types.Message) error {
 		b.Add(bulkReq)
 	}
 
+	lastErrReason := "no reason given"
 	for b.NumberOfActions() != 0 {
 		result, err := b.Do(context.Background())
 		if err != nil {
 			return err
 		}
-
 		if !result.Errors {
-			requests = requests[:len(result.Items)]
-			continue
+			return nil
 		}
 
-		wait := boff.NextBackOff()
-		errorCount := 0
-		var returnedErr *elastic.ErrorDetails
+		var newRequests []*pendingBulkIndex
 		for i, resp := range result.Items {
 			for _, item := range resp {
-				if item.Status < 200 || item.Status > 299 {
-					if returnedErr == nil {
-						reason := "no reason given"
-						if item.Error != nil {
-							if i == 0 {
-								returnedErr = item.Error
-							}
-							reason = item.Error.Reason
-						}
-						e.log.Errorf("Elasticsearch message '%v' rejected with code [%v]: %v\n", item.Id, item.Status, reason)
-						if !shouldRetry(item.Status) {
-							returnedErr = item.Error
-						} else {
-							req := requests[i]
-							bulkReq, err := e.buildBulkableRequest(req)
-							if err != nil {
-								return err
-							}
-							b.Add(bulkReq)
-							requests[errorCount] = req
-						}
-					}
-					errorCount++
+				if item.Status >= 200 && item.Status <= 299 {
+					continue
 				}
+
+				reason := "no reason given"
+				if item.Error != nil {
+					reason = item.Error.Reason
+					lastErrReason = fmt.Sprintf("status [%v]: %v", item.Status, reason)
+				}
+
+				e.log.Errorf("Elasticsearch message '%v' rejected with status [%v]: %v\n", item.Id, item.Status, reason)
+				if !shouldRetry(item.Status) {
+					return fmt.Errorf("failed to send message '%v': %v", item.Id, reason)
+				}
+
+				// IMPORTANT: i exactly matches the index of our source requests
+				// and when we re-run our bulk request with errored requests
+				// that must remain true.
+				sourceReq := requests[i]
+				bulkReq, err := e.buildBulkableRequest(sourceReq)
+				if err != nil {
+					return err
+				}
+				b.Add(bulkReq)
+				newRequests = append(newRequests, sourceReq)
 			}
 		}
-		if wait == backoff.Stop || returnedErr != nil {
-			reason := "no reason given"
-			if returnedErr != nil {
-				reason = returnedErr.Reason
-			}
-			return fmt.Errorf("failed to send %v parts from message: %v", errorCount, reason)
+		requests = newRequests
+
+		wait := boff.NextBackOff()
+		if wait == backoff.Stop {
+			return fmt.Errorf("retries exhausted for messages, aborting with last error reported as: %v", lastErrReason)
 		}
 		time.Sleep(wait)
 	}
