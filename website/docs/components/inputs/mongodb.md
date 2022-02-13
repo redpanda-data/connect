@@ -20,6 +20,8 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Executes a find query and creates a message for each row received.
 
+Introduced in version 3.64.0.
+
 ```yaml
 # Config fields, showing default values
 input:

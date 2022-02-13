@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed an issue where manually clearing errors within a `catch` processor would result in subsequent processors in the block being skipped.
+- The `cassandra` output should now automatically match `float` columns.
 
 ## 3.63.0 - 2022-02-08
 

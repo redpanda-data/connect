@@ -13,6 +13,7 @@ import (
 func mongoConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
+		Version("3.64.0").
 		Categories("Services").
 		Summary("Executes a find query and creates a message for each row received.").
 		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
