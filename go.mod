@@ -70,16 +70,17 @@ require (
 	github.com/itchyny/timefmt-go v0.1.3
 	github.com/jhump/protoreflect v1.10.1
 	github.com/jmespath/go-jmespath v0.4.0
+	github.com/klauspost/compress v1.14.2 // indirect
 	github.com/lib/pq v1.10.4
 	github.com/linkedin/goavro/v2 v2.11.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.17
+	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6 // indirect
-	github.com/nats-io/jwt v1.2.0 // indirect
-	github.com/nats-io/nats-streaming-server v0.19.0 // indirect
-	github.com/nats-io/nats.go v1.13.0
+	github.com/nats-io/nats-streaming-server v0.24.1 // indirect
+	github.com/nats-io/nats.go v1.13.1-0.20220121202836-972a071d373d
 	github.com/nats-io/stan.go v0.10.2
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/nsqio/go-nsq v1.1.0
@@ -94,7 +95,6 @@ require (
 	github.com/pkg/sftp v1.13.4
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.32.1 // indirect
-	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/quipo/statsd v0.0.0-20180118161217-3d6a5565f314
 	github.com/rabbitmq/amqp091-go v1.2.0
@@ -122,12 +122,14 @@ require (
 	go.mongodb.org/mongo-driver v1.8.2
 	go.nanomsg.org/mangos/v3 v3.3.0
 	go.uber.org/atomic v1.9.0 // indirect
-	golang.org/x/crypto v0.0.0-20220131195533-30dcbda58838
+	golang.org/x/crypto v0.0.0-20220213190939-1e6e3497d506
 	golang.org/x/exp v0.0.0-20200331195152-e8c3332aa8e5 // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
 	golang.org/x/text v0.3.7
+	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	google.golang.org/api v0.64.0
 	google.golang.org/genproto v0.0.0-20220107163113-42d7afdf6368 // indirect
 	google.golang.org/grpc v1.43.0 // indirect
