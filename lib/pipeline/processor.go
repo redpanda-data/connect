@@ -158,7 +158,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- typ
 		if i == (nBatches - 1) {
 			msgBatch = msgs[start:]
 		} else {
-			msgBatch = msgs[start:end]
+			msgBatch = msgs[start:end - 1]
 		}
 
 		go func(batch []*message.Batch) {
