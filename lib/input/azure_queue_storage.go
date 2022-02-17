@@ -9,6 +9,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/interop"
+
 	"github.com/Azure/azure-storage-queue-go/azqueue"
 	"github.com/Jeffail/benthos/v3/internal/impl/azure"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
@@ -23,7 +26,8 @@ import (
 type azureQueueStorage struct {
 	conf AzureQueueStorageConfig
 
-	queueURL                 *azqueue.QueueURL
+	queueName                *field.Expression
+	serviceURL               *azqueue.ServiceURL
 	dequeueVisibilityTimeout time.Duration
 
 	log   log.Modular
@@ -31,18 +35,21 @@ type azureQueueStorage struct {
 }
 
 // newAzureQueueStorage creates a new Azure Storage Queue input type.
-func newAzureQueueStorage(conf AzureQueueStorageConfig, log log.Modular, stats metrics.Type) (*azureQueueStorage, error) {
+func newAzureQueueStorage(conf AzureQueueStorageConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*azureQueueStorage, error) {
 	serviceURL, err := azure.GetQueueServiceURL(conf.StorageAccount, conf.StorageAccessKey, conf.StorageConnectionString)
 	if err != nil {
 		return nil, err
 	}
-	queueURL := serviceURL.NewQueueURL(conf.QueueName)
 
 	a := &azureQueueStorage{
-		conf:     conf,
-		log:      log,
-		stats:    stats,
-		queueURL: &queueURL,
+		conf:       conf,
+		log:        log,
+		stats:      stats,
+		serviceURL: serviceURL,
+	}
+
+	if a.queueName, err = interop.NewBloblangField(mgr, conf.QueueName); err != nil {
+		return nil, fmt.Errorf("failed to parse queue name expression: %v", err)
 	}
 
 	if len(conf.DequeueVisibilityTimeout) > 0 {
@@ -62,10 +69,12 @@ func (a *azureQueueStorage) ConnectWithContext(ctx context.Context) error {
 
 // ReadWithContext attempts to read a new message from the target Azure Storage Queue Storage container.
 func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
-	messageURL := a.queueURL.NewMessagesURL()
+	queueName := a.queueName.String(0, msg)
+	queueURL := a.serviceURL.NewQueueURL(queueName)
+	messageURL := queueURL.NewMessagesURL()
 	var approxMsgCount int32
 	if a.conf.TrackProperties {
-		if props, err := a.queueURL.GetProperties(ctx); err == nil {
+		if props, err := queueURL.GetProperties(ctx); err == nil {
 			approxMsgCount = props.ApproximateMessagesCount()
 		}
 	}
@@ -74,7 +83,7 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 		if cerr, ok := err.(azqueue.StorageError); ok {
 			if cerr.ServiceCode() == azqueue.ServiceCodeQueueNotFound {
 				ctx := context.Background()
-				_, err = a.queueURL.Create(ctx, azqueue.Metadata{})
+				_, err = queueURL.Create(ctx, azqueue.Metadata{})
 				return nil, nil, err
 			}
 			return nil, nil, fmt.Errorf("storage error message: %v", cerr)
@@ -82,7 +91,7 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 		return nil, nil, fmt.Errorf("error dequeing message: %v", err)
 	}
 	if n := dequeue.NumMessages(); n > 0 {
-		props, _ := a.queueURL.GetProperties(ctx)
+		props, _ := queueURL.GetProperties(ctx)
 		metadata := props.NewMetadata()
 		msg := message.New(nil)
 		dqm := make([]*azqueue.DequeuedMessage, n)
@@ -91,7 +100,7 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg types.Mess
 			part := message.NewPart([]byte(queueMsg.Text))
 			meta := part.Metadata()
 			meta.Set("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
-			meta.Set("queue_storage_queue_name", a.conf.QueueName)
+			meta.Set("queue_storage_queue_name", queueName)
 			if a.conf.TrackProperties {
 				msgLag := 0
 				if approxMsgCount >= n {
