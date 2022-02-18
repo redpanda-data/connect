@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -178,19 +177,6 @@ func NewProtobufConfig() ProtobufConfig {
 
 //------------------------------------------------------------------------------
 
-type messageDescriptorMap map[string]*desc.MessageDescriptor
-
-func (mdm messageDescriptorMap) Resolve(typeURL string) (proto.Message, error) {
-	typeURL = strings.TrimPrefix(typeURL, "type.googleapis.com/")
-
-	m, ok := mdm[typeURL]
-	if !ok {
-		return nil, fmt.Errorf("unable to resolve type: %v", typeURL)
-	}
-	msg := dynamic.NewMessage(m)
-	return msg, nil
-}
-
 type protobufOperator func(part types.Part) error
 
 func newProtobufToJSONOperator(message string, importPaths []string) (protobufOperator, error) {
@@ -199,13 +185,13 @@ func newProtobufToJSONOperator(message string, importPaths []string) (protobufOp
 		return nil, err
 	}
 
-	m, ok := descriptors[message]
-	if !ok {
-		return nil, fmt.Errorf("message %v not found", message)
+	m, err := getMessageFromDescriptors(message, descriptors)
+	if err != nil {
+		return nil, err
 	}
 
 	marshaller := &jsonpb.Marshaler{
-		AnyResolver: descriptors,
+		AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), descriptors...),
 	}
 
 	return func(part types.Part) error {
@@ -230,10 +216,11 @@ func newProtobufFromJSONOperator(message string, importPaths []string) (protobuf
 		return nil, err
 	}
 
-	m, ok := descriptors[message]
-	if !ok {
-		return nil, fmt.Errorf("message %v not found", message)
+	m, err := getMessageFromDescriptors(message, descriptors)
+	if err != nil {
+		return nil, err
 	}
+
 	return func(part types.Part) error {
 		msg := dynamic.NewMessage(m)
 		if err := msg.UnmarshalJSON(part.Get()); err != nil {
@@ -260,7 +247,7 @@ func strToProtobufOperator(opStr, message string, importPaths []string) (protobu
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
-func loadDescriptors(importPaths []string) (messageDescriptorMap, error) {
+func loadDescriptors(importPaths []string) ([]*desc.FileDescriptor, error) {
 
 	var parser protoparse.Parser
 	if len(importPaths) == 0 {
@@ -296,14 +283,21 @@ func loadDescriptors(importPaths []string) (messageDescriptorMap, error) {
 		return nil, fmt.Errorf("no .proto files were found in the paths '%v'", importPaths)
 	}
 
-	descriptors := make(messageDescriptorMap, len(fds))
-	for _, d := range fds {
-		msgs := d.GetMessageTypes()
-		for _, m := range msgs {
-			descriptors[m.GetFullyQualifiedName()] = m
+	return fds, err
+}
+
+func getMessageFromDescriptors(message string, fds []*desc.FileDescriptor) (*desc.MessageDescriptor, error) {
+	var msg *desc.MessageDescriptor
+	for _, fd := range fds {
+		msg = fd.FindMessage(message)
+		if msg != nil {
+			break
 		}
 	}
-	return descriptors, err
+	if msg == nil {
+		return nil, fmt.Errorf("message %v not found", message)
+	}
+	return msg, nil
 }
 
 //------------------------------------------------------------------------------
