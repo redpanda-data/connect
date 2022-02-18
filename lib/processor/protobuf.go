@@ -221,9 +221,13 @@ func newProtobufFromJSONOperator(message string, importPaths []string) (protobuf
 		return nil, err
 	}
 
+	unmarshaler := &jsonpb.Unmarshaler{
+		AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), descriptors...),
+	}
+
 	return func(part types.Part) error {
 		msg := dynamic.NewMessage(m)
-		if err := msg.UnmarshalJSON(part.Get()); err != nil {
+		if err := msg.UnmarshalJSONPB(unmarshaler, part.Get()); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON message: %w", err)
 		}
 
@@ -248,7 +252,6 @@ func strToProtobufOperator(opStr, message string, importPaths []string) (protobu
 }
 
 func loadDescriptors(importPaths []string) ([]*desc.FileDescriptor, error) {
-
 	var parser protoparse.Parser
 	if len(importPaths) == 0 {
 		importPaths = []string{"."}
