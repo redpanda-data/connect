@@ -1,22 +1,28 @@
 package processor
 
 import (
-	"fmt"
+	"context"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeTry] = TypeSpec{
-		constructor: NewTry,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newTry(conf.Try, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("try", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryComposition,
 		},
@@ -80,51 +86,28 @@ func NewTryConfig() TryConfig {
 
 //------------------------------------------------------------------------------
 
-// Try is a processor that applies a list of child processors to each message of
-// a batch individually, where processors are skipped for messages that failed a
-// previous processor step.
-type Try struct {
+type tryProc struct {
 	children []processor.V1
-
-	log log.Modular
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+	log      log.Modular
 }
 
-// NewTry returns a Try processor.
-func NewTry(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+func newTry(conf TryConfig, mgr interop.Manager) (*tryProc, error) {
 	var children []processor.V1
-	for i, pconf := range conf.Try {
-		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
-		proc, err := New(pconf, pMgr, pLog, pStats)
+	for i, pconf := range conf {
+		pMgr := mgr.IntoPath("try", strconv.Itoa(i))
+		proc, err := New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
 		if err != nil {
 			return nil, err
 		}
 		children = append(children, proc)
 	}
-	return &Try{
+	return &tryProc{
 		children: children,
-		log:      log,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+		log:      mgr.Logger(),
 	}, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (p *Try) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	p.mCount.Incr(1)
-
+func (p *tryProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	resultMsgs := make([]*message.Batch, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		tmpMsg := message.QuickBatch(nil)
@@ -149,29 +132,22 @@ func (p *Try) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		return nil, res
 	}
 
-	p.mBatchSent.Incr(1)
-	p.mSent.Incr(int64(resMsg.Len()))
-
 	resMsgs := [1]*message.Batch{resMsg}
 	return resMsgs[:], nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (p *Try) CloseAsync() {
+func (p *tryProc) Close(ctx context.Context) error {
 	for _, c := range p.children {
 		c.CloseAsync()
 	}
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (p *Try) WaitForClose(timeout time.Duration) error {
-	stopBy := time.Now().Add(timeout)
+	deadline, exists := ctx.Deadline()
+	if !exists {
+		deadline = time.Now().Add(time.Second * 5)
+	}
 	for _, c := range p.children {
-		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
+		if err := c.WaitForClose(time.Until(deadline)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

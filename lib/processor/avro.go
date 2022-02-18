@@ -1,16 +1,15 @@
 package processor
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -21,7 +20,13 @@ import (
 
 func init() {
 	Constructors[TypeAvro] = TypeSpec{
-		constructor: NewAvro,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newAvro(conf.Avro, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("avro", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryParsing,
 		},
@@ -52,7 +57,6 @@ specified encoding.`,
 				"file://path/to/spec.avsc",
 				"http://localhost:8081/path/to/spec/versions/1",
 			),
-			PartsFieldSpec,
 		},
 	}
 }
@@ -61,7 +65,6 @@ specified encoding.`,
 
 // AvroConfig contains configuration fields for the Avro processor.
 type AvroConfig struct {
-	Parts      []int  `json:"parts" yaml:"parts"`
 	Operator   string `json:"operator" yaml:"operator"`
 	Encoding   string `json:"encoding" yaml:"encoding"`
 	Schema     string `json:"schema" yaml:"schema"`
@@ -71,7 +74,6 @@ type AvroConfig struct {
 // NewAvroConfig returns a AvroConfig with default values.
 func NewAvroConfig() AvroConfig {
 	return AvroConfig{
-		Parts:      []int{},
 		Operator:   "to_json",
 		Encoding:   "textual",
 		Schema:     "",
@@ -201,40 +203,18 @@ func loadSchema(schemaPath string) (string, error) {
 
 //------------------------------------------------------------------------------
 
-// Avro is a processor that performs an operation on an Avro payload.
-type Avro struct {
-	parts    []int
+type avro struct {
 	operator avroOperator
-
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+	log      log.Modular
 }
 
-// NewAvro returns an Avro processor.
-func NewAvro(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	a := &Avro{
-		parts: conf.Avro.Parts,
-		conf:  conf,
-		log:   log,
-		stats: stats,
+func newAvro(conf AvroConfig, mgr interop.Manager) (processor.V2, error) {
+	a := &avro{log: mgr.Logger()}
 
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
-	}
 	var schema string
 	var err error
 
-	if schemaPath := conf.Avro.SchemaPath; schemaPath != "" {
+	if schemaPath := conf.SchemaPath; schemaPath != "" {
 		if !(strings.HasPrefix(schemaPath, "file://") || strings.HasPrefix(schemaPath, "http://")) {
 			return nil, fmt.Errorf("invalid schema_path provided, must start with file:// or http://")
 		}
@@ -244,7 +224,7 @@ func NewAvro(
 			return nil, fmt.Errorf("failed to load Avro schema definition: %v", err)
 		}
 	} else {
-		schema = conf.Avro.Schema
+		schema = conf.Schema
 	}
 
 	codec, err := goavro.NewCodec(schema)
@@ -252,7 +232,7 @@ func NewAvro(
 		return nil, fmt.Errorf("failed to parse schema: %v", err)
 	}
 
-	if a.operator, err = strToAvroOperator(conf.Avro.Operator, conf.Avro.Encoding, codec); err != nil {
+	if a.operator, err = strToAvroOperator(conf.Operator, conf.Encoding, codec); err != nil {
 		return nil, err
 	}
 	return a, nil
@@ -260,35 +240,16 @@ func NewAvro(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (p *Avro) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	p.mCount.Incr(1)
-	newMsg := msg.Copy()
-
-	proc := func(index int, span *tracing.Span, part *message.Part) error {
-		if err := p.operator(part); err != nil {
-			p.mErr.Incr(1)
-			p.log.Debugf("Operator failed: %v\n", err)
-			return err
-		}
-		return nil
+func (p *avro) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+	msg = msg.Copy()
+	err := p.operator(msg)
+	if err != nil {
+		p.log.Debugf("Operator failed: %v\n", err)
+		return nil, err
 	}
-
-	IteratePartsWithSpanV2(TypeAvro, p.parts, newMsg, proc)
-
-	p.mBatchSent.Incr(1)
-	p.mSent.Incr(int64(newMsg.Len()))
-	return []*message.Batch{newMsg}, nil
+	return []*message.Part{msg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (p *Avro) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (p *Avro) WaitForClose(timeout time.Duration) error {
+func (p *avro) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

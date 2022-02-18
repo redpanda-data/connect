@@ -161,7 +161,7 @@ func (r *Reader) reactStreamUpdate(mgr bundle.NewManagement, strict bool, path s
 		return true
 	}
 
-	lintlog := mgr.Logger().NewModule(".linter")
+	lintlog := mgr.Logger()
 	for _, lint := range lints {
 		lintlog.Infoln(lint)
 	}

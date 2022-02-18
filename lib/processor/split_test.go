@@ -11,9 +11,10 @@ import (
 
 func TestSplitToSingleParts(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "split"
 
 	testLog := log.Noop()
-	proc, err := NewSplit(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

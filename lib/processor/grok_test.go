@@ -16,14 +16,14 @@ import (
 
 func TestGrokAllParts(t *testing.T) {
 	conf := NewConfig()
-	conf.Grok.Parts = []int{}
+	conf.Type = "grok"
 	conf.Grok.Expressions = []string{
 		"%{WORD:first},%{INT:second:int}",
 	}
 
 	testLog := log.Noop()
 
-	gSet, err := NewGrok(conf, mock.NewManager(), testLog, metrics.Noop())
+	gSet, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,11 +91,11 @@ func TestGrok(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			conf := NewConfig()
-			conf.Grok.Parts = []int{0}
+			conf.Type = "grok"
 			conf.Grok.Expressions = []string{test.pattern}
 			conf.Grok.PatternDefinitions = test.definitions
 
-			gSet, err := NewGrok(conf, mock.NewManager(), tLog, tStats)
+			gSet, err := New(conf, mock.NewManager(), tLog, tStats)
 			require.NoError(t, err)
 
 			inMsg := message.QuickBatch([][]byte{[]byte(test.input)})
@@ -109,11 +109,11 @@ func TestGrok(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			conf := NewConfig()
-			conf.Grok.Parts = []int{0}
+			conf.Type = "grok"
 			conf.Grok.Expressions = []string{test.pattern}
 			conf.Grok.PatternDefinitions = test.definitions
 
-			gSet, err := NewGrok(conf, mock.NewManager(), tLog, tStats)
+			gSet, err := New(conf, mock.NewManager(), tLog, tStats)
 			require.NoError(t, err)
 
 			inMsg := message.QuickBatch([][]byte{[]byte(test.input)})
@@ -135,11 +135,11 @@ FOONESTED %{INT:nested.first:int} %{WORD:nested.second} %{WORD:nested.third}
 	require.NoError(t, err)
 
 	conf := NewConfig()
-	conf.Grok.Parts = []int{0}
+	conf.Type = "grok"
 	conf.Grok.Expressions = []string{`%{FOONESTED}`, `%{FOOFLAT}`}
 	conf.Grok.PatternPaths = []string{tmpDir}
 
-	gSet, err := NewGrok(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	gSet, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	inMsg := message.QuickBatch([][]byte{[]byte(`hello foo bar`)})

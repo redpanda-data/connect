@@ -1,13 +1,15 @@
 package processor
 
 import (
-	"fmt"
+	"context"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -17,7 +19,13 @@ import (
 
 func init() {
 	Constructors[TypeParallel] = TypeSpec{
-		constructor: NewParallel,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newParallel(conf.Parallel, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("parallel", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryComposition,
 		},
@@ -56,52 +64,28 @@ func NewParallelConfig() ParallelConfig {
 
 //------------------------------------------------------------------------------
 
-// Parallel is a processor that applies a list of child processors to each
-// message of a batch individually.
-type Parallel struct {
+type parallelProc struct {
 	children []processor.V1
 	cap      int
-
-	log log.Modular
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
 }
 
-// NewParallel returns a Parallel processor.
-func NewParallel(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+func newParallel(conf ParallelConfig, mgr interop.Manager) (processor.V2Batched, error) {
 	var children []processor.V1
-	for i, pconf := range conf.Parallel.Processors {
-		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
-		proc, err := New(pconf, pMgr, pLog, pStats)
+	for i, pconf := range conf.Processors {
+		pMgr := mgr.IntoPath("parallel", strconv.Itoa(i))
+		proc, err := New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
 		if err != nil {
 			return nil, err
 		}
 		children = append(children, proc)
 	}
-	return &Parallel{
+	return &parallelProc{
 		children: children,
-		cap:      conf.Parallel.Cap,
-		log:      log,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+		cap:      conf.Cap,
 	}, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (p *Parallel) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	p.mCount.Incr(1)
-
+func (p *parallelProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	resultMsgs := make([]*message.Batch, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		tmpMsg := message.QuickBatch(nil)
@@ -150,28 +134,21 @@ func (p *Parallel) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 		})
 	}
 
-	p.mBatchSent.Incr(1)
-	p.mSent.Incr(int64(resMsg.Len()))
-
 	return []*message.Batch{resMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (p *Parallel) CloseAsync() {
+func (p *parallelProc) Close(ctx context.Context) error {
 	for _, c := range p.children {
 		c.CloseAsync()
 	}
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (p *Parallel) WaitForClose(timeout time.Duration) error {
-	stopBy := time.Now().Add(timeout)
+	deadline, exists := ctx.Deadline()
+	if !exists {
+		deadline = time.Now().Add(time.Second * 5)
+	}
 	for _, c := range p.children {
-		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
+		if err := c.WaitForClose(time.Until(deadline)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

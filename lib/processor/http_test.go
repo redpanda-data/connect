@@ -1,11 +1,9 @@
 package processor
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,8 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestHTTPClientRetries(t *testing.T) {
@@ -27,11 +23,12 @@ func TestHTTPClientRetries(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
+	conf.Type = "http"
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 	conf.HTTP.Config.Retry = "1ms"
 	conf.HTTP.Config.NumRetries = 3
 
-	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,9 +77,10 @@ func TestHTTPClientBasic(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
+	conf.Type = "http"
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,9 +147,10 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
+	conf.Type = "http"
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,9 +199,10 @@ func TestHTTPClientEmpty404Response(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
+	conf.Type = "http"
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,10 +240,11 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
+	conf.Type = "http"
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 	conf.HTTP.Config.CopyResponseHeaders = true
 
-	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,10 +275,11 @@ func TestHTTPClientParallel(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
+	conf.Type = "http"
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 	conf.HTTP.Parallel = true
 
-	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,11 +325,12 @@ func TestHTTPClientParallelError(t *testing.T) {
 	defer ts.Close()
 
 	conf := NewConfig()
+	conf.Type = "http"
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
 	conf.HTTP.Parallel = true
 	conf.HTTP.Config.NumRetries = 0
 
-	h, err := NewHTTP(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,67 +368,4 @@ func TestHTTPClientParallelError(t *testing.T) {
 			t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 		}
 	}
-}
-
-func TestHTTPClientFailLogURL(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "notfound") {
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer ts.Close()
-
-	tests := []struct {
-		name      string
-		url       string
-		wantError bool
-	}{
-		{
-			name:      "200 OK",
-			url:       ts.URL,
-			wantError: false,
-		},
-		{
-			name:      "404 Not Found",
-			url:       ts.URL + "/notfound",
-			wantError: true,
-		},
-		{
-			name:      "no such host",
-			url:       "http://test.invalid",
-			wantError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			conf := NewConfig()
-			conf.HTTP.Config.NumRetries = 0
-			conf.HTTP.Config.URL = tt.url
-
-			logMock := &mockLog{}
-			h, err := NewHTTP(conf, mock.NewManager(), logMock, metrics.Noop())
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			_, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
-			if res != nil {
-				t.Error(res)
-			}
-
-			if !tt.wantError {
-				assert.Empty(t, logMock.errors)
-				return
-			}
-
-			require.Len(t, logMock.errors, 1)
-
-			got := logMock.errors[0]
-			if !strings.HasPrefix(got, fmt.Sprintf("HTTP request failed: %s", tt.url)) {
-				t.Errorf("Expected to find %q in logs: %sq", tt.url, got)
-			}
-		})
-	}
-
 }

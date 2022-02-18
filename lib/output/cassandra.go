@@ -195,9 +195,8 @@ type cassandraWriter struct {
 	backoffMin time.Duration
 	backoffMax time.Duration
 
-	session       *gocql.Session
-	mQueryLatency metrics.StatTimer
-	connLock      sync.RWMutex
+	session  *gocql.Session
+	connLock sync.RWMutex
 
 	args        []*field.Expression
 	argsMapping *mapping.Executor
@@ -205,10 +204,9 @@ type cassandraWriter struct {
 
 func newCassandraWriter(conf CassandraConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
 	c := cassandraWriter{
-		log:           log,
-		stats:         stats,
-		conf:          conf,
-		mQueryLatency: stats.GetTimer("query.latency"),
+		log:   log,
+		stats: stats,
+		conf:  conf,
 	}
 
 	var err error
@@ -306,8 +304,6 @@ func (c *cassandraWriter) WriteWithContext(ctx context.Context, msg *message.Bat
 }
 
 func (c *cassandraWriter) writeRow(session *gocql.Session, msg *message.Batch) error {
-	t0 := time.Now()
-
 	values, err := c.mapArgs(msg, 0)
 	if err != nil {
 		return fmt.Errorf("parsing args: %w", err)
@@ -316,14 +312,11 @@ func (c *cassandraWriter) writeRow(session *gocql.Session, msg *message.Batch) e
 	if err := session.Query(c.conf.Query, values...).Exec(); err != nil {
 		return err
 	}
-
-	c.mQueryLatency.Timing(time.Since(t0).Nanoseconds())
 	return nil
 }
 
 func (c *cassandraWriter) writeBatch(session *gocql.Session, msg *message.Batch) error {
 	batch := session.NewBatch(gocql.UnloggedBatch)
-	t0 := time.Now()
 
 	if err := msg.Iter(func(i int, p *message.Part) error {
 		values, err := c.mapArgs(msg, i)
@@ -340,7 +333,6 @@ func (c *cassandraWriter) writeBatch(session *gocql.Session, msg *message.Batch)
 	if err != nil {
 		return err
 	}
-	c.mQueryLatency.Timing(time.Since(t0).Nanoseconds())
 	return nil
 }
 

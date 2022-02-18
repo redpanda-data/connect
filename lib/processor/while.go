@@ -1,9 +1,10 @@
 package processor
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"sync/atomic"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
@@ -11,22 +12,27 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeWhile] = TypeSpec{
-		constructor: NewWhile,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newWhile(conf.While, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("while", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryComposition,
 		},
 		Summary: `
-While is a processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against messages and executes child processors on them for as long as the query resolves to true.`,
+A processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against each batch of messages and executes child processors on them for as long as the query resolves to true.`,
 		Description: `
 The field ` + "`at_least_once`" + `, if true, ensures that the child processors are always executed at least one time (like a do .. while loop.)
 
@@ -44,6 +50,7 @@ If following a loop execution the number of messages in a batch is reduced to ze
 			).HasDefault(""),
 			docs.FieldCommon("processors", "A list of child processors to execute on each loop.").Array().HasType(docs.FieldTypeProcessor),
 		},
+		UsesBatches: true,
 	}
 }
 
@@ -70,33 +77,22 @@ func NewWhileConfig() WhileConfig {
 
 //------------------------------------------------------------------------------
 
-// While is a processor that applies child processors for as long as a child
-// condition resolves to true.
-type While struct {
-	running     int32
+type whileProc struct {
 	maxLoops    int
 	atLeastOnce bool
 	check       *mapping.Executor
 	children    []processor.V1
+	log         log.Modular
 
-	log log.Modular
-
-	mCount      metrics.StatCounter
-	mLoop       metrics.StatCounter
-	mCondFailed metrics.StatCounter
-	mSent       metrics.StatCounter
-	mBatchSent  metrics.StatCounter
+	shutSig *shutdown.Signaller
 }
 
-// NewWhile returns a While processor.
-func NewWhile(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+func newWhile(conf WhileConfig, mgr interop.Manager) (*whileProc, error) {
 	var check *mapping.Executor
 	var err error
 
-	if len(conf.While.Check) > 0 {
-		if check, err = mgr.BloblEnvironment().NewMapping(conf.While.Check); err != nil {
+	if len(conf.Check) > 0 {
+		if check, err = mgr.BloblEnvironment().NewMapping(conf.Check); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
 	} else {
@@ -104,55 +100,41 @@ func NewWhile(
 	}
 
 	var children []processor.V1
-	for i, pconf := range conf.While.Processors {
-		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("while.%v", i), mgr, log, stats)
-		var proc processor.V1
-		if proc, err = New(pconf, pMgr, pLog, pStats); err != nil {
+	for i, pconf := range conf.Processors {
+		pMgr := mgr.IntoPath("while", "processors", strconv.Itoa(i))
+		proc, err := New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
+		if err != nil {
 			return nil, err
 		}
 		children = append(children, proc)
 	}
 
-	return &While{
-		running:     1,
-		maxLoops:    conf.While.MaxLoops,
-		atLeastOnce: conf.While.AtLeastOnce,
+	return &whileProc{
+		maxLoops:    conf.MaxLoops,
+		atLeastOnce: conf.AtLeastOnce,
 		check:       check,
 		children:    children,
-
-		log: log,
-
-		mCount:      stats.GetCounter("count"),
-		mLoop:       stats.GetCounter("loop"),
-		mCondFailed: stats.GetCounter("failed"),
-		mSent:       stats.GetCounter("sent"),
-		mBatchSent:  stats.GetCounter("batch.sent"),
+		log:         mgr.Logger(),
+		shutSig:     shutdown.NewSignaller(),
 	}, nil
 }
 
-//------------------------------------------------------------------------------
-
-func (w *While) checkMsg(msg *message.Batch) bool {
+func (w *whileProc) checkMsg(msg *message.Batch) bool {
 	c, err := w.check.QueryPart(0, msg)
 	if err != nil {
 		c = false
-		w.log.Errorf("Query failed for loop: %v\n", err)
+		w.log.Errorf("Query failed for loop: %v", err)
 	}
 	return c
 }
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (w *While) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res error) {
-	w.mCount.Incr(1)
-
-	spans := tracing.CreateChildSpans(TypeWhile, msg)
+func (w *whileProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) (msgs []*message.Batch, res error) {
 	msgs = []*message.Batch{msg}
 
 	loops := 0
 	condResult := w.atLeastOnce || w.checkMsg(msg)
 	for condResult {
-		if atomic.LoadInt32(&w.running) != 1 {
+		if w.shutSig.ShouldCloseAtLeisure() || ctx.Err() != nil {
 			return nil, component.ErrTypeClosed
 		}
 		if w.maxLoops > 0 && loops >= w.maxLoops {
@@ -160,7 +142,6 @@ func (w *While) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res e
 			break
 		}
 
-		w.mLoop.Incr(1)
 		w.log.Traceln("Looped")
 		for _, s := range spans {
 			s.LogKV("event", "loop")
@@ -176,35 +157,28 @@ func (w *While) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res e
 
 	for _, s := range spans {
 		s.SetTag("result", condResult)
-		s.Finish()
 	}
 
-	w.mBatchSent.Incr(int64(len(msgs)))
 	totalParts := 0
 	for _, msg := range msgs {
 		totalParts += msg.Len()
 	}
-	w.mSent.Incr(int64(totalParts))
 	return
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (w *While) CloseAsync() {
-	atomic.StoreInt32(&w.running, 0)
+func (w *whileProc) Close(ctx context.Context) error {
+	w.shutSig.CloseNow()
 	for _, p := range w.children {
 		p.CloseAsync()
 	}
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (w *While) WaitForClose(timeout time.Duration) error {
-	stopBy := time.Now().Add(timeout)
+	deadline, exists := ctx.Deadline()
+	if !exists {
+		deadline = time.Now().Add(time.Second * 5)
+	}
 	for _, p := range w.children {
-		if err := p.WaitForClose(time.Until(stopBy)); err != nil {
+		if err := p.WaitForClose(time.Until(deadline)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

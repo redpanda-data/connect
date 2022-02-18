@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -180,13 +180,13 @@ func TestWorkflowDeps(t *testing.T) {
 				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
 			}
 
-			p, err := processor.NewWorkflow(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+			p, err := processor.NewWorkflow(conf.Workflow, mock.NewManager())
 			if len(test.err) > 0 {
 				assert.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
 
-				dag := p.(*processor.Workflow).Flow()
+				dag := p.Flow()
 				for _, d := range dag {
 					sort.Strings(d)
 				}
@@ -251,7 +251,7 @@ func TestWorkflowMissingResources(t *testing.T) {
 		"baz": branchConf,
 	})
 
-	_, err := processor.NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
+	_, err := processor.NewWorkflow(conf.Workflow, mgr)
 	require.EqualError(t, err, "processor resource 'foo' was not found")
 }
 
@@ -450,7 +450,7 @@ func TestWorkflows(t *testing.T) {
 				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
 			}
 
-			p, err := processor.NewWorkflow(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+			p, err := processor.NewWorkflow(conf.Workflow, mock.NewManager())
 			require.NoError(t, err)
 
 			inputMsg := message.QuickBatch(nil)
@@ -635,7 +635,7 @@ func TestWorkflowsWithResources(t *testing.T) {
 			}
 
 			mgr := newMockProcProvider(t, quickTestBranches(test.branches...))
-			p, err := processor.NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
+			p, err := processor.NewWorkflow(conf.Workflow, mgr)
 			require.NoError(t, err)
 
 			var parts [][]byte
@@ -702,7 +702,7 @@ func TestWorkflowsParallel(t *testing.T) {
 
 	for loops := 0; loops < 10; loops++ {
 		mgr := newMockProcProvider(t, quickTestBranches(branches...))
-		p, err := processor.NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
+		p, err := processor.NewWorkflow(conf.Workflow, mgr)
 		require.NoError(t, err)
 
 		startChan := make(chan struct{})
@@ -893,7 +893,7 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 			conf.Workflow.Order = test.order
 
 			mgr := newMockProcProvider(t, quickTestBranches(test.branches...))
-			p, err := processor.NewWorkflow(conf, mgr, log.Noop(), metrics.Noop())
+			p, err := processor.NewWorkflow(conf.Workflow, mgr)
 			require.NoError(t, err)
 
 			var parts [][]byte

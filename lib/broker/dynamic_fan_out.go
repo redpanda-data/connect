@@ -218,17 +218,7 @@ func (d *DynamicFanOut) removeOutput(ctx context.Context, ident string) error {
 
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (d *DynamicFanOut) loop() {
-	var (
-		wg          = sync.WaitGroup{}
-		mCount      = d.stats.GetCounter("count")
-		mRemoveErr  = d.stats.GetCounter("output.remove.error")
-		mRemoveSucc = d.stats.GetCounter("output.remove.success")
-		mAddErr     = d.stats.GetCounter("output.add.error")
-		mAddSucc    = d.stats.GetCounter("output.add.success")
-		mMsgsRcd    = d.stats.GetCounter("messages.received")
-		mOutputErr  = d.stats.GetCounter("output.error")
-		mMsgsSnt    = d.stats.GetCounter("messages.sent")
-	)
+	wg := sync.WaitGroup{}
 
 	defer func() {
 		wg.Wait()
@@ -264,10 +254,7 @@ func (d *DynamicFanOut) loop() {
 					// First, always remove the previous output if it exists.
 					if _, exists := d.outputs[wrappedOutput.Name]; exists {
 						if err := d.removeOutput(wrappedOutput.Ctx, wrappedOutput.Name); err != nil {
-							mRemoveErr.Incr(1)
 							d.log.Errorf("Failed to stop old copy of dynamic output '%v' in time: %v, the output will continue to shut down in the background.\n", wrappedOutput.Name, err)
-						} else {
-							mRemoveSucc.Incr(1)
 						}
 						d.onRemove(wrappedOutput.Name)
 					}
@@ -278,10 +265,8 @@ func (d *DynamicFanOut) loop() {
 					} else {
 						err := d.addOutput(wrappedOutput.Name, wrappedOutput.Output)
 						if err != nil {
-							mAddErr.Incr(1)
 							d.log.Errorf("Failed to start new dynamic output '%v': %v\n", wrappedOutput.Name, err)
 						} else {
-							mAddSucc.Incr(1)
 							d.onAdd(wrappedOutput.Name)
 						}
 						wrappedOutput.ResChan <- err
@@ -305,11 +290,9 @@ func (d *DynamicFanOut) loop() {
 					d.close()
 					return
 				}
-				mCount.Incr(1)
 			case <-d.ctx.Done():
 				return
 			}
-			mMsgsRcd.Incr(1)
 
 			d.outputsMut.RLock()
 			for len(d.outputs) == 0 {
@@ -356,12 +339,10 @@ func (d *DynamicFanOut) loop() {
 						case res := <-resChan:
 							if res.AckError() != nil {
 								d.log.Errorf("Failed to dispatch dynamic fan out message to '%v': %v\n", name, res.AckError())
-								mOutputErr.Incr(1)
 								if cont := throt.Retry(); !cont {
 									return component.ErrTypeClosed
 								}
 							} else {
-								mMsgsSnt.Incr(1)
 								return nil
 							}
 						case <-output.ctx.Done():

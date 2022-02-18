@@ -38,7 +38,7 @@ func TestStreamBuilderDefault(t *testing.T) {
 		`logger:
     level: INFO`,
 		`metrics:
-    http_server:`,
+    prometheus:`,
 	}
 
 	for _, str := range exp {

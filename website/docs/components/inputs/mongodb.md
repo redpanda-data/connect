@@ -22,7 +22,7 @@ Executes a find query and creates a message for each row received.
 
 Introduced in version 3.64.0.
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   label: ""
@@ -46,7 +46,7 @@ The URL of the target MongoDB DB.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 url: mongodb://localhost:27017
@@ -89,7 +89,7 @@ Bloblang expression describing MongoDB query.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 query: |2

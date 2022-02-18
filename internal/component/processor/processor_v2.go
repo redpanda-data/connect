@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
-	imessage "github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -31,28 +30,12 @@ type V2Batched interface {
 	// Process a batch of messages into one or more resulting batches, or return
 	// an error if the entire batch could not be processed. If zero messages are
 	// returned and the error is nil then all messages are filtered.
-	ProcessBatch(ctx context.Context, p []*message.Part) ([][]*message.Part, error)
+	ProcessBatch(ctx context.Context, spans []*tracing.Span, b *message.Batch) ([]*message.Batch, error)
 
 	// Close the component, blocks until either the underlying resources are
 	// cleaned up or the context is cancelled. Returns an error if the context
 	// is cancelled.
 	Close(ctx context.Context) error
-}
-
-//------------------------------------------------------------------------------
-
-// FlagErr marks a message part as having failed at a processing step with an
-// error message. If the error is nil the message part remains unchanged.
-func FlagErr(part *message.Part, err error) {
-	if err != nil {
-		part.MetaSet(imessage.FailFlagKey, err.Error())
-	}
-}
-
-// GetFail returns an error string for a message part if it has failed, or an
-// empty string if not.
-func GetFail(part *message.Part) string {
-	return part.MetaGet(imessage.FailFlagKey)
 }
 
 //------------------------------------------------------------------------------
@@ -63,10 +46,12 @@ type v2ToV1Processor struct {
 	p       V2
 	sig     *shutdown.Signaller
 
-	mCount   metrics.StatCounter
-	mDropped metrics.StatCounter
-	mErr     metrics.StatCounter
-	mSent    metrics.StatCounter
+	mReceived      metrics.StatCounter
+	mBatchReceived metrics.StatCounter
+	mSent          metrics.StatCounter
+	mBatchSent     metrics.StatCounter
+	mError         metrics.StatCounter
+	mLatency       metrics.StatTimer
 }
 
 // NewV2ToV1Processor wraps a processor.V2 with a struct that implements V1.
@@ -74,15 +59,20 @@ func NewV2ToV1Processor(typeStr string, p V2, stats metrics.Type) V1 {
 	return &v2ToV1Processor{
 		typeStr: typeStr, p: p, sig: shutdown.NewSignaller(),
 
-		mCount:   stats.GetCounter("count"),
-		mErr:     stats.GetCounter("error"),
-		mSent:    stats.GetCounter("sent"),
-		mDropped: stats.GetCounter("dropped"),
+		mReceived:      stats.GetCounter("processor_received"),
+		mBatchReceived: stats.GetCounter("processor_batch_received"),
+		mSent:          stats.GetCounter("processor_sent"),
+		mBatchSent:     stats.GetCounter("processor_batch_sent"),
+		mError:         stats.GetCounter("processor_error"),
+		mLatency:       stats.GetTimer("processor_latency_ns"),
 	}
 }
 
 func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	a.mCount.Incr(1)
+	a.mReceived.Incr(int64(msg.Len()))
+	a.mBatchReceived.Incr(1)
+
+	tStarted := time.Now()
 
 	newParts := make([]*message.Part, 0, msg.Len())
 
@@ -92,25 +82,19 @@ func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, 
 		nextParts, err := a.p.Process(context.Background(), part)
 		if err != nil {
 			newPart := part.Copy()
-			a.mErr.Incr(1)
-			FlagErr(newPart, err)
-			span.SetTag("error", true)
-			span.LogKV(
-				"event", "error",
-				"type", err.Error(),
-			)
+			a.mError.Incr(1)
+			MarkErr(newPart, span, err)
 			nextParts = append(nextParts, newPart)
 		}
 
 		span.Finish()
 		if len(nextParts) > 0 {
 			newParts = append(newParts, nextParts...)
-		} else {
-			a.mDropped.Incr(1)
 		}
 		return nil
 	})
 
+	a.mLatency.Timing(time.Since(tStarted).Nanoseconds())
 	if len(newParts) == 0 {
 		return nil, nil
 	}
@@ -119,6 +103,7 @@ func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, 
 	newMsg.SetAll(newParts)
 
 	a.mSent.Incr(int64(newMsg.Len()))
+	a.mBatchSent.Incr(1)
 	return []*message.Batch{newMsg}, nil
 }
 
@@ -147,9 +132,12 @@ type v2BatchedToV1Processor struct {
 	p       V2Batched
 	sig     *shutdown.Signaller
 
-	mCount metrics.StatCounter
-	mErr   metrics.StatCounter
-	mSent  metrics.StatCounter
+	mReceived      metrics.StatCounter
+	mBatchReceived metrics.StatCounter
+	mSent          metrics.StatCounter
+	mBatchSent     metrics.StatCounter
+	mError         metrics.StatCounter
+	mLatency       metrics.StatTimer
 }
 
 // NewV2BatchedToV1Processor wraps a processor.V2Batched with a struct that
@@ -158,54 +146,46 @@ func NewV2BatchedToV1Processor(typeStr string, p V2Batched, stats metrics.Type) 
 	return &v2BatchedToV1Processor{
 		typeStr: typeStr, p: p, sig: shutdown.NewSignaller(),
 
-		mCount: stats.GetCounter("count"),
-		mErr:   stats.GetCounter("error"),
-		mSent:  stats.GetCounter("sent"),
+		mReceived:      stats.GetCounter("processor_received"),
+		mBatchReceived: stats.GetCounter("processor_batch_received"),
+		mSent:          stats.GetCounter("processor_sent"),
+		mBatchSent:     stats.GetCounter("processor_batch_sent"),
+		mError:         stats.GetCounter("processor_error"),
+		mLatency:       stats.GetTimer("processor_latency_ns"),
 	}
 }
 
 func (a *v2BatchedToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	a.mCount.Incr(1)
+	a.mReceived.Incr(int64(msg.Len()))
+	a.mBatchReceived.Incr(1)
 
-	newMsg, spans := tracing.WithChildSpans(a.typeStr, msg)
-	parts := make([]*message.Part, newMsg.Len())
-	_ = newMsg.Iter(func(i int, part *message.Part) error {
-		parts[i] = part
-		return nil
-	})
+	tStarted := time.Now()
+	spans := tracing.CreateChildSpans(a.typeStr, msg)
 
-	var outputBatches []*message.Batch
-
-	batches, err := a.p.ProcessBatch(context.Background(), parts)
+	outputBatches, err := a.p.ProcessBatch(context.Background(), spans, msg)
 	if err != nil {
-		a.mErr.Incr(1)
-		for i, p := range parts {
-			parts[i] = p.Copy()
-			FlagErr(parts[i], err)
-		}
-		for _, s := range spans {
-			s.SetTag("error", true)
-			s.LogKV(
-				"event", "error",
-				"type", err.Error(),
-			)
-		}
-		newMsg.SetAll(parts)
-		outputBatches = append(outputBatches, newMsg)
-	} else {
-		for _, batch := range batches {
-			a.mSent.Incr(int64(len(batch)))
-			nextMsg := message.QuickBatch(nil)
-			nextMsg.SetAll(batch)
-			outputBatches = append(outputBatches, nextMsg)
-		}
+		a.mError.Incr(1)
+		outputBatch := msg.Copy()
+		_ = outputBatch.Iter(func(i int, p *message.Part) error {
+			MarkErr(p, spans[i], err)
+			return nil
+		})
+		outputBatches = append(outputBatches, outputBatch)
 	}
 
-	tracing.FinishSpans(newMsg)
+	for _, s := range spans {
+		s.Finish()
+	}
 
+	a.mLatency.Timing(time.Since(tStarted).Nanoseconds())
 	if len(outputBatches) == 0 {
 		return nil, nil
 	}
+
+	for _, m := range outputBatches {
+		a.mSent.Incr(int64(m.Len()))
+	}
+	a.mBatchSent.Incr(int64(len(outputBatches)))
 	return outputBatches, nil
 }
 

@@ -13,8 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeInproc] = TypeSpec{
 		constructor: fromSimpleConstructor(NewInproc),
@@ -89,23 +87,10 @@ func NewInproc(
 //------------------------------------------------------------------------------
 
 func (i *Inproc) loop() {
-	// Metrics paths
-	var (
-		mRunning    = i.stats.GetGauge("running")
-		mRcvd       = i.stats.GetCounter("batch.received")
-		mPartsRcvd  = i.stats.GetCounter("received")
-		mConn       = i.stats.GetCounter("connection.up")
-		mFailedConn = i.stats.GetCounter("connection.failed")
-		mLostConn   = i.stats.GetCounter("connection.lost")
-		mCount      = i.stats.GetCounter("count")
-	)
-
 	defer func() {
-		mRunning.Decr(1)
 		close(i.transactions)
 		close(i.closedChan)
 	}()
-	mRunning.Incr(1)
 
 	var inprocChan <-chan message.Transaction
 
@@ -115,7 +100,6 @@ messageLoop:
 			for {
 				var err error
 				if inprocChan, err = i.mgr.GetPipe(i.pipe); err != nil {
-					mFailedConn.Incr(1)
 					i.log.Errorf("Failed to connect to inproc output '%v': %v\n", i.pipe, err)
 					select {
 					case <-time.After(time.Second):
@@ -127,18 +111,13 @@ messageLoop:
 					break
 				}
 			}
-			mConn.Incr(1)
 		}
 		select {
 		case t, open := <-inprocChan:
 			if !open {
-				mLostConn.Incr(1)
 				inprocChan = nil
 				continue messageLoop
 			}
-			mCount.Incr(1)
-			mRcvd.Incr(1)
-			mPartsRcvd.Incr(int64(t.Payload.Len()))
 			select {
 			case i.transactions <- t:
 			case <-i.closeChan:
@@ -178,5 +157,3 @@ func (i *Inproc) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

@@ -39,7 +39,7 @@ func NewConfig() Config {
 			ExternalID: "",
 		},
 		Endpoint: "",
-		Region:   "eu-west-1", // TODO: V4 empty by default
+		Region:   "",
 	}
 }
 

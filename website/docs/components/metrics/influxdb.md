@@ -36,7 +36,7 @@ metrics:
   influxdb:
     url: ""
     db: ""
-    path_mapping: ""
+  mapping: ""
 ```
 
 </TabItem>
@@ -67,7 +67,7 @@ metrics:
     tags: {}
     retention_policy: ""
     write_consistency: ""
-    path_mapping: ""
+  mapping: ""
 ```
 
 </TabItem>
@@ -322,31 +322,5 @@ Default: `""`
 
 Type: `string`  
 Default: `""`  
-
-### `path_mapping`
-
-An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. When metric paths are created, renamed and dropped a trace log is written, enabling TRACE level logging is therefore a good way to diagnose path mappings. BETA FEATURE: Labels can also be created for the metric path by mapping meta fields.
-
-
-Type: `string`  
-Default: `""`  
-
-```yml
-# Examples
-
-path_mapping: this.replace("input", "source").replace("output", "sink")
-
-path_mapping: |-
-  if ![
-    "benthos.input.received",
-    "benthos.input.latency",
-    "benthos.output.sent"
-  ].contains(this) { deleted() }
-
-path_mapping: |-
-  let matches = this.re_find_all_submatch("resource_processor_([a-zA-Z]+)_(.*)")
-  meta processor = $matches.0.1 | deleted()
-  root = $matches.0.2 | deleted()
-```
 
 

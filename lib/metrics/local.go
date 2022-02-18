@@ -1,66 +1,38 @@
 package metrics
 
 import (
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
-
-	"github.com/Jeffail/benthos/v3/lib/log"
 )
-
-//------------------------------------------------------------------------------
 
 // LocalStat is a representation of a single metric stat. Interactions with this
 // stat are thread safe.
 type LocalStat struct {
-	Value           *int64
-	labelsAndValues *sync.Map
+	Value *int64
 }
 
 // Incr increments a metric by an amount.
-func (l *LocalStat) Incr(count int64) error {
+func (l *LocalStat) Incr(count int64) {
 	atomic.AddInt64(l.Value, count)
-	return nil
 }
 
 // Decr decrements a metric by an amount.
-func (l *LocalStat) Decr(count int64) error {
+func (l *LocalStat) Decr(count int64) {
 	atomic.AddInt64(l.Value, -count)
-	return nil
 }
 
 // Timing sets a timing metric.
-func (l *LocalStat) Timing(delta int64) error {
+func (l *LocalStat) Timing(delta int64) {
 	atomic.StoreInt64(l.Value, delta)
-	return nil
 }
 
 // Set sets a gauge metric.
-func (l *LocalStat) Set(value int64) error {
+func (l *LocalStat) Set(value int64) {
 	atomic.StoreInt64(l.Value, value)
-	return nil
-}
-
-func (l *LocalStat) setLabelsAndValues(ls, vs []string) *LocalStat {
-	for i, k := range ls {
-		l.labelsAndValues.Store(k, vs[i])
-	}
-	return l
-}
-
-// HasLabelWithValue takes a label/value pair and returns true if that
-// combination has been recorded, or false otherwise.
-//
-// This is mostly useful in tests for custom processors.
-func (l *LocalStat) HasLabelWithValue(k, v string) bool {
-	labelI, ok := l.labelsAndValues.Load(k)
-	return ok && v == labelI.(string)
-}
-
-func newLocalStat(c int64) *LocalStat {
-	return &LocalStat{
-		Value:           &c,
-		labelsAndValues: &sync.Map{},
-	}
 }
 
 //------------------------------------------------------------------------------
@@ -109,25 +81,6 @@ func (l *Local) getCounters(reset bool) map[string]int64 {
 	return localFlatCounters
 }
 
-// GetCountersWithLabels returns a map of metric paths to counters including
-// labels and values.
-func (l *Local) GetCountersWithLabels() map[string]LocalStat {
-	l.mut.Lock()
-	localFlatCounters := make(map[string]LocalStat, len(l.flatCounters))
-	for k := range l.flatCounters {
-		o := l.flatCounters[k]
-		cv := atomic.LoadInt64(o.Value)
-		ls := *newLocalStat(cv)
-		o.labelsAndValues.Range(func(key, value interface{}) bool {
-			ls.labelsAndValues.Store(key, value)
-			return true
-		})
-		localFlatCounters[k] = ls
-	}
-	l.mut.Unlock()
-	return localFlatCounters
-}
-
 // GetTimings returns a map of metric paths to timers.
 func (l *Local) GetTimings() map[string]int64 {
 	return l.getTimings(false)
@@ -154,97 +107,110 @@ func (l *Local) getTimings(reset bool) map[string]int64 {
 	return localFlatTimings
 }
 
-// GetTimingsWithLabels returns a map of metric paths to timers, including
-// labels and values.
-func (l *Local) GetTimingsWithLabels() map[string]LocalStat {
-	l.mut.Lock()
-	localFlatTimings := make(map[string]LocalStat, len(l.flatTimings))
-	for k := range l.flatTimings {
-		o := l.flatTimings[k]
-		cv := atomic.LoadInt64(o.Value)
-		ls := *newLocalStat(cv)
-		o.labelsAndValues.Range(func(key, value interface{}) bool {
-			ls.labelsAndValues.Store(key, value)
-			return true
-		})
-		localFlatTimings[k] = ls
-	}
-	l.mut.Unlock()
-	return localFlatTimings
-}
-
 //------------------------------------------------------------------------------
+
+func createLabelledPath(name string, tagNames, tagValues []string) string {
+	if len(tagNames) == 0 {
+		return name
+	}
+
+	b := &strings.Builder{}
+	b.WriteString(name)
+
+	if len(tagNames) == len(tagValues) {
+		tags := make(map[string]string, len(tagNames))
+		for k, v := range tagNames {
+			tags[v] = tagValues[k]
+		}
+		sort.Strings(tagNames)
+
+		b.WriteByte('{')
+		for i, v := range tagNames {
+			if i > 0 {
+				b.WriteString(tagEncodingSeparator)
+			}
+			b.WriteString(v)
+			b.WriteString("=")
+			b.WriteString(strconv.QuoteToASCII(tags[v]))
+		}
+		b.WriteByte('}')
+	}
+	return b.String()
+}
 
 // GetCounter returns a stat counter object for a path.
 func (l *Local) GetCounter(path string) StatCounter {
-	l.mut.Lock()
-	st, exists := l.flatCounters[path]
-	if !exists {
-		st = newLocalStat(0)
-		l.flatCounters[path] = st
-	}
-	l.mut.Unlock()
-
-	return st
+	return l.GetCounterVec(path).With()
 }
 
 // GetTimer returns a stat timer object for a path.
 func (l *Local) GetTimer(path string) StatTimer {
-	l.mut.Lock()
-	st, exists := l.flatTimings[path]
-	if !exists {
-		st = newLocalStat(0)
-		l.flatTimings[path] = st
-	}
-	l.mut.Unlock()
-
-	return st
+	return l.GetTimerVec(path).With()
 }
 
 // GetGauge returns a stat gauge object for a path.
 func (l *Local) GetGauge(path string) StatGauge {
-	l.mut.Lock()
-	st, exists := l.flatCounters[path]
-	if !exists {
-		st = newLocalStat(0)
-		l.flatCounters[path] = st
-	}
-	l.mut.Unlock()
-
-	return st
+	return l.GetGaugeVec(path).With()
 }
 
 // GetCounterVec returns a stat counter object for a path and records the
 // labels and values.
-func (l *Local) GetCounterVec(path string, k []string) StatCounterVec {
-	return fakeCounterVec(func(v []string) StatCounter {
-		return l.GetCounter(path).(*LocalStat).setLabelsAndValues(k, v)
+func (l *Local) GetCounterVec(path string, k ...string) StatCounterVec {
+	return fakeCounterVec(func(v ...string) StatCounter {
+		newPath := createLabelledPath(path, k, v)
+		l.mut.Lock()
+		st, exists := l.flatCounters[newPath]
+		if !exists {
+			var i int64
+			st = &LocalStat{Value: &i}
+			l.flatCounters[newPath] = st
+		}
+		l.mut.Unlock()
+		return st
 	})
 }
 
 // GetTimerVec returns a stat timer object for a path with the labels
 // and values.
-func (l *Local) GetTimerVec(path string, k []string) StatTimerVec {
-	return fakeTimerVec(func(v []string) StatTimer {
-		return l.GetTimer(path).(*LocalStat).setLabelsAndValues(k, v)
+func (l *Local) GetTimerVec(path string, k ...string) StatTimerVec {
+	return fakeTimerVec(func(v ...string) StatTimer {
+		newPath := createLabelledPath(path, k, v)
+		l.mut.Lock()
+		st, exists := l.flatTimings[newPath]
+		if !exists {
+			var i int64
+			st = &LocalStat{Value: &i}
+			l.flatTimings[newPath] = st
+		}
+		l.mut.Unlock()
+		return st
 	})
 }
 
 // GetGaugeVec returns a stat timer object for a path with the labels
 // discarded.
-func (l *Local) GetGaugeVec(path string, k []string) StatGaugeVec {
-	return fakeGaugeVec(func(v []string) StatGauge {
-		return l.GetGauge(path).(*LocalStat).setLabelsAndValues(k, v)
+func (l *Local) GetGaugeVec(path string, k ...string) StatGaugeVec {
+	return fakeGaugeVec(func(v ...string) StatGauge {
+		newPath := createLabelledPath(path, k, v)
+		l.mut.Lock()
+		st, exists := l.flatCounters[newPath]
+		if !exists {
+			var i int64
+			st = &LocalStat{Value: &i}
+			l.flatCounters[newPath] = st
+		}
+		l.mut.Unlock()
+		return st
 	})
 }
 
-// SetLogger does nothing.
-func (l *Local) SetLogger(logger log.Modular) {}
+// HandlerFunc returns nil.
+func (l *Local) HandlerFunc() http.HandlerFunc {
+	return nil
+}
 
 // Close stops the Local object from aggregating metrics and cleans up
 // resources.
 func (l *Local) Close() error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

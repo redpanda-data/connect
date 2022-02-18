@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -19,29 +20,29 @@ import (
 
 func init() {
 	Constructors[TypeAWSCloudWatch] = TypeSpec{
-		constructor: NewAWSCloudWatch,
-		Version:     "3.36.0",
+		constructor: func(conf Config, log log.Modular) (Type, error) {
+			return newCloudWatch(conf.AWSCloudWatch, log)
+		},
+		Version: "3.36.0",
 		Summary: `
 Send metrics to AWS CloudWatch using the PutMetricData endpoint.`,
 		Description: `
-It is STRONGLY recommended that you reduce the metrics that are exposed with a
-` + "`path_mapping`" + ` like this:
+It is STRONGLY recommended that you reduce the metrics that are exposed with a ` + "`mapping`" + ` like this:
 
 ` + "```yaml" + `
 metrics:
+  mapping: |
+    if ![
+      "input_received",
+      "input_latency",
+      "output_sent",
+    ].contains(this) { deleted() }
   aws_cloudwatch:
     namespace: Foo
-    path_mapping: |
-      if ![
-        "input.received",
-        "input.latency",
-        "output.sent",
-      ].contains(this) { deleted() }
 ` + "```" + ``,
 		FieldSpecs: append(docs.FieldSpecs{
 			docs.FieldCommon("namespace", "The namespace used to distinguish metrics from other services."),
 			docs.FieldAdvanced("flush_period", "The period of time between PutMetricData requests."),
-			pathMappingDocs(true, false),
 		}, session.FieldSpecs()...),
 	}
 }
@@ -53,7 +54,6 @@ type CloudWatchConfig struct {
 	session.Config `json:",inline" yaml:",inline"`
 	Namespace      string `json:"namespace" yaml:"namespace"`
 	FlushPeriod    string `json:"flush_period" yaml:"flush_period"`
-	PathMapping    string `json:"path_mapping" yaml:"path_mapping"`
 }
 
 // NewCloudWatchConfig creates an CloudWatchConfig struct with default values.
@@ -62,7 +62,6 @@ func NewCloudWatchConfig() CloudWatchConfig {
 		Config:      session.NewConfig(),
 		Namespace:   "Benthos",
 		FlushPeriod: "100ms",
-		PathMapping: "",
 	}
 }
 
@@ -82,7 +81,7 @@ type cloudWatchDatum struct {
 }
 
 type cloudWatchStat struct {
-	root       *CloudWatch
+	root       *cwMetrics
 	id         string
 	name       string
 	unit       string
@@ -155,33 +154,29 @@ func (c *cloudWatchStat) addValue(v int64) {
 }
 
 // Incr increments a metric by an amount.
-func (c *cloudWatchStat) Incr(count int64) error {
+func (c *cloudWatchStat) Incr(count int64) {
 	c.addValue(count)
-	return nil
 }
 
 // Decr decrements a metric by an amount.
-func (c *cloudWatchStat) Decr(count int64) error {
+func (c *cloudWatchStat) Decr(count int64) {
 	c.addValue(-count)
-	return nil
 }
 
 // Timing sets a timing metric.
-func (c *cloudWatchStat) Timing(delta int64) error {
+func (c *cloudWatchStat) Timing(delta int64) {
 	// Most granular value for timing metrics in cloudwatch is microseconds
 	// versus nanoseconds.
 	c.appendValue(delta / 1000)
-	return nil
 }
 
 // Set sets a gauge metric.
-func (c *cloudWatchStat) Set(value int64) error {
+func (c *cloudWatchStat) Set(value int64) {
 	c.appendValue(value)
-	return nil
 }
 
 type cloudWatchStatVec struct {
-	root       *CloudWatch
+	root       *cwMetrics
 	name       string
 	unit       string
 	labelNames []string
@@ -237,9 +232,7 @@ func (c *cloudWatchGaugeVec) With(labelValues ...string) StatGauge {
 
 //------------------------------------------------------------------------------
 
-// CloudWatch is a stats object with capability to hold internal stats as a JSON
-// endpoint.
-type CloudWatch struct {
+type cwMetrics struct {
 	client cloudwatchiface.CloudWatchAPI
 
 	datumses  map[string]*cloudWatchDatum
@@ -250,33 +243,19 @@ type CloudWatch struct {
 	ctx    context.Context
 	cancel func()
 
-	pathMapping *pathMapping
-	config      CloudWatchConfig
-	log         log.Modular
+	config CloudWatchConfig
+	log    log.Modular
 }
 
-// NewAWSCloudWatch creates and returns a new CloudWatch object.
-func NewAWSCloudWatch(config Config, opts ...func(Type)) (Type, error) {
-	return newCloudWatch(config.AWSCloudWatch, opts...)
-}
-
-func newCloudWatch(config CloudWatchConfig, opts ...func(Type)) (Type, error) {
-	c := &CloudWatch{
+func newCloudWatch(config CloudWatchConfig, log log.Modular) (Type, error) {
+	c := &cwMetrics{
 		config:    config,
 		datumses:  map[string]*cloudWatchDatum{},
 		datumLock: &sync.Mutex{},
-		log:       log.Noop(),
+		log:       log,
 	}
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
-	for _, opt := range opts {
-		opt(c)
-	}
-
-	var err error
-	if c.pathMapping, err = newPathMapping(config.PathMapping, c.log); err != nil {
-		return nil, fmt.Errorf("failed to init path mapping: %v", err)
-	}
 
 	sess, err := config.GetSession()
 	if err != nil {
@@ -294,175 +273,60 @@ func newCloudWatch(config CloudWatchConfig, opts ...func(Type)) (Type, error) {
 
 //------------------------------------------------------------------------------
 
-func (c *CloudWatch) toCMName(dotSepName string) (outPath string, labelNames, labelValues []string) {
-	return c.pathMapping.mapPathWithTags(dotSepName)
+func (c *cwMetrics) GetCounter(path string) StatCounter {
+	return &cloudWatchStat{
+		root: c,
+		id:   path,
+		name: path,
+		unit: cloudwatch.StandardUnitCount,
+	}
 }
 
-// GetCounter returns a stat counter object for a path.
-func (c *CloudWatch) GetCounter(path string) StatCounter {
-	name, labels, values := c.toCMName(path)
-	if name == "" {
-		return DudStat{}
-	}
-	if len(labels) == 0 {
-		return &cloudWatchStat{
-			root: c,
-			id:   name,
-			name: name,
-			unit: cloudwatch.StandardUnitCount,
-		}
-	}
-	return (&cloudWatchCounterVec{
-		cloudWatchStatVec: cloudWatchStatVec{
-			root:       c,
-			name:       name,
-			unit:       cloudwatch.StandardUnitCount,
-			labelNames: labels,
-		},
-	}).With(values...)
-}
-
-// GetCounterVec returns a stat counter object for a path with the labels
-func (c *CloudWatch) GetCounterVec(path string, n []string) StatCounterVec {
-	name, labels, values := c.toCMName(path)
-	if name == "" {
-		return fakeCounterVec(func([]string) StatCounter {
-			return DudStat{}
-		})
-	}
-	if len(labels) > 0 {
-		labels = append(labels, n...)
-		return fakeCounterVec(func(vs []string) StatCounter {
-			fvs := append([]string{}, values...)
-			fvs = append(fvs, vs...)
-			return (&cloudWatchCounterVec{
-				cloudWatchStatVec: cloudWatchStatVec{
-					root:       c,
-					name:       name,
-					unit:       cloudwatch.StandardUnitCount,
-					labelNames: labels,
-				},
-			}).With(fvs...)
-		})
-	}
+func (c *cwMetrics) GetCounterVec(path string, n ...string) StatCounterVec {
 	return &cloudWatchCounterVec{
 		cloudWatchStatVec: cloudWatchStatVec{
 			root:       c,
-			name:       name,
+			name:       path,
 			unit:       cloudwatch.StandardUnitCount,
 			labelNames: n,
 		},
 	}
 }
 
-// GetTimer returns a stat timer object for a path.
-func (c *CloudWatch) GetTimer(path string) StatTimer {
-	name, labels, values := c.toCMName(path)
-	if name == "" {
-		return DudStat{}
+func (c *cwMetrics) GetTimer(path string) StatTimer {
+	return &cloudWatchStat{
+		root: c,
+		id:   path,
+		name: path,
+		unit: cloudwatch.StandardUnitMicroseconds,
 	}
-	if len(labels) == 0 {
-		return &cloudWatchStat{
-			root: c,
-			id:   name,
-			name: name,
-			unit: cloudwatch.StandardUnitMicroseconds,
-		}
-	}
-	return (&cloudWatchTimerVec{
-		cloudWatchStatVec: cloudWatchStatVec{
-			root:       c,
-			name:       name,
-			unit:       cloudwatch.StandardUnitMicroseconds,
-			labelNames: labels,
-		},
-	}).With(values...)
 }
 
-// GetTimerVec returns a stat timer object for a path with the labels
-func (c *CloudWatch) GetTimerVec(path string, n []string) StatTimerVec {
-	name, labels, values := c.toCMName(path)
-	if name == "" {
-		return fakeTimerVec(func([]string) StatTimer {
-			return DudStat{}
-		})
-	}
-	if len(labels) > 0 {
-		labels = append(labels, n...)
-		return fakeTimerVec(func(vs []string) StatTimer {
-			fvs := append([]string{}, values...)
-			fvs = append(fvs, vs...)
-			return (&cloudWatchTimerVec{
-				cloudWatchStatVec: cloudWatchStatVec{
-					root:       c,
-					name:       name,
-					unit:       cloudwatch.StandardUnitMicroseconds,
-					labelNames: labels,
-				},
-			}).With(fvs...)
-		})
-	}
+func (c *cwMetrics) GetTimerVec(path string, n ...string) StatTimerVec {
 	return &cloudWatchTimerVec{
 		cloudWatchStatVec: cloudWatchStatVec{
 			root:       c,
-			name:       name,
+			name:       path,
 			unit:       cloudwatch.StandardUnitMicroseconds,
 			labelNames: n,
 		},
 	}
 }
 
-// GetGauge returns a stat gauge object for a path.
-func (c *CloudWatch) GetGauge(path string) StatGauge {
-	name, labels, values := c.toCMName(path)
-	if name == "" {
-		return DudStat{}
+func (c *cwMetrics) GetGauge(path string) StatGauge {
+	return &cloudWatchStat{
+		root: c,
+		id:   path,
+		name: path,
+		unit: cloudwatch.StandardUnitNone,
 	}
-	if len(labels) == 0 {
-		return &cloudWatchStat{
-			root: c,
-			id:   name,
-			name: name,
-			unit: cloudwatch.StandardUnitNone,
-		}
-	}
-	return (&cloudWatchGaugeVec{
-		cloudWatchStatVec: cloudWatchStatVec{
-			root:       c,
-			name:       name,
-			unit:       cloudwatch.StandardUnitNone,
-			labelNames: labels,
-		},
-	}).With(values...)
 }
 
-// GetGaugeVec returns a stat timer object for a path with the labels
-func (c *CloudWatch) GetGaugeVec(path string, n []string) StatGaugeVec {
-	name, labels, values := c.toCMName(path)
-	if name == "" {
-		return fakeGaugeVec(func([]string) StatGauge {
-			return DudStat{}
-		})
-	}
-	if len(labels) > 0 {
-		labels = append(labels, n...)
-		return fakeGaugeVec(func(vs []string) StatGauge {
-			fvs := append([]string{}, values...)
-			fvs = append(fvs, vs...)
-			return (&cloudWatchGaugeVec{
-				cloudWatchStatVec: cloudWatchStatVec{
-					root:       c,
-					name:       name,
-					unit:       cloudwatch.StandardUnitNone,
-					labelNames: labels,
-				},
-			}).With(fvs...)
-		})
-	}
+func (c *cwMetrics) GetGaugeVec(path string, n ...string) StatGaugeVec {
 	return &cloudWatchGaugeVec{
 		cloudWatchStatVec: cloudWatchStatVec{
 			root:       c,
-			name:       name,
+			name:       path,
 			unit:       cloudwatch.StandardUnitNone,
 			labelNames: n,
 		},
@@ -471,7 +335,7 @@ func (c *CloudWatch) GetGaugeVec(path string, n []string) StatGaugeVec {
 
 //------------------------------------------------------------------------------
 
-func (c *CloudWatch) loop() {
+func (c *cwMetrics) loop() {
 	ticker := time.NewTicker(c.flushPeriod)
 	defer ticker.Stop()
 	for {
@@ -538,7 +402,7 @@ func valuesMapToSlices(m map[int64]int64) (values, counts []*float64) {
 	return
 }
 
-func (c *CloudWatch) flush() error {
+func (c *cwMetrics) flush() error {
 	c.datumLock.Lock()
 	datumMap := c.datumses
 	c.datumses = map[string]*cloudWatchDatum{}
@@ -602,17 +466,12 @@ func (c *CloudWatch) flush() error {
 
 //------------------------------------------------------------------------------
 
-// SetLogger sets the logger used to print connection errors.
-func (c *CloudWatch) SetLogger(log log.Modular) {
-	c.log = log
+func (c *cwMetrics) HandlerFunc() http.HandlerFunc {
+	return nil
 }
 
-// Close stops the CloudWatch object from aggregating metrics and cleans up
-// resources.
-func (c *CloudWatch) Close() error {
+func (c *cwMetrics) Close() error {
 	c.cancel()
 	c.flush()
 	return nil
 }
-
-//------------------------------------------------------------------------------

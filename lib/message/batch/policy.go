@@ -3,6 +3,7 @@ package batch
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
@@ -105,21 +106,15 @@ type Policy struct {
 	mCountBatch  metrics.StatCounter
 	mPeriodBatch metrics.StatCounter
 	mCheckBatch  metrics.StatCounter
-	mCondBatch   metrics.StatCounter
 }
 
 // NewPolicy creates an empty policy with default rules.
-func NewPolicy(
-	conf PolicyConfig,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-) (*Policy, error) {
+func NewPolicy(conf PolicyConfig, mgr interop.Manager) (*Policy, error) {
 	if !conf.isLimited() {
 		return nil, errors.New("batch policy must have at least one active trigger")
 	}
 	if !conf.isHardLimited() {
-		log.Warnln("Batch policy should have at least one of count, period or byte_size set in order to provide a hard batch ceiling.")
+		mgr.Logger().Warnln("Batch policy should have at least one of count, period or byte_size set in order to provide a hard batch ceiling.")
 	}
 	var err error
 	var check *mapping.Executor
@@ -136,15 +131,17 @@ func NewPolicy(
 	}
 	var procs []iprocessor.V1
 	for i, pconf := range conf.Processors {
-		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
-		proc, err := processor.New(pconf, pMgr, pLog, pStats)
+		pMgr := mgr.IntoPath("processors", strconv.Itoa(i))
+		proc, err := processor.New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
 		if err != nil {
 			return nil, fmt.Errorf("failed to create processor '%v': %v", i, err)
 		}
 		procs = append(procs, proc)
 	}
+
+	batchOn := mgr.Metrics().GetCounterVec("batch_created", "mechanism")
 	return &Policy{
-		log: log,
+		log: mgr.Logger(),
 
 		byteSize: conf.ByteSize,
 		count:    conf.Count,
@@ -154,11 +151,10 @@ func NewPolicy(
 
 		lastBatch: time.Now(),
 
-		mSizeBatch:   stats.GetCounter("on_size"),
-		mCountBatch:  stats.GetCounter("on_count"),
-		mPeriodBatch: stats.GetCounter("on_period"),
-		mCheckBatch:  stats.GetCounter("on_check"),
-		mCondBatch:   stats.GetCounter("on_condition"),
+		mSizeBatch:   batchOn.With("size"),
+		mCountBatch:  batchOn.With("count"),
+		mPeriodBatch: batchOn.With("period"),
+		mCheckBatch:  batchOn.With("check"),
 	}, nil
 }
 

@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
@@ -9,17 +8,18 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBoundsCheck(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "bounds_check"
 	conf.BoundsCheck.MinParts = 2
 	conf.BoundsCheck.MaxParts = 3
 	conf.BoundsCheck.MaxPartSize = 10
 	conf.BoundsCheck.MinPartSize = 1
 
-	testLog := log.Noop()
-	proc, err := NewBoundsCheck(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -71,10 +71,11 @@ func TestBoundsCheck(t *testing.T) {
 
 	for _, parts := range goodParts {
 		msg := message.QuickBatch(parts)
-		if msgs, _ := proc.ProcessMessage(msg); len(msgs) == 0 {
-			t.Errorf("Bounds check failed on: %s", parts)
-		} else if !reflect.DeepEqual(msgs[0], msg) {
-			t.Error("Wrong message returned (expected same)")
+		msgs, _ := proc.ProcessMessage(msg)
+		require.Len(t, msgs, 1)
+		require.Equal(t, len(parts), msgs[0].Len())
+		for i, p := range parts {
+			assert.Equal(t, string(p), string(msgs[0].Get(i).Get()), i)
 		}
 	}
 

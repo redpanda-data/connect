@@ -40,7 +40,6 @@ input:
     checkpoint_limit: 1
     commit_period: 5s
     start_from_oldest: true
-    region: eu-west-1
     batching:
       count: 0
       byte_size: 0
@@ -68,7 +67,7 @@ input:
     rebalance_period: 30s
     lease_period: 30s
     start_from_oldest: true
-    region: eu-west-1
+    region: ""
     endpoint: ""
     credentials:
       profile: ""
@@ -204,7 +203,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

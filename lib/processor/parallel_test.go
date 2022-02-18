@@ -29,9 +29,10 @@ func TestParallelBasic(t *testing.T) {
 	httpConf.Type = TypeHTTP
 	httpConf.HTTP.URL = ts.URL + "/testpost"
 	conf := NewConfig()
+	conf.Type = "parallel"
 	conf.Parallel.Processors = []Config{httpConf}
 
-	h, err := NewParallel(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,9 +77,10 @@ func TestParallelError(t *testing.T) {
 	httpConf.HTTP.NumRetries = 0
 
 	conf := NewConfig()
+	conf.Type = "parallel"
 	conf.Parallel.Processors = []Config{httpConf}
 
-	h, err := NewParallel(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,10 +131,11 @@ func TestParallelCapped(t *testing.T) {
 	httpConf.HTTP.URL = ts.URL + "/testpost"
 
 	conf := NewConfig()
+	conf.Type = "parallel"
 	conf.Parallel.Processors = []Config{httpConf}
 	conf.Parallel.Cap = 5
 
-	h, err := NewParallel(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

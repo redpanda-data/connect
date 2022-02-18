@@ -51,14 +51,6 @@ type Type struct {
 	mgr   interop.Manager
 
 	timeout time.Duration
-
-	mCount    metrics.StatCounter
-	mErr      metrics.StatCounter
-	mSucc     metrics.StatCounter
-	mLimited  metrics.StatCounter
-	mLimitFor metrics.StatCounter
-	mLimitErr metrics.StatCounter
-	mLatency  metrics.StatTimer
 }
 
 // New returns a Lambda client.
@@ -84,14 +76,6 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 	for _, opt := range opts {
 		opt(&l)
 	}
-
-	l.mCount = l.stats.GetCounter("count")
-	l.mSucc = l.stats.GetCounter("success")
-	l.mErr = l.stats.GetCounter("error")
-	l.mLimited = l.stats.GetCounter("rate_limit.count")
-	l.mLimitFor = l.stats.GetCounter("rate_limit.total_ms")
-	l.mLimitErr = l.stats.GetCounter("rate_limit.error")
-	l.mLatency = l.stats.GetTimer("latency")
 
 	sess, err := l.conf.GetSession()
 	if err != nil {
@@ -147,14 +131,9 @@ func (l *Type) waitForAccess(ctx context.Context) bool {
 		}
 		if err != nil {
 			l.log.Errorf("Rate limit error: %v\n", err)
-			l.mLimitErr.Incr(1)
 			period = time.Second
 		}
 		if period > 0 {
-			if err == nil {
-				l.mLimited.Incr(1)
-				l.mLimitFor.Incr(period.Nanoseconds() / 1000000)
-			}
 			<-time.After(period)
 		} else {
 			return true
@@ -165,8 +144,6 @@ func (l *Type) waitForAccess(ctx context.Context) bool {
 // InvokeV2 attempts to invoke a lambda function with a message and replaces
 // its contents with the result on success, or returns an error.
 func (l *Type) InvokeV2(p *message.Part) error {
-	l.mCount.Incr(1)
-
 	remainingRetries := l.conf.NumRetries
 	for {
 		l.waitForAccess(context.Background())
@@ -181,12 +158,10 @@ func (l *Type) InvokeV2(p *message.Part) error {
 			if result.FunctionError != nil {
 				p.MetaSet("lambda_function_error", *result.FunctionError)
 			}
-			l.mSucc.Incr(1)
 			p.Set(result.Payload)
 			return nil
 		}
 
-		l.mErr.Incr(1)
 		remainingRetries--
 		if remainingRetries < 0 {
 			return err

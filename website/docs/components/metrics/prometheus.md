@@ -28,9 +28,8 @@ Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.
 ```yml
 # Common config fields, showing default values
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: ""
+  prometheus: {}
+  mapping: ""
 ```
 
 </TabItem>
@@ -40,16 +39,17 @@ metrics:
 # All config fields, showing default values
 metrics:
   prometheus:
-    prefix: benthos
-    path_mapping: ""
     use_histogram_timing: false
     histogram_buckets: []
+    add_process_metrics: false
+    add_go_metrics: false
     push_url: ""
     push_interval: ""
     push_job_name: benthos_push
     push_basic_auth:
       username: ""
       password: ""
+  mapping: ""
 ```
 
 </TabItem>
@@ -58,40 +58,6 @@ metrics:
 Metrics paths will differ from [the standard list](/docs/components/metrics/about#metric_names) in order to comply with Prometheus naming restrictions, where dots are replaced with underscores (and underscores replaced with double underscores). This change is made _before_ the mapping from `path_mapping` is applied.
 
 ## Fields
-
-### `prefix`
-
-A string prefix to add to all metrics.
-
-
-Type: `string`  
-Default: `"benthos"`  
-
-### `path_mapping`
-
-An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. When metric paths are created, renamed and dropped a trace log is written, enabling TRACE level logging is therefore a good way to diagnose path mappings. BETA FEATURE: Labels can also be created for the metric path by mapping meta fields.
-
-
-Type: `string`  
-Default: `""`  
-
-```yml
-# Examples
-
-path_mapping: this.replace("input", "source").replace("output", "sink")
-
-path_mapping: |-
-  if ![
-    "benthos_input_received",
-    "benthos_input_latency",
-    "benthos_output_sent"
-  ].contains(this) { deleted() }
-
-path_mapping: |-
-  let matches = this.re_find_all_submatch("resource_processor_([a-zA-Z]+)_(.*)")
-  meta processor = $matches.0.1 | deleted()
-  root = $matches.0.2 | deleted()
-```
 
 ### `use_histogram_timing`
 
@@ -110,6 +76,22 @@ Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuck
 Type: `array`  
 Default: `[]`  
 Requires version 3.63.0 or newer  
+
+### `add_process_metrics`
+
+Whether to export process metrics such as CPU and memory usage in addition to Benthos metrics.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `add_go_metrics`
+
+Whether to export Go runtime metrics such as GC pauses in addition to Benthos metrics.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `push_url`
 

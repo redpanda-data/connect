@@ -15,7 +15,6 @@ func (k *kafkaReader) Setup(sesh sarama.ConsumerGroupSession) error {
 	k.cMut.Lock()
 	k.session = sesh
 	k.cMut.Unlock()
-	k.mRebalanced.Incr(1)
 	return nil
 }
 
@@ -37,7 +36,7 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 	defer k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", topic, partition)
 
 	latestOffset := claim.InitialOffset()
-	batchPolicy, err := batch.NewPolicy(k.conf.Batching, k.mgr, k.log, k.stats)
+	batchPolicy, err := batch.NewPolicy(k.conf.Batching, k.mgr.IntoPath("kafka", "batching"))
 	if err != nil {
 		k.log.Errorf("Failed to initialise batch policy: %v.\n", err)
 		// The consume claim gets reopened immediately so let's try and

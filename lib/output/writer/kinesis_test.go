@@ -8,24 +8,12 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/kinesis/kinesisiface"
 	"github.com/cenkalti/backoff/v4"
-)
-
-var (
-	mockStats = metrics.Noop()
-)
-
-var (
-	mThrottled       = mockStats.GetCounter("send.throttled")
-	mThrottledF      = mockStats.GetCounter("send.throttled")
-	mPartsThrottled  = mockStats.GetCounter("parts.send.throttled")
-	mPartsThrottledF = mockStats.GetCounter("parts.send.throttled")
 )
 
 type mockKinesis struct {
@@ -193,11 +181,7 @@ func TestKinesisWriteChunkWithThrottling(t *testing.T) {
 				return &output, nil
 			},
 		},
-		mThrottled:       mThrottled,
-		mThrottledF:      mThrottledF,
-		mPartsThrottled:  mPartsThrottled,
-		mPartsThrottledF: mPartsThrottledF,
-		log:              log.Noop(),
+		log: log.Noop(),
 	}
 
 	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
@@ -288,11 +272,7 @@ func TestKinesisWriteMessageThrottling(t *testing.T) {
 				return &output, nil
 			},
 		},
-		mThrottled:       mThrottled,
-		mThrottledF:      mThrottledF,
-		mPartsThrottled:  mPartsThrottled,
-		mPartsThrottledF: mPartsThrottledF,
-		log:              log.Noop(),
+		log: log.Noop(),
 	}
 
 	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")
@@ -337,11 +317,7 @@ func TestKinesisWriteBackoffMaxRetriesExceeded(t *testing.T) {
 				return &output, nil
 			},
 		},
-		mThrottled:       mThrottled,
-		mThrottledF:      mThrottledF,
-		mPartsThrottled:  mPartsThrottled,
-		mPartsThrottledF: mPartsThrottledF,
-		log:              log.Noop(),
+		log: log.Noop(),
 	}
 
 	k.partitionKey, _ = bloblang.GlobalEnvironment().NewField("${!json(\"id\")}")

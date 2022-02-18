@@ -1,8 +1,8 @@
 package processor
 
 import (
+	"context"
 	"fmt"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
@@ -18,15 +18,17 @@ import (
 
 func init() {
 	Constructors[TypeGroupByValue] = TypeSpec{
-		constructor: NewGroupByValue,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newGroupByValue(conf.GroupByValue, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("group_by_value", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryComposition,
 		},
-		Summary: `
-Splits a batch of messages into N batches, where each resulting batch contains a
-group of messages determined by a
-[function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated
-per message.`,
+		Summary: `Splits a batch of messages into N batches, where each resulting batch contains a group of messages determined by a [function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated per message.`,
 		Description: `
 This allows you to group messages using arbitrary fields within their content or
 metadata, process them individually, and send them to unique locations as per
@@ -81,60 +83,34 @@ func NewGroupByValueConfig() GroupByValueConfig {
 
 //------------------------------------------------------------------------------
 
-// GroupByValue is a processor that breaks message batches down into N batches
-// of a smaller size according to a function interpolated string evaluated per
-// message part.
-type GroupByValue struct {
+type groupByValueProc struct {
 	log   log.Modular
-	stats metrics.Type
-
 	value *field.Expression
-
-	mCount     metrics.StatCounter
-	mGroups    metrics.StatGauge
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
 }
 
-// NewGroupByValue returns a GroupByValue processor.
-func NewGroupByValue(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	value, err := mgr.BloblEnvironment().NewField(conf.GroupByValue.Value)
+func newGroupByValue(conf GroupByValueConfig, mgr interop.Manager) (processor.V2Batched, error) {
+	value, err := mgr.BloblEnvironment().NewField(conf.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
-	return &GroupByValue{
-		log:   log,
-		stats: stats,
-
+	return &groupByValueProc{
+		log:   mgr.Logger(),
 		value: value,
-
-		mCount:     stats.GetCounter("count"),
-		mGroups:    stats.GetGauge("groups"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (g *GroupByValue) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	g.mCount.Incr(1)
-
-	if msg.Len() == 0 {
+func (g *groupByValueProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch *message.Batch) ([]*message.Batch, error) {
+	if batch.Len() == 0 {
 		return nil, nil
 	}
 
 	groupKeys := []string{}
 	groupMap := map[string]*message.Batch{}
 
-	spans := tracing.CreateChildSpans(TypeGroupByValue, msg)
-
-	_ = msg.Iter(func(i int, p *message.Part) error {
-		v := g.value.String(i, msg)
+	_ = batch.Iter(func(i int, p *message.Part) error {
+		v := g.value.String(i, batch)
 		spans[i].LogKV(
 			"event", "grouped",
 			"type", v,
@@ -152,35 +128,16 @@ func (g *GroupByValue) ProcessMessage(msg *message.Batch) ([]*message.Batch, err
 		return nil
 	})
 
-	for _, s := range spans {
-		s.Finish()
-	}
-
 	msgs := []*message.Batch{}
 	for _, key := range groupKeys {
 		msgs = append(msgs, groupMap[key])
 	}
-
-	g.mGroups.Set(int64(len(groupKeys)))
-
 	if len(msgs) == 0 {
 		return nil, nil
-	}
-
-	g.mBatchSent.Incr(int64(len(msgs)))
-	for _, m := range msgs {
-		g.mSent.Incr(int64(m.Len()))
 	}
 	return msgs, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (g *GroupByValue) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (g *GroupByValue) WaitForClose(timeout time.Duration) error {
+func (g *groupByValueProc) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

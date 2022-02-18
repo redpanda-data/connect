@@ -382,7 +382,7 @@ func (r *Reader) reactMainUpdate(mgr bundle.NewManagement, strict bool) bool {
 		return true
 	}
 
-	lintlog := mgr.Logger().NewModule(".linter")
+	lintlog := mgr.Logger()
 	for _, lint := range lints {
 		lintlog.Infoln(lint)
 	}

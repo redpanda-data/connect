@@ -3,6 +3,7 @@ package output
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
@@ -174,9 +175,8 @@ func NewBroker(
 			if isThreaded {
 				pipes = pipelines
 			}
-			oMgr, oLog, oStats := interop.LabelChild(fmt.Sprintf("broker.outputs.%v", i), mgr, log, stats)
-			oStats = metrics.Combine(stats, oStats)
-			if outputs[j*len(outputConfs)+i], err = New(oConf, oMgr, oLog, oStats, pipes...); err != nil {
+			oMgr := mgr.IntoPath("broker", "outputs", strconv.Itoa(i))
+			if outputs[j*len(outputConfs)+i], err = New(oConf, oMgr, oMgr.Logger(), oMgr.Metrics(), pipes...); err != nil {
 				return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Type, err)
 			}
 		}
@@ -215,8 +215,7 @@ func NewBroker(
 	}
 
 	if !conf.Broker.Batching.IsNoop() {
-		bMgr, bLog, bStats := interop.LabelChild("batching", mgr, log, stats)
-		policy, err := batch.NewPolicy(conf.Broker.Batching, bMgr, bLog, bStats)
+		policy, err := batch.NewPolicy(conf.Broker.Batching, mgr.IntoPath("broker", "batching"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 		}

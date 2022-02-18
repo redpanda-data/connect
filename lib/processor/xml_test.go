@@ -91,7 +91,8 @@ func TestXMLCases(t *testing.T) {
 	}
 
 	conf := NewConfig()
-	proc, err := NewXML(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	conf.Type = "xml"
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,11 +117,12 @@ func TestXMLCases(t *testing.T) {
 
 func TestXMLWithCast(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "xml"
 	conf.XML.Cast = true
 
 	testString := `<root><title>This is a title</title><number id="99">123</number><bool>True</bool></root>`
 
-	proc, err := NewXML(conf, nil, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

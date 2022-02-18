@@ -35,7 +35,7 @@ pipeline:
 
 Is equivalent to:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 pipeline:
   processors:
     - resource: foo_proc
@@ -60,10 +60,6 @@ type Resource struct {
 	mgr  interop.Manager
 	name string
 	log  log.Modular
-
-	mCount       metrics.StatCounter
-	mErr         metrics.StatCounter
-	mErrNotFound metrics.StatCounter
 }
 
 // NewResource returns a resource processor.
@@ -77,10 +73,6 @@ func NewResource(
 		mgr:  mgr,
 		name: conf.Resource,
 		log:  log,
-
-		mCount:       stats.GetCounter("count"),
-		mErrNotFound: stats.GetCounter("error_not_found"),
-		mErr:         stats.GetCounter("error"),
 	}, nil
 }
 
@@ -89,13 +81,10 @@ func NewResource(
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (r *Resource) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res error) {
-	r.mCount.Incr(1)
 	if err := r.mgr.AccessProcessor(context.Background(), r.name, func(p processor.V1) {
 		msgs, res = p.ProcessMessage(msg)
 	}); err != nil {
-		r.log.Debugf("Failed to obtain processor resource '%v': %v", r.name, err)
-		r.mErrNotFound.Incr(1)
-		r.mErr.Incr(1)
+		r.log.Errorf("Failed to obtain processor resource '%v': %v", r.name, err)
 		return nil, err
 	}
 	return msgs, res

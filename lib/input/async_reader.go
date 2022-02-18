@@ -71,14 +71,11 @@ func NewAsyncReader(
 func (r *AsyncReader) loop() {
 	// Metrics paths
 	var (
-		mRunning    = r.stats.GetGauge("running")
-		mCount      = r.stats.GetCounter("count")
-		mRcvd       = r.stats.GetCounter("batch.received")
-		mPartsRcvd  = r.stats.GetCounter("received")
-		mConn       = r.stats.GetCounter("connection.up")
-		mFailedConn = r.stats.GetCounter("connection.failed")
-		mLostConn   = r.stats.GetCounter("connection.lost")
-		mLatency    = r.stats.GetTimer("latency")
+		mRcvd       = r.stats.GetCounter("input_received")
+		mConn       = r.stats.GetCounter("input_connection_up")
+		mFailedConn = r.stats.GetCounter("input_connection_failed")
+		mLostConn   = r.stats.GetCounter("input_connection_lost")
+		mLatency    = r.stats.GetTimer("input_latency_ns")
 	)
 
 	defer func() {
@@ -92,13 +89,11 @@ func (r *AsyncReader) loop() {
 		}()
 		_ = r.reader.WaitForClose(shutdown.MaximumShutdownWait())
 
-		mRunning.Decr(1)
 		atomic.StoreInt32(&r.connected, 0)
 
 		close(r.transactions)
 		r.shutSig.ShutdownComplete()
 	}()
-	mRunning.Incr(1)
 
 	pendingAcks := sync.WaitGroup{}
 	defer func() {
@@ -169,9 +164,7 @@ func (r *AsyncReader) loop() {
 			continue
 		} else {
 			r.connBackoff.Reset()
-			mCount.Incr(1)
-			mPartsRcvd.Incr(int64(msg.Len()))
-			mRcvd.Incr(1)
+			mRcvd.Incr(int64(msg.Len()))
 			r.log.Tracef("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 		}
 

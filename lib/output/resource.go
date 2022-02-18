@@ -78,8 +78,6 @@ type Resource struct {
 
 	ctx  context.Context
 	done func()
-
-	mErrNotFound metrics.StatCounter
 }
 
 // NewResource returns a resource output.
@@ -91,24 +89,18 @@ func NewResource(
 	}
 	ctx, done := context.WithCancel(context.Background())
 	return &Resource{
-		mgr:          mgr,
-		name:         conf.Resource,
-		log:          log,
-		stats:        stats,
-		ctx:          ctx,
-		done:         done,
-		mErrNotFound: stats.GetCounter("error_not_found"),
+		mgr:   mgr,
+		name:  conf.Resource,
+		log:   log,
+		stats: stats,
+		ctx:   ctx,
+		done:  done,
 	}, nil
 }
 
 //------------------------------------------------------------------------------
 
 func (r *Resource) loop() {
-	// Metrics paths
-	var (
-		mCount = r.stats.GetCounter("count")
-	)
-
 	var ts *message.Transaction
 	for {
 		if ts == nil {
@@ -123,7 +115,6 @@ func (r *Resource) loop() {
 				return
 			}
 		}
-		mCount.Incr(1)
 
 		var err error
 		if oerr := r.mgr.AccessOutput(context.Background(), r.name, func(o output.Sync) {
@@ -132,8 +123,7 @@ func (r *Resource) loop() {
 			err = oerr
 		}
 		if err != nil {
-			r.log.Debugf("Failed to obtain output resource '%v': %v", r.name, err)
-			r.mErrNotFound.Incr(1)
+			r.log.Errorf("Failed to obtain output resource '%v': %v", r.name, err)
 			select {
 			case <-time.After(time.Second):
 			case <-r.ctx.Done():
@@ -164,8 +154,7 @@ func (r *Resource) Connected() (isConnected bool) {
 	if err = r.mgr.AccessOutput(context.Background(), r.name, func(o output.Sync) {
 		isConnected = o.Connected()
 	}); err != nil {
-		r.log.Debugf("Failed to obtain output resource '%v': %v", r.name, err)
-		r.mErrNotFound.Incr(1)
+		r.log.Errorf("Failed to obtain output resource '%v': %v", r.name, err)
 	}
 	return
 }

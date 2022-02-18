@@ -98,10 +98,6 @@ func (o *RoundRobin) loop() {
 		close(o.closedChan)
 	}()
 
-	var (
-		mMsgsRcvd = o.stats.GetCounter("messages.received")
-	)
-
 	i := 0
 	var open bool
 	for atomic.LoadInt32(&o.running) == 1 {
@@ -114,7 +110,6 @@ func (o *RoundRobin) loop() {
 		case <-o.closeChan:
 			return
 		}
-		mMsgsRcvd.Incr(1)
 		select {
 		case o.outputTSChans[i] <- ts:
 		case <-o.closeChan:

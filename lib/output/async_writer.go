@@ -171,14 +171,13 @@ func (w *AsyncWriter) injectSpans(msg *message.Batch, spans []*tracing.Span) *me
 func (w *AsyncWriter) loop() {
 	// Metrics paths
 	var (
-		mCount      = w.stats.GetCounter("count")
-		mPartsSent  = w.stats.GetCounter("sent")
-		mSent       = w.stats.GetCounter("batch.sent")
-		mBytesSent  = w.stats.GetCounter("batch.bytes")
-		mLatency    = w.stats.GetTimer("batch.latency")
-		mConn       = w.stats.GetCounter("connection.up")
-		mFailedConn = w.stats.GetCounter("connection.failed")
-		mLostConn   = w.stats.GetCounter("connection.lost")
+		mSent       = w.stats.GetCounter("output_sent")
+		mBatchSent  = w.stats.GetCounter("output_batch_sent")
+		mError      = w.stats.GetCounter("output_error")
+		mLatency    = w.stats.GetTimer("output_latency_ns")
+		mConn       = w.stats.GetCounter("output_connection_up")
+		mFailedConn = w.stats.GetCounter("output_connection_failed")
+		mLostConn   = w.stats.GetCounter("output_connection_lost")
 	)
 
 	defer func() {
@@ -236,6 +235,8 @@ func (w *AsyncWriter) loop() {
 		if atomic.LoadInt32(&w.isConnected) == 1 {
 			if latency, err = w.latencyMeasuringWrite(msg); err != component.ErrNotConnected {
 				return
+			} else if err != nil {
+				mError.Incr(1)
 			}
 		}
 		mLostConn.Incr(1)
@@ -250,6 +251,8 @@ func (w *AsyncWriter) loop() {
 				atomic.StoreInt32(&w.isConnected, 1)
 				mConn.Incr(1)
 				return
+			} else if err != nil {
+				mError.Incr(1)
 			}
 		}
 	}
@@ -265,7 +268,6 @@ func (w *AsyncWriter) loop() {
 				if !open {
 					return
 				}
-				mCount.Incr(1)
 			case <-w.shutSig.CloseAtLeisureChan():
 				return
 			}
@@ -279,6 +281,8 @@ func (w *AsyncWriter) loop() {
 			// If our writer says it is not connected.
 			if err == component.ErrNotConnected {
 				latency, err = connectLoop(ts.Payload)
+			} else if err != nil {
+				mError.Incr(1)
 			}
 
 			// Close immediately if our writer is closed.
@@ -295,9 +299,8 @@ func (w *AsyncWriter) loop() {
 					w.log.Debugf("Rejecting message: %v\n", err)
 				}
 			} else {
-				mSent.Incr(1)
-				mPartsSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
-				mBytesSent.Incr(int64(message.GetAllBytesLen(ts.Payload)))
+				mBatchSent.Incr(1)
+				mSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 				mLatency.Timing(latency)
 				w.log.Tracef("Successfully wrote %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			}

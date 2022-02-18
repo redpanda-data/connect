@@ -46,7 +46,7 @@ allowing you to transfer data across accounts. You can find out more
 //------------------------------------------------------------------------------
 
 func newKinesisFirehose(name string, conf writer.KinesisFirehoseConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	kin, err := writer.NewKinesisFirehose(conf, log, stats)
+	kin, err := writer.NewKinesisFirehose(conf, log)
 	if err != nil {
 		return nil, err
 	}

@@ -4,17 +4,16 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -24,7 +23,13 @@ import (
 
 func init() {
 	Constructors[TypeUnarchive] = TypeSpec{
-		constructor: NewUnarchive,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newUnarchive(conf.Unarchive, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("unarchive", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryParsing, CategoryUtility,
 		},
@@ -44,7 +49,6 @@ extracted filename.`,
 			docs.FieldCommon("format", "The unarchive [format](#formats) to use.").HasOptions(
 				"tar", "zip", "binary", "lines", "json_documents", "json_array", "json_map", "csv",
 			),
-			PartsFieldSpec,
 		},
 		Footnotes: `
 ## Formats
@@ -99,7 +103,6 @@ the file expands its contents into a json object in a new message.`,
 // UnarchiveConfig contains configuration fields for the Unarchive processor.
 type UnarchiveConfig struct {
 	Format string `json:"format" yaml:"format"`
-	Parts  []int  `json:"parts" yaml:"parts"`
 }
 
 // NewUnarchiveConfig returns a UnarchiveConfig with default values.
@@ -107,7 +110,6 @@ func NewUnarchiveConfig() UnarchiveConfig {
 	return UnarchiveConfig{
 		// TODO: V4 change this default
 		Format: "binary",
-		Parts:  []int{},
 	}
 }
 
@@ -350,105 +352,31 @@ func strToUnarchiver(str string) (unarchiveFunc, error) {
 
 //------------------------------------------------------------------------------
 
-// Unarchive is a processor that can selectively unarchive parts of a message
-// following a chosen archive type.
-type Unarchive struct {
-	conf      UnarchiveConfig
+type unarchiveProc struct {
 	unarchive unarchiveFunc
-
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSkipped   metrics.StatCounter
-	mDropped   metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+	log       log.Modular
 }
 
-// NewUnarchive returns a Unarchive processor.
-func NewUnarchive(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	dcor, err := strToUnarchiver(conf.Unarchive.Format)
+func newUnarchive(conf UnarchiveConfig, mgr interop.Manager) (*unarchiveProc, error) {
+	dcor, err := strToUnarchiver(conf.Format)
 	if err != nil {
 		return nil, err
 	}
-	return &Unarchive{
-		conf:      conf.Unarchive,
+	return &unarchiveProc{
 		unarchive: dcor,
-		log:       log,
-		stats:     stats,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSkipped:   stats.GetCounter("skipped"),
-		mDropped:   stats.GetCounter("dropped"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+		log:       mgr.Logger(),
 	}, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (d *Unarchive) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	d.mCount.Incr(1)
-
-	newMsg := message.QuickBatch(nil)
-	lParts := msg.Len()
-
-	noParts := len(d.conf.Parts) == 0
-	_ = msg.Iter(func(i int, part *message.Part) error {
-		isTarget := noParts
-		if !isTarget {
-			nI := i - lParts
-			for _, t := range d.conf.Parts {
-				if t == nI || t == i {
-					isTarget = true
-					break
-				}
-			}
-		}
-		if !isTarget {
-			newMsg.Append(msg.Get(i).Copy())
-			return nil
-		}
-
-		span := tracing.CreateChildSpan(TypeUnarchive, part)
-		defer span.Finish()
-
-		newParts, err := d.unarchive(part)
-		if err == nil {
-			newMsg.Append(newParts...)
-		} else {
-			d.mErr.Incr(1)
-			d.log.Errorf("Failed to unarchive message part: %v\n", err)
-			newMsg.Append(part)
-			FlagErr(newMsg.Get(-1), err)
-			span.LogKV(
-				"event", "error",
-				"type", err.Error(),
-			)
-		}
-		return nil
-	})
-
-	d.mBatchSent.Incr(1)
-	d.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]*message.Batch{newMsg}
-	return msgs[:], nil
+func (d *unarchiveProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+	newParts, err := d.unarchive(msg)
+	if err != nil {
+		d.log.Errorf("Failed to unarchive message part: %v\n", err)
+		return nil, err
+	}
+	return newParts, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (d *Unarchive) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (d *Unarchive) WaitForClose(timeout time.Duration) error {
+func (d *unarchiveProc) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

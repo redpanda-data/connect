@@ -133,7 +133,7 @@ func (r *Reader) reactResourceUpdate(mgr bundle.NewManagement, strict bool, path
 		return true
 	}
 
-	lintlog := mgr.Logger().NewModule(".linter")
+	lintlog := mgr.Logger()
 	for _, lint := range lints {
 		lintlog.Infoln(lint)
 	}

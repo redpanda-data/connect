@@ -1,13 +1,12 @@
 package processor
 
 import (
+	"context"
 	"fmt"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/internal/xml"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -16,8 +15,14 @@ import (
 
 func init() {
 	Constructors[TypeXML] = TypeSpec{
-		constructor: NewXML,
-		Status:      docs.StatusBeta,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newXML(conf.XML, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("xml", p, mgr.Metrics()), nil
+		},
+		Status: docs.StatusBeta,
 		Categories: []Category{
 			CategoryParsing,
 		},
@@ -91,7 +96,6 @@ With cast set to true, the resulting JSON structure would look like this:
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("operator", "An XML [operation](#operators) to apply to messages.").HasOptions("to_json"),
 			docs.FieldCommon("cast", "Whether to try to cast values that are numbers and booleans to the right type. Default: all values are strings."),
-			PartsFieldSpec,
 		},
 	}
 }
@@ -100,7 +104,6 @@ With cast set to true, the resulting JSON structure would look like this:
 
 // XMLConfig contains configuration fields for the XML processor.
 type XMLConfig struct {
-	Parts    []int  `json:"parts" yaml:"parts"`
 	Operator string `json:"operator" yaml:"operator"`
 	Cast     bool   `json:"cast" yaml:"cast"`
 }
@@ -108,7 +111,6 @@ type XMLConfig struct {
 // NewXMLConfig returns a XMLConfig with default values.
 func NewXMLConfig() XMLConfig {
 	return XMLConfig{
-		Parts:    []int{},
 		Operator: "to_json",
 		Cast:     false,
 	}
@@ -116,77 +118,38 @@ func NewXMLConfig() XMLConfig {
 
 //------------------------------------------------------------------------------
 
-// XML is a processor that performs an operation on a XML payload.
-type XML struct {
-	parts []int
-
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+type xmlProc struct {
+	log  log.Modular
+	cast bool
 }
 
-// NewXML returns a XML processor.
-func NewXML(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	if conf.XML.Operator != "to_json" {
-		return nil, fmt.Errorf("operator not recognised: %v", conf.XML.Operator)
+func newXML(conf XMLConfig, mgr interop.Manager) (*xmlProc, error) {
+	if conf.Operator != "to_json" {
+		return nil, fmt.Errorf("operator not recognised: %v", conf.Operator)
 	}
-
-	j := &XML{
-		parts: conf.XML.Parts,
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+	j := &xmlProc{
+		log:  mgr.Logger(),
+		cast: conf.Cast,
 	}
 	return j, nil
 }
 
-//------------------------------------------------------------------------------
+func (p *xmlProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+	newPart := msg.Copy()
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (p *XML) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	p.mCount.Incr(1)
-	newMsg := msg.Copy()
-
-	proc := func(index int, span *tracing.Span, part *message.Part) error {
-		root, err := xml.ToMap(part.Get(), p.conf.XML.Cast)
-		if err != nil {
-			p.mErr.Incr(1)
-			p.log.Debugf("Failed to parse part as XML: %v\n", err)
-			return err
-		}
-		if err = part.SetJSON(root); err != nil {
-			p.mErr.Incr(1)
-			p.log.Debugf("Failed to marshal XML as JSON: %v\n", err)
-			return err
-		}
-		return nil
+	root, err := xml.ToMap(newPart.Get(), p.cast)
+	if err != nil {
+		p.log.Debugf("Failed to parse part as XML: %v", err)
+		return nil, err
+	}
+	if err = newPart.SetJSON(root); err != nil {
+		p.log.Debugf("Failed to marshal XML as JSON: %v", err)
+		return nil, err
 	}
 
-	IteratePartsWithSpanV2(TypeXML, p.parts, newMsg, proc)
-
-	p.mBatchSent.Incr(1)
-	p.mSent.Incr(int64(newMsg.Len()))
-	return []*message.Batch{newMsg}, nil
+	return []*message.Part{newPart}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (p *XML) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (p *XML) WaitForClose(timeout time.Duration) error {
+func (p *xmlProc) Close(ctx context.Context) error {
 	return nil
 }

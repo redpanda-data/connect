@@ -9,7 +9,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
@@ -61,28 +60,18 @@ type KinesisFirehose struct {
 	backoffCtor func() backoff.BackOff
 	streamName  *string
 
-	log   log.Modular
-	stats metrics.Type
-
-	mThrottled       metrics.StatCounter
-	mThrottledF      metrics.StatCounter
-	mPartsThrottled  metrics.StatCounter
-	mPartsThrottledF metrics.StatCounter
+	log log.Modular
 }
 
 // NewKinesisFirehose creates a new Amazon Kinesis Firehose writer.Type.
 func NewKinesisFirehose(
 	conf KinesisFirehoseConfig,
 	log log.Modular,
-	stats metrics.Type,
 ) (*KinesisFirehose, error) {
 	k := KinesisFirehose{
-		conf:            conf,
-		log:             log,
-		stats:           stats,
-		mPartsThrottled: stats.GetCounter("parts.send.throttled"),
-		mThrottled:      stats.GetCounter("send.throttled"),
-		streamName:      aws.String(conf.Stream),
+		conf:       conf,
+		log:        log,
+		streamName: aws.String(conf.Stream),
 	}
 
 	var err error
@@ -220,8 +209,6 @@ func (a *KinesisFirehose) WriteWithContext(ctx context.Context, msg *message.Bat
 		// if throttling errors detected, pause briefly
 		l := len(failed)
 		if l > 0 {
-			a.mThrottled.Incr(1)
-			a.mPartsThrottled.Incr(int64(l))
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
 				return component.ErrTimeout

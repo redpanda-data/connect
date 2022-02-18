@@ -8,13 +8,13 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/gabs/v2"
 	yaml "gopkg.in/yaml.v3"
@@ -106,7 +106,7 @@ func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]iprocessor.V1, e
 	}
 
 	return []iprocessor.V1{
-		processor.NewBloblangFromExecutor(exec, p.logger, metrics.Noop()),
+		iprocessor.NewV2BatchedToV1Processor("bloblang", processor.NewBloblangFromExecutor(exec, p.logger), metrics.Noop()),
 	}, nil
 }
 

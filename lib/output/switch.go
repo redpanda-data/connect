@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -229,11 +230,7 @@ func NewSwitchConfigCase() SwitchConfigCase {
 // Switch is a broker that implements types.Consumer and broadcasts each message
 // out to an array of outputs.
 type Switch struct {
-	logger     log.Modular
-	stats      metrics.Type
-	mMsgRcvd   metrics.StatCounter
-	mMsgSnt    metrics.StatCounter
-	mOutputErr metrics.StatCounter
+	logger log.Modular
 
 	maxInFlight  int
 	transactions <-chan message.Transaction
@@ -261,7 +258,6 @@ func NewSwitch(
 ) (output.Streamed, error) {
 	ctx, done := context.WithCancel(context.Background())
 	o := &Switch{
-		stats:             stats,
 		logger:            logger,
 		maxInFlight:       conf.Switch.MaxInFlight,
 		transactions:      nil,
@@ -270,9 +266,6 @@ func NewSwitch(
 		closedChan:        make(chan struct{}),
 		ctx:               ctx,
 		close:             done,
-		mMsgRcvd:          stats.GetCounter("switch.messages.received"),
-		mMsgSnt:           stats.GetCounter("switch.messages.sent"),
-		mOutputErr:        stats.GetCounter("switch.output.error"),
 	}
 
 	lCases := len(conf.Switch.Cases)
@@ -288,9 +281,8 @@ func NewSwitch(
 
 	var err error
 	for i, cConf := range conf.Switch.Cases {
-		oMgr, oLog, oStats := interop.LabelChild(fmt.Sprintf("switch.%v.output", i), mgr, logger, stats)
-		oStats = metrics.Combine(stats, oStats)
-		if o.outputs[i], err = New(cConf.Output, oMgr, oLog, oStats); err != nil {
+		oMgr := mgr.IntoPath("switch", strconv.Itoa(i), "output")
+		if o.outputs[i], err = New(cConf.Output, oMgr, oMgr.Logger(), oMgr.Metrics()); err != nil {
 			return nil, fmt.Errorf("failed to create case '%v' output type '%v': %v", i, cConf.Output.Type, err)
 		}
 		if len(cConf.Check) > 0 {
@@ -370,12 +362,10 @@ func (o *Switch) dispatchRetryOnErr(outputTargets [][]*message.Part) error {
 				case res := <-resChan:
 					if res.AckError() != nil {
 						o.logger.Errorf("Failed to dispatch switch message: %v\n", res.AckError())
-						o.mOutputErr.Incr(1)
 						if !throt.Retry() {
 							return component.ErrTypeClosed
 						}
 					} else {
-						o.mMsgSnt.Incr(1)
 						return nil
 					}
 				case <-o.ctx.Done():
@@ -453,7 +443,6 @@ func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage *mes
 			select {
 			case res := <-resChan:
 				if res.AckError() != nil {
-					o.mOutputErr.Incr(1)
 					if bErr, ok := res.AckError().(*batch.Error); ok {
 						bErr.WalkParts(func(i int, p *message.Part, e error) bool {
 							if e != nil {
@@ -467,8 +456,6 @@ func (o *Switch) dispatchNoRetries(group *imessage.SortGroup, sourceMessage *mes
 							return nil
 						})
 					}
-				} else {
-					o.mMsgSnt.Incr(1)
 				}
 			case <-o.ctx.Done():
 				setErr(component.ErrTypeClosed)
@@ -510,7 +497,6 @@ func (o *Switch) loop() {
 			case <-o.ctx.Done():
 				return
 			}
-			o.mMsgRcvd.Incr(1)
 
 			group, trackedMsg := imessage.NewSortGroup(ts.Payload)
 

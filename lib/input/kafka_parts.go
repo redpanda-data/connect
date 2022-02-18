@@ -33,12 +33,12 @@ func (k *kafkaReader) runPartitionConsumer(
 	defer k.log.Debugf("Stopped consuming messages from topic '%v' partition '%v'\n", topic, partition)
 	defer wg.Done()
 
-	batchPolicy, err := batch.NewPolicy(k.conf.Batching, k.mgr, k.log, k.stats)
+	batchPolicy, err := batch.NewPolicy(k.conf.Batching, k.mgr.IntoPath("kafka", "batching"))
 	if err != nil {
 		k.log.Errorf("Failed to initialise batch policy: %v, falling back to no policy.\n", err)
 		conf := batch.NewPolicyConfig()
 		conf.Count = 1
-		if batchPolicy, err = batch.NewPolicy(conf, k.mgr, k.log, k.stats); err != nil {
+		if batchPolicy, err = batch.NewPolicy(conf, k.mgr.IntoPath("kafka", "batching")); err != nil {
 			panic(err)
 		}
 	}

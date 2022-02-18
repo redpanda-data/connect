@@ -21,9 +21,9 @@ func MetricsForRateLimit(r V1, stats metrics.Type) V1 {
 	return &metricsRateLimit{
 		r: r,
 
-		mChecked: stats.GetCounter("checked"),
-		mLimited: stats.GetCounter("limited"),
-		mErr:     stats.GetCounter("error"),
+		mChecked: stats.GetCounter("rate_limit_checked"),
+		mLimited: stats.GetCounter("rate_limit_triggered"),
+		mErr:     stats.GetCounter("rate_limit_error"),
 	}
 }
 

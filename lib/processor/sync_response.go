@@ -12,8 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeSyncResponse] = TypeSpec{
 		constructor: NewSyncResponse,
@@ -62,8 +60,6 @@ func NewSyncResponse(
 	return s, nil
 }
 
-//------------------------------------------------------------------------------
-
 // ProcessMessage logs an event and returns the message unchanged.
 func (s *SyncResponse) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	if err := roundtrip.SetAsResponse(msg); err != nil {
@@ -80,5 +76,3 @@ func (s *SyncResponse) CloseAsync() {
 func (s *SyncResponse) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

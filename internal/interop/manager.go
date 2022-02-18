@@ -15,19 +15,15 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-// LabelChild expands the label of the provided observability components.
-func LabelChild(label string, mgr Manager, logger log.Modular, stats metrics.Type) (Manager, log.Modular, metrics.Type) {
-	newMgr := mgr.ForChildComponent(label)
-	return newMgr, newMgr.Logger(), newMgr.Metrics()
-}
-
 // Manager is an interface expected by Benthos components that allows them to
 // register their service wide behaviours such as HTTP endpoints and event
 // listeners, and obtain service wide shared resources such as caches.
 type Manager interface {
 	ForStream(id string) Manager
-	ForComponent(id string) Manager
-	ForChildComponent(id string) Manager
+	IntoPath(segments ...string) Manager
+	WithAddedMetrics(m metrics.Type) Manager
+
+	Path() []string
 	Label() string
 
 	Metrics() metrics.Type

@@ -49,10 +49,11 @@ func TestParseLogCases(t *testing.T) {
 
 	for _, test := range tests {
 		conf := NewConfig()
+		conf.Type = "parse_log"
 		conf.ParseLog.Format = test.format
 		conf.ParseLog.Codec = test.codec
 		conf.ParseLog.BestEffort = test.bestEff
-		proc, err := NewParseLog(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+		proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -91,9 +92,10 @@ func TestParseLogRFC5424(t *testing.T) {
 	}
 
 	conf := NewConfig()
+	conf.Type = "parse_log"
 	conf.ParseLog.Format = "syslog_rfc5424"
 	conf.ParseLog.BestEffort = true
-	proc, err := NewParseLog(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

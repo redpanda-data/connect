@@ -14,14 +14,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	iconfig "github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/api"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	strmmgr "github.com/Jeffail/benthos/v3/lib/stream/manager"
 	"github.com/Jeffail/benthos/v3/lib/tracer"
@@ -39,11 +39,7 @@ func OptSetServiceName(name string) func() {
 	return func() {
 		testSuffix = fmt.Sprintf("_%v_test", name)
 		conf.HTTP.RootPath = "/" + name
-		conf.Logger.Prefix = name
 		conf.Logger.StaticFields["@service"] = name
-		conf.Metrics.HTTP.Prefix = name
-		conf.Metrics.Prometheus.Prefix = name
-		conf.Metrics.Statsd.Prefix = name
 	}
 }
 
@@ -73,25 +69,6 @@ func OptWithAPITLS(c *tls.Config) func() {
 
 type stoppable interface {
 	Stop(timeout time.Duration) error
-}
-
-// ManagerInitFunc is a function to be called once the Benthos service manager,
-// which manages resources shared across all components, is initialised. This is
-// a useful time to add additional resources that might be required for custom
-// plugins. If a non-nil error is returned the service will terminate.
-type ManagerInitFunc func(manager interop.Manager, logger log.Modular, stats metrics.Type) error
-
-// TODO: V4 remove this
-var onManagerInit ManagerInitFunc = func(manager interop.Manager, logger log.Modular, stats metrics.Type) error {
-	return nil
-}
-
-// OptOnManagerInit creates an opt func that allows you to specify a function to
-// be called once the service manager is constructed.
-func OptOnManagerInit(fn ManagerInitFunc) func() {
-	return func() {
-		onManagerInit = fn
-	}
 }
 
 //------------------------------------------------------------------------------
@@ -129,15 +106,10 @@ func initStreamsMode(
 	strmAPITimeout time.Duration,
 	manager *manager.Type,
 	logger log.Modular,
-	stats metrics.Type,
+	stats *metrics.Namespaced,
 ) stoppable {
-	lintlog := logger.NewModule(".linter")
-
-	streamMgr := strmmgr.New(
+	streamMgr := strmmgr.New(manager,
 		strmmgr.OptSetAPITimeout(strmAPITimeout),
-		strmmgr.OptSetLogger(logger),
-		strmmgr.OptSetManager(manager),
-		strmmgr.OptSetStats(stats),
 		strmmgr.OptAPIEnabled(enableAPI),
 	)
 
@@ -155,7 +127,7 @@ func initStreamsMode(
 		os.Exit(1)
 	}
 	for _, lint := range lints {
-		lintlog.Infoln(lint)
+		logger.Infoln(lint)
 	}
 
 	for id, conf := range streamConfs {
@@ -235,16 +207,13 @@ func initNormalMode(
 	confReader *iconfig.Reader,
 	manager *manager.Type,
 	logger log.Modular,
-	stats metrics.Type,
+	stats *metrics.Namespaced,
 ) (newStream stoppable, stoppedChan chan struct{}) {
 	stoppedChan = make(chan struct{})
 
 	streamInit := func() (stoppable, error) {
 		return stream.New(
-			conf.Config,
-			stream.OptSetLogger(logger),
-			stream.OptSetStats(stats),
-			stream.OptSetManager(manager),
+			conf.Config, manager,
 			stream.OptOnClose(func() {
 				if !watching {
 					close(stoppedChan)
@@ -303,7 +272,7 @@ func cmdService(
 	lints, err := confReader.Read(&conf)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	if strict && len(lints) > 0 {
 		for _, lint := range lints {
@@ -332,18 +301,16 @@ func cmdService(
 		return 1
 	}
 
-	lintlog := logger.NewModule(".linter")
 	for _, lint := range lints {
-		lintlog.Infoln(lint)
+		logger.Infoln(lint)
 	}
 
 	// Create our metrics type.
-	var stats metrics.Type
-	stats, err = metrics.New(conf.Metrics, metrics.OptSetLogger(logger))
+	var stats *metrics.Namespaced
+	stats, err = bundle.AllMetrics.Init(conf.Metrics, logger)
 	for err != nil {
 		logger.Errorf("Failed to connect to metrics aggregator: %v\n", err)
-		<-time.After(time.Second)
-		stats, err = metrics.New(conf.Metrics, metrics.OptSetLogger(logger))
+		return 1
 	}
 	defer func() {
 		if sCloseErr := stats.Close(); sCloseErr != nil {
@@ -380,10 +347,6 @@ func cmdService(
 	manager, err := manager.NewV2(conf.ResourceConfig, httpServer, logger, stats)
 	if err != nil {
 		logger.Errorf("Failed to create resource: %v\n", err)
-		return 1
-	}
-	if err = onManagerInit(manager, logger, stats); err != nil {
-		logger.Errorf("Failed to initialise manager: %v\n", err)
 		return 1
 	}
 

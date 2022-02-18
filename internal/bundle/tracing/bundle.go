@@ -1,6 +1,7 @@
 package tracing
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
@@ -23,7 +24,11 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 			if err != nil {
 				return nil, err
 			}
-			iEvents, ctr := summary.wInputEvents(nm.Label())
+			key := nm.Label()
+			if key == "" {
+				key = "root." + query.SliceToDotPath(nm.Path()...)
+			}
+			iEvents, ctr := summary.wInputEvents(key)
 			i = traceInput(iEvents, ctr, i)
 			return i, err
 		}, spec)
@@ -35,7 +40,11 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 			if err != nil {
 				return nil, err
 			}
-			pEvents, errCtr := summary.wProcessorEvents(nm.Label())
+			key := nm.Label()
+			if key == "" {
+				key = "root." + query.SliceToDotPath(nm.Path()...)
+			}
+			pEvents, errCtr := summary.wProcessorEvents(key)
 			i = traceProcessor(pEvents, errCtr, i)
 			return i, err
 		}, spec)
@@ -51,7 +60,11 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 				return nil, err
 			}
 
-			oEvents, ctr := summary.wOutputEvents(nm.Label())
+			key := nm.Label()
+			if key == "" {
+				key = "root." + query.SliceToDotPath(nm.Path()...)
+			}
+			oEvents, ctr := summary.wOutputEvents(key)
 			o = traceOutput(oEvents, ctr, o)
 
 			return output.WrapWithPipelines(o, pcf...)

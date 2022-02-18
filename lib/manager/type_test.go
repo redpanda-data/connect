@@ -8,6 +8,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
@@ -31,6 +32,10 @@ var _ bundle.NewManagement = &manager.Type{}
 
 //------------------------------------------------------------------------------
 
+func noopStats() *imetrics.Namespaced {
+	return imetrics.NewNamespaced(metrics.Noop())
+}
+
 func TestManagerProcessorLabels(t *testing.T) {
 	t.Skip("No longer validating labels at construction")
 
@@ -47,7 +52,7 @@ func TestManagerProcessorLabels(t *testing.T) {
 		conf.Bloblang = "root = this"
 		conf.Label = l
 
-		mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+		mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), noopStats())
 		require.NoError(t, err)
 
 		_, err = mgr.NewProcessor(conf)
@@ -66,7 +71,7 @@ func TestManagerProcessorLabels(t *testing.T) {
 		conf.Bloblang = "root = this"
 		conf.Label = l
 
-		mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+		mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), noopStats())
 		require.NoError(t, err)
 
 		_, err = mgr.NewProcessor(conf)
@@ -87,7 +92,7 @@ func TestManagerCache(t *testing.T) {
 	barCache.Label = "bar"
 	conf.ResourceCaches = append(conf.ResourceCaches, barCache)
 
-	mgr, err := manager.NewV2(conf, nil, testLog, metrics.Noop())
+	mgr, err := manager.NewV2(conf, nil, testLog, noopStats())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +112,7 @@ func TestManagerCacheList(t *testing.T) {
 	conf := manager.NewResourceConfig()
 	conf.ResourceCaches = append(conf.ResourceCaches, cacheFoo, cacheBar)
 
-	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.NoError(t, err)
 
 	err = mgr.AccessCache(context.Background(), "foo", func(icache.V1) {})
@@ -130,14 +135,14 @@ func TestManagerCacheListErrors(t *testing.T) {
 	conf := manager.NewResourceConfig()
 	conf.ResourceCaches = append(conf.ResourceCaches, cFoo, cBar)
 
-	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	_, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.EqualError(t, err, "cache resource label 'foo' collides with a previously defined resource")
 
 	cEmpty := cache.NewConfig()
 	conf = manager.NewResourceConfig()
 	conf.ResourceCaches = append(conf.ResourceCaches, cEmpty)
 
-	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	_, err = manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.EqualError(t, err, "cache resource has an empty label")
 }
 
@@ -151,7 +156,7 @@ func TestManagerBadCache(t *testing.T) {
 	badConf.Type = "notexist"
 	conf.ResourceCaches = append(conf.ResourceCaches, badConf)
 
-	if _, err := manager.NewV2(conf, nil, testLog, metrics.Noop()); err == nil {
+	if _, err := manager.NewV2(conf, nil, testLog, noopStats()); err == nil {
 		t.Fatal("Expected error from bad cache")
 	}
 }
@@ -167,7 +172,7 @@ func TestManagerRateLimit(t *testing.T) {
 	barRL.Label = "bar"
 	conf.ResourceRateLimits = append(conf.ResourceRateLimits, barRL)
 
-	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +192,7 @@ func TestManagerRateLimitList(t *testing.T) {
 	conf := manager.NewResourceConfig()
 	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cFoo, cBar)
 
-	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.NoError(t, err)
 
 	err = mgr.AccessRateLimit(context.Background(), "foo", func(iratelimit.V1) {})
@@ -210,14 +215,14 @@ func TestManagerRateLimitListErrors(t *testing.T) {
 	conf := manager.NewResourceConfig()
 	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cFoo, cBar)
 
-	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	_, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.EqualError(t, err, "rate limit resource label 'foo' collides with a previously defined resource")
 
 	cEmpty := ratelimit.NewConfig()
 	conf = manager.NewResourceConfig()
 	conf.ResourceRateLimits = append(conf.ResourceRateLimits, cEmpty)
 
-	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	_, err = manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.EqualError(t, err, "rate limit resource has an empty label")
 }
 
@@ -228,7 +233,7 @@ func TestManagerBadRateLimit(t *testing.T) {
 	badConf.Label = "bad"
 	conf.ResourceRateLimits = append(conf.ResourceRateLimits, badConf)
 
-	if _, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop()); err == nil {
+	if _, err := manager.NewV2(conf, nil, log.Noop(), noopStats()); err == nil {
 		t.Fatal("Expected error from bad rate limit")
 	}
 }
@@ -244,7 +249,7 @@ func TestManagerProcessor(t *testing.T) {
 	barProc.Label = "bar"
 	conf.ResourceProcessors = append(conf.ResourceProcessors, barProc)
 
-	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +269,7 @@ func TestManagerProcessorList(t *testing.T) {
 	conf := manager.NewResourceConfig()
 	conf.ResourceProcessors = append(conf.ResourceProcessors, cFoo, cBar)
 
-	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.NoError(t, err)
 
 	err = mgr.AccessProcessor(context.Background(), "foo", func(iprocessor.V1) {})
@@ -287,14 +292,14 @@ func TestManagerProcessorListErrors(t *testing.T) {
 	conf := manager.NewResourceConfig()
 	conf.ResourceProcessors = append(conf.ResourceProcessors, cFoo, cBar)
 
-	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	_, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.EqualError(t, err, "processor resource label 'foo' collides with a previously defined resource")
 
 	cEmpty := processor.NewConfig()
 	conf = manager.NewResourceConfig()
 	conf.ResourceProcessors = append(conf.ResourceProcessors, cEmpty)
 
-	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	_, err = manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.EqualError(t, err, "processor resource has an empty label")
 }
 
@@ -310,7 +315,7 @@ func TestManagerInputList(t *testing.T) {
 	conf := manager.NewResourceConfig()
 	conf.ResourceInputs = append(conf.ResourceInputs, cFoo, cBar)
 
-	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.NoError(t, err)
 
 	err = mgr.AccessInput(context.Background(), "foo", func(i iinput.Streamed) {})
@@ -333,14 +338,14 @@ func TestManagerInputListErrors(t *testing.T) {
 	conf := manager.NewResourceConfig()
 	conf.ResourceInputs = append(conf.ResourceInputs, cFoo, cBar)
 
-	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	_, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.EqualError(t, err, "input resource label 'foo' collides with a previously defined resource")
 
 	cEmpty := input.NewConfig()
 	conf = manager.NewResourceConfig()
 	conf.ResourceInputs = append(conf.ResourceInputs, cEmpty)
 
-	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	_, err = manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.EqualError(t, err, "input resource has an empty label")
 }
 
@@ -356,7 +361,7 @@ func TestManagerOutputList(t *testing.T) {
 	conf := manager.NewResourceConfig()
 	conf.ResourceOutputs = append(conf.ResourceOutputs, cFoo, cBar)
 
-	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.NoError(t, err)
 
 	err = mgr.AccessOutput(context.Background(), "foo", func(ow ioutput.Sync) {})
@@ -379,20 +384,20 @@ func TestManagerOutputListErrors(t *testing.T) {
 	conf := manager.NewResourceConfig()
 	conf.ResourceOutputs = append(conf.ResourceOutputs, cFoo, cBar)
 
-	_, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	_, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.EqualError(t, err, "output resource label 'foo' collides with a previously defined resource")
 
 	cEmpty := output.NewConfig()
 	conf = manager.NewResourceConfig()
 	conf.ResourceOutputs = append(conf.ResourceOutputs, cEmpty)
 
-	_, err = manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	_, err = manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.EqualError(t, err, "output resource has an empty label")
 }
 
 func TestManagerPipeErrors(t *testing.T) {
 	conf := manager.NewResourceConfig()
-	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +409,7 @@ func TestManagerPipeErrors(t *testing.T) {
 
 func TestManagerPipeGetSet(t *testing.T) {
 	conf := manager.NewResourceConfig()
-	mgr, err := manager.NewV2(conf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,8 +40,7 @@ func NewBatcherFromConfig(
 	stats metrics.Type,
 ) (output.Streamed, error) {
 	if !conf.IsNoop() {
-		bMgr, bLog, bStats := interop.LabelChild("batching", mgr, log, stats)
-		policy, err := batch.NewPolicy(conf, bMgr, bLog, bStats)
+		policy, err := batch.NewPolicy(conf, mgr.IntoPath("batching"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 		}

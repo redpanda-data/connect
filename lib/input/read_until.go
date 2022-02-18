@@ -154,9 +154,9 @@ func NewReadUntil(
 		return nil, errors.New("cannot create read_until input without a child")
 	}
 
-	wrapped, err := New(
-		*conf.ReadUntil.Input, mgr, log, stats,
-	)
+	wMgr := mgr.IntoPath("read_until", "input")
+	wLog, wStats := wMgr.Logger(), wMgr.Metrics()
+	wrapped, err := New(*conf.ReadUntil.Input, wMgr, wLog, wStats)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create input '%v': %v", conf.ReadUntil.Input.Type, err)
 	}
@@ -172,17 +172,16 @@ func NewReadUntil(
 		return nil, errors.New("a check query is required")
 	}
 
-	_, rLog, rStats := interop.LabelChild("read_until", mgr, log, stats)
 	rdr := &ReadUntil{
 		running: 1,
 		conf:    conf.ReadUntil,
 
-		wrapperLog:   log,
-		wrapperStats: stats,
-		wrapperMgr:   mgr,
+		wrapperLog:   wLog,
+		wrapperStats: wStats,
+		wrapperMgr:   wMgr,
 
-		log:          rLog,
-		stats:        rStats,
+		log:          log,
+		stats:        stats,
 		wrapped:      wrapped,
 		check:        check,
 		transactions: make(chan message.Transaction),
@@ -197,19 +196,6 @@ func NewReadUntil(
 //------------------------------------------------------------------------------
 
 func (r *ReadUntil) loop() {
-	var (
-		mRunning         = r.stats.GetGauge("running")
-		mRestartErr      = r.stats.GetCounter("restart.error")
-		mRestartSucc     = r.stats.GetCounter("restart.success")
-		mInputClosed     = r.stats.GetCounter("input.closed")
-		mCount           = r.stats.GetCounter("count")
-		mPropagated      = r.stats.GetCounter("propagated")
-		mFinalPropagated = r.stats.GetCounter("final.propagated")
-		mFinalResSent    = r.stats.GetCounter("final.response.sent")
-		mFinalResSucc    = r.stats.GetCounter("final.response.success")
-		mFinalResErr     = r.stats.GetCounter("final.response.error")
-	)
-
 	defer func() {
 		if r.wrapped != nil {
 			r.wrapped.CloseAsync()
@@ -219,12 +205,10 @@ func (r *ReadUntil) loop() {
 			for ; err != nil; err = r.wrapped.WaitForClose(time.Second) {
 			}
 		}
-		mRunning.Decr(1)
 
 		close(r.transactions)
 		close(r.closedChan)
 	}()
-	mRunning.Incr(1)
 
 	// Prevents busy loop when an input never yields messages.
 	restartBackoff := backoff.NewExponentialBackOff()
@@ -244,14 +228,10 @@ runLoop:
 					return
 				}
 				var err error
-				if r.wrapped, err = New(
-					*r.conf.Input, r.wrapperMgr, r.wrapperLog, r.wrapperStats,
-				); err != nil {
-					mRestartErr.Incr(1)
+				if r.wrapped, err = New(*r.conf.Input, r.wrapperMgr, r.wrapperLog, r.wrapperStats); err != nil {
 					r.log.Errorf("Failed to create input '%v': %v\n", r.conf.Input.Type, err)
 					return
 				}
-				mRestartSucc.Incr(1)
 			} else {
 				return
 			}
@@ -261,7 +241,6 @@ runLoop:
 		select {
 		case tran, open = <-r.wrapped.TransactionChan():
 			if !open {
-				mInputClosed.Incr(1)
 				r.wrapped = nil
 				continue runLoop
 			}
@@ -269,7 +248,6 @@ runLoop:
 		case <-r.closeChan:
 			return
 		}
-		mCount.Incr(1)
 
 		check, err := r.check.QueryPart(0, tran.Payload)
 		if err != nil {
@@ -279,7 +257,6 @@ runLoop:
 		if !check {
 			select {
 			case r.transactions <- tran:
-				mPropagated.Incr(1)
 			case <-r.closeChan:
 				return
 			}
@@ -292,7 +269,6 @@ runLoop:
 		tmpRes := make(chan response.Error)
 		select {
 		case r.transactions <- message.NewTransaction(tran.Payload, tmpRes):
-			mFinalPropagated.Incr(1)
 		case <-r.closeChan:
 			return
 		}
@@ -306,15 +282,12 @@ runLoop:
 			streamEnds := res.AckError() == nil
 			select {
 			case tran.ResponseChan <- res:
-				mFinalResSent.Incr(1)
 			case <-r.closeChan:
 				return
 			}
 			if streamEnds {
-				mFinalResSucc.Incr(1)
 				return
 			}
-			mFinalResErr.Incr(1)
 		case <-r.closeChan:
 			return
 		}

@@ -45,13 +45,10 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 	if s.strm != nil {
 		err = errors.New("stream has already been run")
 	} else {
-		s.strm, err = stream.New(s.conf,
+		s.strm, err = stream.New(s.conf, s.mgr,
 			stream.OptOnClose(func() {
 				s.shutSig.ShutdownComplete()
-			}),
-			stream.OptSetManager(s.mgr),
-			stream.OptSetLogger(s.logger),
-			stream.OptSetStats(s.stats))
+			}))
 	}
 	s.strmMut.Unlock()
 	if err != nil {

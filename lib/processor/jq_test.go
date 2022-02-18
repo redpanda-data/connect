@@ -15,9 +15,10 @@ import (
 
 func TestJQAllParts(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "jq"
 	conf.JQ.Query = ".foo.bar"
 
-	jSet, err := NewJQ(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	jSet, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	msgIn := message.QuickBatch([][]byte{
@@ -35,9 +36,10 @@ func TestJQAllParts(t *testing.T) {
 
 func TestJQValidation(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "jq"
 	conf.JQ.Query = ".foo.bar"
 
-	jSet, err := NewJQ(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	jSet, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	msgIn := message.QuickBatch([][]byte{[]byte("this is bad json")})
@@ -51,9 +53,10 @@ func TestJQValidation(t *testing.T) {
 
 func TestJQMutation(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "jq"
 	conf.JQ.Query = `{foo: .foo} | .foo.bar = "baz"`
 
-	jSet, err := NewJQ(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	jSet, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	ogObj := gabs.New()
@@ -145,9 +148,10 @@ func TestJQ(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			conf := NewConfig()
+			conf.Type = "jq"
 			conf.JQ.Query = test.path
 
-			jSet, err := NewJQ(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+			jSet, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			inMsg := message.QuickBatch(
@@ -236,10 +240,11 @@ func TestJQ_OutputRaw(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			conf := NewConfig()
+			conf.Type = "jq"
 			conf.JQ.Query = test.path
 			conf.JQ.OutputRaw = true
 
-			jSet, err := NewJQ(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+			jSet, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			inMsg := message.QuickBatch(

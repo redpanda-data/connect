@@ -21,7 +21,7 @@ func TestSleep(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgIn := message.QuickBatch(nil)
+	msgIn := message.QuickBatch([][]byte{[]byte("hello world")})
 	msgsOut, res := slp.ProcessMessage(msgIn)
 	if res != nil {
 		t.Fatal(res)
@@ -44,7 +44,7 @@ func TestSleepExit(t *testing.T) {
 
 	doneChan := make(chan struct{})
 	go func() {
-		_, _ = slp.ProcessMessage(message.QuickBatch(nil))
+		_, _ = slp.ProcessMessage(message.QuickBatch([][]byte{[]byte("hello world")}))
 		close(doneChan)
 	}()
 
@@ -68,7 +68,7 @@ func TestSleep200Millisecond(t *testing.T) {
 	}
 
 	tBefore := time.Now()
-	batches, err := slp.ProcessMessage(message.QuickBatch(nil))
+	batches, err := slp.ProcessMessage(message.QuickBatch([][]byte{[]byte("hello world")}))
 	tAfter := time.Now()
 	require.NoError(t, err)
 	require.Len(t, batches, 1)

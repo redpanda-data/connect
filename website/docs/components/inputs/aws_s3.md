@@ -33,7 +33,6 @@ input:
   aws_s3:
     bucket: ""
     prefix: ""
-    region: eu-west-1
     codec: all-bytes
     sqs:
       url: ""
@@ -52,7 +51,7 @@ input:
   aws_s3:
     bucket: ""
     prefix: ""
-    region: eu-west-1
+    region: ""
     endpoint: ""
     credentials:
       profile: ""
@@ -135,7 +134,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

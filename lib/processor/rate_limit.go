@@ -16,11 +16,15 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeRateLimit] = TypeSpec{
-		constructor: NewRateLimit,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newRateLimit(conf.RateLimit, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("rate_limit", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryUtility,
 		},
@@ -51,100 +55,58 @@ func NewRateLimitConfig() RateLimitConfig {
 
 //------------------------------------------------------------------------------
 
-// RateLimit is a processor that performs an RateLimit request using the message as the
-// request body, and returns the response.
-type RateLimit struct {
+type rateLimitProc struct {
 	rlName string
 	mgr    interop.Manager
-
-	log log.Modular
-
-	mCount       metrics.StatCounter
-	mRateLimited metrics.StatCounter
-	mErr         metrics.StatCounter
-	mSent        metrics.StatCounter
-	mBatchSent   metrics.StatCounter
 
 	closeChan chan struct{}
 	closeOnce sync.Once
 }
 
-// NewRateLimit returns a RateLimit processor.
-func NewRateLimit(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	if !mgr.ProbeRateLimit(conf.RateLimit.Resource) {
-		return nil, fmt.Errorf("rate limit resource '%v' was not found", conf.RateLimit.Resource)
+func newRateLimit(conf RateLimitConfig, mgr interop.Manager) (*rateLimitProc, error) {
+	if !mgr.ProbeRateLimit(conf.Resource) {
+		return nil, fmt.Errorf("rate limit resource '%v' was not found", conf.Resource)
 	}
-	r := &RateLimit{
-		rlName:       conf.RateLimit.Resource,
-		mgr:          mgr,
-		log:          log,
-		mCount:       stats.GetCounter("count"),
-		mRateLimited: stats.GetCounter("rate.limited"),
-		mErr:         stats.GetCounter("error"),
-		mSent:        stats.GetCounter("sent"),
-		mBatchSent:   stats.GetCounter("batch.sent"),
-		closeChan:    make(chan struct{}),
+	r := &rateLimitProc{
+		rlName:    conf.Resource,
+		mgr:       mgr,
+		closeChan: make(chan struct{}),
 	}
 	return r, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (r *RateLimit) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	r.mCount.Incr(1)
-
-	_ = msg.Iter(func(i int, p *message.Part) error {
+func (r *rateLimitProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+	for {
 		var waitFor time.Duration
 		var err error
-		if rerr := r.mgr.AccessRateLimit(context.Background(), r.rlName, func(rl ratelimit.V1) {
-			waitFor, err = rl.Access(context.Background())
+		if rerr := r.mgr.AccessRateLimit(ctx, r.rlName, func(rl ratelimit.V1) {
+			waitFor, err = rl.Access(ctx)
 		}); rerr != nil {
 			err = rerr
 		}
-		for err != nil || waitFor > 0 {
-			if err == component.ErrTypeClosed {
-				return err
-			}
-			if err != nil {
-				r.mErr.Incr(1)
-				r.log.Errorf("Failed to access rate limit: %v\n", err)
-				waitFor = time.Second
-			} else {
-				r.mRateLimited.Incr(1)
-			}
-			select {
-			case <-time.After(waitFor):
-			case <-r.closeChan:
-				return component.ErrTypeClosed
-			}
-			if rerr := r.mgr.AccessRateLimit(context.Background(), r.rlName, func(rl ratelimit.V1) {
-				waitFor, err = rl.Access(context.Background())
-			}); rerr != nil {
-				err = rerr
-			}
+		if ctx.Err() != nil {
+			return nil, err
 		}
-		return err
-	})
-
-	r.mBatchSent.Incr(1)
-	r.mSent.Incr(int64(msg.Len()))
-	return []*message.Batch{msg}, nil
+		if err != nil {
+			r.mgr.Logger().Errorf("Failed to access rate limit: %v", err)
+			waitFor = time.Second
+		}
+		if waitFor == 0 {
+			return []*message.Part{msg}, nil
+		}
+		select {
+		case <-time.After(waitFor):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-r.closeChan:
+			return nil, component.ErrTypeClosed
+		}
+	}
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (r *RateLimit) CloseAsync() {
+func (r *rateLimitProc) Close(ctx context.Context) error {
 	r.closeOnce.Do(func() {
 		close(r.closeChan)
 	})
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (r *RateLimit) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

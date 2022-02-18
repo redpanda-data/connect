@@ -7,9 +7,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
+	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
@@ -113,15 +114,15 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	}
 
 	// Create our metrics type.
-	stats, err := metrics.New(conf.Metrics, metrics.OptSetLogger(logger))
-	if err != nil {
+	var stats *imetrics.Namespaced
+	if stats, err = bundle.AllMetrics.Init(conf.Metrics, logger); err != nil {
 		logger.Errorf("Failed to connect metrics aggregator: %v\n", err)
-		stats = metrics.Noop()
+		stats = imetrics.NewNamespaced(metrics.Noop())
 	}
 
 	// Create our tracer type.
 	var trac tracer.Type
-	if trac, err = tracer.New(conf.Tracer); err != nil {
+	if trac, err = bundle.AllTracers.Init(conf.Tracer); err != nil {
 		logger.Errorf("Failed to initialise tracer: %v\n", err)
 		trac = tracer.Noop()
 	}
@@ -138,13 +139,13 @@ func NewHandler(conf config.Type) (*Handler, error) {
 
 	transactionChan := make(chan message.Transaction, 1)
 
-	pMgr, pLog, pStats := interop.LabelChild("pipeline", manager, logger, stats)
-	if pipelineLayer, err = pipeline.New(conf.Pipeline, pMgr, pLog, pStats); err != nil {
+	pMgr := manager.IntoPath("pipeline")
+	if pipelineLayer, err = pipeline.New(conf.Pipeline, pMgr, pMgr.Logger(), pMgr.Metrics()); err != nil {
 		return nil, fmt.Errorf("failed to create resource pipeline: %w", err)
 	}
 
-	oMgr, oLog, oStats := interop.LabelChild("output", manager, logger, stats)
-	if outputLayer, err = output.New(conf.Output, oMgr, oLog, oStats); err != nil {
+	oMgr := manager.IntoPath("output")
+	if outputLayer, err = output.New(conf.Output, oMgr, oMgr.Logger(), oMgr.Metrics()); err != nil {
 		return nil, fmt.Errorf("failed to create resource output: %w", err)
 	}
 

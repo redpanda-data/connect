@@ -92,10 +92,8 @@ func (m *Stream) inputLoop() {
 	}()
 
 	var (
-		mWriteCount    = m.stats.GetCounter("write.count")
-		mWriteErr      = m.stats.GetCounter("write.error")
-		mReceived      = m.stats.GetCounter("received")
-		mReceivedBatch = m.stats.GetCounter("batch.received")
+		mReceivedCount      = m.stats.GetCounter("buffer_received")
+		mReceivedBatchCount = m.stats.GetCounter("buffer_batch_received")
 	)
 
 	closeAtLeisureCtx, doneLeisure := m.shutSig.CloseAtLeisureCtx(context.Background())
@@ -112,8 +110,6 @@ func (m *Stream) inputLoop() {
 			if !open {
 				return
 			}
-			mReceived.Incr(int64(tr.Payload.Len()))
-			mReceivedBatch.Incr(1)
 		case <-m.shutSig.CloseAtLeisureChan():
 			return
 		}
@@ -134,11 +130,12 @@ func (m *Stream) inputLoop() {
 			return
 		}
 
+		batchLen := tr.Payload.Len()
 		err := m.buffer.Write(closeAtLeisureCtx, tracing.WithSiblingSpans(m.typeStr, tr.Payload), ackFunc)
 		if err == nil {
-			mWriteCount.Incr(1)
+			mReceivedCount.Incr(int64(batchLen))
+			mReceivedBatchCount.Incr(1)
 		} else {
-			mWriteErr.Incr(1)
 			_ = ackFunc(closeNowCtx, err)
 		}
 	}
@@ -156,11 +153,9 @@ func (m *Stream) outputLoop() {
 	}()
 
 	var (
-		mReadCount = m.stats.GetCounter("read.count")
-		mReadErr   = m.stats.GetCounter("read.error")
-		mSent      = m.stats.GetCounter("sent")
-		mSentBatch = m.stats.GetCounter("batch.sent")
-		mAckErr    = m.stats.GetCounter("ack.error")
+		mSent      = m.stats.GetCounter("buffer_sent")
+		mSentBatch = m.stats.GetCounter("buffer_batch_sent")
+		mLatency   = m.stats.GetTimer("buffer_latency_ns")
 	)
 
 	closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
@@ -170,7 +165,6 @@ func (m *Stream) outputLoop() {
 		msg, ackFunc, err := m.buffer.Read(closeNowCtx)
 		if err != nil {
 			if err != component.ErrTypeClosed && !errors.Is(err, context.Canceled) {
-				mReadErr.Incr(1)
 				m.log.Errorf("Failed to read buffer: %v\n", err)
 				if !m.errThrottle.Retry() {
 					return
@@ -185,9 +179,9 @@ func (m *Stream) outputLoop() {
 		// It's possible that the buffer wiped our previous root span.
 		tracing.InitSpans(m.typeStr, msg)
 
-		mReadCount.Incr(1)
-		m.errThrottle.Reset()
+		batchLen := msg.Len()
 
+		m.errThrottle.Reset()
 		resChan := make(chan response.Error, 1)
 		select {
 		case m.messagesOut <- message.NewTransaction(msg, resChan):
@@ -195,7 +189,9 @@ func (m *Stream) outputLoop() {
 			return
 		}
 
-		mSent.Incr(int64(msg.Len()))
+		startedAt := time.Now()
+
+		mSent.Incr(int64(batchLen))
 		mSentBatch.Incr(1)
 		ackGroup.Add(1)
 
@@ -206,9 +202,9 @@ func (m *Stream) outputLoop() {
 				if !open {
 					return
 				}
+				mLatency.Timing(time.Since(startedAt).Nanoseconds())
 				tracing.FinishSpans(msg)
 				if ackErr := ackFunc(closeNowCtx, res.AckError()); ackErr != nil {
-					mAckErr.Incr(1)
 					if ackErr != component.ErrTypeClosed {
 						m.log.Errorf("Failed to ack buffer message: %v\n", ackErr)
 					}

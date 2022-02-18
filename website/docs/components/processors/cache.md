@@ -48,7 +48,6 @@ cache:
   key: ""
   value: ""
   ttl: ""
-  parts: []
 ```
 
 </TabItem>
@@ -174,19 +173,6 @@ ttl: 5m
 
 ttl: 36h
 ```
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Operators
 

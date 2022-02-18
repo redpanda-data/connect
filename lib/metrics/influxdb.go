@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 
 func init() {
 	Constructors[TypeInfluxDB] = TypeSpec{
-		constructor: NewInfluxDB,
+		constructor: newInfluxDB,
 		Status:      docs.StatusExperimental,
 		Version:     "3.36.0",
 		Summary: `
@@ -44,7 +45,6 @@ Send metrics to InfluxDB 1.x using the ` + "`/write`" + ` endpoint.`,
 			).Map().Advanced(),
 			docs.FieldAdvanced("retention_policy", "Sets the retention policy for each write."),
 			docs.FieldAdvanced("write_consistency", "[any|one|quorum|all] sets write consistency when available."),
-			pathMappingDocs(true, false),
 		},
 	}
 }
@@ -65,8 +65,7 @@ type InfluxDBConfig struct {
 	WriteConsistency string          `json:"write_consistency" yaml:"write_consistency"`
 	Include          InfluxDBInclude `json:"include" yaml:"include"`
 
-	PathMapping string            `json:"path_mapping" yaml:"path_mapping"`
-	Tags        map[string]string `json:"tags" yaml:"tags"`
+	Tags map[string]string `json:"tags" yaml:"tags"`
 }
 
 // InfluxDBInclude contains configuration parameters for optional metrics to
@@ -90,8 +89,7 @@ func NewInfluxDBConfig() InfluxDBConfig {
 	}
 }
 
-// InfluxDB is the stats and client holder
-type InfluxDB struct {
+type influxDBMetrics struct {
 	client      client.Client
 	batchConfig client.BatchPointsConfig
 
@@ -102,27 +100,21 @@ type InfluxDB struct {
 	ctx    context.Context
 	cancel func()
 
-	pathMapping     *pathMapping
 	registry        metrics.Registry
 	runtimeRegistry metrics.Registry
 	config          InfluxDBConfig
 	log             log.Modular
 }
 
-// NewInfluxDB creates and returns a new InfluxDB object.
-func NewInfluxDB(config Config, opts ...func(Type)) (Type, error) {
-	i := &InfluxDB{
+func newInfluxDB(config Config, log log.Modular) (Type, error) {
+	i := &influxDBMetrics{
 		config:          config.InfluxDB,
 		registry:        metrics.NewRegistry(),
 		runtimeRegistry: metrics.NewRegistry(),
-		log:             log.Noop(),
+		log:             log,
 	}
 
 	i.ctx, i.cancel = context.WithCancel(context.Background())
-
-	for _, opt := range opts {
-		opt(i)
-	}
 
 	if config.InfluxDB.Include.Runtime != "" {
 		metrics.RegisterRuntimeMemStats(i.runtimeRegistry)
@@ -143,10 +135,6 @@ func NewInfluxDB(config Config, opts ...func(Type)) (Type, error) {
 	}
 
 	var err error
-	if i.pathMapping, err = newPathMapping(config.InfluxDB.PathMapping, i.log); err != nil {
-		return nil, fmt.Errorf("failed to init path mapping: %v", err)
-	}
-
 	if i.interval, err = time.ParseDuration(config.InfluxDB.Interval); err != nil {
 		return nil, fmt.Errorf("failed to parse interval: %s", err)
 	}
@@ -175,11 +163,7 @@ func NewInfluxDB(config Config, opts ...func(Type)) (Type, error) {
 	return i, nil
 }
 
-func (i *InfluxDB) toCMName(dotSepName string) (outPath string, labelNames, labelValues []string) {
-	return i.pathMapping.mapPathWithTags(dotSepName)
-}
-
-func (i *InfluxDB) makeClient() error {
+func (i *influxDBMetrics) makeClient() error {
 	var c client.Client
 	u, err := url.Parse(i.config.URL)
 	if err != nil {
@@ -220,7 +204,7 @@ func (i *InfluxDB) makeClient() error {
 	return err
 }
 
-func (i *InfluxDB) loop() {
+func (i *influxDBMetrics) loop() {
 	ticker := time.NewTicker(i.interval)
 	pingTicker := time.NewTicker(i.pingInterval)
 	defer ticker.Stop()
@@ -245,7 +229,7 @@ func (i *InfluxDB) loop() {
 	}
 }
 
-func (i *InfluxDB) publishRegistry() error {
+func (i *influxDBMetrics) publishRegistry() error {
 	points, err := client.NewBatchPoints(i.batchConfig)
 	if err != nil {
 		return fmt.Errorf("problem creating batch points for influx: %s", err)
@@ -322,27 +306,21 @@ func getMetricValues(i interface{}) map[string]interface{} {
 	return values
 }
 
-func (i *InfluxDB) getAllMetrics() map[string]map[string]interface{} {
+func (i *influxDBMetrics) getAllMetrics() map[string]map[string]interface{} {
 	data := make(map[string]map[string]interface{})
 	i.registry.Each(func(name string, metric interface{}) {
 		values := getMetricValues(metric)
 		data[name] = values
 	})
 	i.runtimeRegistry.Each(func(name string, metric interface{}) {
-		pathMappedName := i.pathMapping.mapPathNoTags(name)
 		values := getMetricValues(metric)
-		data[pathMappedName] = values
+		data[name] = values
 	})
 	return data
 }
 
-// GetCounter returns a stat counter object for a path.
-func (i *InfluxDB) GetCounter(path string) StatCounter {
-	name, labels, values := i.toCMName(path)
-	if name == "" {
-		return DudStat{}
-	}
-	encodedName := encodeInfluxDBName(name, labels, values)
+func (i *influxDBMetrics) GetCounter(path string) StatCounter {
+	encodedName := encodeInfluxDBName(path, nil, nil)
 	return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
 		return influxDBCounter{
 			metrics.NewCounter(),
@@ -350,21 +328,10 @@ func (i *InfluxDB) GetCounter(path string) StatCounter {
 	}).(influxDBCounter)
 }
 
-// GetCounterVec returns a stat counter object for a path with the labels
-func (i *InfluxDB) GetCounterVec(path string, n []string) StatCounterVec {
-	name, labels, values := i.toCMName(path)
-	if name == "" {
-		return fakeCounterVec(func([]string) StatCounter {
-			return DudStat{}
-		})
-	}
-	labels = append(labels, n...)
+func (i *influxDBMetrics) GetCounterVec(path string, n ...string) StatCounterVec {
 	return &fCounterVec{
-		f: func(l []string) StatCounter {
-			v := make([]string, 0, len(values)+len(l))
-			v = append(v, values...)
-			v = append(v, l...)
-			encodedName := encodeInfluxDBName(path, labels, v)
+		f: func(l ...string) StatCounter {
+			encodedName := encodeInfluxDBName(path, n, l)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Counter {
 				return influxDBCounter{
 					metrics.NewCounter(),
@@ -374,13 +341,8 @@ func (i *InfluxDB) GetCounterVec(path string, n []string) StatCounterVec {
 	}
 }
 
-// GetTimer returns a stat timer object for a path.
-func (i *InfluxDB) GetTimer(path string) StatTimer {
-	name, labels, values := i.toCMName(path)
-	if name == "" {
-		return DudStat{}
-	}
-	encodedName := encodeInfluxDBName(name, labels, values)
+func (i *influxDBMetrics) GetTimer(path string) StatTimer {
+	encodedName := encodeInfluxDBName(path, nil, nil)
 	return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
 		return influxDBTimer{
 			metrics.NewTimer(),
@@ -388,21 +350,10 @@ func (i *InfluxDB) GetTimer(path string) StatTimer {
 	}).(influxDBTimer)
 }
 
-// GetTimerVec returns a stat timer object for a path with the labels
-func (i *InfluxDB) GetTimerVec(path string, n []string) StatTimerVec {
-	name, labels, values := i.toCMName(path)
-	if name == "" {
-		return fakeTimerVec(func([]string) StatTimer {
-			return DudStat{}
-		})
-	}
-	labels = append(labels, n...)
+func (i *influxDBMetrics) GetTimerVec(path string, n ...string) StatTimerVec {
 	return &fTimerVec{
-		f: func(l []string) StatTimer {
-			v := make([]string, 0, len(values)+len(l))
-			v = append(v, values...)
-			v = append(v, l...)
-			encodedName := encodeInfluxDBName(name, labels, v)
+		f: func(l ...string) StatTimer {
+			encodedName := encodeInfluxDBName(path, n, l)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Timer {
 				return influxDBTimer{
 					metrics.NewTimer(),
@@ -412,13 +363,8 @@ func (i *InfluxDB) GetTimerVec(path string, n []string) StatTimerVec {
 	}
 }
 
-// GetGauge returns a stat gauge object for a path.
-func (i *InfluxDB) GetGauge(path string) StatGauge {
-	name, labels, values := i.toCMName(path)
-	if name == "" {
-		return DudStat{}
-	}
-	encodedName := encodeInfluxDBName(name, labels, values)
+func (i *influxDBMetrics) GetGauge(path string) StatGauge {
+	encodedName := encodeInfluxDBName(path, nil, nil)
 	var result = i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
 		return influxDBGauge{
 			metrics.NewGauge(),
@@ -427,21 +373,10 @@ func (i *InfluxDB) GetGauge(path string) StatGauge {
 	return result
 }
 
-// GetGaugeVec returns a stat timer object for a path with the labels
-func (i *InfluxDB) GetGaugeVec(path string, n []string) StatGaugeVec {
-	name, labels, values := i.toCMName(path)
-	if name == "" {
-		return fakeGaugeVec(func([]string) StatGauge {
-			return DudStat{}
-		})
-	}
-	labels = append(labels, n...)
+func (i *influxDBMetrics) GetGaugeVec(path string, n ...string) StatGaugeVec {
 	return &fGaugeVec{
-		f: func(l []string) StatGauge {
-			v := make([]string, 0, len(values)+len(l))
-			v = append(v, values...)
-			v = append(v, l...)
-			encodedName := encodeInfluxDBName(name, labels, v)
+		f: func(l ...string) StatGauge {
+			encodedName := encodeInfluxDBName(path, n, l)
 			return i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
 				return influxDBGauge{
 					metrics.NewGauge(),
@@ -451,13 +386,11 @@ func (i *InfluxDB) GetGaugeVec(path string, n []string) StatGaugeVec {
 	}
 }
 
-// SetLogger sets the logger used to print connection errors.
-func (i *InfluxDB) SetLogger(log log.Modular) {
-	i.log = log
+func (i *influxDBMetrics) HandlerFunc() http.HandlerFunc {
+	return nil
 }
 
-// Close reports metrics one last time and stops the InfluxDB object and closes the underlying client connection
-func (i *InfluxDB) Close() error {
+func (i *influxDBMetrics) Close() error {
 	if err := i.publishRegistry(); err != nil {
 		i.log.Errorf("failed to send metrics data: %s", err)
 	}

@@ -161,8 +161,7 @@ pipeline:
 
     - catch:
       - log:
-          fields:
-            error: "${! error() }"
+          fields_mapping: 'root.error = error()'
           message: "Failed to process message"
       - bloblang: 'root = "Sorry, my circuits are all bent from twerking and I must have malfunctioned."'
 ```

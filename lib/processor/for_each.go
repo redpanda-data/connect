@@ -1,12 +1,15 @@
 package processor
 
 import (
+	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -16,7 +19,13 @@ import (
 
 func init() {
 	Constructors[TypeForEach] = TypeSpec{
-		constructor: NewForEach,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newForEach(conf.ForEach, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("for_each", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryComposition,
 		},
@@ -48,74 +57,24 @@ func NewForEachConfig() ForEachConfig {
 
 //------------------------------------------------------------------------------
 
-// ForEach is a processor that applies a list of child processors to each
-// message of a batch individually.
-type ForEach struct {
+type forEachProc struct {
 	children []processor.V1
-
-	log log.Modular
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
 }
 
-// NewForEach returns a ForEach processor.
-func NewForEach(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+func newForEach(conf ForEachConfig, mgr interop.Manager) (*forEachProc, error) {
 	var children []processor.V1
-	for i, pconf := range conf.ForEach {
-		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
-		proc, err := New(pconf, pMgr, pLog, pStats)
+	for i, pconf := range conf {
+		pMgr := mgr.IntoPath("for_each", strconv.Itoa(i))
+		proc, err := New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
 		if err != nil {
 			return nil, fmt.Errorf("child processor [%v]: %w", i, err)
 		}
 		children = append(children, proc)
 	}
-	return &ForEach{
-		children: children,
-		log:      log,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
-	}, nil
+	return &forEachProc{children: children}, nil
 }
 
-// NewProcessBatch returns a ForEach processor.
-func NewProcessBatch(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	var children []processor.V1
-	for i, pconf := range conf.ProcessBatch {
-		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("%v", i), mgr, log, stats)
-		proc, err := New(pconf, pMgr, pLog, pStats)
-		if err != nil {
-			return nil, err
-		}
-		children = append(children, proc)
-	}
-	return &ForEach{
-		children: children,
-		log:      log,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
-	}, nil
-}
-
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (p *ForEach) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	p.mCount.Incr(1)
-
+func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	individualMsgs := make([]*message.Batch, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		tmpMsg := message.QuickBatch(nil)
@@ -126,9 +85,9 @@ func (p *ForEach) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 
 	resMsg := message.QuickBatch(nil)
 	for _, tmpMsg := range individualMsgs {
-		resultMsgs, res := ExecuteAll(p.children, tmpMsg)
-		if res != nil {
-			return nil, res
+		resultMsgs, err := ExecuteAll(p.children, tmpMsg)
+		if err != nil {
+			return nil, err
 		}
 		for _, m := range resultMsgs {
 			_ = m.Iter(func(i int, p *message.Part) error {
@@ -141,30 +100,21 @@ func (p *ForEach) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	if resMsg.Len() == 0 {
 		return nil, nil
 	}
-
-	p.mBatchSent.Incr(1)
-	p.mSent.Incr(int64(resMsg.Len()))
-
-	resMsgs := [1]*message.Batch{resMsg}
-	return resMsgs[:], nil
+	return []*message.Batch{resMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (p *ForEach) CloseAsync() {
+func (p *forEachProc) Close(ctx context.Context) error {
 	for _, c := range p.children {
 		c.CloseAsync()
 	}
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (p *ForEach) WaitForClose(timeout time.Duration) error {
-	stopBy := time.Now().Add(timeout)
+	deadline, exists := ctx.Deadline()
+	if !exists {
+		deadline = time.Now().Add(time.Second * 5)
+	}
 	for _, c := range p.children {
-		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
+		if err := c.WaitForClose(time.Until(deadline)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

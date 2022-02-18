@@ -3,7 +3,6 @@ package broker
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -116,9 +115,7 @@ func (t *Try) MaxInFlight() (int, bool) {
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (t *Try) loop() {
 	var (
-		wg        = sync.WaitGroup{}
-		mMsgsRcvd = t.stats.GetCounter("count")
-		mErrs     = []metrics.StatCounter{}
+		wg = sync.WaitGroup{}
 	)
 
 	defer func() {
@@ -129,10 +126,6 @@ func (t *Try) loop() {
 		closeAllOutputs(t.outputs)
 		close(t.closedChan)
 	}()
-
-	for i := range t.outputs {
-		mErrs = append(mErrs, t.stats.GetCounter(fmt.Sprintf("%v.%v.failed", t.outputsPrefix, i)))
-	}
 
 	sendLoop := func() {
 		defer wg.Done()
@@ -148,7 +141,6 @@ func (t *Try) loop() {
 			case <-t.ctx.Done():
 				return
 			}
-			mMsgsRcvd.Incr(1)
 
 			rChan := make(chan response.Error)
 			select {
@@ -167,9 +159,7 @@ func (t *Try) loop() {
 					if !lOpen {
 						return
 					}
-					if res.AckError() != nil {
-						mErrs[i-1].Incr(1)
-					} else {
+					if res.AckError() == nil {
 						break triesLoop
 					}
 				case <-t.ctx.Done():

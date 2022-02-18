@@ -4,25 +4,13 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 )
-
-// MappingFieldSpec is a field spec that describes a Bloblang mapping for
-// renaming metrics.
-func MappingFieldSpec() docs.FieldSpec {
-	examples := []interface{}{
-		`this.replace(".foo.count", ".count")`,
-		`if ![ "count", "error", "latency" ].contains(this) { deleted() }`,
-	}
-	summary := "An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported."
-	return docs.FieldBloblang("metrics_mapping", summary, examples...).HasDefault("")
-}
 
 // Mapping is a compiled Bloblang mapping used to rewrite metrics.
 type Mapping struct {
@@ -31,11 +19,11 @@ type Mapping struct {
 }
 
 // NewMapping parses a Bloblang mapping and returns a metrics mapping.
-func NewMapping(mgr interop.Manager, mapping string, logger log.Modular) (*Mapping, error) {
+func NewMapping(mapping string, logger log.Modular) (*Mapping, error) {
 	if mapping == "" {
 		return &Mapping{m: nil, logger: logger}, nil
 	}
-	m, err := mgr.BloblEnvironment().NewMapping(mapping)
+	m, err := bloblang.GlobalEnvironment().OnlyPure().NewMapping(mapping)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(mapping)))

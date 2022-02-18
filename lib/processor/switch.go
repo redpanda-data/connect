@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -21,7 +23,13 @@ import (
 
 func init() {
 	Constructors[TypeSwitch] = TypeSpec{
-		constructor: NewSwitch,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newSwitch(conf.Switch, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("switch", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryComposition,
 		},
@@ -147,24 +155,14 @@ type switchCase struct {
 	fallThrough bool
 }
 
-// Switch is a processor that only applies child processors under a certain
-// condition.
-type Switch struct {
+type switchProc struct {
 	cases []switchCase
 	log   log.Modular
-
-	mCount metrics.StatCounter
-	mSent  metrics.StatCounter
 }
 
-// NewSwitch returns a Switch processor.
-func NewSwitch(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+func newSwitch(conf SwitchConfig, mgr interop.Manager) (*switchProc, error) {
 	var cases []switchCase
-	for i, caseConf := range conf.Switch {
-		prefix := strconv.Itoa(i)
-
+	for i, caseConf := range conf {
 		var err error
 		var check *mapping.Executor
 		var procs []processor.V1
@@ -180,9 +178,9 @@ func NewSwitch(
 		}
 
 		for j, procConf := range caseConf.Processors {
-			pMgr, pLog, pStats := interop.LabelChild(prefix+"."+strconv.Itoa(j), mgr, log, stats)
-			var proc processor.V1
-			if proc, err = New(procConf, pMgr, pLog, pStats); err != nil {
+			pMgr := mgr.IntoPath("switch", strconv.Itoa(i), "processors", strconv.Itoa(j))
+			proc, err := New(procConf, pMgr, pMgr.Logger(), pMgr.Metrics())
+			if err != nil {
 				return nil, fmt.Errorf("case [%v] processor [%v]: %w", i, j, err)
 			}
 			procs = append(procs, proc)
@@ -194,16 +192,11 @@ func NewSwitch(
 			fallThrough: caseConf.Fallthrough,
 		})
 	}
-	return &Switch{
+	return &switchProc{
 		cases: cases,
-		log:   log,
-
-		mCount: stats.GetCounter("count"),
-		mSent:  stats.GetCounter("sent"),
+		log:   mgr.Logger(),
 	}, nil
 }
-
-//------------------------------------------------------------------------------
 
 func reorderFromGroup(group *imessage.SortGroup, parts []*message.Part) {
 	partToIndex := map[*message.Part]int{}
@@ -224,11 +217,7 @@ func reorderFromGroup(group *imessage.SortGroup, parts []*message.Part) {
 	})
 }
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (s *Switch) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res error) {
-	s.mCount.Incr(1)
-
+func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	var result []*message.Part
 	var remaining []*message.Part
 	var carryOver []*message.Part
@@ -255,7 +244,7 @@ func (s *Switch) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res 
 				var err error
 				if test, err = switchCase.check.QueryPart(j, testMsg); err != nil {
 					s.log.Errorf("Failed to test case %v: %v\n", i, err)
-					FlagErr(p, err)
+					processor.MarkErr(p, nil, err)
 					result = append(result, p)
 					continue
 				}
@@ -304,30 +293,25 @@ func (s *Switch) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res 
 		return nil, nil
 	}
 
-	s.mSent.Incr(int64(resMsg.Len()))
 	return []*message.Batch{resMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (s *Switch) CloseAsync() {
-	for _, s := range s.cases {
-		for _, proc := range s.processors {
-			proc.CloseAsync()
+func (s *switchProc) Close(ctx context.Context) error {
+	for _, c := range s.cases {
+		for _, p := range c.processors {
+			p.CloseAsync()
 		}
 	}
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (s *Switch) WaitForClose(timeout time.Duration) error {
-	stopBy := time.Now().Add(timeout)
-	for _, s := range s.cases {
-		for _, proc := range s.processors {
-			if err := proc.WaitForClose(time.Until(stopBy)); err != nil {
+	deadline, exists := ctx.Deadline()
+	if !exists {
+		deadline = time.Now().Add(time.Second * 5)
+	}
+	for _, c := range s.cases {
+		for _, p := range c.processors {
+			if err := p.WaitForClose(time.Until(deadline)); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

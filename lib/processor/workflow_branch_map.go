@@ -10,8 +10,6 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/quipo/dependencysolver"
 )
 
@@ -97,15 +95,14 @@ func (w *workflowBranchMap) WaitForClose(timeout time.Duration) error {
 
 var processDAGStageName = regexp.MustCompile("[a-zA-Z0-9-_]+")
 
-func newWorkflowBranchMap(conf WorkflowConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*workflowBranchMap, error) {
+func newWorkflowBranchMap(conf WorkflowConfig, mgr interop.Manager) (*workflowBranchMap, error) {
 	dynamicBranches, staticBranches := map[string]workflowBranch{}, map[string]*Branch{}
 	for k, v := range conf.Branches {
 		if len(processDAGStageName.FindString(k)) != len(k) {
 			return nil, fmt.Errorf("workflow branch name '%v' contains invalid characters", k)
 		}
 
-		bMgr, bLog, bStats := interop.LabelChild(k, mgr, log, stats)
-		child, err := newBranch(v, bMgr, bLog, bStats)
+		child, err := newBranch(v, mgr.IntoPath("workflow", "branches", k))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create branch '%v': %v", k, err)
 		}
@@ -156,7 +153,7 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr interop.Manager, log log.Modu
 		if dag, err = resolveDynamicBranchDAG(staticBranches); err != nil {
 			return nil, err
 		}
-		log.Infof("Automatically resolved workflow DAG: %v\n", dag)
+		mgr.Logger().Infof("Automatically resolved workflow DAG: %v", dag)
 	}
 
 	return &workflowBranchMap{

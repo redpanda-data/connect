@@ -61,28 +61,19 @@ This also works the same with [output brokers][output_broker].
 
 ## Grouped Message Processing
 
-One of the more powerful features of Benthos is that all processors are "batch aware", which means processors that operate on single messages can be configured using the `parts` field to only operate on select messages of a batch:
+And some processors such as [`while`][processor.while] are executed once across a whole batch, you can avoid this behaviour with the [`for_each` processor][proc_for_each]:
 
 ```yaml
 pipeline:
   processors:
-    # This processor only acts on the first message of a batch
-    - protobuf:
-        parts: [ 0 ]
-        operator: to_json
-        message: header.Message
-        import_paths: [ /tmp/protos ]
-```
-
-And some processors such as [`sleep`][processor.sleep] are executed once per batch, you can avoid this behaviour with the [`for_each` processor][proc_for_each]:
-
-```yaml
-pipeline:
-  processors:
-    # Sleep for one second for each message of a batch
     - for_each:
-      - sleep:
-          duration: 1s
+      - while:
+          at_least_once: true
+          max_loops: 0
+          check: errored()
+          processors:
+            - catch: [] # Wipe any previous error
+            - resource: foo # Attempt this processor until success
 ```
 
 There's a vast number of processors that specialise in operations across batches such as [grouping][proc_group_by] and [archiving][proc_archive]. For example, the following processors group a batch of messages according to a metadata field and compresses them into separate `.tar.gz` archives:
@@ -201,7 +192,7 @@ The above config will batch up messages and then merge them into a line delimite
 During shutdown any remaining messages waiting for a batch to complete will be flushed down the pipeline.
 
 [processors]: /docs/components/processors/about
-[processor.sleep]: /docs/components/processors/sleep
+[processor.while]: /docs/components/processors/while
 [split]: /docs/components/processors/split
 [archive]: /docs/components/processors/archive
 [unarchive]: /docs/components/processors/unarchive

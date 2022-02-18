@@ -121,12 +121,7 @@ func closeAllOutputs(outputs []output.Streamed) {
 
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (o *FanOut) loop() {
-	var (
-		wg         = sync.WaitGroup{}
-		mMsgsRcvd  = o.stats.GetCounter("messages.received")
-		mOutputErr = o.stats.GetCounter("error")
-		mMsgsSnt   = o.stats.GetCounter("messages.sent")
-	)
+	wg := sync.WaitGroup{}
 
 	defer func() {
 		wg.Wait()
@@ -151,7 +146,6 @@ func (o *FanOut) loop() {
 			case <-o.ctx.Done():
 				return
 			}
-			mMsgsRcvd.Incr(1)
 
 			var owg errgroup.Group
 			for target := range o.outputTSChans {
@@ -171,12 +165,10 @@ func (o *FanOut) loop() {
 						case res := <-resChan:
 							if res.AckError() != nil {
 								o.logger.Errorf("Failed to dispatch fan out message to output '%v': %v\n", i, res.AckError())
-								mOutputErr.Incr(1)
 								if !throt.Retry() {
 									return component.ErrTypeClosed
 								}
 							} else {
-								mMsgsSnt.Incr(1)
 								return nil
 							}
 						case <-o.ctx.Done():

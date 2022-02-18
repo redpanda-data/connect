@@ -18,11 +18,12 @@ import (
 
 func TestDecompressBadAlgo(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "decompress"
 	conf.Decompress.Algorithm = "does not exist"
 
 	testLog := log.Noop()
 
-	_, err := NewDecompress(conf, mock.NewManager(), testLog, metrics.Noop())
+	_, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -30,6 +31,7 @@ func TestDecompressBadAlgo(t *testing.T) {
 
 func TestDecompressGZIP(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "decompress"
 	conf.Decompress.Algorithm = "gzip"
 
 	testLog := log.Noop()
@@ -60,7 +62,7 @@ func TestDecompressGZIP(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecompress(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +80,7 @@ func TestDecompressGZIP(t *testing.T) {
 
 func TestDecompressSnappy(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "decompress"
 	conf.Decompress.Algorithm = "snappy"
 
 	input := [][]byte{
@@ -99,7 +102,7 @@ func TestDecompressSnappy(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecompress(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,6 +120,7 @@ func TestDecompressSnappy(t *testing.T) {
 
 func TestDecompressZLIB(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "decompress"
 	conf.Decompress.Algorithm = "zlib"
 
 	testLog := log.Noop()
@@ -147,7 +151,7 @@ func TestDecompressZLIB(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecompress(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,6 +169,7 @@ func TestDecompressZLIB(t *testing.T) {
 
 func TestDecompressFlate(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "decompress"
 	conf.Decompress.Algorithm = "flate"
 
 	testLog := log.Noop()
@@ -198,7 +203,7 @@ func TestDecompressFlate(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecompress(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,6 +221,7 @@ func TestDecompressFlate(t *testing.T) {
 
 func TestDecompressLZ4(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "decompress"
 	conf.Decompress.Algorithm = "lz4"
 
 	input := [][]byte{
@@ -246,7 +252,7 @@ func TestDecompressLZ4(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewDecompress(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,98 +265,5 @@ func TestDecompressLZ4(t *testing.T) {
 	}
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected output: %s != %s", act, exp)
-	}
-}
-
-func TestDecompressIndexBounds(t *testing.T) {
-	conf := NewConfig()
-
-	testLog := log.Noop()
-
-	input := [][]byte{
-		[]byte("0"),
-		[]byte("1"),
-		[]byte("2"),
-		[]byte("3"),
-		[]byte("4"),
-	}
-
-	for i := range input {
-		var buf bytes.Buffer
-
-		zw := gzip.NewWriter(&buf)
-		zw.Write(input[i])
-		zw.Close()
-
-		input[i] = buf.Bytes()
-	}
-
-	type result struct {
-		index int
-		value string
-	}
-
-	tests := map[int]result{
-		-5: {
-			index: 0,
-			value: "0",
-		},
-		-4: {
-			index: 1,
-			value: "1",
-		},
-		-3: {
-			index: 2,
-			value: "2",
-		},
-		-2: {
-			index: 3,
-			value: "3",
-		},
-		-1: {
-			index: 4,
-			value: "4",
-		},
-		0: {
-			index: 0,
-			value: "0",
-		},
-		1: {
-			index: 1,
-			value: "1",
-		},
-		2: {
-			index: 2,
-			value: "2",
-		},
-		3: {
-			index: 3,
-			value: "3",
-		},
-		4: {
-			index: 4,
-			value: "4",
-		},
-	}
-
-	for i, result := range tests {
-		conf.Decompress.Parts = []int{i}
-		proc, err := NewDecompress(conf, mock.NewManager(), testLog, metrics.Noop())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		msgs, res := proc.ProcessMessage(message.QuickBatch(input))
-		if len(msgs) != 1 {
-			t.Errorf("Decompress failed on index: %v", i)
-		} else if res != nil {
-			t.Errorf("Expected nil response: %v", res)
-		}
-		if exp, act := result.value, string(message.GetAllBytes(msgs[0])[result.index]); exp != act {
-			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
-		}
-		if exp, act := result.value, string(message.GetAllBytes(msgs[0])[(result.index+1)%5]); exp == act {
-			t.Errorf("Processor was applied to wrong index %v: %v != %v", (result.index+1)%5, act, exp)
-		}
 	}
 }

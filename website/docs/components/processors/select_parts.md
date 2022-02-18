@@ -19,33 +19,12 @@ import TabItem from '@theme/TabItem';
 Cherry pick a set of messages from a batch by their index. Indexes larger than
 the number of messages are simply ignored.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
 ```yml
-# Common config fields, showing default values
-label: ""
-select_parts: {}
-```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yml
-# All config fields, showing default values
+# Config fields, showing default values
 label: ""
 select_parts:
-  parts:
-    - 0
+  parts: []
 ```
-
-</TabItem>
-</Tabs>
 
 The selected parts are added to the new message batch in the same order as the
 selection array. E.g. with 'parts' set to [ 2, 0, 1 ] and the message parts
@@ -59,6 +38,8 @@ end counting backwards starting from -1. E.g. if index = -1 then the selected
 part will be the last part of the message, if index = -2 then the part before
 the last element with be selected, and so on.
 
+This processor is only applicable to [batched messages](/docs/configuration/batching).
+
 The functionality of this processor depends on being applied across messages
 that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
 
@@ -66,15 +47,10 @@ that are batched. You can find out more about batching [in this doc](/docs/confi
 
 ### `parts`
 
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
+An array of message indexes of a batch. Indexes can be negative, and if so the part will be selected from the end counting backwards starting from -1.
 
 
 Type: `array`  
-Default: `[0]`  
+Default: `[]`  
 
 

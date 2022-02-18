@@ -73,12 +73,12 @@ processor_resources:
       value: ${! json("download_count") }
 
 metrics:
+  mapping: |
+    # Only emit our custom metric, and no internal Benthos metrics.
+    root = if ![
+      "BenthosDownloadGauge"
+    ].contains(this) { deleted() }
   aws_cloudwatch:
     namespace: BenthosAnalyticsStaging
     flush_period: 500ms
     region: eu-west-1
-    path_mapping: |
-      # Only emit our custom metric, and no internal Benthos metrics.
-      root = if ![
-        "BenthosDownloadGauge"
-      ].contains(this) { deleted() }

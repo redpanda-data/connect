@@ -7,12 +7,12 @@ import (
 	"time"
 
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/lib/cache"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

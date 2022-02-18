@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	bmanager "github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/stretchr/testify/require"
@@ -26,11 +26,7 @@ func TestTypeBasicOperations(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := New(
-		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.Noop()),
-		OptSetManager(res),
-	)
+	mgr := New(res)
 
 	if err := mgr.Update("foo", harmlessConf(), time.Second); err == nil {
 		t.Error("Expected error on empty update")
@@ -89,11 +85,7 @@ func TestTypeBasicClose(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := New(
-		OptSetLogger(log.Noop()),
-		OptSetStats(metrics.Noop()),
-		OptSetManager(res),
-	)
+	mgr := New(res)
 
 	conf := harmlessConf()
 	conf.Output.Type = output.TypeNanomsg

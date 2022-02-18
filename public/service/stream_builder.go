@@ -707,7 +707,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		}
 	}
 
-	stats, err := metrics.New(s.metrics, metrics.OptSetLogger(logger))
+	stats, err := bundle.AllMetrics.Init(s.metrics, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -725,17 +725,9 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		if apiMut, err = api.New("", "", s.http, sanitNode, logger, stats); err != nil {
 			return nil, fmt.Errorf("unable to create stream HTTP server due to: %w. Tip: you can disable the server with `http.enabled` set to `false`, or override the configured server with SetHTTPMux", err)
 		}
-	}
-
-	if wHandlerFunc, ok := stats.(metrics.WithHandlerFunc); ok {
-		apiMut.RegisterEndpoint(
-			"/stats", "Returns service metrics.",
-			wHandlerFunc.HandlerFunc(),
-		)
-		apiMut.RegisterEndpoint(
-			"/metrics", "Returns service metrics.",
-			wHandlerFunc.HandlerFunc(),
-		)
+	} else if hler := stats.HandlerFunc(); hler != nil {
+		apiMut.RegisterEndpoint("/stats", "Exposes service-wide metrics in the format configured.", hler)
+		apiMut.RegisterEndpoint("/metrics", "Exposes service-wide metrics in the format configured.", hler)
 	}
 
 	mgr, err := manager.NewV2(

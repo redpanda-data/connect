@@ -2,18 +2,17 @@ package processor
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"regexp"
-	"sync"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -22,15 +21,19 @@ import (
 	"github.com/benhoyt/goawk/parser"
 )
 
-//------------------------------------------------------------------------------
-
 var varInvalidRegexp *regexp.Regexp
 
 func init() {
 	varInvalidRegexp = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
 	Constructors[TypeAWK] = TypeSpec{
-		constructor: NewAWK,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newAWKProc(conf.AWK, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("awk", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryMapping,
 		},
@@ -295,7 +298,6 @@ optional, and if omitted the level ` + "`INFO`" + ` will be used.
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("codec", "A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.").HasOptions("none", "text", "json"),
 			docs.FieldCommon("program", "An AWK program to execute"),
-			PartsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
 			{
@@ -391,7 +393,6 @@ pipeline:
 
 // AWKConfig contains configuration fields for the AWK processor.
 type AWKConfig struct {
-	Parts   []int  `json:"parts" yaml:"parts"`
 	Codec   string `json:"codec" yaml:"codec"`
 	Program string `json:"program" yaml:"program"`
 }
@@ -399,7 +400,6 @@ type AWKConfig struct {
 // NewAWKConfig returns a AWKConfig with default values.
 func NewAWKConfig() AWKConfig {
 	return AWKConfig{
-		Parts:   []int{},
 		Codec:   "text",
 		Program: "BEGIN { x = 0 } { print $0, x; x++ }",
 	}
@@ -407,41 +407,26 @@ func NewAWKConfig() AWKConfig {
 
 //------------------------------------------------------------------------------
 
-// AWK is a processor that executes AWK programs on a message part and replaces
-// the contents with the result.
-type AWK struct {
-	parts   []int
-	program *parser.Program
-
-	conf  AWKConfig
-	log   log.Modular
-	stats metrics.Type
-	mut   sync.Mutex
-
+type awkProc struct {
+	codec     string
+	program   *parser.Program
+	log       log.Modular
 	functions map[string]interface{}
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
 }
 
-// NewAWK returns a AWK processor.
-func NewAWK(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	program, err := parser.ParseProgram([]byte(conf.AWK.Program), &parser.ParserConfig{
+func newAWKProc(conf AWKConfig, mgr interop.Manager) (processor.V2, error) {
+	program, err := parser.ParseProgram([]byte(conf.Program), &parser.ParserConfig{
 		Funcs: awkFunctionsMap,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile AWK program: %v", err)
 	}
-	switch conf.AWK.Codec {
+	switch conf.Codec {
 	case "none":
 	case "text":
 	case "json":
 	default:
-		return nil, fmt.Errorf("unrecognised codec: %v", conf.AWK.Codec)
+		return nil, fmt.Errorf("unrecognised codec: %v", conf.Codec)
 	}
 	functionOverrides := make(map[string]interface{}, len(awkFunctionsMap))
 	for k, v := range awkFunctionsMap {
@@ -452,32 +437,24 @@ func NewAWK(
 		default:
 			fallthrough
 		case "", "INFO":
-			log.Infoln(value)
+			mgr.Logger().Infoln(value)
 		case "TRACE":
-			log.Traceln(value)
+			mgr.Logger().Traceln(value)
 		case "DEBUG":
-			log.Debugln(value)
+			mgr.Logger().Debugln(value)
 		case "WARN":
-			log.Warnln(value)
+			mgr.Logger().Warnln(value)
 		case "ERROR":
-			log.Errorln(value)
+			mgr.Logger().Errorln(value)
 		case "FATAL":
-			log.Fatalln(value)
+			mgr.Logger().Fatalln(value)
 		}
 	}
-	a := &AWK{
-		parts:   conf.AWK.Parts,
-		program: program,
-		conf:    conf.AWK,
-		log:     log,
-		stats:   stats,
-
+	a := &awkProc{
+		codec:     conf.Codec,
+		program:   program,
+		log:       mgr.Logger(),
 		functions: functionOverrides,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
 	}
 	return a, nil
 }
@@ -661,239 +638,214 @@ func flattenForAWK(path string, data interface{}) map[string]string {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (a *AWK) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	a.mCount.Incr(1)
-	newMsg := msg.Copy()
-	mutableJSONParts := make([]interface{}, newMsg.Len())
+func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+	part := msg.Copy()
+	var mutableJSONPart interface{}
 
-	a.mut.Lock()
 	customFuncs := make(map[string]interface{}, len(a.functions))
 	for k, v := range a.functions {
 		customFuncs[k] = v
 	}
-	a.mut.Unlock()
 
-	proc := func(i int, span *tracing.Span, part *message.Part) error {
-		var outBuf, errBuf bytes.Buffer
+	var outBuf, errBuf bytes.Buffer
 
-		// Function overrides
-		customFuncs["metadata_get"] = func(k string) string {
-			return part.MetaGet(k)
-		}
-		customFuncs["metadata_set"] = func(k, v string) {
-			part.MetaSet(k, v)
-		}
-		customFuncs["json_get"] = func(path string) (string, error) {
-			jsonPart, err := part.JSON()
-			if err != nil {
-				return "", fmt.Errorf("failed to parse message into json: %v", err)
-			}
-			gPart := gabs.Wrap(jsonPart)
-			gTarget := gPart.Path(path)
-			if gTarget.Data() == nil {
-				return "null", nil
-			}
-			if str, isString := gTarget.Data().(string); isString {
-				return str, nil
-			}
-			return gTarget.String(), nil
-		}
-		getJSON := func() (*gabs.Container, error) {
-			var err error
-			jsonPart := mutableJSONParts[i]
-			if jsonPart == nil {
-				if jsonPart, err = part.JSON(); err == nil {
-					jsonPart, err = message.CopyJSON(jsonPart)
-				}
-				if err == nil {
-					mutableJSONParts[i] = jsonPart
-				}
-			}
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse message into json: %v", err)
-			}
-			gPart := gabs.Wrap(jsonPart)
-			return gPart, nil
-		}
-		setJSON := func(path string, v interface{}) (int, error) {
-			gPart, err := getJSON()
-			if err != nil {
-				return 0, err
-			}
-			gPart.SetP(v, path)
-			part.SetJSON(gPart.Data())
-			return 0, nil
-		}
-		customFuncs["json_set"] = func(path, v string) (int, error) {
-			return setJSON(path, v)
-		}
-		customFuncs["json_set_int"] = func(path string, v int) (int, error) {
-			return setJSON(path, v)
-		}
-		customFuncs["json_set_float"] = func(path string, v float64) (int, error) {
-			return setJSON(path, v)
-		}
-		customFuncs["json_set_bool"] = func(path string, v bool) (int, error) {
-			return setJSON(path, v)
-		}
-		arrayAppendJSON := func(path string, v interface{}) (int, error) {
-			gPart, err := getJSON()
-			if err != nil {
-				return 0, err
-			}
-			gPart.ArrayAppendP(v, path)
-			part.SetJSON(gPart.Data())
-			return 0, nil
-		}
-		customFuncs["json_append"] = func(path, v string) (int, error) {
-			return arrayAppendJSON(path, v)
-		}
-		customFuncs["json_append_int"] = func(path string, v int) (int, error) {
-			return arrayAppendJSON(path, v)
-		}
-		customFuncs["json_append_float"] = func(path string, v float64) (int, error) {
-			return arrayAppendJSON(path, v)
-		}
-		customFuncs["json_append_bool"] = func(path string, v bool) (int, error) {
-			return arrayAppendJSON(path, v)
-		}
-		customFuncs["json_delete"] = func(path string) (int, error) {
-			gObj, err := getJSON()
-			if err != nil {
-				return 0, err
-			}
-			gObj.DeleteP(path)
-			part.SetJSON(gObj.Data())
-			return 0, nil
-		}
-		customFuncs["json_length"] = func(path string) (int, error) {
-			gObj, err := getJSON()
-			if err != nil {
-				return 0, err
-			}
-			switch t := gObj.Path(path).Data().(type) {
-			case string:
-				return len(t), nil
-			case []interface{}:
-				return len(t), nil
-			}
-			return 0, nil
-		}
-		customFuncs["json_type"] = func(path string) (string, error) {
-			gObj, err := getJSON()
-			if err != nil {
-				return "", err
-			}
-			if !gObj.ExistsP(path) {
-				return "undefined", nil
-			}
-			switch t := gObj.Path(path).Data().(type) {
-			case int:
-				return "int", nil
-			case float64:
-				return "float", nil
-			case json.Number:
-				return "float", nil
-			case string:
-				return "string", nil
-			case bool:
-				return "bool", nil
-			case []interface{}:
-				return "array", nil
-			case map[string]interface{}:
-				return "object", nil
-			case nil:
-				return "null", nil
-			default:
-				return "", fmt.Errorf("type not recognised: %T", t)
-			}
-		}
-
-		config := &interp.Config{
-			Output: &outBuf,
-			Error:  &errBuf,
-			Funcs:  customFuncs,
-		}
-
-		if a.conf.Codec == "json" {
-			jsonPart, err := part.JSON()
-			if err != nil {
-				a.mErr.Incr(1)
-				a.log.Errorf("Failed to parse part into json: %v\n", err)
-				return err
-			}
-
-			for k, v := range flattenForAWK("", jsonPart) {
-				config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
-			}
-			config.Stdin = bytes.NewReader([]byte(" "))
-		} else if a.conf.Codec == "text" {
-			config.Stdin = bytes.NewReader(part.Get())
-		} else {
-			config.Stdin = bytes.NewReader([]byte(" "))
-		}
-
-		if a.conf.Codec != "none" {
-			_ = part.MetaIter(func(k, v string) error {
-				config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
-				return nil
-			})
-		}
-
-		if exitStatus, err := interp.ExecProgram(a.program, config); err != nil {
-			a.mErr.Incr(1)
-			a.log.Errorf("Non-fatal execution error: %v\n", err)
-			return err
-		} else if exitStatus != 0 {
-			a.mErr.Incr(1)
-			err = fmt.Errorf(
-				"non-fatal execution error: awk interpreter returned non-zero exit code: %d", exitStatus,
-			)
-			a.log.Errorf("AWK: %v\n", err)
-			return err
-		}
-
-		if errMsg, err := io.ReadAll(&errBuf); err != nil {
-			a.log.Errorf("Read err error: %v\n", err)
-		} else if len(errMsg) > 0 {
-			a.mErr.Incr(1)
-			a.log.Errorf("Execution error: %s\n", errMsg)
-			return errors.New(string(errMsg))
-		}
-
-		resMsg, err := io.ReadAll(&outBuf)
+	// Function overrides
+	customFuncs["metadata_get"] = func(k string) string {
+		return part.MetaGet(k)
+	}
+	customFuncs["metadata_set"] = func(k, v string) {
+		part.MetaSet(k, v)
+	}
+	customFuncs["json_get"] = func(path string) (string, error) {
+		jsonPart, err := part.JSON()
 		if err != nil {
-			a.mErr.Incr(1)
-			a.log.Errorf("Read output error: %v\n", err)
-			return err
+			return "", fmt.Errorf("failed to parse message into json: %v", err)
 		}
-
-		if len(resMsg) > 0 {
-			// Remove trailing line break
-			if resMsg[len(resMsg)-1] == '\n' {
-				resMsg = resMsg[:len(resMsg)-1]
+		gPart := gabs.Wrap(jsonPart)
+		gTarget := gPart.Path(path)
+		if gTarget.Data() == nil {
+			return "null", nil
+		}
+		if str, isString := gTarget.Data().(string); isString {
+			return str, nil
+		}
+		return gTarget.String(), nil
+	}
+	getJSON := func() (*gabs.Container, error) {
+		var err error
+		jsonPart := mutableJSONPart
+		if jsonPart == nil {
+			if jsonPart, err = part.JSON(); err == nil {
+				jsonPart, err = message.CopyJSON(jsonPart)
 			}
-			part.Set(resMsg)
+			if err == nil {
+				mutableJSONPart = jsonPart
+			}
 		}
-		return nil
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse message into json: %v", err)
+		}
+		gPart := gabs.Wrap(jsonPart)
+		return gPart, nil
+	}
+	setJSON := func(path string, v interface{}) (int, error) {
+		gPart, err := getJSON()
+		if err != nil {
+			return 0, err
+		}
+		gPart.SetP(v, path)
+		part.SetJSON(gPart.Data())
+		return 0, nil
+	}
+	customFuncs["json_set"] = func(path, v string) (int, error) {
+		return setJSON(path, v)
+	}
+	customFuncs["json_set_int"] = func(path string, v int) (int, error) {
+		return setJSON(path, v)
+	}
+	customFuncs["json_set_float"] = func(path string, v float64) (int, error) {
+		return setJSON(path, v)
+	}
+	customFuncs["json_set_bool"] = func(path string, v bool) (int, error) {
+		return setJSON(path, v)
+	}
+	arrayAppendJSON := func(path string, v interface{}) (int, error) {
+		gPart, err := getJSON()
+		if err != nil {
+			return 0, err
+		}
+		gPart.ArrayAppendP(v, path)
+		part.SetJSON(gPart.Data())
+		return 0, nil
+	}
+	customFuncs["json_append"] = func(path, v string) (int, error) {
+		return arrayAppendJSON(path, v)
+	}
+	customFuncs["json_append_int"] = func(path string, v int) (int, error) {
+		return arrayAppendJSON(path, v)
+	}
+	customFuncs["json_append_float"] = func(path string, v float64) (int, error) {
+		return arrayAppendJSON(path, v)
+	}
+	customFuncs["json_append_bool"] = func(path string, v bool) (int, error) {
+		return arrayAppendJSON(path, v)
+	}
+	customFuncs["json_delete"] = func(path string) (int, error) {
+		gObj, err := getJSON()
+		if err != nil {
+			return 0, err
+		}
+		gObj.DeleteP(path)
+		part.SetJSON(gObj.Data())
+		return 0, nil
+	}
+	customFuncs["json_length"] = func(path string) (int, error) {
+		gObj, err := getJSON()
+		if err != nil {
+			return 0, err
+		}
+		switch t := gObj.Path(path).Data().(type) {
+		case string:
+			return len(t), nil
+		case []interface{}:
+			return len(t), nil
+		}
+		return 0, nil
+	}
+	customFuncs["json_type"] = func(path string) (string, error) {
+		gObj, err := getJSON()
+		if err != nil {
+			return "", err
+		}
+		if !gObj.ExistsP(path) {
+			return "undefined", nil
+		}
+		switch t := gObj.Path(path).Data().(type) {
+		case int:
+			return "int", nil
+		case float64:
+			return "float", nil
+		case json.Number:
+			return "float", nil
+		case string:
+			return "string", nil
+		case bool:
+			return "bool", nil
+		case []interface{}:
+			return "array", nil
+		case map[string]interface{}:
+			return "object", nil
+		case nil:
+			return "null", nil
+		default:
+			return "", fmt.Errorf("type not recognised: %T", t)
+		}
 	}
 
-	IteratePartsWithSpanV2(TypeAWK, a.parts, newMsg, proc)
+	config := &interp.Config{
+		Output: &outBuf,
+		Error:  &errBuf,
+		Funcs:  customFuncs,
+	}
 
-	msgs := [1]*message.Batch{newMsg}
+	if a.codec == "json" {
+		jsonPart, err := part.JSON()
+		if err != nil {
+			a.log.Errorf("Failed to parse part into json: %v\n", err)
+			return nil, err
+		}
 
-	a.mBatchSent.Incr(1)
-	a.mSent.Incr(int64(newMsg.Len()))
-	return msgs[:], nil
+		for k, v := range flattenForAWK("", jsonPart) {
+			config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
+		}
+		config.Stdin = bytes.NewReader([]byte(" "))
+	} else if a.codec == "text" {
+		config.Stdin = bytes.NewReader(part.Get())
+	} else {
+		config.Stdin = bytes.NewReader([]byte(" "))
+	}
+
+	if a.codec != "none" {
+		_ = part.MetaIter(func(k, v string) error {
+			config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
+			return nil
+		})
+	}
+
+	if exitStatus, err := interp.ExecProgram(a.program, config); err != nil {
+		a.log.Errorf("Non-fatal execution error: %v\n", err)
+		return nil, err
+	} else if exitStatus != 0 {
+		err = fmt.Errorf(
+			"non-fatal execution error: awk interpreter returned non-zero exit code: %d", exitStatus,
+		)
+		a.log.Errorf("AWK: %v\n", err)
+		return nil, err
+	}
+
+	if errMsg, err := io.ReadAll(&errBuf); err != nil {
+		a.log.Errorf("Read err error: %v\n", err)
+	} else if len(errMsg) > 0 {
+		a.log.Errorf("Execution error: %s\n", errMsg)
+		return nil, errors.New(string(errMsg))
+	}
+
+	resMsgBytes, err := io.ReadAll(&outBuf)
+	if err != nil {
+		a.log.Errorf("Read output error: %v\n", err)
+		return nil, err
+	}
+	if len(resMsgBytes) > 0 {
+		// Remove trailing line break
+		if resMsgBytes[len(resMsgBytes)-1] == '\n' {
+			resMsgBytes = resMsgBytes[:len(resMsgBytes)-1]
+		}
+		part.Set(resMsgBytes)
+	}
+
+	return []*message.Part{part}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (a *AWK) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (a *AWK) WaitForClose(timeout time.Duration) error {
+func (a *awkProc) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

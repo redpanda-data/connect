@@ -73,6 +73,9 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 			return "", false
 		})
 	}
+	if t == TypeMetrics {
+		m["mapping"] = MetricsMappingFieldSpec("mapping")
+	}
 	if _, isLabelType := map[Type]struct{}{
 		TypeInput:     {},
 		TypeProcessor: {},

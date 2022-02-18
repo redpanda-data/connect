@@ -12,10 +12,11 @@ import (
 
 func TestSelectParts(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "select_parts"
 	conf.SelectParts.Parts = []int{1, 3}
 
 	testLog := log.Noop()
-	proc, err := NewSelectParts(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -80,6 +81,7 @@ func TestSelectParts(t *testing.T) {
 
 func TestSelectPartsIndexBounds(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "select_parts"
 	conf.SelectParts.Parts = []int{1, 3}
 
 	testLog := log.Noop()
@@ -107,7 +109,7 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 
 	for i, exp := range tests {
 		conf.SelectParts.Parts = []int{i}
-		proc, err := NewSelectParts(conf, mock.NewManager(), testLog, metrics.Noop())
+		proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -126,10 +128,11 @@ func TestSelectPartsIndexBounds(t *testing.T) {
 
 func TestSelectPartsEmpty(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "select_parts"
 	conf.SelectParts.Parts = []int{3}
 
 	testLog := log.Noop()
-	proc, err := NewSelectParts(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

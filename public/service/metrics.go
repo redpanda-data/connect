@@ -21,7 +21,7 @@ func (m *Metrics) NewCounter(name string, labelKeys ...string) *MetricCounter {
 	if m == nil {
 		return nil
 	}
-	cv := m.t.GetCounterVec(name, labelKeys)
+	cv := m.t.GetCounterVec(name, labelKeys...)
 	return &MetricCounter{cv}
 }
 
@@ -31,7 +31,7 @@ func (m *Metrics) NewTimer(name string, labelKeys ...string) *MetricTimer {
 	if m == nil {
 		return nil
 	}
-	tv := m.t.GetTimerVec(name, labelKeys)
+	tv := m.t.GetTimerVec(name, labelKeys...)
 	return &MetricTimer{tv}
 }
 
@@ -41,7 +41,7 @@ func (m *Metrics) NewGauge(name string, labelKeys ...string) *MetricGauge {
 	if m == nil {
 		return nil
 	}
-	gv := m.t.GetGaugeVec(name, labelKeys)
+	gv := m.t.GetGaugeVec(name, labelKeys...)
 	return &MetricGauge{gv}
 }
 
@@ -59,7 +59,7 @@ func (c *MetricCounter) Incr(count int64, labelValues ...string) {
 	if c == nil {
 		return
 	}
-	_ = c.cv.With(labelValues...).Incr(count)
+	c.cv.With(labelValues...).Incr(count)
 }
 
 // MetricTimer represents a timing metric of a given name and labels.
@@ -73,7 +73,7 @@ func (t *MetricTimer) Timing(delta int64, labelValues ...string) {
 	if t == nil {
 		return
 	}
-	_ = t.tv.With(labelValues...).Timing(delta)
+	t.tv.With(labelValues...).Timing(delta)
 }
 
 // MetricGauge represents a gauge metric of a given name and labels.
@@ -87,5 +87,5 @@ func (g *MetricGauge) Set(value int64, labelValues ...string) {
 	if g == nil {
 		return
 	}
-	_ = g.gv.With(labelValues...).Set(value)
+	g.gv.With(labelValues...).Set(value)
 }

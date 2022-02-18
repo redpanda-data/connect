@@ -205,21 +205,9 @@ type HTTPServer struct {
 
 	allowedVerbs map[string]struct{}
 
-	// TODO: V4 Reduce this way down
-	mCount         metrics.StatCounter
-	mLatency       metrics.StatTimer
-	mRateLimited   metrics.StatCounter
-	mWSRateLimited metrics.StatCounter
-	mRcvd          metrics.StatCounter
-	mPartsRcvd     metrics.StatCounter
-	mWSCount       metrics.StatCounter
-	mTimeout       metrics.StatCounter
-	mErr           metrics.StatCounter
-	mWSErr         metrics.StatCounter
-	mSucc          metrics.StatCounter
-	mWSSucc        metrics.StatCounter
-	mAsyncErr      metrics.StatCounter
-	mAsyncSucc     metrics.StatCounter
+	mPostRcvd metrics.StatCounter
+	mWSRcvd   metrics.StatCounter
+	mLatency  metrics.StatTimer
 }
 
 // NewHTTPServer creates a new HTTPServer input type.
@@ -251,6 +239,7 @@ func NewHTTPServer(conf Config, mgr interop.Manager, log log.Modular, stats metr
 		return nil, errors.New("must provide at least one allowed verb")
 	}
 
+	mRcvd := stats.GetCounterVec("input_received", "endpoint")
 	h := HTTPServer{
 		shutSig:         shutdown.NewSignaller(),
 		conf:            conf.HTTPServer,
@@ -265,20 +254,9 @@ func NewHTTPServer(conf Config, mgr interop.Manager, log log.Modular, stats metr
 
 		allowedVerbs: verbs,
 
-		mCount:         stats.GetCounter("count"),
-		mLatency:       stats.GetTimer("latency"),
-		mRateLimited:   stats.GetCounter("rate_limited"),
-		mWSRateLimited: stats.GetCounter("ws.rate_limited"),
-		mRcvd:          stats.GetCounter("batch.received"),
-		mPartsRcvd:     stats.GetCounter("received"),
-		mWSCount:       stats.GetCounter("ws.count"),
-		mTimeout:       stats.GetCounter("send.timeout"),
-		mErr:           stats.GetCounter("send.error"),
-		mWSErr:         stats.GetCounter("ws.send.error"),
-		mSucc:          stats.GetCounter("send.success"),
-		mWSSucc:        stats.GetCounter("ws.send.success"),
-		mAsyncErr:      stats.GetCounter("send.async_error"),
-		mAsyncSucc:     stats.GetCounter("send.async_success"),
+		mLatency:  stats.GetTimer("input_latency_ns"),
+		mWSRcvd:   mRcvd.With("websocket"),
+		mPostRcvd: mRcvd.With("post"),
 	}
 
 	if h.responseStatus, err = mgr.BloblEnvironment().NewField(h.conf.Response.Status); err != nil {
@@ -425,7 +403,6 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 		} else if tUntil > 0 {
 			w.Header().Add("Retry-After", strconv.Itoa(int(tUntil.Seconds())))
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
-			h.mRateLimited.Incr(1)
 			return
 		}
 	}
@@ -443,20 +420,16 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 	store := roundtrip.NewResultStore()
 	roundtrip.AddResultStore(msg, store)
 
-	h.mCount.Incr(1)
-	h.mPartsRcvd.Incr(int64(msg.Len()))
-	h.mRcvd.Incr(1)
+	h.mPostRcvd.Incr(int64(msg.Len()))
 	h.log.Tracef("Consumed %v messages from POST to '%v'.\n", msg.Len(), h.conf.Path)
 
 	resChan := make(chan response.Error, 1)
 	select {
 	case h.transactions <- message.NewTransaction(msg, resChan):
 	case <-time.After(h.timeout):
-		h.mTimeout.Incr(1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		return
 	case <-r.Context().Done():
-		h.mTimeout.Incr(1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		return
 	case <-h.shutSig.CloseAtLeisureChan():
@@ -470,19 +443,15 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Server closing", http.StatusServiceUnavailable)
 			return
 		} else if res.AckError() != nil {
-			h.mErr.Incr(1)
 			http.Error(w, res.AckError().Error(), http.StatusBadGateway)
 			return
 		}
 		tTaken := time.Since(startedAt).Nanoseconds()
 		h.mLatency.Timing(tTaken)
-		h.mSucc.Incr(1)
 	case <-time.After(h.timeout):
-		h.mTimeout.Incr(1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		return
 	case <-r.Context().Done():
-		h.mTimeout.Incr(1)
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 		return
 	case <-h.shutSig.CloseNowChan():
@@ -606,8 +575,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if _, msgBytes, err = ws.ReadMessage(); err != nil {
 				return
 			}
-			h.mWSCount.Incr(1)
-			h.mCount.Incr(1)
+			h.mWSRcvd.Incr(1)
 		}
 
 		if h.conf.RateLimit != "" {
@@ -627,7 +595,6 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 						h.log.Errorf("Failed to send rate limit message: %v\n", err)
 					}
 				}
-				h.mWSRateLimited.Incr(1)
 				continue
 			}
 		}
@@ -669,14 +636,10 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if res.AckError() != nil {
-				h.mWSErr.Incr(1)
-				h.mErr.Incr(1)
 				throt.Retry()
 			} else {
 				tTaken := time.Since(startedAt).Nanoseconds()
 				h.mLatency.Timing(tTaken)
-				h.mWSSucc.Incr(1)
-				h.mSucc.Incr(1)
 				msgBytes = nil
 				throt.Reset()
 			}
@@ -699,8 +662,6 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 //------------------------------------------------------------------------------
 
 func (h *HTTPServer) loop() {
-	mRunning := h.stats.GetGauge("running")
-
 	defer func() {
 		if h.server != nil {
 			if err := h.server.Shutdown(context.Background()); err != nil {
@@ -716,12 +677,10 @@ func (h *HTTPServer) loop() {
 		}
 
 		h.handlerWG.Wait()
-		mRunning.Decr(1)
 
 		close(h.transactions)
 		h.shutSig.ShutdownComplete()
 	}()
-	mRunning.Incr(1)
 
 	if h.server != nil {
 		go func() {

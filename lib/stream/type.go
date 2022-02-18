@@ -6,17 +6,14 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
 	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
-	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 
@@ -36,20 +33,16 @@ type Type struct {
 	pipelineLayer pipeline.Type
 	outputLayer   ioutput.Streamed
 
-	manager interop.Manager
-	stats   metrics.Type
-	logger  log.Modular
+	manager bundle.NewManagement
 
 	onClose func()
 }
 
 // New creates a new stream.Type.
-func New(conf Config, opts ...func(*Type)) (*Type, error) {
+func New(conf Config, mgr bundle.NewManagement, opts ...func(*Type)) (*Type, error) {
 	t := &Type{
 		conf:    conf,
-		stats:   metrics.Noop(),
-		logger:  log.Noop(),
-		manager: mock.NewManager(),
+		manager: mgr,
 		onClose: func() {},
 	}
 	for _, opt := range opts {
@@ -85,39 +78,6 @@ func New(conf Config, opts ...func(*Type)) (*Type, error) {
 
 //------------------------------------------------------------------------------
 
-// OptSetStats sets the metrics aggregator to be used by all components of the
-// stream.
-func OptSetStats(stats metrics.Type) func(*Type) {
-	return func(t *Type) {
-		t.stats = stats
-	}
-}
-
-// OptSetLogger sets the logging output to be used by all components of the
-// stream. To avoid implementing the log.Modular interface with a custom logger
-// consider using OptSetLogSimple instead.
-func OptSetLogger(l log.Modular) func(*Type) {
-	return func(t *Type) {
-		t.logger = l
-	}
-}
-
-// OptSetLogSimple sets the logging output to a simpler log interface
-// (implemented by the standard *log.Logger.)
-func OptSetLogSimple(l log.PrintFormatter) func(*Type) {
-	return func(t *Type) {
-		t.logger = log.Wrap(l)
-	}
-}
-
-// OptSetManager sets the service manager to be used by all components of the
-// stream.
-func OptSetManager(mgr interop.Manager) func(*Type) {
-	return func(t *Type) {
-		t.manager = mgr
-	}
-}
-
 // OptOnClose sets a closure to be called when the stream closes.
 func OptOnClose(onClose func()) func(*Type) {
 	return func(t *Type) {
@@ -135,24 +95,24 @@ func (t *Type) IsReady() bool {
 
 func (t *Type) start() (err error) {
 	// Constructors
-	iMgr, iLog, iStats := interop.LabelChild("input", t.manager, t.logger, t.stats)
-	if t.inputLayer, err = input.New(t.conf.Input, iMgr, iLog, iStats); err != nil {
+	iMgr := t.manager.IntoPath("input")
+	if t.inputLayer, err = input.New(t.conf.Input, iMgr, iMgr.Logger(), iMgr.Metrics()); err != nil {
 		return
 	}
 	if t.conf.Buffer.Type != "none" {
-		bMgr, bLog, bStats := interop.LabelChild("buffer", t.manager, t.logger, t.stats)
-		if t.bufferLayer, err = buffer.New(t.conf.Buffer, bMgr, bLog, bStats); err != nil {
+		bMgr := t.manager.IntoPath("buffer")
+		if t.bufferLayer, err = buffer.New(t.conf.Buffer, bMgr, bMgr.Logger(), bMgr.Metrics()); err != nil {
 			return
 		}
 	}
 	if tLen := len(t.conf.Pipeline.Processors); tLen > 0 {
-		pMgr, pLog, pStats := interop.LabelChild("pipeline", t.manager, t.logger, t.stats)
-		if t.pipelineLayer, err = pipeline.New(t.conf.Pipeline, pMgr, pLog, pStats); err != nil {
+		pMgr := t.manager.IntoPath("pipeline")
+		if t.pipelineLayer, err = pipeline.New(t.conf.Pipeline, pMgr, pMgr.Logger(), pMgr.Metrics()); err != nil {
 			return
 		}
 	}
-	oMgr, oLog, oStats := interop.LabelChild("output", t.manager, t.logger, t.stats)
-	if t.outputLayer, err = output.New(t.conf.Output, oMgr, oLog, oStats); err != nil {
+	oMgr := t.manager.IntoPath("output")
+	if t.outputLayer, err = output.New(t.conf.Output, oMgr, oMgr.Logger(), oMgr.Metrics()); err != nil {
 		return
 	}
 
@@ -348,9 +308,9 @@ func (t *Type) Stop(timeout time.Duration) error {
 		return nil
 	}
 	if err == component.ErrTimeout {
-		t.logger.Infoln("Unable to fully drain buffered messages within target time.")
+		t.manager.Logger().Infoln("Unable to fully drain buffered messages within target time.")
 	} else {
-		t.logger.Errorf("Encountered error whilst shutting down: %v\n", err)
+		t.manager.Logger().Errorf("Encountered error whilst shutting down: %v\n", err)
 	}
 
 	err = t.StopUnordered(tOutUnordered)
@@ -358,14 +318,14 @@ func (t *Type) Stop(timeout time.Duration) error {
 		return nil
 	}
 	if err == component.ErrTimeout {
-		t.logger.Errorln("Failed to stop stream gracefully within target time.")
+		t.manager.Logger().Errorln("Failed to stop stream gracefully within target time.")
 
 		dumpBuf := bytes.NewBuffer(nil)
 		pprof.Lookup("goroutine").WriteTo(dumpBuf, 1)
 
-		t.logger.Debugln(dumpBuf.String())
+		t.manager.Logger().Debugln(dumpBuf.String())
 	} else {
-		t.logger.Errorf("Encountered error whilst shutting down: %v\n", err)
+		t.manager.Logger().Errorf("Encountered error whilst shutting down: %v\n", err)
 	}
 
 	return err

@@ -3,6 +3,7 @@ package metrics
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -10,20 +11,17 @@ func TestInfluxTimers(t *testing.T) {
 	config := NewConfig()
 	config.InfluxDB.URL = "http://localhost:8086"
 	config.InfluxDB.DB = "db0"
-	config.InfluxDB.PathMapping = `meta buz = "first"`
 
-	influx, err := NewInfluxDB(config)
+	influx, err := newInfluxDB(config, log.Noop())
 	require.NoError(t, err)
 
-	i := influx.(*InfluxDB)
+	i := influx.(*influxDBMetrics)
 
 	expectedMetrics := 3
-	i.GetTimer("").Timing(100)
 	i.GetTimer("ti mer").Timing(100)
 	i.GetTimer("ti mer").Timing(200)
-	i.GetTimerVec("", []string{"label"}).With("value").Timing(200)
-	i.GetTimerVec("timer with labels", []string{"label"}).With("value").Timing(200)
-	i.GetTimerVec("timer with labels", []string{"label"}).With("value2").Timing(400)
+	i.GetTimerVec("timer with labels", "label").With("value").Timing(200)
+	i.GetTimerVec("timer with labels", "label").With("value2").Timing(400)
 
 	m := i.getAllMetrics()
 	if len(m) != expectedMetrics {
@@ -31,9 +29,9 @@ func TestInfluxTimers(t *testing.T) {
 	}
 
 	measurements := []string{
-		`ti\ mer,buz=first`,
-		`timer\ with\ labels,buz=first,label=value`,
-		`timer\ with\ labels,buz=first,label=value2`,
+		`ti\ mer`,
+		`timer\ with\ labels,label=value`,
+		`timer\ with\ labels,label=value2`,
 	}
 
 	for _, measurementName := range measurements {
@@ -53,21 +51,18 @@ func TestInfluxCounters(t *testing.T) {
 	config := NewConfig()
 	config.InfluxDB.URL = "http://localhost:8086"
 	config.InfluxDB.DB = "db0"
-	config.InfluxDB.PathMapping = `meta buz = "first"`
 
-	influx, err := NewInfluxDB(config)
+	influx, err := newInfluxDB(config, log.Noop())
 	require.NoError(t, err)
 
-	i := influx.(*InfluxDB)
+	i := influx.(*influxDBMetrics)
 
 	expectedMetrics := 3
-	i.GetCounter("").Incr(1)
 	i.GetCounter("cou nter").Incr(1)
 	i.GetCounter("cou nter").Incr(1)
-	i.GetCounterVec("", []string{"label"}).With("value").Incr(2)
-	i.GetCounterVec("counter with labels", []string{"label"}).With("value").Incr(2)
-	i.GetCounterVec("counter with labels", []string{"label"}).With("value").Incr(2)
-	i.GetCounterVec("counter with labels", []string{"label"}).With("value2").Incr(2)
+	i.GetCounterVec("counter with labels", "label").With("value").Incr(2)
+	i.GetCounterVec("counter with labels", "label").With("value").Incr(2)
+	i.GetCounterVec("counter with labels", "label").With("value2").Incr(2)
 
 	m := i.getAllMetrics()
 	if len(m) != expectedMetrics {
@@ -75,9 +70,9 @@ func TestInfluxCounters(t *testing.T) {
 	}
 
 	measurements := []string{
-		`cou\ nter,buz=first`,
-		`counter\ with\ labels,buz=first,label=value`,
-		`counter\ with\ labels,buz=first,label=value2`,
+		`cou\ nter`,
+		`counter\ with\ labels,label=value`,
+		`counter\ with\ labels,label=value2`,
 	}
 
 	for _, measurementName := range measurements {
@@ -97,22 +92,19 @@ func TestInfluxGauge(t *testing.T) {
 	config := NewConfig()
 	config.InfluxDB.URL = "http://localhost:8086"
 	config.InfluxDB.DB = "db0"
-	config.InfluxDB.PathMapping = `meta buz = "first"`
 
-	influx, err := NewInfluxDB(config)
+	influx, err := newInfluxDB(config, log.Noop())
 	require.NoError(t, err)
 
-	i := influx.(*InfluxDB)
+	i := influx.(*influxDBMetrics)
 
 	expectedMetrics := 3
-	i.GetGauge("").Set(10)
 	i.GetGauge("ga uge").Set(10)
 	i.GetGauge("ga uge").Set(20)
 	i.GetGauge("ga uge").Set(30)
-	i.GetGaugeVec("", []string{"label"}).With("value").Set(100)
-	i.GetGaugeVec("gauge with labels", []string{"label"}).With("value").Set(100)
-	i.GetGaugeVec("gauge with labels", []string{"label"}).With("value").Set(200)
-	i.GetGaugeVec("gauge with labels", []string{"label"}).With("value2").Set(100)
+	i.GetGaugeVec("gauge with labels", "label").With("value").Set(100)
+	i.GetGaugeVec("gauge with labels", "label").With("value").Set(200)
+	i.GetGaugeVec("gauge with labels", "label").With("value2").Set(100)
 
 	m := i.getAllMetrics()
 	if len(m) != expectedMetrics {
@@ -120,9 +112,9 @@ func TestInfluxGauge(t *testing.T) {
 	}
 
 	measurements := []string{
-		`ga\ uge,buz=first`,
-		`gauge\ with\ labels,buz=first,label=value`,
-		`gauge\ with\ labels,buz=first,label=value2`,
+		`ga\ uge`,
+		`gauge\ with\ labels,label=value`,
+		`gauge\ with\ labels,label=value2`,
 	}
 
 	for _, measurementName := range measurements {
@@ -143,10 +135,10 @@ func TestInflux_makeClientDefault(t *testing.T) {
 	config.InfluxDB.URL = "http://localhost:8086"
 	config.InfluxDB.DB = "db0"
 
-	flux, err := NewInfluxDB(config)
+	flux, err := newInfluxDB(config, log.Noop())
 	require.NoError(t, err)
 
-	i := flux.(*InfluxDB)
+	i := flux.(*influxDBMetrics)
 	if i.client == nil {
 		t.Errorf("expected a client")
 	}
@@ -157,10 +149,10 @@ func TestInflux_makeClientHTTPS(t *testing.T) {
 	config.InfluxDB.URL = "https://localhost:8086"
 	config.InfluxDB.DB = "db0"
 
-	flux, err := NewInfluxDB(config)
+	flux, err := newInfluxDB(config, log.Noop())
 	require.NoError(t, err)
 
-	i := flux.(*InfluxDB)
+	i := flux.(*influxDBMetrics)
 	if i.client == nil {
 		t.Errorf("expected a client")
 	}
@@ -170,11 +162,11 @@ func TestInflux_makeClientUDP(t *testing.T) {
 	config := NewConfig()
 	config.InfluxDB.URL = "udp://localhost:8065"
 	config.InfluxDB.DB = "db0"
-	flux, err := NewInfluxDB(config)
+	flux, err := newInfluxDB(config, log.Noop())
 	if err != nil {
 		t.Errorf("unexpected error %s", err)
 	}
-	i := flux.(*InfluxDB)
+	i := flux.(*influxDBMetrics)
 	if i.client == nil {
 		t.Errorf("expected a client")
 	}
@@ -186,7 +178,7 @@ func TestInflux_makeClientInvalid(t *testing.T) {
 	influxConfig.URL = "scheme://localhost:8065"
 	influxConfig.DB = "db0"
 	config.InfluxDB = influxConfig
-	flux, err := NewInfluxDB(config)
+	flux, err := newInfluxDB(config, log.Noop())
 	if err == nil {
 		t.Errorf("expected error but did not receive one")
 	}

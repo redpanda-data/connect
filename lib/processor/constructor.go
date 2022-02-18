@@ -91,30 +91,6 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 // Constructors is a map of all processor types with their specs.
 var Constructors = map[string]TypeSpec{}
 
-// Block replaces the constructor of a Benthos processor such that its
-// construction will always return an error. This is useful for building strict
-// pipelines where certain processors should not be available. NOTE: This does
-// not remove the processor from the configuration spec, and normalisation will
-// still work the same for blocked processors.
-//
-// EXPERIMENTAL: This function is experimental and therefore subject to change
-// outside of major version releases.
-func Block(typeStr, reason string) {
-	ctor, ok := Constructors[typeStr]
-	if !ok {
-		return
-	}
-	ctor.constructor = func(
-		conf Config,
-		mgr interop.Manager,
-		log log.Modular,
-		stats metrics.Type,
-	) (processor.V1, error) {
-		return nil, fmt.Errorf("processor '%v' is blocked due to: %v", typeStr, reason)
-	}
-	Constructors[typeStr] = ctor
-}
-
 //------------------------------------------------------------------------------
 
 // String constants representing each processor type.
@@ -214,7 +190,6 @@ type Config struct {
 	Switch       SwitchConfig       `json:"switch" yaml:"switch"`
 	SyncResponse SyncResponseConfig `json:"sync_response" yaml:"sync_response"`
 	Try          TryConfig          `json:"try" yaml:"try"`
-	Throttle     ThrottleConfig     `json:"throttle" yaml:"throttle"`
 	Unarchive    UnarchiveConfig    `json:"unarchive" yaml:"unarchive"`
 	While        WhileConfig        `json:"while" yaml:"while"`
 	Workflow     WorkflowConfig     `json:"workflow" yaml:"workflow"`
@@ -268,7 +243,6 @@ func NewConfig() Config {
 		Switch:       NewSwitchConfig(),
 		SyncResponse: NewSyncResponseConfig(),
 		Try:          NewTryConfig(),
-		Throttle:     NewThrottleConfig(),
 		Unarchive:    NewUnarchiveConfig(),
 		While:        NewWhileConfig(),
 		Workflow:     NewWorkflowConfig(),

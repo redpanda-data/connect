@@ -7,14 +7,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
 	imessage "github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/nsf/jsondiff"
 	"github.com/ory/dockertest/v3"
@@ -115,7 +116,6 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 			J:        false,
 			WTimeout: "100s",
 		},
-		Parts:       nil,
 		Operation:   "insert-one",
 		DocumentMap: "root.a = this.foo\nroot.b = this.bar",
 	}
@@ -133,7 +133,7 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 		[]byte(`{"foo":"foo2","bar":"bar2"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.QuickBatch(parts))
+	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -187,7 +187,6 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 			J:        false,
 			WTimeout: "100s",
 		},
-		Parts:     nil,
 		Operation: "delete-one",
 		FilterMap: "root.a = this.foo\nroot.b = this.bar",
 	}
@@ -211,7 +210,7 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_delete","bar":"bar_delete"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.QuickBatch(parts))
+	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -247,7 +246,6 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 			J:        false,
 			WTimeout: "100s",
 		},
-		Parts:     nil,
 		Operation: "delete-many",
 		FilterMap: "root.a = this.foo\nroot.b = this.bar",
 	}
@@ -273,7 +271,7 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_delete_many","bar":"bar_delete_many"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.QuickBatch(parts))
+	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -308,7 +306,6 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 			J:        false,
 			WTimeout: "100s",
 		},
-		Parts:       nil,
 		Operation:   "replace-one",
 		DocumentMap: "root.a = this.foo\nroot.b = this.bar",
 		FilterMap:   "root.a = this.foo",
@@ -333,7 +330,7 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_replace","bar":"bar_new"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.QuickBatch(parts))
+	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -373,7 +370,6 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 			J:        false,
 			WTimeout: "100s",
 		},
-		Parts:       nil,
 		Operation:   "update-one",
 		DocumentMap: `root = {"$set": {"a": this.foo, "b": this.bar}}`,
 		FilterMap:   "root.a = this.foo",
@@ -398,7 +394,7 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_update","bar":"bar_update_new"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.QuickBatch(parts))
+	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -438,7 +434,6 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 		J:        false,
 		WTimeout: "100s",
 	}
-	conf.MongoDB.Parts = nil
 	conf.MongoDB.Operation = "find-one"
 	conf.MongoDB.FilterMap = "root.a = this.a"
 
@@ -494,7 +489,7 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 
 		m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
 		require.NoError(t, err)
-		resMsgs, response := m.ProcessMessage(message.QuickBatch([][]byte{[]byte(tt.message)}))
+		resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, 1), message.QuickBatch([][]byte{[]byte(tt.message)}))
 		require.Nil(t, response)
 		require.Len(t, resMsgs, 1)
 		if tt.expectedErr != nil {

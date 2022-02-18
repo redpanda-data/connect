@@ -1,12 +1,9 @@
 package log
 
-//------------------------------------------------------------------------------
-
 // Modular is a log printer that allows you to branch new modules.
 type Modular interface {
-	NewModule(prefix string) Modular
-
 	WithFields(fields map[string]string) Modular
+	With(keyValues ...interface{}) Modular
 
 	Fatalf(format string, v ...interface{})
 	Errorf(format string, v ...interface{})
@@ -22,5 +19,3 @@ type Modular interface {
 	Debugln(message string)
 	Traceln(message string)
 }
-
-//------------------------------------------------------------------------------

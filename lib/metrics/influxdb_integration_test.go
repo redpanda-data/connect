@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/log"
 	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/ory/dockertest/v3"
 )
@@ -79,14 +80,13 @@ func TestInfluxIntegration(t *testing.T) {
 	config.DB = "db0"
 	config.Interval = "1s"
 	config.Tags = map[string]string{"hostname": "localhost"}
-	config.PathMapping = `root = "benthos." + this`
 	globalConfig.InfluxDB = config
 
-	flux, err := NewInfluxDB(globalConfig)
+	flux, err := newInfluxDB(globalConfig, log.Noop())
 	if err != nil {
 		t.Fatalf("problem creating to InfluxDB: %s", err)
 	}
-	i := flux.(*InfluxDB)
+	i := flux.(*influxDBMetrics)
 	i.client = c
 
 	t.Run("testInfluxConnect", func(t *testing.T) {
@@ -98,7 +98,7 @@ func testInfluxConnect(t *testing.T, i Type, c client.Client) {
 	i.GetGauge("testing").Set(31337)
 	i.Close()
 
-	resp, err := c.Query(client.Query{Command: `SELECT "hostname"::tag, "value"::field FROM "benthos.testing"`, Database: "db0"})
+	resp, err := c.Query(client.Query{Command: `SELECT "hostname"::tag, "value"::field FROM "testing"`, Database: "db0"})
 	if err != nil {
 		t.Errorf("problem with influx query: %s", err)
 	}

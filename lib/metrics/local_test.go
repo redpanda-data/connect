@@ -1,272 +1,71 @@
 package metrics
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"testing"
 
-	"golang.org/x/sync/errgroup"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCounter(t *testing.T) {
-	path := "testing.label"
-	local := NewLocal()
-	label := "tested"
-	counter := local.GetCounterVec(path, []string{label})
-	value := "true"
+	nm := NewLocal()
 
-	counter.With(value).Incr(1)
+	ctr := nm.GetCounter("counterone")
+	ctr.Incr(10)
+	ctr.Incr(11)
 
-	counters := local.GetCountersWithLabels()
-	c, ok := counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
+	gge := nm.GetGauge("gaugeone")
+	gge.Set(12)
+
+	tmr := nm.GetTimer("timerone")
+	tmr.Timing(13)
+
+	ctrTwo := nm.GetCounterVec("countertwo", "label1")
+	ctrTwo.With("value1").Incr(10)
+	ctrTwo.With("value2").Incr(11)
+
+	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
+	ggeTwo.With("value3").Set(12)
+
+	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
+	tmrTwo.With("value4", "value5").Timing(13)
+
+	ggeTwo.With("value6").Set(24)
+
+	expCounters := map[string]int64{
+		"counterone":                    21,
+		"countertwo{label1=\"value1\"}": 10,
+		"countertwo{label1=\"value2\"}": 11,
+		"gaugeone":                      12,
+		"gaugetwo{label2=\"value3\"}":   12,
+		"gaugetwo{label2=\"value6\"}":   24,
 	}
+	assert.Equal(t, expCounters, nm.GetCounters())
+	// Check twice to ensure we didn't flush
+	assert.Equal(t, expCounters, nm.GetCounters())
 
-	if *c.Value != 1 {
-		t.Fatalf("value for counter: got %d, wanted 1", *c.Value)
+	assert.Equal(t, expCounters, nm.FlushCounters())
+	expCounters = map[string]int64{
+		"counterone":                    0,
+		"countertwo{label1=\"value1\"}": 0,
+		"countertwo{label1=\"value2\"}": 0,
+		"gaugeone":                      0,
+		"gaugetwo{label2=\"value3\"}":   0,
+		"gaugetwo{label2=\"value6\"}":   0,
 	}
+	assert.Equal(t, expCounters, nm.GetCounters())
 
-	// test second call results in the same value
-	counters = local.GetCountersWithLabels()
-	c, ok = counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
+	expTimings := map[string]int64{
+		"timerone": 13,
+		"timertwo{label3=\"value4\",label4=\"value5\"}": 13,
 	}
+	assert.Equal(t, expTimings, nm.GetTimings())
+	// Check twice to ensure we didn't flush
+	assert.Equal(t, expTimings, nm.GetTimings())
 
-	if *c.Value != 1 {
-		t.Fatalf("value for counter: got %d, wanted 1", *c.Value)
+	assert.Equal(t, expTimings, nm.FlushTimings())
+	expTimings = map[string]int64{
+		"timerone": 0,
+		"timertwo{label3=\"value4\",label4=\"value5\"}": 0,
 	}
-}
-
-func TestFlushCounter(t *testing.T) {
-	path := "testing.label"
-	local := NewLocal()
-	label := "tested"
-	counter := local.GetCounterVec(path, []string{label})
-	value := "true"
-
-	counter.With(value).Incr(1)
-
-	counters := local.FlushCounters()
-	c, ok := counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
-	}
-
-	if c != 1 {
-		t.Fatalf("value for counter: got %d, wanted 1", c)
-	}
-
-	// test second call results in a reset counter
-	counters = local.FlushCounters()
-	c, ok = counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
-	}
-
-	if c != 0 {
-		t.Fatalf("value for flushed counter: got %d, wanted 0", c)
-	}
-
-}
-
-func TestCounterWithLabelsAndValues(t *testing.T) {
-	path := "testing.label"
-	local := NewLocal()
-	label := "tested"
-	counter := local.GetCounterVec(path, []string{label})
-	value := "true"
-
-	counter.With(value).Incr(1)
-
-	counters := local.GetCountersWithLabels()
-	c, ok := counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
-	}
-
-	if !c.HasLabelWithValue(label, value) {
-		t.Fatalf("counter does not have label with value %s - %#v", value, c)
-	}
-
-	if c.HasLabelWithValue(label, "unknown") {
-		t.Fatal("counter has label with value unknown")
-	}
-}
-
-func TestCounterWithLabelsAndValuesConcurrent(t *testing.T) {
-	path := "testing.label"
-	local := NewLocal()
-	label := "tested"
-	counter := local.GetCounterVec(path, []string{label})
-	value := "true"
-
-	counter.With(value).Incr(1)
-
-	wg, _ := errgroup.WithContext(context.Background())
-	wg.Go(func() error {
-		for i := 0; i < 1000; i++ {
-			if err := counter.With(value).Incr(1); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	wg.Go(func() error {
-		for i := 0; i < 1000; i++ {
-			counters := local.GetCountersWithLabels()
-			c, ok := counters[path]
-			if !ok {
-				return errors.New("did not find counter for path")
-			}
-
-			if !c.HasLabelWithValue(label, value) {
-				return fmt.Errorf("counter does not have label with value %s - %#v", value, c)
-			}
-
-			if c.HasLabelWithValue(label, "unknown") {
-				return errors.New("counter has label with value unknown")
-			}
-			if err := counter.With(value).Incr(1); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-
-	if err := wg.Wait(); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestTimer(t *testing.T) {
-	path := "testing.label"
-	local := NewLocal()
-	label := "tested"
-	counter := local.GetTimerVec(path, []string{label})
-	value := "true"
-
-	counter.With(value).Timing(1)
-
-	counters := local.GetTimingsWithLabels()
-	c, ok := counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
-	}
-
-	if *c.Value != 1 {
-		t.Fatalf("value for counter: got %d, wanted 1", *c.Value)
-	}
-
-	// test second call results in the same value
-	counters = local.GetTimingsWithLabels()
-	c, ok = counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
-	}
-
-	if *c.Value != 1 {
-		t.Fatalf("value for counter: got %d, wanted 1", *c.Value)
-	}
-}
-
-func TestFlushTimer(t *testing.T) {
-	path := "testing.label"
-	local := NewLocal()
-	label := "tested"
-	counter := local.GetTimerVec(path, []string{label})
-	value := "true"
-
-	counter.With(value).Timing(1)
-
-	counters := local.FlushTimings()
-	c, ok := counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
-	}
-
-	if c != 1 {
-		t.Fatalf("value for counter: got %d, wanted 1", c)
-	}
-
-	// test second call results in a reset counter
-	counters = local.FlushTimings()
-	c, ok = counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
-	}
-
-	if c != 0 {
-		t.Fatalf("value for counter: got %d, wanted 0", c)
-	}
-}
-
-func TestTimerWithLabelsAndValues(t *testing.T) {
-	path := "testing.label"
-	local := NewLocal()
-	label := "tested"
-	counter := local.GetTimerVec(path, []string{label})
-	value := "true"
-
-	counter.With(value).Timing(1)
-
-	counters := local.GetTimingsWithLabels()
-	c, ok := counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
-	}
-
-	if !c.HasLabelWithValue(label, value) {
-		t.Fatalf("counter does not have label with value %s - %#v", value, c)
-	}
-
-	if c.HasLabelWithValue(label, "unknown") {
-		t.Fatal("counter has label with value unknown")
-	}
-}
-
-func TestGauge(t *testing.T) {
-	path := "testing.label"
-	local := NewLocal()
-	label := "tested"
-	counter := local.GetGaugeVec(path, []string{label})
-	value := "true"
-
-	counter.With(value).Incr(1)
-
-	counters := local.GetCountersWithLabels()
-	c, ok := counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
-	}
-
-	if *c.Value != 1 {
-		t.Fatalf("value for counter: got %d, wanted 1", *c.Value)
-	}
-}
-
-func TestGaugeWithLabelsAndValues(t *testing.T) {
-	path := "testing.label"
-	local := NewLocal()
-	label := "tested"
-	counter := local.GetGaugeVec(path, []string{label})
-	value := "true"
-
-	counter.With(value).Incr(1)
-
-	counters := local.GetCountersWithLabels()
-	c, ok := counters[path]
-	if !ok {
-		t.Fatal("did not find counter for path")
-	}
-
-	if !c.HasLabelWithValue(label, value) {
-		t.Fatalf("counter does not have label with value %s - %#v", value, c)
-	}
-
-	if c.HasLabelWithValue(label, "unknown") {
-		t.Fatal("counter has label with value unknown")
-	}
+	assert.Equal(t, expTimings, nm.GetTimings())
 }

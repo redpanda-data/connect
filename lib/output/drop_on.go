@@ -185,12 +185,6 @@ func newDropOn(conf DropOnConditions, wrapped output.Streamed, log log.Modular, 
 //------------------------------------------------------------------------------
 
 func (d *dropOn) loop() {
-	// Metrics paths
-	var (
-		mDropped      = d.stats.GetCounter("drop_on.dropped")
-		mDroppedBatch = d.stats.GetCounter("drop_on.batch.dropped")
-	)
-
 	defer func() {
 		close(d.transactionsOut)
 		d.wrapped.CloseAsync()
@@ -250,8 +244,6 @@ func (d *dropOn) loop() {
 					}
 				}
 				if gotBackPressure {
-					mDropped.Incr(int64(ts.Payload.Len()))
-					mDroppedBatch.Incr(1)
 					d.log.Warnln("Message dropped due to back pressure.")
 					if d.onError {
 						res = response.NewError(nil)
@@ -279,8 +271,6 @@ func (d *dropOn) loop() {
 		}
 
 		if res.AckError() != nil && d.onError {
-			mDropped.Incr(int64(ts.Payload.Len()))
-			mDroppedBatch.Incr(1)
 			d.log.Warnf("Message dropped due to: %v\n", res.AckError())
 			res = response.NewError(nil)
 		}

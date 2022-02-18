@@ -1,21 +1,26 @@
 package processor
 
 import (
-	"time"
+	"context"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeSplit] = TypeSpec{
-		constructor: NewSplit,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newSplit(conf.Split, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("split", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryUtility,
 		},
@@ -52,47 +57,23 @@ func NewSplitConfig() SplitConfig {
 
 //------------------------------------------------------------------------------
 
-// Split is a processor that splits messages into a message per part.
-type Split struct {
-	log   log.Modular
-	stats metrics.Type
+type splitProc struct {
+	log log.Modular
 
 	size     int
 	byteSize int
-
-	mCount     metrics.StatCounter
-	mDropped   metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
 }
 
-// NewSplit returns a Split processor.
-func NewSplit(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	return &Split{
-		log:   log,
-		stats: stats,
-
-		size:     conf.Split.Size,
-		byteSize: conf.Split.ByteSize,
-
-		mCount:     stats.GetCounter("count"),
-		mDropped:   stats.GetCounter("dropped"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+func newSplit(conf SplitConfig, mgr interop.Manager) (*splitProc, error) {
+	return &splitProc{
+		log:      mgr.Logger(),
+		size:     conf.Size,
+		byteSize: conf.ByteSize,
 	}, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (s *Split) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	s.mCount.Incr(1)
-
+func (s *splitProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	if msg.Len() == 0 {
-		s.mDropped.Incr(1)
 		return nil, nil
 	}
 
@@ -120,19 +101,9 @@ func (s *Split) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	if nextMsg.Len() > 0 {
 		msgs = append(msgs, nextMsg)
 	}
-
-	s.mBatchSent.Incr(int64(len(msgs)))
-	s.mSent.Incr(int64(msg.Len()))
 	return msgs, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (s *Split) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (s *Split) WaitForClose(timeout time.Duration) error {
+func (s *splitProc) Close(ctx context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

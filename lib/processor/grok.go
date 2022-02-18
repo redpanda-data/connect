@@ -2,17 +2,16 @@ package processor
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -24,7 +23,13 @@ import (
 
 func init() {
 	Constructors[TypeGrok] = TypeSpec{
-		constructor: NewGrok,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newGrok(conf.Grok, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("grok", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryParsing,
 		},
@@ -43,7 +48,6 @@ This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regul
 			docs.FieldAdvanced("named_captures_only", "Whether to only capture values from named patterns."),
 			docs.FieldAdvanced("use_default_patterns", "Whether to use a [default set of patterns](#default-patterns)."),
 			docs.FieldAdvanced("remove_empty_values", "Whether to remove values that are empty from the resulting structure."),
-			PartsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
 			{
@@ -84,7 +88,6 @@ A summary of the default patterns on offer can be [found here](https://github.co
 
 // GrokConfig contains configuration fields for the Grok processor.
 type GrokConfig struct {
-	Parts              []int             `json:"parts" yaml:"parts"`
 	Expressions        []string          `json:"expressions" yaml:"expressions"`
 	RemoveEmpty        bool              `json:"remove_empty_values" yaml:"remove_empty_values"`
 	NamedOnly          bool              `json:"named_captures_only" yaml:"named_captures_only"`
@@ -96,7 +99,6 @@ type GrokConfig struct {
 // NewGrokConfig returns a GrokConfig with default values.
 func NewGrokConfig() GrokConfig {
 	return GrokConfig{
-		Parts:              []int{},
 		Expressions:        []string{},
 		RemoveEmpty:        true,
 		NamedOnly:          true,
@@ -108,36 +110,20 @@ func NewGrokConfig() GrokConfig {
 
 //------------------------------------------------------------------------------
 
-// Grok is a processor that executes Grok queries on a message part and replaces
-// the contents with the result.
-type Grok struct {
-	parts    []int
+type grokProc struct {
 	gparsers []*grok.CompiledGrok
-
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErrGrok   metrics.StatCounter
-	mErrJSONS  metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+	log      log.Modular
 }
 
-// NewGrok returns a Grok processor.
-func NewGrok(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+func newGrok(conf GrokConfig, mgr interop.Manager) (processor.V2, error) {
 	grokConf := grok.Config{
-		RemoveEmptyValues:   conf.Grok.RemoveEmpty,
-		NamedCapturesOnly:   conf.Grok.NamedOnly,
-		SkipDefaultPatterns: !conf.Grok.UseDefaults,
-		Patterns:            conf.Grok.PatternDefinitions,
+		RemoveEmptyValues:   conf.RemoveEmpty,
+		NamedCapturesOnly:   conf.NamedOnly,
+		SkipDefaultPatterns: !conf.UseDefaults,
+		Patterns:            conf.PatternDefinitions,
 	}
 
-	for _, path := range conf.Grok.PatternPaths {
+	for _, path := range conf.PatternPaths {
 		if err := addGrokPatternsFromPath(path, grokConf.Patterns); err != nil {
 			return nil, fmt.Errorf("failed to parse patterns from path '%v': %v", path, err)
 		}
@@ -149,7 +135,7 @@ func NewGrok(
 	}
 
 	var compiled []*grok.CompiledGrok
-	for _, pattern := range conf.Grok.Expressions {
+	for _, pattern := range conf.Expressions {
 		var gcompiled *grok.CompiledGrok
 		if gcompiled, err = gcompiler.Compile(pattern); err != nil {
 			return nil, fmt.Errorf("failed to compile Grok pattern '%v': %v", pattern, err)
@@ -157,19 +143,9 @@ func NewGrok(
 		compiled = append(compiled, gcompiled)
 	}
 
-	g := &Grok{
-		parts:    conf.Grok.Parts,
+	g := &grokProc{
 		gparsers: compiled,
-		conf:     conf,
-		log:      log,
-		stats:    stats,
-
-		mCount:     stats.GetCounter("count"),
-		mErrGrok:   stats.GetCounter("error.grok_no_matches"),
-		mErrJSONS:  stats.GetCounter("error.json_set"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+		log:      mgr.Logger(),
 	}
 	return g, nil
 }
@@ -210,65 +186,38 @@ func addGrokPatternsFromPath(path string, patterns map[string]string) error {
 	return nil
 }
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (g *Grok) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	g.mCount.Incr(1)
-	newMsg := msg.Copy()
+func (g *grokProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+	body := msg.Get()
 
-	proc := func(index int, span *tracing.Span, part *message.Part) error {
-		body := part.Get()
-
-		var values map[string]interface{}
-		for _, compiler := range g.gparsers {
-			var err error
-			if values, err = compiler.ParseTyped(body); err != nil {
-				g.log.Debugf("Failed to parse body: %v\n", err)
-				continue
-			}
-			if len(values) > 0 {
-				break
-			}
+	var values map[string]interface{}
+	for _, compiler := range g.gparsers {
+		var err error
+		if values, err = compiler.ParseTyped(body); err != nil {
+			g.log.Debugf("Failed to parse body: %v\n", err)
+			continue
 		}
-
-		if len(values) == 0 {
-			g.mErrGrok.Incr(1)
-			g.mErr.Incr(1)
-			g.log.Debugf("No matches found for payload: %s\n", body)
-			return errors.New("no pattern matches found")
+		if len(values) > 0 {
+			break
 		}
-
-		gObj := gabs.New()
-		for k, v := range values {
-			gObj.SetP(v, k)
-		}
-
-		if err := newMsg.Get(index).SetJSON(gObj.Data()); err != nil {
-			g.mErrJSONS.Incr(1)
-			g.mErr.Incr(1)
-			g.log.Debugf("Failed to convert grok result into json: %v\n", err)
-			return err
-		}
-
-		return nil
+	}
+	if len(values) == 0 {
+		g.log.Debugf("No matches found for payload: %s\n", body)
+		return nil, errors.New("no pattern matches found")
 	}
 
-	IteratePartsWithSpanV2(TypeGrok, g.parts, newMsg, proc)
+	gObj := gabs.New()
+	for k, v := range values {
+		gObj.SetP(v, k)
+	}
 
-	msgs := [1]*message.Batch{newMsg}
-
-	g.mBatchSent.Incr(1)
-	g.mSent.Incr(int64(newMsg.Len()))
-	return msgs[:], nil
+	newMsg := msg.Copy()
+	if err := newMsg.SetJSON(gObj.Data()); err != nil {
+		g.log.Debugf("Failed to convert grok result into json: %v\n", err)
+		return nil, err
+	}
+	return []*message.Part{newMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (g *Grok) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (g *Grok) WaitForClose(timeout time.Duration) error {
+func (g *grokProc) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

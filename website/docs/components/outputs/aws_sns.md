@@ -39,7 +39,6 @@ output:
     max_in_flight: 1
     metadata:
       exclude_prefixes: []
-    region: eu-west-1
 ```
 
 </TabItem>
@@ -57,7 +56,7 @@ output:
     metadata:
       exclude_prefixes: []
     timeout: 5s
-    region: eu-west-1
+    region: ""
     endpoint: ""
     credentials:
       profile: ""
@@ -152,7 +151,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

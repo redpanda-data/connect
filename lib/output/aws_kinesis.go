@@ -51,7 +51,7 @@ allowing you to transfer data across accounts. You can find out more
 //------------------------------------------------------------------------------
 
 func newKinesis(name string, conf writer.KinesisConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	kin, err := writer.NewKinesisV2(conf, mgr, log, stats)
+	kin, err := writer.NewKinesisV2(conf, mgr, log)
 	if err != nil {
 		return nil, err
 	}

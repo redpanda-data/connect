@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,16 +22,12 @@ func TestMetricsNil(t *testing.T) {
 
 func TestMetricsNoLabels(t *testing.T) {
 	conf := metrics.NewConfig()
-	conf.Prometheus.Prefix = ""
 	conf.Type = metrics.TypePrometheus
 
-	prom, err := metrics.New(conf)
+	stats, err := bundle.AllMetrics.Init(conf, log.Noop())
 	require.NoError(t, err)
 
-	wHandler, ok := prom.(metrics.WithHandlerFunc)
-	require.True(t, ok)
-
-	nm := newReverseAirGapMetrics(prom)
+	nm := newReverseAirGapMetrics(stats)
 
 	ctr := nm.NewCounter("counterone")
 	ctr.Incr(10)
@@ -43,7 +41,7 @@ func TestMetricsNoLabels(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "http://example.com/foo", nil)
 	w := httptest.NewRecorder()
-	wHandler.HandlerFunc()(w, req)
+	stats.HandlerFunc()(w, req)
 
 	body, err := io.ReadAll(w.Result().Body)
 	require.NoError(t, err)
@@ -55,16 +53,12 @@ func TestMetricsNoLabels(t *testing.T) {
 
 func TestMetricsWithLabels(t *testing.T) {
 	conf := metrics.NewConfig()
-	conf.Prometheus.Prefix = ""
 	conf.Type = metrics.TypePrometheus
 
-	prom, err := metrics.New(conf)
+	stats, err := bundle.AllMetrics.Init(conf, log.Noop())
 	require.NoError(t, err)
 
-	wHandler, ok := prom.(metrics.WithHandlerFunc)
-	require.True(t, ok)
-
-	nm := newReverseAirGapMetrics(prom)
+	nm := newReverseAirGapMetrics(stats)
 
 	ctr := nm.NewCounter("countertwo", "label1")
 	ctr.Incr(10, "value1")
@@ -78,7 +72,7 @@ func TestMetricsWithLabels(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "http://example.com/foo", nil)
 	w := httptest.NewRecorder()
-	wHandler.HandlerFunc()(w, req)
+	stats.HandlerFunc()(w, req)
 
 	body, err := io.ReadAll(w.Result().Body)
 	require.NoError(t, err)

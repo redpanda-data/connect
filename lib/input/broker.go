@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
@@ -214,9 +215,8 @@ func NewBroker(
 
 		for j := 0; j < conf.Broker.Copies; j++ {
 			for i, iConf := range conf.Broker.Inputs {
-				iMgr, iLog, iStats := interop.LabelChild(fmt.Sprintf("broker.inputs.%v", i), mgr, log, stats)
-				iStats = metrics.Combine(stats, iStats)
-				inputs[len(conf.Broker.Inputs)*j+i], err = New(iConf, iMgr, iLog, iStats, pipelines...)
+				iMgr := mgr.IntoPath("broker", "inputs", strconv.Itoa(i))
+				inputs[len(conf.Broker.Inputs)*j+i], err = New(iConf, iMgr, iMgr.Logger(), iMgr.Metrics(), pipelines...)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create input '%v' type '%v': %v", i, iConf.Type, err)
 				}
@@ -232,8 +232,8 @@ func NewBroker(
 		return b, nil
 	}
 
-	bMgr, bLog, bStats := interop.LabelChild("batching", mgr, log, stats)
-	policy, err := batch.NewPolicy(conf.Broker.Batching, bMgr, bLog, bStats)
+	bMgr := mgr.IntoPath("broker", "batching")
+	policy, err := batch.NewPolicy(conf.Broker.Batching, bMgr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 	}

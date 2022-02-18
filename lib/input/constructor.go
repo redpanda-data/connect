@@ -2,6 +2,7 @@ package input
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/input"
@@ -98,9 +99,9 @@ func AppendProcessorsFromConfig(
 			}
 			processors := make([]iprocessor.V1, len(conf.Processors))
 			for j, procConf := range conf.Processors {
-				newMgr, newLog, newStats := interop.LabelChild(fmt.Sprintf("processor.%v", *i), mgr, log, stats)
+				newMgr := mgr.IntoPath("processors", strconv.Itoa(*i))
 				var err error
-				processors[j], err = processor.New(procConf, newMgr, newLog, newStats)
+				processors[j], err = processor.New(procConf, newMgr, newMgr.Logger(), newMgr.Metrics())
 				if err != nil {
 					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 				}

@@ -226,16 +226,10 @@ func New(
 	t.RegisterEndpoint("/version", "Returns the service version.", handleVersion)
 	t.RegisterEndpoint("/endpoints", "Returns this map of endpoints.", handleEndpoints)
 
-	// If we want to expose a JSON stats endpoint we register the endpoints.
-	if wHandlerFunc, ok := stats.(metrics.WithHandlerFunc); ok {
-		t.RegisterEndpoint(
-			"/stats", "Returns a JSON object of service metrics.",
-			wHandlerFunc.HandlerFunc(),
-		)
-		t.RegisterEndpoint(
-			"/metrics", "Returns a JSON object of service metrics.",
-			wHandlerFunc.HandlerFunc(),
-		)
+	// If we want to expose a stats endpoint we register the endpoints.
+	if wHandlerFunc := stats.HandlerFunc(); wHandlerFunc != nil {
+		t.RegisterEndpoint("/stats", "Exposes service-wide metrics in the format configured.", wHandlerFunc)
+		t.RegisterEndpoint("/metrics", "Exposes service-wide metrics in the format configured.", wHandlerFunc)
 	}
 
 	for _, opt := range opts {

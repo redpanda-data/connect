@@ -109,12 +109,7 @@ func (o *FanOutSequential) MaxInFlight() (int, bool) {
 
 // loop is an internal loop that brokers incoming messages to many outputs.
 func (o *FanOutSequential) loop() {
-	var (
-		wg         = sync.WaitGroup{}
-		mMsgsRcvd  = o.stats.GetCounter("messages.received")
-		mOutputErr = o.stats.GetCounter("error")
-		mMsgsSnt   = o.stats.GetCounter("messages.sent")
-	)
+	wg := sync.WaitGroup{}
 
 	defer func() {
 		wg.Wait()
@@ -139,7 +134,6 @@ func (o *FanOutSequential) loop() {
 			case <-o.ctx.Done():
 				return
 			}
-			mMsgsRcvd.Incr(1)
 
 			for i := range o.outputTSChans {
 				msgCopy := ts.Payload.Copy()
@@ -159,12 +153,10 @@ func (o *FanOutSequential) loop() {
 					case res := <-resChan:
 						if res.AckError() != nil {
 							o.logger.Errorf("Failed to dispatch fan out message to output '%v': %v\n", i, res.AckError())
-							mOutputErr.Incr(1)
 							if !throt.Retry() {
 								return
 							}
 						} else {
-							mMsgsSnt.Incr(1)
 							break sendLoop
 						}
 					case <-o.ctx.Done():

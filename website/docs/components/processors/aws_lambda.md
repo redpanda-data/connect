@@ -36,7 +36,6 @@ label: ""
 aws_lambda:
   parallel: false
   function: ""
-  region: eu-west-1
 ```
 
 </TabItem>
@@ -49,7 +48,7 @@ aws_lambda:
   parallel: false
   function: ""
   rate_limit: ""
-  region: eu-west-1
+  region: ""
   endpoint: ""
   credentials:
     profile: ""
@@ -167,7 +166,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

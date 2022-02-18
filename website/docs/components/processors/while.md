@@ -16,7 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-While is a processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against messages and executes child processors on them for as long as the query resolves to true.
+A processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against each batch of messages and executes child processors on them for as long as the query resolves to true.
 
 
 <Tabs defaultValue="common" values={[
@@ -56,6 +56,9 @@ The field `at_least_once`, if true, ensures that the child processors are always
 The field `max_loops`, if greater than zero, caps the number of loops for a message batch to this value.
 
 If following a loop execution the number of messages in a batch is reduced to zero the loop is exited regardless of the condition result. If following a loop execution there are more than 1 message batches the query is checked against the first batch only.
+
+The functionality of this processor depends on being applied across messages
+that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
 
 ## Fields
 

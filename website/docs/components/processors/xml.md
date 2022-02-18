@@ -22,36 +22,13 @@ This component is mostly stable but breaking changes could still be made outside
 Parses messages as an XML document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 label: ""
 xml:
   operator: to_json
   cast: false
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yml
-# All config fields, showing default values
-label: ""
-xml:
-  operator: to_json
-  cast: false
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 ## Operators
 
@@ -135,18 +112,5 @@ Whether to try to cast values that are numbers and booleans to the right type. D
 
 Type: `bool`  
 Default: `false`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 

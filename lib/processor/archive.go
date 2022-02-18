@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -23,7 +24,13 @@ import (
 
 func init() {
 	Constructors[TypeArchive] = TypeSpec{
-		constructor: NewArchive,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newArchive(conf.Archive, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("archive", p, stats), nil
+		},
 		Summary: `
 Archives all the messages of a batch into a single message according to the
 selected archive [format](#formats).`,
@@ -42,8 +49,8 @@ of the batch.`,
 		},
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("format", "The archiving [format](#formats) to apply.").HasOptions("tar", "zip", "binary", "lines", "json_array", "concatenate"),
-			docs.FieldCommon(
+			docs.FieldString("format", "The archiving [format](#formats) to apply.").HasOptions("tar", "zip", "binary", "lines", "json_array", "concatenate"),
+			docs.FieldString(
 				"path", "The path to set for each message in the archive (when applicable).",
 				"${!count(\"files\")}-${!timestamp_unix_nano()}.txt", "${!meta(\"kafka_key\")}-${!json(\"id\")}.json",
 			).IsInterpolated(),
@@ -256,49 +263,26 @@ func strToArchiver(str string) (archiveFunc, error) {
 
 //------------------------------------------------------------------------------
 
-// Archive is a processor that can selectively archive parts of a message into a
-// single part using a chosen archive type.
-type Archive struct {
-	conf    ArchiveConfig
+type archive struct {
 	archive archiveFunc
-
-	path *field.Expression
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSucc      metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
-
-	log   log.Modular
-	stats metrics.Type
+	path    *field.Expression
+	log     log.Modular
 }
 
-// NewArchive returns a Archive processor.
-func NewArchive(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	path, err := mgr.BloblEnvironment().NewField(conf.Archive.Path)
+func newArchive(conf ArchiveConfig, mgr interop.Manager) (processor.V2Batched, error) {
+	path, err := mgr.BloblEnvironment().NewField(conf.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
-	archiver, err := strToArchiver(conf.Archive.Format)
+	archiver, err := strToArchiver(conf.Format)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Archive{
-		conf:    conf.Archive,
-		path:    path,
+	return &archive{
 		archive: archiver,
-		log:     log,
-		stats:   stats,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSucc:      stats.GetCounter("success"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+		path:    path,
+		log:     mgr.Logger(),
 	}, nil
 }
 
@@ -329,7 +313,7 @@ func (f fakeInfo) Sys() interface{} {
 	return nil
 }
 
-func (d *Archive) createHeaderFunc(msg *message.Batch) func(int, *message.Part) os.FileInfo {
+func (d *archive) createHeaderFunc(msg *message.Batch) func(int, *message.Part) os.FileInfo {
 	return func(index int, body *message.Part) os.FileInfo {
 		return fakeInfo{
 			name: d.path.String(index, msg),
@@ -341,53 +325,25 @@ func (d *Archive) createHeaderFunc(msg *message.Batch) func(int, *message.Part) 
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (d *Archive) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	d.mCount.Incr(1)
-
+func (d *archive) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	if msg.Len() == 0 {
 		return nil, nil
 	}
 
-	d.mSent.Incr(1)
-	d.mBatchSent.Incr(1)
-
 	newMsg := msg.Copy()
 
-	spans := tracing.CreateChildSpans(TypeArchive, newMsg)
 	newPart, err := d.archive(d.createHeaderFunc(msg), msg)
 	if err != nil {
-		_ = newMsg.Iter(func(i int, p *message.Part) error {
-			FlagErr(p, err)
-			spans[i].LogKV(
-				"event", "error",
-				"type", err.Error(),
-			)
-			return nil
-		})
 		d.log.Errorf("Failed to create archive: %v\n", err)
-		d.mErr.Incr(1)
-	} else {
-		d.mSucc.Incr(1)
-		newPart = batch.WithCollapsedCount(newPart, msg.Len())
-		newMsg.SetAll([]*message.Part{newPart})
+		return nil, err
 	}
-	for _, s := range spans {
-		s.Finish()
-	}
+	newPart = batch.WithCollapsedCount(newPart, msg.Len())
+	newMsg.SetAll([]*message.Part{newPart})
 
 	msgs := [1]*message.Batch{newMsg}
 	return msgs[:], nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (d *Archive) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (d *Archive) WaitForClose(timeout time.Duration) error {
+func (d *archive) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

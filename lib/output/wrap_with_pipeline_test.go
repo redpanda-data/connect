@@ -123,6 +123,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 
 	secondProc := processor.NewConfig()
 	secondProc.Type = "select_parts"
+	secondProc.SelectParts.Parts = []int{0}
 
 	conf := NewConfig()
 	conf.Processors = append(conf.Processors, firstProc)

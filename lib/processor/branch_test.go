@@ -281,7 +281,7 @@ func TestBranchBasic(t *testing.T) {
 			conf.Branch.Processors = append(conf.Branch.Processors, procConf)
 			conf.Branch.ResultMap = test.resultMap
 
-			proc, err := NewBranch(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+			proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
 			msg := message.QuickBatch(nil)

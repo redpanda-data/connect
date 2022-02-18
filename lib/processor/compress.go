@@ -5,13 +5,12 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"compress/zlib"
+	"context"
 	"fmt"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -23,7 +22,13 @@ import (
 
 func init() {
 	Constructors[TypeCompress] = TypeSpec{
-		constructor: NewCompress,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newCompress(conf.Compress, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("compress", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryParsing,
 		},
@@ -35,7 +40,6 @@ The 'level' field might not apply to all algorithms.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("algorithm", "The compression algorithm to use.").HasOptions("gzip", "zlib", "flate", "snappy", "lz4"),
 			docs.FieldCommon("level", "The level of compression to use. May not be applicable to all algorithms."),
-			PartsFieldSpec,
 		},
 	}
 }
@@ -46,7 +50,6 @@ The 'level' field might not apply to all algorithms.`,
 type CompressConfig struct {
 	Algorithm string `json:"algorithm" yaml:"algorithm"`
 	Level     int    `json:"level" yaml:"level"`
-	Parts     []int  `json:"parts" yaml:"parts"`
 }
 
 // NewCompressConfig returns a CompressConfig with default values.
@@ -54,7 +57,6 @@ func NewCompressConfig() CompressConfig {
 	return CompressConfig{
 		Algorithm: "gzip",
 		Level:     gzip.DefaultCompression,
-		Parts:     []int{},
 	}
 }
 
@@ -152,81 +154,37 @@ func strToCompressor(str string) (compressFunc, error) {
 
 //------------------------------------------------------------------------------
 
-// Compress is a processor that can selectively compress parts of a message as a
-// chosen compression algorithm.
-type Compress struct {
-	conf CompressConfig
-	comp compressFunc
-
+type compressProc struct {
+	level int
+	comp  compressFunc
 	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
 }
 
-// NewCompress returns a Compress processor.
-func NewCompress(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	cor, err := strToCompressor(conf.Compress.Algorithm)
+func newCompress(conf CompressConfig, mgr interop.Manager) (*compressProc, error) {
+	cor, err := strToCompressor(conf.Algorithm)
 	if err != nil {
 		return nil, err
 	}
-	return &Compress{
-		conf:  conf.Compress,
+	return &compressProc{
+		level: conf.Level,
 		comp:  cor,
-		log:   log,
-		stats: stats,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+		log:   mgr.Logger(),
 	}, nil
 }
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (c *Compress) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	c.mCount.Incr(1)
+func (c *compressProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+	newBytes, err := c.comp(c.level, msg.Get())
+	if err != nil {
+		c.log.Errorf("Failed to compress message: %v\n", err)
+		return nil, err
+	}
 	newMsg := msg.Copy()
-
-	proc := func(i int, span *tracing.Span, part *message.Part) error {
-		newBytes, err := c.comp(c.conf.Level, part.Get())
-		if err == nil {
-			part.Set(newBytes)
-		} else {
-			c.log.Errorf("Failed to compress message part: %v\n", err)
-			c.mErr.Incr(1)
-			return err
-		}
-		return nil
-	}
-
-	if newMsg.Len() == 0 {
-		return nil, nil
-	}
-
-	IteratePartsWithSpanV2(TypeCompress, c.conf.Parts, newMsg, proc)
-
-	c.mBatchSent.Incr(1)
-	c.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]*message.Batch{newMsg}
-	return msgs[:], nil
+	newMsg.Set(newBytes)
+	return []*message.Part{newMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (c *Compress) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (c *Compress) WaitForClose(timeout time.Duration) error {
+func (c *compressProc) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

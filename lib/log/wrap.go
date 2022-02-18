@@ -34,14 +34,15 @@ func WrapAtLevel(l PrintFormatter, level int) Modular {
 	}
 }
 
-func (l *wrapped) NewModule(prefix string) Modular {
-	return l
-}
-
 //------------------------------------------------------------------------------
 
 // WithFields is a no-op.
 func (l *wrapped) WithFields(fields map[string]string) Modular {
+	return l
+}
+
+// With is a no-op.
+func (l *wrapped) With(keyValues ...interface{}) Modular {
 	return l
 }
 
@@ -130,5 +131,3 @@ func (l *wrapped) Traceln(message string) {
 		l.pf.Println(message)
 	}
 }
-
-//------------------------------------------------------------------------------

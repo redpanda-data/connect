@@ -15,13 +15,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 )
 
-var (
-	firehoseMThrottled       = mockStats.GetCounter("send.throttled")
-	firehoseMThrottledF      = mockStats.GetCounter("send.throttled")
-	firehoseMPartsThrottled  = mockStats.GetCounter("parts.send.throttled")
-	firehoseMPartsThrottledF = mockStats.GetCounter("parts.send.throttled")
-)
-
 type mockKinesisFirehose struct {
 	firehoseiface.FirehoseAPI
 	fn func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error)
@@ -171,11 +164,7 @@ func TestKinesisFirehoseWriteChunkWithThrottling(t *testing.T) {
 				return &output, nil
 			},
 		},
-		mThrottled:       firehoseMThrottled,
-		mThrottledF:      firehoseMThrottledF,
-		mPartsThrottled:  firehoseMPartsThrottled,
-		mPartsThrottledF: firehoseMPartsThrottledF,
-		log:              log.Noop(),
+		log: log.Noop(),
 	}
 
 	msg := message.QuickBatch(nil)
@@ -260,11 +249,7 @@ func TestKinesisFirehoseWriteMessageThrottling(t *testing.T) {
 				return &output, nil
 			},
 		},
-		mThrottled:       mThrottled,
-		mThrottledF:      mThrottledF,
-		mPartsThrottled:  mPartsThrottled,
-		mPartsThrottledF: mPartsThrottledF,
-		log:              log.Noop(),
+		log: log.Noop(),
 	}
 
 	msg := message.QuickBatch(nil)
@@ -306,11 +291,7 @@ func TestKinesisFirehoseWriteBackoffMaxRetriesExceeded(t *testing.T) {
 				return &output, nil
 			},
 		},
-		mThrottled:       mThrottled,
-		mThrottledF:      mThrottledF,
-		mPartsThrottled:  mPartsThrottled,
-		mPartsThrottledF: mPartsThrottledF,
-		log:              log.Noop(),
+		log: log.Noop(),
 	}
 
 	msg := message.QuickBatch(nil)

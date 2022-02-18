@@ -133,9 +133,8 @@ func NewDynamic(
 		if err := yaml.Unmarshal(c, &newConf); err != nil {
 			return err
 		}
-		iMgr, iLog, iStats := interop.LabelChild(fmt.Sprintf("dynamic.inputs.%v", id), mgr, log, stats)
-		iStats = metrics.Combine(stats, iStats)
-		newInput, err := New(newConf, iMgr, iLog, iStats, pipelines...)
+		iMgr := mgr.IntoPath("dynamic", "inputs", id)
+		newInput, err := New(newConf, iMgr, iMgr.Logger(), iMgr.Metrics(), pipelines...)
 		if err != nil {
 			return err
 		}

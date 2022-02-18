@@ -161,6 +161,15 @@ func (f FieldSpec) Advanced() FieldSpec {
 	return f
 }
 
+// Deprecated marks this field as being deprecated.
+func (f FieldSpec) Deprecated() FieldSpec {
+	f.IsDeprecated = true
+	for i, v := range f.Children {
+		f.Children[i] = v.Deprecated()
+	}
+	return f
+}
+
 // Array determines that this field is an array of the field type.
 func (f FieldSpec) Array() FieldSpec {
 	f.Kind = KindArray

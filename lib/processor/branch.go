@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
@@ -56,8 +57,10 @@ root.bar.id = this.user.id`,
 
 func init() {
 	Constructors[TypeBranch] = TypeSpec{
-		Status:      docs.StatusStable,
-		constructor: NewBranch,
+		Status: docs.StatusStable,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			return newBranch(conf.Branch, mgr)
+		},
 		Categories: []Category{
 			CategoryComposition,
 		},
@@ -206,39 +209,26 @@ func NewBranchConfig() BranchConfig {
 // a subset of request messages, and mapping results from those requests back
 // into the original message batch.
 type Branch struct {
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 
 	requestMap *mapping.Executor
 	resultMap  *mapping.Executor
 	children   []processor.V1
 
 	// Metrics
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mErrParts  metrics.StatCounter
-	mErrProc   metrics.StatCounter
-	mErrAlign  metrics.StatCounter
-	mErrReq    metrics.StatCounter
-	mErrRes    metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+	mReceived      metrics.StatCounter
+	mBatchReceived metrics.StatCounter
+	mSent          metrics.StatCounter
+	mBatchSent     metrics.StatCounter
+	mError         metrics.StatCounter
+	mLatency       metrics.StatTimer
 }
 
-// NewBranch creates a new branch processor.
-func NewBranch(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	return newBranch(conf.Branch, mgr, log, stats)
-}
-
-func newBranch(
-	conf BranchConfig, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (*Branch, error) {
+func newBranch(conf BranchConfig, mgr interop.Manager) (*Branch, error) {
 	children := make([]processor.V1, 0, len(conf.Processors))
 	for i, pconf := range conf.Processors {
-		pMgr, pLog, pStats := interop.LabelChild(fmt.Sprintf("processor.%v", i), mgr, log, stats)
-		proc, err := New(pconf, pMgr, pLog, pStats)
+		pMgr := mgr.IntoPath("branch", "processors", strconv.Itoa(i))
+		proc, err := New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
 		if err != nil {
 			return nil, fmt.Errorf("failed to init processor %v: %w", i, err)
 		}
@@ -248,20 +238,17 @@ func newBranch(
 		return nil, errors.New("the branch processor requires at least one child processor")
 	}
 
+	stats := mgr.Metrics()
 	b := &Branch{
 		children: children,
-		log:      log,
-		stats:    stats,
+		log:      mgr.Logger(),
 
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mErrParts:  stats.GetCounter("error_counts_diverged"),
-		mErrProc:   stats.GetCounter("error_processors"),
-		mErrAlign:  stats.GetCounter("error_result_alignment"),
-		mErrReq:    stats.GetCounter("error_request_map"),
-		mErrRes:    stats.GetCounter("error_result_map"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+		mReceived:      stats.GetCounter("processor_received"),
+		mBatchReceived: stats.GetCounter("processor_batch_received"),
+		mSent:          stats.GetCounter("processor_sent"),
+		mBatchSent:     stats.GetCounter("processor_batch_sent"),
+		mError:         stats.GetCounter("processor_error"),
+		mLatency:       stats.GetTimer("processor_latency_ns"),
 	}
 
 	var err error
@@ -338,6 +325,10 @@ pathLoop:
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
+	b.mReceived.Incr(int64(msg.Len()))
+	b.mBatchReceived.Incr(1)
+	startedAt := time.Now()
+
 	branchMsg, propSpans := tracing.WithChildSpans(TypeBranch, msg.Copy())
 	defer func() {
 		for _, s := range propSpans {
@@ -388,6 +379,7 @@ func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		b.log.Errorf("Branch error: %v", e.err)
 	}
 
+	b.mLatency.Timing(time.Since(startedAt).Nanoseconds())
 	return []*message.Batch{result}, nil
 }
 
@@ -409,8 +401,6 @@ func newBranchMapError(index int, err error) branchMapError {
 // result can be overlayed onto the original message in order to complete the
 // map.
 func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch) ([]*message.Part, []branchMapError, error) {
-	b.mCount.Incr(1)
-
 	originalLen := len(parts)
 
 	// Create request payloads
@@ -428,7 +418,7 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 			_ = parts[i].Set(nil)
 			newPart, err := b.requestMap.MapOnto(parts[i], i, referenceMsg)
 			if err != nil {
-				b.mErrReq.Incr(1)
+				b.mError.Incr(1)
 				b.log.Debugf("Failed to map request '%v': %v\n", i, err)
 
 				// Skip if message part fails mapping.
@@ -460,8 +450,7 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 			err = errors.New("child processors resulted in zero messages")
 		}
 		if err != nil {
-			b.mErrProc.Incr(1)
-			b.mErr.Incr(1)
+			b.mError.Incr(1)
 			b.log.Errorf("Child processors failed: %v\n", err)
 			return nil, mapErrs, err
 		}
@@ -470,8 +459,7 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 	// Re-align processor results with original message indexes
 	var alignedResult []*message.Part
 	if alignedResult, err = alignBranchResult(originalLen, skipped, failed, procResults); err != nil {
-		b.mErrAlign.Incr(1)
-		b.mErr.Incr(1)
+		b.mError.Incr(1)
 		b.log.Errorf("Failed to align branch result: %v. Avoid using filters or archive/unarchive processors within your branch, or anything that increases or reduces the number of messages. These processors should instead be applied before or after the branch processor.\n", err)
 		return nil, mapErrs, err
 	}
@@ -493,7 +481,7 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 // payload as per the map specified in the postmap and postmap_optional fields.
 func (b *Branch) overlayResult(payload *message.Batch, results []*message.Part) ([]branchMapError, error) {
 	if exp, act := payload.Len(), len(results); exp != act {
-		b.mErr.Incr(1)
+		b.mError.Incr(1)
 		return nil, fmt.Errorf(
 			"message count returned from branch has diverged from the request, started with %v messages, finished with %v",
 			act, exp,
@@ -519,7 +507,7 @@ func (b *Branch) overlayResult(payload *message.Batch, results []*message.Part) 
 
 			newPart, err := b.resultMap.MapOnto(payload.Get(i), i, resultMsg)
 			if err != nil {
-				b.mErrRes.Incr(1)
+				b.mError.Incr(1)
 				b.log.Debugf("Failed to map result '%v': %v\n", i, err)
 
 				failed = append(failed, newBranchMapError(i, fmt.Errorf("result mapping failed: %w", err)))
@@ -598,5 +586,3 @@ func (b *Branch) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

@@ -12,11 +12,11 @@ import (
 
 func TestAWKValidation(t *testing.T) {
 	conf := NewConfig()
-	conf.AWK.Parts = []int{0}
+	conf.Type = "awk"
 	conf.AWK.Codec = "json"
 	conf.AWK.Program = "{ print foo_bar }"
 
-	a, err := NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	a, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,37 +36,19 @@ func TestAWKValidation(t *testing.T) {
 		t.Error("Expected fail flag on message part")
 	}
 
-	conf.AWK.Parts = []int{5}
-
-	if a, err = NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err != nil {
-		t.Fatal(err)
-	}
-
-	msgIn = message.QuickBatch([][]byte{[]byte("{}")})
-	msgs, res = a.ProcessMessage(msgIn)
-	if len(msgs) != 1 {
-		t.Fatal("No passthrough for bad index")
-	}
-	if res != nil {
-		t.Fatal("Non-nil result")
-	}
-	if exp, act := "{}", string(message.GetAllBytes(msgs[0])[0]); exp != act {
-		t.Errorf("Wrong output from bad index: %v != %v", act, exp)
-	}
-
 	conf.AWK.Codec = "not valid"
-	if _, err = NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err == nil {
+	if _, err = New(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err == nil {
 		t.Error("Expected error from bad codec")
 	}
 }
 
 func TestAWKBadExitStatus(t *testing.T) {
 	conf := NewConfig()
-	conf.AWK.Parts = []int{0}
+	conf.Type = "awk"
 	conf.AWK.Codec = "none"
 	conf.AWK.Program = "{ exit 1; print foo }"
 
-	a, err := NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	a, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,11 +71,11 @@ func TestAWKBadExitStatus(t *testing.T) {
 
 func TestAWKBadDateString(t *testing.T) {
 	conf := NewConfig()
-	conf.AWK.Parts = []int{0}
+	conf.Type = "awk"
 	conf.AWK.Codec = "none"
 	conf.AWK.Program = `{ print timestamp_unix("this isnt a date string") }`
 
-	a, err := NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	a, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,14 +95,14 @@ func TestAWKBadDateString(t *testing.T) {
 
 func TestAWKJSONParts(t *testing.T) {
 	conf := NewConfig()
-	conf.AWK.Parts = []int{}
+	conf.Type = "awk"
 	conf.AWK.Codec = "none"
 	conf.AWK.Program = `{
 		json_set("foo.bar", json_get("init.val"));
 		json_set("foo.bar", json_get("foo.bar") " extra");
 	}`
 
-	a, err := NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	a, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -607,10 +589,11 @@ func TestAWK(t *testing.T) {
 
 	for _, test := range tests {
 		conf := NewConfig()
+		conf.Type = "awk"
 		conf.AWK.Codec = test.codec
 		conf.AWK.Program = test.program
 
-		a, err := NewAWK(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+		a, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 		if err != nil {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}

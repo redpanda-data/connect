@@ -1,8 +1,8 @@
 package processor
 
 import (
+	"context"
 	"sync"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
@@ -18,8 +18,14 @@ import (
 
 func init() {
 	Constructors[TypeAWSLambda] = TypeSpec{
-		constructor: NewAWSLambda,
-		Version:     "3.36.0",
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newLambda(conf.AWSLambda, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("aws_lambda", p, mgr.Metrics()), nil
+		},
+		Version: "3.36.0",
 		Categories: []Category{
 			CategoryIntegration,
 		},
@@ -113,53 +119,25 @@ func NewLambdaConfig() LambdaConfig {
 
 //------------------------------------------------------------------------------
 
-// Lambda is a processor that invokes an AWS Lambda using the message as the
-// request body, and returns the response.
-type Lambda struct {
-	client *client.Type
-
+type lambda struct {
+	client   *client.Type
 	parallel bool
 
-	conf  LambdaConfig
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErrLambda metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+	functionName string
+	log          log.Modular
 }
 
-// NewAWSLambda returns a Lambda processor.
-func NewAWSLambda(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	return newLambda(conf.AWSLambda, mgr, log, stats)
-}
-
-func newLambda(
-	conf LambdaConfig, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	l := &Lambda{
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
-		parallel: conf.Parallel,
-
-		mCount:     stats.GetCounter("count"),
-		mErrLambda: stats.GetCounter("error.lambda"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+func newLambda(conf LambdaConfig, mgr interop.Manager) (processor.V2Batched, error) {
+	l := &lambda{
+		functionName: conf.Function,
+		log:          mgr.Logger(),
+		parallel:     conf.Parallel,
 	}
 	var err error
 	if l.client, err = client.New(
 		conf.Config,
-		client.OptSetLogger(l.log),
-		// TODO: V4 Remove this
-		client.OptSetStats(metrics.Namespaced(l.stats, "client")),
+		client.OptSetLogger(mgr.Logger()),
+		client.OptSetStats(mgr.Metrics()),
 		client.OptSetManager(mgr),
 	); err != nil {
 		return nil, err
@@ -169,42 +147,34 @@ func newLambda(
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (l *Lambda) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	l.mCount.Incr(1)
-
+func (l *lambda) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch *message.Batch) ([]*message.Batch, error) {
 	var resultMsg *message.Batch
-	if !l.parallel || msg.Len() == 1 {
-		resultMsg = msg.Copy()
-		IteratePartsWithSpanV2("aws_lambda", nil, resultMsg, func(i int, _ *tracing.Span, p *message.Part) error {
+	if !l.parallel || batch.Len() == 1 {
+		resultMsg = batch.Copy()
+		_ = resultMsg.Iter(func(i int, p *message.Part) error {
 			if err := l.client.InvokeV2(p); err != nil {
-				l.mErr.Incr(1)
-				l.mErrLambda.Incr(1)
-				l.log.Errorf("Lambda function '%v' failed: %v\n", l.conf.Config.Function, err)
-				return err
+				l.log.Errorf("Lambda function '%v' failed: %v\n", l.functionName, err)
+				processor.MarkErr(p, spans[i], err)
 			}
 			return nil
 		})
 	} else {
-		parts := make([]*message.Part, msg.Len())
-		_ = msg.Iter(func(i int, p *message.Part) error {
+		parts := make([]*message.Part, batch.Len())
+		_ = batch.Iter(func(i int, p *message.Part) error {
 			parts[i] = p.Copy()
 			return nil
 		})
 
 		wg := sync.WaitGroup{}
-		wg.Add(msg.Len())
+		wg.Add(batch.Len())
 
-		for i := 0; i < msg.Len(); i++ {
+		for i := 0; i < batch.Len(); i++ {
 			go func(index int) {
-				result := msg.Get(index).Copy()
+				result := batch.Get(index).Copy()
 				err := l.client.InvokeV2(result)
 				if err != nil {
-					l.mErr.Incr(1)
-					l.mErrLambda.Incr(1)
-					l.log.Errorf("Lambda parallel request to '%v' failed: %v\n", l.conf.Config.Function, err)
-					FlagErr(parts[index], err)
+					l.log.Errorf("Lambda parallel request to '%v' failed: %v\n", l.functionName, err)
+					processor.MarkErr(parts[index], spans[index], err)
 				} else {
 					parts[index] = result
 				}
@@ -219,19 +189,9 @@ func (l *Lambda) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	}
 
 	msgs := [1]*message.Batch{resultMsg}
-
-	l.mBatchSent.Incr(1)
-	l.mSent.Incr(int64(resultMsg.Len()))
 	return msgs[:], nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (l *Lambda) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (l *Lambda) WaitForClose(timeout time.Duration) error {
+func (l *lambda) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

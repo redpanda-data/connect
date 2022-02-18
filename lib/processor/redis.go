@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
@@ -21,7 +22,13 @@ import (
 
 func init() {
 	Constructors[TypeRedis] = TypeSpec{
-		constructor: NewRedis,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newRedisProc(conf.Redis, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("redis", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryIntegration,
 		},
@@ -55,7 +62,6 @@ Returns the value of ` + "`key`" + ` after the increment.`,
 			docs.FieldCommon("key", "A key to use for the target operator.").IsInterpolated(),
 			docs.FieldAdvanced("retries", "The maximum number of retries before abandoning a request."),
 			docs.FieldAdvanced("retry_period", "The time to wait before consecutive retry attempts."),
-			PartsFieldSpec,
 		),
 		Examples: []docs.AnnotatedExample{
 			{
@@ -124,18 +130,18 @@ pipeline:
 // RedisConfig contains configuration fields for the Redis processor.
 type RedisConfig struct {
 	bredis.Config `json:",inline" yaml:",inline"`
-	Parts         []int  `json:"parts" yaml:"parts"`
 	Operator      string `json:"operator" yaml:"operator"`
 	Key           string `json:"key" yaml:"key"`
-	Retries       int    `json:"retries" yaml:"retries"`
-	RetryPeriod   string `json:"retry_period" yaml:"retry_period"`
+
+	// TODO: V4 replace this
+	Retries     int    `json:"retries" yaml:"retries"`
+	RetryPeriod string `json:"retry_period" yaml:"retry_period"`
 }
 
 // NewRedisConfig returns a RedisConfig with default values.
 func NewRedisConfig() RedisConfig {
 	return RedisConfig{
 		Config:      bredis.NewConfig(),
-		Parts:       []int{},
 		Operator:    "scard",
 		Key:         "",
 		Retries:     3,
@@ -145,84 +151,59 @@ func NewRedisConfig() RedisConfig {
 
 //------------------------------------------------------------------------------
 
-// Redis is a processor that performs redis operations
-type Redis struct {
-	parts []int
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
+type redisProc struct {
+	log log.Modular
 	key *field.Expression
 
 	operator    redisOperator
 	client      redis.UniversalClient
+	retries     int
 	retryPeriod time.Duration
-
-	mCount      metrics.StatCounter
-	mErr        metrics.StatCounter
-	mSent       metrics.StatCounter
-	mBatchSent  metrics.StatCounter
-	mRedisRetry metrics.StatCounter
 }
 
-// NewRedis returns a Redis processor.
-func NewRedis(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+func newRedisProc(conf RedisConfig, mgr interop.Manager) (*redisProc, error) {
 	var retryPeriod time.Duration
-	if tout := conf.Redis.RetryPeriod; len(tout) > 0 {
+	if tout := conf.RetryPeriod; len(tout) > 0 {
 		var err error
 		if retryPeriod, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse retry period string: %v", err)
 		}
 	}
 
-	client, err := conf.Redis.Config.Client()
+	client, err := conf.Config.Client()
 	if err != nil {
 		return nil, err
 	}
 
-	key, err := mgr.BloblEnvironment().NewField(conf.Redis.Key)
+	key, err := mgr.BloblEnvironment().NewField(conf.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
-	r := &Redis{
-		parts: conf.Redis.Parts,
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
+	r := &redisProc{
+		log: mgr.Logger(),
 		key: key,
 
+		retries:     conf.Retries,
 		retryPeriod: retryPeriod,
 		client:      client,
-
-		mCount:      stats.GetCounter("count"),
-		mErr:        stats.GetCounter("error"),
-		mSent:       stats.GetCounter("sent"),
-		mBatchSent:  stats.GetCounter("batch.sent"),
-		mRedisRetry: stats.GetCounter("redis.retry"),
 	}
 
-	if r.operator, err = getRedisOperator(conf.Redis.Operator); err != nil {
+	if r.operator, err = getRedisOperator(conf.Operator); err != nil {
 		return nil, err
 	}
 	return r, nil
 }
 
-//------------------------------------------------------------------------------
-
-type redisOperator func(r *Redis, key string, part *message.Part) error
+type redisOperator func(r *redisProc, key string, part *message.Part) error
 
 func newRedisKeysOperator() redisOperator {
-	return func(r *Redis, key string, part *message.Part) error {
+	return func(r *redisProc, key string, part *message.Part) error {
 		res, err := r.client.Keys(key).Result()
 
-		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
+		for i := 0; i <= r.retries && err != nil; i++ {
 			r.log.Errorf("Keys command failed: %v\n", err)
 			<-time.After(r.retryPeriod)
-			r.mRedisRetry.Incr(1)
 			res, err = r.client.Keys(key).Result()
 		}
 		if err != nil {
@@ -238,13 +219,12 @@ func newRedisKeysOperator() redisOperator {
 }
 
 func newRedisSCardOperator() redisOperator {
-	return func(r *Redis, key string, part *message.Part) error {
+	return func(r *redisProc, key string, part *message.Part) error {
 		res, err := r.client.SCard(key).Result()
 
-		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
+		for i := 0; i <= r.retries && err != nil; i++ {
 			r.log.Errorf("SCard command failed: %v\n", err)
 			<-time.After(r.retryPeriod)
-			r.mRedisRetry.Incr(1)
 			res, err = r.client.SCard(key).Result()
 		}
 		if err != nil {
@@ -257,13 +237,12 @@ func newRedisSCardOperator() redisOperator {
 }
 
 func newRedisSAddOperator() redisOperator {
-	return func(r *Redis, key string, part *message.Part) error {
+	return func(r *redisProc, key string, part *message.Part) error {
 		res, err := r.client.SAdd(key, part.Get()).Result()
 
-		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
+		for i := 0; i <= r.retries && err != nil; i++ {
 			r.log.Errorf("SAdd command failed: %v\n", err)
 			<-time.After(r.retryPeriod)
-			r.mRedisRetry.Incr(1)
 			res, err = r.client.SAdd(key, part.Get()).Result()
 		}
 		if err != nil {
@@ -276,17 +255,16 @@ func newRedisSAddOperator() redisOperator {
 }
 
 func newRedisIncrByOperator() redisOperator {
-	return func(r *Redis, key string, part *message.Part) error {
+	return func(r *redisProc, key string, part *message.Part) error {
 		valueInt, err := strconv.Atoi(string(part.Get()))
 		if err != nil {
 			return err
 		}
 		res, err := r.client.IncrBy(key, int64(valueInt)).Result()
 
-		for i := 0; i <= r.conf.Redis.Retries && err != nil; i++ {
+		for i := 0; i <= r.retries && err != nil; i++ {
 			r.log.Errorf("incrby command failed: %v\n", err)
 			<-time.After(r.retryPeriod)
-			r.mRedisRetry.Incr(1)
 			res, err = r.client.IncrBy(key, int64(valueInt)).Result()
 		}
 		if err != nil {
@@ -312,37 +290,19 @@ func getRedisOperator(opStr string) (redisOperator, error) {
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (r *Redis) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	r.mCount.Incr(1)
+func (r *redisProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	newMsg := msg.Copy()
-
-	proc := func(index int, span *tracing.Span, part *message.Part) error {
+	_ = newMsg.Iter(func(index int, part *message.Part) error {
 		key := r.key.String(index, newMsg)
 		if err := r.operator(r, key, part); err != nil {
-			r.mErr.Incr(1)
-			r.log.Debugf("Operator failed for key '%s': %v\n", key, err)
+			r.log.Debugf("Operator failed for key '%s': %v", key, err)
 			return err
 		}
 		return nil
-	}
-
-	IteratePartsWithSpanV2(TypeRedis, r.parts, newMsg, proc)
-
-	r.mBatchSent.Incr(1)
-	r.mSent.Incr(int64(newMsg.Len()))
+	})
 	return []*message.Batch{newMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (r *Redis) CloseAsync() {
+func (r *redisProc) Close(ctx context.Context) error {
+	return r.client.Close()
 }
-
-// WaitForClose blocks until the processor has closed down.
-func (r *Redis) WaitForClose(timeout time.Duration) error {
-	r.client.Close()
-	return nil
-}
-
-//------------------------------------------------------------------------------

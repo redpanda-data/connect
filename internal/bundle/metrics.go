@@ -3,7 +3,9 @@ package bundle
 import (
 	"sort"
 
+	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
@@ -43,12 +45,26 @@ func (s *MetricsSet) Add(constructor MetricConstructor, spec docs.ComponentSpec)
 }
 
 // Init attempts to initialise an metrics from a config.
-func (s *MetricsSet) Init(conf metrics.Config, opts ...func(metrics.Type)) (metrics.Type, error) {
+func (s *MetricsSet) Init(conf metrics.Config, log log.Modular) (*imetrics.Namespaced, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, metrics.ErrInvalidMetricOutputType
 	}
-	return spec.constructor(conf, opts...)
+
+	m, err := spec.constructor(conf, log)
+	if err != nil {
+		return nil, err
+	}
+
+	ns := imetrics.NewNamespaced(m)
+	if conf.Mapping != "" {
+		mmap, err := imetrics.NewMapping(conf.Mapping, log)
+		if err != nil {
+			return nil, err
+		}
+		ns = ns.WithMapping(mmap)
+	}
+	return ns, nil
 }
 
 // Docs returns a slice of metrics specs, which document each method.

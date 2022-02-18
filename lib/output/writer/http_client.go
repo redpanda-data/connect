@@ -80,8 +80,7 @@ func NewHTTPClient(
 	opts := []func(*http.Client){
 		http.OptSetLogger(h.log),
 		http.OptSetManager(mgr),
-		// TODO: V4 Remove this
-		http.OptSetStats(metrics.Namespaced(h.stats, "client")),
+		http.OptSetStats(h.stats),
 	}
 
 	if len(conf.Multipart) > 0 {

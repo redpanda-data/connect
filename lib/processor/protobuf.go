@@ -1,16 +1,15 @@
 package processor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -29,7 +28,13 @@ import (
 
 func init() {
 	Constructors[TypeProtobuf] = TypeSpec{
-		constructor: NewProtobuf,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newProtobuf(conf.Protobuf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("protobuf", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryParsing,
 		},
@@ -63,7 +68,6 @@ Attempts to create a target protobuf message from a generic JSON structure.`,
 			docs.FieldCommon("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
 			docs.FieldCommon("message", "The fully qualified name of the protobuf message to convert to/from."),
 			docs.FieldString("import_paths", "A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").Array(),
-			PartsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
 			{
@@ -160,7 +164,6 @@ pipeline:
 
 // ProtobufConfig contains configuration fields for the Protobuf processor.
 type ProtobufConfig struct {
-	Parts       []int    `json:"parts" yaml:"parts"`
 	Operator    string   `json:"operator" yaml:"operator"`
 	Message     string   `json:"message" yaml:"message"`
 	ImportPaths []string `json:"import_paths" yaml:"import_paths"`
@@ -169,7 +172,6 @@ type ProtobufConfig struct {
 // NewProtobufConfig returns a ProtobufConfig with default values.
 func NewProtobufConfig() ProtobufConfig {
 	return ProtobufConfig{
-		Parts:       []int{},
 		Operator:    "to_json",
 		Message:     "",
 		ImportPaths: []string{},
@@ -311,77 +313,31 @@ func getMessageFromDescriptors(message string, fds []*desc.FileDescriptor) *desc
 
 //------------------------------------------------------------------------------
 
-// Protobuf is a processor that performs an operation on an Protobuf payload.
-type Protobuf struct {
-	parts    []int
+type protobufProc struct {
 	operator protobufOperator
-
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+	log      log.Modular
 }
 
-// NewProtobuf returns an Protobuf processor.
-func NewProtobuf(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	p := &Protobuf{
-		parts: conf.Protobuf.Parts,
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+func newProtobuf(conf ProtobufConfig, mgr interop.Manager) (*protobufProc, error) {
+	p := &protobufProc{
+		log: mgr.Logger(),
 	}
-
-	importPaths := conf.Protobuf.ImportPaths
-
 	var err error
-	if p.operator, err = strToProtobufOperator(conf.Protobuf.Operator, conf.Protobuf.Message, importPaths); err != nil {
+	if p.operator, err = strToProtobufOperator(conf.Operator, conf.Message, conf.ImportPaths); err != nil {
 		return nil, err
 	}
 	return p, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (p *Protobuf) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	p.mCount.Incr(1)
-	newMsg := msg.Copy()
-
-	proc := func(index int, span *tracing.Span, part *message.Part) error {
-		if err := p.operator(part); err != nil {
-			p.mErr.Incr(1)
-			p.log.Debugf("Operator failed: %v\n", err)
-			return err
-		}
-		return nil
+func (p *protobufProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+	newPart := msg.Copy()
+	if err := p.operator(newPart); err != nil {
+		p.log.Debugf("Operator failed: %v", err)
+		return nil, err
 	}
-
-	IteratePartsWithSpanV2(TypeProtobuf, p.parts, newMsg, proc)
-
-	p.mBatchSent.Incr(1)
-	p.mSent.Incr(int64(newMsg.Len()))
-	return []*message.Batch{newMsg}, nil
+	return []*message.Part{newPart}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (p *Protobuf) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (p *Protobuf) WaitForClose(timeout time.Duration) error {
+func (p *protobufProc) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

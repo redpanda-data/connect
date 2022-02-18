@@ -2,6 +2,7 @@ package output
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
@@ -97,9 +98,8 @@ func newFallback(
 
 	var err error
 	for i, oConf := range outputConfs {
-		oMgr, oLog, oStats := interop.LabelChild(fmt.Sprintf("fallback.%v", i), mgr, log, stats)
-		oStats = metrics.Combine(stats, oStats)
-		if outputs[i], err = New(oConf, oMgr, oLog, oStats); err != nil {
+		oMgr := mgr.IntoPath("fallback", strconv.Itoa(i))
+		if outputs[i], err = New(oConf, oMgr, oMgr.Logger(), oMgr.Metrics()); err != nil {
 			return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Type, err)
 		}
 		if mif, ok := output.GetMaxInFlight(outputs[i]); ok && mif > maxInFlight {

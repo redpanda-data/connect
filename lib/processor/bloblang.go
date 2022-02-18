@@ -1,8 +1,8 @@
 package processor
 
 import (
+	"context"
 	"fmt"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
@@ -19,7 +19,13 @@ import (
 
 func init() {
 	Constructors[TypeBloblang] = TypeSpec{
-		constructor: NewBloblang,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newBloblang(conf.Bloblang, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("bloblang", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryMapping,
 			CategoryParsing,
@@ -131,103 +137,55 @@ func NewBloblangConfig() BloblangConfig {
 
 //------------------------------------------------------------------------------
 
-// Bloblang is a processor that performs a Bloblang mapping.
-type Bloblang struct {
+type bloblangProc struct {
 	exec *mapping.Executor
-
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
-	mDropped   metrics.StatCounter
+	log  log.Modular
 }
 
-// NewBloblang returns a Bloblang processor.
-func NewBloblang(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	exec, err := mgr.BloblEnvironment().NewMapping(string(conf.Bloblang))
+func newBloblang(conf BloblangConfig, mgr interop.Manager) (processor.V2Batched, error) {
+	exec, err := mgr.BloblEnvironment().NewMapping(string(conf))
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
-			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(conf.Bloblang)))
+			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(conf)))
 		}
 		return nil, err
 	}
-	return NewBloblangFromExecutor(exec, log, stats), nil
+	return NewBloblangFromExecutor(exec, mgr.Logger()), nil
 }
 
-// NewBloblangFromExecutor returns a Bloblang processor.
-func NewBloblangFromExecutor(exec *mapping.Executor, log log.Modular, stats metrics.Type) processor.V1 {
-	return &Bloblang{
+// NewBloblangFromExecutor returns a new bloblang processor from an executor.
+func NewBloblangFromExecutor(exec *mapping.Executor, log log.Modular) processor.V2Batched {
+	return &bloblangProc{
 		exec: exec,
-
-		log:   log,
-		stats: stats,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
-		mDropped:   stats.GetCounter("dropped"),
+		log:  log,
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (b *Bloblang) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	b.mCount.Incr(1)
-
+func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	newParts := make([]*message.Part, 0, msg.Len())
-
 	_ = msg.Iter(func(i int, part *message.Part) error {
-		span := tracing.CreateChildSpan(TypeBloblang, part)
-
 		p, err := b.exec.MapPart(i, msg)
 		if err != nil {
 			p = part.Copy()
-			b.mErr.Incr(1)
 			b.log.Errorf("%v\n", err)
-			FlagErr(p, err)
-			span.SetTag("error", true)
-			span.LogKV(
-				"event", "error",
-				"type", err.Error(),
-			)
+			processor.MarkErr(p, spans[i], err)
 		}
-
-		span.Finish()
 		if p != nil {
 			newParts = append(newParts, p)
-		} else {
-			b.mDropped.Incr(1)
 		}
 		return nil
 	})
-
 	if len(newParts) == 0 {
 		return nil, nil
 	}
 
 	newMsg := message.QuickBatch(nil)
 	newMsg.SetAll(newParts)
-
-	b.mBatchSent.Incr(1)
-	b.mSent.Incr(int64(newMsg.Len()))
 	return []*message.Batch{newMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (b *Bloblang) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (b *Bloblang) WaitForClose(timeout time.Duration) error {
+func (b *bloblangProc) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

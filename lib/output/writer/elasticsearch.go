@@ -110,8 +110,6 @@ type Elasticsearch struct {
 	pipelineStr *field.Expression
 	routingStr  *field.Expression
 
-	eJSONErr metrics.StatCounter
-
 	client *elastic.Client
 }
 
@@ -123,7 +121,6 @@ func NewElasticsearchV2(conf ElasticsearchConfig, mgr interop.Manager, log log.M
 		conf:        conf,
 		sniff:       conf.Sniff,
 		healthcheck: conf.Healthcheck,
-		eJSONErr:    stats.GetCounter("error.json"),
 	}
 
 	var err error
@@ -270,7 +267,6 @@ func (e *Elasticsearch) Write(msg *message.Batch) error {
 	if err := msg.Iter(func(i int, part *message.Part) error {
 		jObj, ierr := part.JSON()
 		if ierr != nil {
-			e.eJSONErr.Incr(1)
 			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
 			return fmt.Errorf("failed to marshal message into JSON document: %w", ierr)
 		}

@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -20,7 +21,13 @@ import (
 
 func init() {
 	Constructors[TypeGroupBy] = TypeSpec{
-		constructor: NewGroupBy,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newGroupBy(conf.GroupBy, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("group_by", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryComposition,
 		},
@@ -104,31 +111,16 @@ type group struct {
 	Processors []processor.V1
 }
 
-// GroupBy is a processor that group_bys messages into a message per part.
-type GroupBy struct {
-	log   log.Modular
-	stats metrics.Type
-
-	groups     []group
-	mGroupPass []metrics.StatCounter
-
-	mCount        metrics.StatCounter
-	mGroupDefault metrics.StatCounter
-	mSent         metrics.StatCounter
-	mBatchSent    metrics.StatCounter
+type groupByProc struct {
+	log    log.Modular
+	groups []group
 }
 
-// NewGroupBy returns a GroupBy processor.
-func NewGroupBy(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+func newGroupBy(conf GroupByConfig, mgr interop.Manager) (processor.V2Batched, error) {
 	var err error
-	groups := make([]group, len(conf.GroupBy))
-	groupCtrs := make([]metrics.StatCounter, len(conf.GroupBy))
+	groups := make([]group, len(conf))
 
-	for i, gConf := range conf.GroupBy {
-		groupPrefix := fmt.Sprintf("groups.%v", i)
-
+	for i, gConf := range conf {
 		if len(gConf.Check) > 0 {
 			if groups[i].Check, err = mgr.BloblEnvironment().NewMapping(gConf.Check); err != nil {
 				return nil, fmt.Errorf("failed to parse check for group '%v': %v", i, err)
@@ -138,38 +130,22 @@ func NewGroupBy(
 		}
 
 		for j, pConf := range gConf.Processors {
-			pMgr, pLog, pStats := interop.LabelChild(groupPrefix+fmt.Sprintf(".processor.%v", j), mgr, log, stats)
-			var proc processor.V1
-			if proc, err = New(pConf, pMgr, pLog, pStats); err != nil {
+			pMgr := mgr.IntoPath("group_by", strconv.Itoa(i), "processors", strconv.Itoa(j))
+			proc, err := New(pConf, pMgr, pMgr.Logger(), pMgr.Metrics())
+			if err != nil {
 				return nil, fmt.Errorf("failed to create processor '%v' for group '%v': %v", j, i, err)
 			}
 			groups[i].Processors = append(groups[i].Processors, proc)
 		}
-
-		groupCtrs[i] = stats.GetCounter(groupPrefix + ".passed")
 	}
 
-	return &GroupBy{
-		log:   log,
-		stats: stats,
-
-		groups:     groups,
-		mGroupPass: groupCtrs,
-
-		mCount:        stats.GetCounter("count"),
-		mGroupDefault: stats.GetCounter("groups.default.passed"),
-		mSent:         stats.GetCounter("sent"),
-		mBatchSent:    stats.GetCounter("batch.sent"),
+	return &groupByProc{
+		log:    mgr.Logger(),
+		groups: groups,
 	}, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	g.mCount.Incr(1)
-
+func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	if msg.Len() == 0 {
 		return nil, nil
 	}
@@ -179,8 +155,6 @@ func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		groups[i] = message.QuickBatch(nil)
 	}
 	groupless := message.QuickBatch(nil)
-
-	spans := tracing.CreateChildSpans(TypeGroupBy, msg)
 
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		for j, group := range g.groups {
@@ -197,7 +171,6 @@ func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 				)
 				spans[i].SetTag("group", groupStr)
 				groups[j].Append(p.Copy())
-				g.mGroupPass[j].Incr(1)
 				return nil
 			}
 		}
@@ -208,13 +181,8 @@ func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		)
 		spans[i].SetTag("group", "default")
 		groupless.Append(p.Copy())
-		g.mGroupDefault.Incr(1)
 		return nil
 	})
-
-	for _, s := range spans {
-		s.Finish()
-	}
 
 	msgs := []*message.Batch{}
 	for i, gmsg := range groups {
@@ -232,7 +200,6 @@ func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 			}
 		}
 	}
-
 	if groupless.Len() > 0 {
 		msgs = append(msgs, groupless)
 	}
@@ -240,34 +207,25 @@ func (g *GroupBy) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	if len(msgs) == 0 {
 		return nil, nil
 	}
-
-	g.mBatchSent.Incr(int64(len(msgs)))
-	for _, m := range msgs {
-		g.mSent.Incr(int64(m.Len()))
-	}
 	return msgs, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (g *GroupBy) CloseAsync() {
+func (g *groupByProc) Close(ctx context.Context) error {
 	for _, group := range g.groups {
 		for _, p := range group.Processors {
 			p.CloseAsync()
 		}
 	}
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (g *GroupBy) WaitForClose(timeout time.Duration) error {
-	stopBy := time.Now().Add(timeout)
+	deadline, exists := ctx.Deadline()
+	if !exists {
+		deadline = time.Now().Add(time.Second * 5)
+	}
 	for _, group := range g.groups {
 		for _, p := range group.Processors {
-			if err := p.WaitForClose(time.Until(stopBy)); err != nil {
+			if err := p.WaitForClose(time.Until(deadline)); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

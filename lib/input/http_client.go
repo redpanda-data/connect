@@ -177,12 +177,11 @@ func newHTTPClient(conf HTTPClientConfig, mgr interop.Manager, log log.Modular, 
 		payload = message.QuickBatch([][]byte{[]byte(conf.Payload)})
 	}
 
-	cMgr, cLog, cStats := interop.LabelChild("client", mgr, log, stats)
 	client, err := http.NewClient(
 		conf.Config,
-		http.OptSetManager(cMgr),
-		http.OptSetLogger(cLog),
-		http.OptSetStats(cStats),
+		http.OptSetManager(mgr),
+		http.OptSetLogger(log),
+		http.OptSetStats(stats),
 	)
 	if err != nil {
 		return nil, err

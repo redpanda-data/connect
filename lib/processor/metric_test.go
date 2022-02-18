@@ -11,40 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//------------------------------------------------------------------------------
-
-type mockMetric struct {
-	values map[string]int64
-}
-
-func (d *mockMetric) Incr(path string, count int64) error {
-	prev := d.values[path]
-	prev += count
-	d.values[path] = prev
-	return nil
-}
-
-func (d *mockMetric) Decr(path string, count int64) error {
-	prev := d.values[path]
-	prev -= count
-	d.values[path] = prev
-	return nil
-}
-
-func (d *mockMetric) Timing(path string, delta int64) error {
-	d.values[path] = delta
-	return nil
-}
-
-func (d *mockMetric) Gauge(path string, value int64) error {
-	d.values[path] = value
-	return nil
-}
-
-func (d *mockMetric) Close() error { return nil }
-
-//------------------------------------------------------------------------------
-
 func TestMetricBad(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "metric"
@@ -60,17 +26,15 @@ func TestMetricBad(t *testing.T) {
 }
 
 func TestMetricCounter(t *testing.T) {
-	mockStats := &mockMetric{
-		values: map[string]int64{},
-	}
-
 	conf := NewConfig()
 	conf.Type = "metric"
 	conf.Metric.Type = "counter"
 	conf.Metric.Name = "foo.bar"
 	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.WrapFlat(mockStats))
+	mockMetrics := metrics.NewLocal()
+
+	proc, err := New(conf, mock.NewManager(), log.Noop(), mockMetrics)
 	require.NoError(t, err)
 
 	inputs := [][][]byte{
@@ -102,21 +66,19 @@ func TestMetricCounter(t *testing.T) {
 		assert.Nil(t, res)
 	}
 
-	assert.Equal(t, expMetrics, mockStats.values)
+	assert.Equal(t, expMetrics, mockMetrics.FlushCounters())
 }
 
 func TestMetricCounterBy(t *testing.T) {
-	mockStats := &mockMetric{
-		values: map[string]int64{},
-	}
-
 	conf := NewConfig()
 	conf.Type = "metric"
 	conf.Metric.Type = "counter_by"
 	conf.Metric.Name = "foo.bar"
 	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.WrapFlat(mockStats))
+	mockMetrics := metrics.NewLocal()
+
+	proc, err := New(conf, mock.NewManager(), log.Noop(), mockMetrics)
 	require.NoError(t, err)
 
 	inputs := [][][]byte{
@@ -151,21 +113,19 @@ func TestMetricCounterBy(t *testing.T) {
 		assert.Nil(t, res)
 	}
 
-	assert.Equal(t, expMetrics, mockStats.values)
+	assert.Equal(t, expMetrics, mockMetrics.FlushCounters())
 }
 
 func TestMetricGauge(t *testing.T) {
-	mockStats := &mockMetric{
-		values: map[string]int64{},
-	}
-
 	conf := NewConfig()
 	conf.Type = "metric"
 	conf.Metric.Type = "gauge"
 	conf.Metric.Name = "foo.bar"
 	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.WrapFlat(mockStats))
+	mockMetrics := metrics.NewLocal()
+
+	proc, err := New(conf, mock.NewManager(), log.Noop(), mockMetrics)
 	require.NoError(t, err)
 
 	inputs := [][][]byte{
@@ -200,21 +160,19 @@ func TestMetricGauge(t *testing.T) {
 		assert.Nil(t, res)
 	}
 
-	assert.Equal(t, expMetrics, mockStats.values)
+	assert.Equal(t, expMetrics, mockMetrics.FlushCounters())
 }
 
 func TestMetricTiming(t *testing.T) {
-	mockStats := &mockMetric{
-		values: map[string]int64{},
-	}
-
 	conf := NewConfig()
 	conf.Type = "metric"
 	conf.Metric.Type = "timing"
 	conf.Metric.Name = "foo.bar"
 	conf.Metric.Value = "${!json(\"foo.bar\")}"
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.WrapFlat(mockStats))
+	mockMetrics := metrics.NewLocal()
+
+	proc, err := New(conf, mock.NewManager(), log.Noop(), mockMetrics)
 	require.NoError(t, err)
 
 	inputs := [][][]byte{
@@ -249,5 +207,5 @@ func TestMetricTiming(t *testing.T) {
 		assert.Nil(t, res)
 	}
 
-	assert.Equal(t, expMetrics, mockStats.values)
+	assert.Equal(t, expMetrics, mockMetrics.FlushTimings())
 }

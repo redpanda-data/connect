@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,7 +50,7 @@ type cacheTestEnvironment struct {
 	timeout time.Duration
 	ctx     context.Context
 	log     log.Modular
-	stats   metrics.Type
+	stats   *metrics.Namespaced
 }
 
 func newCacheTestEnvironment(t *testing.T, confTemplate string) cacheTestEnvironment {
@@ -100,7 +100,11 @@ func CacheTestOptLogging(level string) CacheTestOptFunc {
 	return func(env *cacheTestEnvironment) {
 		logConf := log.NewConfig()
 		logConf.LogLevel = level
-		env.log = log.New(os.Stdout, logConf)
+		var err error
+		env.log, err = log.NewV2(os.Stdout, logConf)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

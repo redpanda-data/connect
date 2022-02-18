@@ -89,7 +89,7 @@ output:
       processors: []
     aws:
       enabled: false
-      region: eu-west-1
+      region: ""
       endpoint: ""
       credentials:
         profile: ""
@@ -529,7 +529,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `aws.endpoint`
 

@@ -5,10 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,7 +38,7 @@ func TestPolicyBasic(t *testing.T) {
 	conf.Count = 2
 	conf.ByteSize = 0
 
-	pol, err := NewPolicy(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	pol, err := NewPolicy(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -88,7 +86,7 @@ func TestPolicyPeriod(t *testing.T) {
 	conf := NewPolicyConfig()
 	conf.Period = "300ms"
 
-	pol, err := NewPolicy(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	pol, err := NewPolicy(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +122,7 @@ func TestPolicySize(t *testing.T) {
 	conf := NewPolicyConfig()
 	conf.ByteSize = 10
 
-	pol, err := NewPolicy(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	pol, err := NewPolicy(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +155,7 @@ func TestPolicyCheck(t *testing.T) {
 	conf := NewPolicyConfig()
 	conf.Check = `content() == "bar"`
 
-	pol, err := NewPolicy(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	pol, err := NewPolicy(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +188,7 @@ func TestPolicyCheckAdvanced(t *testing.T) {
 	conf := NewPolicyConfig()
 	conf.Check = `batch_size() >= 3`
 
-	pol, err := NewPolicy(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	pol, err := NewPolicy(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +231,7 @@ func TestPolicyArchived(t *testing.T) {
 
 	conf.Processors = append(conf.Processors, procConf)
 
-	pol, err := NewPolicy(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	pol, err := NewPolicy(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -267,7 +265,7 @@ func TestPolicySplit(t *testing.T) {
 
 	conf.Processors = append(conf.Processors, procConf)
 
-	pol, err := NewPolicy(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	pol, err := NewPolicy(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

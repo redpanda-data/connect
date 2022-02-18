@@ -20,7 +20,10 @@ import (
 
 func init() {
 	Constructors[TypeWorkflow] = TypeSpec{
-		constructor: NewWorkflow,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := NewWorkflow(conf.Workflow, mgr)
+			return p, err
+		},
 		Categories: []Category{
 			CategoryComposition,
 		},
@@ -284,58 +287,47 @@ func NewWorkflowConfig() WorkflowConfig {
 // payload mapped from the original, and after processing attempts to overlay
 // the results back onto the original payloads according to more mappings.
 type Workflow struct {
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 
 	children  *workflowBranchMap
 	allStages map[string]struct{}
 	metaPath  []string
 
-	mCount           metrics.StatCounter
-	mSent            metrics.StatCounter
-	mSentParts       metrics.StatCounter
-	mSkippedNoStages metrics.StatCounter
-	mErr             metrics.StatCounter
-	mErrJSON         metrics.StatCounter
-	mErrMeta         metrics.StatCounter
-	mErrOverlay      metrics.StatCounter
-	mErrStages       map[string]metrics.StatCounter
-	mSuccStages      map[string]metrics.StatCounter
-	metricsMut       sync.RWMutex
+	// Metrics
+	mReceived      metrics.StatCounter
+	mBatchReceived metrics.StatCounter
+	mSent          metrics.StatCounter
+	mBatchSent     metrics.StatCounter
+	mError         metrics.StatCounter
+	mLatency       metrics.StatTimer
 }
 
-// NewWorkflow returns a new workflow processor.
-func NewWorkflow(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+// NewWorkflow instanciates a new workflow processor.
+func NewWorkflow(conf WorkflowConfig, mgr interop.Manager) (*Workflow, error) {
+	stats := mgr.Metrics()
 	w := &Workflow{
-		log:         log,
-		stats:       stats,
-		mErrStages:  map[string]metrics.StatCounter{},
-		mSuccStages: map[string]metrics.StatCounter{},
-		metaPath:    nil,
-		allStages:   map[string]struct{}{},
+		log:       mgr.Logger(),
+		metaPath:  nil,
+		allStages: map[string]struct{}{},
+
+		mReceived:      stats.GetCounter("processor_received"),
+		mBatchReceived: stats.GetCounter("processor_batch_received"),
+		mSent:          stats.GetCounter("processor_sent"),
+		mBatchSent:     stats.GetCounter("processor_batch_sent"),
+		mError:         stats.GetCounter("processor_error"),
+		mLatency:       stats.GetTimer("processor_latency_ns"),
 	}
-	if len(conf.Workflow.MetaPath) > 0 {
-		w.metaPath = gabs.DotPathToSlice(conf.Workflow.MetaPath)
+	if len(conf.MetaPath) > 0 {
+		w.metaPath = gabs.DotPathToSlice(conf.MetaPath)
 	}
 
 	var err error
-	if w.children, err = newWorkflowBranchMap(conf.Workflow, mgr, log, stats); err != nil {
+	if w.children, err = newWorkflowBranchMap(conf, mgr); err != nil {
 		return nil, err
 	}
 	for k := range w.children.dynamicBranches {
 		w.allStages[k] = struct{}{}
 	}
-
-	w.mCount = stats.GetCounter("count")
-	w.mSent = stats.GetCounter("sent")
-	w.mSentParts = stats.GetCounter("parts.sent")
-	w.mSkippedNoStages = stats.GetCounter("skipped.no_stages")
-	w.mErr = stats.GetCounter("error")
-	w.mErrJSON = stats.GetCounter("error.json_parse")
-	w.mErrMeta = stats.GetCounter("error.meta_set")
-	w.mErrOverlay = stats.GetCounter("error.overlay")
 
 	return w, nil
 }
@@ -343,42 +335,6 @@ func NewWorkflow(
 // Flow returns the calculated workflow as a 2D slice.
 func (w *Workflow) Flow() [][]string {
 	return w.children.dag
-}
-
-//------------------------------------------------------------------------------
-
-func (w *Workflow) incrStageErr(id string) {
-	w.metricsMut.RLock()
-	ctr, exists := w.mErrStages[id]
-	w.metricsMut.RUnlock()
-	if exists {
-		ctr.Incr(1)
-		return
-	}
-
-	w.metricsMut.Lock()
-	defer w.metricsMut.Unlock()
-
-	ctr = w.stats.GetCounter(fmt.Sprintf("%v.error", id))
-	ctr.Incr(1)
-	w.mErrStages[id] = ctr
-}
-
-func (w *Workflow) incrStageSucc(id string) {
-	w.metricsMut.RLock()
-	ctr, exists := w.mSuccStages[id]
-	w.metricsMut.RUnlock()
-	if exists {
-		ctr.Incr(1)
-		return
-	}
-
-	w.metricsMut.Lock()
-	defer w.metricsMut.Unlock()
-
-	ctr = w.stats.GetCounter(fmt.Sprintf("%v.success", id))
-	ctr.Incr(1)
-	w.mSuccStages[id] = ctr
 }
 
 //------------------------------------------------------------------------------
@@ -506,22 +462,24 @@ func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
 
 // ProcessMessage applies workflow stages to each part of a message type.
 func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	w.mCount.Incr(1)
+	w.mReceived.Incr(int64(msg.Len()))
+	w.mBatchReceived.Incr(1)
+	startedAt := time.Now()
 
 	payload := msg.DeepCopy()
 
 	// Prevent resourced branches from being updated mid-flow.
 	dag, children, unlock, err := w.children.Lock()
 	if err != nil {
-		w.mErr.Incr(1)
+		w.mError.Incr(1)
 		w.log.Errorf("Failed to establish workflow: %v\n", err)
 
 		_ = payload.Iter(func(i int, p *message.Part) error {
 			FlagErr(p, err)
 			return nil
 		})
-		w.mSentParts.Incr(int64(payload.Len()))
-		w.mSent.Incr(1)
+		w.mSent.Incr(int64(payload.Len()))
+		w.mBatchSent.Incr(1)
 		return []*message.Batch{payload}, nil
 	}
 	defer unlock()
@@ -587,13 +545,10 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 			var failed []branchMapError
 			err := errors[i]
 			if err == nil {
-				if failed, err = children[id].overlayResult(payload, results[i]); err != nil {
-					w.mErrOverlay.Incr(1)
-				}
+				failed, err = children[id].overlayResult(payload, results[i])
 			}
 			if err != nil {
-				w.incrStageErr(id)
-				w.mErr.Incr(1)
+				w.mError.Incr(1)
 				w.log.Errorf("Failed to perform enrichment '%v': %v\n", id, err)
 				for j := range records {
 					records[j].Failed(id, err.Error())
@@ -603,7 +558,6 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 			for _, e := range failed {
 				records[e.index].Failed(id, e.err.Error())
 			}
-			w.incrStageSucc(id)
 		}
 	}
 
@@ -612,8 +566,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 		_ = payload.Iter(func(i int, p *message.Part) error {
 			pJSON, err := p.JSON()
 			if err != nil {
-				w.mErr.Incr(1)
-				w.mErrMeta.Incr(1)
+				w.mError.Incr(1)
 				w.log.Errorf("Failed to parse message for meta update: %v\n", err)
 				FlagErr(p, err)
 				return nil
@@ -646,10 +599,10 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 
 	tracing.FinishSpans(propMsg)
 
-	w.mSentParts.Incr(int64(payload.Len()))
-	w.mSent.Incr(1)
-	msgs := [1]*message.Batch{payload}
-	return msgs[:], nil
+	w.mSent.Incr(int64(payload.Len()))
+	w.mBatchSent.Incr(1)
+	w.mLatency.Timing(time.Since(startedAt).Nanoseconds())
+	return []*message.Batch{payload}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

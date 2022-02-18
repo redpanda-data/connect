@@ -19,36 +19,13 @@ import TabItem from '@theme/TabItem';
 Compresses messages according to the selected algorithm. Supported compression
 algorithms are: gzip, zlib, flate, snappy, lz4.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 label: ""
 compress:
   algorithm: gzip
   level: -1
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yml
-# All config fields, showing default values
-label: ""
-compress:
-  algorithm: gzip
-  level: -1
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 The 'level' field might not apply to all algorithms.
 
@@ -70,18 +47,5 @@ The level of compression to use. May not be applicable to all algorithms.
 
 Type: `int`  
 Default: `-1`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 

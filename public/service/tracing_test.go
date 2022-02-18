@@ -47,7 +47,7 @@ logger:
 	assert.Equal(t, 2, int(trace.TotalProcessorErrors()))
 
 	assert.Equal(t, map[string][]service.TracingEvent{
-		"input": {
+		"root.input": {
 			{Type: service.TracingEventProduce, Content: `{"id":1}`},
 			{Type: service.TracingEventProduce, Content: `{"id":2}`},
 			{Type: service.TracingEventProduce, Content: `{"id":3}`},
@@ -57,7 +57,7 @@ logger:
 	}, trace.InputEvents())
 
 	assert.Equal(t, map[string][]service.TracingEvent{
-		"pipeline.processor.0": {
+		"root.pipeline.processors.0": {
 			{Type: service.TracingEventConsume, Content: `{"id":1}`},
 			{Type: service.TracingEventProduce, Content: `{"count":1}`},
 			{Type: service.TracingEventConsume, Content: `{"id":2}`},
@@ -74,7 +74,7 @@ logger:
 	}, trace.ProcessorEvents())
 
 	assert.Equal(t, map[string][]service.TracingEvent{
-		"output": {
+		"root.output": {
 			{Type: service.TracingEventConsume, Content: `{"count":1}`},
 			{Type: service.TracingEventConsume, Content: `{"id":2}`},
 			{Type: service.TracingEventConsume, Content: `{"count":3}`},

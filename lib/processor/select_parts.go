@@ -1,21 +1,26 @@
 package processor
 
 import (
-	"time"
+	"context"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeSelectParts] = TypeSpec{
-		constructor: NewSelectParts,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newSelectParts(conf.SelectParts, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("select_parts", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryUtility,
 		},
@@ -33,10 +38,12 @@ output message) the batch is dropped entirely.
 Message indexes can be negative, and if so the part will be selected from the
 end counting backwards starting from -1. E.g. if index = -1 then the selected
 part will be the last part of the message, if index = -2 then the part before
-the last element with be selected, and so on.`,
+the last element with be selected, and so on.
+
+This processor is only applicable to [batched messages](/docs/configuration/batching).`,
 		UsesBatches: true,
 		FieldSpecs: docs.FieldSpecs{
-			PartsFieldSpec,
+			docs.FieldInt("parts", `An array of message indexes of a batch. Indexes can be negative, and if so the part will be selected from the end counting backwards starting from -1.`).Array(),
 		},
 	}
 }
@@ -52,88 +59,44 @@ type SelectPartsConfig struct {
 // NewSelectPartsConfig returns a SelectPartsConfig with default values.
 func NewSelectPartsConfig() SelectPartsConfig {
 	return SelectPartsConfig{
-		Parts: []int{0},
+		Parts: []int{},
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// SelectParts is a processor that selects parts from a message to append to a
-// new message.
-type SelectParts struct {
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mSkipped   metrics.StatCounter
-	mSelected  metrics.StatCounter
-	mDropped   metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+type selectPartsProc struct {
+	parts []int
 }
 
-// NewSelectParts returns a SelectParts processor.
-func NewSelectParts(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	return &SelectParts{
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
-		mCount:     stats.GetCounter("count"),
-		mSkipped:   stats.GetCounter("skipped"),
-		mSelected:  stats.GetCounter("selected"),
-		mDropped:   stats.GetCounter("dropped"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+func newSelectParts(conf SelectPartsConfig, mgr interop.Manager) (*selectPartsProc, error) {
+	return &selectPartsProc{
+		parts: conf.Parts,
 	}, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (m *SelectParts) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	m.mCount.Incr(1)
-
+func (m *selectPartsProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	newMsg := message.QuickBatch(nil)
 
 	lParts := msg.Len()
-	for _, index := range m.conf.SelectParts.Parts {
+	for _, index := range m.parts {
 		if index < 0 {
 			// Negative indexes count backwards from the end.
 			index = lParts + index
 		}
-
 		// Check boundary of part index.
 		if index < 0 || index >= lParts {
-			m.mSkipped.Incr(1)
-		} else {
-			m.mSelected.Incr(1)
-			newMsg.Append(msg.Get(index).Copy())
+			continue
 		}
+		newMsg.Append(msg.Get(index).Copy())
 	}
 
 	if newMsg.Len() == 0 {
-		m.mDropped.Incr(1)
 		return nil, nil
 	}
-
-	m.mBatchSent.Incr(1)
-	m.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]*message.Batch{newMsg}
-	return msgs[:], nil
+	return []*message.Batch{newMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (m *SelectParts) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (m *SelectParts) WaitForClose(timeout time.Duration) error {
+func (m *selectPartsProc) Close(ctx context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

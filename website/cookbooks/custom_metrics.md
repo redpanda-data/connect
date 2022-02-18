@@ -97,9 +97,8 @@ pipeline:
     - bloblang: root = deleted()
 
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: if this != "downloads" { deleted() }
+  mapping: if this != "downloads" { deleted() }
+  prometheus: {}
 ```
 
 With the above config we have selected the [`prometheus` metrics type][metrics.prometheus], which allows us to use [Prometheus][prometheus] to scrape metrics from Benthos by polling its HTTP API at the url `http://localhost:4195/stats`.
@@ -192,9 +191,8 @@ pipeline:
     - bloblang: root = deleted()
 
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: if this != "downloads" { deleted() }
+  mapping: if this != "downloads" { deleted() }
+  prometheus: {}
 ```
 
 </TabItem>
@@ -271,9 +269,8 @@ pipeline:
     - bloblang: root = deleted()
 
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: if this != "downloads" { deleted() }
+  mapping: if this != "downloads" { deleted() }
+  prometheus: {}
 ```
 
 Finally, let's combine all the custom metrics into one pipeline.
@@ -361,9 +358,8 @@ processor_resources:
       value: ${! json("download_count") }
 
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: if this != "downloads" { deleted() }
+  mapping: if this != "downloads" { deleted() }
+  prometheus: {}
 ```
 
 [serverless.lambda]: /docs/guides/serverless/lambda
@@ -378,5 +374,5 @@ metrics:
 [processors.metric]: /docs/components/processors/metric
 [rate_limits]: /docs/components/rate_limits/about
 [metrics.prometheus]: /docs/components/metrics/prometheus
-[metrics.prometheus.path_mapping]: /docs/components/metrics/prometheus#path_mapping
+[metrics.about.mapping]: /docs/components/metrics/about#metric-mapping
 [prometheus]: https://prometheus.io/

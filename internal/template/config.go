@@ -11,7 +11,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/fatih/color"
 	"github.com/nsf/jsondiff"
 	"gopkg.in/yaml.v3"
@@ -116,7 +115,7 @@ func (c Config) compile() (*compiled, error) {
 	}
 	var metricsMapping *metrics.Mapping
 	if c.MetricsMapping != "" {
-		if metricsMapping, err = metrics.NewMapping(mock.NewManager(), c.MetricsMapping, log.Noop()); err != nil {
+		if metricsMapping, err = metrics.NewMapping(c.MetricsMapping, log.Noop()); err != nil {
 			return nil, fmt.Errorf("parse metrics mapping: %w", err)
 		}
 	}
@@ -247,7 +246,7 @@ func ConfigSpec() docs.FieldSpecs {
 		docs.FieldBloblang(
 			"mapping", "A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of the template into a valid Benthos configuration for the target component type.",
 		),
-		metrics.MappingFieldSpec(),
+		docs.MetricsMappingFieldSpec("metrics_mapping"),
 		docs.FieldCommon(
 			"tests", "Optional unit test definitions for the template that verify certain configurations produce valid configs. These tests are executed with the command `benthos template lint`.",
 		).Array().WithChildren(

@@ -100,7 +100,7 @@ func (b *Batcher) Close(ctx context.Context) error {
 
 // NewBatcher creates a batching mechanism from the policy.
 func (b BatchPolicy) NewBatcher(res *Resources) (*Batcher, error) {
-	p, err := batch.NewPolicy(b.toInternal(), res.mgr, res.mgr.Logger(), res.mgr.Metrics())
+	p, err := batch.NewPolicy(b.toInternal(), res.mgr.IntoPath("batching"))
 	if err != nil {
 		return nil, err
 	}

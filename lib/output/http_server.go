@@ -25,8 +25,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	corsSpec := httpdocs.ServerCORSFieldSpec()
 	corsSpec.Description += " Only valid with a custom `address`."
@@ -112,30 +110,17 @@ type HTTPServer struct {
 
 	allowedVerbs map[string]struct{}
 
-	mRunning       metrics.StatGauge
-	mCount         metrics.StatCounter
-	mPartsCount    metrics.StatCounter
-	mSendSucc      metrics.StatCounter
-	mPartsSendSucc metrics.StatCounter
-	mSent          metrics.StatCounter
-	mPartsSent     metrics.StatCounter
+	mGetSent      metrics.StatCounter
+	mGetBatchSent metrics.StatCounter
 
-	mGetReqRcvd  metrics.StatCounter
-	mGetCount    metrics.StatCounter
-	mGetSendSucc metrics.StatCounter
+	mWSSent      metrics.StatCounter
+	mWSBatchSent metrics.StatCounter
+	mWSLatency   metrics.StatTimer
+	mWSError     metrics.StatCounter
 
-	mWSReqRcvd  metrics.StatCounter
-	mWSCount    metrics.StatCounter
-	mWSSendSucc metrics.StatCounter
-	mWSSendErr  metrics.StatCounter
-
-	mStrmReqRcvd  metrics.StatCounter
-	mStrmErrCast  metrics.StatCounter
-	mStrmErrWrong metrics.StatCounter
-	mStrmClosed   metrics.StatCounter
-	mStrmCount    metrics.StatCounter
-	mStrmErrWrite metrics.StatCounter
-	mStrmSndSucc  metrics.StatCounter
+	mStreamSent      metrics.StatCounter
+	mStreamBatchSent metrics.StatCounter
+	mStreamError     metrics.StatCounter
 }
 
 // NewHTTPServer creates a new HTTPServer output type.
@@ -160,6 +145,11 @@ func NewHTTPServer(conf Config, mgr interop.Manager, log log.Modular, stats metr
 		return nil, errors.New("must provide at least one allowed verb")
 	}
 
+	mSent := stats.GetCounterVec("output_sent", "endpoint")
+	mBatchSent := stats.GetCounterVec("output_batch_sent", "endpoint")
+	mLatency := stats.GetTimerVec("output_latency_ns", "endpoint")
+	mError := stats.GetCounterVec("output_error", "endpoint")
+
 	h := HTTPServer{
 		running:    1,
 		conf:       conf,
@@ -172,27 +162,17 @@ func NewHTTPServer(conf Config, mgr interop.Manager, log log.Modular, stats metr
 
 		allowedVerbs: verbs,
 
-		mRunning:       stats.GetGauge("running"),
-		mCount:         stats.GetCounter("count"),
-		mPartsCount:    stats.GetCounter("parts.count"),
-		mSendSucc:      stats.GetCounter("send.success"),
-		mPartsSendSucc: stats.GetCounter("parts.send.success"),
-		mSent:          stats.GetCounter("batch.sent"),
-		mPartsSent:     stats.GetCounter("sent"),
-		mGetReqRcvd:    stats.GetCounter("get.request.received"),
-		mGetCount:      stats.GetCounter("get.count"),
-		mGetSendSucc:   stats.GetCounter("get.send.success"),
-		mWSCount:       stats.GetCounter("ws.count"),
-		mWSReqRcvd:     stats.GetCounter("stream.request.received"),
-		mWSSendSucc:    stats.GetCounter("ws.send.success"),
-		mWSSendErr:     stats.GetCounter("ws.send.error"),
-		mStrmReqRcvd:   stats.GetCounter("stream.request.received"),
-		mStrmErrCast:   stats.GetCounter("stream.error.cast_flusher"),
-		mStrmErrWrong:  stats.GetCounter("stream.error.wrong_method"),
-		mStrmClosed:    stats.GetCounter("stream.client_closed"),
-		mStrmCount:     stats.GetCounter("stream.count"),
-		mStrmErrWrite:  stats.GetCounter("stream.error.write"),
-		mStrmSndSucc:   stats.GetCounter("stream.send.success"),
+		mGetSent:      mSent.With("get"),
+		mGetBatchSent: mBatchSent.With("get"),
+
+		mWSSent:      mSent.With("websocket"),
+		mWSBatchSent: mBatchSent.With("websocket"),
+		mWSError:     mError.With("websocket"),
+		mWSLatency:   mLatency.With("websocket"),
+
+		mStreamSent:      mSent.With("stream"),
+		mStreamBatchSent: mBatchSent.With("stream"),
+		mStreamError:     mError.With("stream"),
 	}
 
 	if tout := conf.HTTPServer.Timeout; len(tout) > 0 {
@@ -240,8 +220,6 @@ func NewHTTPServer(conf Config, mgr interop.Manager, log log.Modular, stats metr
 //------------------------------------------------------------------------------
 
 func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
-	h.mGetReqRcvd.Incr(1)
-
 	if atomic.LoadInt32(&h.running) != 1 {
 		http.Error(w, "Server closed", http.StatusServiceUnavailable)
 		return
@@ -265,9 +243,6 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 			go h.CloseAsync()
 			return
 		}
-		h.mGetCount.Incr(1)
-		h.mCount.Incr(1)
-		h.mPartsCount.Incr(int64(ts.Payload.Len()))
 	case <-time.After(h.timeout - time.Since(tStart)):
 		http.Error(w, "Timed out waiting for message", http.StatusRequestTimeout)
 		return
@@ -294,11 +269,8 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(ts.Payload.Get(0).Get())
 	}
 
-	h.mSendSucc.Incr(1)
-	h.mPartsSendSucc.Incr(int64(ts.Payload.Len()))
-	h.mSent.Incr(1)
-	h.mPartsSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
-	h.mGetSendSucc.Incr(1)
+	h.mGetBatchSent.Incr(1)
+	h.mGetSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 
 	select {
 	case ts.ResponseChan <- response.NewError(nil):
@@ -308,19 +280,15 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
-	h.mStrmReqRcvd.Incr(1)
-
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Server error", http.StatusInternalServerError)
-		h.mStrmErrCast.Incr(1)
 		h.log.Errorln("Failed to cast response writer to flusher")
 		return
 	}
 
 	if _, exists := h.allowedVerbs[r.Method]; !exists {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
-		h.mStrmErrWrong.Incr(1)
 		return
 	}
 
@@ -335,11 +303,8 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-r.Context().Done():
-			h.mStrmClosed.Incr(1)
 			return
 		}
-		h.mStrmCount.Incr(1)
-		h.mCount.Incr(1)
 
 		var data []byte
 		if ts.Payload.Len() == 1 {
@@ -354,25 +319,19 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		case <-h.closeChan:
 			return
 		}
-
 		if err != nil {
-			h.mStrmErrWrite.Incr(1)
+			h.mStreamError.Incr(1)
 			return
 		}
 
 		w.Write([]byte("\n"))
 		flusher.Flush()
-		h.mStrmSndSucc.Incr(1)
-		h.mSendSucc.Incr(1)
-		h.mPartsSendSucc.Incr(int64(ts.Payload.Len()))
-		h.mSent.Incr(1)
-		h.mPartsSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
+		h.mStreamSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
+		h.mStreamBatchSent.Incr(1)
 	}
 }
 
 func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
-	h.mWSReqRcvd.Incr(1)
-
 	var err error
 	defer func() {
 		if err != nil {
@@ -401,28 +360,21 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-r.Context().Done():
-			h.mStrmClosed.Incr(1)
 			return
 		case <-h.closeChan:
 			return
 		}
-		h.mWSCount.Incr(1)
-		h.mCount.Incr(1)
 
 		var werr error
 		for _, msg := range message.GetAllBytes(ts.Payload) {
 			if werr = ws.WriteMessage(websocket.BinaryMessage, msg); werr != nil {
 				break
 			}
-			h.mWSSendSucc.Incr(1)
-			h.mSendSucc.Incr(1)
-			h.mPartsSendSucc.Incr(int64(ts.Payload.Len()))
-			h.mSent.Incr(1)
-			h.mPartsSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
+			h.mWSBatchSent.Incr(1)
+			h.mWSSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 		}
-
 		if werr != nil {
-			h.mWSSendErr.Incr(1)
+			h.mWSError.Incr(1)
 		}
 		select {
 		case ts.ResponseChan <- response.NewError(werr):
@@ -443,8 +395,6 @@ func (h *HTTPServer) Consume(ts <-chan message.Transaction) error {
 
 	if h.server != nil {
 		go func() {
-			h.mRunning.Incr(1)
-
 			if len(h.conf.HTTPServer.KeyFile) > 0 || len(h.conf.HTTPServer.CertFile) > 0 {
 				h.log.Infof(
 					"Serving messages through HTTPS GET request at: https://%s\n",
@@ -464,8 +414,6 @@ func (h *HTTPServer) Consume(ts <-chan message.Transaction) error {
 					h.log.Errorf("Server error: %v\n", err)
 				}
 			}
-
-			h.mRunning.Decr(1)
 
 			atomic.StoreInt32(&h.running, 0)
 			close(h.closeChan)
@@ -502,5 +450,3 @@ func (h *HTTPServer) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

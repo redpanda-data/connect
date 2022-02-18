@@ -8,12 +8,12 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/bundle/tracing"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -195,9 +195,9 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 	}
 
 	procEvents := summary.ProcessorEvents()
-	require.Contains(t, procEvents, "foo.processor.0")
+	require.Contains(t, procEvents, "root.processors.0")
 
-	processorEvents := procEvents["foo.processor.0"]
+	processorEvents := procEvents["root.processors.0"]
 	require.Len(t, processorEvents, 20)
 
 	for i := 0; i < len(processorEvents); i += 2 {

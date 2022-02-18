@@ -2,14 +2,13 @@ package processor
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -18,8 +17,14 @@ import (
 
 func init() {
 	Constructors[TypeJQ] = TypeSpec{
-		constructor: NewJQ,
-		Status:      docs.StatusStable,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newJQ(conf.JQ, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("jq", p, mgr.Metrics()), nil
+		},
+		Status: docs.StatusStable,
 		Categories: []Category{
 			CategoryMapping,
 		},
@@ -119,47 +124,21 @@ var jqCompileOptions = []gojq.CompilerOption{
 	gojq.WithVariables([]string{"$metadata"}),
 }
 
-// JQ is a processor that passes messages through gojq.
-type JQ struct {
-	conf  JQConfig
-	log   log.Modular
-	stats metrics.Type
-	code  *gojq.Code
-
-	mCount        metrics.StatCounter
-	mCountParts   metrics.StatCounter
-	mSent         metrics.StatCounter
-	mBatchSent    metrics.StatCounter
-	mDropped      metrics.StatCounter
-	mDroppedParts metrics.StatCounter
-	mErr          metrics.StatCounter
-	mErrJSONParse metrics.StatCounter
-	mErrJSONSet   metrics.StatCounter
-	mErrQuery     metrics.StatCounter
+type jqProc struct {
+	inRaw  bool
+	outRaw bool
+	log    log.Modular
+	code   *gojq.Code
 }
 
-// NewJQ returns a JQ processor.
-func NewJQ(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	j := &JQ{
-		conf:  conf.JQ,
-		stats: stats,
-		log:   log,
-
-		mCount:        stats.GetCounter("count"),
-		mCountParts:   stats.GetCounter("count_parts"),
-		mSent:         stats.GetCounter("sent"),
-		mBatchSent:    stats.GetCounter("batch.count"),
-		mDropped:      stats.GetCounter("dropped"),
-		mDroppedParts: stats.GetCounter("dropped_num_parts"),
-		mErr:          stats.GetCounter("error"),
-		mErrJSONParse: stats.GetCounter("error.json_parse"),
-		mErrJSONSet:   stats.GetCounter("error.json_set"),
-		mErrQuery:     stats.GetCounter("error.query"),
+func newJQ(conf JQConfig, mgr interop.Manager) (*jqProc, error) {
+	j := &jqProc{
+		inRaw:  conf.Raw,
+		outRaw: conf.OutputRaw,
+		log:    mgr.Logger(),
 	}
 
-	query, err := gojq.Parse(j.conf.Query)
+	query, err := gojq.Parse(conf.Query)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing jq query: %w", err)
 	}
@@ -172,9 +151,7 @@ func NewJQ(
 	return j, nil
 }
 
-//------------------------------------------------------------------------------
-
-func (j *JQ) getPartMetadata(part *message.Part) map[string]interface{} {
+func (j *jqProc) getPartMetadata(part *message.Part) map[string]interface{} {
 	metadata := map[string]interface{}{}
 	_ = part.MetaIter(func(k, v string) error {
 		metadata[k] = v
@@ -183,7 +160,7 @@ func (j *JQ) getPartMetadata(part *message.Part) map[string]interface{} {
 	return metadata
 }
 
-func (j *JQ) getPartValue(part *message.Part, raw bool) (obj interface{}, err error) {
+func (j *jqProc) getPartValue(part *message.Part, raw bool) (obj interface{}, err error) {
 	if raw {
 		return string(part.Get()), nil
 	}
@@ -192,108 +169,73 @@ func (j *JQ) getPartValue(part *message.Part, raw bool) (obj interface{}, err er
 		obj, err = message.CopyJSON(obj)
 	}
 	if err != nil {
-		j.mErrJSONParse.Incr(1)
 		j.log.Debugf("Failed to parse part into json: %v\n", err)
 		return nil, err
 	}
 	return obj, nil
 }
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (j *JQ) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	j.mCount.Incr(1)
+func (j *jqProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+	part := msg.Copy()
 
-	newMsg := msg.Copy()
-	iteratePartsFilterableWithSpan(TypeJQ, nil, newMsg, func(index int, span *tracing.Span, part *message.Part) (bool, error) {
-		in, err := j.getPartValue(part, j.conf.Raw)
-		if err != nil {
-			j.mErr.Incr(1)
-			return false, err
+	in, err := j.getPartValue(part, j.inRaw)
+	if err != nil {
+		return nil, err
+	}
+	metadata := j.getPartMetadata(part)
+
+	var emitted []interface{}
+	iter := j.code.Run(in, metadata)
+	for {
+		out, ok := iter.Next()
+		if !ok {
+			break
 		}
-		metadata := j.getPartMetadata(part)
-
-		var emitted []interface{}
-		iter := j.code.Run(in, metadata)
-		for {
-			out, ok := iter.Next()
-			if !ok {
-				break
-			}
-
-			if err, ok := out.(error); ok {
-				j.log.Debugf(err.Error())
-				j.mErr.Incr(1)
-				j.mErrQuery.Incr(1)
-				return false, err
-			}
-
-			j.mSent.Incr(1)
-			emitted = append(emitted, out)
+		if err, ok := out.(error); ok {
+			j.log.Debugf(err.Error())
+			return nil, err
 		}
-
-		if j.conf.OutputRaw {
-			raw, err := j.marshalRaw(emitted)
-			if err != nil {
-				j.log.Debugf("Failed to marshal raw text: %s", err)
-				j.mErr.Incr(1)
-				return false, err
-			}
-
-			// Sometimes the query result is an empty string. Example:
-			//    echo '{ "foo": "" }' | jq .foo
-			// In that case we want pass on the empty string instead of treating it as
-			// an empty message and dropping it
-			if len(raw) == 0 && len(emitted) == 0 {
-				j.mDroppedParts.Incr(1)
-				return false, nil
-			}
-
-			part.Set(raw)
-			return true, nil
-		} else if len(emitted) > 1 {
-			if err = part.SetJSON(emitted); err != nil {
-				j.log.Debugf("Failed to set part JSON: %v\n", err)
-				j.mErr.Incr(1)
-				j.mErrJSONSet.Incr(1)
-				return false, err
-			}
-		} else if len(emitted) == 1 {
-			if err = part.SetJSON(emitted[0]); err != nil {
-				j.log.Debugf("Failed to set part JSON: %v\n", err)
-				j.mErr.Incr(1)
-				j.mErrJSONSet.Incr(1)
-				return false, err
-			}
-		} else {
-			j.mDroppedParts.Incr(1)
-			return false, nil
-		}
-
-		return true, nil
-	})
-
-	if newMsg.Len() == 0 {
-		j.mDropped.Incr(1)
-		return nil, nil
+		emitted = append(emitted, out)
 	}
 
-	j.mBatchSent.Incr(1)
-	j.mSent.Incr(int64(newMsg.Len()))
+	if j.outRaw {
+		raw, err := j.marshalRaw(emitted)
+		if err != nil {
+			j.log.Debugf("Failed to marshal raw text: %s", err)
+			return nil, err
+		}
 
-	return []*message.Batch{newMsg}, nil
+		// Sometimes the query result is an empty string. Example:
+		//    echo '{ "foo": "" }' | jq .foo
+		// In that case we want pass on the empty string instead of treating it as
+		// an empty message and dropping it
+		if len(raw) == 0 && len(emitted) == 0 {
+			return nil, nil
+		}
+
+		part.Set(raw)
+		return []*message.Part{part}, nil
+	} else if len(emitted) > 1 {
+		if err = part.SetJSON(emitted); err != nil {
+			j.log.Debugf("Failed to set part JSON: %v\n", err)
+			return nil, err
+		}
+	} else if len(emitted) == 1 {
+		if err = part.SetJSON(emitted[0]); err != nil {
+			j.log.Debugf("Failed to set part JSON: %v\n", err)
+			return nil, err
+		}
+	} else {
+		return nil, nil
+	}
+	return []*message.Part{part}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (*JQ) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (*JQ) WaitForClose(timeout time.Duration) error {
+func (*jqProc) Close(ctx context.Context) error {
 	return nil
 }
 
-func (j *JQ) marshalRaw(values []interface{}) ([]byte, error) {
+func (j *jqProc) marshalRaw(values []interface{}) ([]byte, error) {
 	buf := bytes.NewBufferString("")
 
 	for index, el := range values {

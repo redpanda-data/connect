@@ -12,7 +12,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"github.com/aws/aws-sdk-go/aws"
@@ -78,13 +77,7 @@ type Kinesis struct {
 	partitionKey *field.Expression
 	streamName   *string
 
-	log   log.Modular
-	stats metrics.Type
-
-	mThrottled       metrics.StatCounter
-	mThrottledF      metrics.StatCounter
-	mPartsThrottled  metrics.StatCounter
-	mPartsThrottledF metrics.StatCounter
+	log log.Modular
 }
 
 // NewKinesisV2 creates a new Amazon Kinesis writer.Type.
@@ -92,19 +85,15 @@ func NewKinesisV2(
 	conf KinesisConfig,
 	mgr interop.Manager,
 	log log.Modular,
-	stats metrics.Type,
 ) (*Kinesis, error) {
 	if conf.PartitionKey == "" {
 		return nil, errors.New("partition key must not be empty")
 	}
 
 	k := Kinesis{
-		conf:            conf,
-		log:             log,
-		stats:           stats,
-		mPartsThrottled: stats.GetCounter("parts.send.throttled"),
-		mThrottled:      stats.GetCounter("send.throttled"),
-		streamName:      aws.String(conf.Stream),
+		conf:       conf,
+		log:        log,
+		streamName: aws.String(conf.Stream),
 	}
 	var err error
 	if k.hashKey, err = mgr.BloblEnvironment().NewField(conf.HashKey); err != nil {
@@ -258,8 +247,6 @@ func (a *Kinesis) WriteWithContext(ctx context.Context, msg *message.Batch) erro
 		// if throttling errors detected, pause briefly
 		l := len(failed)
 		if l > 0 {
-			a.mThrottled.Incr(1)
-			a.mPartsThrottled.Incr(int64(l))
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
 				return component.ErrTimeout

@@ -1,13 +1,14 @@
 package processor
 
 import (
+	"context"
 	"fmt"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -17,7 +18,13 @@ import (
 
 func init() {
 	Constructors[TypeInsertPart] = TypeSpec{
-		constructor: NewInsertPart,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newInsertPart(conf.InsertPart, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("insert_part", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryComposition,
 		},
@@ -61,50 +68,26 @@ func NewInsertPartConfig() InsertPartConfig {
 
 //------------------------------------------------------------------------------
 
-// InsertPart is a processor that inserts a new message part at a specific
-// index.
-type InsertPart struct {
-	part *field.Expression
-
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+type insertPart struct {
+	index int
+	part  *field.Expression
 }
 
-// NewInsertPart returns a InsertPart processor.
-func NewInsertPart(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	part, err := mgr.BloblEnvironment().NewField(conf.InsertPart.Content)
+func newInsertPart(conf InsertPartConfig, mgr interop.Manager) (processor.V2Batched, error) {
+	part, err := mgr.BloblEnvironment().NewField(conf.Content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse content expression: %v", err)
 	}
-	return &InsertPart{
-		part: part,
-
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
-		mCount:     stats.GetCounter("count"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+	return &insertPart{
+		part:  part,
+		index: conf.Index,
 	}, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (p *InsertPart) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	p.mCount.Incr(1)
-
+func (p *insertPart) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	newPartBytes := p.part.Bytes(0, msg)
-	index := p.conf.InsertPart.Index
+
+	index := p.index
 	msgLen := msg.Len()
 	if index < 0 {
 		index = msgLen + index + 1
@@ -129,19 +112,9 @@ func (p *InsertPart) ProcessMessage(msg *message.Batch) ([]*message.Batch, error
 		newMsg.Append(newPart)
 	}
 
-	p.mBatchSent.Incr(1)
-	p.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]*message.Batch{newMsg}
-	return msgs[:], nil
+	return []*message.Batch{newMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (p *InsertPart) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (p *InsertPart) WaitForClose(timeout time.Duration) error {
+func (p *insertPart) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

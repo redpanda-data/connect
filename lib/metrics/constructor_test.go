@@ -14,7 +14,7 @@ func TestConstructorConfigYAMLInference(t *testing.T) {
 
 	if err := yaml.Unmarshal([]byte(`[
 		{
-			"http_server": {
+			"json_api": {
 				"value": "foo"
 			},
 			"prometheus": {

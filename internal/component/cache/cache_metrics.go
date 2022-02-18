@@ -15,20 +15,20 @@ type metricsCache struct {
 	sig *shutdown.Signaller
 
 	mGetNotFound metrics.StatCounter
-	mGetFailed   metrics.StatCounter
+	mGetError    metrics.StatCounter
 	mGetSuccess  metrics.StatCounter
 	mGetLatency  metrics.StatTimer
 
-	mSetFailed  metrics.StatCounter
+	mSetError   metrics.StatCounter
 	mSetSuccess metrics.StatCounter
 	mSetLatency metrics.StatTimer
 
 	mAddDupe    metrics.StatCounter
-	mAddFailed  metrics.StatCounter
+	mAddError   metrics.StatCounter
 	mAddSuccess metrics.StatCounter
 	mAddLatency metrics.StatTimer
 
-	mDelFailed  metrics.StatCounter
+	mDelError   metrics.StatCounter
 	mDelSuccess metrics.StatCounter
 	mDelLatency metrics.StatTimer
 }
@@ -36,26 +36,30 @@ type metricsCache struct {
 // MetricsForCache wraps a cache with a struct that adds standard metrics over
 // each method.
 func MetricsForCache(c V1, stats metrics.Type) V1 {
+	cacheSuccess := stats.GetCounterVec("cache_success", "operation")
+	cacheError := stats.GetCounterVec("cache_error", "operation")
+	cacheLatency := stats.GetTimerVec("cache_latency_ns", "operation")
+
 	return &metricsCache{
 		c: c, sig: shutdown.NewSignaller(),
 
-		mGetNotFound: stats.GetCounter("get.not_found"),
-		mGetFailed:   stats.GetCounter("get.failed"),
-		mGetSuccess:  stats.GetCounter("get.success"),
-		mGetLatency:  stats.GetTimer("get.latency"),
+		mGetNotFound: stats.GetCounterVec("cache_not_found", "operation").With("get"),
+		mGetError:    cacheError.With("get"),
+		mGetSuccess:  cacheSuccess.With("get"),
+		mGetLatency:  cacheLatency.With("get"),
 
-		mSetFailed:  stats.GetCounter("set.failed"),
-		mSetSuccess: stats.GetCounter("set.success"),
-		mSetLatency: stats.GetTimer("set.latency"),
+		mSetError:   cacheError.With("set"),
+		mSetSuccess: cacheSuccess.With("set"),
+		mSetLatency: cacheLatency.With("set"),
 
-		mAddDupe:    stats.GetCounter("add.duplicate"),
-		mAddFailed:  stats.GetCounter("add.failed"),
-		mAddSuccess: stats.GetCounter("add.success"),
-		mAddLatency: stats.GetTimer("add.latency"),
+		mAddDupe:    stats.GetCounterVec("cache_duplicate", "operation").With("add"),
+		mAddError:   cacheError.With("add"),
+		mAddSuccess: cacheSuccess.With("add"),
+		mAddLatency: cacheLatency.With("add"),
 
-		mDelFailed:  stats.GetCounter("delete.failed"),
-		mDelSuccess: stats.GetCounter("delete.success"),
-		mDelLatency: stats.GetTimer("delete.latency"),
+		mDelError:   cacheError.With("delete"),
+		mDelSuccess: cacheSuccess.With("delete"),
+		mDelLatency: cacheLatency.With("delete"),
 	}
 }
 
@@ -67,7 +71,7 @@ func (a *metricsCache) Get(ctx context.Context, key string) ([]byte, error) {
 		if errors.Is(err, component.ErrKeyNotFound) {
 			a.mGetNotFound.Incr(1)
 		} else {
-			a.mGetFailed.Incr(1)
+			a.mGetError.Incr(1)
 		}
 	} else {
 		a.mGetSuccess.Incr(1)
@@ -80,7 +84,7 @@ func (a *metricsCache) Set(ctx context.Context, key string, value []byte, ttl *t
 	err := a.c.Set(ctx, key, value, ttl)
 	a.mSetLatency.Timing(int64(time.Since(started)))
 	if err != nil {
-		a.mSetFailed.Incr(1)
+		a.mSetError.Incr(1)
 	} else {
 		a.mSetSuccess.Incr(1)
 	}
@@ -92,7 +96,7 @@ func (a *metricsCache) SetMulti(ctx context.Context, items map[string]TTLItem) e
 	err := a.c.SetMulti(ctx, items)
 	a.mSetLatency.Timing(int64(time.Since(started)))
 	if err != nil {
-		a.mSetFailed.Incr(int64(len(items)))
+		a.mSetError.Incr(int64(len(items)))
 	} else {
 		a.mSetSuccess.Incr(int64(len(items)))
 	}
@@ -107,7 +111,7 @@ func (a *metricsCache) Add(ctx context.Context, key string, value []byte, ttl *t
 		if errors.Is(err, component.ErrKeyAlreadyExists) {
 			a.mAddDupe.Incr(1)
 		} else {
-			a.mAddFailed.Incr(1)
+			a.mAddError.Incr(1)
 		}
 	} else {
 		a.mAddSuccess.Incr(1)
@@ -120,7 +124,7 @@ func (a *metricsCache) Delete(ctx context.Context, key string) error {
 	err := a.c.Delete(ctx, key)
 	a.mDelLatency.Timing(int64(time.Since(started)))
 	if err != nil {
-		a.mDelFailed.Incr(1)
+		a.mDelError.Incr(1)
 	} else {
 		a.mDelSuccess.Incr(1)
 	}

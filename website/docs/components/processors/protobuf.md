@@ -23,38 +23,14 @@ Performs conversions to or from a protobuf message. This processor uses
 reflection, meaning conversions can be made directly from the target .proto
 files.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 label: ""
 protobuf:
   operator: to_json
   message: ""
   import_paths: []
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yml
-# All config fields, showing default values
-label: ""
-protobuf:
-  operator: to_json
-  message: ""
-  import_paths: []
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 The main functionality of this processor is to map to and from JSON documents,
 you can read more about JSON mapping of protobuf messages here:
@@ -99,19 +75,6 @@ Default: `""`
 ### `import_paths`
 
 A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.
-
-
-Type: `array`  
-Default: `[]`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
 
 
 Type: `array`  

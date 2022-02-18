@@ -3,6 +3,7 @@ package metrics
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
@@ -14,11 +15,9 @@ import (
 	"github.com/Jeffail/gabs/v2"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeStdout] = TypeSpec{
-		constructor: NewStdout,
+		constructor: newStdout,
 		Status:      docs.StatusBeta,
 		Summary: `
 Prints aggregated metrics as JSON objects to stdout.`,
@@ -32,7 +31,6 @@ periodically.`,
 				"@service": "benthos",
 			}).HasType(docs.FieldTypeUnknown),
 			docs.FieldCommon("flush_metrics", "Whether counters and timing metrics should be reset to 0 each time metrics are printed."),
-			pathMappingDocs(false, false),
 		},
 	}
 }
@@ -45,7 +43,6 @@ type StdoutConfig struct {
 	PushInterval string                 `json:"push_interval" yaml:"push_interval"`
 	StaticFields map[string]interface{} `json:"static_fields" yaml:"static_fields"`
 	FlushMetrics bool                   `json:"flush_metrics" yaml:"flush_metrics"`
-	PathMapping  string                 `json:"path_mapping" yaml:"path_mapping"`
 }
 
 // NewStdoutConfig returns a new StdoutConfig with default values.
@@ -56,51 +53,38 @@ func NewStdoutConfig() StdoutConfig {
 			"@service": "benthos",
 		},
 		FlushMetrics: false,
-		PathMapping:  "",
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// Stdout is an object with capability to hold internal stats and emit them as
-// individual JSON objects via stdout.
-type Stdout struct {
+type stdoutMetrics struct {
 	local     *Local
 	timestamp time.Time
 	log       log.Modular
 
-	pathMapping *pathMapping
-	config      StdoutConfig
-	closedChan  chan struct{}
-	running     int32
+	config     StdoutConfig
+	closedChan chan struct{}
+	running    int32
 
 	staticFields []byte
 }
 
-// NewStdout creates and returns a new Stdout metric object.
-func NewStdout(config Config, opts ...func(Type)) (Type, error) {
-	t := &Stdout{
+func newStdout(config Config, log log.Modular) (Type, error) {
+	t := &stdoutMetrics{
 		local:      NewLocal(),
 		timestamp:  time.Now(),
 		config:     config.Stdout,
 		closedChan: make(chan struct{}),
 		running:    1,
+		log:        log,
 	}
 
-	//TODO: add field interpolation here
 	sf, err := json.Marshal(config.Stdout.StaticFields)
 	if err != nil {
 		return t, fmt.Errorf("failed to parse static fields: %v", err)
 	}
 	t.staticFields = sf
-
-	for _, opt := range opts {
-		opt(t)
-	}
-
-	if t.pathMapping, err = newPathMapping(t.config.PathMapping, t.log); err != nil {
-		return nil, fmt.Errorf("failed to init path mapping: %v", err)
-	}
 
 	if len(t.config.PushInterval) > 0 {
 		interval, err := time.ParseDuration(t.config.PushInterval)
@@ -124,9 +108,7 @@ func NewStdout(config Config, opts ...func(Type)) (Type, error) {
 
 //------------------------------------------------------------------------------
 
-// writeMetric prints a metric object with any configured extras merged in to
-// t.
-func (s *Stdout) writeMetric(metricSet *gabs.Container) {
+func (s *stdoutMetrics) writeMetric(metricSet *gabs.Container) {
 	base, _ := gabs.ParseJSON(s.staticFields)
 	base.SetP(time.Now().Format(time.RFC3339), "@timestamp")
 	base.Merge(metricSet)
@@ -134,8 +116,7 @@ func (s *Stdout) writeMetric(metricSet *gabs.Container) {
 	fmt.Printf("%s\n", base.String())
 }
 
-// publishMetrics
-func (s *Stdout) publishMetrics() {
+func (s *stdoutMetrics) publishMetrics() {
 	counterObjs := make(map[string]*gabs.Container)
 
 	var counters map[string]int64
@@ -167,7 +148,7 @@ func (s *Stdout) publishMetrics() {
 // a container for each component instance.  For example,
 // pipeline.processor.1.count and pipeline.processor.1.error would be grouped
 // into a single pipeline.processor.1 object.
-func (s *Stdout) constructMetrics(co map[string]*gabs.Container, metrics map[string]int64) {
+func (s *stdoutMetrics) constructMetrics(co map[string]*gabs.Container, metrics map[string]int64) {
 	for k, v := range metrics {
 		parts := strings.Split(k, ".")
 		var objKey string
@@ -199,74 +180,35 @@ func (s *Stdout) constructMetrics(co map[string]*gabs.Container, metrics map[str
 	}
 }
 
-// GetCounter returns a stat counter object for a path.
-func (s *Stdout) GetCounter(path string) StatCounter {
-	if path = s.pathMapping.mapPathNoTags(path); path == "" {
-		return DudStat{}
-	}
-	return s.local.GetCounter(path)
+func (s *stdoutMetrics) GetCounter(path string) StatCounter {
+	return s.GetCounterVec(path).With()
 }
 
-// GetCounterVec returns a stat counter object for a path with the labels
-// discarded.
-func (s *Stdout) GetCounterVec(path string, n []string) StatCounterVec {
-	path = s.pathMapping.mapPathNoTags(path)
-	return fakeCounterVec(func([]string) StatCounter {
-		if path == "" {
-			return DudStat{}
-		}
-		return s.local.GetCounter(path)
-	})
+func (s *stdoutMetrics) GetCounterVec(path string, n ...string) StatCounterVec {
+	return s.local.GetCounterVec(path, n...)
 }
 
-// GetTimer returns a stat timer object for a path.
-func (s *Stdout) GetTimer(path string) StatTimer {
-	if path = s.pathMapping.mapPathNoTags(path); path == "" {
-		return DudStat{}
-	}
-	return s.local.GetTimer(path)
+func (s *stdoutMetrics) GetTimer(path string) StatTimer {
+	return s.GetTimerVec(path).With()
 }
 
-// GetTimerVec returns a stat timer object for a path with the labels
-// discarded.
-func (s *Stdout) GetTimerVec(path string, n []string) StatTimerVec {
-	path = s.pathMapping.mapPathNoTags(path)
-	return fakeTimerVec(func([]string) StatTimer {
-		if path == "" {
-			return DudStat{}
-		}
-		return s.local.GetTimer(path)
-	})
+func (s *stdoutMetrics) GetTimerVec(path string, n ...string) StatTimerVec {
+	return s.local.GetTimerVec(path, n...)
 }
 
-// GetGauge returns a stat gauge object for a path.
-func (s *Stdout) GetGauge(path string) StatGauge {
-	if path = s.pathMapping.mapPathNoTags(path); path == "" {
-		return DudStat{}
-	}
-	return s.local.GetGauge(path)
+func (s *stdoutMetrics) GetGauge(path string) StatGauge {
+	return s.GetGaugeVec(path).With()
 }
 
-// GetGaugeVec returns a stat timer object for a path with the labels
-// discarded.
-func (s *Stdout) GetGaugeVec(path string, n []string) StatGaugeVec {
-	path = s.pathMapping.mapPathNoTags(path)
-	return fakeGaugeVec(func([]string) StatGauge {
-		if path == "" {
-			return DudStat{}
-		}
-		return s.local.GetGauge(path)
-	})
+func (s *stdoutMetrics) GetGaugeVec(path string, n ...string) StatGaugeVec {
+	return s.local.GetGaugeVec(path, n...)
 }
 
-// SetLogger does nothing.
-func (s *Stdout) SetLogger(log log.Modular) {
-	s.log = log
+func (s *stdoutMetrics) HandlerFunc() http.HandlerFunc {
+	return nil
 }
 
-// Close stops the Stdout object from aggregating metrics and does a publish
-// (write to stdout) of metrics.
-func (s *Stdout) Close() error {
+func (s *stdoutMetrics) Close() error {
 	if atomic.CompareAndSwapInt32(&s.running, 1, 0) {
 		close(s.closedChan)
 	}
@@ -274,5 +216,3 @@ func (s *Stdout) Close() error {
 
 	return nil
 }
-
-//------------------------------------------------------------------------------

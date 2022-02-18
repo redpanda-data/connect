@@ -48,7 +48,6 @@ grok:
   named_captures_only: true
   use_default_patterns: true
   remove_empty_values: true
-  parts: []
 ```
 
 </TabItem>
@@ -145,19 +144,6 @@ Whether to remove values that are empty from the resulting structure.
 
 Type: `bool`  
 Default: `true`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Default Patterns
 

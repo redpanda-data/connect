@@ -32,8 +32,7 @@ Introduced in version 3.36.0.
 metrics:
   aws_cloudwatch:
     namespace: Benthos
-    path_mapping: ""
-    region: eu-west-1
+  mapping: ""
 ```
 
 </TabItem>
@@ -45,8 +44,7 @@ metrics:
   aws_cloudwatch:
     namespace: Benthos
     flush_period: 100ms
-    path_mapping: ""
-    region: eu-west-1
+    region: ""
     endpoint: ""
     credentials:
       profile: ""
@@ -55,24 +53,24 @@ metrics:
       token: ""
       role: ""
       role_external_id: ""
+  mapping: ""
 ```
 
 </TabItem>
 </Tabs>
 
-It is STRONGLY recommended that you reduce the metrics that are exposed with a
-`path_mapping` like this:
+It is STRONGLY recommended that you reduce the metrics that are exposed with a `mapping` like this:
 
 ```yaml
 metrics:
+  mapping: |
+    if ![
+      "input_received",
+      "input_latency",
+      "output_sent",
+    ].contains(this) { deleted() }
   aws_cloudwatch:
     namespace: Foo
-    path_mapping: |
-      if ![
-        "input.received",
-        "input.latency",
-        "output.sent",
-      ].contains(this) { deleted() }
 ```
 
 ## Fields
@@ -93,39 +91,13 @@ The period of time between PutMetricData requests.
 Type: `string`  
 Default: `"100ms"`  
 
-### `path_mapping`
-
-An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. When metric paths are created, renamed and dropped a trace log is written, enabling TRACE level logging is therefore a good way to diagnose path mappings. BETA FEATURE: Labels can also be created for the metric path by mapping meta fields.
-
-
-Type: `string`  
-Default: `""`  
-
-```yml
-# Examples
-
-path_mapping: this.replace("input", "source").replace("output", "sink")
-
-path_mapping: |-
-  if ![
-    "benthos.input.received",
-    "benthos.input.latency",
-    "benthos.output.sent"
-  ].contains(this) { deleted() }
-
-path_mapping: |-
-  let matches = this.re_find_all_submatch("resource_processor_([a-zA-Z]+)_(.*)")
-  meta processor = $matches.0.1 | deleted()
-  root = $matches.0.2 | deleted()
-```
-
 ### `region`
 
 The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

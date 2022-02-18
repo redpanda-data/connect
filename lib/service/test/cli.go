@@ -59,7 +59,11 @@ https://benthos.dev/docs/configuration/unit_testing`[1:],
 			if logLevel := c.String("log"); len(logLevel) > 0 {
 				logConf := log.NewConfig()
 				logConf.LogLevel = logLevel
-				logger := log.New(os.Stdout, logConf)
+				logger, err := log.NewV2(os.Stdout, logConf)
+				if err != nil {
+					fmt.Printf("Failed to init logger: %v\n", err)
+					os.Exit(1)
+				}
 				if runAll(c.Args().Slice(), testSuffix, true, logger, resourcesPaths) {
 					os.Exit(0)
 				}

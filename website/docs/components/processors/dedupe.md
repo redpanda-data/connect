@@ -15,88 +15,26 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Deduplicates message batches by caching selected (and optionally hashed)
-messages, dropping batches that are already cached.
-
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
+Deduplicates messages by storing a key value in a cache using the `add` operator. If the message already exists within the cache it is dropped.
 
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 label: ""
 dedupe:
   cache: ""
-  hash: none
   key: ""
   drop_on_err: true
 ```
 
-</TabItem>
-<TabItem value="advanced">
+Caches must be configured as resources, for more information check out the [cache documentation here](/docs/components/caches/about).
 
-```yml
-# All config fields, showing default values
-label: ""
-dedupe:
-  cache: ""
-  hash: none
-  key: ""
-  drop_on_err: true
-  parts:
-    - 0
-```
-
-</TabItem>
-</Tabs>
-
-This processor acts across an entire batch, in order to deduplicate individual
-messages within a batch use this processor with the
-[`for_each`](/docs/components/processors/for_each) processor.
-
-Optionally, the `key` field can be populated in order to hash on a
-function interpolated string rather than the full contents of messages. This
-allows you to deduplicate based on dynamic fields within a message, such as its
-metadata, JSON fields, etc. A full list of interpolation functions can be found
-[here](/docs/configuration/interpolation#bloblang-queries).
-
-For example, the following config would deduplicate based on the concatenated
-values of the metadata field `kafka_key` and the value of the JSON
-path `id` within the message contents:
-
-```yaml
-pipeline:
-  processors:
-    - dedupe:
-        cache: foocache
-        key: ${! meta("kafka_key") }-${! json("id") }
-```
-
-Caches should be configured as a resource, for more information check out the
-[documentation here](/docs/components/caches/about).
-
-When using this processor with an output target that might fail you should
-always wrap the output within a [`retry`](/docs/components/outputs/retry)
-block. This ensures that during outages your messages aren't reprocessed after
-failures, which would result in messages being dropped.
+When using this processor with an output target that might fail you should always wrap the output within an indefinite [`retry`](/docs/components/outputs/retry) block. This ensures that during outages your messages aren't reprocessed after failures, which would result in messages being dropped.
 
 ## Delivery Guarantees
 
-Performing deduplication on a stream using a distributed cache voids any
-at-least-once guarantees that it previously had. This is because the cache will
-preserve message signatures even if the message fails to leave the Benthos
-pipeline, which would cause message loss in the event of an outage at the output
-sink followed by a restart of the Benthos instance.
+Performing deduplication on a stream using a distributed cache voids any at-least-once guarantees that it previously had. This is because the cache will preserve message signatures even if the message fails to leave the Benthos pipeline, which would cause message loss in the event of an outage at the output sink followed by a restart of the Benthos instance (or a server crash, etc).
 
-If you intend to preserve at-least-once delivery guarantees you can avoid this
-problem by using a memory based cache. This is a compromise that can achieve
-effective deduplication but parallel deployments of the pipeline as well as
-service restarts increase the chances of duplicates passing undetected.
+This problem can be mitigated by using an in-memory cache and distributing messages to horizontally scaled Benthos pipelines partitioned by the deduplication key. However, in situations where at-least-once delivery guarantees are important it is worth avoiding deduplication in favour of implement idempotent behaviour at the edge of your stream pipelines.
 
 ## Fields
 
@@ -108,38 +46,55 @@ The [`cache` resource](/docs/components/caches/about) to target with this proces
 Type: `string`  
 Default: `""`  
 
-### `hash`
-
-The hash type to used.
-
-
-Type: `string`  
-Default: `"none"`  
-Options: `none`, `xxhash`.
-
 ### `key`
 
-An optional key to use for deduplication (instead of the entire message contents).
+An interpolated string yielding the key to deduplicate by for each message.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 Default: `""`  
 
+```yml
+# Examples
+
+key: ${! meta("kafka_key") }
+
+key: ${! content().hash("xxhash64") }
+```
+
 ### `drop_on_err`
 
-Whether messages should be dropped when the cache returns an error.
+Whether messages should be dropped when the cache returns a general error such as a network issue.
 
 
 Type: `bool`  
 Default: `true`  
 
-### `parts`
+## Examples
 
-An array of message indexes within the batch to deduplicate based on. If left empty all messages are included. This field is only applicable when batching messages [at the input level](/docs/configuration/batching).
+<Tabs defaultValue="Deduplicate based on Kafka key" values={[
+{ label: 'Deduplicate based on Kafka key', value: 'Deduplicate based on Kafka key', },
+]}>
 
+<TabItem value="Deduplicate based on Kafka key">
 
-Type: `array`  
-Default: `[0]`  
+The following configuration demonstrates a pipeline that deduplicates messages based on the Kafka key.
+
+```yaml
+pipeline:
+  processors:
+    - dedupe:
+        cache: keycache
+        key: ${! meta("kafka_key") }
+
+cache_resources:
+  - label: keycache
+    memory:
+      default_ttl: 60s
+```
+
+</TabItem>
+</Tabs>
 
 

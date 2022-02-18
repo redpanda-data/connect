@@ -19,34 +19,12 @@ import TabItem from '@theme/TabItem';
 Decompresses messages according to the selected algorithm. Supported
 decompression types are: gzip, zlib, bzip2, flate, snappy, lz4.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 label: ""
 decompress:
   algorithm: gzip
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yml
-# All config fields, showing default values
-label: ""
-decompress:
-  algorithm: gzip
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 ## Fields
 
@@ -58,18 +36,5 @@ The decompression algorithm to use.
 Type: `string`  
 Default: `"gzip"`  
 Options: `gzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`.
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 

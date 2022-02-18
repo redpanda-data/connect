@@ -87,7 +87,7 @@ func testRedisKeys(t *testing.T, client *redis.Client, url string) {
 	conf.Redis.Operator = "keys"
 	conf.Redis.Key = "foo*"
 
-	r, err := NewRedis(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	r, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	for _, key := range []string{
@@ -129,7 +129,7 @@ func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
 	conf.Redis.Operator = "sadd"
 	conf.Redis.Key = "${! meta(\"key\") }"
 
-	r, err := NewRedis(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	r, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 	conf.Redis.Operator = "scard"
 	conf.Redis.Key = "${!content()}"
 
-	r, err := NewRedis(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	r, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func testRedisIncrby(t *testing.T, client *redis.Client, url string) {
 	conf.Redis.Operator = "incrby"
 	conf.Redis.Key = "incrby"
 
-	r, err := NewRedis(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	r, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

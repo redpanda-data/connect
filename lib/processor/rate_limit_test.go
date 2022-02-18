@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -26,8 +25,9 @@ func TestRateLimitBasic(t *testing.T) {
 	mgr.RateLimits["foo"] = rlFn
 
 	conf := NewConfig()
+	conf.Type = "rate_limit"
 	conf.RateLimit.Resource = "foo"
-	proc, err := NewRateLimit(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,49 +56,6 @@ func TestRateLimitBasic(t *testing.T) {
 	}
 }
 
-func TestRateLimitClosed(t *testing.T) {
-	var hits int32
-	rlFn := func(context.Context) (time.Duration, error) {
-		if i := atomic.AddInt32(&hits, 1); i == 2 {
-			return 0, component.ErrTypeClosed
-		}
-		return 0, nil
-	}
-
-	mgr := mock.NewManager()
-	mgr.RateLimits["foo"] = rlFn
-
-	conf := NewConfig()
-	conf.RateLimit.Resource = "foo"
-	proc, err := NewRateLimit(conf, mgr, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	input := message.QuickBatch([][]byte{
-		[]byte(`{"key":"1","value":"foo 1"}`),
-		[]byte(`{"key":"2","value":"foo 2"}`),
-		[]byte(`{"key":"1","value":"foo 3"}`),
-	})
-
-	output, res := proc.ProcessMessage(input)
-	if res != nil {
-		t.Fatal(res)
-	}
-
-	if len(output) != 1 {
-		t.Fatalf("Wrong count of result messages: %v", len(output))
-	}
-
-	if exp, act := message.GetAllBytes(input), message.GetAllBytes(output[0]); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong result messages: %s != %s", act, exp)
-	}
-
-	if exp, act := int32(2), atomic.LoadInt32(&hits); exp != act {
-		t.Errorf("Wrong count of rate limit hits: %v != %v", act, exp)
-	}
-}
-
 func TestRateLimitErroredOut(t *testing.T) {
 	rlFn := func(context.Context) (time.Duration, error) {
 		return 0, errors.New("omg foo")
@@ -108,8 +65,9 @@ func TestRateLimitErroredOut(t *testing.T) {
 	mgr.RateLimits["foo"] = rlFn
 
 	conf := NewConfig()
+	conf.Type = "rate_limit"
 	conf.RateLimit.Resource = "foo"
-	proc, err := NewRateLimit(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,8 +112,9 @@ func TestRateLimitBlocked(t *testing.T) {
 	mgr.RateLimits["foo"] = rlFn
 
 	conf := NewConfig()
+	conf.Type = "rate_limit"
 	conf.RateLimit.Resource = "foo"
-	proc, err := NewRateLimit(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

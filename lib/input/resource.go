@@ -13,8 +13,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
 	Constructors[TypeResource] = TypeSpec{
 		constructor: fromSimpleConstructor(NewResource),
@@ -71,10 +69,9 @@ You can find out more about resources [in this document.](/docs/configuration/re
 
 // Resource is an input that wraps an input resource.
 type Resource struct {
-	mgr          interop.Manager
-	name         string
-	log          log.Modular
-	mErrNotFound metrics.StatCounter
+	mgr  interop.Manager
+	name string
+	log  log.Modular
 }
 
 // NewResource returns a resource input.
@@ -85,10 +82,9 @@ func NewResource(
 		return nil, fmt.Errorf("input resource '%v' was not found", conf.Resource)
 	}
 	return &Resource{
-		mgr:          mgr,
-		name:         conf.Resource,
-		log:          log,
-		mErrNotFound: stats.GetCounter("error_not_found"),
+		mgr:  mgr,
+		name: conf.Resource,
+		log:  log,
 	}, nil
 }
 
@@ -100,8 +96,7 @@ func (r *Resource) TransactionChan() (tChan <-chan message.Transaction) {
 	if err := r.mgr.AccessInput(context.Background(), r.name, func(i input.Streamed) {
 		tChan = i.TransactionChan()
 	}); err != nil {
-		r.log.Debugf("Failed to obtain input resource '%v': %v", r.name, err)
-		r.mErrNotFound.Incr(1)
+		r.log.Errorf("Failed to obtain input resource '%v': %v", r.name, err)
 	}
 	return
 }
@@ -112,8 +107,7 @@ func (r *Resource) Connected() (isConnected bool) {
 	if err := r.mgr.AccessInput(context.Background(), r.name, func(i input.Streamed) {
 		isConnected = i.Connected()
 	}); err != nil {
-		r.log.Debugf("Failed to obtain input resource '%v': %v", r.name, err)
-		r.mErrNotFound.Incr(1)
+		r.log.Errorf("Failed to obtain input resource '%v': %v", r.name, err)
 	}
 	return
 }
@@ -126,5 +120,3 @@ func (r *Resource) CloseAsync() {
 func (r *Resource) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
 	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
@@ -59,9 +60,13 @@ type Type struct {
 	// added as a label to logs and metrics.
 	stream string
 
-	// An optional identifier given to a manager that is used by a component and
-	// if specified should be added as a label to logs and metrics.
-	component string
+	// Keeps track of the full configuration path of the component that holds
+	// the manager. This value is used only in observability and therefore it
+	// is acceptable that this does not fully represent reality.
+	componentPath []string
+
+	// Keeps track of the label of the component holding this manager.
+	label string
 
 	apiReg APIReg
 
@@ -104,7 +109,7 @@ func OptSetBloblangEnvironment(env *bloblang.Environment) OptFunc {
 
 // NewV2 returns an instance of manager.Type, which can be shared amongst
 // components and logical threads of a Benthos service.
-func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Type, opts ...OptFunc) (*Type, error) {
+func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats *imetrics.Namespaced, opts ...OptFunc) (*Type, error) {
 	t := &Type{
 		apiReg: apiReg,
 
@@ -120,7 +125,7 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats metrics.Ty
 		bloblEnv: bloblang.GlobalEnvironment(),
 
 		logger: log,
-		stats:  imetrics.NewNamespaced(stats),
+		stats:  stats,
 
 		pipes:    map[string]<-chan message.Transaction{},
 		pipeLock: &sync.RWMutex{},
@@ -228,60 +233,58 @@ func (t *Type) forStream(id string) *Type {
 	newT.logger = t.logger.WithFields(map[string]string{
 		"stream": id,
 	})
-	newT.stats = t.stats.WithPrefix(id)
+	newT.stats = t.stats.WithLabels("stream", id)
 	return &newT
 }
 
-// ForComponent returns a variant of this manager to be used by a particular
-// component identifer, where observability components will be automatically
-// tagged with the label.
-func (t *Type) ForComponent(id string) interop.Manager {
-	return t.forComponent(id)
-}
-
-func (t *Type) forComponent(id string) *Type {
+func (t *Type) forLabel(name string) *Type {
 	newT := *t
-	newT.component = id
+	newT.label = name
 	newT.logger = t.logger.WithFields(map[string]string{
-		"component": id,
+		"label": name,
 	})
-
-	statsPrefix := id
-	if len(newT.stream) > 0 {
-		statsPrefix = newT.stream + "." + statsPrefix
-	}
-	newT.stats = t.stats.WithPrefix(statsPrefix)
+	newT.stats = t.stats.WithLabels("label", name)
 	return &newT
 }
 
-// ForChildComponent returns a variant of this manager to be used by a
-// particular component identifer, which is a child of the current component,
-// where observability components will be automatically tagged with the label.
-func (t *Type) ForChildComponent(id string) interop.Manager {
-	return t.forChildComponent(id)
+// IntoPath returns a variant of this manager to be used by a particular
+// component path, which is a child of the current component, where
+// observability components will be automatically tagged with the new path.
+func (t *Type) IntoPath(segments ...string) interop.Manager {
+	return t.intoPath(segments...)
 }
 
-func (t *Type) forChildComponent(id string) *Type {
+func (t *Type) intoPath(segments ...string) *Type {
 	newT := *t
-	newT.logger = t.logger.NewModule("." + id)
+	newComponentPath := make([]string, 0, len(t.componentPath)+len(segments))
+	newComponentPath = append(newComponentPath, t.componentPath...)
+	newComponentPath = append(newComponentPath, segments...)
+	newT.componentPath = newComponentPath
 
-	if len(newT.component) > 0 {
-		id = newT.component + "." + id
-	}
-
-	statsPrefix := id
-	if len(newT.stream) > 0 {
-		statsPrefix = newT.stream + "." + statsPrefix
-	}
-
-	newT.stats = t.stats.WithPrefix(statsPrefix)
-	newT.component = id
+	pathStr := "root." + query.SliceToDotPath(newComponentPath...)
+	newT.logger = t.logger.WithFields(map[string]string{
+		"path": pathStr,
+	})
+	newT.stats = t.stats.WithLabels("path", pathStr)
 	return &newT
+}
+
+// Path returns the current component path held by a manager.
+func (t *Type) Path() []string {
+	return t.componentPath
 }
 
 // Label returns the current component label held by a manager.
 func (t *Type) Label() string {
-	return t.component
+	return t.label
+}
+
+// WithAddedMetrics returns a modified version of the manager where metrics are
+// registered to both the current metrics target as well as the provided one.
+func (t *Type) WithAddedMetrics(m metrics.Type) interop.Manager {
+	newT := *t
+	newT.stats = newT.stats.WithStats(metrics.Combine(newT.stats.Child(), m))
+	return &newT
 }
 
 //------------------------------------------------------------------------------
@@ -420,12 +423,7 @@ func (t *Type) AccessCache(ctx context.Context, name string, fn func(icache.V1))
 
 // NewCache attempts to create a new cache component from a config.
 func (t *Type) NewCache(conf cache.Config) (icache.V1, error) {
-	mgr := t
-	// A configured label overrides any previously set component label.
-	if len(conf.Label) > 0 && t.component != conf.Label {
-		mgr = t.forComponent(conf.Label)
-	}
-	return t.env.CacheInit(conf, mgr)
+	return t.env.CacheInit(conf, t.forLabel(conf.Label))
 }
 
 // StoreCache attempts to store a new cache resource. If an existing resource
@@ -445,7 +443,7 @@ func (t *Type) StoreCache(ctx context.Context, name string, conf cache.Config) e
 		}
 	}
 
-	newCache, err := t.forComponent("resource.cache." + name).NewCache(conf)
+	newCache, err := t.intoPath("cache_resources").NewCache(conf)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to create cache resource '%v' of type '%v': %w",
@@ -487,12 +485,7 @@ func (t *Type) AccessInput(ctx context.Context, name string, fn func(iinput.Stre
 
 // NewInput attempts to create a new input component from a config.
 func (t *Type) NewInput(conf input.Config, pipelines ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
-	mgr := t
-	// A configured label overrides any previously set component label.
-	if len(conf.Label) > 0 && t.component != conf.Label {
-		mgr = t.forComponent(conf.Label)
-	}
-	return t.env.InputInit(conf, mgr, pipelines...)
+	return t.env.InputInit(conf, t.forLabel(conf.Label), pipelines...)
 }
 
 // StoreInput attempts to store a new input resource. If an existing resource
@@ -516,7 +509,7 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 		return fmt.Errorf("label '%v' must be empty or match the resource name '%v'", conf.Label, name)
 	}
 
-	newInput, err := t.forComponent("resource.input." + name).NewInput(conf)
+	newInput, err := t.intoPath("input_resources").NewInput(conf)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to create input resource '%v' of type '%v': %w",
@@ -560,12 +553,7 @@ func (t *Type) AccessProcessor(ctx context.Context, name string, fn func(iproces
 
 // NewProcessor attempts to create a new processor component from a config.
 func (t *Type) NewProcessor(conf processor.Config) (iprocessor.V1, error) {
-	mgr := t
-	// A configured label overrides any previously set component label.
-	if len(conf.Label) > 0 && t.component != conf.Label {
-		mgr = t.forComponent(conf.Label)
-	}
-	return t.env.ProcessorInit(conf, mgr)
+	return t.env.ProcessorInit(conf, t.forLabel(conf.Label))
 }
 
 // StoreProcessor attempts to store a new processor resource. If an existing
@@ -589,7 +577,7 @@ func (t *Type) StoreProcessor(ctx context.Context, name string, conf processor.C
 		return fmt.Errorf("label '%v' must be empty or match the resource name '%v'", conf.Label, name)
 	}
 
-	newProcessor, err := t.forComponent("resource.processor." + name).NewProcessor(conf)
+	newProcessor, err := t.intoPath("processor_resources").NewProcessor(conf)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to create processor resource '%v' of type '%v': %w",
@@ -632,12 +620,7 @@ func (t *Type) AccessOutput(ctx context.Context, name string, fn func(ioutput.Sy
 
 // NewOutput attempts to create a new output component from a config.
 func (t *Type) NewOutput(conf output.Config, pipelines ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
-	mgr := t
-	// A configured label overrides any previously set component label.
-	if len(conf.Label) > 0 && t.component != conf.Label {
-		mgr = t.forComponent(conf.Label)
-	}
-	return t.env.OutputInit(conf, mgr, pipelines...)
+	return t.env.OutputInit(conf, t.forLabel(conf.Label), pipelines...)
 }
 
 // StoreOutput attempts to store a new output resource. If an existing resource
@@ -661,7 +644,7 @@ func (t *Type) StoreOutput(ctx context.Context, name string, conf output.Config)
 		return fmt.Errorf("label '%v' must be empty or match the resource name '%v'", conf.Label, name)
 	}
 
-	tmpOutput, err := t.forComponent("resource.output." + name).NewOutput(conf)
+	tmpOutput, err := t.intoPath("output_resources").NewOutput(conf)
 	if err == nil {
 		if t.outputs[name], err = wrapOutput(tmpOutput); err != nil {
 			tmpOutput.CloseAsync()
@@ -708,12 +691,7 @@ func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(irateli
 
 // NewRateLimit attempts to create a new rate limit component from a config.
 func (t *Type) NewRateLimit(conf ratelimit.Config) (iratelimit.V1, error) {
-	mgr := t
-	// A configured label overrides any previously set component label.
-	if len(conf.Label) > 0 && t.component != conf.Label {
-		mgr = t.forComponent(conf.Label)
-	}
-	return t.env.RateLimitInit(conf, mgr)
+	return t.env.RateLimitInit(conf, t.forLabel(conf.Label))
 }
 
 // StoreRateLimit attempts to store a new rate limit resource. If an existing
@@ -733,7 +711,7 @@ func (t *Type) StoreRateLimit(ctx context.Context, name string, conf ratelimit.C
 		}
 	}
 
-	newRateLimit, err := t.forComponent("resource.rate_limit." + name).NewRateLimit(conf)
+	newRateLimit, err := t.intoPath("rate_limit_resources").NewRateLimit(conf)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to create rate limit resource '%v' of type '%v': %w",
@@ -805,20 +783,4 @@ func (t *Type) WaitForClose(timeout time.Duration) error {
 		delete(t.outputs, k)
 	}
 	return nil
-}
-
-//------------------------------------------------------------------------------
-
-// DEPRECATED
-// TODO: V4 Remove this
-
-// SwapMetrics attempts to swap the underlying metrics implementation of a
-// manager. This function does nothing if the manager type is not a *Type.
-func SwapMetrics(mgr interop.Manager, stats metrics.Type) interop.Manager {
-	if t, ok := mgr.(*Type); ok {
-		newMgr := *t
-		newMgr.stats = t.stats.WithStats(stats)
-		return &newMgr
-	}
-	return mgr
 }

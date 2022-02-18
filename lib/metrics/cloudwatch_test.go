@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type mockCloudWatchClient struct {
@@ -85,7 +84,7 @@ func checkInput(i cloudwatch.PutMetricDataInput) map[string]checkedDatum {
 func TestCloudWatchBasic(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 
-	cw := &CloudWatch{
+	cw := &cwMetrics{
 		config:    NewCloudWatchConfig(),
 		datumses:  map[string]*cloudWatchDatum{},
 		datumLock: &sync.Mutex{},
@@ -206,7 +205,7 @@ func TestCloudWatchBasic(t *testing.T) {
 func TestCloudWatchMoreThan20Items(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 
-	cw := &CloudWatch{
+	cw := &cwMetrics{
 		config:    NewCloudWatchConfig(),
 		datumses:  map[string]*cloudWatchDatum{},
 		datumLock: &sync.Mutex{},
@@ -245,7 +244,7 @@ func TestCloudWatchMoreThan20Items(t *testing.T) {
 func TestCloudWatchMoreThan150Values(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 
-	cw := &CloudWatch{
+	cw := &cwMetrics{
 		config:    NewCloudWatchConfig(),
 		datumses:  map[string]*cloudWatchDatum{},
 		datumLock: &sync.Mutex{},
@@ -287,7 +286,7 @@ func TestCloudWatchMoreThan150Values(t *testing.T) {
 func TestCloudWatchMoreThan150RandomReduce(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 
-	cw := &CloudWatch{
+	cw := &cwMetrics{
 		config:    NewCloudWatchConfig(),
 		datumses:  map[string]*cloudWatchDatum{},
 		datumLock: &sync.Mutex{},
@@ -314,7 +313,7 @@ func TestCloudWatchMoreThan150RandomReduce(t *testing.T) {
 func TestCloudWatchMoreThan150LiveReduce(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 
-	cw := &CloudWatch{
+	cw := &cwMetrics{
 		config:    NewCloudWatchConfig(),
 		datumses:  map[string]*cloudWatchDatum{},
 		datumLock: &sync.Mutex{},
@@ -341,7 +340,7 @@ func TestCloudWatchMoreThan150LiveReduce(t *testing.T) {
 func TestCloudWatchTags(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 
-	cw := &CloudWatch{
+	cw := &cwMetrics{
 		config:    NewCloudWatchConfig(),
 		datumses:  map[string]*cloudWatchDatum{},
 		datumLock: &sync.Mutex{},
@@ -350,8 +349,8 @@ func TestCloudWatchTags(t *testing.T) {
 	}
 	cw.ctx, cw.cancel = context.WithCancel(context.Background())
 
-	ctr := cw.GetCounterVec("counter.bar", []string{"foo"})
-	gge := cw.GetGaugeVec("gauge.bar", []string{"bar"})
+	ctr := cw.GetCounterVec("counter.bar", "foo")
+	gge := cw.GetGaugeVec("gauge.bar", "bar")
 
 	ctr.With("one").Incr(1)
 	ctr.With("two").Incr(2)
@@ -388,113 +387,10 @@ func TestCloudWatchTags(t *testing.T) {
 	}, checkInput(mockSvc.inputs[0]))
 }
 
-func TestCloudWatchStaticTags(t *testing.T) {
-	mockSvc := &mockCloudWatchClient{}
-
-	cw := &CloudWatch{
-		config:    NewCloudWatchConfig(),
-		datumses:  map[string]*cloudWatchDatum{},
-		datumLock: &sync.Mutex{},
-		log:       log.Noop(),
-		client:    mockSvc,
-	}
-	cw.ctx, cw.cancel = context.WithCancel(context.Background())
-
-	var err error
-	cw.pathMapping, err = newPathMapping(`meta buz = "first"`, log.Noop())
-	require.NoError(t, err)
-
-	ctr := cw.GetCounter("counter.baz")
-	gge := cw.GetGauge("gauge.baz")
-
-	ctr.Incr(1)
-	gge.Set(3)
-
-	cw.flush()
-
-	assert.Equal(t, 1, len(mockSvc.inputs))
-	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
-	assert.Equal(t, map[string]checkedDatum{
-		"counter.baz:map[buz:first]": {
-			unit: "Count",
-			dimensions: map[string]string{
-				"buz": "first",
-			},
-			value: 1,
-		},
-		"gauge.baz:map[buz:first]": {
-			unit: "None",
-			dimensions: map[string]string{
-				"buz": "first",
-			},
-			values: map[float64]float64{
-				3: 1,
-			},
-		},
-	}, checkInput(mockSvc.inputs[0]))
-}
-
-func TestCloudWatchTagsAndStaticTags(t *testing.T) {
-	mockSvc := &mockCloudWatchClient{}
-
-	cw := &CloudWatch{
-		config:    NewCloudWatchConfig(),
-		datumses:  map[string]*cloudWatchDatum{},
-		datumLock: &sync.Mutex{},
-		log:       log.Noop(),
-		client:    mockSvc,
-	}
-	cw.ctx, cw.cancel = context.WithCancel(context.Background())
-
-	var err error
-	cw.pathMapping, err = newPathMapping(`meta buz = "first"`, log.Noop())
-	require.NoError(t, err)
-
-	ctr := cw.GetCounterVec("counter.baz", []string{"foo"})
-	gge := cw.GetGaugeVec("gauge.baz", []string{"bar"})
-
-	ctr.With("one").Incr(1)
-	ctr.With("two").Incr(2)
-	gge.With("third").Set(3)
-
-	cw.flush()
-
-	assert.Equal(t, 1, len(mockSvc.inputs))
-	assert.Equal(t, "Benthos", *mockSvc.inputs[0].Namespace)
-	assert.Equal(t, map[string]checkedDatum{
-		"counter.baz:map[buz:first foo:one]": {
-			unit: "Count",
-			dimensions: map[string]string{
-				"foo": "one",
-				"buz": "first",
-			},
-			value: 1,
-		},
-		"counter.baz:map[buz:first foo:two]": {
-			unit: "Count",
-			dimensions: map[string]string{
-				"foo": "two",
-				"buz": "first",
-			},
-			value: 2,
-		},
-		"gauge.baz:map[bar:third buz:first]": {
-			unit: "None",
-			dimensions: map[string]string{
-				"bar": "third",
-				"buz": "first",
-			},
-			values: map[float64]float64{
-				3: 1,
-			},
-		},
-	}, checkInput(mockSvc.inputs[0]))
-}
-
 func TestCloudWatchTagsMoreThan20(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 
-	cw := &CloudWatch{
+	cw := &cwMetrics{
 		config:    NewCloudWatchConfig(),
 		datumses:  map[string]*cloudWatchDatum{},
 		datumLock: &sync.Mutex{},
@@ -516,7 +412,7 @@ func TestCloudWatchTagsMoreThan20(t *testing.T) {
 		}
 	}
 
-	ctrFoo := cw.GetCounterVec("counter.foo", tagNames)
+	ctrFoo := cw.GetCounterVec("counter.foo", tagNames...)
 	ctrFoo.With(tagValues...).Incr(3)
 
 	cw.flush()

@@ -4,16 +4,15 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"reflect"
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,9 +20,7 @@ func TestArchiveBadAlgo(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "does not exist"
 
-	testLog := log.Noop()
-
-	_, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	_, err := newArchive(conf.Archive, mock.NewManager())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -34,8 +31,6 @@ func TestArchiveTar(t *testing.T) {
 	conf.Archive.Format = "tar"
 	conf.Archive.Path = "foo-${!meta(\"path\")}"
 
-	testLog := log.Noop()
-
 	exp := [][]byte{
 		[]byte("hello world first part"),
 		[]byte("hello world second part"),
@@ -44,7 +39,7 @@ func TestArchiveTar(t *testing.T) {
 		[]byte("5"),
 	}
 
-	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := newArchive(conf.Archive, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +49,7 @@ func TestArchiveTar(t *testing.T) {
 		p.MetaSet("path", fmt.Sprintf("bar%v", i))
 		return nil
 	})
-	msgs, res := proc.ProcessMessage(msg)
+	msgs, res := proc.ProcessBatch(context.Background(), nil, msg)
 	if len(msgs) != 1 {
 		t.Error("Archive failed")
 	} else if res != nil {
@@ -102,8 +97,6 @@ func TestArchiveZip(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "zip"
 
-	testLog := log.Noop()
-
 	exp := [][]byte{
 		[]byte("hello world first part"),
 		[]byte("hello world second part"),
@@ -112,12 +105,12 @@ func TestArchiveZip(t *testing.T) {
 		[]byte("5"),
 	}
 
-	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := newArchive(conf.Archive, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
+	msgs, res := proc.ProcessBatch(context.Background(), nil, message.QuickBatch(exp))
 	if len(msgs) != 1 {
 		t.Error("Archive failed")
 	} else if res != nil {
@@ -158,14 +151,12 @@ func TestArchiveLines(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "lines"
 
-	testLog := log.Noop()
-
-	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := newArchive(conf.Archive, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
+	msgs, res := proc.ProcessBatch(context.Background(), nil, message.QuickBatch([][]byte{
 		[]byte("hello world first part"),
 		[]byte("hello world second part"),
 		[]byte("third part"),
@@ -198,14 +189,12 @@ func TestArchiveConcatenate(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "concatenate"
 
-	testLog := log.Noop()
-
-	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := newArchive(conf.Archive, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
+	msgs, res := proc.ProcessBatch(context.Background(), nil, message.QuickBatch([][]byte{
 		{},
 		{0},
 		{1, 2},
@@ -234,12 +223,12 @@ func TestArchiveJSONArray(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "json_array"
 
-	proc, err := NewArchive(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := newArchive(conf.Archive, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	msgs, res := proc.ProcessMessage(message.QuickBatch([][]byte{
+	msgs, res := proc.ProcessBatch(context.Background(), nil, message.QuickBatch([][]byte{
 		[]byte(`{"foo":"bar"}`),
 		[]byte(`5`),
 		[]byte(`"testing 123"`),
@@ -268,8 +257,7 @@ func TestArchiveBinary(t *testing.T) {
 	conf := NewConfig()
 	conf.Archive.Format = "binary"
 
-	testLog := log.Noop()
-	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := newArchive(conf.Archive, mock.NewManager())
 	if err != nil {
 		t.Error(err)
 		return
@@ -278,7 +266,7 @@ func TestArchiveBinary(t *testing.T) {
 	testMsg := message.QuickBatch([][]byte{[]byte("hello"), []byte("world")})
 	testMsgBlob := message.ToBytes(testMsg)
 
-	if msgs, _ := proc.ProcessMessage(testMsg); len(msgs) == 1 {
+	if msgs, _ := proc.ProcessBatch(context.Background(), nil, testMsg); len(msgs) == 1 {
 		if lParts := msgs[0].Len(); lParts != 1 {
 			t.Errorf("Wrong number of parts returned: %v != %v", lParts, 1)
 		}
@@ -292,15 +280,13 @@ func TestArchiveBinary(t *testing.T) {
 
 func TestArchiveEmpty(t *testing.T) {
 	conf := NewConfig()
-
-	testLog := log.Noop()
-	proc, err := NewArchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := newArchive(conf.Archive, mock.NewManager())
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	msgs, _ := proc.ProcessMessage(message.QuickBatch([][]byte{}))
+	msgs, _ := proc.ProcessBatch(context.Background(), nil, message.QuickBatch([][]byte{}))
 	if len(msgs) != 0 {
 		t.Error("Expected failure with zero part message")
 	}

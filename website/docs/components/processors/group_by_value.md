@@ -15,11 +15,7 @@ categories: ["Composition"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Splits a batch of messages into N batches, where each resulting batch contains a
-group of messages determined by a
-[function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated
-per message.
+Splits a batch of messages into N batches, where each resulting batch contains a group of messages determined by a [function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated per message.
 
 ```yml
 # Config fields, showing default values

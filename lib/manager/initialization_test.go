@@ -10,6 +10,7 @@ import (
 	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
@@ -69,7 +70,7 @@ func TestInitialization(t *testing.T) {
 		Name: "testratelimit",
 	}))
 
-	mgr, err := NewV2(NewResourceConfig(), nil, log.Noop(), metrics.Noop(), OptSetEnvironment(env))
+	mgr, err := NewV2(NewResourceConfig(), nil, log.Noop(), imetrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
 	require.NoError(t, err)
 
 	bConf := buffer.NewConfig()
@@ -174,7 +175,7 @@ func TestInitializationOrdering(t *testing.T) {
 	resConf.ResourceProcessors = append(resConf.ResourceProcessors, procConf)
 	resConf.ResourceRateLimits = append(resConf.ResourceRateLimits, rlConf)
 
-	_, err := NewV2(resConf, nil, log.Noop(), metrics.Noop(), OptSetEnvironment(env))
+	_, err := NewV2(resConf, nil, log.Noop(), imetrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
 	require.NoError(t, err)
 
 	wg.Wait()

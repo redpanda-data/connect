@@ -14,14 +14,13 @@ import (
 
 func TestInsertBoundaries(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "insert_part"
 	conf.InsertPart.Content = "hello world"
-
-	testLog := log.Noop()
 
 	for i := 0; i < 10; i++ {
 		for j := -5; j <= 5; j++ {
 			conf.InsertPart.Index = j
-			proc, err := NewInsertPart(conf, mock.NewManager(), testLog, metrics.Noop())
+			proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 			if err != nil {
 				t.Error(err)
 				return
@@ -47,6 +46,7 @@ func TestInsertBoundaries(t *testing.T) {
 
 func TestInsertPart(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "insert_part"
 	conf.InsertPart.Content = "hello world"
 
 	testLog := log.Noop()
@@ -165,7 +165,7 @@ func TestInsertPart(t *testing.T) {
 
 	for _, test := range tests {
 		conf.InsertPart.Index = test.index
-		proc, err := NewInsertPart(conf, mock.NewManager(), testLog, metrics.Noop())
+		proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 		if err != nil {
 			t.Error(err)
 			return
@@ -185,12 +185,13 @@ func TestInsertPart(t *testing.T) {
 
 func TestInsertPartInterpolation(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "insert_part"
 	conf.InsertPart.Content = "hello ${!hostname()} world"
 
 	hostname, _ := os.Hostname()
 
 	testLog := log.Noop()
-	proc, err := NewInsertPart(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

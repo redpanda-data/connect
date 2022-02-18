@@ -3,6 +3,7 @@ package input
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -393,10 +394,7 @@ type Sequence struct {
 
 	joiner *messageJoiner
 
-	wrapperMgr   interop.Manager
-	wrapperLog   log.Modular
-	wrapperStats metrics.Type
-
+	mgr   interop.Manager
 	stats metrics.Type
 	log   log.Modular
 
@@ -429,18 +427,13 @@ func NewSequence(
 		})
 	}
 
-	_, rLog, rStats := interop.LabelChild("sequence", mgr, log, stats)
 	rdr := &Sequence{
-		conf: conf.Sequence,
-
+		conf:      conf.Sequence,
 		remaining: targets,
 
-		wrapperLog:   log,
-		wrapperStats: stats,
-		wrapperMgr:   mgr,
-
-		log:          rLog,
-		stats:        rStats,
+		mgr:          mgr,
+		log:          log,
+		stats:        stats,
 		transactions: make(chan message.Transaction),
 		shutSig:      shutdown.NewSignaller(),
 	}
@@ -477,13 +470,10 @@ func (r *Sequence) createNextTarget() (input.Streamed, bool, error) {
 	r.targetMut.Lock()
 	r.target = nil
 	if len(r.remaining) > 0 {
-		if target, err = New(
-			r.remaining[0].config,
-			r.wrapperMgr,
-			r.wrapperLog,
-			r.wrapperStats,
-		); err == nil {
-			r.spent = append(r.spent, r.remaining[0])
+		next := r.remaining[0]
+		wMgr := r.mgr.IntoPath("sequence", "inputs", strconv.Itoa(next.index))
+		if target, err = New(next.config, wMgr, wMgr.Logger(), wMgr.Metrics()); err == nil {
+			r.spent = append(r.spent, next)
 			r.remaining = r.remaining[1:]
 		} else {
 			err = fmt.Errorf("failed to initialize input index %v: %w", r.remaining[0].index, err)

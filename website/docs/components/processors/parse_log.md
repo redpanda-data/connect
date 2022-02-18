@@ -48,7 +48,6 @@ parse_log:
   allow_rfc3339: true
   default_year: current
   default_timezone: UTC
-  parts: []
 ```
 
 </TabItem>
@@ -105,19 +104,6 @@ Sets the strategy to decide the timezone for rfc3164 timestamps. Applicable to f
 
 Type: `string`  
 Default: `"UTC"`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Codecs
 

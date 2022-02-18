@@ -8,17 +8,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 )
-
-//------------------------------------------------------------------------------
 
 // StreamStatus tracks a stream along with information regarding its internals.
 type StreamStatus struct {
@@ -76,11 +72,6 @@ func (s *StreamStatus) Metrics() *metrics.Local {
 	return s.metrics
 }
 
-// Logger returns the logger of the stream.
-func (s *StreamStatus) Logger() log.Modular {
-	return s.logger
-}
-
 // setClosed sets the flag indicating that the stream is closed.
 func (s *StreamStatus) setClosed() {
 	atomic.SwapInt64(&s.stoppedAfter, int64(time.Since(s.createdAt)))
@@ -100,9 +91,7 @@ type Type struct {
 	closed  bool
 	streams map[string]*StreamStatus
 
-	manager    interop.Manager
-	stats      metrics.Type
-	logger     log.Modular
+	manager    bundle.NewManagement
 	apiTimeout time.Duration
 	apiEnabled bool
 
@@ -110,14 +99,12 @@ type Type struct {
 }
 
 // New creates a new stream manager.Type.
-func New(opts ...func(*Type)) *Type {
+func New(mgr bundle.NewManagement, opts ...func(*Type)) *Type {
 	t := &Type{
 		streams:    map[string]*StreamStatus{},
-		manager:    mock.NewManager(),
-		stats:      metrics.Noop(),
 		apiTimeout: time.Second * 5,
-		logger:     log.Noop(),
 		apiEnabled: true,
+		manager:    mgr,
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -133,31 +120,6 @@ func New(opts ...func(*Type)) *Type {
 func OptAPIEnabled(b bool) func(*Type) {
 	return func(t *Type) {
 		t.apiEnabled = b
-	}
-}
-
-// OptSetStats sets the metrics aggregator to be used by the manager and all
-// child streams.
-func OptSetStats(stats metrics.Type) func(*Type) {
-	return func(t *Type) {
-		t.stats = stats
-		t.manager = manager.SwapMetrics(t.manager, t.stats)
-	}
-}
-
-// OptSetLogger sets the logging output to be used by the manager and all child
-// streams.
-func OptSetLogger(log log.Modular) func(*Type) {
-	return func(t *Type) {
-		t.logger = log
-	}
-}
-
-// OptSetManager sets the service manager to be used by the stream manager and
-// all child streams.
-func OptSetManager(mgr interop.Manager) func(*Type) {
-	return func(t *Type) {
-		t.manager = manager.SwapMetrics(mgr, t.stats)
 	}
 }
 
@@ -192,33 +154,18 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		return ErrStreamExists
 	}
 
-	sMgr := m.manager.ForStream(id)
-	sLog, sStats := sMgr.Logger(), sMgr.Metrics()
-	if u, ok := sStats.(interface {
-		Unwrap() metrics.Type
-	}); ok {
-		sStats = u.Unwrap()
-	}
-
 	strmFlatMetrics := metrics.NewLocal()
-	sStats = metrics.Combine(sStats, strmFlatMetrics)
-	sMgr = manager.SwapMetrics(sMgr, sStats)
+	sMgr := m.manager.ForStream(id).WithAddedMetrics(strmFlatMetrics).(bundle.NewManagement)
 
 	var wrapper *StreamStatus
-	strm, err := stream.New(
-		conf,
-		stream.OptSetLogger(sLog),
-		stream.OptSetStats(sStats),
-		stream.OptSetManager(sMgr),
-		stream.OptOnClose(func() {
-			wrapper.setClosed()
-		}),
-	)
+	strm, err := stream.New(conf, sMgr, stream.OptOnClose(func() {
+		wrapper.setClosed()
+	}))
 	if err != nil {
 		return err
 	}
 
-	wrapper = NewStreamStatus(conf, strm, sLog, strmFlatMetrics)
+	wrapper = NewStreamStatus(conf, strm, sMgr.Logger(), strmFlatMetrics)
 	m.streams[id] = wrapper
 	return nil
 }

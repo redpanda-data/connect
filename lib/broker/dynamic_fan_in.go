@@ -78,10 +78,8 @@ func NewDynamicFanIn(
 	for _, opt := range options {
 		opt(d)
 	}
-	mAddErr := d.stats.GetCounter("input.add.error")
 	for key, input := range inputs {
 		if err := d.addInput(key, input); err != nil {
-			mAddErr.Incr(1)
 			d.log.Errorf("Failed to start new dynamic input '%v': %v\n", key, err)
 		}
 	}
@@ -211,38 +209,22 @@ func (d *DynamicFanIn) managerLoop() {
 		close(d.closedChan)
 	}()
 
-	var (
-		mCount      = d.stats.GetCounter("count")
-		mRemoveErr  = d.stats.GetCounter("input.remove.error")
-		mRemoveSucc = d.stats.GetCounter("input.remove.success")
-		mAddErr     = d.stats.GetCounter("input.add.error")
-		mAddSucc    = d.stats.GetCounter("input.add.success")
-	)
-
 	for {
 		select {
 		case wrappedInput, open := <-d.newInputChan:
 			if !open {
 				return
 			}
-			mCount.Incr(1)
-
 			var err error
 			if _, exists := d.inputs[wrappedInput.Name]; exists {
 				if err = d.removeInput(wrappedInput.Name, wrappedInput.Timeout); err != nil {
-					mRemoveErr.Incr(1)
 					d.log.Errorf("Failed to stop old copy of dynamic input '%v': %v\n", wrappedInput.Name, err)
-				} else {
-					mRemoveSucc.Incr(1)
 				}
 			}
 			if err == nil && wrappedInput.Input != nil {
 				// If the input is nil then we only wanted to remove the input.
 				if err = d.addInput(wrappedInput.Name, wrappedInput.Input); err != nil {
-					mAddErr.Incr(1)
 					d.log.Errorf("Failed to start new dynamic input '%v': %v\n", wrappedInput.Name, err)
-				} else {
-					mAddSucc.Incr(1)
 				}
 			}
 			select {

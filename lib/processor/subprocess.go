@@ -12,14 +12,13 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
+	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -29,7 +28,13 @@ import (
 
 func init() {
 	Constructors[TypeSubprocess] = TypeSpec{
-		constructor: NewSubprocess,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newSubprocess(conf.Subprocess, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("subprocess", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryIntegration,
 		},
@@ -61,7 +66,6 @@ If a message contains line breaks each line of the message is piped to the subpr
 			docs.FieldAdvanced(
 				"codec_recv", "Determines how messages read from the subprocess are decoded, which allows them to be logically separated.",
 			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0"),
-			PartsFieldSpec,
 		},
 	}
 }
@@ -70,7 +74,6 @@ If a message contains line breaks each line of the message is piped to the subpr
 
 // SubprocessConfig contains configuration fields for the Subprocess processor.
 type SubprocessConfig struct {
-	Parts     []int    `json:"parts" yaml:"parts"`
 	Name      string   `json:"name" yaml:"name"`
 	Args      []string `json:"args" yaml:"args"`
 	MaxBuffer int      `json:"max_buffer" yaml:"max_buffer"`
@@ -81,7 +84,6 @@ type SubprocessConfig struct {
 // NewSubprocessConfig returns a SubprocessConfig with default values.
 func NewSubprocessConfig() SubprocessConfig {
 	return SubprocessConfig{
-		Parts:     []int{},
 		Name:      "cat",
 		Args:      []string{},
 		MaxBuffer: bufio.MaxScanTokenSize,
@@ -92,45 +94,20 @@ func NewSubprocessConfig() SubprocessConfig {
 
 //------------------------------------------------------------------------------
 
-// Subprocess is a processor that executes a command.
-type Subprocess struct {
-	subprocClosed int32
+type subprocessProc struct {
+	log log.Modular
 
-	log   log.Modular
-	stats metrics.Type
-
-	conf     SubprocessConfig
 	subproc  *subprocWrapper
-	procFunc func(index int, span *tracing.Span, part *message.Part) error
+	procFunc func(part *message.Part) error
 	mut      sync.Mutex
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
 }
 
-// NewSubprocess returns a Subprocess processor.
-func NewSubprocess(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	return newSubprocess(conf.Subprocess, mgr, log, stats)
-}
-
-func newSubprocess(
-	conf SubprocessConfig, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	e := &Subprocess{
-		log:        log,
-		stats:      stats,
-		conf:       conf,
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+func newSubprocess(conf SubprocessConfig, mgr interop.Manager) (*subprocessProc, error) {
+	e := &subprocessProc{
+		log: mgr.Logger(),
 	}
 	var err error
-	if e.subproc, err = newSubprocWrapper(conf.Name, conf.Args, e.conf.MaxBuffer, conf.CodecRecv, log); err != nil {
+	if e.subproc, err = newSubprocWrapper(conf.Name, conf.Args, conf.MaxBuffer, conf.CodecRecv, mgr.Logger()); err != nil {
 		return nil, err
 	}
 	if e.procFunc, err = e.getSendSubprocessorFunc(conf.CodecSend); err != nil {
@@ -141,10 +118,10 @@ func newSubprocess(
 
 //------------------------------------------------------------------------------
 
-func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span *tracing.Span, part *message.Part) error, error) {
+func (e *subprocessProc) getSendSubprocessorFunc(codec string) (func(part *message.Part) error, error) {
 	switch codec {
 	case "length_prefixed_uint32_be":
-		return func(_ int, _ *tracing.Span, part *message.Part) error {
+		return func(part *message.Part) error {
 			const prefixBytes int = 4
 
 			lenBuf := make([]byte, prefixBytes)
@@ -154,7 +131,6 @@ func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span
 			res, err := e.subproc.Send(lenBuf, m, nil)
 			if err != nil {
 				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
-				e.mErr.Incr(1)
 				return err
 			}
 			res2 := make([]byte, len(res))
@@ -163,14 +139,13 @@ func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span
 			return nil
 		}, nil
 	case "netstring":
-		return func(_ int, _ *tracing.Span, part *message.Part) error {
+		return func(part *message.Part) error {
 			lenBuf := make([]byte, 0)
 			m := part.Get()
 			lenBuf = append(strconv.AppendUint(lenBuf, uint64(len(m)), 10), ':')
 			res, err := e.subproc.Send(lenBuf, m, commaBytes)
 			if err != nil {
 				e.log.Errorf("Failed to send message to subprocess: %v\n", err)
-				e.mErr.Incr(1)
 				return err
 			}
 			res2 := make([]byte, len(res))
@@ -179,7 +154,7 @@ func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span
 			return nil
 		}, nil
 	case "lines":
-		return func(_ int, _ *tracing.Span, part *message.Part) error {
+		return func(part *message.Part) error {
 			results := [][]byte{}
 			splitMsg := bytes.Split(part.Get(), newLineBytes)
 			for j, p := range splitMsg {
@@ -190,7 +165,6 @@ func (e *Subprocess) getSendSubprocessorFunc(codec string) (func(index int, span
 				res, err := e.subproc.Send(nil, p, newLineBytes)
 				if err != nil {
 					e.log.Errorf("Failed to send message to subprocess: %v\n", err)
-					e.mErr.Incr(1)
 					return err
 				}
 				results = append(results, res)
@@ -219,18 +193,16 @@ type subprocWrapper struct {
 	cmdStdin    io.WriteCloser
 	cmdCancelFn func()
 
-	closeChan  chan struct{}
-	closedChan chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 func newSubprocWrapper(name string, args []string, maxBuf int, codecRecv string, log log.Modular) (*subprocWrapper, error) {
 	s := &subprocWrapper{
-		name:       name,
-		args:       args,
-		maxBuf:     maxBuf,
-		logger:     log,
-		closeChan:  make(chan struct{}),
-		closedChan: make(chan struct{}),
+		name:    name,
+		args:    args,
+		maxBuf:  maxBuf,
+		logger:  log,
+		shutSig: shutdown.NewSignaller(),
 	}
 	switch codecRecv {
 	case "lines":
@@ -248,7 +220,7 @@ func newSubprocWrapper(name string, args []string, maxBuf int, codecRecv string,
 	go func() {
 		defer func() {
 			s.stop()
-			close(s.closedChan)
+			s.shutSig.ShutdownComplete()
 		}()
 		for {
 			select {
@@ -273,7 +245,7 @@ func newSubprocWrapper(name string, args []string, maxBuf int, codecRecv string,
 				}
 
 				s.start()
-			case <-s.closeChan:
+			case <-s.shutSig.CloseAtLeisureChan():
 				return
 			}
 		}
@@ -500,37 +472,23 @@ var newLineBytes = []byte("\n")
 var commaBytes = []byte(",")
 
 // ProcessMessage logs an event and returns the message unchanged.
-func (e *Subprocess) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	e.mCount.Incr(1)
+func (e *subprocessProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	e.mut.Lock()
 	defer e.mut.Unlock()
 
 	result := msg.Copy()
-
-	IteratePartsWithSpanV2(TypeSubprocess, e.conf.Parts, result, e.procFunc)
-
-	e.mSent.Incr(int64(result.Len()))
-	e.mBatchSent.Incr(1)
-
-	msgs := [1]*message.Batch{result}
-	return msgs[:], nil
-}
-
-// CloseAsync shuts down the processor and stops processing requests.
-func (e *Subprocess) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&e.subprocClosed, 0, 1) {
-		close(e.subproc.closeChan)
+	if err := e.procFunc(result); err != nil {
+		return nil, err
 	}
+	return []*message.Part{result}, nil
 }
 
-// WaitForClose blocks until the processor has closed down.
-func (e *Subprocess) WaitForClose(timeout time.Duration) error {
+func (e *subprocessProc) Close(ctx context.Context) error {
+	e.subproc.shutSig.CloseNow()
 	select {
-	case <-time.After(timeout):
-		return fmt.Errorf("subprocess failed to close in allotted time: %w", component.ErrTimeout)
-	case <-e.subproc.closedChan:
+	case <-e.subproc.shutSig.HasClosedChan():
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

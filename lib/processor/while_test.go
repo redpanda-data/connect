@@ -178,9 +178,7 @@ func TestWhileWithStaticTrue(t *testing.T) {
 	}()
 
 	_, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
-	if res == nil {
-		t.Error("Expected error response due to shut down")
-	}
+	assert.NoError(t, res)
 
 	if err := c.WaitForClose(time.Second); err != nil {
 		t.Error(err)

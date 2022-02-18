@@ -20,36 +20,13 @@ Checks messages against a provided JSONSchema definition but does not change the
 payload under any circumstances. If a message does not match the schema it can
 be caught using error handling methods outlined [here](/docs/configuration/error_handling).
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 label: ""
 json_schema:
   schema: ""
   schema_path: ""
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yml
-# All config fields, showing default values
-label: ""
-json_schema:
-  schema: ""
-  schema_path: ""
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 Please refer to the [JSON Schema website](https://json-schema.org/) for
 information and tutorials regarding the syntax of the schema.
@@ -71,19 +48,6 @@ The path of a schema document to apply. Use either this or the `schema` field.
 
 Type: `string`  
 Default: `""`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Examples
 

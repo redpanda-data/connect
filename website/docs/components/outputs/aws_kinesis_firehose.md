@@ -40,7 +40,6 @@ output:
       byte_size: 0
       period: ""
       check: ""
-    region: eu-west-1
 ```
 
 </TabItem>
@@ -59,7 +58,7 @@ output:
       period: ""
       check: ""
       processors: []
-    region: eu-west-1
+    region: ""
     endpoint: ""
     credentials:
       profile: ""
@@ -215,7 +214,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

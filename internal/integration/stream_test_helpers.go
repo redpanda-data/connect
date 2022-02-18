@@ -15,6 +15,7 @@ import (
 	"time"
 
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -23,7 +24,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/response"
 
@@ -112,7 +112,7 @@ type streamTestEnvironment struct {
 	timeout time.Duration
 	ctx     context.Context
 	log     log.Modular
-	stats   metrics.Type
+	stats   *metrics.Namespaced
 	mgr     interop.Manager
 
 	allowDuplicateMessages bool
@@ -210,7 +210,11 @@ func StreamTestOptLogging(level string) StreamTestOptFunc {
 	return func(env *streamTestEnvironment) {
 		logConf := log.NewConfig()
 		logConf.LogLevel = level
-		env.log = log.New(os.Stdout, logConf)
+		var err error
+		env.log, err = log.NewV2(os.Stdout, logConf)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

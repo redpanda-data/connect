@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -121,7 +120,7 @@ func TestPathMapping(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			m, err := NewMapping(mock.NewManager(), test.mapping, log.Noop())
+			m, err := NewMapping(test.mapping, log.Noop())
 			require.NoError(t, err)
 			for i, def := range test.cases {
 				out, labels, values := m.mapPath(def.input, def.inLabels, def.inValues)

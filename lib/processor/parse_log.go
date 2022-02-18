@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -19,7 +19,13 @@ import (
 
 func init() {
 	Constructors[TypeParseLog] = TypeSpec{
-		constructor: NewParseLog,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newParseLog(conf.ParseLog, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("parse_log", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryParsing,
 		},
@@ -41,8 +47,6 @@ easier and often much faster than ` + "[`grok`](/docs/components/processors/grok
 				" set to an integer that value will be used. Leave this field empty to not set a default year at all."),
 			docs.FieldAdvanced("default_timezone", "Sets the strategy to decide the timezone for rfc3164 timestamps."+
 				" Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format."),
-
-			PartsFieldSpec,
 		},
 		Footnotes: `
 ## Codecs
@@ -90,7 +94,6 @@ spec. The resulting structured document may contain any of the following fields:
 
 // ParseLogConfig contains configuration fields for the ParseLog processor.
 type ParseLogConfig struct {
-	Parts        []int  `json:"parts" yaml:"parts"`
 	Format       string `json:"format" yaml:"format"`
 	Codec        string `json:"codec" yaml:"codec"`
 	BestEffort   bool   `json:"best_effort" yaml:"best_effort"`
@@ -102,7 +105,6 @@ type ParseLogConfig struct {
 // NewParseLogConfig returns a ParseLogConfig with default values.
 func NewParseLogConfig() ParseLogConfig {
 	return ParseLogConfig{
-		Parts:  []int{},
 		Format: "syslog_rfc5424",
 		Codec:  "json",
 
@@ -252,85 +254,42 @@ func getParseFormat(parser string, bestEffort, rfc3339 bool, defYear, defTZ stri
 
 //------------------------------------------------------------------------------
 
-// ParseLog is a processor that parses properly formatted messages.
-type ParseLog struct {
-	parts  []int
-	format parserFormat
-
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErr       metrics.StatCounter
-	mErrJSONS  metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+type parseLogProc struct {
+	format    parserFormat
+	formatStr string
+	log       log.Modular
 }
 
-// NewParseLog returns a ParseLog processor.
-func NewParseLog(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	s := &ParseLog{
-		parts: conf.ParseLog.Parts,
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
-		mCount:     stats.GetCounter("count"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+func newParseLog(conf ParseLogConfig, mgr interop.Manager) (processor.V2, error) {
+	s := &parseLogProc{
+		formatStr: conf.Format,
+		log:       mgr.Logger(),
 	}
 	var err error
-	if s.format, err = getParseFormat(conf.ParseLog.Format, conf.ParseLog.BestEffort, conf.ParseLog.WithRFC3339,
-		conf.ParseLog.WithYear, conf.ParseLog.WithTimezone); err != nil {
+	if s.format, err = getParseFormat(conf.Format, conf.BestEffort, conf.WithRFC3339,
+		conf.WithYear, conf.WithTimezone); err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 
-//------------------------------------------------------------------------------
+func (s *parseLogProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
+	newPart := msg.Copy()
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (s *ParseLog) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	s.mCount.Incr(1)
-	newMsg := msg.Copy()
-
-	proc := func(index int, span *tracing.Span, part *message.Part) error {
-		dataMap, err := s.format(part.Get())
-		if err != nil {
-			s.mErr.Incr(1)
-			s.log.Debugf("Failed to parse message as %s: %v\n", s.conf.ParseLog.Format, err)
-			return err
-		}
-
-		if err := newMsg.Get(index).SetJSON(dataMap); err != nil {
-			s.mErrJSONS.Incr(1)
-			s.mErr.Incr(1)
-			s.log.Debugf("Failed to convert log format result into json: %v\n", err)
-			return err
-		}
-
-		return nil
+	dataMap, err := s.format(newPart.Get())
+	if err != nil {
+		s.log.Debugf("Failed to parse message as %s: %v", s.formatStr, err)
+		return nil, err
 	}
 
-	IteratePartsWithSpanV2(TypeParseLog, s.parts, newMsg, proc)
+	if err := newPart.SetJSON(dataMap); err != nil {
+		s.log.Debugf("Failed to convert log format result into json: %v", err)
+		return nil, err
+	}
 
-	s.mBatchSent.Incr(1)
-	s.mSent.Incr(int64(newMsg.Len()))
-	return []*message.Batch{newMsg}, nil
+	return []*message.Part{newPart}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (s *ParseLog) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (s *ParseLog) WaitForClose(timeout time.Duration) error {
+func (s *parseLogProc) Close(ctx context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

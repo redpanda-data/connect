@@ -32,7 +32,6 @@ input:
   label: ""
   aws_sqs:
     url: ""
-    region: eu-west-1
 ```
 
 </TabItem>
@@ -46,7 +45,7 @@ input:
     url: ""
     delete_message: true
     reset_visibility: true
-    region: eu-west-1
+    region: ""
     endpoint: ""
     credentials:
       profile: ""
@@ -114,7 +113,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

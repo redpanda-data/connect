@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
@@ -99,22 +100,23 @@ func newAirGapBatchProcessor(typeStr string, p BatchProcessor, stats metrics.Typ
 	return processor.NewV2BatchedToV1Processor(typeStr, &airGapBatchProcessor{p}, stats)
 }
 
-func (a *airGapBatchProcessor) ProcessBatch(ctx context.Context, msgs []*message.Part) ([][]*message.Part, error) {
-	inputBatch := make([]*Message, len(msgs))
-	for i, msg := range msgs {
-		inputBatch[i] = newMessageFromPart(msg)
-	}
+func (a *airGapBatchProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch *message.Batch) ([]*message.Batch, error) {
+	inputBatch := make([]*Message, batch.Len())
+	_ = batch.Iter(func(i int, p *message.Part) error {
+		inputBatch[i] = newMessageFromPart(p)
+		return nil
+	})
 
 	outputBatches, err := a.p.ProcessBatch(ctx, inputBatch)
 	if err != nil {
 		return nil, err
 	}
 
-	newBatches := make([][]*message.Part, len(outputBatches))
+	newBatches := make([]*message.Batch, len(outputBatches))
 	for i, batch := range outputBatches {
-		newBatch := make([]*message.Part, len(batch))
-		for j, msg := range batch {
-			newBatch[j] = msg.part
+		newBatch := message.QuickBatch(nil)
+		for _, msg := range batch {
+			newBatch.Append(msg.part)
 		}
 		newBatches[i] = newBatch
 	}

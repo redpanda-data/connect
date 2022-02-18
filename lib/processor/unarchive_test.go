@@ -17,11 +17,12 @@ import (
 
 func TestUnarchiveBadAlgo(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "unarchive"
 	conf.Unarchive.Format = "does not exist"
 
 	testLog := log.Noop()
 
-	_, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	_, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err == nil {
 		t.Error("Expected error from bad algo")
 	}
@@ -29,6 +30,7 @@ func TestUnarchiveBadAlgo(t *testing.T) {
 
 func TestUnarchiveTar(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "unarchive"
 	conf.Unarchive.Format = "tar"
 
 	testLog := log.Noop()
@@ -74,7 +76,7 @@ func TestUnarchiveTar(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,6 +99,7 @@ func TestUnarchiveTar(t *testing.T) {
 
 func TestUnarchiveZip(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "unarchive"
 	conf.Unarchive.Format = "zip"
 
 	testLog := log.Noop()
@@ -137,7 +140,7 @@ func TestUnarchiveZip(t *testing.T) {
 		t.Fatal("Input and exp output are the same")
 	}
 
-	proc, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,6 +163,7 @@ func TestUnarchiveZip(t *testing.T) {
 
 func TestUnarchiveLines(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "unarchive"
 	conf.Unarchive.Format = "lines"
 
 	testLog := log.Noop()
@@ -172,7 +176,7 @@ func TestUnarchiveLines(t *testing.T) {
 		[]byte("5"),
 	}
 
-	proc, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,6 +200,7 @@ fourth
 
 func TestUnarchiveJSONDocuments(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "unarchive"
 	conf.Unarchive.Format = "json_documents"
 
 	exp := [][]byte{
@@ -207,7 +212,7 @@ func TestUnarchiveJSONDocuments(t *testing.T) {
 		[]byte(`true`),
 	}
 
-	proc, err := NewUnarchive(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,6 +232,7 @@ func TestUnarchiveJSONDocuments(t *testing.T) {
 
 func TestUnarchiveJSONArray(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "unarchive"
 	conf.Unarchive.Format = "json_array"
 
 	exp := [][]byte{
@@ -237,7 +243,7 @@ func TestUnarchiveJSONArray(t *testing.T) {
 		[]byte(`true`),
 	}
 
-	proc, err := NewUnarchive(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,6 +263,7 @@ func TestUnarchiveJSONArray(t *testing.T) {
 
 func TestUnarchiveJSONMap(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "unarchive"
 	conf.Unarchive.Format = "json_map"
 
 	exp := [][]byte{
@@ -270,7 +277,7 @@ func TestUnarchiveJSONMap(t *testing.T) {
 		"a", "b", "c", "d", "e",
 	}
 
-	proc, err := NewUnarchive(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,10 +324,11 @@ func TestUnarchiveJSONMap(t *testing.T) {
 
 func TestUnarchiveBinary(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "unarchive"
 	conf.Unarchive.Format = "binary"
 
 	testLog := log.Noop()
-	proc, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -351,115 +359,9 @@ func TestUnarchiveBinary(t *testing.T) {
 	}
 }
 
-func TestUnarchiveIndexBounds(t *testing.T) {
-	conf := NewConfig()
-	conf.Unarchive.Format = "tar"
-
-	testLog := log.Noop()
-
-	input := [][]byte{
-		[]byte("0"),
-		[]byte("1"),
-		[]byte("2"),
-		[]byte("3"),
-		[]byte("4"),
-	}
-
-	for i := range input {
-		var buf bytes.Buffer
-		tw := tar.NewWriter(&buf)
-
-		hdr := &tar.Header{
-			Name: fmt.Sprintf("testfile%v", i),
-			Mode: 0o600,
-			Size: int64(len(input[i])),
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := tw.Write(input[i]); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := tw.Close(); err != nil {
-			t.Fatal(err)
-		}
-
-		input[i] = buf.Bytes()
-	}
-
-	type result struct {
-		index int
-		value string
-	}
-
-	tests := map[int]result{
-		-5: {
-			index: 0,
-			value: "0",
-		},
-		-4: {
-			index: 1,
-			value: "1",
-		},
-		-3: {
-			index: 2,
-			value: "2",
-		},
-		-2: {
-			index: 3,
-			value: "3",
-		},
-		-1: {
-			index: 4,
-			value: "4",
-		},
-		0: {
-			index: 0,
-			value: "0",
-		},
-		1: {
-			index: 1,
-			value: "1",
-		},
-		2: {
-			index: 2,
-			value: "2",
-		},
-		3: {
-			index: 3,
-			value: "3",
-		},
-		4: {
-			index: 4,
-			value: "4",
-		},
-	}
-
-	for i, result := range tests {
-		conf.Unarchive.Parts = []int{i}
-		proc, err := NewUnarchive(conf, mock.NewManager(), testLog, metrics.Noop())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		msgs, res := proc.ProcessMessage(message.QuickBatch(input))
-		if len(msgs) != 1 {
-			t.Errorf("Unarchive failed on index: %v", i)
-		} else if res != nil {
-			t.Errorf("Expected nil response: %v", res)
-		}
-		if exp, act := result.value, string(message.GetAllBytes(msgs[0])[result.index]); exp != act {
-			t.Errorf("Unexpected output for index %v: %v != %v", i, act, exp)
-		}
-		if exp, act := result.value, string(message.GetAllBytes(msgs[0])[(result.index+1)%5]); exp == act {
-			t.Errorf("Processor was applied to wrong index %v: %v != %v", (result.index+1)%5, act, exp)
-		}
-	}
-}
-
 func TestUnarchiveCSV(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "unarchive"
 	conf.Unarchive.Format = "csv"
 
 	exp := []interface{}{
@@ -468,7 +370,7 @@ func TestUnarchiveCSV(t *testing.T) {
 		map[string]interface{}{"id": "3", "name": "baz", "color": "red"},
 	}
 
-	proc, err := NewUnarchive(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

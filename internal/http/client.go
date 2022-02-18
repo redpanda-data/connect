@@ -7,7 +7,6 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -62,17 +61,7 @@ type Client struct {
 	stats metrics.Type
 	mgr   interop.Manager
 
-	mCount         metrics.StatCounter
-	mErr           metrics.StatCounter
-	mErrReq        metrics.StatCounter
-	mErrReqTimeout metrics.StatCounter
-	mErrRes        metrics.StatCounter
-	mLimited       metrics.StatCounter
-	mLimitFor      metrics.StatCounter
-	mLimitErr      metrics.StatCounter
-	mSucc          metrics.StatCounter
-	mLatency       metrics.StatTimer
-
+	mLatency metrics.StatTimer
 	mCodes   map[int]metrics.StatCounter
 	codesMut sync.RWMutex
 
@@ -178,16 +167,7 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 		return nil, fmt.Errorf("failed to construct metadata extract filter: %w", err)
 	}
 
-	h.mCount = h.stats.GetCounter("count")
-	h.mErr = h.stats.GetCounter("error")
-	h.mErrReq = h.stats.GetCounter("error.request")
-	h.mErrReqTimeout = h.stats.GetCounter("request_timeout")
-	h.mErrRes = h.stats.GetCounter("error.response")
-	h.mLimited = h.stats.GetCounter("rate_limit.count")
-	h.mLimitFor = h.stats.GetCounter("rate_limit.total_ms")
-	h.mLimitErr = h.stats.GetCounter("rate_limit.error")
-	h.mLatency = h.stats.GetTimer("latency")
-	h.mSucc = h.stats.GetCounter("success")
+	h.mLatency = h.stats.GetTimer("http_request_latency_ns")
 	h.mCodes = map[int]metrics.StatCounter{}
 
 	var retry, maxBackoff time.Duration
@@ -269,7 +249,11 @@ func (h *Client) incrCode(code int) {
 		return
 	}
 
-	ctr = h.stats.GetCounter(fmt.Sprintf("code.%v", code))
+	tier := code / 100
+	if tier < 0 || tier > 5 {
+		return
+	}
+	ctr = h.stats.GetCounter(fmt.Sprintf("http_request_code_%vxx", tier))
 	ctr.Incr(1)
 
 	h.codesMut.Lock()
@@ -291,11 +275,7 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 		}
 		if err != nil {
 			h.log.Errorf("Rate limit error: %v\n", err)
-			h.mLimitErr.Incr(1)
 			period = time.Second
-		} else if period > 0 {
-			h.mLimited.Incr(1)
-			h.mLimitFor.Incr(period.Nanoseconds() / 1000000)
 		}
 
 		if period > 0 {
@@ -430,8 +410,6 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg *message.Batch, err e
 
 				var bytesRead int64
 				if bytesRead, err = buffer.ReadFrom(p); err != nil {
-					h.mErrRes.Incr(1)
-					h.mErr.Incr(1)
 					h.log.Errorf("Failed to read response: %v\n", err)
 					return
 				}
@@ -452,8 +430,6 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg *message.Batch, err e
 		} else {
 			var bytesRead int64
 			if bytesRead, err = buffer.ReadFrom(res.Body); err != nil {
-				h.mErrRes.Incr(1)
-				h.mErr.Incr(1)
 				h.log.Errorf("Failed to read response: %v\n", err)
 				return
 			}
@@ -514,8 +490,6 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 // performs it, and then returns the *http.Response, allowing the raw response
 // to be consumed.
 func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Batch) (res *http.Response, err error) {
-	h.mCount.Incr(1)
-
 	var spans []*tracing.Span
 	if sendMsg != nil {
 		spans = tracing.CreateChildSpans("http_request", sendMsg)
@@ -526,8 +500,6 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Ba
 		}()
 	}
 	logErr := func(e error) {
-		h.mErrRes.Incr(1)
-		h.mErr.Incr(1)
 		for _, s := range spans {
 			s.LogKV(
 				"event", "error",
@@ -548,8 +520,6 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Ba
 		}
 	}()
 
-	startedAt := time.Now()
-
 	if !h.waitForAccess(ctx) {
 		return nil, component.ErrTypeClosed
 	}
@@ -557,12 +527,8 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Ba
 	rateLimited := false
 	numRetries := h.conf.NumRetries
 
-	res, err = h.client.Do(req.WithContext(ctx))
-	if err != nil {
-		if err, ok := err.(net.Error); ok && err.Timeout() {
-			h.mErrReqTimeout.Incr(1)
-		}
-	} else {
+	startedAt := time.Now()
+	if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
 		h.incrCode(res.StatusCode)
 		if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
 			rateLimited = retryStrat == retryBackoff
@@ -575,6 +541,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Ba
 			}
 		}
 	}
+	h.mLatency.Timing(time.Since(startedAt).Nanoseconds())
 
 	i, j := 0, numRetries
 	for i < j && err != nil {
@@ -595,6 +562,8 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Ba
 			return nil, component.ErrTypeClosed
 		}
 		rateLimited = false
+
+		startedAt = time.Now()
 		if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
 			h.incrCode(res.StatusCode)
 			if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
@@ -607,9 +576,8 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Ba
 					res.Body.Close()
 				}
 			}
-		} else if err, ok := err.(net.Error); ok && err.Timeout() {
-			h.mErrReqTimeout.Incr(1)
 		}
+		h.mLatency.Timing(time.Since(startedAt).Nanoseconds())
 		i++
 	}
 	if err != nil {
@@ -617,8 +585,6 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Ba
 		return nil, err
 	}
 
-	h.mLatency.Timing(int64(time.Since(startedAt)))
-	h.mSucc.Incr(1)
 	h.retryThrottle.Reset()
 	return res, nil
 }

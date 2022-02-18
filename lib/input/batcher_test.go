@@ -25,7 +25,7 @@ func TestBatcherStandard(t *testing.T) {
 	batchConf := batch.NewPolicyConfig()
 	batchConf.Count = 3
 
-	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestBatcherErrorTracking(t *testing.T) {
 	batchConf := batch.NewPolicyConfig()
 	batchConf.Count = 3
 
-	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager())
 	require.NoError(t, err)
 
 	batcher := NewBatcher(batchPol, mockInput, log.Noop(), metrics.Noop())
@@ -229,7 +229,7 @@ func TestBatcherTiming(t *testing.T) {
 	batchConf.Count = 0
 	batchConf.Period = "1ms"
 
-	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func TestBatcherFinalFlush(t *testing.T) {
 	batchConf := batch.NewPolicyConfig()
 	batchConf.Count = 10
 
-	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	batchPol, err := batch.NewPolicy(batchConf, mock.NewManager())
 	require.NoError(t, err)
 
 	batcher := NewBatcher(batchPol, mockInput, log.Noop(), metrics.Noop())

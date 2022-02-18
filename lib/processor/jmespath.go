@@ -1,14 +1,13 @@
 package processor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -19,7 +18,13 @@ import (
 
 func init() {
 	Constructors[TypeJMESPath] = TypeSpec{
-		constructor: NewJMESPath,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newJMESPath(conf.JMESPath, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("jmespath", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryMapping,
 		},
@@ -65,7 +70,6 @@ pipeline:
 		},
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("query", "The JMESPath query to apply to messages."),
-			PartsFieldSpec,
 		},
 	}
 }
@@ -74,66 +78,34 @@ pipeline:
 
 // JMESPathConfig contains configuration fields for the JMESPath processor.
 type JMESPathConfig struct {
-	Parts []int  `json:"parts" yaml:"parts"`
 	Query string `json:"query" yaml:"query"`
 }
 
 // NewJMESPathConfig returns a JMESPathConfig with default values.
 func NewJMESPathConfig() JMESPathConfig {
 	return JMESPathConfig{
-		Parts: []int{},
 		Query: "",
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// JMESPath is a processor that executes JMESPath queries on a message part and
-// replaces the contents with the result.
-type JMESPath struct {
-	parts []int
+type jmespathProc struct {
 	query *jmespath.JMESPath
-
-	conf  Config
 	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErrJSONP  metrics.StatCounter
-	mErrJMES   metrics.StatCounter
-	mErrJSONS  metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
 }
 
-// NewJMESPath returns a JMESPath processor.
-func NewJMESPath(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	query, err := jmespath.Compile(conf.JMESPath.Query)
+func newJMESPath(conf JMESPathConfig, mgr interop.Manager) (processor.V2, error) {
+	query, err := jmespath.Compile(conf.Query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile JMESPath query: %v", err)
 	}
-	j := &JMESPath{
-		parts: conf.JMESPath.Parts,
+	j := &jmespathProc{
 		query: query,
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
-		mCount:     stats.GetCounter("count"),
-		mErrJSONP:  stats.GetCounter("error.json_parse"),
-		mErrJMES:   stats.GetCounter("error.jmespath_search"),
-		mErrJSONS:  stats.GetCounter("error.json_set"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+		log:   mgr.Logger(),
 	}
 	return j, nil
 }
-
-//------------------------------------------------------------------------------
 
 func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err error) {
 	defer func() {
@@ -171,57 +143,32 @@ func clearNumbers(v interface{}) (interface{}, bool) {
 	return nil, false
 }
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (p *JMESPath) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	p.mCount.Incr(1)
+func (p *jmespathProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	newMsg := msg.Copy()
 
-	proc := func(index int, span *tracing.Span, part *message.Part) error {
-		jsonPart, err := part.JSON()
-		if err != nil {
-			p.mErrJSONP.Incr(1)
-			p.mErr.Incr(1)
-			p.log.Debugf("Failed to parse part into json: %v\n", err)
-			return err
-		}
-		if v, replace := clearNumbers(jsonPart); replace {
-			jsonPart = v
-		}
-
-		var result interface{}
-		if result, err = safeSearch(jsonPart, p.query); err != nil {
-			p.mErrJMES.Incr(1)
-			p.mErr.Incr(1)
-			p.log.Debugf("Failed to search json: %v\n", err)
-			return err
-		}
-
-		if err = newMsg.Get(index).SetJSON(result); err != nil {
-			p.mErrJSONS.Incr(1)
-			p.mErr.Incr(1)
-			p.log.Debugf("Failed to convert jmespath result into part: %v\n", err)
-			return err
-		}
-		return nil
+	jsonPart, err := newMsg.JSON()
+	if err != nil {
+		p.log.Debugf("Failed to parse part into json: %v\n", err)
+		return nil, err
+	}
+	if v, replace := clearNumbers(jsonPart); replace {
+		jsonPart = v
 	}
 
-	IteratePartsWithSpanV2(TypeJMESPath, p.parts, newMsg, proc)
+	var result interface{}
+	if result, err = safeSearch(jsonPart, p.query); err != nil {
+		p.log.Debugf("Failed to search json: %v\n", err)
+		return nil, err
+	}
 
-	msgs := [1]*message.Batch{newMsg}
+	if err = newMsg.SetJSON(result); err != nil {
+		p.log.Debugf("Failed to convert jmespath result into part: %v\n", err)
+		return nil, err
+	}
 
-	p.mBatchSent.Incr(1)
-	p.mSent.Incr(int64(newMsg.Len()))
-	return msgs[:], nil
+	return []*message.Part{newMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (p *JMESPath) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (p *JMESPath) WaitForClose(timeout time.Duration) error {
+func (p *jmespathProc) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

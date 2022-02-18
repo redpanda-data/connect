@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"strconv"
 
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/interop"
@@ -48,9 +49,9 @@ func New(
 ) (Type, error) {
 	processors := make([]iprocessor.V1, len(conf.Processors)+len(processorCtors))
 	for j, procConf := range conf.Processors {
-		pMgr, pLog, pMetrics := interop.LabelChild(fmt.Sprintf("processor.%v", j), mgr, log, stats)
 		var err error
-		processors[j], err = processor.New(procConf, pMgr, pLog, pMetrics)
+		pMgr := mgr.IntoPath("processors", strconv.Itoa(j))
+		processors[j], err = processor.New(procConf, pMgr, pMgr.Logger(), pMgr.Metrics())
 		if err != nil {
 			return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 		}

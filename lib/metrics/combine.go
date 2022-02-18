@@ -1,11 +1,7 @@
 package metrics
 
-import "github.com/Jeffail/benthos/v3/lib/log"
+import "net/http"
 
-//------------------------------------------------------------------------------
-
-// combinedWrapper wraps two existing Type implementations. Both implementations
-// are fed all metrics.
 type combinedWrapper struct {
 	t1 Type
 	t2 Type
@@ -50,11 +46,9 @@ type combinedCounter struct {
 	c2 StatCounter
 }
 
-func (c *combinedCounter) Incr(count int64) error {
-	if err := c.c1.Incr(count); err != nil {
-		return err
-	}
-	return c.c2.Incr(count)
+func (c *combinedCounter) Incr(count int64) {
+	c.c1.Incr(count)
+	c.c2.Incr(count)
 }
 
 type combinedTimer struct {
@@ -62,11 +56,9 @@ type combinedTimer struct {
 	c2 StatTimer
 }
 
-func (c *combinedTimer) Timing(delta int64) error {
-	if err := c.c1.Timing(delta); err != nil {
-		return err
-	}
-	return c.c2.Timing(delta)
+func (c *combinedTimer) Timing(delta int64) {
+	c.c1.Timing(delta)
+	c.c2.Timing(delta)
 }
 
 type combinedGauge struct {
@@ -74,25 +66,19 @@ type combinedGauge struct {
 	c2 StatGauge
 }
 
-func (c *combinedGauge) Set(value int64) error {
-	if err := c.c1.Set(value); err != nil {
-		return err
-	}
-	return c.c2.Set(value)
+func (c *combinedGauge) Set(value int64) {
+	c.c1.Set(value)
+	c.c2.Set(value)
 }
 
-func (c *combinedGauge) Incr(count int64) error {
-	if err := c.c1.Incr(count); err != nil {
-		return err
-	}
-	return c.c2.Incr(count)
+func (c *combinedGauge) Incr(count int64) {
+	c.c1.Incr(count)
+	c.c2.Incr(count)
 }
 
-func (c *combinedGauge) Decr(count int64) error {
-	if err := c.c1.Decr(count); err != nil {
-		return err
-	}
-	return c.c2.Decr(count)
+func (c *combinedGauge) Decr(count int64) {
+	c.c1.Decr(count)
+	c.c2.Decr(count)
 }
 
 //------------------------------------------------------------------------------
@@ -142,10 +128,10 @@ func (c *combinedWrapper) GetCounter(path string) StatCounter {
 	}
 }
 
-func (c *combinedWrapper) GetCounterVec(path string, n []string) StatCounterVec {
+func (c *combinedWrapper) GetCounterVec(path string, n ...string) StatCounterVec {
 	return &combinedCounterVec{
-		c1: c.t1.GetCounterVec(path, n),
-		c2: c.t2.GetCounterVec(path, n),
+		c1: c.t1.GetCounterVec(path, n...),
+		c2: c.t2.GetCounterVec(path, n...),
 	}
 }
 
@@ -156,10 +142,10 @@ func (c *combinedWrapper) GetTimer(path string) StatTimer {
 	}
 }
 
-func (c *combinedWrapper) GetTimerVec(path string, n []string) StatTimerVec {
+func (c *combinedWrapper) GetTimerVec(path string, n ...string) StatTimerVec {
 	return &combinedTimerVec{
-		c1: c.t1.GetTimerVec(path, n),
-		c2: c.t2.GetTimerVec(path, n),
+		c1: c.t1.GetTimerVec(path, n...),
+		c2: c.t2.GetTimerVec(path, n...),
 	}
 }
 
@@ -170,16 +156,18 @@ func (c *combinedWrapper) GetGauge(path string) StatGauge {
 	}
 }
 
-func (c *combinedWrapper) GetGaugeVec(path string, n []string) StatGaugeVec {
+func (c *combinedWrapper) GetGaugeVec(path string, n ...string) StatGaugeVec {
 	return &combinedGaugeVec{
-		c1: c.t1.GetGaugeVec(path, n),
-		c2: c.t2.GetGaugeVec(path, n),
+		c1: c.t1.GetGaugeVec(path, n...),
+		c2: c.t2.GetGaugeVec(path, n...),
 	}
 }
 
-func (c *combinedWrapper) SetLogger(log log.Modular) {
-	c.t1.SetLogger(log)
-	c.t2.SetLogger(log)
+func (c *combinedWrapper) HandlerFunc() http.HandlerFunc {
+	if h := c.t1.HandlerFunc(); h != nil {
+		return h
+	}
+	return c.t2.HandlerFunc()
 }
 
 func (c *combinedWrapper) Close() error {
@@ -187,5 +175,3 @@ func (c *combinedWrapper) Close() error {
 	c.t2.Close()
 	return nil
 }
-
-//------------------------------------------------------------------------------

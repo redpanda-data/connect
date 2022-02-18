@@ -91,7 +91,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.12
 	github.com/pkg/sftp v1.13.4
 	github.com/prometheus/client_golang v1.11.0
-	github.com/prometheus/common v0.32.1 // indirect
+	github.com/prometheus/common v0.32.1
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/rabbitmq/amqp091-go v1.2.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475

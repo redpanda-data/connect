@@ -135,8 +135,6 @@ type kinesisReader struct {
 	leasePeriod     time.Duration
 	rebalancePeriod time.Duration
 
-	mRebalanced metrics.StatCounter
-
 	cMut    sync.Mutex
 	msgChan chan asyncMessage
 
@@ -161,7 +159,6 @@ func newKinesisReader(
 		stats:        stats,
 		log:          log,
 		mgr:          mgr,
-		mRebalanced:  stats.GetCounter("rebalanced"),
 		closedChan:   make(chan struct{}),
 		streamShards: map[string][]string{},
 	}

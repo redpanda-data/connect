@@ -72,7 +72,6 @@ mongodb:
   hint_map: ""
   upsert: false
   json_marshal_mode: canonical
-  parts: []
   max_retries: 3
   backoff:
     initial_interval: 1s
@@ -243,19 +242,6 @@ Requires version 3.60.0 or newer
 | `canonical` | A string format that emphasizes type preservation at the expense of readability and interoperability. That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases.  |
 | `relaxed` | A string format that emphasizes readability and interoperability at the expense of type preservation.That is, conversion from relaxed format to BSON can lose type information. |
 
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ### `max_retries`
 

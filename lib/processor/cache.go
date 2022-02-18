@@ -22,7 +22,13 @@ import (
 
 func init() {
 	Constructors[TypeCache] = TypeSpec{
-		constructor: NewCache,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newCache(conf.Cache, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("cache", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryIntegration,
 		},
@@ -39,7 +45,6 @@ This processor will interpolate functions within the ` + "`key` and `value`" + `
 				"ttl", "The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, those that do will have a configuration field `default_ttl`, and those that do not will fall back to their generally configured TTL setting.",
 				"60s", "5m", "36h",
 			).IsInterpolated().AtVersion("3.33.0"),
-			PartsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
 			{
@@ -124,7 +129,6 @@ action is a no-op and will not fail with an error.`,
 // CacheConfig contains configuration fields for the Cache processor.
 type CacheConfig struct {
 	Resource string `json:"resource" yaml:"resource"`
-	Parts    []int  `json:"parts" yaml:"parts"`
 	Operator string `json:"operator" yaml:"operator"`
 	Key      string `json:"key" yaml:"key"`
 	Value    string `json:"value" yaml:"value"`
@@ -135,7 +139,6 @@ type CacheConfig struct {
 func NewCacheConfig() CacheConfig {
 	return CacheConfig{
 		Resource: "",
-		Parts:    []int{},
 		Operator: "set",
 		Key:      "",
 		Value:    "",
@@ -145,15 +148,7 @@ func NewCacheConfig() CacheConfig {
 
 //------------------------------------------------------------------------------
 
-// Cache is a processor that stores or retrieves data from a cache for each
-// message of a batch via an interpolated key.
-type Cache struct {
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
-	parts []int
-
+type cacheProc struct {
 	key   *field.Expression
 	value *field.Expression
 	ttl   *field.Expression
@@ -161,39 +156,30 @@ type Cache struct {
 	mgr       interop.Manager
 	cacheName string
 	operator  cacheOperator
-
-	mCount            metrics.StatCounter
-	mErr              metrics.StatCounter
-	mKeyAlreadyExists metrics.StatCounter
-	mSent             metrics.StatCounter
-	mBatchSent        metrics.StatCounter
 }
 
-// NewCache returns a Cache processor.
-func NewCache(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	cacheName := conf.Cache.Resource
+func newCache(conf CacheConfig, mgr interop.Manager) (*cacheProc, error) {
+	cacheName := conf.Resource
 	if cacheName == "" {
 		return nil, errors.New("cache name must be specified")
 	}
 
-	op, err := cacheOperatorFromString(conf.Cache.Operator)
+	op, err := cacheOperatorFromString(conf.Operator)
 	if err != nil {
 		return nil, err
 	}
 
-	key, err := mgr.BloblEnvironment().NewField(conf.Cache.Key)
+	key, err := mgr.BloblEnvironment().NewField(conf.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
 
-	value, err := mgr.BloblEnvironment().NewField(conf.Cache.Value)
+	value, err := mgr.BloblEnvironment().NewField(conf.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
 
-	ttl, err := mgr.BloblEnvironment().NewField(conf.Cache.TTL)
+	ttl, err := mgr.BloblEnvironment().NewField(conf.TTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ttl expression: %v", err)
 	}
@@ -202,13 +188,7 @@ func NewCache(
 		return nil, fmt.Errorf("cache resource '%v' was not found", cacheName)
 	}
 
-	return &Cache{
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
-		parts: conf.Cache.Parts,
-
+	return &cacheProc{
 		key:   key,
 		value: value,
 		ttl:   ttl,
@@ -216,12 +196,6 @@ func NewCache(
 		mgr:       mgr,
 		cacheName: cacheName,
 		operator:  op,
-
-		mCount:            stats.GetCounter("count"),
-		mErr:              stats.GetCounter("error"),
-		mKeyAlreadyExists: stats.GetCounter("key_already_exists"),
-		mSent:             stats.GetCounter("sent"),
-		mBatchSent:        stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -273,13 +247,9 @@ func cacheOperatorFromString(operator string) (cacheOperator, error) {
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (c *Cache) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	c.mCount.Incr(1)
-	newMsg := msg.Copy()
-
-	proc := func(index int, span *tracing.Span, part *message.Part) error {
+func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+	resMsg := msg.Copy()
+	_ = resMsg.Iter(func(index int, part *message.Part) error {
 		key := c.key.String(index, msg)
 		value := c.value.Bytes(index, msg)
 
@@ -287,9 +257,9 @@ func (c *Cache) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		if ttls := c.ttl.String(index, msg); ttls != "" {
 			td, err := time.ParseDuration(ttls)
 			if err != nil {
-				c.mErr.Incr(1)
-				c.log.Debugf("TTL must be a duration: %v\n", err)
-				return err
+				c.mgr.Logger().Debugf("TTL must be a duration: %v\n", err)
+				processor.MarkErr(part, spans[index], err)
+				return nil
 			}
 			ttl = &td
 		}
@@ -304,36 +274,23 @@ func (c *Cache) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		}
 		if err != nil {
 			if err != component.ErrKeyAlreadyExists {
-				c.mErr.Incr(1)
-				c.log.Debugf("Operator failed for key '%s': %v\n", key, err)
+				c.mgr.Logger().Debugf("Operator failed for key '%s': %v\n", key, err)
 			} else {
-				c.mKeyAlreadyExists.Incr(1)
-				c.log.Debugf("Key already exists: %v\n", key)
+				c.mgr.Logger().Debugf("Key already exists: %v\n", key)
 			}
-			return err
+			processor.MarkErr(part, spans[index], err)
+			return nil
 		}
 
 		if useResult {
 			part.Set(result)
 		}
 		return nil
-	}
+	})
 
-	IteratePartsWithSpanV2(TypeCache, c.parts, newMsg, proc)
-
-	c.mBatchSent.Incr(1)
-	c.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]*message.Batch{newMsg}
-	return msgs[:], nil
+	return []*message.Batch{resMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (c *Cache) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (c *Cache) WaitForClose(_ time.Duration) error {
+func (c *cacheProc) Close(ctx context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

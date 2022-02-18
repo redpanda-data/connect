@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
@@ -13,6 +12,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/http"
 	ihttpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -23,7 +23,13 @@ import (
 
 func init() {
 	Constructors[TypeHTTP] = TypeSpec{
-		constructor: NewHTTP,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newHTTPProc(conf.HTTP, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("http", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryIntegration,
 		},
@@ -114,45 +120,24 @@ func NewHTTPConfig() HTTPConfig {
 
 //------------------------------------------------------------------------------
 
-// HTTP is a processor that performs an HTTP request using the message as the
-// request body, and returns the response.
-type HTTP struct {
+type httpProc struct {
 	client   *http.Client
 	parallel bool
-
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
-	mCount     metrics.StatCounter
-	mErrHTTP   metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
+	rawURL   string
+	log      log.Modular
 }
 
-// NewHTTP returns a HTTP processor.
-func NewHTTP(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	g := &HTTP{
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
-		parallel: conf.HTTP.Parallel,
-
-		mCount:     stats.GetCounter("count"),
-		mErrHTTP:   stats.GetCounter("error.http"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
+func newHTTPProc(conf HTTPConfig, mgr interop.Manager) (processor.V2Batched, error) {
+	g := &httpProc{
+		rawURL:   conf.URL,
+		log:      mgr.Logger(),
+		parallel: conf.Parallel,
 	}
 	var err error
 	if g.client, err = http.NewClient(
-		conf.HTTP.Config,
-		http.OptSetLogger(g.log),
-		http.OptSetStats(g.stats),
+		conf.Config,
+		http.OptSetLogger(mgr.Logger()),
+		http.OptSetStats(mgr.Metrics()),
 		http.OptSetManager(mgr),
 	); err != nil {
 		return nil, err
@@ -160,12 +145,7 @@ func NewHTTP(
 	return g, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (h *HTTP) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	h.mCount.Incr(1)
+func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	var responseMsg *message.Batch
 
 	if !h.parallel || msg.Len() == 1 {
@@ -177,8 +157,6 @@ func (h *HTTP) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 			if ok := errors.As(err, &hErr); ok {
 				codeStr = strconv.Itoa(hErr.Code)
 			}
-			h.mErr.Incr(1)
-			h.mErrHTTP.Incr(1)
 			h.log.Errorf("HTTP request failed: %v\n", err)
 			responseMsg = msg.Copy()
 			_ = responseMsg.Iter(func(i int, p *message.Part) error {
@@ -248,9 +226,7 @@ func (h *HTTP) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		}()
 		for i := 0; i < msg.Len(); i++ {
 			if err := <-resChan; err != nil {
-				h.mErr.Incr(1)
-				h.mErrHTTP.Incr(1)
-				h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.conf.HTTP.URL, err)
+				h.log.Errorf("HTTP parallel request to '%v' failed: %v\n", h.rawURL, err)
 			}
 		}
 
@@ -260,24 +236,11 @@ func (h *HTTP) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	}
 
 	if responseMsg.Len() < 1 {
-		return nil, fmt.Errorf("HTTP response from '%v' was empty", h.conf.HTTP.URL)
+		return nil, fmt.Errorf("HTTP response from '%v' was empty", h.rawURL)
 	}
-
-	msgs := [1]*message.Batch{responseMsg}
-
-	h.mBatchSent.Incr(1)
-	h.mSent.Incr(int64(responseMsg.Len()))
-	return msgs[:], nil
+	return []*message.Batch{responseMsg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (h *HTTP) CloseAsync() {
-	go h.client.Close(context.Background())
+func (h *httpProc) Close(ctx context.Context) error {
+	return h.client.Close(ctx)
 }
-
-// WaitForClose blocks until the processor has closed down.
-func (h *HTTP) WaitForClose(timeout time.Duration) error {
-	return nil
-}
-
-//------------------------------------------------------------------------------

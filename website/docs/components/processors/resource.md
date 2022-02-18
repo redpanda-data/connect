@@ -36,7 +36,7 @@ pipeline:
 
 Is equivalent to:
 
-``` yaml
+```yaml
 pipeline:
   processors:
     - resource: foo_proc

@@ -31,7 +31,7 @@ type awsKinesisRecordBatcher struct {
 }
 
 func (k *kinesisReader) newAWSKinesisRecordBatcher(streamID, shardID, sequence string) (*awsKinesisRecordBatcher, error) {
-	batchPolicy, err := batch.NewPolicy(k.conf.Batching, k.mgr, k.log, k.stats)
+	batchPolicy, err := batch.NewPolicy(k.conf.Batching, k.mgr.IntoPath("aws_kinesis", "batching"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize batch policy for shard consumer: %w", err)
 	}

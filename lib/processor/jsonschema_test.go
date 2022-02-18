@@ -83,10 +83,10 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := NewConfig()
-			conf.Type = "jsonschema"
+			conf.Type = "json_schema"
 			conf.JSONSchema.SchemaPath = tt.fields.schemaPath
 
-			c, err := NewJSONSchema(conf, mock.NewManager(), testLog, testMet)
+			c, err := New(conf, mock.NewManager(), testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
@@ -175,11 +175,10 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := NewConfig()
-			conf.Type = "jsonschema"
+			conf.Type = "json_schema"
 			conf.JSONSchema.Schema = tt.fields.schema
-			conf.JSONSchema.Parts = []int{0}
 
-			c, err := NewJSONSchema(conf, mock.NewManager(), testLog, testMet)
+			c, err := New(conf, mock.NewManager(), testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
@@ -281,11 +280,10 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conf := NewConfig()
-			conf.Type = "jsonschema"
+			conf.Type = "json_schema"
 			conf.JSONSchema.Schema = tt.fields.schema
-			conf.JSONSchema.Parts = []int{0}
 
-			c, err := NewJSONSchema(conf, mock.NewManager(), testLog, testMet)
+			c, err := New(conf, mock.NewManager(), testLog, testMet)
 			if err != nil {
 				t.Error(err)
 				return
@@ -315,10 +313,10 @@ func TestJSONSchemaPathNotExist(t *testing.T) {
 	testMet := metrics.Noop()
 
 	conf := NewConfig()
-	conf.Type = "jsonschema"
+	conf.Type = "json_schema"
 	conf.JSONSchema.SchemaPath = "file://path_does_not_exist"
 
-	_, err := NewJSONSchema(conf, mock.NewManager(), testLog, testMet)
+	_, err := New(conf, mock.NewManager(), testLog, testMet)
 	if err == nil {
 		t.Error("expected error from loading non existant schema file")
 	}
@@ -345,10 +343,10 @@ func TestJSONSchemaInvalidSchema(t *testing.T) {
 	testMet := metrics.Noop()
 
 	conf := NewConfig()
-	conf.Type = "jsonschema"
+	conf.Type = "json_schema"
 	conf.JSONSchema.SchemaPath = fmt.Sprintf("file://%s", tmpSchemaFile.Name())
 
-	_, err = NewJSONSchema(conf, mock.NewManager(), testLog, testMet)
+	_, err = New(conf, mock.NewManager(), testLog, testMet)
 	if err == nil {
 		t.Error("expected error from loading bad schema")
 	}

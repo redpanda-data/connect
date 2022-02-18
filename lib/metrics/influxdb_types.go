@@ -17,21 +17,18 @@ type influxDBGauge struct {
 }
 
 // Set sets a gauge metric.
-func (g influxDBGauge) Set(value int64) error {
+func (g influxDBGauge) Set(value int64) {
 	g.Update(value)
-	return nil
 }
 
 // Incr increments a metric by an amount.
-func (g influxDBGauge) Incr(count int64) error {
+func (g influxDBGauge) Incr(count int64) {
 	g.Update(g.Value() + count)
-	return nil
 }
 
 // Decr decrements a metric by an amount.
-func (g influxDBGauge) Decr(count int64) error {
+func (g influxDBGauge) Decr(count int64) {
 	g.Update(g.Value() - count)
-	return nil
 }
 
 type influxDBCounter struct {
@@ -39,9 +36,8 @@ type influxDBCounter struct {
 }
 
 // Incr increments a metric by an amount.
-func (i influxDBCounter) Incr(count int64) error {
+func (i influxDBCounter) Incr(count int64) {
 	i.Inc(count)
-	return nil
 }
 
 type influxDBTimer struct {
@@ -49,9 +45,8 @@ type influxDBTimer struct {
 }
 
 // Timing sets a timing metric.
-func (i influxDBTimer) Timing(delta int64) error {
+func (i influxDBTimer) Timing(delta int64) {
 	i.Update(time.Duration(delta))
-	return nil
 }
 
 // encodeInfluxDBName accepts a measurement name and a map of tag values and
@@ -61,7 +56,7 @@ func encodeInfluxDBName(name string, tagNames, tagValues []string) string {
 	b.WriteString(escape.String(name))
 
 	// only add tags+values if they're equal length
-	if len(tagNames) == len(tagValues) {
+	if len(tagNames) > 0 && len(tagNames) == len(tagValues) {
 		tags := make(map[string]string, len(tagNames))
 		for k, v := range tagNames {
 			tags[v] = tagValues[k]

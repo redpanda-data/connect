@@ -19,34 +19,12 @@ import TabItem from '@theme/TabItem';
 Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces
 the message with the resulting document.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 label: ""
 jmespath:
   query: ""
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yml
-# All config fields, showing default values
-label: ""
-jmespath:
-  query: ""
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 :::note Try out Bloblang
 For better performance and improved capabilities try out native Benthos mapping with the [bloblang processor](/docs/components/processors/bloblang).
@@ -62,19 +40,6 @@ The JMESPath query to apply to messages.
 
 Type: `string`  
 Default: `""`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Examples
 

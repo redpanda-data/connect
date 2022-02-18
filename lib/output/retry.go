@@ -163,16 +163,6 @@ func NewRetry(
 //------------------------------------------------------------------------------
 
 func (r *Retry) loop() {
-	// Metrics paths
-	var (
-		mRunning      = r.stats.GetGauge("retry.running")
-		mCount        = r.stats.GetCounter("retry.count")
-		mSuccess      = r.stats.GetCounter("retry.send.success")
-		mPartsSuccess = r.stats.GetCounter("retry.parts.send.success")
-		mError        = r.stats.GetCounter("retry.send.error")
-		mEndOfRetries = r.stats.GetCounter("retry.end_of_retries")
-	)
-
 	wg := sync.WaitGroup{}
 
 	defer func() {
@@ -180,10 +170,8 @@ func (r *Retry) loop() {
 		close(r.transactionsOut)
 		r.wrapped.CloseAsync()
 		_ = r.wrapped.WaitForClose(shutdown.MaximumShutdownWait())
-		mRunning.Decr(1)
 		close(r.closedChan)
 	}()
-	mRunning.Incr(1)
 
 	errInterruptChan := make(chan struct{})
 	var errLooped int64
@@ -208,7 +196,6 @@ func (r *Retry) loop() {
 			if !open {
 				return
 			}
-			mCount.Incr(1)
 		case <-r.closeChan:
 			return
 		}
@@ -254,15 +241,12 @@ func (r *Retry) loop() {
 						atomic.AddInt64(&errLooped, 1)
 					}
 
-					mError.Incr(1)
-
 					if backOff == nil {
 						backOff = r.backoffCtor()
 					}
 
 					nextBackoff := backOff.NextBackOff()
 					if nextBackoff == backoff.Stop {
-						mEndOfRetries.Incr(1)
 						r.log.Errorf("Failed to send message: %v\n", res.AckError())
 						resOut = response.NewError(response.ErrNoAck)
 						break
@@ -281,8 +265,6 @@ func (r *Retry) loop() {
 						return
 					}
 				} else {
-					mSuccess.Incr(1)
-					mPartsSuccess.Incr(int64(ts.Payload.Len()))
 					resOut = response.NewError(nil)
 					break
 				}

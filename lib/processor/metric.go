@@ -46,7 +46,6 @@ Custom metrics such as these are emitted along with Benthos internal metrics, wh
 				},
 			).IsInterpolated().Map(),
 			docs.FieldCommon("value", "For some metric types specifies a value to set, increment.").IsInterpolated(),
-			PartsFieldSpec,
 		},
 		Examples: []docs.AnnotatedExample{
 			{
@@ -64,15 +63,14 @@ pipeline:
           type: ${! json("document.type").or("unknown") }
 
 metrics:
+  mapping: |
+    root = if ![
+      "Foos",
+      "input_received",
+      "output_sent"
+    ].contains(this) { deleted() }
   aws_cloudwatch:
     namespace: ProdConsumer
-    region: eu-west-1
-    path_mapping: |
-      root = if ![
-        "Foos",
-        "input.received",
-        "output.sent"
-      ].contains(this) { deleted() }
 `,
 			},
 			{
@@ -89,8 +87,8 @@ pipeline:
         value: ${! json("foo.size") }
 
 metrics:
-  prometheus:
-    path_mapping: 'if this != "FooSize" { deleted() }'
+  mapping: 'if this != "FooSize" { deleted() }'
+  prometheus: {}
 `,
 			},
 		},
@@ -146,7 +144,6 @@ Equivalent to ` + "`gauge`" + ` where instead the metric is a timing.`,
 
 // MetricConfig contains configuration fields for the Metric processor.
 type MetricConfig struct {
-	Parts  []int             `json:"parts" yaml:"parts"`
 	Type   string            `json:"type" yaml:"type"`
 	Name   string            `json:"name" yaml:"name"`
 	Labels map[string]string `json:"labels" yaml:"labels"`
@@ -156,7 +153,6 @@ type MetricConfig struct {
 // NewMetricConfig returns a MetricConfig with default values.
 func NewMetricConfig() MetricConfig {
 	return MetricConfig{
-		Parts:  []int{},
 		Type:   "counter",
 		Name:   "",
 		Labels: map[string]string{},
@@ -168,9 +164,6 @@ func NewMetricConfig() MetricConfig {
 
 // Metric is a processor that creates a metric from extracted values from a message part.
 type Metric struct {
-	parts      []int
-	deprecated bool
-
 	conf  Config
 	log   log.Modular
 	stats metrics.Type
@@ -215,16 +208,6 @@ func (l labels) values(index int, msg *message.Batch) []string {
 	return values
 }
 
-func unwrapMetric(t metrics.Type) metrics.Type {
-	u, ok := t.(interface {
-		Unwrap() metrics.Type
-	})
-	if ok {
-		t = u.Unwrap()
-	}
-	return t
-}
-
 // NewMetric returns a Metric processor.
 func NewMetric(
 	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
@@ -235,7 +218,6 @@ func NewMetric(
 	}
 
 	m := &Metric{
-		parts: conf.Metric.Parts,
 		conf:  conf,
 		log:   log,
 		stats: stats,
@@ -246,9 +228,6 @@ func NewMetric(
 	if name == "" {
 		return nil, errors.New("metric name must not be empty")
 	}
-
-	// Remove any namespaces from the metric type.
-	stats = unwrapMetric(stats)
 
 	labelNames := make([]string, 0, len(conf.Metric.Labels))
 	for n := range conf.Metric.Labels {
@@ -270,28 +249,28 @@ func NewMetric(
 	switch strings.ToLower(conf.Metric.Type) {
 	case "counter":
 		if len(m.labels) > 0 {
-			m.mCounterVec = stats.GetCounterVec(name, m.labels.names())
+			m.mCounterVec = stats.GetCounterVec(name, m.labels.names()...)
 		} else {
 			m.mCounter = stats.GetCounter(name)
 		}
 		m.handler = m.handleCounter
 	case "counter_by":
 		if len(m.labels) > 0 {
-			m.mCounterVec = stats.GetCounterVec(name, m.labels.names())
+			m.mCounterVec = stats.GetCounterVec(name, m.labels.names()...)
 		} else {
 			m.mCounter = stats.GetCounter(name)
 		}
 		m.handler = m.handleCounterBy
 	case "gauge":
 		if len(m.labels) > 0 {
-			m.mGaugeVec = stats.GetGaugeVec(name, m.labels.names())
+			m.mGaugeVec = stats.GetGaugeVec(name, m.labels.names()...)
 		} else {
 			m.mGauge = stats.GetGauge(name)
 		}
 		m.handler = m.handleGauge
 	case "timing":
 		if len(m.labels) > 0 {
-			m.mTimerVec = stats.GetTimerVec(name, m.labels.names())
+			m.mTimerVec = stats.GetTimerVec(name, m.labels.names()...)
 		} else {
 			m.mTimer = stats.GetTimer(name)
 		}
@@ -362,22 +341,13 @@ func (m *Metric) handleTimer(val string, index int, msg *message.Batch) error {
 
 // ProcessMessage applies the processor to a message
 func (m *Metric) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	if m.deprecated {
-		value := m.value.String(0, msg)
-		if err := m.handler(value, 0, msg); err != nil {
-			m.log.Errorf("Handler error: %v\n", err)
-		}
-		return []*message.Batch{msg}, nil
-	}
-	if err := iterateParts(m.parts, msg, func(index int, p *message.Part) error {
+	_ = iterateParts(nil, msg, func(index int, p *message.Part) error {
 		value := m.value.String(index, msg)
 		if err := m.handler(value, index, msg); err != nil {
 			m.log.Errorf("Handler error: %v\n", err)
 		}
 		return nil
-	}); err != nil {
-		m.log.Errorf("Failed to iterate parts: %v\n", err)
-	}
+	})
 	return []*message.Batch{msg}, nil
 }
 

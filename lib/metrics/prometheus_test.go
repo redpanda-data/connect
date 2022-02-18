@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,10 +15,10 @@ import (
 func TestPrometheusNoPushGateway(t *testing.T) {
 	config := NewConfig()
 
-	p, err := NewPrometheus(config)
+	p, err := newPrometheus(config, log.Noop())
 	assert.NoError(t, err)
 	assert.NotNil(t, p)
-	assert.Nil(t, p.(*Prometheus).pusher)
+	assert.Nil(t, p.(*prometheusMetrics).pusher)
 }
 
 func TestPrometheusWithPushGateway(t *testing.T) {
@@ -30,10 +31,10 @@ func TestPrometheusWithPushGateway(t *testing.T) {
 	config := NewConfig()
 	config.Prometheus.PushURL = server.URL
 
-	p, err := NewPrometheus(config)
+	p, err := newPrometheus(config, log.Noop())
 	assert.NoError(t, err)
 	assert.NotNil(t, p)
-	assert.NotNil(t, p.(*Prometheus).pusher)
+	assert.NotNil(t, p.(*prometheusMetrics).pusher)
 
 	go func() {
 		err = p.Close()
@@ -60,10 +61,10 @@ func TestPrometheusWithPushGatewayAndPushInterval(t *testing.T) {
 	config.Prometheus.PushURL = server.URL
 	config.Prometheus.PushInterval = pushInterval.String()
 
-	p, err := NewPrometheus(config)
+	p, err := newPrometheus(config, log.Noop())
 	assert.NoError(t, err)
 	assert.NotNil(t, p)
-	assert.NotNil(t, p.(*Prometheus).pusher)
+	assert.NotNil(t, p.(*prometheusMetrics).pusher)
 
 	// Wait for first message for the PushGateway
 	select {
@@ -88,17 +89,10 @@ func TestPrometheusWithPushGatewayAndPushInterval(t *testing.T) {
 func getTestProm(t *testing.T) (Type, http.HandlerFunc) {
 	t.Helper()
 
-	conf := NewConfig()
-	conf.Prometheus.Prefix = ""
-	conf.Type = TypePrometheus
-
-	prom, err := New(conf)
+	prom, err := newPrometheus(NewConfig(), log.Noop())
 	require.NoError(t, err)
 
-	wHandler, ok := prom.(WithHandlerFunc)
-	require.True(t, ok)
-
-	return prom, wHandler.HandlerFunc()
+	return prom, prom.HandlerFunc()
 }
 
 func getPage(t *testing.T, handler http.HandlerFunc) string {
@@ -127,14 +121,14 @@ func TestPrometheusMetrics(t *testing.T) {
 	tmr := nm.GetTimer("timerone")
 	tmr.Timing(13)
 
-	ctrTwo := nm.GetCounterVec("countertwo", []string{"label1"})
+	ctrTwo := nm.GetCounterVec("countertwo", "label1")
 	ctrTwo.With("value1").Incr(10)
 	ctrTwo.With("value2").Incr(11)
 
-	ggeTwo := nm.GetGaugeVec("gaugetwo", []string{"label2"})
+	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
 	ggeTwo.With("value3").Set(12)
 
-	tmrTwo := nm.GetTimerVec("timertwo", []string{"label3", "label4"})
+	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
 	tmrTwo.With("value4", "value5").Timing(13)
 
 	body := getPage(t, handler)

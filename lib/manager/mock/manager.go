@@ -43,11 +43,14 @@ func NewManager() *Manager {
 // ForStream returns the same mock manager.
 func (m *Manager) ForStream(id string) interop.Manager { return m }
 
-// ForComponent returns the same mock manager.
-func (m *Manager) ForComponent(id string) interop.Manager { return m }
+// IntoPath returns the same mock manager.
+func (m *Manager) IntoPath(segments ...string) interop.Manager { return m }
 
-// ForChildComponent returns the same mock manager.
-func (m *Manager) ForChildComponent(id string) interop.Manager { return m }
+// Path always returns empty.
+func (m *Manager) Path() []string { return nil }
+
+// WithAddedMetrics returns the same mock manager.
+func (m *Manager) WithAddedMetrics(m2 metrics.Type) interop.Manager { return m }
 
 // Label always returns empty.
 func (m *Manager) Label() string { return "" }

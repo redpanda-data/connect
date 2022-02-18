@@ -160,8 +160,6 @@ type kafkaReader struct {
 	msgChan         chan asyncMessage
 	session         offsetMarker
 
-	mRebalanced metrics.StatCounter
-
 	conf  reader.KafkaConfig
 	stats metrics.Type
 	log   log.Modular
@@ -215,7 +213,6 @@ func newKafkaReader(
 		consumerCloseFn: nil,
 		log:             log,
 		mgr:             mgr,
-		mRebalanced:     stats.GetCounter("rebalanced"),
 		closedChan:      make(chan struct{}),
 		topicPartitions: map[string][]int32{},
 	}

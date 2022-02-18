@@ -1,12 +1,13 @@
 package processor
 
 import (
+	"context"
 	"errors"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -16,7 +17,13 @@ import (
 
 func init() {
 	Constructors[TypeBoundsCheck] = TypeSpec{
-		constructor: NewBoundsCheck,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newBoundsCheck(conf.BoundsCheck, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2BatchedToV1Processor("bounds_check", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryUtility,
 		},
@@ -54,75 +61,45 @@ func NewBoundsCheckConfig() BoundsCheckConfig {
 
 //------------------------------------------------------------------------------
 
-// BoundsCheck is a processor that checks each message against a set of bounds
-// and rejects messages if they aren't within them.
-type BoundsCheck struct {
-	conf  Config
-	log   log.Modular
-	stats metrics.Type
-
-	mCount           metrics.StatCounter
-	mDropped         metrics.StatCounter
-	mDroppedEmpty    metrics.StatCounter
-	mDroppedNumParts metrics.StatCounter
-	mDroppedPartSize metrics.StatCounter
-	mSent            metrics.StatCounter
-	mBatchSent       metrics.StatCounter
+type boundsCheck struct {
+	conf BoundsCheckConfig
+	log  log.Modular
 }
 
-// NewBoundsCheck returns a BoundsCheck processor.
-func NewBoundsCheck(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
-	return &BoundsCheck{
-		conf:  conf,
-		log:   log,
-		stats: stats,
-
-		mCount:           stats.GetCounter("count"),
-		mDropped:         stats.GetCounter("dropped"),
-		mDroppedEmpty:    stats.GetCounter("dropped_empty"),
-		mDroppedNumParts: stats.GetCounter("dropped_num_parts"),
-		mDroppedPartSize: stats.GetCounter("dropped_part_size"),
-		mSent:            stats.GetCounter("sent"),
-		mBatchSent:       stats.GetCounter("batch.sent"),
+// newBoundsCheck returns a BoundsCheck processor.
+func newBoundsCheck(conf BoundsCheckConfig, mgr interop.Manager) (processor.V2Batched, error) {
+	return &boundsCheck{
+		conf: conf,
+		log:  mgr.Logger(),
 	}, nil
 }
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies the processor to a message, either creating >0
-// resulting messages or a response to be sent back to the message source.
-func (m *BoundsCheck) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	m.mCount.Incr(1)
-
+func (m *boundsCheck) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	lParts := msg.Len()
-	if lParts < m.conf.BoundsCheck.MinParts {
+	if lParts < m.conf.MinParts {
 		m.log.Debugf(
 			"Rejecting message due to message parts below minimum (%v): %v\n",
-			m.conf.BoundsCheck.MinParts, lParts,
+			m.conf.MinParts, lParts,
 		)
-		m.mDropped.Incr(1)
-		m.mDroppedEmpty.Incr(1)
 		return nil, nil
-	} else if lParts > m.conf.BoundsCheck.MaxParts {
+	} else if lParts > m.conf.MaxParts {
 		m.log.Debugf(
 			"Rejecting message due to message parts exceeding limit (%v): %v\n",
-			m.conf.BoundsCheck.MaxParts, lParts,
+			m.conf.MaxParts, lParts,
 		)
-		m.mDropped.Incr(1)
-		m.mDroppedNumParts.Incr(1)
 		return nil, nil
 	}
 
 	var reject bool
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		if size := len(p.Get()); size > m.conf.BoundsCheck.MaxPartSize ||
-			size < m.conf.BoundsCheck.MinPartSize {
+		if size := len(p.Get()); size > m.conf.MaxPartSize ||
+			size < m.conf.MinPartSize {
 			m.log.Debugf(
 				"Rejecting message due to message part size (%v -> %v): %v\n",
-				m.conf.BoundsCheck.MinPartSize,
-				m.conf.BoundsCheck.MaxPartSize,
+				m.conf.MinPartSize,
+				m.conf.MaxPartSize,
 				size,
 			)
 			reject = true
@@ -130,26 +107,14 @@ func (m *BoundsCheck) ProcessMessage(msg *message.Batch) ([]*message.Batch, erro
 		}
 		return nil
 	})
-
 	if reject {
-		m.mDropped.Incr(1)
-		m.mDroppedPartSize.Incr(1)
 		return nil, nil
 	}
 
-	m.mBatchSent.Incr(1)
-	m.mSent.Incr(int64(msg.Len()))
 	msgs := [1]*message.Batch{msg}
 	return msgs[:], nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (m *BoundsCheck) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (m *BoundsCheck) WaitForClose(timeout time.Duration) error {
+func (m *boundsCheck) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

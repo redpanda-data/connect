@@ -17,10 +17,11 @@ func TestCacheSet(t *testing.T) {
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	conf := NewConfig()
+	conf.Type = "cache"
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Value = "${!json(\"value\")}"
 	conf.Cache.Resource = "foocache"
-	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -54,59 +55,17 @@ func TestCacheSet(t *testing.T) {
 	assert.Equal(t, "foo 2", actV.Value)
 }
 
-func TestCacheSetParts(t *testing.T) {
-	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
-
-	conf := NewConfig()
-	conf.Cache.Key = "${!json(\"key\")}"
-	conf.Cache.Value = "${!json(\"value\")}"
-	conf.Cache.Resource = "foocache"
-	conf.Cache.Parts = []int{0, 1}
-	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	input := message.QuickBatch([][]byte{
-		[]byte(`{"key":"1","value":"foo 1"}`),
-		[]byte(`{"key":"2","value":"foo 2"}`),
-		[]byte(`{"key":"1","value":"foo 3"}`),
-	})
-
-	output, res := proc.ProcessMessage(input)
-	if res != nil {
-		t.Fatal(res)
-	}
-
-	if len(output) != 1 {
-		t.Fatalf("Wrong count of result messages: %v", len(output))
-	}
-
-	if exp, act := message.GetAllBytes(input), message.GetAllBytes(output[0]); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong result messages: %s != %s", act, exp)
-	}
-
-	actV, ok := mgr.Caches["foocache"]["1"]
-	require.True(t, ok)
-	assert.Equal(t, "foo 1", actV.Value)
-
-	actV, ok = mgr.Caches["foocache"]["2"]
-	require.True(t, ok)
-	assert.Equal(t, "foo 2", actV.Value)
-}
-
 func TestCacheAdd(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	conf := NewConfig()
+	conf.Type = "cache"
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Value = "${!json(\"value\")}"
 	conf.Cache.Resource = "foocache"
 	conf.Cache.Operator = "add"
-	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -158,10 +117,11 @@ func TestCacheGet(t *testing.T) {
 	}
 
 	conf := NewConfig()
+	conf.Type = "cache"
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Resource = "foocache"
 	conf.Cache.Operator = "get"
-	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return
@@ -211,10 +171,11 @@ func TestCacheDelete(t *testing.T) {
 	}
 
 	conf := NewConfig()
+	conf.Type = "cache"
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Resource = "foocache"
 	conf.Cache.Operator = "delete"
-	proc, err := NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Error(err)
 		return

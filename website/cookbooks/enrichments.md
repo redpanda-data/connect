@@ -297,8 +297,7 @@ pipeline:
 
     - catch:
         - log:
-            fields:
-              content: "${!content()}"
+            fields_mapping: 'root.content = content().string()'
             message: "Enrichments failed due to: ${!error()}"
 
     - bloblang: |

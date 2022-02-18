@@ -10,7 +10,6 @@ type MongoDBConfig struct {
 	MongoDB      client.Config       `json:",inline" yaml:",inline"`
 	WriteConcern client.WriteConcern `json:"write_concern" yaml:"write_concern"`
 
-	Parts           []int                  `json:"parts" yaml:"parts"`
 	Operation       string                 `json:"operation" yaml:"operation"`
 	FilterMap       string                 `json:"filter_map" yaml:"filter_map"`
 	DocumentMap     string                 `json:"document_map" yaml:"document_map"`
@@ -30,7 +29,6 @@ func NewMongoDBConfig() MongoDBConfig {
 
 	return MongoDBConfig{
 		MongoDB:         client.NewConfig(),
-		Parts:           []int{},
 		Operation:       "insert-one",
 		RetryConfig:     rConf,
 		WriteConcern:    client.WriteConcern{},

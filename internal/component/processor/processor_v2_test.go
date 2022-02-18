@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/stretchr/testify/assert"
@@ -118,12 +119,12 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 //------------------------------------------------------------------------------
 
 type fnBatchProcessor struct {
-	fn     func(context.Context, []*message.Part) ([][]*message.Part, error)
+	fn     func(context.Context, *message.Batch) ([]*message.Batch, error)
 	closed bool
 }
 
-func (p *fnBatchProcessor) ProcessBatch(ctx context.Context, msg []*message.Part) ([][]*message.Part, error) {
-	return p.fn(ctx, msg)
+func (p *fnBatchProcessor) ProcessBatch(ctx context.Context, _ []*tracing.Span, batch *message.Batch) ([]*message.Batch, error) {
+	return p.fn(ctx, batch)
 }
 
 func (p *fnBatchProcessor) Close(ctx context.Context) error {
@@ -147,13 +148,15 @@ func TestBatchProcessorAirGapShutdown(t *testing.T) {
 
 func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs []*message.Part) ([][]*message.Part, error) {
-			if b := msgs[0].Get(); string(b) != "unchanged" {
+		fn: func(c context.Context, msgs *message.Batch) ([]*message.Batch, error) {
+			if b := msgs.Get(0).Get(); string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
-			newMsg := msgs[0].Copy()
+			newMsg := msgs.Get(0).Copy()
 			newMsg.Set([]byte("changed"))
-			return [][]*message.Part{{newMsg}}, nil
+			newBatch := message.QuickBatch(nil)
+			newBatch.Append(newMsg)
+			return []*message.Batch{newBatch}, nil
 		},
 	}, metrics.Noop())
 
@@ -168,8 +171,8 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 
 func TestBatchProcessorAirGapOneToError(t *testing.T) {
 	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs []*message.Part) ([][]*message.Part, error) {
-			_, err := msgs[0].JSON()
+		fn: func(c context.Context, msgs *message.Batch) ([]*message.Batch, error) {
+			_, err := msgs.Get(0).JSON()
 			return nil, err
 		},
 	}, metrics.Noop())
@@ -186,17 +189,23 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 
 func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
-		fn: func(c context.Context, msgs []*message.Part) ([][]*message.Part, error) {
-			if b := msgs[0].Get(); string(b) != "unchanged" {
+		fn: func(c context.Context, msgs *message.Batch) ([]*message.Batch, error) {
+			if b := msgs.Get(0).Get(); string(b) != "unchanged" {
 				return nil, errors.New("nope")
 			}
-			first := msgs[0].Copy()
-			second := msgs[0].Copy()
-			third := msgs[0].Copy()
+			first := msgs.Get(0).Copy()
+			second := msgs.Get(0).Copy()
+			third := msgs.Get(0).Copy()
 			first.Set([]byte("changed 1"))
 			second.Set([]byte("changed 2"))
 			third.Set([]byte("changed 3"))
-			return [][]*message.Part{{first, second}, {third}}, nil
+
+			firstBatch := message.QuickBatch(nil)
+			firstBatch.Append(first, second)
+
+			secondBatch := message.QuickBatch(nil)
+			secondBatch.Append(third)
+			return []*message.Batch{firstBatch, secondBatch}, nil
 		},
 	}, metrics.Noop())
 

@@ -1,15 +1,14 @@
 package processor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
@@ -21,7 +20,13 @@ import (
 
 func init() {
 	Constructors[TypeJSONSchema] = TypeSpec{
-		constructor: NewJSONSchema,
+		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+			p, err := newJSONSchema(conf.JSONSchema, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return processor.NewV2ToV1Processor("json_schema", p, mgr.Metrics()), nil
+		},
 		Categories: []Category{
 			CategoryMapping,
 		},
@@ -86,7 +91,6 @@ dropped.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("schema", "A schema to apply. Use either this or the `schema_path` field."),
 			docs.FieldCommon("schema_path", "The path of a schema document to apply. Use either this or the `schema` field."),
-			PartsFieldSpec,
 		},
 	}
 }
@@ -96,7 +100,6 @@ dropped.`,
 // JSONSchemaConfig is a configuration struct containing fields for the
 // jsonschema processor.
 type JSONSchemaConfig struct {
-	Parts      []int  `json:"parts" yaml:"parts"`
 	SchemaPath string `json:"schema_path" yaml:"schema_path"`
 	Schema     string `json:"schema" yaml:"schema"`
 }
@@ -104,7 +107,6 @@ type JSONSchemaConfig struct {
 // NewJSONSchemaConfig returns a JSONSchemaConfig with default values.
 func NewJSONSchemaConfig() JSONSchemaConfig {
 	return JSONSchemaConfig{
-		Parts:      []int{},
 		SchemaPath: "",
 		Schema:     "",
 	}
@@ -112,39 +114,27 @@ func NewJSONSchemaConfig() JSONSchemaConfig {
 
 //------------------------------------------------------------------------------
 
-// JSONSchema is a processor that validates messages against a specified json schema.
-type JSONSchema struct {
-	conf   JSONSchemaConfig
-	stats  metrics.Type
+type jsonSchemaProc struct {
 	log    log.Modular
 	schema *jsonschema.Schema
-
-	mCount     metrics.StatCounter
-	mErrJSONP  metrics.StatCounter
-	mErr       metrics.StatCounter
-	mSent      metrics.StatCounter
-	mBatchSent metrics.StatCounter
 }
 
-// NewJSONSchema returns a JSONSchema processor.
-func NewJSONSchema(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+func newJSONSchema(conf JSONSchemaConfig, mgr interop.Manager) (processor.V2, error) {
 	var schema *jsonschema.Schema
 	var err error
 
 	// load JSONSchema definition
-	if schemaPath := conf.JSONSchema.SchemaPath; schemaPath != "" {
+	if schemaPath := conf.SchemaPath; schemaPath != "" {
 		if !(strings.HasPrefix(schemaPath, "file://") || strings.HasPrefix(schemaPath, "http://")) {
 			return nil, fmt.Errorf("invalid schema_path provided, must start with file:// or http://")
 		}
 
-		schema, err = jsonschema.NewSchema(jsonschema.NewReferenceLoader(conf.JSONSchema.SchemaPath))
+		schema, err = jsonschema.NewSchema(jsonschema.NewReferenceLoader(conf.SchemaPath))
 		if err != nil {
 			return nil, fmt.Errorf("failed to load JSON schema definition: %v", err)
 		}
-	} else if conf.JSONSchema.Schema != "" {
-		schema, err = jsonschema.NewSchema(jsonschema.NewStringLoader(conf.JSONSchema.Schema))
+	} else if conf.Schema != "" {
+		schema, err = jsonschema.NewSchema(jsonschema.NewStringLoader(conf.Schema))
 		if err != nil {
 			return nil, fmt.Errorf("failed to load JSON schema definition: %v", err)
 		}
@@ -152,16 +142,9 @@ func NewJSONSchema(
 		return nil, fmt.Errorf("either schema or schema_path must be provided")
 	}
 
-	return &JSONSchema{
-		stats:  stats,
-		log:    log,
+	return &jsonSchemaProc{
+		log:    mgr.Logger(),
 		schema: schema,
-
-		mCount:     stats.GetCounter("count"),
-		mErrJSONP:  stats.GetCounter("error_json_parse"),
-		mErr:       stats.GetCounter("error"),
-		mSent:      stats.GetCounter("sent"),
-		mBatchSent: stats.GetCounter("batch.sent"),
 	}, nil
 }
 
@@ -169,66 +152,40 @@ func NewJSONSchema(
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (s *JSONSchema) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	s.mCount.Incr(1)
-	newMsg := msg.Copy()
-	proc := func(i int, span *tracing.Span, part *message.Part) error {
-		jsonPart, err := msg.Get(i).JSON()
-		if err != nil {
-			s.log.Debugf("Failed to parse part into json: %v\n", err)
-			s.mErrJSONP.Incr(1)
-			s.mErr.Incr(1)
-			return err
-		}
+func (s *jsonSchemaProc) Process(ctx context.Context, part *message.Part) ([]*message.Part, error) {
+	jsonPart, err := part.JSON()
+	if err != nil {
+		s.log.Debugf("Failed to parse part into json: %v", err)
+		return nil, err
+	}
 
-		partLoader := jsonschema.NewGoLoader(jsonPart)
-		result, err := s.schema.Validate(partLoader)
-		if err != nil {
-			s.log.Debugf("Failed to validate json: %v\n", err)
-			s.mErr.Incr(1)
-			return err
-		}
+	partLoader := jsonschema.NewGoLoader(jsonPart)
+	result, err := s.schema.Validate(partLoader)
+	if err != nil {
+		s.log.Debugf("Failed to validate json: %v", err)
+		return nil, err
+	}
 
-		if !result.Valid() {
-			s.log.Debugf("The document is not valid\n")
-			s.mErr.Incr(1)
-			var errStr string
-			for i, desc := range result.Errors() {
-				if i > 0 {
-					errStr += "\n"
-				}
-				description := strings.ToLower(desc.Description())
-				if property := desc.Details()["property"]; property != nil {
-					description = property.(string) + strings.TrimPrefix(description, strings.ToLower(property.(string)))
-				}
-				errStr += desc.Field() + " " + description
+	if !result.Valid() {
+		s.log.Debugf("The document is not valid")
+		var errStr string
+		for i, desc := range result.Errors() {
+			if i > 0 {
+				errStr += "\n"
 			}
-			return errors.New(errStr)
+			description := strings.ToLower(desc.Description())
+			if property := desc.Details()["property"]; property != nil {
+				description = property.(string) + strings.TrimPrefix(description, strings.ToLower(property.(string)))
+			}
+			errStr += desc.Field() + " " + description
 		}
-		s.log.Debugf("The document is valid\n")
-
-		return nil
+		return nil, errors.New(errStr)
 	}
 
-	if newMsg.Len() == 0 {
-		return nil, nil
-	}
-
-	IteratePartsWithSpanV2(TypeJSONSchema, s.conf.Parts, newMsg, proc)
-
-	s.mBatchSent.Incr(1)
-	s.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]*message.Batch{newMsg}
-	return msgs[:], nil
+	s.log.Debugf("The document is valid")
+	return []*message.Part{part}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (s *JSONSchema) CloseAsync() {
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (s *JSONSchema) WaitForClose(timeout time.Duration) error {
+func (s *jsonSchemaProc) Close(context.Context) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

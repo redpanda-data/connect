@@ -19,7 +19,7 @@ var (
 // TypeSpec is a constructor and a usage description for each metric output
 // type.
 type TypeSpec struct {
-	constructor func(conf Config, opts ...func(Type)) (Type, error)
+	constructor func(conf Config, log log.Modular) (Type, error)
 
 	Status      docs.Status
 	Version     string
@@ -31,7 +31,7 @@ type TypeSpec struct {
 }
 
 // ConstructorFunc is a func signature able to construct a metrics output.
-type ConstructorFunc func(Config, ...func(Type)) (Type, error)
+type ConstructorFunc func(Config, log.Modular) (Type, error)
 
 // WalkConstructors iterates each component constructor.
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
@@ -65,7 +65,6 @@ var Constructors = map[string]TypeSpec{}
 // String constants representing each metric type.
 const (
 	TypeAWSCloudWatch = "aws_cloudwatch"
-	TypeHTTPServer    = "http_server"
 	TypeInfluxDB      = "influxdb"
 	TypeNone          = "none"
 	TypePrometheus    = "prometheus"
@@ -79,8 +78,9 @@ const (
 // types.
 type Config struct {
 	Type          string           `json:"type" yaml:"type"`
+	Mapping       string           `json:"mapping" yaml:"mapping"`
 	AWSCloudWatch CloudWatchConfig `json:"aws_cloudwatch" yaml:"aws_cloudwatch"`
-	HTTP          HTTPConfig       `json:"http_server" yaml:"http_server"`
+	JSONAPI       JSONAPIConfig    `json:"json_api" yaml:"json_api"`
 	InfluxDB      InfluxDBConfig   `json:"influxdb" yaml:"influxdb"`
 	None          struct{}         `json:"none" yaml:"none"`
 	Prometheus    PrometheusConfig `json:"prometheus" yaml:"prometheus"`
@@ -91,9 +91,10 @@ type Config struct {
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Type:          "http_server",
+		Type:          "prometheus",
+		Mapping:       "",
 		AWSCloudWatch: NewCloudWatchConfig(),
-		HTTP:          NewHTTPConfig(),
+		JSONAPI:       NewJSONAPIConfig(),
 		InfluxDB:      NewInfluxDBConfig(),
 		None:          struct{}{},
 		Prometheus:    NewPrometheusConfig(),
@@ -125,17 +126,10 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 
 //------------------------------------------------------------------------------
 
-// OptSetLogger sets the logging output to be used by the metrics clients.
-func OptSetLogger(log log.Modular) func(Type) {
-	return func(t Type) {
-		t.SetLogger(log)
-	}
-}
-
 // New creates a metric output type based on a configuration.
-func New(conf Config, opts ...func(Type)) (Type, error) {
+func New(conf Config, log log.Modular) (Type, error) {
 	if c, ok := Constructors[conf.Type]; ok {
-		return c.constructor(conf, opts...)
+		return c.constructor(conf, log)
 	}
 	return nil, ErrInvalidMetricOutputType
 }

@@ -92,6 +92,7 @@ type SocketServer struct {
 	closedChan chan struct{}
 
 	mLatency metrics.StatTimer
+	mRcvd    metrics.StatCounter
 }
 
 // NewSocketServer creates a new SocketServer input type.
@@ -133,7 +134,8 @@ func NewSocketServer(conf Config, mgr interop.Manager, log log.Modular, stats me
 		transactions: make(chan message.Transaction),
 		closedChan:   make(chan struct{}),
 
-		mLatency: stats.GetTimer("latency"),
+		mRcvd:    stats.GetCounter("input_received"),
+		mLatency: stats.GetTimer("input_latency_ns"),
 	}
 	t.ctx, t.closeFn = context.WithCancel(context.Background())
 
@@ -221,12 +223,6 @@ func (t *SocketServer) sendMsg(msg *message.Batch) bool {
 }
 
 func (t *SocketServer) loop() {
-	var (
-		mCount     = t.stats.GetCounter("count")
-		mRcvd      = t.stats.GetCounter("batch.received")
-		mPartsRcvd = t.stats.GetCounter("received")
-	)
-
 	var wg sync.WaitGroup
 
 	defer func() {
@@ -291,9 +287,7 @@ acceptLoop:
 					}
 					return
 				}
-				mCount.Incr(1)
-				mRcvd.Incr(1)
-				mPartsRcvd.Incr(int64(len(parts)))
+				t.mRcvd.Incr(int64(len(parts)))
 
 				// We simply bounce rejected messages in a loop downstream so
 				// there's no benefit to aggregating acks.
@@ -310,12 +304,6 @@ acceptLoop:
 }
 
 func (t *SocketServer) udpLoop() {
-	var (
-		mCount     = t.stats.GetCounter("count")
-		mRcvd      = t.stats.GetCounter("batch.received")
-		mPartsRcvd = t.stats.GetCounter("received")
-	)
-
 	defer func() {
 		t.retriesMut.Lock()
 		// nolint:staticcheck, gocritic // Ignore SA2001 empty critical section, Ignore badLock
@@ -349,9 +337,7 @@ func (t *SocketServer) udpLoop() {
 			}
 			return
 		}
-		mCount.Incr(1)
-		mRcvd.Incr(1)
-		mPartsRcvd.Incr(int64(len(parts)))
+		t.mRcvd.Incr(int64(len(parts)))
 
 		// We simply bounce rejected messages in a loop downstream so
 		// there's no benefit to aggregating acks.

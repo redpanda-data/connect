@@ -13,12 +13,12 @@ import (
 
 func TestJMESPathAllParts(t *testing.T) {
 	conf := NewConfig()
-	conf.JMESPath.Parts = []int{}
+	conf.Type = "jmespath"
 	conf.JMESPath.Query = "foo.bar"
 
 	testLog := log.Noop()
 
-	jSet, err := NewJMESPath(conf, mock.NewManager(), testLog, metrics.Noop())
+	jSet, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,12 +44,12 @@ func TestJMESPathAllParts(t *testing.T) {
 
 func TestJMESPathValidation(t *testing.T) {
 	conf := NewConfig()
-	conf.JMESPath.Parts = []int{0}
+	conf.Type = "jmespath"
 	conf.JMESPath.Query = "foo.bar"
 
 	testLog := log.Noop()
 
-	jSet, err := NewJMESPath(conf, mock.NewManager(), testLog, metrics.Noop())
+	jSet, err := New(conf, mock.NewManager(), testLog, metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,32 +65,14 @@ func TestJMESPathValidation(t *testing.T) {
 	if exp, act := "this is bad json", string(message.GetAllBytes(msgs[0])[0]); exp != act {
 		t.Errorf("Wrong output from bad json: %v != %v", act, exp)
 	}
-
-	conf.JMESPath.Parts = []int{5}
-
-	jSet, err = NewJMESPath(conf, mock.NewManager(), testLog, metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	msgIn = message.QuickBatch([][]byte{[]byte("{}")})
-	msgs, res = jSet.ProcessMessage(msgIn)
-	if len(msgs) != 1 {
-		t.Fatal("No passthrough for bad index")
-	}
-	if res != nil {
-		t.Fatal("Non-nil result")
-	}
-	if exp, act := "{}", string(message.GetAllBytes(msgs[0])[0]); exp != act {
-		t.Errorf("Wrong output from bad index: %v != %v", act, exp)
-	}
 }
 
 func TestJMESPathMutation(t *testing.T) {
 	conf := NewConfig()
+	conf.Type = "jmespath"
 	conf.JMESPath.Query = "{foo: merge(foo, {bar:'baz'})}"
 
-	jSet, err := NewJMESPath(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	jSet, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,10 +163,10 @@ func TestJMESPath(t *testing.T) {
 
 	for _, test := range tests {
 		conf := NewConfig()
-		conf.JMESPath.Parts = []int{0}
+		conf.Type = "jmespath"
 		conf.JMESPath.Query = test.path
 
-		jSet, err := NewJMESPath(conf, mock.NewManager(), tLog, tStats)
+		jSet, err := New(conf, mock.NewManager(), tLog, tStats)
 		if err != nil {
 			t.Fatalf("Error for test '%v': %v", test.name, err)
 		}
