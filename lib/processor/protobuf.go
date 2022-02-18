@@ -185,9 +185,9 @@ func newProtobufToJSONOperator(message string, importPaths []string) (protobufOp
 		return nil, err
 	}
 
-	m, err := getMessageFromDescriptors(message, descriptors)
-	if err != nil {
-		return nil, err
+	m := getMessageFromDescriptors(message, descriptors)
+	if m == nil {
+		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", message, importPaths)
 	}
 
 	marshaller := &jsonpb.Marshaler{
@@ -216,9 +216,9 @@ func newProtobufFromJSONOperator(message string, importPaths []string) (protobuf
 		return nil, err
 	}
 
-	m, err := getMessageFromDescriptors(message, descriptors)
-	if err != nil {
-		return nil, err
+	m := getMessageFromDescriptors(message, descriptors)
+	if m == nil {
+		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", message, importPaths)
 	}
 
 	unmarshaler := &jsonpb.Unmarshaler{
@@ -289,7 +289,7 @@ func loadDescriptors(importPaths []string) ([]*desc.FileDescriptor, error) {
 	return fds, err
 }
 
-func getMessageFromDescriptors(message string, fds []*desc.FileDescriptor) (*desc.MessageDescriptor, error) {
+func getMessageFromDescriptors(message string, fds []*desc.FileDescriptor) *desc.MessageDescriptor {
 	var msg *desc.MessageDescriptor
 	for _, fd := range fds {
 		msg = fd.FindMessage(message)
@@ -297,10 +297,7 @@ func getMessageFromDescriptors(message string, fds []*desc.FileDescriptor) (*des
 			break
 		}
 	}
-	if msg == nil {
-		return nil, fmt.Errorf("message %v not found", message)
-	}
-	return msg, nil
+	return msg
 }
 
 //------------------------------------------------------------------------------
