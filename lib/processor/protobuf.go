@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -180,6 +181,10 @@ func NewProtobufConfig() ProtobufConfig {
 type protobufOperator func(part types.Part) error
 
 func newProtobufToJSONOperator(message string, importPaths []string) (protobufOperator, error) {
+	if message == "" {
+		return nil, errors.New("message field must not be empty")
+	}
+
 	descriptors, err := loadDescriptors(importPaths)
 	if err != nil {
 		return nil, err
@@ -211,6 +216,10 @@ func newProtobufToJSONOperator(message string, importPaths []string) (protobufOp
 }
 
 func newProtobufFromJSONOperator(message string, importPaths []string) (protobufOperator, error) {
+	if message == "" {
+		return nil, errors.New("message field must not be empty")
+	}
+
 	descriptors, err := loadDescriptors(importPaths)
 	if err != nil {
 		return nil, err
