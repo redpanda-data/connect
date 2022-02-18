@@ -19,6 +19,10 @@ All notable changes to this project will be documented in this file.
 - The `cassandra` output should now automatically match `float` columns.
 - Fixed an issue where the `elasticsearch` output would collapse batched messages of matching ID rather than send as individual items.
 
+### Changed
+
+- The `throttle` processor has now been marked as deprecated.
+
 ## 3.63.0 - 2022-02-08
 
 ### Added

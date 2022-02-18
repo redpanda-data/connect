@@ -17,6 +17,7 @@ import (
 func init() {
 	Constructors[TypeThrottle] = TypeSpec{
 		constructor: NewThrottle,
+		Status:      docs.StatusDeprecated,
 		Categories: []Category{
 			CategoryUtility,
 		},
@@ -26,7 +27,11 @@ period. This throttle is per processing pipeline, and therefore four threads
 each with a throttle would result in four times the rate specified.`,
 		Description: `
 The period should be specified as a time duration string. For example, '1s'
-would be 1 second, '10ms' would be 10 milliseconds, etc.`,
+would be 1 second, '10ms' would be 10 milliseconds, etc.
+
+### Alternatives
+
+It's recommended that you use the ` + "[`rate_limit` processor](/docs/components/processors/rate_limit)" + ` instead.`,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldCommon("period", "The period to throttle to."),
 		},
