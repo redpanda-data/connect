@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Field `cast` added to the `xml` processor and `parse_xml` bloblang method.
 - New experimental `gcp_bigquery_select` processor.
 - New `assign` bloblang method.
+- The `protobuf` processor now supports `Any` fields in protobuf definitions.
 
 ### Fixed
 

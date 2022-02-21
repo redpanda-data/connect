@@ -15,6 +15,7 @@ import (
 
 	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
 	"github.com/golang/protobuf/jsonpb"
+	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
 	"github.com/golang/protobuf/proto"
 
 	"github.com/jhump/protoreflect/desc"
