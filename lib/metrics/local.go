@@ -7,6 +7,9 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/rcrowley/go-metrics"
 )
 
 // LocalStat is a representation of a single metric stat. Interactions with this
@@ -25,14 +28,22 @@ func (l *LocalStat) Decr(count int64) {
 	atomic.AddInt64(l.Value, -count)
 }
 
-// Timing sets a timing metric.
-func (l *LocalStat) Timing(delta int64) {
-	atomic.StoreInt64(l.Value, delta)
-}
-
 // Set sets a gauge metric.
 func (l *LocalStat) Set(value int64) {
 	atomic.StoreInt64(l.Value, value)
+}
+
+// LocalTiming is a representation of a single metric timing.
+type LocalTiming struct {
+	t    metrics.Timer
+	lock sync.Mutex
+}
+
+// Timing sets a timing metric.
+func (l *LocalTiming) Timing(delta int64) {
+	l.lock.Lock()
+	l.t.Update(time.Duration(delta))
+	l.lock.Unlock()
 }
 
 //------------------------------------------------------------------------------
@@ -40,7 +51,7 @@ func (l *LocalStat) Set(value int64) {
 // Local is a metrics aggregator that stores metrics locally.
 type Local struct {
 	flatCounters map[string]*LocalStat
-	flatTimings  map[string]*LocalStat
+	flatTimings  map[string]*LocalTiming
 
 	mut sync.Mutex
 }
@@ -49,7 +60,7 @@ type Local struct {
 func NewLocal() *Local {
 	return &Local{
 		flatCounters: make(map[string]*LocalStat),
-		flatTimings:  make(map[string]*LocalStat),
+		flatTimings:  make(map[string]*LocalTiming),
 	}
 }
 
@@ -82,26 +93,29 @@ func (l *Local) getCounters(reset bool) map[string]int64 {
 }
 
 // GetTimings returns a map of metric paths to timers.
-func (l *Local) GetTimings() map[string]int64 {
+func (l *Local) GetTimings() map[string]metrics.Timer {
 	return l.getTimings(false)
 }
 
 // FlushTimings returns a map of the current state of the metrics paths to
 // counters and then resets the counters to 0
-func (l *Local) FlushTimings() map[string]int64 {
+func (l *Local) FlushTimings() map[string]metrics.Timer {
 	return l.getTimings(true)
 }
 
 // FlushTimings returns a map of the current state of the metrics paths to
 // counters and then resets the counters to 0
-func (l *Local) getTimings(reset bool) map[string]int64 {
+func (l *Local) getTimings(reset bool) map[string]metrics.Timer {
 	l.mut.Lock()
-	localFlatTimings := make(map[string]int64, len(l.flatTimings))
-	for k := range l.flatTimings {
-		localFlatTimings[k] = atomic.LoadInt64(l.flatTimings[k].Value)
+	localFlatTimings := make(map[string]metrics.Timer, len(l.flatTimings))
+	for k, v := range l.flatTimings {
+		v.lock.Lock()
+		localFlatTimings[k] = v.t.Snapshot()
 		if reset {
-			atomic.StoreInt64(l.flatTimings[k].Value, 0)
+			v.t.Stop()
+			v.t = metrics.NewTimer()
 		}
+		v.lock.Unlock()
 	}
 	l.mut.Unlock()
 	return localFlatTimings
@@ -136,6 +150,31 @@ func createLabelledPath(name string, tagNames, tagValues []string) string {
 		b.WriteByte('}')
 	}
 	return b.String()
+}
+
+func reverseLabelledPath(path string) (name string, tagNames, tagValues []string) {
+	if !strings.HasSuffix(path, "}") {
+		name = path
+		return
+	}
+
+	labelsStart := strings.Index(path, "{")
+	if labelsStart == -1 {
+		name = path
+		return
+	}
+
+	name = path[:labelsStart]
+	for _, tagKVStr := range strings.Split(path[labelsStart+1:len(path)-1], tagEncodingSeparator) {
+		tagKV := strings.Split(tagKVStr, "=")
+		if len(tagKV) != 2 {
+			continue
+		}
+		tagNames = append(tagNames, tagKV[0])
+		tagValue, _ := strconv.Unquote(tagKV[1])
+		tagValues = append(tagValues, tagValue)
+	}
+	return
 }
 
 // GetCounter returns a stat counter object for a path.
@@ -178,8 +217,7 @@ func (l *Local) GetTimerVec(path string, k ...string) StatTimerVec {
 		l.mut.Lock()
 		st, exists := l.flatTimings[newPath]
 		if !exists {
-			var i int64
-			st = &LocalStat{Value: &i}
+			st = &LocalTiming{t: metrics.NewTimer()}
 			l.flatTimings[newPath] = st
 		}
 		l.mut.Unlock()

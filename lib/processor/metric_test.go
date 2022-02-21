@@ -197,15 +197,19 @@ func TestMetricTiming(t *testing.T) {
 		},
 	}
 
-	expMetrics := map[string]int64{
-		"foo.bar": 7,
-	}
-
 	for _, i := range inputs {
 		msg, res := proc.ProcessMessage(message.QuickBatch(i))
 		assert.Len(t, msg, 1)
 		assert.Nil(t, res)
 	}
 
-	assert.Equal(t, expMetrics, mockMetrics.FlushTimings())
+	expTimingAvgs := map[string]float64{
+		"foo.bar": 6,
+	}
+	actTimingAvgs := map[string]float64{}
+	for k, v := range mockMetrics.FlushTimings() {
+		actTimingAvgs[k] = v.Mean()
+	}
+
+	assert.Equal(t, expTimingAvgs, actTimingAvgs)
 }

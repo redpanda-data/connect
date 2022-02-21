@@ -156,6 +156,10 @@ The name given to the generic JSON API metrics type was `http_server`, which was
 
 In order to distinguish this metrics type by its unique feature, which is that it exposes metrics as a JSON object, it has been renamed to `json_api`.
 
+### The `stdout` type renamed to `logger`
+
+The `stdout` metrics type now emits metrics using the Benthos logger, and therefore also matches the logger format. As such, it has been renamed to `logger` in order to reflect that.
+
 ### No more dots
 
 In V3 metrics names contained dots in order to represent pseudo-paths. In V4 all metric names produced by Benthos have been changed to contain only alpha-numeric characters and underscores. It is recommended that any custom metric names produced by your `metric` processors and custom plugins should match this new format for consistency.

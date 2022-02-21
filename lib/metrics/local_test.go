@@ -54,18 +54,80 @@ func TestCounter(t *testing.T) {
 	}
 	assert.Equal(t, expCounters, nm.GetCounters())
 
-	expTimings := map[string]int64{
+	expTimingAvgs := map[string]float64{
 		"timerone": 13,
 		"timertwo{label3=\"value4\",label4=\"value5\"}": 13,
 	}
-	assert.Equal(t, expTimings, nm.GetTimings())
-	// Check twice to ensure we didn't flush
-	assert.Equal(t, expTimings, nm.GetTimings())
+	actTimingAvgs := map[string]float64{}
+	for k, v := range nm.GetTimings() {
+		actTimingAvgs[k] = v.Mean()
+	}
 
-	assert.Equal(t, expTimings, nm.FlushTimings())
-	expTimings = map[string]int64{
+	assert.Equal(t, expTimingAvgs, actTimingAvgs)
+
+	// Check twice to ensure we didn't flush
+	actTimingAvgs = map[string]float64{}
+	for k, v := range nm.GetTimings() {
+		actTimingAvgs[k] = v.Mean()
+	}
+	assert.Equal(t, expTimingAvgs, actTimingAvgs)
+
+	actTimingAvgs = map[string]float64{}
+	for k, v := range nm.FlushTimings() {
+		actTimingAvgs[k] = v.Mean()
+	}
+	assert.Equal(t, expTimingAvgs, actTimingAvgs)
+
+	expTimingAvgs = map[string]float64{
 		"timerone": 0,
 		"timertwo{label3=\"value4\",label4=\"value5\"}": 0,
 	}
-	assert.Equal(t, expTimings, nm.GetTimings())
+
+	actTimingAvgs = map[string]float64{}
+	for k, v := range nm.GetTimings() {
+		actTimingAvgs[k] = v.Mean()
+	}
+	assert.Equal(t, expTimingAvgs, actTimingAvgs)
+}
+
+func TestReverseName(t *testing.T) {
+	tests := map[string]struct {
+		input     string
+		name      string
+		tagNames  []string
+		tagValues []string
+	}{
+		"no labels": {
+			input: "hello world",
+			name:  "hello world",
+		},
+		"single label": {
+			input:     `hello world{foo="bar"}`,
+			name:      "hello world",
+			tagNames:  []string{"foo"},
+			tagValues: []string{"bar"},
+		},
+		"empty label": {
+			input:     `hello world{foo=""}`,
+			name:      "hello world",
+			tagNames:  []string{"foo"},
+			tagValues: []string{""},
+		},
+		"multiple labels": {
+			input:     `hello world{foo="first",bar="second",baz="third"}`,
+			name:      "hello world",
+			tagNames:  []string{"foo", "bar", "baz"},
+			tagValues: []string{"first", "second", "third"},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			res, tagNames, tagValues := reverseLabelledPath(test.input)
+			assert.Equal(t, test.name, res)
+			assert.Equal(t, test.tagNames, tagNames)
+			assert.Equal(t, test.tagValues, tagValues)
+		})
+	}
 }

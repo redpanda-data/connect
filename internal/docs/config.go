@@ -138,7 +138,8 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, defaultType str
 
 	if len(candidates) == 0 && len(defaultType) > 0 {
 		// A totally empty component config results in the default.
-		// TODO: V4 Disable this
+		// TODO: V4 Disable this and replace with a general look up like
+		// reserved fields by type.
 		if spec, exists := GetDocs(docProvider, defaultType, t); exists {
 			return defaultType, spec, nil
 		}

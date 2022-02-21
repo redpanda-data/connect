@@ -22,7 +22,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
-	"github.com/Jeffail/gabs/v2"
 	"github.com/gorilla/mux"
 	"gopkg.in/yaml.v3"
 )
@@ -577,21 +576,32 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
-			uptime := info.Uptime().String()
-			counters := info.Metrics().GetCounters()
-			timings := info.Metrics().GetTimings()
+			values := map[string]interface{}{}
+			for k, v := range info.metrics.GetCounters() {
+				values[k] = v
+			}
+			for k, v := range info.metrics.GetTimings() {
+				ps := v.Percentiles([]float64{0.5, 0.9, 0.99})
+				values[k] = struct {
+					P50 float64 `json:"p50"`
+					P90 float64 `json:"p90"`
+					P99 float64 `json:"p99"`
+				}{
+					P50: ps[0],
+					P90: ps[1],
+					P99: ps[2],
+				}
+			}
+			values["uptime_ns"] = info.Uptime().Nanoseconds()
 
-			obj := gabs.New()
-			for k, v := range counters {
-				obj.SetP(v, k)
+			jBytes, err := json.Marshal(values)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
 			}
-			for k, v := range timings {
-				obj.SetP(v, k)
-				obj.SetP(time.Duration(v).String(), k+"_readable")
-			}
-			obj.SetP(uptime, "uptime")
+
 			w.Header().Set("Content-Type", "application/json")
-			w.Write(obj.Bytes())
+			w.Write(jBytes)
 		}
 	default:
 		requestErr = fmt.Errorf("verb not supported: %v", r.Method)

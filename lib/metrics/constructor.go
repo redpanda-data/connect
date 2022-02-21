@@ -69,7 +69,6 @@ const (
 	TypeNone          = "none"
 	TypePrometheus    = "prometheus"
 	TypeStatsd        = "statsd"
-	TypeStdout        = "stdout"
 )
 
 //------------------------------------------------------------------------------
@@ -85,7 +84,7 @@ type Config struct {
 	None          struct{}         `json:"none" yaml:"none"`
 	Prometheus    PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Statsd        StatsdConfig     `json:"statsd" yaml:"statsd"`
-	Stdout        StdoutConfig     `json:"stdout" yaml:"stdout"`
+	Logger        LoggerConfig     `json:"logger" yaml:"logger"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -99,7 +98,7 @@ func NewConfig() Config {
 		None:          struct{}{},
 		Prometheus:    NewPrometheusConfig(),
 		Statsd:        NewStatsdConfig(),
-		Stdout:        NewStdoutConfig(),
+		Logger:        NewLoggerConfig(),
 	}
 }
 

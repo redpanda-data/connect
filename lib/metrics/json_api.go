@@ -1,13 +1,12 @@
 package metrics
 
 import (
+	"encoding/json"
 	"net/http"
-	"runtime"
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/gabs/v2"
 )
 
 func init() {
@@ -51,25 +50,31 @@ func newJSONAPI(config Config, log log.Modular) (Type, error) {
 
 func (h *jsonAPIMetrics) HandlerFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uptime := time.Since(h.timestamp).String()
-		goroutines := runtime.NumGoroutine()
-
-		counters := h.local.GetCounters()
-		timings := h.local.GetTimings()
-
-		obj := gabs.New()
-		for k, v := range counters {
-			obj.SetP(v, k)
+		values := map[string]interface{}{}
+		for k, v := range h.local.GetCounters() {
+			values[k] = v
 		}
-		for k, v := range timings {
-			obj.SetP(v, k)
-			obj.SetP(time.Duration(v).String(), k+"_readable")
+		for k, v := range h.local.GetTimings() {
+			ps := v.Percentiles([]float64{0.5, 0.9, 0.99})
+			values[k] = struct {
+				P50 float64 `json:"p50"`
+				P90 float64 `json:"p90"`
+				P99 float64 `json:"p99"`
+			}{
+				P50: ps[0],
+				P90: ps[1],
+				P99: ps[2],
+			}
 		}
-		obj.SetP(uptime, "uptime")
-		obj.SetP(goroutines, "goroutines")
+
+		jBytes, err := json.Marshal(values)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(obj.Bytes())
+		w.Write(jBytes)
 	}
 }
 
