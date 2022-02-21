@@ -33,9 +33,9 @@ func TestLoggerWith(t *testing.T) {
 
 	logger.Warnf("Warning message root module\n")
 
-	expected := `@service=benthos_service @system=foo level=WARN msg="Warning message root module"
-@service=benthos_service @system=foo count=10 foo=bar iscool=true thing="is a string" level=WARN msg="Warning message foo fields"
-@service=benthos_service @system=foo level=WARN msg="Warning message root module"
+	expected := `level=warning msg="Warning message root module" @service=benthos_service @system=foo
+level=warning msg="Warning message foo fields" @service=benthos_service @system=foo count=10 foo=bar iscool=true thing="is a string"
+level=warning msg="Warning message root module" @service=benthos_service @system=foo
 `
 
 	assert.Equal(t, expected, buf.String())
@@ -63,7 +63,7 @@ func TestLoggerWithOddArgs(t *testing.T) {
 
 	logger.Warnln("Warning message foo fields")
 
-	expected := `@service=benthos_service @system=foo count=10 foo=bar iscool=true thing="is a string" level=WARN msg="Warning message foo fields"
+	expected := `level=warning msg="Warning message foo fields" @service=benthos_service @system=foo count=10 foo=bar iscool=true thing="is a string"
 `
 
 	assert.Equal(t, expected, buf.String())
@@ -93,7 +93,7 @@ func TestLoggerWithNonStringKeys(t *testing.T) {
 
 	logger.Warnln("Warning message foo fields")
 
-	expected := `@service=benthos_service @system=foo component=meow foo=bar iscool=true thing="is a string" level=WARN msg="Warning message foo fields"
+	expected := `level=warning msg="Warning message foo fields" @service=benthos_service @system=foo component=meow foo=bar iscool=true thing="is a string"
 `
 
 	assert.Equal(t, expected, buf.String())
@@ -109,16 +109,22 @@ func (l *logCounter) Write(p []byte) (n int, err error) {
 }
 
 func TestLogLevels(t *testing.T) {
-	for i := 0; i < LogAll; i++ {
+	for i, lvl := range []string{
+		"FATAL",
+		"ERROR",
+		"WARN",
+		"INFO",
+		"DEBUG",
+		"TRACE",
+	} {
 		loggerConfig := NewConfig()
-		loggerConfig.LogLevel = intToLogLevel(i)
+		loggerConfig.LogLevel = lvl
 
 		buf := logCounter{}
 
 		logger, err := NewV2(&buf, loggerConfig)
 		require.NoError(t, err)
 
-		logger.Fatalln("fatal test")
 		logger.Errorln("error test")
 		logger.Warnln("warn test")
 		logger.Infoln("info test")

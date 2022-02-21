@@ -1,7 +1,5 @@
 package log
 
-//------------------------------------------------------------------------------
-
 // PrintFormatter is an interface implemented by standard loggers.
 type PrintFormatter interface {
 	Printf(format string, v ...interface{})
@@ -9,6 +7,18 @@ type PrintFormatter interface {
 }
 
 //------------------------------------------------------------------------------
+
+// Logger level constants
+const (
+	LogOff   int = 0
+	LogFatal int = 1
+	LogError int = 2
+	LogWarn  int = 3
+	LogInfo  int = 4
+	LogDebug int = 5
+	LogTrace int = 6
+	LogAll   int = 7
+)
 
 // wrapped is an object with support for levelled logging and modular components.
 type wrapped struct {

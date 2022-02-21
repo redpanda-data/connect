@@ -98,6 +98,7 @@ require (
 	github.com/rickb777/date v1.17.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/segmentio/ksuid v1.0.4
+	github.com/sirupsen/logrus v1.8.1
 	github.com/smira/go-statsd v1.3.2
 	github.com/stretchr/testify v1.7.0
 	github.com/tilinna/z85 v1.0.0

@@ -38,6 +38,9 @@ pipeline:
 
 output:
   stdout: {}
+
+logger:
+  level: none
 `)
 	panicOnErr(err)
 
@@ -81,6 +84,9 @@ generate:
 	err = builder.AddOutputYAML(`stdout: {}`)
 	panicOnErr(err)
 
+	err = builder.SetLoggerYAML(`level: off`)
+	panicOnErr(err)
+
 	// Build a stream with our configured components.
 	stream, err := builder.Build()
 	panicOnErr(err)
@@ -103,7 +109,7 @@ func Example_streamBuilderPush() {
 	}
 
 	builder := service.NewStreamBuilder()
-	err := builder.SetLoggerYAML(`level: NONE`)
+	err := builder.SetLoggerYAML(`level: off`)
 	panicOnErr(err)
 
 	err = builder.AddProcessorYAML(`bloblang: 'root = content().uppercase()'`)
