@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/types"
 
 	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 
 	"github.com/jhump/protoreflect/desc"
@@ -180,17 +181,31 @@ func NewProtobufConfig() ProtobufConfig {
 type protobufOperator func(part types.Part) error
 
 func newProtobufToJSONOperator(message string, importPaths []string) (protobufOperator, error) {
-	m, err := loadDescriptor(message, importPaths)
+	if message == "" {
+		return nil, errors.New("message field must not be empty")
+	}
+
+	descriptors, err := loadDescriptors(importPaths)
 	if err != nil {
 		return nil, err
 	}
+
+	m := getMessageFromDescriptors(message, descriptors)
+	if m == nil {
+		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", message, importPaths)
+	}
+
+	marshaller := &jsonpb.Marshaler{
+		AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), descriptors...),
+	}
+
 	return func(part types.Part) error {
 		msg := dynamic.NewMessage(m)
 		if err := proto.Unmarshal(part.Get(), msg); err != nil {
 			return fmt.Errorf("failed to unmarshal message: %w", err)
 		}
 
-		data, err := msg.MarshalJSON()
+		data, err := msg.MarshalJSONPB(marshaller)
 		if err != nil {
 			return fmt.Errorf("failed to marshal protobuf message: %w", err)
 		}
@@ -201,13 +216,27 @@ func newProtobufToJSONOperator(message string, importPaths []string) (protobufOp
 }
 
 func newProtobufFromJSONOperator(message string, importPaths []string) (protobufOperator, error) {
-	m, err := loadDescriptor(message, importPaths)
+	if message == "" {
+		return nil, errors.New("message field must not be empty")
+	}
+
+	descriptors, err := loadDescriptors(importPaths)
 	if err != nil {
 		return nil, err
 	}
+
+	m := getMessageFromDescriptors(message, descriptors)
+	if m == nil {
+		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", message, importPaths)
+	}
+
+	unmarshaler := &jsonpb.Unmarshaler{
+		AnyResolver: dynamic.AnyResolver(dynamic.NewMessageFactoryWithDefaults(), descriptors...),
+	}
+
 	return func(part types.Part) error {
 		msg := dynamic.NewMessage(m)
-		if err := msg.UnmarshalJSON(part.Get()); err != nil {
+		if err := msg.UnmarshalJSONPB(unmarshaler, part.Get()); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON message: %w", err)
 		}
 
@@ -231,11 +260,7 @@ func strToProtobufOperator(opStr, message string, importPaths []string) (protobu
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
-func loadDescriptor(message string, importPaths []string) (*desc.MessageDescriptor, error) {
-	if message == "" {
-		return nil, errors.New("message field must not be empty")
-	}
-
+func loadDescriptors(importPaths []string) ([]*desc.FileDescriptor, error) {
 	var parser protoparse.Parser
 	if len(importPaths) == 0 {
 		importPaths = []string{"."}
@@ -270,16 +295,18 @@ func loadDescriptor(message string, importPaths []string) (*desc.MessageDescript
 		return nil, fmt.Errorf("no .proto files were found in the paths '%v'", importPaths)
 	}
 
+	return fds, err
+}
+
+func getMessageFromDescriptors(message string, fds []*desc.FileDescriptor) *desc.MessageDescriptor {
 	var msg *desc.MessageDescriptor
-	for _, d := range fds {
-		if msg = d.FindMessage(message); msg != nil {
+	for _, fd := range fds {
+		msg = fd.FindMessage(message)
+		if msg != nil {
 			break
 		}
 	}
-	if msg == nil {
-		err = fmt.Errorf("unable to find message '%v' definition within '%v'", message, importPaths)
-	}
-	return msg, err
+	return msg
 }
 
 //------------------------------------------------------------------------------
