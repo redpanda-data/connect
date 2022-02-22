@@ -28,6 +28,7 @@ messages these interpolations are performed per message part.`,
 			docs.FieldCommon("client_id", "An identifier for the client connection."),
 			docs.FieldString("dynamic_client_id_suffix", "Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.").Optional().Advanced().HasAnnotatedOptions(
 				"nanoid", "append a nanoid of length 21 characters",
+				"hostname", "append the hostname",
 			),
 			docs.FieldCommon("qos", "The QoS value to set for each message.").HasOptions("0", "1", "2"),
 			docs.FieldString("connect_timeout", "The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.", "1s", "500ms").HasDefault("30s").AtVersion("3.58.0"),

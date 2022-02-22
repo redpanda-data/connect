@@ -126,9 +126,10 @@ Append a dynamically generated suffix to the specified `client_id` on each run o
 Type: `string`  
 Default: `""`  
 
-| Option | Summary |
-|---|---|
-| `nanoid` | append a nanoid of length 21 characters |
+| Option     | Summary                                 |
+|------------|-----------------------------------------|
+| `nanoid`   | append a nanoid of length 21 characters |
+| `hostname` | append the hostname                     |
 
 
 ### `qos`

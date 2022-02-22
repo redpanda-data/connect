@@ -3,6 +3,7 @@ package writer
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -126,6 +127,12 @@ func NewMQTTV2(
 			return nil, fmt.Errorf("failed to generate nanoid: %w", err)
 		}
 		m.conf.ClientID += nid
+	case "hostname":
+		hname, err := os.Hostname()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate hostname: %w", err)
+		}
+		m.conf.ClientID += hname
 	case "":
 	default:
 		return nil, fmt.Errorf("unknown dynamic_client_id_suffix: %v", m.conf.DynamicClientIDSuffix)
