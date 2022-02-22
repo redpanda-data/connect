@@ -81,7 +81,7 @@ input:
 			integration.StreamTestOptMaxInFlight(10),
 		)
 	})
-	t.Run("with generated suffix", func(t *testing.T) {
+	t.Run("with generated nanoid suffix", func(t *testing.T) {
 		t.Parallel()
 		suite.Run(
 			t, template,
@@ -90,6 +90,17 @@ input:
 			integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
 			integration.StreamTestOptMaxInFlight(10),
 			integration.StreamTestOptVarOne("nanoid"),
+		)
+	})
+	t.Run("with generated hostname suffix", func(t *testing.T) {
+		t.Parallel()
+		suite.Run(
+			t, template,
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
+			integration.StreamTestOptMaxInFlight(10),
+			integration.StreamTestOptVarOne("hostname"),
 		)
 	})
 })
