@@ -150,9 +150,8 @@ pipeline:
 
 ## Batch Policy
 
-When an input component has a config field `batching` that means it supports a batch policy. This is a mechanism that allows you to configure exactly how your batching should work.
+When an input or output component has a config field `batching` that means it supports a batch policy. This is a mechanism that allows you to configure exactly how your batching should work on messages before they are routed to the input or output it's associated with. Batches are considered complete and will be flushed downstream when either of the following conditions are met:
 
-Batches are considered complete and will be flushed downstream when either of the following conditions are met:
 
 - The `byte_size` field is non-zero and the total size of the batch in bytes matches or exceeds it (disregarding metadata.)
 - The `count` field is non-zero and the total number of messages in the batch matches or exceeds it.
@@ -173,6 +172,14 @@ output:
       count: 10
       period: 100ms
 ```
+
+:::caution
+A batch policy has the capability to _create_ batches, but not to break them down.
+:::
+
+If your configured pipeline is processing messages that are batched _before_ they reach the batch policy then they may circumvent the conditions you've specified here, resulting in sizes you aren't expecting.
+
+If you are affected by this limitation then consider breaking the batches down with a [`split` processor][split] before they reach the batch policy.
 
 ### Post-Batch Processing
 
