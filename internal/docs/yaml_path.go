@@ -268,7 +268,7 @@ func (f FieldSpec) YAMLLabelsToPaths(docsProvider Provider, node *yaml.Node, lab
 			for _, f := range reservedFieldsByType(coreType) {
 				coreFields = append(coreFields, f)
 			}
-			if inferred, cSpec, err := GetInferenceCandidateFromYAML(docsProvider, coreType, "", node); err == nil {
+			if inferred, cSpec, err := GetInferenceCandidateFromYAML(docsProvider, coreType, node); err == nil {
 				conf := cSpec.Config
 				conf.Name = inferred
 				coreFields = append(coreFields, conf)

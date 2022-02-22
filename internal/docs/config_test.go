@@ -12,6 +12,10 @@ import (
 
 func TestInference(t *testing.T) {
 	docsProv := docs.NewMappedDocsProvider()
+	docsProv.RegisterDocs(docs.ComponentSpec{
+		Name: "stdin",
+		Type: docs.TypeInput,
+	})
 	for _, t := range docs.Types() {
 		docsProv.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testfoo%v", string(t)),
@@ -24,9 +28,8 @@ func TestInference(t *testing.T) {
 	}
 
 	type testCase struct {
-		inputType    docs.Type
-		inputConf    interface{}
-		inputDefault string
+		inputType docs.Type
+		inputConf interface{}
 
 		res string
 		err string
@@ -38,8 +41,14 @@ func TestInference(t *testing.T) {
 			inputConf: map[string]interface{}{
 				"processors": "yep",
 			},
-			inputDefault: "testfooinput",
-			res:          "testfooinput",
+			res: "stdin",
+		},
+		{
+			inputType: docs.TypeOutput,
+			inputConf: map[string]interface{}{
+				"processors": "yep",
+			},
+			err: "an explicit output type must be specified",
 		},
 		{
 			inputType: docs.TypeOutput,
@@ -153,25 +162,25 @@ func TestInference(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		res, spec, err := docs.GetInferenceCandidate(docsProv, test.inputType, test.inputDefault, test.inputConf)
+		res, spec, err := docs.GetInferenceCandidate(docsProv, test.inputType, test.inputConf)
 		if len(test.err) > 0 {
 			assert.EqualError(t, err, test.err, "test: %v", i)
 		} else {
-			assert.Equal(t, test.res, spec.Name)
-			assert.Equal(t, test.inputType, spec.Type)
-			assert.NoError(t, err)
+			assert.Equal(t, test.res, spec.Name, "test: %v", i)
+			assert.Equal(t, test.inputType, spec.Type, "test: %v", i)
+			assert.NoError(t, err, "test: %v", i)
 			assert.Equal(t, test.res, res, "test: %v", i)
 		}
 
 		var node yaml.Node
 		require.NoError(t, node.Encode(test.inputConf))
-		res, spec, err = docs.GetInferenceCandidateFromYAML(docsProv, test.inputType, test.inputDefault, &node)
+		res, spec, err = docs.GetInferenceCandidateFromYAML(docsProv, test.inputType, &node)
 		if len(test.err) > 0 {
-			assert.Error(t, err)
+			assert.Error(t, err, "test: %v", i)
 		} else {
-			assert.Equal(t, test.res, spec.Name)
-			assert.Equal(t, test.inputType, spec.Type)
-			assert.NoError(t, err)
+			assert.Equal(t, test.res, spec.Name, "test: %v", i)
+			assert.Equal(t, test.inputType, spec.Type, "test: %v", i)
+			assert.NoError(t, err, "test: %v", i)
 			assert.Equal(t, test.res, res, "test: %v", i)
 		}
 	}

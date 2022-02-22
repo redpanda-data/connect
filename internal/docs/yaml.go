@@ -103,7 +103,7 @@ func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 // GetInferenceCandidateFromYAML checks a yaml node config structure for a
 // component and returns either the inferred type name or an error if one cannot
 // be inferred.
-func GetInferenceCandidateFromYAML(docProv Provider, t Type, defaultType string, node *yaml.Node) (string, ComponentSpec, error) {
+func GetInferenceCandidateFromYAML(docProv Provider, t Type, node *yaml.Node) (string, ComponentSpec, error) {
 	if docProv == nil {
 		docProv = globalProvider
 	}
@@ -127,7 +127,7 @@ func GetInferenceCandidateFromYAML(docProv Provider, t Type, defaultType string,
 		keys = append(keys, node.Content[i].Value)
 	}
 
-	return getInferenceCandidateFromList(docProv, t, defaultType, keys)
+	return getInferenceCandidateFromList(docProv, t, keys)
 }
 
 // GetPluginConfigYAML extracts a plugin configuration node from a component
@@ -219,7 +219,7 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 			return nil
 		}
 		var err error
-		if name, _, err = getInferenceCandidateFromList(conf, cType, "", keys); err != nil {
+		if name, _, err = getInferenceCandidateFromList(conf, cType, keys); err != nil {
 			return err
 		}
 	}
@@ -452,7 +452,7 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 			return nil
 		}
 		var err error
-		if name, _, err = getInferenceCandidateFromList(ctx.DocsProvider, cType, "", keys); err != nil {
+		if name, _, err = getInferenceCandidateFromList(ctx.DocsProvider, cType, keys); err != nil {
 			lints = append(lints, NewLintWarning(node.Line, "unable to infer component type"))
 			return lints
 		}

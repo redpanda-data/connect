@@ -88,9 +88,32 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 	return m
 }
 
+func defaultTypeByType(t Type) string {
+	switch t {
+	case TypeBuffer:
+		return "none"
+	case TypeInput:
+		return "stdin"
+	case TypeMetrics:
+		return "prometheus"
+	case TypeOutput:
+		return "stdout"
+	case TypeTracer:
+		return "none"
+	// No defaults for the following
+	case TypeCache:
+		return ""
+	case TypeProcessor:
+		return ""
+	case TypeRateLimit:
+		return ""
+	}
+	return ""
+}
+
 // GetInferenceCandidate checks a generic config structure for a component and
 // returns either the inferred type name or an error if one cannot be inferred.
-func GetInferenceCandidate(docProvider Provider, t Type, defaultType string, raw interface{}) (string, ComponentSpec, error) {
+func GetInferenceCandidate(docProvider Provider, t Type, raw interface{}) (string, ComponentSpec, error) {
 	m, ok := raw.(map[string]interface{})
 	if !ok {
 		return "", ComponentSpec{}, fmt.Errorf("invalid config value %T, expected object", raw)
@@ -109,10 +132,10 @@ func GetInferenceCandidate(docProvider Provider, t Type, defaultType string, raw
 		keys = append(keys, k)
 	}
 
-	return getInferenceCandidateFromList(docProvider, t, defaultType, keys)
+	return getInferenceCandidateFromList(docProvider, t, keys)
 }
 
-func getInferenceCandidateFromList(docProvider Provider, t Type, defaultType string, l []string) (string, ComponentSpec, error) {
+func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (string, ComponentSpec, error) {
 	ignore := reservedFieldsByType(t)
 
 	var candidates []string
@@ -136,12 +159,13 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, defaultType str
 		}
 	}
 
-	if len(candidates) == 0 && len(defaultType) > 0 {
-		// A totally empty component config results in the default.
-		// TODO: V4 Disable this and replace with a general look up like
-		// reserved fields by type.
+	if len(candidates) == 0 {
+		defaultType := defaultTypeByType(t)
 		if spec, exists := GetDocs(docProvider, defaultType, t); exists {
 			return defaultType, spec, nil
+		}
+		if inferred == "" {
+			return "", ComponentSpec{}, fmt.Errorf("an explicit %v type must be specified", string(t))
 		}
 	}
 
