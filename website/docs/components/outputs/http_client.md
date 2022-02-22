@@ -102,7 +102,7 @@ output:
     drop_on: []
     successful_on: []
     proxy_url: ""
-    batch_as_multipart: true
+    batch_as_multipart: false
     propagate_response: false
     max_in_flight: 1
     batching:
@@ -651,7 +651,7 @@ Send message batches as a single request using [RFC1341](https://www.w3.org/Prot
 
 
 Type: `bool`  
-Default: `true`  
+Default: `false`  
 
 ### `propagate_response`
 

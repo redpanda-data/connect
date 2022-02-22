@@ -16,6 +16,14 @@ https://github.com/Jeffail/benthos/issues/399
 
 In V3 the `pipeline.threads` field defaults to 1. If this field is explicitly set to `0` it will automatically match the number of CPUs on the host machine. In V4 this will change so that the default value of `pipeline.threads` is `-1`, where this value indicates we should match the number of host CPUs. A value of `0` will now throw a configuration error when set explicitly.
 
+## `http` processor and `http_client` output parallel by default
+
+The `http` processor and `http_client` output now execute message batch requests as parallel individual requests by default. This behaviour can be disabled by either explicitly sending batches as multipart requests by setting `batch_as_multipart` to `true`, or by placing the processor within a `for_each`.
+
+## `aws_lambda` processor parallel by default
+
+The `aws_lambda` processor now executes message batch requests in parallel. This can be disabled by placing the processor within a `for_each`.
+
 ## Processor Batch Behaviour Changes
 
 https://github.com/Jeffail/benthos/issues/408

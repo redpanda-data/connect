@@ -51,7 +51,6 @@ pipeline:
             - bloblang: 'root = ""'
             - try:
               - http:
-                  parallel: true
                   url: https://api.github.com/repos/Jeffail/benthos/releases/latest
                   verb: GET
               - bloblang: 'root = "The latest release of Benthos is %v: %v".format(this.tag_name, this.html_url)'

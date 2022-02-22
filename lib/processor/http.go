@@ -37,11 +37,6 @@ func init() {
 Performs an HTTP request using a message batch as the request body, and replaces
 the original message parts with the body of the response.`,
 		Description: `
-If a processed message batch contains more than one message they will be sent in
-a single request as a [multipart message](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
-Alternatively, message batches can be sent in parallel by setting the field
-` + "`parallel` to `true`" + `.
-
 The ` + "`rate_limit`" + ` field can be used to specify a rate limit
 [resource](/docs/components/rate_limits/about) to cap the rate of requests
 across all parallel components service wide.
@@ -80,7 +75,8 @@ attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](/docs/configuration/error_handling).`,
 		config: ihttpdocs.ClientFieldSpec(false,
-			docs.FieldBool("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request.").HasDefault(false)),
+			docs.FieldBool("batch_as_multipart", "Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).").Advanced().HasDefault(false),
+			docs.FieldBool("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent serially.").HasDefault(false).Deprecated()),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "Branched Request",
@@ -106,15 +102,17 @@ pipeline:
 
 // HTTPConfig contains configuration fields for the HTTP processor.
 type HTTPConfig struct {
-	Parallel      bool `json:"parallel" yaml:"parallel"`
-	client.Config `json:",inline" yaml:",inline"`
+	BatchAsMultipart bool `json:"batch_as_multipart" yaml:"batch_as_multipart"`
+	Parallel         bool `json:"parallel" yaml:"parallel"`
+	client.Config    `json:",inline" yaml:",inline"`
 }
 
 // NewHTTPConfig returns a HTTPConfig with default values.
 func NewHTTPConfig() HTTPConfig {
 	return HTTPConfig{
-		Parallel: false,
-		Config:   client.NewConfig(),
+		BatchAsMultipart: false,
+		Parallel:         false,
+		Config:           client.NewConfig(),
 	}
 }
 
@@ -131,8 +129,9 @@ func newHTTPProc(conf HTTPConfig, mgr interop.Manager) (processor.V2Batched, err
 	g := &httpProc{
 		rawURL:   conf.URL,
 		log:      mgr.Logger(),
-		parallel: conf.Parallel,
+		parallel: conf.Parallel || !conf.BatchAsMultipart,
 	}
+
 	var err error
 	if g.client, err = http.NewClient(
 		conf.Config,

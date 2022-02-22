@@ -34,7 +34,6 @@ Introduced in version 3.36.0.
 # Common config fields, showing default values
 label: ""
 aws_lambda:
-  parallel: false
   function: ""
 ```
 
@@ -45,7 +44,6 @@ aws_lambda:
 # All config fields, showing default values
 label: ""
 aws_lambda:
-  parallel: false
   function: ""
   rate_limit: ""
   region: ""
@@ -64,10 +62,7 @@ aws_lambda:
 </TabItem>
 </Tabs>
 
-It is possible to perform requests per message of a batch in parallel by setting
-the `parallel` flag to `true`. The `rate_limit`
-field can be used to specify a rate limit [resource](/docs/components/rate_limits/about)
-to cap the rate of requests across parallel components service wide.
+The `rate_limit` field can be used to specify a rate limit [resource](/docs/components/rate_limits/about) to cap the rate of requests across parallel components service wide.
 
 In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
@@ -135,14 +130,6 @@ pipeline:
 </Tabs>
 
 ## Fields
-
-### `parallel`
-
-Whether messages of a batch should be dispatched in parallel.
-
-
-Type: `bool`  
-Default: `false`  
 
 ### `function`
 

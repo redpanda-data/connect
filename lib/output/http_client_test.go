@@ -44,6 +44,7 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = TypeHTTPClient
+	conf.HTTPClient.BatchAsMultipart = true
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 
 	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())

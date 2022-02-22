@@ -42,8 +42,8 @@ type HTTPClientConfig struct {
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
 		Config:            client.NewConfig(),
-		BatchAsMultipart:  true, // TODO: V4 Set false by default.
-		MaxInFlight:       1,    // TODO: Increase this default?
+		BatchAsMultipart:  false,
+		MaxInFlight:       1, // TODO: Increase this default?
 		PropagateResponse: false,
 		Batching:          batch.NewPolicyConfig(),
 	}

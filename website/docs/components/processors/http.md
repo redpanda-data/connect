@@ -37,7 +37,6 @@ http:
     Content-Type: application/octet-stream
   rate_limit: ""
   timeout: 5s
-  parallel: false
 ```
 
 </TabItem>
@@ -96,16 +95,11 @@ http:
   drop_on: []
   successful_on: []
   proxy_url: ""
-  parallel: false
+  batch_as_multipart: false
 ```
 
 </TabItem>
 </Tabs>
-
-If a processed message batch contains more than one message they will be sent in
-a single request as a [multipart message](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
-Alternatively, message batches can be sent in parallel by setting the field
-`parallel` to `true`.
 
 The `rate_limit` field can be used to specify a rate limit
 [resource](/docs/components/rate_limits/about) to cap the rate of requests
@@ -670,9 +664,9 @@ An optional HTTP proxy URL.
 Type: `string`  
 Default: `""`  
 
-### `parallel`
+### `batch_as_multipart`
 
-When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request.
+Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
 
 
 Type: `bool`  

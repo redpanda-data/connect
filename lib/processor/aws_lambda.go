@@ -34,10 +34,7 @@ Invokes an AWS lambda for each message. The contents of the message is the
 payload of the request, and the result of the invocation will become the new
 contents of the message.`,
 		Description: `
-It is possible to perform requests per message of a batch in parallel by setting
-the ` + "`parallel`" + ` flag to ` + "`true`" + `. The ` + "`rate_limit`" + `
-field can be used to specify a rate limit [resource](/docs/components/rate_limits/about)
-to cap the rate of requests across parallel components service wide.
+The ` + "`rate_limit`" + ` field can be used to specify a rate limit [resource](/docs/components/rate_limits/about) to cap the rate of requests across parallel components service wide.
 
 In order to map or encode the payload to a specific request body, and map the
 response back into the original payload instead of replacing it entirely, you
@@ -80,7 +77,7 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/cloud/aws).`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("parallel", "Whether messages of a batch should be dispatched in parallel."),
+			docs.FieldDeprecated("parallel", "Whether messages of a batch should be dispatched in parallel.").HasDefault(true),
 		}.Merge(client.FieldSpecs()),
 		Examples: []docs.AnnotatedExample{
 			{
@@ -113,7 +110,7 @@ type LambdaConfig struct {
 func NewLambdaConfig() LambdaConfig {
 	return LambdaConfig{
 		Config:   client.NewConfig(),
-		Parallel: false,
+		Parallel: true,
 	}
 }
 

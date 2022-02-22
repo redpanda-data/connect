@@ -76,7 +76,6 @@ pipeline:
         request_map: 'root.text = this.article.content'
         processors:
           - http:
-              parallel: true
               url: http://localhost:4197/claims
               verb: POST
         result_map: 'root.tmp.claims = this.claims'
@@ -201,7 +200,6 @@ pipeline:
           root.hyperbole_rank = this.tmp.hyperbole_rank
         processors:
           - http:
-              parallel: true
               url: http://localhost:4199/fakenews
               verb: POST
         result_map: 'root.article.fake_news_score = this.fake_news_rank'
@@ -266,7 +264,6 @@ pipeline:
             request_map: 'root.text = this.article.content'
             processors:
               - http:
-                  parallel: true
                   url: http://localhost:4197/claims
                   verb: POST
             result_map: 'root.tmp.claims = this.claims'
@@ -290,7 +287,6 @@ pipeline:
               root.hyperbole_rank = this.tmp.hyperbole_rank
             processors:
               - http:
-                  parallel: true
                   url: http://localhost:4199/fakenews
                   verb: POST
             result_map: 'root.article.fake_news_score = this.fake_news_rank'
