@@ -19,7 +19,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 )
 
 // AzureQueueStorage is a benthos reader.Type implementation that reads messages
@@ -36,7 +35,7 @@ type azureQueueStorage struct {
 }
 
 // newAzureQueueStorage creates a new Azure Storage Queue input type.
-func newAzureQueueStorage(conf AzureQueueStorageConfig, mgr types.Manager, log log.Modular, stats metrics.Type) (*azureQueueStorage, error) {
+func newAzureQueueStorage(conf AzureQueueStorageConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*azureQueueStorage, error) {
 	serviceURL, err := azure.GetQueueServiceURL(conf.StorageAccount, conf.StorageAccessKey, conf.StorageConnectionString)
 	if err != nil {
 		return nil, err
@@ -49,7 +48,7 @@ func newAzureQueueStorage(conf AzureQueueStorageConfig, mgr types.Manager, log l
 		serviceURL: serviceURL,
 	}
 
-	if a.queueName, err = interop.NewBloblangField(mgr, conf.QueueName); err != nil {
+	if a.queueName, err = mgr.BloblEnvironment().NewField(conf.QueueName); err != nil {
 		return nil, fmt.Errorf("failed to parse queue name expression: %v", err)
 	}
 

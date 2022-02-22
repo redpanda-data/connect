@@ -120,7 +120,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 queue_name: foo_queue
