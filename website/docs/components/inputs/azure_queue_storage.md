@@ -113,11 +113,18 @@ Default: `""`
 
 ### `queue_name`
 
-The name of the target Storage queue.
+The name of the source storage queue.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 Default: `""`  
+
+```yaml
+# Examples
+
+queue_name: ${! "${MESSAGE_TYPE}".lowercase() }
+```
 
 ### `dequeue_visibility_timeout`
 

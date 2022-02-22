@@ -64,7 +64,7 @@ func NewAzureQueueStorageV2(
 	}
 
 	if s.queueName, err = interop.NewBloblangField(mgr, conf.QueueName); err != nil {
-		return nil, fmt.Errorf("failed to parse table name expression: %v", err)
+		return nil, fmt.Errorf("failed to parse queue name expression: %v", err)
 	}
 
 	return s, nil

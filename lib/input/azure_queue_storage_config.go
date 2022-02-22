@@ -10,7 +10,7 @@ import (
 func init() {
 	Constructors[TypeAzureQueueStorage] = TypeSpec{
 		constructor: fromSimpleConstructor(func(conf Config, mgr types.Manager, log log.Modular, stats metrics.Type) (Type, error) {
-			r, err := newAzureQueueStorage(conf.AzureQueueStorage, log, stats)
+			r, err := newAzureQueueStorage(conf.AzureQueueStorage, mgr, log, stats)
 			if err != nil {
 				return nil, err
 			}
@@ -51,8 +51,8 @@ Only one authentication method is required, ` + "`storage_connection_string`" + 
 				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.",
 			),
 			docs.FieldCommon(
-				"queue_name", "The name of the target Storage queue.",
-			),
+				"queue_name", "The name of the source storage queue.", `${! "${MESSAGE_TYPE}".lowercase() }`,
+			).IsInterpolated(),
 			docs.FieldAdvanced(
 				"dequeue_visibility_timeout", "The timeout duration until a dequeued message gets visible again, 30s by default",
 			).AtVersion("3.45.0"),
