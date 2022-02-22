@@ -123,7 +123,9 @@ Default: `""`
 ```yaml
 # Examples
 
-queue_name: ${! "${MESSAGE_TYPE}".lowercase() }
+queue_name: foo_queue
+
+queue_name: ${! env("MESSAGE_TYPE").lowercase() }
 ```
 
 ### `dequeue_visibility_timeout`

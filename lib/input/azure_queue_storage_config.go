@@ -51,7 +51,7 @@ Only one authentication method is required, ` + "`storage_connection_string`" + 
 				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.",
 			),
 			docs.FieldCommon(
-				"queue_name", "The name of the source storage queue.", `${! "${MESSAGE_TYPE}".lowercase() }`,
+				"queue_name", "The name of the source storage queue.", "foo_queue", `${! env("MESSAGE_TYPE").lowercase() }`,
 			).IsInterpolated(),
 			docs.FieldAdvanced(
 				"dequeue_visibility_timeout", "The timeout duration until a dequeued message gets visible again, 30s by default",

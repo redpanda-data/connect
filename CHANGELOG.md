@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `gcp_bigquery_select` processor.
 - New `assign` bloblang method.
 - The `protobuf` processor now supports `Any` fields in protobuf definitions.
+- The `azure_queue_storage` input field `queue_name` now supports interpolation functions.
 
 ### Fixed
 
