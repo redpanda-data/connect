@@ -141,7 +141,8 @@ func TestTypeAPIDisabled(t *testing.T) {
 		manager.OptSetAPITimeout(time.Millisecond*100),
 		manager.OptAPIEnabled(false),
 	)
-	assert.Empty(t, r.endpoints)
+	assert.Len(t, r.endpoints, 1)
+	assert.Contains(t, r.endpoints, "/ready")
 }
 
 func TestTypeAPIBadMethods(t *testing.T) {

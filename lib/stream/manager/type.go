@@ -122,9 +122,7 @@ func New(opts ...func(*Type)) *Type {
 	for _, opt := range opts {
 		opt(t)
 	}
-	if t.apiEnabled {
-		t.registerEndpoints()
-	}
+	t.registerEndpoints(t.apiEnabled)
 	return t
 }
 

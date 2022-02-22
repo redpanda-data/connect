@@ -30,7 +30,15 @@ import (
 
 //------------------------------------------------------------------------------
 
-func (m *Type) registerEndpoints() {
+func (m *Type) registerEndpoints(enableCrud bool) {
+	m.manager.RegisterEndpoint(
+		"/ready",
+		"Returns 200 OK if the inputs and outputs of all running streams are connected, otherwise a 503 is returned. If there are no active streams 200 is returned.",
+		m.HandleStreamReady,
+	)
+	if !enableCrud {
+		return
+	}
 	m.manager.RegisterEndpoint(
 		"/streams",
 		"GET: List all streams along with their status and uptimes."+
@@ -54,11 +62,6 @@ func (m *Type) registerEndpoints() {
 		"/resources/{type}/{id}",
 		"POST: Create or replace a given resource configuration of a specified type. Types supported are `cache`, `input`, `output`, `processor` and `rate_limit`.",
 		m.HandleResourceCRUD,
-	)
-	m.manager.RegisterEndpoint(
-		"/ready",
-		"Returns 200 OK if the inputs and outputs of all running streams are connected, otherwise a 503 is returned. If there are no active streams 200 is returned.",
-		m.HandleStreamReady,
 	)
 }
 
