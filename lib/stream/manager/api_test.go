@@ -132,9 +132,12 @@ func TestTypeAPIDisabled(t *testing.T) {
 		manager.OptSetAPITimeout(time.Millisecond*100),
 		manager.OptAPIEnabled(true),
 	)
-	assert.NotEmpty(t, r.endpoints)
+	assert.Greater(t, len(r.endpoints), 1)
 
 	r = &endpointReg{endpoints: map[string]http.HandlerFunc{}}
+	rMgr, err = bmanager.NewV2(bmanager.NewResourceConfig(), r, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
 	_ = manager.New(rMgr,
 		manager.OptSetAPITimeout(time.Millisecond*100),
 		manager.OptAPIEnabled(false),
