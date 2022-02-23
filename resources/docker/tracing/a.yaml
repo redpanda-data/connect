@@ -29,6 +29,5 @@ output:
 tracer:
   jaeger:
     agent_address: 'localhost:6831'
-    service_name: benthos_a
     tags:
       pipeline: my_tracing_example

@@ -9,6 +9,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+const (
+	name = "benthos"
+)
+
 // GetSpan returns a span attached to a message part. Returns nil if the part
 // doesn't have a span attached.
 func GetSpan(p *message.Part) *Span {
@@ -25,10 +29,10 @@ func GetSpan(p *message.Part) *Span {
 func CreateChildSpan(operationName string, part *message.Part) *Span {
 	span := GetSpan(part)
 	if span == nil {
-		ctx, t := otel.GetTracerProvider().Tracer("benthos").Start(context.Background(), operationName)
+		ctx, t := otel.GetTracerProvider().Tracer(name).Start(context.Background(), operationName)
 		span = otelSpan(ctx, t)
 	} else {
-		ctx, t := otel.GetTracerProvider().Tracer("benthos").Start(span.ctx, operationName)
+		ctx, t := otel.GetTracerProvider().Tracer(name).Start(span.ctx, operationName)
 		span = otelSpan(ctx, t)
 	}
 	return span
@@ -88,10 +92,10 @@ func WithSiblingSpans(operationName string, msg *message.Batch) *message.Batch {
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		otSpan := GetSpan(part)
 		if otSpan == nil {
-			ctx, t := otel.GetTracerProvider().Tracer("benthos").Start(context.Background(), operationName)
+			ctx, t := otel.GetTracerProvider().Tracer(name).Start(context.Background(), operationName)
 			otSpan = otelSpan(ctx, t)
 		} else {
-			ctx, t := otel.GetTracerProvider().Tracer("benthos").Start(
+			ctx, t := otel.GetTracerProvider().Tracer(name).Start(
 				context.Background(), operationName,
 				trace.WithLinks(trace.LinkFromContext(otSpan.ctx)),
 			)
@@ -137,7 +141,7 @@ func InitSpan(operationName string, part *message.Part) *message.Part {
 	if GetSpan(part) != nil {
 		return part
 	}
-	ctx, _ := otel.GetTracerProvider().Tracer("benthos").Start(context.Background(), operationName)
+	ctx, _ := otel.GetTracerProvider().Tracer(name).Start(context.Background(), operationName)
 	return message.WithContext(ctx, part)
 }
 
@@ -158,7 +162,7 @@ func InitSpanFromParent(operationName string, parent *Span, part *message.Part) 
 	if GetSpan(part) != nil {
 		return part
 	}
-	ctx, _ := otel.GetTracerProvider().Tracer("benthos").Start(parent.ctx, operationName)
+	ctx, _ := otel.GetTracerProvider().Tracer(name).Start(parent.ctx, operationName)
 	return message.WithContext(ctx, part)
 }
 
@@ -176,7 +180,7 @@ func InitSpansFromParentTextMap(operationName string, textMapGeneric map[string]
 
 	tracedParts := make([]*message.Part, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		pCtx, _ := otel.GetTracerProvider().Tracer("benthos").Start(ctx, operationName)
+		pCtx, _ := otel.GetTracerProvider().Tracer(name).Start(ctx, operationName)
 		tracedParts[i] = message.WithContext(pCtx, p)
 		return nil
 	})
