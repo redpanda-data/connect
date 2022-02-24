@@ -7,13 +7,12 @@ import (
 	"sort"
 	"strings"
 
+	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/fatih/color"
 	yaml "gopkg.in/yaml.v3"
 )
-
-//------------------------------------------------------------------------------
 
 var green = color.New(color.FgGreen).SprintFunc()
 var red = color.New(color.FgRed).SprintFunc()
@@ -64,59 +63,25 @@ func getDefinition(targetPath, definitionPath string) (*Definition, error) {
 
 // GetTestTargets searches for test definition targets in a path with a given
 // test suffix.
-func GetTestTargets(targetPath, testSuffix string, recurse bool) (map[string]Definition, error) {
-	targetPath = filepath.Clean(targetPath)
-	info, err := os.Stat(targetPath)
+func GetTestTargets(targetPaths []string, testSuffix string) (map[string]Definition, error) {
+	targetPaths, err := ifilepath.GlobsAndSuperPaths(targetPaths, "yaml", "yml")
 	if err != nil {
 		return nil, err
 	}
-	if !info.IsDir() {
-		configPath, definitionPath := GetPathPair(targetPath, testSuffix)
+
+	targetDefinitions := map[string]Definition{}
+	for _, tPath := range targetPaths {
+		configPath, definitionPath := GetPathPair(tPath, testSuffix)
 		def, err := getDefinition(configPath, definitionPath)
 		if err != nil {
 			return nil, err
 		}
 		if len(def.Cases) == 0 {
-			return nil, fmt.Errorf("no tests found for %v", configPath)
+			continue
 		}
-		return map[string]Definition{
-			configPath: *def,
-		}, nil
+		targetDefinitions[filepath.Clean(configPath)] = *def
 	}
-
-	pathMap := map[string]Definition{}
-	err = filepath.Walk(targetPath, func(path string, info os.FileInfo, werr error) error {
-		if werr != nil {
-			return werr
-		}
-		if info.IsDir() {
-			if recurse || path == targetPath {
-				return nil
-			}
-			return filepath.SkipDir
-		}
-		configPath, definitionPath := GetPathPair(path, testSuffix)
-		if _, exists := pathMap[configPath]; exists {
-			return nil
-		}
-		def, err := getDefinition(configPath, definitionPath)
-		if err != nil {
-			return err
-		}
-		pathMap[configPath] = *def
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Tests without cases are skipped.
-	for k, v := range pathMap {
-		if len(v.Cases) == 0 {
-			delete(pathMap, k)
-		}
-	}
-	return pathMap, nil
+	return targetDefinitions, nil
 }
 
 // Lints the config target of a test definition and either returns linting
@@ -132,19 +97,6 @@ func lintTarget(path, testSuffix string) ([]string, error) {
 }
 
 //------------------------------------------------------------------------------
-
-func resolveTestPath(path string) (string, bool) {
-	recurse := false
-	if path == "./..." || path == "..." {
-		recurse = true
-		path = "."
-	}
-	if strings.HasSuffix(path, "/...") {
-		recurse = true
-		path = strings.TrimSuffix(path, "/...")
-	}
-	return path, recurse
-}
 
 // Run executes the test command for a specified path. The path can either be a
 // config file, a config files test definition file, a directory, or the
@@ -168,21 +120,11 @@ func RunAllWithLogger(paths []string, testSuffix string, lint bool, logger log.M
 }
 
 func runAll(paths []string, testSuffix string, lint bool, logger log.Modular, resourcesPaths []string) bool {
-	targets := map[string]Definition{}
-
-	for _, path := range paths {
-		var recurse bool
-		path, recurse = resolveTestPath(path)
-		lTargets, err := GetTestTargets(path, testSuffix, recurse)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to obtain test targets: %v\n", err)
-			return false
-		}
-		for k, v := range lTargets {
-			targets[k] = v
-		}
+	targets, err := GetTestTargets(paths, testSuffix)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to obtain test targets: %v\n", err)
+		return false
 	}
-
 	if len(targets) == 0 {
 		fmt.Printf("%v\n", yellow("No tests were found"))
 		return false
@@ -201,7 +143,6 @@ func runAll(paths []string, testSuffix string, lint bool, logger log.Modular, re
 	}
 	sort.Strings(targetPaths)
 
-	var err error
 	for _, target := range targetPaths {
 		var lints []string
 		var failCases []CaseFailure
@@ -257,5 +198,3 @@ func runAll(paths []string, testSuffix string, lint bool, logger log.Modular, re
 	}
 	return true
 }
-
-//------------------------------------------------------------------------------

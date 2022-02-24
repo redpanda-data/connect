@@ -1,11 +1,62 @@
 package filepath
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 )
+
+// GlobsAndSuperPaths attempts to expand a list of paths, which may include glob
+// patterns and super paths (the ... thing) to a list of explicit file paths.
+// Extensions must be provided, and limit the file types that are captured with
+// a super path.
+func GlobsAndSuperPaths(paths []string, extensions ...string) ([]string, error) {
+	if len(extensions) == 0 {
+		return nil, errors.New("must specify at least one extension for super paths")
+	}
+
+	var superPaths, skippedPaths []string
+	for _, p := range paths {
+		if strings.HasSuffix(p, "...") {
+			if p == "./..." || p == "..." {
+				p = "."
+			} else {
+				p = strings.TrimSuffix(p, "/...")
+			}
+			if err := filepath.Walk(p, func(path string, info os.FileInfo, werr error) error {
+				if werr != nil {
+					return werr
+				}
+				if info.IsDir() {
+					return nil
+				}
+				for _, ext := range extensions {
+					if strings.HasSuffix(path, ext) {
+						superPaths = append(superPaths, path)
+						return nil
+					}
+				}
+				return nil
+			}); err != nil {
+				return nil, err
+			}
+		} else {
+			skippedPaths = append(skippedPaths, p)
+		}
+	}
+
+	resultPaths := append([]string{}, superPaths...)
+	if len(skippedPaths) > 0 {
+		globPaths, err := Globs(skippedPaths)
+		if err != nil {
+			return nil, err
+		}
+		resultPaths = append(resultPaths, globPaths...)
+	}
+	return resultPaths, nil
+}
 
 // hasMeta reports whether path contains any of the magic characters
 // recognized by Match.

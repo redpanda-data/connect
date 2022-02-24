@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
@@ -19,19 +19,6 @@ import (
 
 var red = color.New(color.FgRed).SprintFunc()
 var yellow = color.New(color.FgYellow).SprintFunc()
-
-func resolveLintPath(path string) (string, bool) {
-	recurse := false
-	if path == "./..." || path == "..." {
-		recurse = true
-		path = "."
-	}
-	if strings.HasSuffix(path, "/...") {
-		recurse = true
-		path = strings.TrimSuffix(path, "/...")
-	}
-	return path, recurse
-}
 
 type pathLint struct {
 	source string
@@ -151,30 +138,10 @@ files with the .yaml or .yml extension.`[1:],
 			},
 		},
 		Action: func(c *cli.Context) error {
-			var targets []string
-			for _, p := range c.Args().Slice() {
-				var recurse bool
-				// TODO: V4 support wildcards
-				if p, recurse = resolveLintPath(p); recurse {
-					if err := filepath.Walk(p, func(path string, info os.FileInfo, werr error) error {
-						if werr != nil {
-							return werr
-						}
-						if info.IsDir() {
-							return nil
-						}
-						if strings.HasSuffix(path, ".yaml") ||
-							strings.HasSuffix(path, ".yml") {
-							targets = append(targets, path)
-						}
-						return nil
-					}); err != nil {
-						fmt.Fprintf(os.Stderr, "Filesystem walk error: %v\n", err)
-						os.Exit(1)
-					}
-				} else {
-					targets = append(targets, p)
-				}
+			targets, err := ifilepath.GlobsAndSuperPaths(c.Args().Slice(), "yaml", "yml")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Lint paths error: %v\n", err)
+				os.Exit(1)
 			}
 			if conf := c.String("config"); len(conf) > 0 {
 				targets = append(targets, conf)

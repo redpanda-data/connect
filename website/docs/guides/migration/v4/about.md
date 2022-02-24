@@ -104,7 +104,7 @@ It is now possible to reference the `root` of the document being created within 
 
 All caches that support retries have had their retry/backoff configuration fields modified in order to be more consistent. The new common format is:
 
-```yaml
+```yml
 retries:
   initial_interval: 1s
   max_interval: 5s
@@ -138,12 +138,13 @@ The default output of the serverless distribution of Benthos is now the followin
 ```yaml
 output:
   switch:
+    retry_until_success: false
     cases:
       - check: !errored()
         output:
           sync_response: {}
       - output:
-          nack: "processing failed due to: ${! error() }"
+          reject: "processing failed due to: ${! error() }"
 ```
 
 This change was made in order to return processing errors directly to the invoker by default.

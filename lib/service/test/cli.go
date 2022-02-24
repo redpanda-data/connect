@@ -19,17 +19,12 @@ Execute any number of Benthos unit test definitions. If one or more tests
 fail the process will report the errors and exit with a status code 1.
 
   benthos test ./path/to/configs/...
-  benthos test ./foo_configs ./bar_configs
+  benthos test ./foo_configs/*.yaml ./bar_configs/*.yaml
   benthos test ./foo.yaml
 
 For more information check out the docs at:
 https://benthos.dev/docs/configuration/unit_testing`[1:],
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:  "generate",
-				Value: false,
-				Usage: "instead of testing, detect untested Benthos configs and generate test definitions for them.",
-			},
 			&cli.StringFlag{
 				Name:  "log",
 				Value: "",
@@ -37,15 +32,6 @@ https://benthos.dev/docs/configuration/unit_testing`[1:],
 			},
 		},
 		Action: func(c *cli.Context) error {
-			if c.Bool("generate") {
-				if err := GenerateAll(
-					c.Args().Slice(), testSuffix,
-				); err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to generate config tests: %v\n", err)
-					os.Exit(1)
-				}
-				os.Exit(0)
-			}
 			if len(c.StringSlice("set")) > 0 {
 				fmt.Fprintln(os.Stderr, "Cannot override fields with --set (-s) during unit tests")
 				os.Exit(1)
