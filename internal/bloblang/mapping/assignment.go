@@ -7,17 +7,22 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/gabs/v2"
 )
 
 //------------------------------------------------------------------------------
 
+type metaMsg interface {
+	MetaSet(key, value string)
+	MetaDelete(key string)
+	MetaIter(f func(k, v string) error) error
+}
+
 // AssignmentContext contains references to all potential assignment
 // destinations of a given mapping.
 type AssignmentContext struct {
 	Vars  map[string]interface{}
-	Msg   *message.Part
+	Meta  metaMsg
 	Value *interface{}
 }
 
@@ -76,24 +81,24 @@ func NewMetaAssignment(key *string) *MetaAssignment {
 
 // Apply a value to a metadata key.
 func (m *MetaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
-	if ctx.Msg == nil {
+	if ctx.Meta == nil {
 		return errors.New("unable to assign metadata in the current context")
 	}
 	_, deleted := value.(query.Delete)
 	if m.key == nil {
 		if deleted {
-			_ = ctx.Msg.MetaIter(func(k, _ string) error {
-				ctx.Msg.MetaDelete(k)
+			_ = ctx.Meta.MetaIter(func(k, _ string) error {
+				ctx.Meta.MetaDelete(k)
 				return nil
 			})
 		} else {
 			if m, ok := value.(map[string]interface{}); ok {
-				_ = ctx.Msg.MetaIter(func(k, _ string) error {
-					ctx.Msg.MetaDelete(k)
+				_ = ctx.Meta.MetaIter(func(k, _ string) error {
+					ctx.Meta.MetaDelete(k)
 					return nil
 				})
 				for k, v := range m {
-					ctx.Msg.MetaSet(k, query.IToString(v))
+					ctx.Meta.MetaSet(k, query.IToString(v))
 				}
 			} else {
 				return fmt.Errorf("setting root meta object requires object value, received: %T", value)
@@ -102,9 +107,9 @@ func (m *MetaAssignment) Apply(value interface{}, ctx AssignmentContext) error {
 		return nil
 	}
 	if deleted {
-		ctx.Msg.MetaDelete(*m.key)
+		ctx.Meta.MetaDelete(*m.key)
 	} else {
-		ctx.Msg.MetaSet(*m.key, query.IToString(value))
+		ctx.Meta.MetaSet(*m.key, query.IToString(value))
 	}
 	return nil
 }

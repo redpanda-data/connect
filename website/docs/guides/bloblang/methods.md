@@ -383,7 +383,7 @@ root.quoted = this.thing.quote()
 # Out: {"quoted":"\"foo\\nbar\""}
 ```
 
-### `replace`
+### `replace_all`
 
 Replaces all occurrences of the first argument in a target string with the second argument.
 
@@ -396,15 +396,15 @@ Replaces all occurrences of the first argument in a target string with the secon
 
 
 ```coffee
-root.new_value = this.value.replace("foo","dog")
+root.new_value = this.value.replace_all("foo","dog")
 
 # In:  {"value":"The foo ate my homework"}
 # Out: {"new_value":"The dog ate my homework"}
 ```
 
-### `replace_many`
+### `replace_all_many`
 
-For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.
+For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace_all` methods.
 
 #### Parameters
 
@@ -414,7 +414,7 @@ For each pair of strings in an argument array, replaces all occurrences of the f
 
 
 ```coffee
-root.new_value = this.value.replace_many([
+root.new_value = this.value.replace_all_many([
   "<b>", "&lt;b&gt;",
   "</b>", "&lt;/b&gt;",
   "<i>", "&lt;i&gt;",
@@ -705,7 +705,7 @@ root.matches = this.value.re_match("[0-9]")
 # Out: {"matches":false}
 ```
 
-### `re_replace`
+### `re_replace_all`
 
 Replaces all occurrences of the argument regular expression in a string with a value. Inside the value $ signs are interpreted as submatch expansions, e.g. `$1` represents the text of the first submatch.
 
@@ -718,7 +718,7 @@ Replaces all occurrences of the argument regular expression in a string with a v
 
 
 ```coffee
-root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")
+root.new_value = this.value.re_replace_all("ADD ([0-9]+)","+($1)")
 
 # In:  {"value":"foo ADD 70"}
 # Out: {"new_value":"foo +(70)"}
@@ -2245,35 +2245,6 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 #### Parameters
 
 **`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
-
-## Deprecated
-
-### `parse_timestamp_unix`
-
-Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.
-
-#### Parameters
-
-**`format`** &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; An optional format to use.  
-
-#### Examples
-
-
-```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()
-
-# In:  {"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}
-# Out: {"doc":{"timestamp":1597405526}}
-```
-
-An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
-
-```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")
-
-# In:  {"doc":{"timestamp":"2020-Aug-14"}}
-# Out: {"doc":{"timestamp":1597363200}}
-```
 
 [field_paths]: /docs/configuration/field_paths
 [methods.encode]: #encode

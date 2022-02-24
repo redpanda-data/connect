@@ -49,6 +49,14 @@ type MessageBatch interface {
 	Len() int
 }
 
+// MetaMsg provides access to the metadata of a message.
+type MetaMsg interface {
+	MetaSet(key, value string)
+	MetaGet(key string) string
+	MetaDelete(key string)
+	MetaIter(f func(k, v string) error) error
+}
+
 // FunctionContext provides access to a range of query targets for functions to
 // reference.
 type FunctionContext struct {
@@ -59,7 +67,8 @@ type FunctionContext struct {
 	Legacy   bool
 
 	// Reference new message being mapped
-	NewMsg *message.Part
+	NewMeta  MetaMsg
+	NewValue *interface{}
 
 	valueFn    func() *interface{}
 	value      *interface{}

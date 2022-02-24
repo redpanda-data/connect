@@ -172,7 +172,8 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 			Vars:     vars,
 			Index:    index,
 			MsgBatch: reference,
-			NewMsg:   newPart,
+			NewMeta:  newPart,
+			NewValue: &newValue,
 		}.WithValueFunc(lazyValue))
 		if err != nil {
 			var line int
@@ -190,7 +191,7 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 		}
 		if err = stmt.assignment.Apply(res, AssignmentContext{
 			Vars:  vars,
-			Msg:   newPart,
+			Meta:  newPart,
 			Value: &newValue,
 		}); err != nil {
 			var line int
@@ -256,6 +257,8 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 	}
 
 	var newObj interface{} = query.Nothing(nil)
+	ctx.NewValue = &newObj
+
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(ctx)
 		if err != nil {

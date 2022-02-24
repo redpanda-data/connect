@@ -102,10 +102,10 @@ mapping: |
 
 metrics_mapping: |
   root = match this {
-    this.has_suffix("processor.7.count") => this.replace("processor.7.count", "count"),
-    this.has_suffix("processor.3.client.error") => this.replace("processor.3.client.error", "error"),
+    this.has_suffix("processor.7.count") => this.replace_all("processor.7.count", "count"),
+    this.has_suffix("processor.3.client.error") => this.replace_all("processor.3.client.error", "error"),
     this.contains("processor.3.client.error") => deleted(), # Ignore more specialized client errors
-    this.contains("processor.3.client") => this.replace("processor.3.client", "request"),
+    this.contains("processor.3.client") => this.replace_all("processor.3.client", "request"),
     _ => deleted(),
   }
 

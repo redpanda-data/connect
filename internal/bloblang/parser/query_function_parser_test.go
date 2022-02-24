@@ -3,7 +3,6 @@ package parser
 import (
 	"os"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -224,7 +223,7 @@ bar""")`,
 		},
 		"metadata 2": {
 			input:  `meta("bar")`,
-			output: "",
+			output: "null",
 			messages: []easyMsg{
 				{
 					meta: map[string]string{
@@ -278,7 +277,7 @@ bar""")`,
 		},
 		"metadata 6": {
 			input:  `meta("foo")`,
-			output: ``,
+			output: `null`,
 			index:  1,
 			messages: []easyMsg{
 				{
@@ -329,7 +328,7 @@ bar""")`,
 		},
 		"error function 2": {
 			input:  `error().from(1)`,
-			output: ``,
+			output: `null`,
 			messages: []easyMsg{
 				{meta: map[string]string{
 					imessage.FailFlagKey: "test error",
@@ -806,38 +805,5 @@ func TestTimestamps(t *testing.T) {
 
 	if tThen.Sub(now).Seconds() > 5.0 {
 		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
-	}
-
-	now = time.Now()
-	e, perr = tryParseQuery("timestamp()", false)
-	require.Nil(t, perr)
-
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
-
-	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if tThen.Sub(now).Seconds() > 5.0 {
-		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
-	}
-
-	now = time.Now()
-	e, perr = tryParseQuery("timestamp_utc()", false)
-	require.Nil(t, perr)
-
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
-
-	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if tThen.Sub(now).Seconds() > 5.0 {
-		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
-	}
-	if !strings.Contains(tStamp, "UTC") {
-		t.Errorf("Non-UTC timezone detected: %v", tStamp)
 	}
 }

@@ -94,11 +94,9 @@ https://github.com/Jeffail/benthos/issues/571
 
 The functions `meta`, `root_meta`, `error` and `env` now return `null` when the target value does not exist. This is in order to improve consistency across different functions and query types. In cases where a default empty string is preferred you can add `.or("")` onto the function. In cases where you want to throw an error when the value does not exist you can add `.not_null()` onto the function.
 
-TODO: NEEDS AN ISSUE
-
+The method `replace` has been renamed to `replace_all`.
+The method `replace_many` has been renamed to `replace_all_many`.
 The method `re_replace` has been renamed to `re_replace_all`.
-
-TODO: NEEDS AN ISSUE
 
 It is now possible to reference the `root` of the document being created within a mapping query, i.e. `root.hash = root.string().hash("xxhash64")`.
 

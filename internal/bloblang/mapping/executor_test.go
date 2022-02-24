@@ -104,8 +104,8 @@ func TestAssignments(t *testing.T) {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), initFunc("meta", "foo")),
 			),
-			input: []part{{Content: `{}`}},
-			err:   errors.New("failed assignment (line 0): metadata value 'foo' not found"),
+			input:  []part{{Content: `{}`}},
+			output: &part{Content: `{"foo":null}`},
 		},
 		"meta assignment": {
 			mapping: NewExecutor("", nil, nil,
@@ -506,7 +506,7 @@ func TestQueries(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("foo"), initFunc("meta", "foo")),
 			),
 			input: []part{{Content: `{}`}},
-			err:   errors.New("failed assignment (line 0): metadata value 'foo' not found"),
+			err:   errors.New("expected bool value, got object from mapping"),
 		},
 	}
 

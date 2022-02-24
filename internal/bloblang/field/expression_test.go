@@ -262,7 +262,7 @@ func TestExpressions(t *testing.T) {
 				}()),
 			),
 			numDyn: 1,
-			output: ``,
+			output: `null`,
 			messages: []easyMsg{
 				{content: `hello world`, meta: map[string]string{
 					"bar": "from bar",

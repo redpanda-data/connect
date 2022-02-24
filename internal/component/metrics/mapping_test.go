@@ -93,7 +93,7 @@ func TestPathMapping(t *testing.T) {
 		},
 		{
 			name:    "replace foo with bar",
-			mapping: `this.replace("foo","bar")`,
+			mapping: `this.replace_all("foo","bar")`,
 			cases: []testCase{
 				{input: "foo", output: "bar"},
 				{input: "hello foo world", output: "hello bar world"},

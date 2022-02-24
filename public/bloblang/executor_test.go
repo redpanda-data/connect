@@ -16,9 +16,9 @@ func TestExecutorQuery(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:        "no metadata get",
-			mapping:     `root = meta("foo")`,
-			errContains: "metadata value 'foo' not found",
+			name:    "no metadata get",
+			mapping: `root = meta("foo")`,
+			output:  nil,
 		},
 		{
 			name:        "no metadata set",
@@ -58,6 +58,7 @@ root = $foo`,
 				require.NoError(t, err)
 				assert.Equal(t, test.output, res)
 			} else {
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
 			}
 		})
@@ -74,9 +75,9 @@ func TestExecutorOverlay(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:        "no metadata get",
-			mapping:     `root = meta("foo")`,
-			errContains: "metadata value 'foo' not found",
+			name:    "no metadata get",
+			mapping: `root = meta("foo")`,
+			output:  nil,
 		},
 		{
 			name:        "no metadata set",

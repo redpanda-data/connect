@@ -68,6 +68,7 @@ func (e *Executor) Overlay(value interface{}, onto *interface{}) error {
 		Vars:     vars,
 		Index:    0,
 		MsgBatch: e.emptyQueryMessage,
+		NewValue: onto,
 	}.WithValue(value), mapping.AssignmentContext{
 		Vars:  vars,
 		Value: onto,

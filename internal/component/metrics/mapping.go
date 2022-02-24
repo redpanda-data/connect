@@ -59,10 +59,11 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		Maps:     m.m.Maps(),
 		Vars:     vars,
 		MsgBatch: msg,
-		NewMsg:   outPart,
+		NewMeta:  outPart,
+		NewValue: &v,
 	}.WithValue(input), mapping.AssignmentContext{
 		Vars:  vars,
-		Msg:   outPart,
+		Meta:  outPart,
 		Value: &v,
 	}); err != nil {
 		m.logger.Errorf("Failed to apply path mapping on '%v': %v\n", path, err)

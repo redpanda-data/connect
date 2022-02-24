@@ -53,7 +53,7 @@ func (q QueryResolver) ResolveString(index int, msg Message, escaped, legacy boo
 		Index:    index,
 		MsgBatch: msg,
 		Legacy:   legacy,
-		NewMsg:   msg.Get(index),
+		NewMeta:  msg.Get(index),
 	}.WithValueFunc(func() *interface{} {
 		if jObj, err := msg.Get(index).JSON(); err == nil {
 			return &jObj
@@ -71,7 +71,7 @@ func (q QueryResolver) ResolveBytes(index int, msg Message, escaped, legacy bool
 		Index:    index,
 		MsgBatch: msg,
 		Legacy:   legacy,
-		NewMsg:   msg.Get(index),
+		NewMeta:  msg.Get(index),
 	}.WithValueFunc(func() *interface{} {
 		if jObj, err := msg.Get(index).JSON(); err == nil {
 			return &jObj

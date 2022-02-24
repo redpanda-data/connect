@@ -90,9 +90,9 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"check meta function error": {
-			input: mustFunc("meta", "foo"),
-			vars:  map[string]interface{}{},
-			err:   `metadata value 'foo' not found`,
+			input:  mustFunc("meta", "foo"),
+			vars:   map[string]interface{}{},
+			output: nil,
 		},
 		"check metadata function object": {
 			input:  mustFunc("meta", "foo"),
@@ -164,7 +164,7 @@ func TestFunctions(t *testing.T) {
 					Maps:     map[string]Function{},
 					Index:    test.index,
 					MsgBatch: msg,
-					NewMsg:   msg.Get(test.index),
+					NewMeta:  msg.Get(test.index),
 				})
 				if len(test.err) > 0 {
 					require.EqualError(t, err, test.err)

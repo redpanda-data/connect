@@ -115,7 +115,7 @@ func TestBranchBasic(t *testing.T) {
 		},
 		"map error into branch": {
 			requestMap:   `root.err = error()`,
-			processorMap: `root.err = this.err.uppercase()`,
+			processorMap: `root.err = this.err.string().uppercase()`,
 			resultMap:    `root.result_err = this.err`,
 			input: []mockMsg{
 				msg(
@@ -129,7 +129,7 @@ func TestBranchBasic(t *testing.T) {
 					`{"id":0,"name":"first","result_err":"THIS IS A PRE-EXISTING FAILURE"}`,
 					FailFlagKey, "this is a pre-existing failure",
 				),
-				msg(`{"id":1,"name":"second","result_err":""}`),
+				msg(`{"id":1,"name":"second","result_err":"NULL"}`),
 			},
 		},
 		"filtered and failed mappings": {

@@ -156,9 +156,11 @@ func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutpu
 		Maps:     exec.Maps(),
 		Vars:     e.vars,
 		MsgBatch: e.msg,
+		NewMeta:  e.msg.Get(0),
+		NewValue: &result,
 	}.WithValueFunc(lazyValue), mapping.AssignmentContext{
 		Vars:  e.vars,
-		Msg:   e.msg.Get(0),
+		Meta:  e.msg.Get(0),
 		Value: &result,
 	})
 	if err != nil {

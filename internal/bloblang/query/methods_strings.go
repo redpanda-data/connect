@@ -1244,50 +1244,6 @@ var _ = registerSimpleMethod(
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
-	NewDeprecatedMethodSpec(
-		"parse_timestamp_unix", "",
-	).InCategory(
-		MethodCategoryTime,
-		"Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.",
-		NewExampleSpec("",
-			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()`,
-			`{"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}`,
-			`{"doc":{"timestamp":1597405526}}`,
-		),
-		NewExampleSpec(
-			"An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.",
-			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")`,
-			`{"doc":{"timestamp":"2020-Aug-14"}}`,
-			`{"doc":{"timestamp":1597363200}}`,
-		),
-	).Param(ParamString("format", "An optional format to use.").Default(time.RFC3339Nano)),
-	func(args *ParsedParams) (simpleMethod, error) {
-		layout, err := args.FieldString("format")
-		if err != nil {
-			return nil, err
-		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			var str string
-			switch t := v.(type) {
-			case []byte:
-				str = string(t)
-			case string:
-				str = t
-			default:
-				return nil, NewTypeError(v, ValueString)
-			}
-			ut, err := time.Parse(layout, str)
-			if err != nil {
-				return nil, err
-			}
-			return ut.Unix(), nil
-		}, nil
-	},
-)
-
-//------------------------------------------------------------------------------
-
-var _ = registerSimpleMethod(
 	NewMethodSpec(
 		"parse_timestamp", "",
 	).InCategory(
@@ -1625,13 +1581,22 @@ var _ = registerSimpleMethod(
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
+	NewHiddenMethodSpec("replace").
+		Param(ParamString("old", "A string to match against.")).
+		Param(ParamString("new", "A string to replace with.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		return nil, errors.New("the method `replace` has been renamed to `replace_all`")
+	},
+)
+
+var _ = registerSimpleMethod(
 	NewMethodSpec(
-		"replace", "",
+		"replace_all", "",
 	).InCategory(
 		MethodCategoryStrings,
 		"Replaces all occurrences of the first argument in a target string with the second argument.",
 		NewExampleSpec("",
-			`root.new_value = this.value.replace("foo","dog")`,
+			`root.new_value = this.value.replace_all("foo","dog")`,
 			`{"value":"The foo ate my homework"}`,
 			`{"new_value":"The dog ate my homework"}`,
 		),
@@ -1663,13 +1628,21 @@ var _ = registerSimpleMethod(
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
+	NewHiddenMethodSpec("replace_many").
+		Param(ParamArray("values", "An array of values, each even value will be replaced with the following odd value.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		return nil, errors.New("the method `replace_many` has been renamed to `replace_all_many`")
+	},
+)
+
+var _ = registerSimpleMethod(
 	NewMethodSpec(
-		"replace_many", "",
+		"replace_all_many", "",
 	).InCategory(
 		MethodCategoryStrings,
-		"For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.",
+		"For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace_all` methods.",
 		NewExampleSpec("",
-			`root.new_value = this.value.replace_many([
+			`root.new_value = this.value.replace_all_many([
   "<b>", "&lt;b&gt;",
   "</b>", "&lt;/b&gt;",
   "<i>", "&lt;i&gt;",
@@ -1988,15 +1961,23 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
-// TODO: V4 Rename this to `re_replace_all`
+var _ = registerSimpleMethod(
+	NewHiddenMethodSpec("re_replace").
+		Param(ParamString("pattern", "The pattern to match against.")).
+		Param(ParamString("value", "The value to replace with.")),
+	func(args *ParsedParams) (simpleMethod, error) {
+		return nil, errors.New("the method `re_replace` has been renamed to `re_replace_all`")
+	},
+)
+
 var _ = registerSimpleMethod(
 	NewMethodSpec(
-		"re_replace", "",
+		"re_replace_all", "",
 	).InCategory(
 		MethodCategoryRegexp,
 		"Replaces all occurrences of the argument regular expression in a string with a value. Inside the value $ signs are interpreted as submatch expansions, e.g. `$1` represents the text of the first submatch.",
 		NewExampleSpec("",
-			`root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")`,
+			`root.new_value = this.value.re_replace_all("ADD ([0-9]+)","+($1)")`,
 			`{"value":"foo ADD 70"}`,
 			`{"new_value":"foo +(70)"}`,
 		),

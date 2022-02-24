@@ -163,10 +163,10 @@ func TestNamespacedPrefixStaticLabels(t *testing.T) {
 func TestNamespacedPrefixStaticLabelsWithMappings(t *testing.T) {
 	prom, handler := getTestProm(t)
 
-	mappingFooToBar, err := imetrics.NewMapping(`root = this.replace("foo","bar")`, log.Noop())
+	mappingFooToBar, err := imetrics.NewMapping(`root = this.replace_all("foo","bar")`, log.Noop())
 	require.NoError(t, err)
 
-	mappingBarToBaz, err := imetrics.NewMapping(`root = this.replace("bar","baz")`, log.Noop())
+	mappingBarToBaz, err := imetrics.NewMapping(`root = this.replace_all("bar","baz")`, log.Noop())
 	require.NoError(t, err)
 
 	nm := imetrics.NewNamespaced(prom).WithLabels("static1", "svalue1")
@@ -207,14 +207,14 @@ func TestNamespacedPrefixStaticLabelsWithMappings(t *testing.T) {
 func TestNamespacedPrefixStaticLabelsWithMappingLabels(t *testing.T) {
 	prom, handler := getTestProm(t)
 
-	mappingFooToBar, err := imetrics.NewMapping(`meta = meta().map_each(kv -> kv.value.replace("value","bar"))
+	mappingFooToBar, err := imetrics.NewMapping(`meta = meta().map_each(kv -> kv.value.replace_all("value","bar"))
 meta extra1 = "extravalue1"
-root = this.replace("foo","bar")`, log.Noop())
+root = this.replace_all("foo","bar")`, log.Noop())
 	require.NoError(t, err)
 
-	mappingBarToBaz, err := imetrics.NewMapping(`meta = meta().map_each(kv -> kv.value.replace("bar","baz"))
+	mappingBarToBaz, err := imetrics.NewMapping(`meta = meta().map_each(kv -> kv.value.replace_all("bar","baz"))
 meta extra2 = "extravalue2"
-root = this.replace("bar","baz")`, log.Noop())
+root = this.replace_all("bar","baz")`, log.Noop())
 	require.NoError(t, err)
 
 	nm := imetrics.NewNamespaced(prom).WithLabels("static1", "svalue1")

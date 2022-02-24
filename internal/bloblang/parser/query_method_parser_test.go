@@ -155,7 +155,7 @@ func TestMethodParser(t *testing.T) {
 		},
 		"meta from all": {
 			input:  `meta("foo").from_all()`,
-			output: `["bar","","baz"]`,
+			output: `["bar",null,"baz"]`,
 			messages: []easyMsg{
 				{meta: map[string]string{"foo": "bar"}},
 				{},

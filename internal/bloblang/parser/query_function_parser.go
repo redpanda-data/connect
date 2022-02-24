@@ -223,8 +223,6 @@ func variableLiteralParser() Func {
 	}
 }
 
-var errNoRoot = errors.New("unable to reference the `root` of your mapped document within a query. This feature will be introduced soon, but in the meantime in order to use a mapped value multiple times use variables (https://www.benthos.dev/docs/guides/bloblang/about#variables). If instead you wish to refer to a field `root` from your input document use `this.root`")
-
 func fieldLiteralRootParser(pCtx Context) Func {
 	fieldPathParser := Expect(
 		JoinStringPayloads(
@@ -252,7 +250,7 @@ func fieldLiteralRootParser(pCtx Context) Func {
 		if path == "this" {
 			fn = query.NewFieldFunction("")
 		} else if path == "root" {
-			return Fail(NewFatalError(input, errNoRoot), input)
+			fn = query.NewRootFieldFunction("")
 		} else {
 			if pCtx.HasNamedContext(path) {
 				fn = query.NewNamedContextFieldFunction(path, "")
