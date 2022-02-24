@@ -56,12 +56,12 @@ type AMQP09Config struct {
 func NewAMQP09Config() AMQP09Config {
 	return AMQP09Config{
 		URLs:  []string{},
-		Queue: "benthos-queue",
+		Queue: "",
 		QueueDeclare: AMQP09QueueDeclareConfig{
 			Enabled: false,
 			Durable: true,
 		},
-		ConsumerTag:        "benthos-consumer",
+		ConsumerTag:        "",
 		AutoAck:            false,
 		NackRejectPatterns: []string{},
 		PrefetchCount:      10,

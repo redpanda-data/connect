@@ -34,7 +34,7 @@ type RedisStreamsConfig struct {
 func NewRedisStreamsConfig() RedisStreamsConfig {
 	return RedisStreamsConfig{
 		Config:       bredis.NewConfig(),
-		Stream:       "benthos_stream",
+		Stream:       "",
 		BodyKey:      "body",
 		MaxLenApprox: 0,
 		MaxInFlight:  1,

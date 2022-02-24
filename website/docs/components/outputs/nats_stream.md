@@ -31,11 +31,10 @@ Publish to a NATS Stream subject.
 output:
   label: ""
   nats_stream:
-    urls:
-      - nats://127.0.0.1:4222
-    cluster_id: test-cluster
-    subject: benthos_messages
-    client_id: benthos_client
+    urls: []
+    cluster_id: ""
+    subject: ""
+    client_id: ""
     max_in_flight: 1
 ```
 
@@ -47,11 +46,10 @@ output:
 output:
   label: ""
   nats_stream:
-    urls:
-      - nats://127.0.0.1:4222
-    cluster_id: test-cluster
-    subject: benthos_messages
-    client_id: benthos_client
+    urls: []
+    cluster_id: ""
+    subject: ""
+    client_id: ""
     max_in_flight: 1
     tls:
       enabled: false
@@ -109,7 +107,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["nats://127.0.0.1:4222"]`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -127,7 +125,7 @@ The cluster ID to publish to.
 
 
 Type: `string`  
-Default: `"test-cluster"`  
+Default: `""`  
 
 ### `subject`
 
@@ -135,7 +133,7 @@ The subject to publish to.
 
 
 Type: `string`  
-Default: `"benthos_messages"`  
+Default: `""`  
 
 ### `client_id`
 
@@ -143,7 +141,7 @@ The client ID to connect with.
 
 
 Type: `string`  
-Default: `"benthos_client"`  
+Default: `""`  
 
 ### `max_in_flight`
 

@@ -139,7 +139,7 @@ type CacheConfig struct {
 func NewCacheConfig() CacheConfig {
 	return CacheConfig{
 		Resource: "",
-		Operator: "set",
+		Operator: "",
 		Key:      "",
 		Value:    "",
 		TTL:      "",

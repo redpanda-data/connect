@@ -25,20 +25,20 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 ` + auth.Description(),
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+			docs.FieldString(
 				"urls",
 				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
 				[]string{"nats://127.0.0.1:4222"},
 				[]string{"nats://username:password@127.0.0.1:4222"},
 			).Array(),
-			docs.FieldCommon("subject", "The subject to publish to.").IsInterpolated(),
+			docs.FieldString("subject", "The subject to publish to.").IsInterpolated(),
 			docs.FieldString("headers", "Explicit message headers to add to messages.",
 				map[string]string{
 					"Content-Type": "application/json",
 					"Timestamp":    `${!meta("Timestamp")}`,
 				},
 			).IsInterpolated().Map(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			tls.FieldSpec(),
 			auth.FieldSpec(),
 		},

@@ -108,8 +108,7 @@ type UnarchiveConfig struct {
 // NewUnarchiveConfig returns a UnarchiveConfig with default values.
 func NewUnarchiveConfig() UnarchiveConfig {
 	return UnarchiveConfig{
-		// TODO: V4 change this default
-		Format: "binary",
+		Format: "",
 	}
 }
 

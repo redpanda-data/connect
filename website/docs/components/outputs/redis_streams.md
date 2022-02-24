@@ -33,7 +33,7 @@ output:
   label: ""
   redis_streams:
     url: ""
-    stream: benthos_stream
+    stream: ""
     body_key: body
     max_length: 0
     max_in_flight: 1
@@ -64,7 +64,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    stream: benthos_stream
+    stream: ""
     body_key: body
     max_length: 0
     max_in_flight: 1
@@ -283,7 +283,7 @@ The stream to add messages to.
 
 
 Type: `string`  
-Default: `"benthos_stream"`  
+Default: `""`  
 
 ### `body_key`
 

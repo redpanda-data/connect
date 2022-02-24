@@ -65,14 +65,14 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 	rConf.Backoff.MaxElapsedTime = "30s"
 
 	return ElasticsearchConfig{
-		URLs:        []string{"http://localhost:9200"},
+		URLs:        []string{},
 		Sniff:       true,
 		Healthcheck: true,
 		Action:      "index",
 		ID:          `${!count("elastic_ids")}-${!timestamp_unix()}`,
-		Index:       "benthos_index",
+		Index:       "",
 		Pipeline:    "",
-		Type:        "doc",
+		Type:        "",
 		Routing:     "",
 		Timeout:     "5s",
 		TLS:         btls.NewConfig(),
@@ -356,29 +356,37 @@ func (e *Elasticsearch) WaitForClose(timeout time.Duration) error {
 
 // Build a bulkable request for a given pending bulk index item.
 func (e *Elasticsearch) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequest, error) {
-	// TODO: V4 the type field should be optional and not used
 	switch p.Action {
 	case "update":
-		return elastic.NewBulkUpdateRequest().
+		r := elastic.NewBulkUpdateRequest().
 			Index(p.Index).
 			Routing(p.Routing).
-			Type(p.Type).
 			Id(p.ID).
-			Doc(p.Doc), nil
+			Doc(p.Doc)
+		if p.Type != "" {
+			r = r.Type(p.Type)
+		}
+		return r, nil
 	case "delete":
-		return elastic.NewBulkDeleteRequest().
+		r := elastic.NewBulkDeleteRequest().
 			Index(p.Index).
 			Routing(p.Routing).
-			Id(p.ID).
-			Type(p.Type), nil
+			Id(p.ID)
+		if p.Type != "" {
+			r = r.Type(p.Type)
+		}
+		return r, nil
 	case "index":
-		return elastic.NewBulkIndexRequest().
+		r := elastic.NewBulkIndexRequest().
 			Index(p.Index).
 			Pipeline(p.Pipeline).
 			Routing(p.Routing).
-			Type(p.Type).
 			Id(p.ID).
-			Doc(p.Doc), nil
+			Doc(p.Doc)
+		if p.Type != "" {
+			r = r.Type(p.Type)
+		}
+		return r, nil
 	default:
 		return nil, fmt.Errorf("elasticsearch action '%s' is not allowed", p.Action)
 	}

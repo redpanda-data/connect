@@ -61,13 +61,13 @@ func NewKafkaConfig() KafkaConfig {
 	rConf.Backoff.MaxElapsedTime = "30s"
 
 	return KafkaConfig{
-		Addresses:     []string{"localhost:9092"},
-		ClientID:      "benthos_kafka_output",
+		Addresses:     []string{},
+		ClientID:      "benthos",
 		RackID:        "",
 		Key:           "",
 		Partitioner:   "fnv1a_hash",
 		Partition:     "",
-		Topic:         "benthos_stream",
+		Topic:         "",
 		Compression:   "none",
 		MaxMsgBytes:   1000000,
 		Timeout:       "5s",

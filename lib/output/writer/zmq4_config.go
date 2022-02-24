@@ -14,7 +14,7 @@ type ZMQ4Config struct {
 // NewZMQ4Config creates a new ZMQ4Config with default values.
 func NewZMQ4Config() *ZMQ4Config {
 	return &ZMQ4Config{
-		URLs:          []string{"tcp://*:5556"},
+		URLs:          []string{},
 		Bind:          true,
 		SocketType:    "PUSH",
 		HighWaterMark: 0,

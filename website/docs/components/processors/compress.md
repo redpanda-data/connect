@@ -23,7 +23,7 @@ algorithms are: gzip, zlib, flate, snappy, lz4.
 # Config fields, showing default values
 label: ""
 compress:
-  algorithm: gzip
+  algorithm: ""
   level: -1
 ```
 
@@ -37,7 +37,7 @@ The compression algorithm to use.
 
 
 Type: `string`  
-Default: `"gzip"`  
+Default: `""`  
 Options: `gzip`, `zlib`, `flate`, `snappy`, `lz4`.
 
 ### `level`

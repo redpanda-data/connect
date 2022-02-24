@@ -27,7 +27,7 @@ type RedisPubSubConfig struct {
 func NewRedisPubSubConfig() RedisPubSubConfig {
 	return RedisPubSubConfig{
 		Config:      bredis.NewConfig(),
-		Channels:    []string{"benthos_chan"},
+		Channels:    []string{},
 		UsePatterns: false,
 	}
 }

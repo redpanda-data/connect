@@ -32,13 +32,12 @@ multiple clients of a subject to consume using queue semantics.
 input:
   label: ""
   nats_stream:
-    urls:
-      - nats://127.0.0.1:4222
-    cluster_id: test-cluster
-    client_id: benthos_client
-    queue: benthos_queue
-    subject: benthos_messages
-    durable_name: benthos_offset
+    urls: []
+    cluster_id: ""
+    client_id: ""
+    queue: ""
+    subject: ""
+    durable_name: ""
     unsubscribe_on_close: false
 ```
 
@@ -50,13 +49,12 @@ input:
 input:
   label: ""
   nats_stream:
-    urls:
-      - nats://127.0.0.1:4222
-    cluster_id: test-cluster
-    client_id: benthos_client
-    queue: benthos_queue
-    subject: benthos_messages
-    durable_name: benthos_offset
+    urls: []
+    cluster_id: ""
+    client_id: ""
+    queue: ""
+    subject: ""
+    durable_name: ""
     unsubscribe_on_close: false
     start_from_oldest: true
     max_inflight: 1024
@@ -132,7 +130,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["nats://127.0.0.1:4222"]`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -150,7 +148,7 @@ The ID of the cluster to consume from.
 
 
 Type: `string`  
-Default: `"test-cluster"`  
+Default: `""`  
 
 ### `client_id`
 
@@ -158,7 +156,7 @@ A client ID to connect as.
 
 
 Type: `string`  
-Default: `"benthos_client"`  
+Default: `""`  
 
 ### `queue`
 
@@ -166,7 +164,7 @@ The queue to consume from.
 
 
 Type: `string`  
-Default: `"benthos_queue"`  
+Default: `""`  
 
 ### `subject`
 
@@ -174,7 +172,7 @@ A subject to consume from.
 
 
 Type: `string`  
-Default: `"benthos_messages"`  
+Default: `""`  
 
 ### `durable_name`
 
@@ -182,7 +180,7 @@ Preserve the state of your consumer under a durable name.
 
 
 Type: `string`  
-Default: `"benthos_offset"`  
+Default: `""`  
 
 ### `unsubscribe_on_close`
 

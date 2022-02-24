@@ -33,7 +33,7 @@ output:
   label: ""
   redis_pubsub:
     url: ""
-    channel: benthos_chan
+    channel: ""
     max_in_flight: 1
     batching:
       count: 0
@@ -60,7 +60,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    channel: benthos_chan
+    channel: ""
     max_in_flight: 1
     batching:
       count: 0
@@ -270,7 +270,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos_chan"`  
+Default: `""`  
 
 ### `max_in_flight`
 

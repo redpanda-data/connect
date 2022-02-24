@@ -31,7 +31,7 @@ Sends messages to an HTTP server.
 output:
   label: ""
   http_client:
-    url: http://localhost:4195/post
+    url: ""
     verb: POST
     headers:
       Content-Type: application/octet-stream
@@ -53,7 +53,7 @@ output:
 output:
   label: ""
   http_client:
-    url: http://localhost:4195/post
+    url: ""
     verb: POST
     headers:
       Content-Type: application/octet-stream
@@ -155,7 +155,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"http://localhost:4195/post"`  
+Default: `""`  
 
 ### `verb`
 

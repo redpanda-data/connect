@@ -21,7 +21,7 @@ Splits a batch of messages into N batches, where each resulting batch contains a
 # Config fields, showing default values
 label: ""
 group_by_value:
-  value: ${! meta("example") }
+  value: ""
 ```
 
 This allows you to group messages using arbitrary fields within their content or
@@ -40,7 +40,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${! meta(\"example\") }"`  
+Default: `""`  
 
 ```yml
 # Examples

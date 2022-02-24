@@ -34,9 +34,9 @@ type NATSConfig struct {
 // NewNATSConfig creates a new NATSConfig with default values.
 func NewNATSConfig() NATSConfig {
 	return NATSConfig{
-		URLs:          []string{nats.DefaultURL},
-		Subject:       "benthos_messages",
-		QueueID:       "benthos_queue",
+		URLs:          []string{},
+		Subject:       "",
+		QueueID:       "",
 		PrefetchCount: 32,
 		TLS:           btls.NewConfig(),
 		Auth:          auth.New(),

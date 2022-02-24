@@ -34,13 +34,13 @@ func (w *Will) Validate() error {
 
 // WillFieldSpec defines a last will message registration.
 func WillFieldSpec() docs.FieldSpec {
-	return docs.FieldAdvanced(
+	return docs.FieldObject(
 		"will", "Set last will message in case of Benthos failure",
 	).WithChildren(
-		docs.FieldCommon("enabled", "Whether to enable last will messages."),
-		docs.FieldCommon("qos", "Set QoS for last will message.").HasOptions("0", "1", "2"),
-		docs.FieldCommon("retained", "Set retained for last will message."),
-		docs.FieldCommon("topic", "Set topic for last will message."),
-		docs.FieldCommon("payload", "Set payload for last will message."),
-	)
+		docs.FieldBool("enabled", "Whether to enable last will messages."),
+		docs.FieldInt("qos", "Set QoS for last will message.").HasOptions("0", "1", "2"),
+		docs.FieldBool("retained", "Set retained for last will message."),
+		docs.FieldString("topic", "Set topic for last will message."),
+		docs.FieldString("payload", "Set payload for last will message."),
+	).Advanced()
 }

@@ -105,8 +105,8 @@ type ParseLogConfig struct {
 // NewParseLogConfig returns a ParseLogConfig with default values.
 func NewParseLogConfig() ParseLogConfig {
 	return ParseLogConfig{
-		Format: "syslog_rfc5424",
-		Codec:  "json",
+		Format: "",
+		Codec:  "",
 
 		BestEffort:   true,
 		WithRFC3339:  true,

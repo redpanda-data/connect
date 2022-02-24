@@ -18,13 +18,13 @@ func init() {
 		Summary: `
 Subscribe to an NSQ instance topic and channel.`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("nsqd_tcp_addresses", "A list of nsqd addresses to connect to.").Array(),
-			docs.FieldCommon("lookupd_http_addresses", "A list of nsqlookupd addresses to connect to.").Array(),
+			docs.FieldString("nsqd_tcp_addresses", "A list of nsqd addresses to connect to.").Array(),
+			docs.FieldString("lookupd_http_addresses", "A list of nsqlookupd addresses to connect to.").Array(),
 			tls.FieldSpec(),
-			docs.FieldCommon("topic", "The topic to consume from."),
-			docs.FieldCommon("channel", "The channel to consume from."),
-			docs.FieldCommon("user_agent", "A user agent to assume when connecting."),
-			docs.FieldCommon("max_in_flight", "The maximum number of pending messages to consume at any given time."),
+			docs.FieldString("topic", "The topic to consume from."),
+			docs.FieldString("channel", "The channel to consume from."),
+			docs.FieldString("user_agent", "A user agent to assume when connecting."),
+			docs.FieldInt("max_in_flight", "The maximum number of pending messages to consume at any given time."),
 		},
 		Categories: []Category{
 			CategoryServices,

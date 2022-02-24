@@ -121,9 +121,8 @@ type ArchiveConfig struct {
 // NewArchiveConfig returns a ArchiveConfig with default values.
 func NewArchiveConfig() ArchiveConfig {
 	return ArchiveConfig{
-		// TODO: V4 change this default
-		Format: "binary",
-		Path:   `${!count("files")}-${!timestamp_unix_nano()}.txt`,
+		Format: "",
+		Path:   ``,
 	}
 }
 

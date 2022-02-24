@@ -30,8 +30,8 @@ Creates a server that receives a stream of messages over a tcp, udp or unix sock
 input:
   label: ""
   socket_server:
-    network: unix
-    address: /tmp/benthos.sock
+    network: ""
+    address: ""
     codec: lines
 ```
 
@@ -43,8 +43,8 @@ input:
 input:
   label: ""
   socket_server:
-    network: unix
-    address: /tmp/benthos.sock
+    network: ""
+    address: ""
     codec: lines
     max_buffer: 1000000
 ```
@@ -62,7 +62,7 @@ A network type to accept (unix|tcp|udp).
 
 
 Type: `string`  
-Default: `"unix"`  
+Default: `""`  
 Options: `unix`, `tcp`, `udp`.
 
 ### `address`
@@ -71,7 +71,7 @@ The address to listen from.
 
 
 Type: `string`  
-Default: `"/tmp/benthos.sock"`  
+Default: `""`  
 
 ```yml
 # Examples

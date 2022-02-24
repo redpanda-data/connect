@@ -40,10 +40,10 @@ type MQTTConfig struct {
 // NewMQTTConfig creates a new MQTTConfig with default values.
 func NewMQTTConfig() MQTTConfig {
 	return MQTTConfig{
-		URLs:           []string{"tcp://localhost:1883"},
+		URLs:           []string{},
 		QoS:            1,
-		Topics:         []string{"benthos_topic"},
-		ClientID:       "benthos_input",
+		Topics:         []string{},
+		ClientID:       "",
 		Will:           mqttconf.EmptyWill(),
 		CleanSession:   true,
 		User:           "",

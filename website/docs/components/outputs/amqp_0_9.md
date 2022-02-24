@@ -33,8 +33,8 @@ output:
   label: ""
   amqp_0_9:
     urls: []
-    exchange: benthos-exchange
-    key: benthos-key
+    exchange: ""
+    key: ""
     type: ""
     metadata:
       exclude_prefixes: []
@@ -50,12 +50,12 @@ output:
   label: ""
   amqp_0_9:
     urls: []
-    exchange: benthos-exchange
+    exchange: ""
     exchange_declare:
       enabled: false
       type: direct
       durable: true
-    key: benthos-key
+    key: ""
     type: ""
     content_type: application/octet-stream
     content_encoding: ""
@@ -127,7 +127,7 @@ An AMQP exchange to publish to.
 
 
 Type: `string`  
-Default: `"benthos-exchange"`  
+Default: `""`  
 
 ### `exchange_declare`
 
@@ -168,7 +168,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos-key"`  
+Default: `""`  
 
 ### `type`
 

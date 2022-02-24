@@ -53,7 +53,7 @@ type DecompressConfig struct {
 // NewDecompressConfig returns a DecompressConfig with default values.
 func NewDecompressConfig() DecompressConfig {
 	return DecompressConfig{
-		Algorithm: "gzip",
+		Algorithm: "",
 	}
 }
 

@@ -33,8 +33,7 @@ input:
   label: ""
   redis_pubsub:
     url: ""
-    channels:
-      - benthos_chan
+    channels: []
     use_patterns: false
 ```
 
@@ -56,8 +55,7 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    channels:
-      - benthos_chan
+    channels: []
     use_patterns: false
 ```
 
@@ -258,7 +256,7 @@ A list of channels to consume from.
 
 
 Type: `array`  
-Default: `["benthos_chan"]`  
+Default: `[]`  
 
 ### `use_patterns`
 

@@ -23,8 +23,8 @@ selected archive [format](#formats).
 # Config fields, showing default values
 label: ""
 archive:
-  format: binary
-  path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+  format: ""
+  path: ""
 ```
 
 Some archive formats (such as tar, zip) treat each archive item (message part)
@@ -48,7 +48,7 @@ The archiving [format](#formats) to apply.
 
 
 Type: `string`  
-Default: `"binary"`  
+Default: `""`  
 Options: `tar`, `zip`, `binary`, `lines`, `json_array`, `concatenate`.
 
 ### `path`
@@ -58,7 +58,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`  
+Default: `""`  
 
 ```yml
 # Examples

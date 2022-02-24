@@ -31,7 +31,7 @@ type Config struct {
 // NewConfig creates a new Config with default values.
 func NewConfig() Config {
 	return Config{
-		URL:  "http://localhost:4195/post",
+		URL:  "",
 		Verb: "POST",
 		Headers: map[string]string{
 			"Content-Type": "application/octet-stream",

@@ -31,9 +31,9 @@ Publish to an NSQ topic.
 output:
   label: ""
   nsq:
-    nsqd_tcp_address: localhost:4150
-    topic: benthos_messages
-    user_agent: benthos_producer
+    nsqd_tcp_address: ""
+    topic: ""
+    user_agent: ""
     max_in_flight: 1
 ```
 
@@ -45,9 +45,9 @@ output:
 output:
   label: ""
   nsq:
-    nsqd_tcp_address: localhost:4150
-    topic: benthos_messages
-    user_agent: benthos_producer
+    nsqd_tcp_address: ""
+    topic: ""
+    user_agent: ""
     tls:
       enabled: false
       skip_cert_verify: false
@@ -79,7 +79,7 @@ The address of the target NSQD server.
 
 
 Type: `string`  
-Default: `"localhost:4150"`  
+Default: `""`  
 
 ### `topic`
 
@@ -88,7 +88,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos_messages"`  
+Default: `""`  
 
 ### `user_agent`
 
@@ -96,7 +96,7 @@ A user agent string to connect with.
 
 
 Type: `string`  
-Default: `"benthos_producer"`  
+Default: `""`  
 
 ### `tls`
 

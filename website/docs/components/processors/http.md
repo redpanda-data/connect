@@ -31,7 +31,7 @@ the original message parts with the body of the response.
 # Common config fields, showing default values
 label: ""
 http:
-  url: http://localhost:4195/post
+  url: ""
   verb: POST
   headers:
     Content-Type: application/octet-stream
@@ -46,7 +46,7 @@ http:
 # All config fields, showing default values
 label: ""
 http:
-  url: http://localhost:4195/post
+  url: ""
   verb: POST
   headers:
     Content-Type: application/octet-stream
@@ -174,7 +174,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"http://localhost:4195/post"`  
+Default: `""`  
 
 ### `verb`
 

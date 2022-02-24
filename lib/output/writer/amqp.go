@@ -58,13 +58,13 @@ func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
 		URLs:        []string{},
 		MaxInFlight: 1,
-		Exchange:    "benthos-exchange",
+		Exchange:    "",
 		ExchangeDeclare: AMQPExchangeDeclareConfig{
 			Enabled: false,
 			Type:    "direct",
 			Durable: true,
 		},
-		BindingKey:      "benthos-key",
+		BindingKey:      "",
 		Type:            "",
 		ContentType:     "application/octet-stream",
 		ContentEncoding: "",

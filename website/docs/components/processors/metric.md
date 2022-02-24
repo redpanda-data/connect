@@ -21,7 +21,7 @@ Emit custom metrics by extracting values from messages.
 # Config fields, showing default values
 label: ""
 metric:
-  type: counter
+  type: ""
   name: ""
   labels: {}
   value: ""
@@ -39,7 +39,7 @@ The metric [type](#types) to create.
 
 
 Type: `string`  
-Default: `"counter"`  
+Default: `""`  
 Options: `counter`, `counter_by`, `gauge`, `timing`.
 
 ### `name`

@@ -117,7 +117,7 @@ type HTTPClientConfig struct {
 func NewHTTPClientConfig() HTTPClientConfig {
 	cConf := client.NewConfig()
 	cConf.Verb = "GET"
-	cConf.URL = "http://localhost:4195/get"
+	cConf.URL = ""
 	return HTTPClientConfig{
 		Config:          cConf,
 		Payload:         "",

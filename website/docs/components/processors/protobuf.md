@@ -27,7 +27,7 @@ files.
 # Config fields, showing default values
 label: ""
 protobuf:
-  operator: to_json
+  operator: ""
   message: ""
   import_paths: []
 ```
@@ -61,7 +61,7 @@ The [operator](#operators) to execute
 
 
 Type: `string`  
-Default: `"to_json"`  
+Default: `""`  
 Options: `to_json`, `from_json`.
 
 ### `message`

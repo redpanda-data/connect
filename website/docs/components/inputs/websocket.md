@@ -31,7 +31,7 @@ Connects to a websocket server and continuously receives messages.
 input:
   label: ""
   websocket:
-    url: ws://localhost:4195/get/ws
+    url: ""
 ```
 
 </TabItem>
@@ -42,7 +42,7 @@ input:
 input:
   label: ""
   websocket:
-    url: ws://localhost:4195/get/ws
+    url: ""
     open_message: ""
     tls:
       enabled: false
@@ -84,7 +84,7 @@ The URL to connect to.
 
 
 Type: `string`  
-Default: `"ws://localhost:4195/get/ws"`  
+Default: `""`  
 
 ```yml
 # Examples

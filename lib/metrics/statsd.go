@@ -57,7 +57,7 @@ type StatsdConfig struct {
 // NewStatsdConfig creates an StatsdConfig struct with default values.
 func NewStatsdConfig() StatsdConfig {
 	return StatsdConfig{
-		Address:     "localhost:4040",
+		Address:     "",
 		FlushPeriod: "100ms",
 		TagFormat:   TagFormatNone,
 	}

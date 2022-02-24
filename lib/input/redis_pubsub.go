@@ -30,8 +30,8 @@ patterns in your channel names. For example:
 Use ` + "`\\`" + ` to escape special characters if you want to match them
 verbatim.`,
 		FieldSpecs: old.ConfigDocs().Add(
-			docs.FieldCommon("channels", "A list of channels to consume from.").Array(),
-			docs.FieldCommon("use_patterns", "Whether to use the PSUBSCRIBE command."),
+			docs.FieldString("channels", "A list of channels to consume from.").Array(),
+			docs.FieldBool("use_patterns", "Whether to use the PSUBSCRIBE command."),
 		),
 		Categories: []Category{
 			CategoryServices,

@@ -47,11 +47,11 @@ type KafkaConfig struct {
 // NewKafkaConfig creates a new KafkaConfig with default values.
 func NewKafkaConfig() KafkaConfig {
 	return KafkaConfig{
-		Addresses:           []string{"localhost:9092"},
+		Addresses:           []string{},
 		Topics:              []string{},
-		ClientID:            "benthos_kafka_input",
+		ClientID:            "benthos",
 		RackID:              "",
-		ConsumerGroup:       "benthos_consumer_group",
+		ConsumerGroup:       "",
 		Group:               NewKafkaBalancedGroupConfig(),
 		CommitPeriod:        "1s",
 		CheckpointLimit:     1,

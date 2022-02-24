@@ -31,10 +31,9 @@ Subscribe to a NATS subject.
 input:
   label: ""
   nats:
-    urls:
-      - nats://127.0.0.1:4222
-    queue: benthos_queue
-    subject: benthos_messages
+    urls: []
+    queue: ""
+    subject: ""
 ```
 
 </TabItem>
@@ -45,10 +44,9 @@ input:
 input:
   label: ""
   nats:
-    urls:
-      - nats://127.0.0.1:4222
-    queue: benthos_queue
-    subject: benthos_messages
+    urls: []
+    queue: ""
+    subject: ""
     prefetch_count: 32
     tls:
       enabled: false
@@ -112,7 +110,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["nats://127.0.0.1:4222"]`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -130,7 +128,7 @@ The queue to consume from.
 
 
 Type: `string`  
-Default: `"benthos_queue"`  
+Default: `""`  
 
 ### `subject`
 
@@ -138,7 +136,7 @@ A subject to consume from.
 
 
 Type: `string`  
-Default: `"benthos_messages"`  
+Default: `""`  
 
 ### `prefetch_count`
 

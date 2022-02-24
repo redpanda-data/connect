@@ -55,8 +55,8 @@ type SocketServerConfig struct {
 // NewSocketServerConfig creates a new SocketServerConfig with default values.
 func NewSocketServerConfig() SocketServerConfig {
 	return SocketServerConfig{
-		Network:   "unix",
-		Address:   "/tmp/benthos.sock",
+		Network:   "",
+		Address:   "",
 		Codec:     "lines",
 		MaxBuffer: 1000000,
 	}

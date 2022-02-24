@@ -27,8 +27,8 @@ type SocketConfig struct {
 // NewSocketConfig creates a new SocketConfig with default values.
 func NewSocketConfig() SocketConfig {
 	return SocketConfig{
-		Network: "unix",
-		Address: "/tmp/benthos.sock",
+		Network: "",
+		Address: "",
 		Codec:   "lines",
 	}
 }

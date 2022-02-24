@@ -31,9 +31,8 @@ Sends message parts as files to a HDFS directory.
 output:
   label: ""
   hdfs:
-    hosts:
-      - localhost:9000
-    user: benthos_hdfs
+    hosts: []
+    user: ""
     directory: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 1
@@ -52,9 +51,8 @@ output:
 output:
   label: ""
   hdfs:
-    hosts:
-      - localhost:9000
-    user: benthos_hdfs
+    hosts: []
+    user: ""
     directory: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     max_in_flight: 1
@@ -87,7 +85,7 @@ A list of hosts to connect to.
 
 
 Type: `array`  
-Default: `["localhost:9000"]`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -101,7 +99,7 @@ A user identifier.
 
 
 Type: `string`  
-Default: `"benthos_hdfs"`  
+Default: `""`  
 
 ### `directory`
 

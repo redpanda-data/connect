@@ -22,7 +22,7 @@ Supported tagging formats are 'none', 'datadog' and 'influxdb'.
 # Config fields, showing default values
 metrics:
   statsd:
-    address: localhost:4040
+    address: ""
     flush_period: 100ms
     tag_format: none
   mapping: ""
@@ -43,7 +43,7 @@ The address to send metrics to.
 
 
 Type: `string`  
-Default: `"localhost:4040"`  
+Default: `""`  
 
 ### `flush_period`
 

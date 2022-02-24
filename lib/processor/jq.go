@@ -114,7 +114,7 @@ type JQConfig struct {
 // NewJQConfig returns a JQConfig with default values.
 func NewJQConfig() JQConfig {
 	return JQConfig{
-		Query: ".",
+		Query: "",
 	}
 }
 

@@ -23,7 +23,7 @@ decompression types are: gzip, zlib, bzip2, flate, snappy, lz4.
 # Config fields, showing default values
 label: ""
 decompress:
-  algorithm: gzip
+  algorithm: ""
 ```
 
 ## Fields
@@ -34,7 +34,7 @@ The decompression algorithm to use.
 
 
 Type: `string`  
-Default: `"gzip"`  
+Default: `""`  
 Options: `gzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`.
 
 

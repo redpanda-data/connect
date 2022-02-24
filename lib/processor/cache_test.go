@@ -18,6 +18,7 @@ func TestCacheSet(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = "cache"
+	conf.Cache.Operator = "set"
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Value = "${!json(\"value\")}"
 	conf.Cache.Resource = "foocache"

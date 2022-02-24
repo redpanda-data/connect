@@ -153,7 +153,7 @@ type MetricConfig struct {
 // NewMetricConfig returns a MetricConfig with default values.
 func NewMetricConfig() MetricConfig {
 	return MetricConfig{
-		Type:   "counter",
+		Type:   "",
 		Name:   "",
 		Labels: map[string]string{},
 		Value:  "",

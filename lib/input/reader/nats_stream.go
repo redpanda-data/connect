@@ -43,14 +43,14 @@ type NATSStreamConfig struct {
 // NewNATSStreamConfig creates a new NATSStreamConfig with default values.
 func NewNATSStreamConfig() NATSStreamConfig {
 	return NATSStreamConfig{
-		URLs:            []string{stan.DefaultNatsURL},
-		ClusterID:       "test-cluster",
-		ClientID:        "benthos_client",
-		QueueID:         "benthos_queue",
-		DurableName:     "benthos_offset",
+		URLs:            []string{},
+		ClusterID:       "",
+		ClientID:        "",
+		QueueID:         "",
+		DurableName:     "",
 		UnsubOnClose:    false,
 		StartFromOldest: true,
-		Subject:         "benthos_messages",
+		Subject:         "",
 		MaxInflight:     1024,
 		AckWait:         "30s",
 		TLS:             btls.NewConfig(),

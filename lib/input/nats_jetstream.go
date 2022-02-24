@@ -3,7 +3,6 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
 	"github.com/Jeffail/benthos/v3/lib/util/tls"
-	"github.com/nats-io/nats.go"
 )
 
 // NATSJetStreamConfig contains configuration fields for the NATS Jetstream
@@ -23,7 +22,7 @@ type NATSJetStreamConfig struct {
 // NewNATSJetStreamConfig creates a new NATSJetstreamConfig with default values.
 func NewNATSJetStreamConfig() NATSJetStreamConfig {
 	return NATSJetStreamConfig{
-		URLs:          []string{nats.DefaultURL},
+		URLs:          []string{},
 		Subject:       "",
 		AckWait:       "30s",
 		MaxAckPending: 1024,

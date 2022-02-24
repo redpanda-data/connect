@@ -31,10 +31,8 @@ The kafka output type writes a batch of messages to Kafka brokers and waits for 
 output:
   label: ""
   kafka:
-    addresses:
-      - localhost:9092
-    topic: benthos_stream
-    client_id: benthos_kafka_output
+    addresses: []
+    topic: ""
     target_version: 1.0.0
     key: ""
     partitioner: fnv1a_hash
@@ -58,8 +56,7 @@ output:
 output:
   label: ""
   kafka:
-    addresses:
-      - localhost:9092
+    addresses: []
     tls:
       enabled: false
       skip_cert_verify: false
@@ -74,8 +71,8 @@ output:
       access_token: ""
       token_cache: ""
       token_key: ""
-    topic: benthos_stream
-    client_id: benthos_kafka_output
+    topic: ""
+    client_id: benthos
     target_version: 1.0.0
     rack_id: ""
     key: ""
@@ -147,7 +144,7 @@ A list of broker addresses to connect to. If an item of the list contains commas
 
 
 Type: `array`  
-Default: `["localhost:9092"]`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -360,7 +357,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos_stream"`  
+Default: `""`  
 
 ### `client_id`
 
@@ -368,7 +365,7 @@ An identifier for the client connection.
 
 
 Type: `string`  
-Default: `"benthos_kafka_output"`  
+Default: `"benthos"`  
 
 ### `target_version`
 

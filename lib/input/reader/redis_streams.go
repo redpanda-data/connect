@@ -38,10 +38,10 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 	return RedisStreamsConfig{
 		Config:          bredis.NewConfig(),
 		BodyKey:         "body",
-		Streams:         []string{"benthos_stream"},
+		Streams:         []string{},
 		CreateStreams:   true,
-		ConsumerGroup:   "benthos_group",
-		ClientID:        "benthos_consumer",
+		ConsumerGroup:   "",
+		ClientID:        "",
 		Limit:           10,
 		StartFromOldest: true,
 		CommitPeriod:    "1s",

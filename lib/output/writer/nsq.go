@@ -33,9 +33,9 @@ type NSQConfig struct {
 // NewNSQConfig creates a new NSQConfig with default values.
 func NewNSQConfig() NSQConfig {
 	return NSQConfig{
-		Address:     "localhost:4150",
-		Topic:       "benthos_messages",
-		UserAgent:   "benthos_producer",
+		Address:     "",
+		Topic:       "",
+		UserAgent:   "",
 		TLS:         btls.NewConfig(),
 		MaxInFlight: 1,
 	}

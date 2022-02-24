@@ -280,6 +280,7 @@ func TestArchiveBinary(t *testing.T) {
 
 func TestArchiveEmpty(t *testing.T) {
 	conf := NewConfig()
+	conf.Archive.Format = "binary"
 	proc, err := newArchive(conf.Archive, mock.NewManager())
 	if err != nil {
 		t.Error(err)

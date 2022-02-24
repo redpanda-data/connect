@@ -31,7 +31,7 @@ Performs operations against a [cache resource](/docs/components/caches/about) fo
 label: ""
 cache:
   resource: ""
-  operator: set
+  operator: ""
   key: ""
   value: ""
 ```
@@ -44,7 +44,7 @@ cache:
 label: ""
 cache:
   resource: ""
-  operator: set
+  operator: ""
   key: ""
   value: ""
   ttl: ""
@@ -133,7 +133,7 @@ The [operation](#operators) to perform with the cache.
 
 
 Type: `string`  
-Default: `"set"`  
+Default: `""`  
 Options: `set`, `add`, `get`, `delete`.
 
 ### `key`

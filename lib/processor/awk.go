@@ -400,8 +400,8 @@ type AWKConfig struct {
 // NewAWKConfig returns a AWKConfig with default values.
 func NewAWKConfig() AWKConfig {
 	return AWKConfig{
-		Codec:   "text",
-		Program: "BEGIN { x = 0 } { print $0, x; x++ }",
+		Codec:   "",
+		Program: "",
 	}
 }
 

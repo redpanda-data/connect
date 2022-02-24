@@ -34,11 +34,11 @@ type NSQConfig struct {
 // NewNSQConfig creates a new NSQConfig with default values.
 func NewNSQConfig() NSQConfig {
 	return NSQConfig{
-		Addresses:       []string{"localhost:4150"},
-		LookupAddresses: []string{"localhost:4161"},
-		Topic:           "benthos_messages",
-		Channel:         "benthos_stream",
-		UserAgent:       "benthos_consumer",
+		Addresses:       []string{},
+		LookupAddresses: []string{},
+		Topic:           "",
+		Channel:         "",
+		UserAgent:       "",
 		TLS:             btls.NewConfig(),
 		MaxInFlight:     100,
 	}

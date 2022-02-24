@@ -33,7 +33,7 @@ output:
   label: ""
   redis_list:
     url: ""
-    key: benthos_list
+    key: ""
     max_in_flight: 1
     batching:
       count: 0
@@ -60,7 +60,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    key: benthos_list
+    key: ""
     max_in_flight: 1
     batching:
       count: 0
@@ -271,7 +271,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos_list"`  
+Default: `""`  
 
 ```yml
 # Examples

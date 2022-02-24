@@ -84,7 +84,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			btls.FieldSpec(),
 			sasl.FieldSpec(),
 			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions."),
-			docs.FieldCommon("client_id", "An identifier for the client connection."),
+			docs.FieldString("client_id", "An identifier for the client connection.").Advanced(),
 			docs.FieldAdvanced("rack_id", "A rack identifier for this client."),
 			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
 			docs.FieldCommon(

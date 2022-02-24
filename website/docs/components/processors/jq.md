@@ -30,7 +30,7 @@ Transforms and filters messages using jq queries.
 # Common config fields, showing default values
 label: ""
 jq:
-  query: .
+  query: ""
 ```
 
 </TabItem>
@@ -40,7 +40,7 @@ jq:
 # All config fields, showing default values
 label: ""
 jq:
-  query: .
+  query: ""
   raw: false
   output_raw: false
 ```
@@ -84,7 +84,7 @@ The jq query to filter and transform messages with.
 
 
 Type: `string`  
-Default: `"."`  
+Default: `""`  
 
 ### `raw`
 

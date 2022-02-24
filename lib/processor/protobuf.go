@@ -172,7 +172,7 @@ type ProtobufConfig struct {
 // NewProtobufConfig returns a ProtobufConfig with default values.
 func NewProtobufConfig() ProtobufConfig {
 	return ProtobufConfig{
-		Operator:    "to_json",
+		Operator:    "",
 		Message:     "",
 		ImportPaths: []string{},
 	}

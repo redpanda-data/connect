@@ -31,10 +31,9 @@ Pushes messages to an MQTT broker.
 output:
   label: ""
   mqtt:
-    urls:
-      - tcp://localhost:1883
-    topic: benthos_topic
-    client_id: benthos_output
+    urls: []
+    topic: ""
+    client_id: ""
     qos: 1
     connect_timeout: 30s
     write_timeout: 3s
@@ -50,10 +49,9 @@ output:
 output:
   label: ""
   mqtt:
-    urls:
-      - tcp://localhost:1883
-    topic: benthos_topic
-    client_id: benthos_output
+    urls: []
+    topic: ""
+    client_id: ""
     dynamic_client_id_suffix: ""
     qos: 1
     connect_timeout: 30s
@@ -100,7 +98,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["tcp://localhost:1883"]`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -115,7 +113,7 @@ The topic to publish messages to.
 
 
 Type: `string`  
-Default: `"benthos_topic"`  
+Default: `""`  
 
 ### `client_id`
 
@@ -123,7 +121,7 @@ An identifier for the client connection.
 
 
 Type: `string`  
-Default: `"benthos_output"`  
+Default: `""`  
 
 ### `dynamic_client_id_suffix`
 

@@ -27,7 +27,7 @@ type RedisListConfig struct {
 func NewRedisListConfig() RedisListConfig {
 	return RedisListConfig{
 		Config:  bredis.NewConfig(),
-		Key:     "benthos_list",
+		Key:     "",
 		Timeout: "5s",
 	}
 }

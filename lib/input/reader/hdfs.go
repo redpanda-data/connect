@@ -24,8 +24,8 @@ type HDFSConfig struct {
 // NewHDFSConfig creates a new Config with default values.
 func NewHDFSConfig() HDFSConfig {
 	return HDFSConfig{
-		Hosts:     []string{"localhost:9000"},
-		User:      "benthos_hdfs",
+		Hosts:     []string{},
+		User:      "",
 		Directory: "",
 	}
 }

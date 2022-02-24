@@ -31,12 +31,10 @@ Connects to Kafka brokers and consumes one or more topics.
 input:
   label: ""
   kafka:
-    addresses:
-      - localhost:9092
+    addresses: []
     topics: []
     target_version: 2.0.0
-    consumer_group: benthos_consumer_group
-    client_id: benthos_kafka_input
+    consumer_group: ""
     checkpoint_limit: 1
 ```
 
@@ -48,8 +46,7 @@ input:
 input:
   label: ""
   kafka:
-    addresses:
-      - localhost:9092
+    addresses: []
     topics: []
     target_version: 2.0.0
     tls:
@@ -66,8 +63,8 @@ input:
       access_token: ""
       token_cache: ""
       token_key: ""
-    consumer_group: benthos_consumer_group
-    client_id: benthos_kafka_input
+    consumer_group: ""
+    client_id: benthos
     rack_id: ""
     start_from_oldest: true
     checkpoint_limit: 1
@@ -130,7 +127,7 @@ A list of broker addresses to connect to. If an item of the list contains commas
 
 
 Type: `array`  
-Default: `["localhost:9092"]`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -381,7 +378,7 @@ An identifier for the consumer group of the connection. This field can be explic
 
 
 Type: `string`  
-Default: `"benthos_consumer_group"`  
+Default: `""`  
 
 ### `client_id`
 
@@ -389,7 +386,7 @@ An identifier for the client connection.
 
 
 Type: `string`  
-Default: `"benthos_kafka_input"`  
+Default: `"benthos"`  
 
 ### `rack_id`
 

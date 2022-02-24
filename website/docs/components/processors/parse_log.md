@@ -31,8 +31,8 @@ easier and often much faster than [`grok`](/docs/components/processors/grok).
 # Common config fields, showing default values
 label: ""
 parse_log:
-  format: syslog_rfc5424
-  codec: json
+  format: ""
+  codec: ""
 ```
 
 </TabItem>
@@ -42,8 +42,8 @@ parse_log:
 # All config fields, showing default values
 label: ""
 parse_log:
-  format: syslog_rfc5424
-  codec: json
+  format: ""
+  codec: ""
   best_effort: true
   allow_rfc3339: true
   default_year: current
@@ -61,7 +61,7 @@ A common log [format](#formats) to parse.
 
 
 Type: `string`  
-Default: `"syslog_rfc5424"`  
+Default: `""`  
 Options: `syslog_rfc5424`, `syslog_rfc3164`.
 
 ### `codec`
@@ -70,7 +70,7 @@ Specifies the structured format to parse a log into.
 
 
 Type: `string`  
-Default: `"json"`  
+Default: `""`  
 Options: `json`.
 
 ### `best_effort`

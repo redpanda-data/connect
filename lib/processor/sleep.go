@@ -44,7 +44,7 @@ type SleepConfig struct {
 // NewSleepConfig returns a SleepConfig with default values.
 func NewSleepConfig() SleepConfig {
 	return SleepConfig{
-		Duration: "100us",
+		Duration: "",
 	}
 }
 

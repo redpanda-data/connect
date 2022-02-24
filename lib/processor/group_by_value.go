@@ -77,7 +77,7 @@ type GroupByValueConfig struct {
 // NewGroupByValueConfig returns a GroupByValueConfig with default values.
 func NewGroupByValueConfig() GroupByValueConfig {
 	return GroupByValueConfig{
-		Value: "${! meta(\"example\") }",
+		Value: "",
 	}
 }
 

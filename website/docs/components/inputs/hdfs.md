@@ -24,9 +24,8 @@ a single message payload.
 input:
   label: ""
   hdfs:
-    hosts:
-      - localhost:9000
-    user: benthos_hdfs
+    hosts: []
+    user: ""
     directory: ""
 ```
 
@@ -50,7 +49,7 @@ A list of target host addresses to connect to.
 
 
 Type: `array`  
-Default: `["localhost:9000"]`  
+Default: `[]`  
 
 ### `user`
 
@@ -58,7 +57,7 @@ A user ID to connect as.
 
 
 Type: `string`  
-Default: `"benthos_hdfs"`  
+Default: `""`  
 
 ### `directory`
 

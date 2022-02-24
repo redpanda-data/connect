@@ -23,14 +23,14 @@ have a different path for each object you should use function interpolations
 described [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("hosts", "A list of hosts to connect to.", "localhost:9000").Array(),
-			docs.FieldCommon("user", "A user identifier."),
-			docs.FieldCommon("directory", "A directory to store message files within. If the directory does not exist it will be created."),
-			docs.FieldCommon(
+			docs.FieldString("hosts", "A list of hosts to connect to.", "localhost:9000").Array(),
+			docs.FieldString("user", "A user identifier."),
+			docs.FieldString("directory", "A directory to store message files within. If the directory does not exist it will be created."),
+			docs.FieldString(
 				"path", "The path to upload messages as, interpolation functions should be used in order to generate unique file paths.",
 				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
 			).IsInterpolated(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			batch.FieldSpec(),
 		},
 		Categories: []Category{

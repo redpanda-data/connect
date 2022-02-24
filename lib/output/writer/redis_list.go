@@ -32,7 +32,7 @@ type RedisListConfig struct {
 func NewRedisListConfig() RedisListConfig {
 	return RedisListConfig{
 		Config:      bredis.NewConfig(),
-		Key:         "benthos_list",
+		Key:         "",
 		MaxInFlight: 1,
 		Batching:    batch.NewPolicyConfig(),
 	}

@@ -31,9 +31,8 @@ Publish to an NATS subject.
 output:
   label: ""
   nats:
-    urls:
-      - nats://127.0.0.1:4222
-    subject: benthos_messages
+    urls: []
+    subject: ""
     headers: {}
     max_in_flight: 1
 ```
@@ -46,9 +45,8 @@ output:
 output:
   label: ""
   nats:
-    urls:
-      - nats://127.0.0.1:4222
-    subject: benthos_messages
+    urls: []
+    subject: ""
     headers: {}
     max_in_flight: 1
     tls:
@@ -110,7 +108,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["nats://127.0.0.1:4222"]`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -129,7 +127,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos_messages"`  
+Default: `""`  
 
 ### `headers`
 

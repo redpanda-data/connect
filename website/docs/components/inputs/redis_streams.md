@@ -34,11 +34,10 @@ input:
   redis_streams:
     url: ""
     body_key: body
-    streams:
-      - benthos_stream
+    streams: []
     limit: 10
-    client_id: benthos_consumer
-    consumer_group: benthos_group
+    client_id: ""
+    consumer_group: ""
 ```
 
 </TabItem>
@@ -60,11 +59,10 @@ input:
       root_cas_file: ""
       client_certs: []
     body_key: body
-    streams:
-      - benthos_stream
+    streams: []
     limit: 10
-    client_id: benthos_consumer
-    consumer_group: benthos_group
+    client_id: ""
+    consumer_group: ""
     create_streams: true
     start_from_oldest: true
     commit_period: 1s
@@ -269,7 +267,7 @@ A list of streams to consume from.
 
 
 Type: `array`  
-Default: `["benthos_stream"]`  
+Default: `[]`  
 
 ### `limit`
 
@@ -285,7 +283,7 @@ An identifier for the client connection.
 
 
 Type: `string`  
-Default: `"benthos_consumer"`  
+Default: `""`  
 
 ### `consumer_group`
 
@@ -293,7 +291,7 @@ An identifier for the consumer group of the stream.
 
 
 Type: `string`  
-Default: `"benthos_group"`  
+Default: `""`  
 
 ### `create_streams`
 

@@ -30,7 +30,7 @@ Executes a command as a subprocess and, for each message, will pipe its contents
 # Common config fields, showing default values
 label: ""
 subprocess:
-  name: cat
+  name: ""
   args: []
 ```
 
@@ -41,7 +41,7 @@ subprocess:
 # All config fields, showing default values
 label: ""
 subprocess:
-  name: cat
+  name: ""
   args: []
   max_buffer: 65536
   codec_send: lines
@@ -75,7 +75,7 @@ The command to execute as a subprocess.
 
 
 Type: `string`  
-Default: `"cat"`  
+Default: `""`  
 
 ```yml
 # Examples

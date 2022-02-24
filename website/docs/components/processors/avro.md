@@ -25,7 +25,7 @@ Performs Avro based operations on messages based on a schema.
 # Config fields, showing default values
 label: ""
 avro:
-  operator: to_json
+  operator: ""
   encoding: textual
   schema: ""
   schema_path: ""
@@ -54,7 +54,7 @@ The [operator](#operators) to execute
 
 
 Type: `string`  
-Default: `"to_json"`  
+Default: `""`  
 Options: `to_json`, `from_json`.
 
 ### `encoding`

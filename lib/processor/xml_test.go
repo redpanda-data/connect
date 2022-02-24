@@ -92,6 +92,7 @@ func TestXMLCases(t *testing.T) {
 
 	conf := NewConfig()
 	conf.Type = "xml"
+	conf.XML.Operator = "to_json"
 	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
@@ -119,6 +120,7 @@ func TestXMLWithCast(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "xml"
 	conf.XML.Cast = true
+	conf.XML.Operator = "to_json"
 
 	testString := `<root><title>This is a title</title><number id="99">123</number><bool>True</bool></root>`
 

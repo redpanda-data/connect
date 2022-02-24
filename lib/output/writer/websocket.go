@@ -29,7 +29,7 @@ type WebsocketConfig struct {
 // NewWebsocketConfig creates a new WebsocketConfig with default values.
 func NewWebsocketConfig() WebsocketConfig {
 	return WebsocketConfig{
-		URL:    "ws://localhost:4195/post/ws",
+		URL:    "",
 		Config: auth.NewConfig(),
 		TLS:    btls.NewConfig(),
 	}

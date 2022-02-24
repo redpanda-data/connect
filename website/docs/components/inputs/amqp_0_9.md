@@ -33,8 +33,8 @@ input:
   label: ""
   amqp_0_9:
     urls: []
-    queue: benthos-queue
-    consumer_tag: benthos-consumer
+    queue: ""
+    consumer_tag: ""
     prefetch_count: 10
 ```
 
@@ -47,12 +47,12 @@ input:
   label: ""
   amqp_0_9:
     urls: []
-    queue: benthos-queue
+    queue: ""
     queue_declare:
       enabled: false
       durable: true
     bindings_declare: []
-    consumer_tag: benthos-consumer
+    consumer_tag: ""
     auto_ack: false
     nack_reject_patterns: []
     prefetch_count: 10
@@ -131,7 +131,7 @@ An AMQP queue to consume from.
 
 
 Type: `string`  
-Default: `"benthos-queue"`  
+Default: `""`  
 
 ### `queue_declare`
 
@@ -195,7 +195,7 @@ A consumer tag.
 
 
 Type: `string`  
-Default: `"benthos-consumer"`  
+Default: `""`  
 
 ### `auto_ack`
 

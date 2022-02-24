@@ -24,8 +24,8 @@ message contents and metadata.
 # Config fields, showing default values
 label: ""
 awk:
-  codec: text
-  program: BEGIN { x = 0 } { print $0, x; x++ }
+  codec: ""
+  program: ""
 ```
 
 Works by feeding message contents as the program input based on a chosen
@@ -51,7 +51,7 @@ A [codec](#codecs) defines how messages should be inserted into the AWK program 
 
 
 Type: `string`  
-Default: `"text"`  
+Default: `""`  
 Options: `none`, `text`, `json`.
 
 ### `program`
@@ -60,7 +60,7 @@ An AWK program to execute
 
 
 Type: `string`  
-Default: `"BEGIN { x = 0 } { print $0, x; x++ }"`  
+Default: `""`  
 
 ## Examples
 

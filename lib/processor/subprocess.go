@@ -84,7 +84,7 @@ type SubprocessConfig struct {
 // NewSubprocessConfig returns a SubprocessConfig with default values.
 func NewSubprocessConfig() SubprocessConfig {
 	return SubprocessConfig{
-		Name:      "cat",
+		Name:      "",
 		Args:      []string{},
 		MaxBuffer: bufio.MaxScanTokenSize,
 		CodecSend: "lines",

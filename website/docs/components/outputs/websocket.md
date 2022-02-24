@@ -31,7 +31,7 @@ Sends messages to an HTTP server via a websocket connection.
 output:
   label: ""
   websocket:
-    url: ws://localhost:4195/post/ws
+    url: ""
 ```
 
 </TabItem>
@@ -42,7 +42,7 @@ output:
 output:
   label: ""
   websocket:
-    url: ws://localhost:4195/post/ws
+    url: ""
     tls:
       enabled: false
       skip_cert_verify: false
@@ -79,7 +79,7 @@ The URL to connect to.
 
 
 Type: `string`  
-Default: `"ws://localhost:4195/post/ws"`  
+Default: `""`  
 
 ### `tls`
 

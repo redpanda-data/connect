@@ -23,7 +23,7 @@ multiple messages within a [batch](/docs/configuration/batching).
 # Config fields, showing default values
 label: ""
 unarchive:
-  format: binary
+  format: ""
 ```
 
 When a message is unarchived the new messages replace the original message in
@@ -43,7 +43,7 @@ The unarchive [format](#formats) to use.
 
 
 Type: `string`  
-Default: `"binary"`  
+Default: `""`  
 Options: `tar`, `zip`, `binary`, `lines`, `json_documents`, `json_array`, `json_map`, `csv`.
 
 ## Formats

@@ -32,7 +32,7 @@ input:
   label: ""
   redis_list:
     url: ""
-    key: benthos_list
+    key: ""
 ```
 
 </TabItem>
@@ -53,7 +53,7 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    key: benthos_list
+    key: ""
     timeout: 5s
 ```
 
@@ -243,7 +243,7 @@ The key of a list to read from.
 
 
 Type: `string`  
-Default: `"benthos_list"`  
+Default: `""`  
 
 ### `timeout`
 

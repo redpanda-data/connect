@@ -32,11 +32,9 @@ it is created with a dynamic mapping.
 output:
   label: ""
   elasticsearch:
-    urls:
-      - http://localhost:9200
-    index: benthos_index
+    urls: []
+    index: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
-    type: doc
     max_in_flight: 1
     batching:
       count: 0
@@ -53,13 +51,11 @@ output:
 output:
   label: ""
   elasticsearch:
-    urls:
-      - http://localhost:9200
-    index: benthos_index
+    urls: []
+    index: ""
     action: index
     pipeline: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
-    type: doc
     routing: ""
     sniff: true
     healthcheck: true
@@ -132,7 +128,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["http://localhost:9200"]`  
+Default: `[]`  
 
 ```yml
 # Examples
@@ -148,7 +144,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos_index"`  
+Default: `""`  
 
 ### `action`
 
@@ -177,14 +173,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"${!count(\"elastic_ids\")}-${!timestamp_unix()}"`  
-
-### `type`
-
-The document type.
-
-
-Type: `string`  
-Default: `"doc"`  
 
 ### `routing`
 

@@ -33,7 +33,7 @@ type RedisPubSubConfig struct {
 func NewRedisPubSubConfig() RedisPubSubConfig {
 	return RedisPubSubConfig{
 		Config:      bredis.NewConfig(),
-		Channel:     "benthos_chan",
+		Channel:     "",
 		MaxInFlight: 1,
 		Batching:    batch.NewPolicyConfig(),
 	}

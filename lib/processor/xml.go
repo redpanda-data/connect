@@ -111,7 +111,7 @@ type XMLConfig struct {
 // NewXMLConfig returns a XMLConfig with default values.
 func NewXMLConfig() XMLConfig {
 	return XMLConfig{
-		Operator: "to_json",
+		Operator: "",
 		Cast:     false,
 	}
 }

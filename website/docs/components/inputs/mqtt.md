@@ -31,11 +31,9 @@ Subscribe to topics on MQTT brokers.
 input:
   label: ""
   mqtt:
-    urls:
-      - tcp://localhost:1883
-    topics:
-      - benthos_topic
-    client_id: benthos_input
+    urls: []
+    topics: []
+    client_id: ""
     connect_timeout: 30s
 ```
 
@@ -47,11 +45,9 @@ input:
 input:
   label: ""
   mqtt:
-    urls:
-      - tcp://localhost:1883
-    topics:
-      - benthos_topic
-    client_id: benthos_input
+    urls: []
+    topics: []
+    client_id: ""
     dynamic_client_id_suffix: ""
     qos: 1
     clean_session: true
@@ -100,7 +96,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["tcp://localhost:1883"]`  
+Default: `[]`  
 
 ### `topics`
 
@@ -108,7 +104,7 @@ A list of topics to consume from.
 
 
 Type: `array`  
-Default: `["benthos_topic"]`  
+Default: `[]`  
 
 ### `client_id`
 
@@ -116,7 +112,7 @@ An identifier for the client connection.
 
 
 Type: `string`  
-Default: `"benthos_input"`  
+Default: `""`  
 
 ### `dynamic_client_id_suffix`
 

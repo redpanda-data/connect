@@ -26,7 +26,7 @@ overwrites the previous contents with the new value.
 # Config fields, showing default values
 label: ""
 xml:
-  operator: to_json
+  operator: ""
   cast: false
 ```
 
@@ -102,7 +102,7 @@ An XML [operation](#operators) to apply to messages.
 
 
 Type: `string`  
-Default: `"to_json"`  
+Default: `""`  
 Options: `to_json`.
 
 ### `cast`

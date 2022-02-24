@@ -34,7 +34,7 @@ result.
 label: ""
 redis:
   url: ""
-  operator: scard
+  operator: ""
   key: ""
 ```
 
@@ -55,7 +55,7 @@ redis:
     root_cas: ""
     root_cas_file: ""
     client_certs: []
-  operator: scard
+  operator: ""
   key: ""
   retries: 3
   retry_period: 500ms
@@ -337,7 +337,7 @@ The [operator](#operators) to apply.
 
 
 Type: `string`  
-Default: `"scard"`  
+Default: `""`  
 Options: `scard`, `sadd`, `incrby`, `keys`.
 
 ### `key`

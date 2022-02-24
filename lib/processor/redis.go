@@ -142,7 +142,7 @@ type RedisConfig struct {
 func NewRedisConfig() RedisConfig {
 	return RedisConfig{
 		Config:      bredis.NewConfig(),
-		Operator:    "scard",
+		Operator:    "",
 		Key:         "",
 		Retries:     3,
 		RetryPeriod: "500ms",

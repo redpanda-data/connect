@@ -31,8 +31,8 @@ Connects to a tcp or unix socket and consumes a continuous stream of messages.
 input:
   label: ""
   socket:
-    network: unix
-    address: /tmp/benthos.sock
+    network: ""
+    address: ""
     codec: lines
 ```
 
@@ -44,8 +44,8 @@ input:
 input:
   label: ""
   socket:
-    network: unix
-    address: /tmp/benthos.sock
+    network: ""
+    address: ""
     codec: lines
     max_buffer: 1000000
 ```
@@ -61,7 +61,7 @@ A network type to assume (unix|tcp).
 
 
 Type: `string`  
-Default: `"unix"`  
+Default: `""`  
 Options: `unix`, `tcp`.
 
 ### `address`
@@ -70,7 +70,7 @@ The address to connect to.
 
 
 Type: `string`  
-Default: `"/tmp/benthos.sock"`  
+Default: `""`  
 
 ```yml
 # Examples

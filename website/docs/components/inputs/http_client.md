@@ -31,7 +31,7 @@ Connects to a server and continuously performs requests for a single message.
 input:
   label: ""
   http_client:
-    url: http://localhost:4195/get
+    url: ""
     verb: GET
     headers:
       Content-Type: application/octet-stream
@@ -52,7 +52,7 @@ input:
 input:
   label: ""
   http_client:
-    url: http://localhost:4195/get
+    url: ""
     verb: GET
     headers:
       Content-Type: application/octet-stream
@@ -168,7 +168,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"http://localhost:4195/get"`  
+Default: `""`  
 
 ### `verb`
 

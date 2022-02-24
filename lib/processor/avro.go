@@ -74,7 +74,7 @@ type AvroConfig struct {
 // NewAvroConfig returns a AvroConfig with default values.
 func NewAvroConfig() AvroConfig {
 	return AvroConfig{
-		Operator:   "to_json",
+		Operator:   "",
 		Encoding:   "textual",
 		Schema:     "",
 		SchemaPath: "",

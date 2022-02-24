@@ -55,8 +55,8 @@ type CompressConfig struct {
 // NewCompressConfig returns a CompressConfig with default values.
 func NewCompressConfig() CompressConfig {
 	return CompressConfig{
-		Algorithm: "gzip",
-		Level:     gzip.DefaultCompression,
+		Algorithm: "",
+		Level:     -1,
 	}
 }
 
