@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/serverless"
 	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -34,10 +34,21 @@ func Run() {
 	}
 
 	conf := config.New()
-	conf.Metrics.Type = metrics.TypeAWSCloudWatch
+	conf.Metrics.Type = "none"
+	conf.Logger.Format = "json"
 
-	// TODO: V4 Replace this and ensure processor errors fail the handler.
-	conf.Output.Type = serverless.ServerlessResponseType
+	conf.Output.Type = "switch"
+	conf.Output.Switch.RetryUntilSuccess = false
+
+	errorCase := output.NewSwitchConfigCase()
+	errorCase.Check = "errored()"
+	errorCase.Output.Type = "reject"
+	errorCase.Output.Reject = "processing failed due to: ${! error() }"
+
+	responseCase := output.NewSwitchConfigCase()
+	responseCase.Output.Type = "sync_response"
+
+	conf.Output.Switch.Cases = append(conf.Output.Switch.Cases, errorCase, responseCase)
 
 	if confStr := os.Getenv("BENTHOS_CONFIG"); len(confStr) > 0 {
 		confBytes := text.ReplaceEnvVariables([]byte(confStr))
