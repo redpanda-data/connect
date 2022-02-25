@@ -135,14 +135,14 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 			if err != nil {
 				return nil, err
 			}
-			return pipeline.NewProcessor(log.Noop(), metrics.Noop(), proc), nil
+			return pipeline.NewProcessor(proc), nil
 		},
 		func(i *int) (iprocessor.Pipeline, error) {
 			proc, err := processor.New(secondProc, mock.NewManager(), log.Noop(), metrics.Noop())
 			if err != nil {
 				return nil, err
 			}
-			return pipeline.NewProcessor(log.Noop(), metrics.Noop(), proc), nil
+			return pipeline.NewProcessor(proc), nil
 		},
 	)
 	if err != nil {

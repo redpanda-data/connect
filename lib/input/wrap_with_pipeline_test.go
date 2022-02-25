@@ -7,9 +7,7 @@ import (
 	"time"
 
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/response"
 )
@@ -214,11 +212,8 @@ func (m mockProc) WaitForClose(timeout time.Duration) error {
 func TestBasicWrapProcessors(t *testing.T) {
 	mockIn := &mockInput{ts: make(chan message.Transaction)}
 
-	l := log.Noop()
-	s := metrics.Noop()
-
-	pipe1 := pipeline.NewProcessor(l, s, mockProc{})
-	pipe2 := pipeline.NewProcessor(l, s, mockProc{})
+	pipe1 := pipeline.NewProcessor(mockProc{})
+	pipe2 := pipeline.NewProcessor(mockProc{})
 
 	newInput, err := WrapWithPipelines(mockIn, func(i *int) (iprocessor.Pipeline, error) {
 		return pipe1, nil
@@ -291,10 +286,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 func TestBasicWrapDoubleProcessors(t *testing.T) {
 	mockIn := &mockInput{ts: make(chan message.Transaction)}
 
-	l := log.Noop()
-	s := metrics.Noop()
-
-	pipe1 := pipeline.NewProcessor(l, s, mockProc{}, mockProc{})
+	pipe1 := pipeline.NewProcessor(mockProc{}, mockProc{})
 
 	newInput, err := WrapWithPipelines(mockIn, func(i *int) (iprocessor.Pipeline, error) {
 		return pipe1, nil

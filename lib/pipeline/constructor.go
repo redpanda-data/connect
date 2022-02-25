@@ -6,8 +6,6 @@ import (
 
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 )
 
@@ -27,27 +25,16 @@ type Config struct {
 // NewConfig returns a configuration struct fully populated with default values.
 func NewConfig() Config {
 	return Config{
-		Threads:    1,
+		Threads:    -1,
 		Processors: []processor.Config{},
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// ProcessorConstructorFunc is a constructor to be called for each parallel
-// stream pipeline thread in order to construct a custom processor
-// implementation.
-type ProcessorConstructorFunc func() (iprocessor.V1, error)
-
 // New creates an input type based on an input configuration.
-func New(
-	conf Config,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-	processorCtors ...ProcessorConstructorFunc,
-) (Type, error) {
-	processors := make([]iprocessor.V1, len(conf.Processors)+len(processorCtors))
+func New(conf Config, mgr interop.Manager) (Type, error) {
+	processors := make([]iprocessor.V1, len(conf.Processors))
 	for j, procConf := range conf.Processors {
 		var err error
 		pMgr := mgr.IntoPath("processors", strconv.Itoa(j))
@@ -56,16 +43,8 @@ func New(
 			return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 		}
 	}
-	for j, procCtor := range processorCtors {
-		var err error
-		processors[j+len(conf.Processors)], err = procCtor()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create processor: %v", err)
-		}
-	}
-
 	if conf.Threads == 1 {
-		return NewProcessor(log, stats, processors...), nil
+		return NewProcessor(processors...), nil
 	}
-	return newPoolV2(conf.Threads, log, stats, processors...)
+	return newPoolV2(conf.Threads, mgr.Logger(), processors...)
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/public/service"
+	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -14,15 +15,19 @@ import (
 )
 
 func TestTracing(t *testing.T) {
+	u, err := uuid.NewV4()
+	require.NoError(t, err)
+
 	config := `
 input:
   generate:
     count: 5
     interval: 1us
     mapping: |
-      root.id = count("counting the number of messages in my tracing test")
+      root.id = count("` + u.String() + `")
 
 pipeline:
+  threads: 1
   processors:
     - bloblang: |
         root.count = if this.id % 2 == 0 { throw("nah %v".format(this.id)) } else { this.id }
@@ -94,6 +99,7 @@ input:
       root.id = uuid_v4()
 
 pipeline:
+  threads: 1
   processors:
     - bloblang: 'root = this'
 
@@ -150,6 +156,7 @@ input:
       root.id = uuid_v4()
 
 pipeline:
+  threads: 1
   processors:
     - bloblang: 'root = this'
 

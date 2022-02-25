@@ -10,10 +10,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
-
-//------------------------------------------------------------------------------
 
 // Pool is a pool of pipelines. Each pipeline reads from a shared transaction
 // channel. Inputs remain coupled to their outputs as they propagate the
@@ -23,8 +20,7 @@ type Pool struct {
 
 	workers []iprocessor.Pipeline
 
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 
 	messagesIn  <-chan message.Transaction
 	messagesOut chan message.Transaction
@@ -33,13 +29,7 @@ type Pool struct {
 	closed    chan struct{}
 }
 
-// TODO: V4 Remove this
-func newTestPool(
-	constructor iprocessor.PipelineConstructorFunc,
-	threads int,
-	log log.Modular,
-	stats metrics.Type,
-) (*Pool, error) {
+func newPoolV2(threads int, log log.Modular, msgProcessors ...iprocessor.V1) (*Pool, error) {
 	if threads <= 0 {
 		threads = runtime.NumCPU()
 	}
@@ -48,45 +38,13 @@ func newTestPool(
 		running:     1,
 		workers:     make([]iprocessor.Pipeline, threads),
 		log:         log,
-		stats:       stats,
 		messagesOut: make(chan message.Transaction),
 		closeChan:   make(chan struct{}),
 		closed:      make(chan struct{}),
 	}
 
 	for i := range p.workers {
-		procs := 0
-		var err error
-		if p.workers[i], err = constructor(&procs); err != nil {
-			return nil, err
-		}
-	}
-
-	return p, nil
-}
-
-func newPoolV2(
-	threads int,
-	log log.Modular,
-	stats metrics.Type,
-	msgProcessors ...iprocessor.V1,
-) (*Pool, error) {
-	if threads <= 0 {
-		threads = runtime.NumCPU()
-	}
-
-	p := &Pool{
-		running:     1,
-		workers:     make([]iprocessor.Pipeline, threads),
-		log:         log,
-		stats:       stats,
-		messagesOut: make(chan message.Transaction),
-		closeChan:   make(chan struct{}),
-		closed:      make(chan struct{}),
-	}
-
-	for i := range p.workers {
-		p.workers[i] = NewProcessor(log, stats, msgProcessors...)
+		p.workers[i] = NewProcessor(msgProcessors...)
 	}
 
 	return p, nil
@@ -200,5 +158,3 @@ func (p *Pool) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

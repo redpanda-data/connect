@@ -6,47 +6,28 @@ import (
 	"testing"
 	"time"
 
-	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPoolBasic(t *testing.T) {
 	mockProc := &mockMsgProcessor{dropChan: make(chan bool)}
-
 	go func() {
 		mockProc.dropChan <- true
 	}()
 
-	constr := func(i *int) (iprocessor.Pipeline, error) {
-		return NewProcessor(
-			log.Noop(),
-			metrics.Noop(),
-			mockProc,
-		), nil
-	}
-
-	proc, err := newTestPool(
-		constr, 1,
-		log.Noop(),
-		metrics.Noop(),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	proc, err := newPoolV2(1, log.Noop(), mockProc)
+	require.NoError(t, err)
 
 	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
 
-	if err := proc.Consume(tChan); err != nil {
-		t.Fatal(err)
-	}
-	if err := proc.Consume(tChan); err == nil {
-		t.Error("Expected error from dupe receiving")
-	}
+	require.NoError(t, proc.Consume(tChan))
+	assert.Error(t, proc.Consume(tChan))
 
 	msg := message.QuickBatch([][]byte{
 		[]byte(`one`),
@@ -136,19 +117,7 @@ func TestPoolBasic(t *testing.T) {
 func TestPoolMultiMsgs(t *testing.T) {
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
-	constr := func(i *int) (iprocessor.Pipeline, error) {
-		return NewProcessor(
-			log.Noop(),
-			metrics.Noop(),
-			mockProc,
-		), nil
-	}
-
-	proc, err := newTestPool(
-		constr, 1,
-		log.Noop(),
-		metrics.Noop(),
-	)
+	proc, err := newPoolV2(1, log.Noop(), mockProc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +196,7 @@ func TestPoolMultiThreads(t *testing.T) {
 	conf.Threads = 2
 	conf.Processors = append(conf.Processors, processor.NewConfig())
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +269,7 @@ func TestPoolMultiNaturalClose(t *testing.T) {
 	conf.Threads = 2
 	conf.Processors = append(conf.Processors, processor.NewConfig())
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := New(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

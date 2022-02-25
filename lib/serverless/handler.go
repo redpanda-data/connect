@@ -140,7 +140,7 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	transactionChan := make(chan message.Transaction, 1)
 
 	pMgr := manager.IntoPath("pipeline")
-	if pipelineLayer, err = pipeline.New(conf.Pipeline, pMgr, pMgr.Logger(), pMgr.Metrics()); err != nil {
+	if pipelineLayer, err = pipeline.New(conf.Pipeline, pMgr); err != nil {
 		return nil, fmt.Errorf("failed to create resource pipeline: %w", err)
 	}
 

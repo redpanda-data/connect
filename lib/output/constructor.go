@@ -79,7 +79,7 @@ func AppendProcessorsFromConfig(
 				}
 				*i++
 			}
-			return pipeline.NewProcessor(log, stats, processors...), nil
+			return pipeline.NewProcessor(processors...), nil
 		}}...)
 	}
 	return pipelines

@@ -107,7 +107,7 @@ func (t *Type) start() (err error) {
 	}
 	if tLen := len(t.conf.Pipeline.Processors); tLen > 0 {
 		pMgr := t.manager.IntoPath("pipeline")
-		if t.pipelineLayer, err = pipeline.New(t.conf.Pipeline, pMgr, pMgr.Logger(), pMgr.Metrics()); err != nil {
+		if t.pipelineLayer, err = pipeline.New(t.conf.Pipeline, pMgr); err != nil {
 			return
 		}
 	}

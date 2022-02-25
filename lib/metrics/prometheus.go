@@ -87,7 +87,7 @@ func NewPrometheusPushBasicAuthConfig() PrometheusPushBasicAuthConfig {
 // NewPrometheusConfig creates an PrometheusConfig struct with default values.
 func NewPrometheusConfig() PrometheusConfig {
 	return PrometheusConfig{
-		UseHistogramTiming: false,
+		UseHistogramTiming: true,
 		HistogramBuckets:   []float64{},
 		PushURL:            "",
 		PushBasicAuth:      NewPrometheusPushBasicAuthConfig(),

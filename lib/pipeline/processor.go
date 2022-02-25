@@ -7,9 +7,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
@@ -22,7 +20,6 @@ import (
 // either propagate a new message or drop it.
 type Processor struct {
 	running int32
-	stats   metrics.Type
 
 	msgProcessors []iprocessor.V1
 
@@ -36,15 +33,10 @@ type Processor struct {
 }
 
 // NewProcessor returns a new message processing pipeline.
-func NewProcessor(
-	log log.Modular,
-	stats metrics.Type,
-	msgProcessors ...iprocessor.V1,
-) *Processor {
+func NewProcessor(msgProcessors ...iprocessor.V1) *Processor {
 	return &Processor{
 		running:       1,
 		msgProcessors: msgProcessors,
-		stats:         stats,
 		messagesOut:   make(chan message.Transaction),
 		responsesIn:   make(chan response.Error),
 		closeChan:     make(chan struct{}),

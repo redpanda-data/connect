@@ -8,9 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
 )
 
@@ -58,11 +56,7 @@ func TestProcessorPipeline(t *testing.T) {
 		mockProc.dropChan <- true
 	}()
 
-	proc := NewProcessor(
-		log.Noop(),
-		metrics.Noop(),
-		mockProc,
-	)
+	proc := NewProcessor(mockProc)
 
 	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
 
@@ -212,11 +206,7 @@ func (m *mockMultiMsgProcessor) WaitForClose(timeout time.Duration) error {
 func TestProcessorMultiMsgs(t *testing.T) {
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
-	proc := NewProcessor(
-		log.Noop(),
-		metrics.Noop(),
-		mockProc,
-	)
+	proc := NewProcessor(mockProc)
 
 	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
 
@@ -297,11 +287,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
-	proc := NewProcessor(
-		log.Noop(),
-		metrics.Noop(),
-		mockProc,
-	)
+	proc := NewProcessor(mockProc)
 
 	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
 

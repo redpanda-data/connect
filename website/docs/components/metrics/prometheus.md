@@ -39,7 +39,7 @@ metrics:
 # All config fields, showing default values
 metrics:
   prometheus:
-    use_histogram_timing: false
+    use_histogram_timing: true
     histogram_buckets: []
     add_process_metrics: false
     add_go_metrics: false
