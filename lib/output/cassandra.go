@@ -18,12 +18,12 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/util/retries"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/gocql/gocql"
 )
 

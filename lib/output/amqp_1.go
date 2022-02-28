@@ -3,13 +3,13 @@ package output
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/amqp1"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
+	"github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
-	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -34,7 +34,7 @@ Message metadata is added to each AMQP message as string annotations. In order t
 			docs.FieldCommon("target_address", "The target address to write to.", "/foo", "queue:/bar", "topic:/baz"),
 			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			tls.FieldSpec(),
-			sasl.FieldSpec(),
+			amqp1.SASLFieldSpec(),
 			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to messages as headers.").WithChildren(metadata.ExcludeFilterFields()...),
 		},
 		Categories: []Category{

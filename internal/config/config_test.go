@@ -5,8 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	iconfig "github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/lib/config"
+	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -15,7 +14,7 @@ import (
 
 func TestSetOverridesOnNothing(t *testing.T) {
 	conf := config.New()
-	rdr := iconfig.NewReader("", nil, iconfig.OptAddOverrides(
+	rdr := config.NewReader("", nil, config.OptAddOverrides(
 		"input.type=kafka",
 		"input.kafka.addresses=foobarbaz.com",
 		"output.type=amqp_0_9",
@@ -60,7 +59,7 @@ func TestSetOverrideErrors(t *testing.T) {
 
 	for _, test := range tests {
 		conf := config.New()
-		rdr := iconfig.NewReader("", nil, iconfig.OptAddOverrides(test.input))
+		rdr := config.NewReader("", nil, config.OptAddOverrides(test.input))
 
 		_, err := rdr.Read(&conf)
 		assert.Contains(t, err.Error(), test.err)
@@ -79,7 +78,7 @@ input:
 `), 0o644))
 
 	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, nil, iconfig.OptAddOverrides(
+	rdr := config.NewReader(fullPath, nil, config.OptAddOverrides(
 		"input.kafka.addresses.0=nope1.com",
 		"input.kafka.addresses.1=nope2.com",
 		"input.kafka.topics=justthis",
@@ -138,7 +137,7 @@ tests:
 `), 0o644))
 
 	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath, resourceThreePath})
+	rdr := config.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath, resourceThreePath})
 
 	lints, err := rdr.Read(&conf)
 	require.NoError(t, err)
@@ -188,7 +187,7 @@ cache_resources:
 `), 0o644))
 
 	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
+	rdr := config.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
 
 	lints, err := rdr.Read(&conf)
 	require.NoError(t, err)

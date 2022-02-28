@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
+	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"gopkg.in/yaml.v3"
 )
 

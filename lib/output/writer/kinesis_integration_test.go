@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
+	sess "github.com/Jeffail/benthos/v3/internal/impl/aws/session"
+	"github.com/Jeffail/benthos/v3/internal/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"

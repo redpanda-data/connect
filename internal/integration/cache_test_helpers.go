@@ -10,11 +10,11 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/config"
+	"github.com/Jeffail/benthos/v3/internal/manager"
+	"github.com/Jeffail/benthos/v3/internal/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -193,7 +193,7 @@ func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.LintV2(docs.NewLintContext(), confBytes)
+	lints, err := config.LintBytes(docs.NewLintContext(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 

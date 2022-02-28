@@ -10,12 +10,12 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	mqttconf "github.com/Jeffail/benthos/v3/internal/impl/mqtt"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/mqttconf"
+	"github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/tls"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )

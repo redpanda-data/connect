@@ -2,9 +2,9 @@ package docs
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/http/docs/auth"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
-	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
-	"github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/gabs/v2"
 )
 

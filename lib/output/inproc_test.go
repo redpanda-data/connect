@@ -6,8 +6,8 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/stretchr/testify/require"

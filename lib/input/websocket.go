@@ -3,12 +3,12 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/http/docs/auth"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/http/auth"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------

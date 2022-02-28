@@ -17,12 +17,12 @@ import (
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/lib/config"
+	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -450,7 +450,7 @@ func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.LintV2(docs.NewLintContext(), confBytes)
+	lints, err := config.LintBytes(docs.NewLintContext(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -479,7 +479,7 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.LintV2(docs.NewLintContext(), confBytes)
+	lints, err := config.LintBytes(docs.NewLintContext(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 

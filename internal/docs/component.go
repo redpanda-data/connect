@@ -7,9 +7,19 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Jeffail/benthos/v3/lib/util/config"
 	"gopkg.in/yaml.v3"
 )
+
+// Copied from ./internal/config/format.go
+func marshalYAML(v interface{}) ([]byte, error) {
+	var cbytes bytes.Buffer
+	enc := yaml.NewEncoder(&cbytes)
+	enc.SetIndent(2)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return cbytes.Bytes(), nil
+}
 
 // AnnotatedExample is an isolated example for a component.
 type AnnotatedExample struct {
@@ -266,11 +276,11 @@ func genExampleConfigs(t Type, nest bool, fullConfigExample interface{}) (common
 		commonConfig = map[string]interface{}{string(t): commonConfig}
 	}
 
-	advancedConfigBytes, err := config.MarshalYAML(advConfig)
+	advancedConfigBytes, err := marshalYAML(advConfig)
 	if err != nil {
 		panic(err)
 	}
-	commonConfigBytes, err := config.MarshalYAML(commonConfig)
+	commonConfigBytes, err := marshalYAML(commonConfig)
 	if err != nil {
 		panic(err)
 	}

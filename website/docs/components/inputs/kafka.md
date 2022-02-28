@@ -57,7 +57,7 @@ input:
       root_cas_file: ""
       client_certs: []
     sasl:
-      mechanism: ""
+      mechanism: none
       user: ""
       password: ""
       access_token: ""
@@ -310,10 +310,11 @@ The SASL authentication mechanism, if left empty SASL authentication is not used
 
 
 Type: `string`  
-Default: `""`  
+Default: `"none"`  
 
 | Option | Summary |
 |---|---|
+| `none` | Default, no SASL authentication. |
 | `PLAIN` | Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled). |
 | `OAUTHBEARER` | OAuth Bearer based authentication. |
 | `SCRAM-SHA-256` | Authentication using the SCRAM-SHA-256 mechanism. |

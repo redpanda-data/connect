@@ -3,8 +3,8 @@ package docs_test
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

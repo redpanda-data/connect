@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/xml"
+	"github.com/Jeffail/benthos/v3/internal/impl/xml"
 	"github.com/OneOfOne/xxhash"
 	"github.com/itchyny/timefmt-go"
 	"github.com/microcosm-cc/bluemonday"

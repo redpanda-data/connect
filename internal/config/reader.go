@@ -12,8 +12,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/stream"
+	"github.com/Jeffail/benthos/v3/internal/stream"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v3"
@@ -121,7 +120,7 @@ func OptSetStreamPaths(streamsPaths ...string) OptFunc {
 //------------------------------------------------------------------------------
 
 // Read a Benthos config from the files and options specified.
-func (r *Reader) Read(conf *config.Type) (lints []string, err error) {
+func (r *Reader) Read(conf *Type) (lints []string, err error) {
 	if lints, err = r.readMain(conf); err != nil {
 		return
 	}
@@ -313,7 +312,7 @@ func applyOverrides(specs docs.FieldSpecs, root *yaml.Node, overrides ...string)
 	return nil
 }
 
-func (r *Reader) readMain(conf *config.Type) (lints []string, err error) {
+func (r *Reader) readMain(conf *Type) (lints []string, err error) {
 	defer func() {
 		if err != nil && r.mainPath != "" {
 			err = fmt.Errorf("%v: %w", r.mainPath, err)
@@ -327,7 +326,7 @@ func (r *Reader) readMain(conf *config.Type) (lints []string, err error) {
 	var rawNode yaml.Node
 	var confBytes []byte
 	if r.mainPath != "" {
-		if confBytes, lints, err = config.ReadBytes(r.mainPath, true); err != nil {
+		if confBytes, lints, err = ReadFileEnvSwap(r.mainPath); err != nil {
 			return
 		}
 		if err = yaml.Unmarshal(confBytes, &rawNode); err != nil {
@@ -342,11 +341,11 @@ func (r *Reader) readMain(conf *config.Type) (lints []string, err error) {
 	// now (ignoring the issue).
 	r.configFileInfo.updatedAt = time.Now()
 
-	confSpec := config.Spec()
+	confSpec := Spec()
 	if r.streamsMode {
 		// Spec is limited to just non-stream fields when in streams mode (no
 		// input, output, etc)
-		confSpec = config.SpecWithoutStream()
+		confSpec = SpecWithoutStream()
 	}
 	if err = applyOverrides(confSpec, &rawNode, r.overrides...); err != nil {
 		return
@@ -373,7 +372,7 @@ func (r *Reader) reactMainUpdate(mgr bundle.NewManagement, strict bool) bool {
 
 	mgr.Logger().Infoln("Main config updated, attempting to update pipeline.")
 
-	conf := config.New()
+	conf := New()
 	lints, err := r.readMain(&conf)
 	if err != nil {
 		mgr.Logger().Errorf("Failed to read updated config: %v", err)

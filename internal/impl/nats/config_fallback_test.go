@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

@@ -3,12 +3,12 @@ package output
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	mqttconf "github.com/Jeffail/benthos/v3/internal/impl/mqtt"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/mqttconf"
+	"github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------

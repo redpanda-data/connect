@@ -5,8 +5,8 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/config"
 )
 
 // Full represents the entirety of the Benthos instances configuration spec and

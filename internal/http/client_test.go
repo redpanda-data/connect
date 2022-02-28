@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +34,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.Retry = "1ms"
 	conf.NumRetries = 3
@@ -50,7 +50,7 @@ func TestHTTPClientRetries(t *testing.T) {
 }
 
 func TestHTTPClientBadRequest(t *testing.T) {
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = "htp://notvalid:1111"
 	conf.Verb = "notvalid\n"
 	conf.NumRetries = 3
@@ -80,7 +80,7 @@ func TestHTTPClientSendBasic(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := NewClient(conf)
@@ -113,7 +113,7 @@ func TestHTTPClientBadContentType(t *testing.T) {
 	}))
 	t.Cleanup(ts.Close)
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := NewClient(conf)
@@ -135,7 +135,7 @@ func TestHTTPClientDropOn(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.DropOn = []int{400}
 
@@ -157,7 +157,7 @@ func TestHTTPClientSuccessfulOn(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.SuccessfulOn = []int{400}
 
@@ -194,7 +194,7 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + `/${! json("foo.bar") }`
 	conf.Headers["static"] = "foo"
 	conf.Headers["dynamic"] = `hdr-${!json("foo.baz")}`
@@ -256,7 +256,7 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := NewClient(conf)
@@ -296,7 +296,7 @@ func TestHTTPClientReceive(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := NewClient(conf)
@@ -331,7 +331,7 @@ bar_b: %v
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.Metadata.IncludePrefixes = []string{"foo_"}
 
@@ -370,7 +370,7 @@ func TestHTTPClientReceiveHeaders(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.CopyResponseHeaders = true
 
@@ -397,7 +397,7 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL
 
 	for _, tt := range []struct {
@@ -498,7 +498,7 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := NewClient(conf)
@@ -552,7 +552,7 @@ func TestHTTPClientReceiveMultipartWithHeaders(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := client.NewConfig()
+	conf := docs.NewConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.CopyResponseHeaders = true
 

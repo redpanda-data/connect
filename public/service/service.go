@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/Jeffail/benthos/v3/lib/service"
+	"github.com/Jeffail/benthos/v3/internal/cli"
 )
 
 // RunCLI executes Benthos as a CLI, allowing users to specify a configuration
@@ -20,5 +20,5 @@ import (
 // program, as it interacts with singleton state. In order to manage multiple
 // Benthos stream lifecycles in a program use the StreamBuilder API instead.
 func RunCLI(ctx context.Context) {
-	service.RunWithOpts(service.OptUseContext(ctx))
+	cli.RunWithOpts(cli.OptUseContext(ctx))
 }

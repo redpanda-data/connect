@@ -3,12 +3,12 @@ package input
 import (
 	"github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/impl/amqp1"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/benthos/v3/lib/input/reader"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
-	"github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ You can access these metadata fields using
 			docs.FieldCommon("source_address", "The source address to consume from.", "/foo", "queue:/bar", "topic:/baz"),
 			docs.FieldAdvanced("azure_renew_lock", "Experimental: Azure service bus specific option to renew lock if processing takes more then configured lock time").AtVersion("3.45.0"),
 			tls.FieldSpec(),
-			sasl.FieldSpec(),
+			amqp1.SASLFieldSpec(),
 		},
 	}
 }

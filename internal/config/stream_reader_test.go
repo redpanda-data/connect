@@ -5,9 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	iconfig "github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/stream"
+	"github.com/Jeffail/benthos/v3/internal/config"
+	"github.com/Jeffail/benthos/v3/internal/stream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -38,7 +37,7 @@ cache_resources:
       ttl: 13
 `), 0o644))
 
-	rdr := iconfig.NewReader("", nil, iconfig.OptSetStreamPaths(streamOnePath, streamTwoPath))
+	rdr := config.NewReader("", nil, config.OptSetStreamPaths(streamOnePath, streamTwoPath))
 
 	conf := config.New()
 	lints, err := rdr.Read(&conf)
@@ -86,7 +85,7 @@ pipeline:
     - bloblang: 'root = "third"'
 `), 0o644))
 
-	rdr := iconfig.NewReader("", nil, iconfig.OptSetStreamPaths(streamOnePath, filepath.Join(dir, "nested")))
+	rdr := config.NewReader("", nil, config.OptSetStreamPaths(streamOnePath, filepath.Join(dir, "nested")))
 
 	conf := config.New()
 	lints, err := rdr.Read(&conf)

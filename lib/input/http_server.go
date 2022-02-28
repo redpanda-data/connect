@@ -2,6 +2,7 @@ package input
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -30,7 +31,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	httputil "github.com/Jeffail/benthos/v3/lib/util/http"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -272,8 +272,8 @@ func NewHTTPServer(conf Config, mgr interop.Manager, log log.Modular, stats metr
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
-	postHdlr := httputil.GzipHandler(h.postHandler)
-	wsHdlr := httputil.GzipHandler(h.wsHandler)
+	postHdlr := gzipHandler(h.postHandler)
+	wsHdlr := gzipHandler(h.wsHandler)
 	if mux != nil {
 		if len(h.conf.Path) > 0 {
 			mux.HandleFunc(h.conf.Path, postHdlr)
@@ -741,3 +741,30 @@ func (h *HTTPServer) WaitForClose(timeout time.Duration) error {
 }
 
 //------------------------------------------------------------------------------
+
+type gzipResponseWriter struct {
+	io.Writer
+	http.ResponseWriter
+}
+
+func (w gzipResponseWriter) Write(b []byte) (int, error) {
+	if w.Header().Get("Content-Type") == "" {
+		// If no content type, apply sniffing algorithm to un-gzipped body.
+		w.Header().Set("Content-Type", http.DetectContentType(b))
+	}
+	return w.Writer.Write(b)
+}
+
+func gzipHandler(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			fn(w, r)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		gzr := gzipResponseWriter{Writer: gz, ResponseWriter: w}
+		fn(gzr, r)
+	}
+}

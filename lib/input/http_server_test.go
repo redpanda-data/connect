@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/api"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/lib/api"
+	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/response"
@@ -245,7 +245,9 @@ func TestHTTPServerLifecycle(t *testing.T) {
 	go func() {
 		_ = apiImpl.ListenAndServe()
 	}()
-	defer apiImpl.Shutdown(context.Background())
+	defer func() {
+		_ = apiImpl.Shutdown(context.Background())
+	}()
 
 	mgr, err := manager.NewV2(manager.NewResourceConfig(), apiImpl, log.Noop(), metrics.Noop())
 	require.NoError(t, err)

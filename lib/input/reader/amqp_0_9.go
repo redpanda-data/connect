@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 

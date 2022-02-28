@@ -1,9 +1,9 @@
 package reader
 
 import (
+	"github.com/Jeffail/benthos/v3/internal/impl/kafka/sasl"
+	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
-	"github.com/Jeffail/benthos/v3/lib/util/kafka/sasl"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"github.com/Shopify/sarama"
 )
 

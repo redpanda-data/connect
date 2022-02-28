@@ -7,8 +7,8 @@ import (
 	"time"
 
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
+	"github.com/Jeffail/benthos/v3/internal/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/pipeline"
 	"github.com/Jeffail/benthos/v3/lib/response"
 )
 

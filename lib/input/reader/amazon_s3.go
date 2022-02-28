@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	sess "github.com/Jeffail/benthos/v3/internal/impl/aws/session"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	sess "github.com/Jeffail/benthos/v3/lib/util/aws/session"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"

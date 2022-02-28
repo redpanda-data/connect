@@ -10,10 +10,9 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
+	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
@@ -94,7 +93,7 @@ func readResource(path string, conf *manager.ResourceConfig) (lints []string, er
 	}()
 
 	var confBytes []byte
-	if confBytes, lints, err = config.ReadBytes(path, true); err != nil {
+	if confBytes, lints, err = ReadFileEnvSwap(path); err != nil {
 		return
 	}
 
@@ -104,7 +103,7 @@ func readResource(path string, conf *manager.ResourceConfig) (lints []string, er
 	}
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
 		allowTest := append(docs.FieldSpecs{
-			config.TestsField,
+			TestsField,
 		}, manager.Spec()...)
 		for _, lint := range allowTest.LintYAML(docs.NewLintContext(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("resource file %v: line %v: %v", path, lint.Line, lint.What))

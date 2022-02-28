@@ -16,7 +16,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
 
 //------------------------------------------------------------------------------
@@ -104,7 +103,7 @@ pipeline:
 type HTTPConfig struct {
 	BatchAsMultipart bool `json:"batch_as_multipart" yaml:"batch_as_multipart"`
 	Parallel         bool `json:"parallel" yaml:"parallel"`
-	client.Config    `json:",inline" yaml:",inline"`
+	ihttpdocs.Config `json:",inline" yaml:",inline"`
 }
 
 // NewHTTPConfig returns a HTTPConfig with default values.
@@ -112,7 +111,7 @@ func NewHTTPConfig() HTTPConfig {
 	return HTTPConfig{
 		BatchAsMultipart: false,
 		Parallel:         false,
-		Config:           client.NewConfig(),
+		Config:           ihttpdocs.NewConfig(),
 	}
 }
 

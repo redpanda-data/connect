@@ -20,7 +20,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
 
 func httpClientSpec() docs.FieldSpec {
@@ -107,15 +106,15 @@ type StreamConfig struct {
 
 // HTTPClientConfig contains configuration for the HTTPClient output type.
 type HTTPClientConfig struct {
-	client.Config   `json:",inline" yaml:",inline"`
-	Payload         string       `json:"payload" yaml:"payload"`
-	DropEmptyBodies bool         `json:"drop_empty_bodies" yaml:"drop_empty_bodies"`
-	Stream          StreamConfig `json:"stream" yaml:"stream"`
+	ihttpdocs.Config `json:",inline" yaml:",inline"`
+	Payload          string       `json:"payload" yaml:"payload"`
+	DropEmptyBodies  bool         `json:"drop_empty_bodies" yaml:"drop_empty_bodies"`
+	Stream           StreamConfig `json:"stream" yaml:"stream"`
 }
 
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
-	cConf := client.NewConfig()
+	cConf := ihttpdocs.NewConfig()
 	cConf.Verb = "GET"
 	cConf.URL = ""
 	return HTTPClientConfig{

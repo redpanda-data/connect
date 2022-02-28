@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/rcrowley/go-metrics"
 )

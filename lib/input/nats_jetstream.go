@@ -2,7 +2,7 @@ package input
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
-	"github.com/Jeffail/benthos/v3/lib/util/tls"
+	"github.com/Jeffail/benthos/v3/internal/tls"
 )
 
 // NATSJetStreamConfig contains configuration fields for the NATS Jetstream

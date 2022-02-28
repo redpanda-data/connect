@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/http"
+	"github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 )
 
 //------------------------------------------------------------------------------
@@ -30,7 +30,7 @@ type HTTPClientMultipartExpression struct {
 // HTTPClientConfig contains configuration fields for the HTTPClient output
 // type.
 type HTTPClientConfig struct {
-	client.Config     `json:",inline" yaml:",inline"`
+	docs.Config       `json:",inline" yaml:",inline"`
 	BatchAsMultipart  bool                            `json:"batch_as_multipart" yaml:"batch_as_multipart"`
 	MaxInFlight       int                             `json:"max_in_flight" yaml:"max_in_flight"`
 	PropagateResponse bool                            `json:"propagate_response" yaml:"propagate_response"`
@@ -41,7 +41,7 @@ type HTTPClientConfig struct {
 // NewHTTPClientConfig creates a new HTTPClientConfig with default values.
 func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
-		Config:            client.NewConfig(),
+		Config:            docs.NewConfig(),
 		BatchAsMultipart:  false,
 		MaxInFlight:       1, // TODO: Increase this default?
 		PropagateResponse: false,

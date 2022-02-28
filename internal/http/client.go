@@ -18,14 +18,14 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
+	"github.com/Jeffail/benthos/v3/internal/http/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/manager/mock"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/http/client"
 	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
@@ -54,7 +54,7 @@ type Client struct {
 	metaInsertFilter  *metadata.IncludeFilter
 	metaExtractFilter *metadata.IncludeFilter
 
-	conf          client.Config
+	conf          docs.Config
 	retryThrottle *throttle.Type
 
 	log   log.Modular
@@ -70,7 +70,7 @@ type Client struct {
 }
 
 // NewClient creates a new http client that sends and receives Benthos messages.
-func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
+func NewClient(conf docs.Config, opts ...func(*Client)) (*Client, error) {
 	h := Client{
 		conf:      conf,
 		log:       log.Noop(),

@@ -3,8 +3,8 @@ package ratelimit_test
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager/mock"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 )

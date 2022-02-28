@@ -9,12 +9,12 @@ import (
 
 	"github.com/Azure/go-amqp"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/impl/amqp1"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
+	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/util/amqp/sasl"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 )
 
 //------------------------------------------------------------------------------
@@ -25,7 +25,7 @@ type AMQP1Config struct {
 	TargetAddress string                       `json:"target_address" yaml:"target_address"`
 	MaxInFlight   int                          `json:"max_in_flight" yaml:"max_in_flight"`
 	TLS           btls.Config                  `json:"tls" yaml:"tls"`
-	SASL          sasl.Config                  `json:"sasl" yaml:"sasl"`
+	SASL          amqp1.SASLConfig             `json:"sasl" yaml:"sasl"`
 	Metadata      metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
 }
 
@@ -36,7 +36,7 @@ func NewAMQP1Config() AMQP1Config {
 		TargetAddress: "",
 		MaxInFlight:   1,
 		TLS:           btls.NewConfig(),
-		SASL:          sasl.NewConfig(),
+		SASL:          amqp1.NewSASLConfig(),
 		Metadata:      metadata.NewExcludeFilterConfig(),
 	}
 }

@@ -8,24 +8,23 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Jeffail/benthos/v3/internal/api"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/bundle/tracing"
+	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/api"
+	"github.com/Jeffail/benthos/v3/internal/manager"
+	"github.com/Jeffail/benthos/v3/internal/stream"
 	"github.com/Jeffail/benthos/v3/lib/buffer"
 	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/config"
 	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
 	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/stream"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	"gopkg.in/yaml.v3"
@@ -797,7 +796,7 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 //------------------------------------------------------------------------------
 
 func getYAMLNode(b []byte) (*yaml.Node, error) {
-	b = text.ReplaceEnvVariables(b)
+	b = config.ReplaceEnvVariables(b)
 	var nconf yaml.Node
 	if err := yaml.Unmarshal(b, &nconf); err != nil {
 		return nil, err
