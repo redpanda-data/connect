@@ -19,11 +19,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
+	"github.com/Jeffail/benthos/v3/internal/old/tracer"
 	"github.com/Jeffail/benthos/v3/internal/stream"
 	strmmgr "github.com/Jeffail/benthos/v3/internal/stream/manager"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/tracer"
 	"gopkg.in/yaml.v3"
 )
 

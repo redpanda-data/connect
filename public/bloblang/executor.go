@@ -5,7 +5,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 // Executor stores a parsed Bloblang mapping and provides APIs for executing it.

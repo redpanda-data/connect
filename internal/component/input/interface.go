@@ -3,7 +3,7 @@ package input
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 // Streamed is a common interface implemented by inputs and provides channel

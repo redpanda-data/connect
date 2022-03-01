@@ -3,7 +3,7 @@ package batch
 import (
 	"context"
 
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 type batchedCountKeyType int

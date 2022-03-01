@@ -3,7 +3,7 @@ package plugins
 import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 // Register adds any native Bloblang methods and functions to the global sets

@@ -1,9 +1,8 @@
 package processor
 
 import (
-	imessage "github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
-	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 // MarkErr marks a message part as having failed. This includes modifying
@@ -13,7 +12,7 @@ func MarkErr(part *message.Part, span *tracing.Span, err error) {
 	if err == nil {
 		return
 	}
-	part.MetaSet(imessage.FailFlagKey, err.Error())
+	part.MetaSet(message.FailFlagKey, err.Error())
 	if span == nil {
 		span = tracing.GetSpan(part)
 	}
@@ -29,5 +28,5 @@ func MarkErr(part *message.Part, span *tracing.Span, err error) {
 // GetFail returns an error string for a message part if it has failed, or an
 // empty string if not.
 func GetFail(part *message.Part) string {
-	return part.MetaGet(imessage.FailFlagKey)
+	return part.MetaGet(message.FailFlagKey)
 }

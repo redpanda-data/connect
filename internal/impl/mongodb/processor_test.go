@@ -10,13 +10,12 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	imessage "github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/processor"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/nsf/jsondiff"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
@@ -493,7 +492,7 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 		require.Nil(t, response)
 		require.Len(t, resMsgs, 1)
 		if tt.expectedErr != nil {
-			require.Equal(t, mongo.ErrNoDocuments.Error(), resMsgs[0].Get(0).MetaGet(imessage.FailFlagKey))
+			require.Equal(t, mongo.ErrNoDocuments.Error(), resMsgs[0].Get(0).MetaGet(message.FailFlagKey))
 			continue
 		}
 

@@ -3,8 +3,7 @@ package mock
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 // Input provides a mocked input implementation.
@@ -16,7 +15,7 @@ type Input struct {
 // list of batches, then exit.
 func NewInput(batches []*message.Batch) *Input {
 	ts := make(chan message.Transaction, len(batches))
-	resChan := make(chan response.Error, len(batches))
+	resChan := make(chan error, len(batches))
 	go func() {
 		defer close(ts)
 		for _, b := range batches {

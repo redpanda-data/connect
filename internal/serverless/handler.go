@@ -12,16 +12,15 @@ import (
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/config"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/metrics"
+	"github.com/Jeffail/benthos/v3/internal/old/output"
+	"github.com/Jeffail/benthos/v3/internal/old/tracer"
 	"github.com/Jeffail/benthos/v3/internal/pipeline"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/roundtrip"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/tracer"
+	"github.com/Jeffail/benthos/v3/internal/transaction"
 )
 
 // ServerlessResponseType is an output type that redirects pipeline outputs back
@@ -46,15 +45,13 @@ func (h *Handler) Close(tout time.Duration) error {
 func (h *Handler) Handle(ctx context.Context, obj interface{}) (interface{}, error) {
 	msg := message.QuickBatch(nil)
 	part := message.NewPart(nil)
-	if err := part.SetJSON(obj); err != nil {
-		return nil, err
-	}
+	part.SetJSON(obj)
 	msg.Append(part)
 
-	store := roundtrip.NewResultStore()
-	roundtrip.AddResultStore(msg, store)
+	store := transaction.NewResultStore()
+	transaction.AddResultStore(msg, store)
 
-	resChan := make(chan response.Error, 1)
+	resChan := make(chan error, 1)
 
 	select {
 	case h.transactionChan <- message.NewTransaction(msg, resChan):
@@ -64,8 +61,8 @@ func (h *Handler) Handle(ctx context.Context, obj interface{}) (interface{}, err
 
 	select {
 	case res := <-resChan:
-		if res.AckError() != nil {
-			return nil, res.AckError()
+		if res != nil {
+			return nil, res
 		}
 	case <-ctx.Done():
 		return nil, errors.New("request cancelled")

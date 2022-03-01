@@ -15,14 +15,13 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle/mock"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	bmanager "github.com/Jeffail/benthos/v3/internal/manager"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
+	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/stream"
 	"github.com/Jeffail/benthos/v3/internal/stream/manager"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -867,7 +866,7 @@ file:
 	r.ServeHTTP(hResponse, request)
 	assert.Equal(t, http.StatusOK, hResponse.Code, hResponse.Body.String())
 
-	resChan := make(chan response.Error)
+	resChan := make(chan error)
 	select {
 	case tChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte(`{"id":"first","content":"hello world"}`)}), resChan):
 	case <-time.After(time.Second * 5):

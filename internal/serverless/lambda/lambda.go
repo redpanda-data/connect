@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/config"
+	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/serverless"
-	"github.com/Jeffail/benthos/v3/lib/output"
 	"github.com/aws/aws-lambda-go/lambda"
 	"gopkg.in/yaml.v3"
 )

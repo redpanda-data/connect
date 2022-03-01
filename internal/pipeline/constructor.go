@@ -6,7 +6,7 @@ import (
 
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/Jeffail/benthos/v3/internal/old/processor"
 )
 
 // Config is a configuration struct for creating parallel processing pipelines.

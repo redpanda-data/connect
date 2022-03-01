@@ -1,6 +1,6 @@
 package metrics
 
-import "github.com/Jeffail/benthos/v3/lib/metrics"
+import "github.com/Jeffail/benthos/v3/internal/old/metrics"
 
 type fCounterVec struct {
 	f func([]string) metrics.StatCounter

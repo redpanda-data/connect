@@ -6,11 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,7 +23,7 @@ func TestPoolBasic(t *testing.T) {
 	proc, err := newPoolV2(1, log.Noop(), mockProc)
 	require.NoError(t, err)
 
-	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan error)
 
 	require.NoError(t, proc.Consume(tChan))
 	assert.Error(t, proc.Consume(tChan))
@@ -51,8 +50,8 @@ func TestPoolBasic(t *testing.T) {
 		if !open {
 			t.Fatal("Closed early")
 		}
-		if res.AckError() != errMockProc {
-			t.Error(res.AckError())
+		if res != errMockProc {
+			t.Error(res)
 		}
 	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
@@ -89,7 +88,7 @@ func TestPoolBasic(t *testing.T) {
 	// Respond without error
 	go func() {
 		select {
-		case procT.ResponseChan <- response.NewError(nil):
+		case procT.ResponseChan <- nil:
 		case <-time.After(time.Second * 5):
 			t.Error("Timed out")
 		}
@@ -101,8 +100,8 @@ func TestPoolBasic(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if res.AckError() != nil {
-			t.Error(res.AckError())
+		if res != nil {
+			t.Error(res)
 		}
 	case <-time.After(time.Second * 5):
 		t.Fatal("Timed out")
@@ -122,7 +121,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan error)
 	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +160,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 
 			// Respond with no error
 			select {
-			case procT.ResponseChan <- response.NewError(nil):
+			case procT.ResponseChan <- nil:
 			case <-time.After(time.Second * 5):
 				t.Fatal("Timed out")
 			}
@@ -173,8 +172,8 @@ func TestPoolMultiMsgs(t *testing.T) {
 		case res, open := <-resChan:
 			if !open {
 				t.Error("Closed early")
-			} else if res.AckError() != nil {
-				t.Error(res.AckError())
+			} else if res != nil {
+				t.Error(res)
 			}
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")
@@ -201,7 +200,7 @@ func TestPoolMultiThreads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan error)
 	if err := proc.Consume(tChan); err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +237,7 @@ func TestPoolMultiThreads(t *testing.T) {
 		go func(tran message.Transaction) {
 			// Respond with no error
 			select {
-			case tran.ResponseChan <- response.NewError(nil):
+			case tran.ResponseChan <- nil:
 			case <-time.After(time.Second * 5):
 				t.Error("Timed out")
 			}
@@ -250,8 +249,8 @@ func TestPoolMultiThreads(t *testing.T) {
 		case res, open := <-resChan:
 			if !open {
 				t.Error("Closed early")
-			} else if res.AckError() != nil {
-				t.Error(res.AckError())
+			} else if res != nil {
+				t.Error(res)
 			}
 		case <-time.After(time.Second * 5):
 			t.Fatal("Timed out")

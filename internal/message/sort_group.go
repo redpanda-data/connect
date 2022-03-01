@@ -2,8 +2,6 @@ package message
 
 import (
 	"context"
-
-	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 // SortGroup associates a tag of a part with the original group.
@@ -12,9 +10,9 @@ type SortGroup struct {
 }
 
 // NewSortGroupParts creates a sort group associated with a slice of parts.
-func NewSortGroupParts(parts []*message.Part) (*SortGroup, []*message.Part) {
+func NewSortGroupParts(parts []*Part) (*SortGroup, []*Part) {
 	g := &SortGroup{Len: len(parts)}
-	newParts := make([]*message.Part, len(parts))
+	newParts := make([]*Part, len(parts))
 
 	for i, part := range parts {
 		tag := &tag{
@@ -22,7 +20,7 @@ func NewSortGroupParts(parts []*message.Part) (*SortGroup, []*message.Part) {
 			Group: g,
 		}
 
-		ctx := message.GetContext(part)
+		ctx := GetContext(part)
 
 		var prev tagChecker
 		if v, ok := ctx.Value(tagKey).(tagChecker); ok {
@@ -34,22 +32,22 @@ func NewSortGroupParts(parts []*message.Part) (*SortGroup, []*message.Part) {
 			previous: prev,
 		})
 
-		newParts[i] = message.WithContext(ctx, part)
+		newParts[i] = WithContext(ctx, part)
 	}
 
 	return g, newParts
 }
 
-// NewSortGroup creates a new sort group to be associated with a message.
-func NewSortGroup(m *message.Batch) (*SortGroup, *message.Batch) {
-	inParts := make([]*message.Part, m.Len())
-	_ = m.Iter(func(i int, part *message.Part) error {
+// NewSortGroup creates a new sort group to be associated with a
+func NewSortGroup(m *Batch) (*SortGroup, *Batch) {
+	inParts := make([]*Part, m.Len())
+	_ = m.Iter(func(i int, part *Part) error {
 		inParts[i] = part
 		return nil
 	})
 
 	group, outParts := NewSortGroupParts(inParts)
-	newMsg := message.QuickBatch(nil)
+	newMsg := QuickBatch(nil)
 	newMsg.SetAll(outParts)
 
 	return group, newMsg
@@ -57,8 +55,8 @@ func NewSortGroup(m *message.Batch) (*SortGroup, *message.Batch) {
 
 // GetIndex attempts to determine the original index of a message part relative
 // to a sort group.
-func (g *SortGroup) GetIndex(p *message.Part) int {
-	ctx := message.GetContext(p)
+func (g *SortGroup) GetIndex(p *Part) int {
+	ctx := GetContext(p)
 
 	v, ok := ctx.Value(tagKey).(tagChecker)
 	if !ok {

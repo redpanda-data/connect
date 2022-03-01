@@ -5,9 +5,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/impl/kafka/sasl"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Shopify/sarama"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"

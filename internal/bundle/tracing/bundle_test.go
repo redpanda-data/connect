@@ -9,14 +9,13 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/bundle/tracing"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
+	"github.com/Jeffail/benthos/v3/internal/old/output"
+	"github.com/Jeffail/benthos/v3/internal/old/processor"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,7 +49,7 @@ func TestBundleInputTracing(t *testing.T) {
 		select {
 		case tran := <-in.TransactionChan():
 			select {
-			case tran.ResponseChan <- response.NewError(nil):
+			case tran.ResponseChan <- nil:
 			case <-time.After(time.Second):
 				t.Fatal("timed out")
 			}
@@ -101,7 +100,7 @@ func TestBundleOutputTracing(t *testing.T) {
 	require.NoError(t, out.Consume(tranChan))
 
 	for i := 0; i < 10; i++ {
-		resChan := make(chan response.Error)
+		resChan := make(chan error)
 		tran := message.NewTransaction(message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}), resChan)
 		select {
 		case tranChan <- tran:
@@ -162,7 +161,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 	require.NoError(t, out.Consume(tranChan))
 
 	for i := 0; i < 10; i++ {
-		resChan := make(chan response.Error)
+		resChan := make(chan error)
 		tran := message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world " + strconv.Itoa(i))}), resChan)
 		select {
 		case tranChan <- tran:

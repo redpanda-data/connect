@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 )
 
 // Metrics allows plugin authors to emit custom metrics from components that are

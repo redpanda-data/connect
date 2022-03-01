@@ -7,9 +7,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
+	"github.com/Jeffail/benthos/v3/internal/log"
+	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 // Pool is a pool of pipelines. Each pipeline reads from a shared transaction

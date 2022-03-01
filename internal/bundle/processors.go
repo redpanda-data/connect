@@ -6,7 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/Jeffail/benthos/v3/internal/old/processor"
 )
 
 // AllProcessors is a set containing every single processor that has been

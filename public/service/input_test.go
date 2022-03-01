@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -104,7 +103,7 @@ func TestInputAirGapHappy(t *testing.T) {
 	assert.Equal(t, 1, outMsg.Len())
 	assert.Equal(t, "hello world", string(outMsg.Get(0).Get()))
 
-	assert.NoError(t, outAckFn(context.Background(), response.NewError(errors.New("foobar"))))
+	assert.NoError(t, outAckFn(context.Background(), errors.New("foobar")))
 	assert.EqualError(t, ackErr, "foobar")
 }
 
@@ -204,6 +203,6 @@ func TestBatchInputAirGapHappy(t *testing.T) {
 	assert.Equal(t, "this is a test message", string(outMsg.Get(1).Get()))
 	assert.Equal(t, "and it will work", string(outMsg.Get(2).Get()))
 
-	assert.NoError(t, outAckFn(context.Background(), response.NewError(errors.New("foobar"))))
+	assert.NoError(t, outAckFn(context.Background(), errors.New("foobar")))
 	assert.EqualError(t, ackErr, "foobar")
 }

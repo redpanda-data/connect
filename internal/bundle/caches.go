@@ -6,7 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/cache"
+	"github.com/Jeffail/benthos/v3/internal/old/cache"
 )
 
 // AllCaches is a set containing every single cache that has been imported.

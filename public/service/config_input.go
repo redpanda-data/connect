@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
 	"gopkg.in/yaml.v3"
 )
 

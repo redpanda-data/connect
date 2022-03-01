@@ -9,6 +9,7 @@ import (
 	"time"
 
 	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
+	"github.com/Jeffail/benthos/v3/internal/batch/policy"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
@@ -16,14 +17,13 @@ import (
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
+	"github.com/Jeffail/benthos/v3/internal/log"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/metrics"
+	"github.com/Jeffail/benthos/v3/internal/old/output"
+	"github.com/Jeffail/benthos/v3/internal/old/output/writer"
+	"github.com/Jeffail/benthos/v3/internal/old/util/retries"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -78,7 +78,7 @@ func init() {
 				docs.FieldCommon(
 					"max_in_flight",
 					"The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-				batch.FieldSpec(),
+				policy.FieldSpec(),
 			).Merge(retries.FieldSpecs())...,
 		).ChildDefaultAndTypesFromStruct(output.NewMongoDBConfig()),
 	})

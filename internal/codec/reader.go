@@ -17,7 +17,7 @@ import (
 	"sync"
 
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 // ReaderDocs is a static field documentation for input codecs.

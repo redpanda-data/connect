@@ -11,12 +11,12 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	lbuffer "github.com/Jeffail/benthos/v3/lib/buffer"
-	lcache "github.com/Jeffail/benthos/v3/lib/cache"
-	linput "github.com/Jeffail/benthos/v3/lib/input"
-	loutput "github.com/Jeffail/benthos/v3/lib/output"
-	lprocessor "github.com/Jeffail/benthos/v3/lib/processor"
-	lratelimit "github.com/Jeffail/benthos/v3/lib/ratelimit"
+	lbuffer "github.com/Jeffail/benthos/v3/internal/old/buffer"
+	lcache "github.com/Jeffail/benthos/v3/internal/old/cache"
+	linput "github.com/Jeffail/benthos/v3/internal/old/input"
+	loutput "github.com/Jeffail/benthos/v3/internal/old/output"
+	lprocessor "github.com/Jeffail/benthos/v3/internal/old/processor"
+	lratelimit "github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 )
 
 // Manager provides a mock benthos manager that components can use to test

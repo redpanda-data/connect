@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/Jeffail/benthos/v3/internal/filepath"
-	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/urfave/cli/v2"
 )
 

@@ -7,13 +7,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/log"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/metrics"
+	"github.com/Jeffail/benthos/v3/internal/old/util/throttle"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/internal/tracing"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/util/throttle"
 )
 
 // AckFunc is a function used to acknowledge receipt of a message batch from a
@@ -119,7 +118,7 @@ func (m *Stream) inputLoop() {
 		ackFunc := func(ctx context.Context, ackErr error) (err error) {
 			ackOnce.Do(func() {
 				select {
-				case tr.ResponseChan <- response.NewError(ackErr):
+				case tr.ResponseChan <- ackErr:
 				case <-ctx.Done():
 					err = ctx.Err()
 				case <-m.shutSig.CloseNowChan():
@@ -182,7 +181,7 @@ func (m *Stream) outputLoop() {
 		batchLen := msg.Len()
 
 		m.errThrottle.Reset()
-		resChan := make(chan response.Error, 1)
+		resChan := make(chan error, 1)
 		select {
 		case m.messagesOut <- message.NewTransaction(msg, resChan):
 		case <-m.shutSig.CloseNowChan():
@@ -204,7 +203,7 @@ func (m *Stream) outputLoop() {
 				}
 				mLatency.Timing(time.Since(startedAt).Nanoseconds())
 				tracing.FinishSpans(msg)
-				if ackErr := ackFunc(closeNowCtx, res.AckError()); ackErr != nil {
+				if ackErr := ackFunc(closeNowCtx, res); ackErr != nil {
 					if ackErr != component.ErrTypeClosed {
 						m.log.Errorf("Failed to ack buffer message: %v\n", ackErr)
 					}

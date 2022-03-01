@@ -3,7 +3,7 @@ package service
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/internal/log"
 )
 
 // Logger allows plugin authors to write custom logs from components that are

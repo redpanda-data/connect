@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/integration"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output/writer"
+	"github.com/Jeffail/benthos/v3/internal/log"
+	"github.com/Jeffail/benthos/v3/internal/old/metrics"
+	"github.com/Jeffail/benthos/v3/internal/old/output/writer"
 	"github.com/go-redis/redis/v7"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"

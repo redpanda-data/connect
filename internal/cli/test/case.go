@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/processor"
 	yaml "gopkg.in/yaml.v3"
 )
 

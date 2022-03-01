@@ -8,8 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 var errMockProc = errors.New("this is an error from mock processor")
@@ -58,7 +57,7 @@ func TestProcessorPipeline(t *testing.T) {
 
 	proc := NewProcessor(mockProc)
 
-	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
@@ -89,8 +88,8 @@ func TestProcessorPipeline(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if res.AckError() != errMockProc {
-			t.Error(res.AckError())
+		if res != errMockProc {
+			t.Error(res)
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out")
@@ -122,8 +121,8 @@ func TestProcessorPipeline(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		if res.AckError() != nil {
-			t.Error(res.AckError())
+		if res != nil {
+			t.Error(res)
 		} else {
 			t.Error("Message was dropped")
 		}
@@ -134,7 +133,7 @@ func TestProcessorPipeline(t *testing.T) {
 	// Respond without error
 	go func() {
 		select {
-		case procT.ResponseChan <- response.NewError(nil):
+		case procT.ResponseChan <- nil:
 		case _, open := <-resChan:
 			if !open {
 				t.Error("Closed early")
@@ -151,8 +150,8 @@ func TestProcessorPipeline(t *testing.T) {
 	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
-		} else if res.AckError() != nil {
-			t.Error(res.AckError())
+		} else if res != nil {
+			t.Error(res)
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out")
@@ -208,7 +207,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 
 	proc := NewProcessor(mockProc)
 
-	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
@@ -226,7 +225,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 		expMsgs[fmt.Sprintf("test%v", i)] = struct{}{}
 	}
 
-	resChans := []chan<- response.Error{}
+	resChans := []chan<- error{}
 
 	// Receive N messages
 	for i := 0; i < mockProc.N; i++ {
@@ -254,7 +253,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 	// Respond without error N times
 	for i := 0; i < mockProc.N; i++ {
 		select {
-		case resChans[i] <- response.NewError(nil):
+		case resChans[i] <- nil:
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -265,8 +264,8 @@ func TestProcessorMultiMsgs(t *testing.T) {
 	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
-		} else if res.AckError() != nil {
-			t.Error(res.AckError())
+		} else if res != nil {
+			t.Error(res)
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out")
@@ -289,7 +288,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 
 	proc := NewProcessor(mockProc)
 
-	tChan, resChan := make(chan message.Transaction), make(chan response.Error)
+	tChan, resChan := make(chan message.Transaction), make(chan error)
 
 	if err := proc.Consume(tChan); err != nil {
 		t.Error(err)
@@ -307,7 +306,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		t.Error("Timed out")
 	}
 
-	var errResChan chan<- response.Error
+	var errResChan chan<- error
 
 	// Receive 1 message
 	select {
@@ -326,12 +325,12 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 
 	// Respond with 1 error
 	select {
-	case errResChan <- response.NewError(errors.New("foo")):
+	case errResChan <- errors.New("foo"):
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 
-	resChans := []chan<- response.Error{}
+	resChans := []chan<- error{}
 
 	// Receive N messages
 	for i := 0; i < mockProc.N; i++ {
@@ -359,7 +358,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	// Respond without error N times
 	for i := 0; i < mockProc.N; i++ {
 		select {
-		case resChans[i] <- response.NewError(nil):
+		case resChans[i] <- nil:
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -370,8 +369,8 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	case res, open := <-resChan:
 		if !open {
 			t.Error("Closed early")
-		} else if res.AckError() != nil {
-			t.Error(res.AckError())
+		} else if res != nil {
+			t.Error(res)
 		}
 	case <-time.After(time.Second):
 		t.Error("Timed out")

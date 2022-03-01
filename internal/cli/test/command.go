@@ -9,7 +9,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/config"
 	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
-	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/fatih/color"
 	yaml "gopkg.in/yaml.v3"
 )

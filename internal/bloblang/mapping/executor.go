@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 //------------------------------------------------------------------------------
@@ -215,9 +215,7 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 		case []byte:
 			newPart.Set(t)
 		default:
-			if err := newPart.SetJSON(newValue); err != nil {
-				return nil, fmt.Errorf("failed to set result of mapping: %w", err)
-			}
+			newPart.SetJSON(newValue)
 		}
 	}
 	return newPart, nil

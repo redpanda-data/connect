@@ -8,10 +8,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/response"
 )
 
 // Output is an interface implemented by Benthos outputs that support single
@@ -191,7 +190,7 @@ func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
 	payload := message.QuickBatch(nil)
 	payload.Append(m.part)
 
-	resChan := make(chan response.Error, 1)
+	resChan := make(chan error, 1)
 	select {
 	case o.t <- message.NewTransaction(payload, resChan):
 	case <-ctx.Done():
@@ -200,7 +199,7 @@ func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
 
 	select {
 	case res := <-resChan:
-		return res.AckError()
+		return res
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -214,7 +213,7 @@ func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
 		payload.Append(m.part)
 	}
 
-	resChan := make(chan response.Error, 1)
+	resChan := make(chan error, 1)
 	select {
 	case o.t <- message.NewTransaction(payload, resChan):
 	case <-ctx.Done():
@@ -223,7 +222,7 @@ func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
 
 	select {
 	case res := <-resChan:
-		return res.AckError()
+		return res
 	case <-ctx.Done():
 		return ctx.Err()
 	}

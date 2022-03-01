@@ -5,8 +5,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,35 +21,35 @@ func TestTaggingErrorsSinglePart(t *testing.T) {
 	tran := NewTracked(msg, nil)
 
 	// No error
-	assert.Equal(t, response.NewError(nil), tran.resFromError(nil))
+	assert.Equal(t, nil, tran.resFromError(nil))
 
 	// Static error
-	assert.Equal(t, response.NewError(errTest1), tran.resFromError(errTest1))
+	assert.Equal(t, errTest1, tran.resFromError(errTest1))
 
 	// Create batch error with single part
 	batchErr := batch.NewError(tran.Message(), errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(errTest2), tran.resFromError(batchErr))
+	assert.Equal(t, errTest2, tran.resFromError(batchErr))
 
 	// Create new message, no common part, and create batch error
 	newMsg := message.QuickBatch([][]byte{[]byte("bar")})
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(errTest1), tran.resFromError(batchErr))
+	assert.Equal(t, errTest1, tran.resFromError(batchErr))
 
 	// Add tran part to new message and create batch error with error on non-tran part
 	newMsg.Append(tran.Message().Get(0))
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(nil), tran.resFromError(batchErr))
+	assert.Equal(t, nil, tran.resFromError(batchErr))
 
 	// Create batch error for tran part
 	batchErr.Failed(1, errTest3)
 
-	assert.Equal(t, response.NewError(errTest3), tran.resFromError(batchErr))
+	assert.Equal(t, errTest3, tran.resFromError(batchErr))
 }
 
 func TestTaggingErrorsMultiplePart(t *testing.T) {
@@ -66,23 +65,23 @@ func TestTaggingErrorsMultiplePart(t *testing.T) {
 	tran := NewTracked(msg, nil)
 
 	// No error
-	assert.Equal(t, response.NewError(nil), tran.resFromError(nil))
+	assert.Equal(t, nil, tran.resFromError(nil))
 
 	// Static error
-	assert.Equal(t, response.NewError(errTest1), tran.resFromError(errTest1))
+	assert.Equal(t, errTest1, tran.resFromError(errTest1))
 
 	// Create batch error with single part
 	batchErr := batch.NewError(tran.Message(), errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(errTest2), tran.resFromError(batchErr))
+	assert.Equal(t, errTest2, tran.resFromError(batchErr))
 
 	// Create new message, no common part, and create batch error
 	newMsg := message.QuickBatch([][]byte{[]byte("baz")})
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(errTest1), tran.resFromError(batchErr))
+	assert.Equal(t, errTest1, tran.resFromError(batchErr))
 
 	// Add tran part to new message, still returning general error due to
 	// missing part
@@ -90,24 +89,24 @@ func TestTaggingErrorsMultiplePart(t *testing.T) {
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(errTest1), tran.resFromError(batchErr))
+	assert.Equal(t, errTest1, tran.resFromError(batchErr))
 
 	// Add next tran part to new message, and return ack now
 	newMsg.Append(tran.Message().Get(1))
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(nil), tran.resFromError(batchErr))
+	assert.Equal(t, nil, tran.resFromError(batchErr))
 
 	// Create batch error with error on non-tran part
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(nil), tran.resFromError(batchErr))
+	assert.Equal(t, nil, tran.resFromError(batchErr))
 
 	// Create batch error for tran part
 	batchErr.Failed(1, errTest3)
-	assert.Equal(t, response.NewError(errTest3), tran.resFromError(batchErr))
+	assert.Equal(t, errTest3, tran.resFromError(batchErr))
 }
 
 func TestTaggingErrorsNestedOverlap(t *testing.T) {
@@ -127,27 +126,27 @@ func TestTaggingErrorsNestedOverlap(t *testing.T) {
 	tranTwo := NewTracked(msgTwo, nil)
 
 	// No error
-	assert.Equal(t, response.NewError(nil), tranOne.resFromError(nil))
-	assert.Equal(t, response.NewError(nil), tranTwo.resFromError(nil))
+	assert.Equal(t, nil, tranOne.resFromError(nil))
+	assert.Equal(t, nil, tranTwo.resFromError(nil))
 
 	// Static error
-	assert.Equal(t, response.NewError(errTest1), tranOne.resFromError(errTest1))
-	assert.Equal(t, response.NewError(errTest1), tranTwo.resFromError(errTest1))
+	assert.Equal(t, errTest1, tranOne.resFromError(errTest1))
+	assert.Equal(t, errTest1, tranTwo.resFromError(errTest1))
 
 	// Create batch error with single part
 	batchErr := batch.NewError(tranTwo.Message(), errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(errTest2), tranOne.resFromError(batchErr))
-	assert.Equal(t, response.NewError(errTest2), tranTwo.resFromError(batchErr))
+	assert.Equal(t, errTest2, tranOne.resFromError(batchErr))
+	assert.Equal(t, errTest2, tranTwo.resFromError(batchErr))
 
 	// And if the batch error only touches the first message, only see error in
 	// first transaction
 	batchErr = batch.NewError(tranOne.Message(), errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(errTest2), tranOne.resFromError(batchErr))
-	assert.Equal(t, response.NewError(errTest1), tranTwo.resFromError(batchErr))
+	assert.Equal(t, errTest2, tranOne.resFromError(batchErr))
+	assert.Equal(t, errTest1, tranTwo.resFromError(batchErr))
 }
 
 func TestTaggingErrorsNestedSerial(t *testing.T) {
@@ -169,19 +168,19 @@ func TestTaggingErrorsNestedSerial(t *testing.T) {
 	msg.Append(tranTwo.Message().Get(0))
 
 	// No error
-	assert.Equal(t, response.NewError(nil), tranOne.resFromError(nil))
-	assert.Equal(t, response.NewError(nil), tranTwo.resFromError(nil))
+	assert.Equal(t, nil, tranOne.resFromError(nil))
+	assert.Equal(t, nil, tranTwo.resFromError(nil))
 
 	// Static error
-	assert.Equal(t, response.NewError(errTest1), tranOne.resFromError(errTest1))
-	assert.Equal(t, response.NewError(errTest1), tranTwo.resFromError(errTest1))
+	assert.Equal(t, errTest1, tranOne.resFromError(errTest1))
+	assert.Equal(t, errTest1, tranTwo.resFromError(errTest1))
 
 	// Create batch error with single part
 	batchErr := batch.NewError(msg, errTest1)
 	batchErr.Failed(0, errTest2)
 
-	assert.Equal(t, response.NewError(errTest2), tranOne.resFromError(batchErr))
-	assert.Equal(t, response.NewError(nil), tranTwo.resFromError(batchErr))
+	assert.Equal(t, errTest2, tranOne.resFromError(batchErr))
+	assert.Equal(t, nil, tranTwo.resFromError(batchErr))
 }
 
 func BenchmarkErrorWithTagging(b *testing.B) {
@@ -201,7 +200,7 @@ func BenchmarkErrorWithTagging(b *testing.B) {
 		batchErr := batch.NewError(tran.Message(), errTest1)
 		batchErr.Failed(0, errTest2)
 
-		assert.Equal(b, response.NewError(errTest2), tran.resFromError(batchErr))
+		assert.Equal(b, errTest2, tran.resFromError(batchErr))
 	}
 }
 
@@ -224,9 +223,9 @@ func BenchmarkErrorWithTaggingN3(b *testing.B) {
 		batchErr := batch.NewError(tranThree.Message(), errTest1)
 		batchErr.Failed(0, errTest2)
 
-		assert.Equal(b, response.NewError(errTest2), tran.resFromError(batchErr))
-		assert.Equal(b, response.NewError(errTest2), tranTwo.resFromError(batchErr))
-		assert.Equal(b, response.NewError(errTest2), tranThree.resFromError(batchErr))
+		assert.Equal(b, errTest2, tran.resFromError(batchErr))
+		assert.Equal(b, errTest2, tranTwo.resFromError(batchErr))
+		assert.Equal(b, errTest2, tranThree.resFromError(batchErr))
 	}
 }
 
@@ -248,8 +247,8 @@ func BenchmarkErrorWithTaggingN2(b *testing.B) {
 		batchErr := batch.NewError(tranTwo.Message(), errTest1)
 		batchErr.Failed(0, errTest2)
 
-		assert.Equal(b, response.NewError(errTest2), tran.resFromError(batchErr))
-		assert.Equal(b, response.NewError(errTest2), tranTwo.resFromError(batchErr))
+		assert.Equal(b, errTest2, tran.resFromError(batchErr))
+		assert.Equal(b, errTest2, tranTwo.resFromError(batchErr))
 	}
 }
 
@@ -265,6 +264,6 @@ func BenchmarkErrorNoTagging(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		tran := NewTracked(msg, nil)
-		assert.Equal(b, response.NewError(errTest1), tran.resFromError(errTest1))
+		assert.Equal(b, errTest1, tran.resFromError(errTest1))
 	}
 }

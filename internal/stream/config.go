@@ -2,10 +2,10 @@ package stream
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/old/buffer"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
+	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/pipeline"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/output"
 	"gopkg.in/yaml.v3"
 )
 

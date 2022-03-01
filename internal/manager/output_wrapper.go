@@ -7,7 +7,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 type outputWrapper struct {

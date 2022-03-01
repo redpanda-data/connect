@@ -5,14 +5,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/batch/policy"
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
 	"github.com/Jeffail/benthos/v3/public/service"
 )
 
 func memoryBufferConfig() *service.ConfigSpec {
-	bs := batch.FieldSpec()
+	bs := policy.FieldSpec()
 	bs.Name = "batch_policy"
 	bs.Description = "Optionally configure a policy to flush buffered messages in batches."
 	bs.Examples = nil

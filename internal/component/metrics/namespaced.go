@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/lib/metrics"
+	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 )
 
 // Namespaced wraps a child metrics exporter and exposes a metrics.Type API that

@@ -8,8 +8,8 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/log"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 // Mapping is a compiled Bloblang mapping used to rewrite metrics.
@@ -39,10 +39,7 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 	}
 
 	part := message.NewPart(nil)
-	if err := part.SetJSON(path); err != nil {
-		m.logger.Errorf("Failed to apply path mapping on '%v': %v\n", path, err)
-		return path, labelNames, labelValues
-	}
+	part.SetJSON(path)
 	for i, v := range labelNames {
 		part.MetaSet(v, labelValues[i])
 	}

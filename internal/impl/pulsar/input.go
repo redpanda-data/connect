@@ -13,13 +13,12 @@ import (
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/impl/pulsar/auth"
+	"github.com/Jeffail/benthos/v3/internal/log"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
+	"github.com/Jeffail/benthos/v3/internal/old/input/reader"
+	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/input/reader"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/apache/pulsar-client-go/pulsar"
 )
 
@@ -270,7 +269,7 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 
 	msg.Append(part)
 
-	return msg, func(ctx context.Context, res response.Error) error {
+	return msg, func(ctx context.Context, res error) error {
 		var r pulsar.Consumer
 		p.m.RLock()
 		if p.consumer != nil {
@@ -278,7 +277,7 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 		}
 		p.m.RUnlock()
 		if r != nil {
-			if res.AckError() != nil {
+			if res != nil {
 				r.Nack(pulMsg)
 			} else {
 				r.Ack(pulMsg)

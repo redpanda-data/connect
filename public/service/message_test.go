@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	ibloblang "github.com/Jeffail/benthos/v3/internal/bloblang"
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -289,9 +289,9 @@ func BenchmarkMessageMappingNew(b *testing.B) {
 
 func BenchmarkMessageMappingOld(b *testing.B) {
 	part := message.NewPart(nil)
-	require.NoError(b, part.SetJSON(map[string]interface{}{
+	part.SetJSON(map[string]interface{}{
 		"content": "hello world",
-	}))
+	})
 
 	msg := message.QuickBatch(nil)
 	msg.Append(part)

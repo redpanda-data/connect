@@ -11,15 +11,11 @@ import (
 	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/buffer"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
+	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/pipeline"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/output"
-
-	// TODO: V4 Remove this as it's a temporary work around to ensure current
-	// plugin users automatically import all components.
-	_ "github.com/Jeffail/benthos/v3/public/components/legacy"
 )
 
 //------------------------------------------------------------------------------

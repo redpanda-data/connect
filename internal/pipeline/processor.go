@@ -7,10 +7,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/processor"
+	"github.com/Jeffail/benthos/v3/internal/old/util/throttle"
 )
 
 //------------------------------------------------------------------------------
@@ -24,7 +23,7 @@ type Processor struct {
 	msgProcessors []iprocessor.V1
 
 	messagesOut chan message.Transaction
-	responsesIn chan response.Error
+	responsesIn chan error
 
 	messagesIn <-chan message.Transaction
 
@@ -38,7 +37,7 @@ func NewProcessor(msgProcessors ...iprocessor.V1) *Processor {
 		running:       1,
 		msgProcessors: msgProcessors,
 		messagesOut:   make(chan message.Transaction),
-		responsesIn:   make(chan response.Error),
+		responsesIn:   make(chan error),
 		closeChan:     make(chan struct{}),
 		closed:        make(chan struct{}),
 	}
@@ -73,7 +72,7 @@ func (p *Processor) loop() {
 		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
 			select {
-			case tran.ResponseChan <- response.NewError(resultRes):
+			case tran.ResponseChan <- resultRes:
 			case <-p.closeChan:
 				return
 			}
@@ -94,11 +93,11 @@ func (p *Processor) loop() {
 
 // dispatchMessages attempts to send a multiple messages results of processors
 // over the shared messages channel. This send is retried until success.
-func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- response.Error) {
+func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- error) {
 	throt := throttle.New(throttle.OptCloseChan(p.closeChan))
 
 	sendMsg := func(m *message.Batch) {
-		resChan := make(chan response.Error)
+		resChan := make(chan error)
 		transac := message.NewTransaction(m, resChan)
 
 		for {
@@ -109,7 +108,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- res
 			}
 
 			var open bool
-			var res response.Error
+			var res error
 			select {
 			case res, open = <-resChan:
 				if !open {
@@ -119,7 +118,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- res
 				return
 			}
 
-			if res.AckError() == nil {
+			if res == nil {
 				return
 			}
 			if !throt.Retry() {
@@ -144,7 +143,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- res
 	throt.Reset()
 
 	select {
-	case ogResChan <- response.NewError(nil):
+	case ogResChan <- nil:
 	case <-p.closeChan:
 		return
 	}

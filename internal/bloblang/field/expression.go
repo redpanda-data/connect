@@ -3,7 +3,7 @@ package field
 import (
 	"bytes"
 
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 // Message is an interface type to be given to a function interpolator, it

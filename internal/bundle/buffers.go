@@ -6,7 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
+	"github.com/Jeffail/benthos/v3/internal/old/buffer"
 )
 
 // AllBuffers is a set containing every single buffer that has been imported.

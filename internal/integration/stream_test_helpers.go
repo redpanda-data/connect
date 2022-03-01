@@ -20,12 +20,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
+	"github.com/Jeffail/benthos/v3/internal/old/output"
 
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
@@ -528,7 +527,7 @@ func sendMessage(
 	msg := message.QuickBatch(nil)
 	msg.Append(p)
 
-	resChan := make(chan response.Error)
+	resChan := make(chan error)
 
 	select {
 	case tranChan <- message.NewTransaction(msg, resChan):
@@ -538,7 +537,7 @@ func sendMessage(
 
 	select {
 	case res := <-resChan:
-		return res.AckError()
+		return res
 	case <-ctx.Done():
 	}
 	t.Fatal("timed out on response")
@@ -558,7 +557,7 @@ func sendBatch(
 		msg.Append(message.NewPart([]byte(payload)))
 	}
 
-	resChan := make(chan response.Error)
+	resChan := make(chan error)
 
 	select {
 	case tranChan <- message.NewTransaction(msg, resChan):
@@ -568,7 +567,7 @@ func sendBatch(
 
 	select {
 	case res := <-resChan:
-		return res.AckError()
+		return res
 	case <-ctx.Done():
 	}
 
@@ -589,8 +588,8 @@ func receiveMessage(
 	return b
 }
 
-func sendResponse(ctx context.Context, t testing.TB, resChan chan<- response.Error, err error) {
-	res := response.NewError(err)
+func sendResponse(ctx context.Context, t testing.TB, resChan chan<- error, err error) {
+	res := err
 	select {
 	case resChan <- res:
 	case <-ctx.Done():
@@ -599,7 +598,7 @@ func sendResponse(ctx context.Context, t testing.TB, resChan chan<- response.Err
 }
 
 // nolint:gocritic // Ignore unnamedResult false positive
-func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, chan<- response.Error) {
+func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, chan<- error) {
 	t.Helper()
 
 	var tran message.Transaction

@@ -13,18 +13,17 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bundle/tracing"
 	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/buffer"
+	"github.com/Jeffail/benthos/v3/internal/old/cache"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
+	"github.com/Jeffail/benthos/v3/internal/old/metrics"
+	"github.com/Jeffail/benthos/v3/internal/old/output"
+	"github.com/Jeffail/benthos/v3/internal/old/processor"
+	"github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/stream"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/response"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	"gopkg.in/yaml.v3"
@@ -167,7 +166,7 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 	return func(ctx context.Context, m *Message) error {
 		tmpMsg := message.QuickBatch(nil)
 		tmpMsg.Append(m.part)
-		resChan := make(chan response.Error)
+		resChan := make(chan error)
 		select {
 		case tChan <- message.NewTransaction(tmpMsg, resChan):
 		case <-ctx.Done():
@@ -175,7 +174,7 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 		}
 		select {
 		case res := <-resChan:
-			return res.AckError()
+			return res
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -218,7 +217,7 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 		for _, m := range b {
 			tmpMsg.Append(m.part)
 		}
-		resChan := make(chan response.Error)
+		resChan := make(chan error)
 		select {
 		case tChan <- message.NewTransaction(tmpMsg, resChan):
 		case <-ctx.Done():
@@ -226,7 +225,7 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 		}
 		select {
 		case res := <-resChan:
-			return res.AckError()
+			return res
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -662,11 +661,11 @@ func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
 				return nil
 			})
 			err := s.consumerFunc(context.Background(), batch)
-			var res response.Error
+			var res error
 			if err != nil {
-				res = response.NewError(err)
+				res = err
 			} else {
-				res = response.NewError(nil)
+				res = nil
 			}
 			tran.ResponseChan <- res
 		}

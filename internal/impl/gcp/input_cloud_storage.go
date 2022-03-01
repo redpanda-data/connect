@@ -16,12 +16,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/input/reader"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
+	"github.com/Jeffail/benthos/v3/internal/log"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
+	"github.com/Jeffail/benthos/v3/internal/old/input/reader"
+	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"google.golang.org/api/iterator"
 )
 
@@ -347,8 +346,8 @@ func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg *messag
 		}
 	}
 
-	return gcpCloudStorageMsgFromParts(object, parts), func(rctx context.Context, res response.Error) error {
-		return scnAckFn(rctx, res.AckError())
+	return gcpCloudStorageMsgFromParts(object, parts), func(rctx context.Context, res error) error {
+		return scnAckFn(rctx, res)
 	}, nil
 }
 

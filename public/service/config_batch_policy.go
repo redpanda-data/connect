@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/batch/policy"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
-	"github.com/Jeffail/benthos/v3/lib/processor"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/processor"
 	"gopkg.in/yaml.v3"
 )
 
@@ -25,8 +25,8 @@ type BatchPolicy struct {
 	procs []processor.Config
 }
 
-func (b BatchPolicy) toInternal() batch.PolicyConfig {
-	batchConf := batch.NewPolicyConfig()
+func (b BatchPolicy) toInternal() policy.Config {
+	batchConf := policy.NewConfig()
 	batchConf.ByteSize = b.ByteSize
 	batchConf.Count = b.Count
 	batchConf.Check = b.Check
@@ -46,7 +46,7 @@ func (b BatchPolicy) toInternal() batch.PolicyConfig {
 // therefore it is important to call Close when this batcher is no longer
 // required, having also called Flush if appropriate.
 type Batcher struct {
-	p *batch.Policy
+	p *policy.Batcher
 }
 
 // Add a message to the batch. Returns true if the batching policy has been
@@ -100,7 +100,7 @@ func (b *Batcher) Close(ctx context.Context) error {
 
 // NewBatcher creates a batching mechanism from the policy.
 func (b BatchPolicy) NewBatcher(res *Resources) (*Batcher, error) {
-	p, err := batch.NewPolicy(b.toInternal(), res.mgr.IntoPath("batching"))
+	p, err := policy.New(b.toInternal(), res.mgr.IntoPath("batching"))
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (b BatchPolicy) NewBatcher(res *Resources) (*Batcher, error) {
 // BatchPolicy from the resulting parsed config with the method
 // FieldBatchPolicy.
 func NewBatchPolicyField(name string) *ConfigField {
-	bs := batch.FieldSpec()
+	bs := policy.FieldSpec()
 	bs.Name = name
 	bs.Type = docs.FieldTypeObject
 	var newChildren []docs.FieldSpec

@@ -17,10 +17,6 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/template"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v3"
-
-	// TODO: V4 Remove this as it's a temporary work around to ensure current
-	// plugin users automatically import all components.
-	_ "github.com/Jeffail/benthos/v3/public/components/legacy"
 )
 
 //------------------------------------------------------------------------------
@@ -49,8 +45,8 @@ func init() {
 // OptSetVersionStamp creates an opt func for setting the version and date built
 // stamps that Benthos returns via --version and the /version endpoint. The
 // traditional way of setting these values is via the build flags:
-// -X github.com/Jeffail/benthos/v3/lib/service.Version=$(VERSION) and
-// -X github.com/Jeffail/benthos/v3/lib/service.DateBuilt=$(DATE)
+// -X github.com/Jeffail/benthos/v3/internal/old/service.Version=$(VERSION) and
+// -X github.com/Jeffail/benthos/v3/internal/old/service.DateBuilt=$(DATE)
 func OptSetVersionStamp(version, dateBuilt string) func() {
 	return func() {
 		Version = version

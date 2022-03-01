@@ -1,7 +1,7 @@
 package pulsar
 
 import (
-	"github.com/Jeffail/benthos/v3/lib/log"
+	"github.com/Jeffail/benthos/v3/internal/log"
 	plog "github.com/apache/pulsar-client-go/pulsar/log"
 )
 

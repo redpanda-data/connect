@@ -7,10 +7,9 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/input"
+	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/Jeffail/benthos/v3/internal/old/input/reader"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/input/reader"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/response"
 )
 
 // AckFunc is a common function returned by inputs that must be called once for
@@ -132,8 +131,8 @@ func (a *airGapReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 	}
 	tMsg := message.QuickBatch(nil)
 	tMsg.Append(msg.part)
-	return tMsg, func(c context.Context, r response.Error) error {
-		return ackFn(c, r.AckError())
+	return tMsg, func(c context.Context, r error) error {
+		return ackFn(c, r)
 	}, nil
 }
 
@@ -189,8 +188,8 @@ func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (*message.Batch
 	for _, msg := range batch {
 		tMsg.Append(msg.part)
 	}
-	return tMsg, func(c context.Context, r response.Error) error {
-		return ackFn(c, r.AckError())
+	return tMsg, func(c context.Context, r error) error {
+		return ackFn(c, r)
 	}, nil
 }
 
@@ -247,11 +246,11 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 	})
 
 	return b, func(actx context.Context, err error) error {
-		var res response.Error
+		var res error
 		if err != nil {
-			res = response.NewError(err)
+			res = err
 		} else {
-			res = response.NewError(nil)
+			res = nil
 		}
 		select {
 		case tran.ResponseChan <- res:

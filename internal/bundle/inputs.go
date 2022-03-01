@@ -8,7 +8,7 @@ import (
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/input"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
 )
 
 // AllInputs is a set containing every single input that has been imported.

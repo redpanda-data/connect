@@ -25,6 +25,8 @@ var (
 	ErrAlreadyStarted = errors.New("type has already been started")
 
 	ErrNoAck = errors.New("failed to receive acknowledgement")
+
+	ErrFailedSend = errors.New("message failed to reach a target destination")
 )
 
 //------------------------------------------------------------------------------

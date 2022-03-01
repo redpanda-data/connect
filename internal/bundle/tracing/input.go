@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/component/input"
+	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/message"
 )
 
 type tracedInput struct {

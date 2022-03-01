@@ -6,7 +6,7 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component"
 	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
+	"github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 )
 
 // AllRateLimits is a set containing every single ratelimit that has been imported.

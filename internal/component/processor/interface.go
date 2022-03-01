@@ -3,7 +3,7 @@ package processor
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 )
 
 // V1 is a common interface implemented by processors.

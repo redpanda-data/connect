@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"cloud.google.com/go/bigquery"
+	"github.com/Jeffail/benthos/v3/internal/old/input"
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/input"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
 	"github.com/Jeffail/benthos/v3/public/service"
 	"google.golang.org/api/iterator"

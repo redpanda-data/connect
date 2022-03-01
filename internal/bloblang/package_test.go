@@ -6,7 +6,7 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -202,7 +202,7 @@ func TestMappingParallelExecution(t *testing.T) {
 
 					for j := 0; j < 100; j++ {
 						part := message.NewPart(nil)
-						require.NoError(t, part.SetJSON(test.input))
+						part.SetJSON(test.input)
 
 						msg := message.QuickBatch(nil)
 						msg.Append(part)
