@@ -850,6 +850,7 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 	}
 
 	conf := NewConfig()
+	conf.Switch.RetryUntilSuccess = true
 	for i := 0; i < len(mockOutputs); i++ {
 		outConf := NewSwitchConfigCase()
 		outConf.Continue = true

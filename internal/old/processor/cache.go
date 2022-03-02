@@ -71,6 +71,31 @@ cache_resources:
 `,
 			},
 			{
+				Title: "Deduplication Batch-Wide",
+				Summary: `
+Sometimes it's necessary to deduplicate a batch of messages (AKA a window) by a single identifying value. This can be done by introducing a ` + "[`branch` processor](/docs/components/processors/branch)" + `, which executes the cache only once on behalf of the batch, in this case with a value make from a field extracted from the first and last messages of the batch:`,
+				Config: `
+pipeline:
+  processors:
+    # Try and add one message to a cache that identifies the whole batch
+    - branch:
+        request_map: |
+          root = if batch_index() == 0 {
+            json("id").from(0) + json("meta.tail_id").from(-1)
+          } else { deleted() }
+        processors:
+          - cache:
+              operator: add
+              key: ${! content() }
+              value: t
+    # Delete all messages if we failed
+    - bloblang: |
+        root = if errored().from(0) {
+          deleted()
+        }
+`,
+			},
+			{
 				Title: "Hydration",
 				Summary: `
 It's possible to enrich payloads with content previously stored in a cache by

@@ -59,6 +59,7 @@ This processor will interpolate functions within the `key` and `value` fields in
 
 <Tabs defaultValue="Deduplication" values={[
 { label: 'Deduplication', value: 'Deduplication', },
+{ label: 'Deduplication Batch-Wide', value: 'Deduplication Batch-Wide', },
 { label: 'Hydration', value: 'Hydration', },
 ]}>
 
@@ -84,6 +85,33 @@ cache_resources:
   - label: foocache
     redis:
       url: tcp://TODO:6379
+```
+
+</TabItem>
+<TabItem value="Deduplication Batch-Wide">
+
+
+Sometimes it's necessary to deduplicate a batch of messages (AKA a window) by a single identifying value. This can be done by introducing a [`branch` processor](/docs/components/processors/branch), which executes the cache only once on behalf of the batch, in this case with a value make from a field extracted from the first and last messages of the batch:
+
+```yaml
+pipeline:
+  processors:
+    # Try and add one message to a cache that identifies the whole batch
+    - branch:
+        request_map: |
+          root = if batch_index() == 0 {
+            json("id").from(0) + json("meta.tail_id").from(-1)
+          } else { deleted() }
+        processors:
+          - cache:
+              operator: add
+              key: ${! content() }
+              value: t
+    # Delete all messages if we failed
+    - bloblang: |
+        root = if errored().from(0) {
+          deleted()
+        }
 ```
 
 </TabItem>

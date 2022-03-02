@@ -31,7 +31,7 @@ The switch output type allows you to route messages to different outputs based o
 output:
   label: ""
   switch:
-    retry_until_success: true
+    retry_until_success: false
     cases: []
 ```
 
@@ -43,7 +43,7 @@ output:
 output:
   label: ""
   switch:
-    retry_until_success: true
+    retry_until_success: false
     strict_mode: false
     max_in_flight: 1
     cases: []
@@ -136,7 +136,7 @@ in order to avoid duplicate messages being routed to an output.
 
 
 Type: `bool`  
-Default: `true`  
+Default: `false`  
 
 ### `strict_mode`
 

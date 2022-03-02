@@ -70,6 +70,9 @@ type InputSet struct {
 
 // Add a new input to this set by providing a constructor and documentation.
 func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]inputSpec{}
 	}

@@ -9,6 +9,7 @@ package bundle
 
 import (
 	"context"
+	"regexp"
 
 	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
 	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
@@ -24,6 +25,9 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/old/processor"
 	"github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 )
+
+var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
+var nameRegexp = regexp.MustCompile(nameRegexpRaw)
 
 // NewManagement defines the latest API for a Benthos manager, which will become
 // the only API (internally) in Benthos V4.

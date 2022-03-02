@@ -145,14 +145,18 @@ Within the mapping the input document (referenced by the keyword `this`) is a st
 
 Labels can be referenced as metadata values with the function `meta`, where if the label does not exist in the series being mapped the value `null` is returned. Labels can be changed by using meta assignments, and can be assigned `deleted()` in order to remove them.
 
-For example, the following mapping removes the `path` label entirely, which reduces the cardinality of each series. It also renames labels (for some reason) so that labels containing meows now contain woofs. Finally, the mapping restricts the metrics emitted to only three series; one for the input count, one for processor errors, and one for the output count, it does this by looking up metric names in a static array of allowed names, and if not present the `root` is assigned `deleted()`:
+For example, the following mapping removes all but the `label` label entirely, which reduces the cardinality of each series. It also renames the `label` (for some reason) so that labels containing meows now contain woofs. Finally, the mapping restricts the metrics emitted to only three series; one for the input count, one for processor errors, and one for the output count, it does this by looking up metric names in a static array of allowed names, and if not present the `root` is assigned `deleted()`:
 
 ```yaml
 metrics:
   mapping: |
-    meta path = deleted()
+    # Delete all pre-existing labels
+    meta = deleted()
+
+    # Re-add the `label` label with meows replaced with woofs
     meta label = meta("label").replace("meow", "woof")
 
+    # Delete all metric series that aren't in our list
     root = if ![
       "input_received",
       "processor_error",
@@ -160,7 +164,7 @@ metrics:
     ].contains(this) { deleted() }
 
   prometheus:
-    use_histogram_timing: true
+    use_histogram_timing: false
 ```
 
 import ComponentSelect from '@theme/ComponentSelect';

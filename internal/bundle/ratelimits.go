@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
@@ -50,6 +51,9 @@ type RateLimitSet struct {
 // Add a new ratelimit to this set by providing a spec (name, documentation, and
 // constructor).
 func (s *RateLimitSet) Add(constructor RateLimitConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]rateLimitSpec{}
 	}

@@ -31,11 +31,15 @@ func init() {
 		Categories: []Category{
 			CategoryUtility,
 		},
-		Summary: `Deduplicates messages by storing a key value in a cache using the ` + "`add`" + ` operator. If the message already exists within the cache it is dropped.`,
+		Summary: `Deduplicates messages by storing a key value in a cache using the ` + "`add`" + ` operator. If the key already exists within the cache it is dropped.`,
 		Description: `
 Caches must be configured as resources, for more information check out the [cache documentation here](/docs/components/caches/about).
 
 When using this processor with an output target that might fail you should always wrap the output within an indefinite ` + "[`retry`](/docs/components/outputs/retry)" + ` block. This ensures that during outages your messages aren't reprocessed after failures, which would result in messages being dropped.
+
+## Batch Deduplication
+
+This processor enacts on individual messages only, in order to perform a deduplication on behalf of a batch (or window) of messages instead use the ` + "[`cache` processor](/docs/components/processors/cache#examples)" + `.
 
 ## Delivery Guarantees
 

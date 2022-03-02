@@ -71,6 +71,9 @@ type OutputSet struct {
 // Add a new output to this set by providing a spec (name, documentation, and
 // constructor).
 func (s *OutputSet) Add(constructor OutputConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]outputSpec{}
 	}

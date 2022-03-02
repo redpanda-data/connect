@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"fmt"
 	"sort"
 
 	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
@@ -33,6 +34,9 @@ type MetricsSet struct {
 // Add a new metrics to this set by providing a spec (name, documentation, and
 // constructor).
 func (s *MetricsSet) Add(constructor MetricConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]metricsSpec{}
 	}

@@ -107,8 +107,7 @@ behavior is false, which will drop the message.`,
 			}
 			gObj := gabs.Wrap(value)
 			retry, exists := gObj.S("retry_until_success").Data().(bool)
-			// TODO: V4 Is retry_until_success going to be false by default now?
-			if exists && !retry {
+			if !exists || !retry {
 				return nil
 			}
 			for _, cObj := range gObj.S("cases").Children() {
@@ -116,7 +115,7 @@ behavior is false, which will drop the message.`,
 				isReject := cObj.Exists("output", "reject")
 				if typeStr == "reject" || isReject {
 					return []docs.Lint{
-						docs.NewLintError(line, "a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false` (defaults to `true`), otherwise the `reject` child output will result in infinite retries"),
+						docs.NewLintError(line, "a `switch` output with a `reject` case output must have the field `switch.retry_until_success` set to `false`, otherwise the `reject` child output will result in infinite retries"),
 					}
 				}
 			}
@@ -199,11 +198,10 @@ type SwitchConfig struct {
 // NewSwitchConfig creates a new SwitchConfig with default values.
 func NewSwitchConfig() SwitchConfig {
 	return SwitchConfig{
-		RetryUntilSuccess: true,
-		// TODO: V4 consider making this true by default.
-		StrictMode:  false,
-		MaxInFlight: 1,
-		Cases:       []SwitchConfigCase{},
+		RetryUntilSuccess: false,
+		StrictMode:        false,
+		MaxInFlight:       1,
+		Cases:             []SwitchConfigCase{},
 	}
 }
 
