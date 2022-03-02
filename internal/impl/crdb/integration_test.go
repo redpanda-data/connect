@@ -63,14 +63,10 @@ func TestIntegrationCRDB(t *testing.T) {
 	})
 
 	template := `
-input:
-  crdb_changefeed:
-    dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
-    tables:
-      - foo
-
-output:
-  type: stdout
+crdb_changefeed:
+  dsn: postgresql://root@localhost:26257/defaultdb?sslmode=disable
+  tables:
+    - foo
 `
 	streamOutBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
