@@ -187,7 +187,7 @@ func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
 			return nil, err
 		}
 
-		// Tempate processors inserted _before_ configured processors.
+		// Template processors inserted _before_ configured processors.
 		conf.Processors = append(conf.Processors, c.Processors...)
 
 		if tmpl.metricsMapping != nil {
