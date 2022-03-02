@@ -39,6 +39,8 @@ input:
     queue: ""
     subject: ""
     durable: ""
+    stream: ""
+    bind: false
     deliver: all
 ```
 
@@ -54,6 +56,8 @@ input:
     queue: ""
     subject: ""
     durable: ""
+    stream: ""
+    bind: false
     deliver: all
     ack_wait: 30s
     max_ack_pending: 1024
@@ -161,6 +165,20 @@ Preserve the state of your consumer under a durable name.
 
 
 Type: `string`  
+
+### `stream`
+
+The name of the stream to read from.
+
+
+Type: `string`  
+
+### `bind`
+
+Indicates that subscription should use an existing consumer.
+
+
+Type: `bool`  
 
 ### `deliver`
 
