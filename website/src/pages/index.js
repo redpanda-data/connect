@@ -326,13 +326,18 @@ function Home() {
             <div className="row">
               <div className={classnames('col col--6')}>
                 <h3 id="sponsored-by">Sponsored by the following heroes</h3>
-                <a href="https://www.meltwater.com/" className={styles.sponsorLink}><img className={styles.meltwaterImg} src="/img/sponsors/mw_logo.png" /></a>
-                <a href="https://www.humansecurity.com" className={styles.sponsorLink}><img className={styles.humanImg} src="/img/sponsors/HUMAN_logo.png" /></a>
-                <a href="https://www.infosum.com/" className={styles.sponsorLink}><img className={styles.infosumImg} src="/img/sponsors/infosum_logo.png" /></a>
-                <a href="https://community.com/" className={styles.sponsorLink}><img className={styles.communityImg} src="/img/sponsors/community.svg" /></a>
-                <a href="https://www.optum.com/" className={styles.sponsorLink}><img className={styles.optumImg} src="/img/sponsors/optum_logo.png" /></a>
-                <a href="https://aurora.dev/" className={styles.sponsorLink}><img className={styles.auroraImg} src="/img/sponsors/aurora.svg" /></a>
-                <a href="https://rudderstack.com/" className={styles.sponsorLink}><img className={styles.rudderstackImg} src="/img/sponsors/rudderstack.svg" /></a>
+                <div className="container">
+                  <div className={classnames("row")}>
+                    <a href="https://www.meltwater.com/" className="col col--6"><img className={styles.meltwaterImg} src="/img/sponsors/mw_logo.png" /></a>
+                    <a href="https://www.humansecurity.com" className="col col--6"><img className={styles.humanImg} src="/img/sponsors/HUMAN_logo.png" /></a>
+                    <a href="https://www.infosum.com/" className="col col--6"><img className={styles.infosumImg} src="/img/sponsors/infosum_logo.png" /></a>
+                    <a href="https://community.com/" className="col col--6"><img className={styles.communityImg} src="/img/sponsors/community.svg" /></a>
+                    <a href="https://www.optum.com/" className="col col--6"><img className={styles.optumImg} src="/img/sponsors/optum_logo.png" /></a>
+                    <a href="https://aurora.dev/" className="col col--6"><img className={styles.auroraImg} src="/img/sponsors/aurora.svg" /></a>
+                    <a href="https://rudderstack.com/" className="col col--6"><img className={styles.rudderstackImg} src="/img/sponsors/rudderstack.svg" /></a>
+                    <a href="http://wildbit.com" className="col col--6"><img className={styles.wildbitImg} src="/img/sponsors/wildbit.svg" /></a>
+                  </div>
+                </div>
               </div>
               <div className={classnames('col col--6', styles.loveSectionPlea)}>
                 <div>
