@@ -132,13 +132,7 @@ module.exports = {
           type: 'category',
           label: 'Migration',
           items: [
-            {
-              type: 'category',
-              label: 'Migrating to Version 4',
-              items: [
-                'guides/migration/v4/about',
-              ],
-            },
+            'guides/migration/v4',
             'guides/migration/v3',
             'guides/migration/v2',
           ]
