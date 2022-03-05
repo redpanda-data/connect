@@ -5,19 +5,16 @@ import (
 
 	ibloblang "github.com/Jeffail/benthos/v3/internal/bloblang"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
-	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
-	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/buffer"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/old/buffer"
-	"github.com/Jeffail/benthos/v3/internal/old/cache"
 	"github.com/Jeffail/benthos/v3/internal/old/input"
 	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
 )
 
@@ -91,7 +88,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeBuffer
-	return e.internal.BufferAdd(func(conf buffer.Config, nm bundle.NewManagement) (ibuffer.Streamed, error) {
+	return e.internal.BufferAdd(func(conf buffer.Config, nm bundle.NewManagement) (buffer.Streamed, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -100,7 +97,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 		if err != nil {
 			return nil, err
 		}
-		return ibuffer.NewStream(conf.Type, newAirGapBatchBuffer(b), nm.Logger(), nm.Metrics()), nil
+		return buffer.NewStream(conf.Type, newAirGapBatchBuffer(b), nm.Logger(), nm.Metrics()), nil
 	}, componentSpec)
 }
 
@@ -122,7 +119,7 @@ func (e *Environment) RegisterCache(name string, spec *ConfigSpec, ctor CacheCon
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeCache
-	return e.internal.CacheAdd(func(conf cache.Config, nm bundle.NewManagement) (icache.V1, error) {
+	return e.internal.CacheAdd(func(conf cache.Config, nm bundle.NewManagement) (cache.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -357,7 +354,7 @@ func (e *Environment) RegisterRateLimit(name string, spec *ConfigSpec, ctor Rate
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeRateLimit
-	return e.internal.RateLimitAdd(func(conf ratelimit.Config, nm bundle.NewManagement) (iratelimit.V1, error) {
+	return e.internal.RateLimitAdd(func(conf ratelimit.Config, nm bundle.NewManagement) (ratelimit.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err

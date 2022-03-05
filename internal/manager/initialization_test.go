@@ -7,22 +7,18 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
-	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
-	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/buffer"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
-	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/old/buffer"
-	"github.com/Jeffail/benthos/v3/internal/old/cache"
 	"github.com/Jeffail/benthos/v3/internal/old/input"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,13 +26,13 @@ import (
 func TestInitialization(t *testing.T) {
 	env := bundle.NewEnvironment()
 
-	require.NoError(t, env.BufferAdd(func(c buffer.Config, mgr bundle.NewManagement) (ibuffer.Streamed, error) {
+	require.NoError(t, env.BufferAdd(func(c buffer.Config, mgr bundle.NewManagement) (buffer.Streamed, error) {
 		return nil, errors.New("not this buffer")
 	}, docs.ComponentSpec{
 		Name: "testbuffer",
 	}))
 
-	require.NoError(t, env.CacheAdd(func(c cache.Config, mgr bundle.NewManagement) (icache.V1, error) {
+	require.NoError(t, env.CacheAdd(func(c cache.Config, mgr bundle.NewManagement) (cache.V1, error) {
 		return nil, errors.New("not this cache")
 	}, docs.ComponentSpec{
 		Name: "testcache",
@@ -64,13 +60,13 @@ func TestInitialization(t *testing.T) {
 		Name: "testprocessor",
 	}))
 
-	require.NoError(t, env.RateLimitAdd(func(c ratelimit.Config, mgr bundle.NewManagement) (iratelimit.V1, error) {
+	require.NoError(t, env.RateLimitAdd(func(c ratelimit.Config, mgr bundle.NewManagement) (ratelimit.V1, error) {
 		return nil, errors.New("not this rate limit")
 	}, docs.ComponentSpec{
 		Name: "testratelimit",
 	}))
 
-	mgr, err := NewV2(NewResourceConfig(), nil, log.Noop(), imetrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
+	mgr, err := NewV2(NewResourceConfig(), nil, log.Noop(), metrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
 	require.NoError(t, err)
 
 	bConf := buffer.NewConfig()
@@ -78,15 +74,9 @@ func TestInitialization(t *testing.T) {
 	_, err = mgr.NewBuffer(bConf)
 	assert.EqualError(t, err, "not this buffer")
 
-	_, err = buffer.New(bConf, mgr, log.Noop(), metrics.Noop())
-	assert.EqualError(t, err, "not this buffer")
-
 	cConf := cache.NewConfig()
 	cConf.Type = "testcache"
 	_, err = mgr.NewCache(cConf)
-	assert.EqualError(t, err, "not this cache")
-
-	_, err = cache.New(cConf, mgr, log.Noop(), metrics.Noop())
 	assert.EqualError(t, err, "not this cache")
 
 	iConf := input.NewConfig()
@@ -119,9 +109,6 @@ func TestInitialization(t *testing.T) {
 	rConf.Type = "testratelimit"
 	_, err = mgr.NewRateLimit(rConf)
 	assert.EqualError(t, err, "not this rate limit")
-
-	_, err = ratelimit.New(rConf, mgr, log.Noop(), metrics.Noop())
-	assert.EqualError(t, err, "not this rate limit")
 }
 
 func TestInitializationOrdering(t *testing.T) {
@@ -133,7 +120,7 @@ func TestInitializationOrdering(t *testing.T) {
 	require.NoError(t, env.InputAdd(func(c input.Config, mgr bundle.NewManagement, p ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 		go func() {
 			defer wg.Done()
-			err := mgr.AccessRateLimit(context.Background(), "testratelimit", func(rl iratelimit.V1) {})
+			err := mgr.AccessRateLimit(context.Background(), "testratelimit", func(rl ratelimit.V1) {})
 			_ = assert.Error(t, err) && assert.Contains(t, err.Error(), "unable to locate")
 		}()
 		return nil, nil
@@ -144,7 +131,7 @@ func TestInitializationOrdering(t *testing.T) {
 	require.NoError(t, env.ProcessorAdd(func(c processor.Config, mgr bundle.NewManagement) (iprocessor.V1, error) {
 		go func() {
 			defer wg.Done()
-			err := mgr.AccessRateLimit(context.Background(), "fooratelimit", func(rl iratelimit.V1) {})
+			err := mgr.AccessRateLimit(context.Background(), "fooratelimit", func(rl ratelimit.V1) {})
 			_ = assert.Error(t, err) && assert.Contains(t, err.Error(), "unable to locate")
 		}()
 		return nil, nil
@@ -152,7 +139,7 @@ func TestInitializationOrdering(t *testing.T) {
 		Name: "testprocessor",
 	}))
 
-	require.NoError(t, env.RateLimitAdd(func(c ratelimit.Config, mgr bundle.NewManagement) (iratelimit.V1, error) {
+	require.NoError(t, env.RateLimitAdd(func(c ratelimit.Config, mgr bundle.NewManagement) (ratelimit.V1, error) {
 		return nil, nil
 	}, docs.ComponentSpec{
 		Name: "testratelimit",
@@ -175,7 +162,7 @@ func TestInitializationOrdering(t *testing.T) {
 	resConf.ResourceProcessors = append(resConf.ResourceProcessors, procConf)
 	resConf.ResourceRateLimits = append(resConf.ResourceRateLimits, rlConf)
 
-	_, err := NewV2(resConf, nil, log.Noop(), imetrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
+	_, err := NewV2(resConf, nil, log.Noop(), metrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
 	require.NoError(t, err)
 
 	wg.Wait()

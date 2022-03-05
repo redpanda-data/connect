@@ -14,7 +14,6 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Do not send tracing events anywhere.
 
 ```yml

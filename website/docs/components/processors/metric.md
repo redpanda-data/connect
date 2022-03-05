@@ -175,5 +175,5 @@ pipeline:
 
 ### `timing`
 
-Equivalent to `gauge` where instead the metric is a timing.
+Equivalent to `gauge` where instead the metric is a timing. It is recommended that timing values are recorded in nanoseconds in order to be consistent with standard Benthos timing metrics, as in some cases these values are automatically converted into other units such as when exporting timings as histograms with Prometheus metrics.
 

@@ -10,11 +10,11 @@ import (
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
 	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/impl/azure"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 )
 
 // AzureQueueStorage is a benthos writer.Type implementation that writes messages to an

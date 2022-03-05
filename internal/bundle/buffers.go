@@ -5,9 +5,8 @@ import (
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
-	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
+	"github.com/Jeffail/benthos/v3/internal/component/buffer"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/old/buffer"
 )
 
 // AllBuffers is a set containing every single buffer that has been imported.
@@ -24,7 +23,7 @@ func (e *Environment) BufferAdd(constructor BufferConstructor, spec docs.Compone
 }
 
 // BufferInit attempts to initialise a buffer from a config.
-func (e *Environment) BufferInit(conf buffer.Config, mgr NewManagement) (ibuffer.Streamed, error) {
+func (e *Environment) BufferInit(conf buffer.Config, mgr NewManagement) (buffer.Streamed, error) {
 	return e.buffers.Init(conf, mgr)
 }
 
@@ -36,7 +35,7 @@ func (e *Environment) BufferDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // BufferConstructor constructs an buffer component.
-type BufferConstructor func(buffer.Config, NewManagement) (ibuffer.Streamed, error)
+type BufferConstructor func(buffer.Config, NewManagement) (buffer.Streamed, error)
 
 type bufferSpec struct {
 	constructor BufferConstructor
@@ -66,7 +65,7 @@ func (s *BufferSet) Add(constructor BufferConstructor, spec docs.ComponentSpec) 
 }
 
 // Init attempts to initialise an buffer from a config.
-func (s *BufferSet) Init(conf buffer.Config, mgr NewManagement) (ibuffer.Streamed, error) {
+func (s *BufferSet) Init(conf buffer.Config, mgr NewManagement) (buffer.Streamed, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidBufferType

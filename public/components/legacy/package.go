@@ -10,10 +10,8 @@ import (
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/old/input"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/internal/old/tracer"
 )
 
 func init() {
@@ -25,11 +23,6 @@ func init() {
 		) (iinput.Streamed, error) {
 			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics(), pipes...)
 		}, spec); err != nil {
-			panic(err)
-		}
-	})
-	metrics.WalkConstructors(func(ctor metrics.ConstructorFunc, spec docs.ComponentSpec) {
-		if err := bundle.AllMetrics.Add(bundle.MetricConstructor(ctor), spec); err != nil {
 			panic(err)
 		}
 	})
@@ -48,11 +41,6 @@ func init() {
 		if err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (iprocessor.V1, error) {
 			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
 		}, spec); err != nil {
-			panic(err)
-		}
-	})
-	tracer.WalkConstructors(func(ctor tracer.ConstructorFunc, spec docs.ComponentSpec) {
-		if err := bundle.AllTracers.Add(bundle.TracerConstructor(ctor), spec); err != nil {
 			panic(err)
 		}
 	})

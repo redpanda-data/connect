@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +22,8 @@ func TestMetricsNil(t *testing.T) {
 
 func TestMetricsNoLabels(t *testing.T) {
 	conf := metrics.NewConfig()
-	conf.Type = metrics.TypePrometheus
+	conf.Type = "prometheus"
+	conf.Prometheus.UseHistogramTiming = true
 
 	stats, err := bundle.AllMetrics.Init(conf, log.Noop())
 	require.NoError(t, err)
@@ -48,12 +49,13 @@ func TestMetricsNoLabels(t *testing.T) {
 
 	assert.Contains(t, string(body), "counterone 21")
 	assert.Contains(t, string(body), "gaugeone 12")
-	assert.Contains(t, string(body), "timerone_sum 13")
+	assert.Contains(t, string(body), "timerone_sum 1.3e-08")
 }
 
 func TestMetricsWithLabels(t *testing.T) {
 	conf := metrics.NewConfig()
-	conf.Type = metrics.TypePrometheus
+	conf.Type = "prometheus"
+	conf.Prometheus.UseHistogramTiming = true
 
 	stats, err := bundle.AllMetrics.Init(conf, log.Noop())
 	require.NoError(t, err)
@@ -80,5 +82,5 @@ func TestMetricsWithLabels(t *testing.T) {
 	assert.Contains(t, string(body), "countertwo{label1=\"value1\"} 10")
 	assert.Contains(t, string(body), "countertwo{label1=\"value2\"} 11")
 	assert.Contains(t, string(body), "gaugetwo{label2=\"value3\"} 12")
-	assert.Contains(t, string(body), "timertwo_sum{label3=\"value4\",label4=\"value5\"} 13")
+	assert.Contains(t, string(body), "timertwo_sum{label3=\"value4\",label4=\"value5\"} 1.3e-08")
 }

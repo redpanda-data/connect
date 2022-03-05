@@ -3,10 +3,10 @@ package processor
 import (
 	"testing"
 
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
 	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 )
 
 func TestSplitToSingleParts(t *testing.T) {

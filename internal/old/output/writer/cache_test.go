@@ -6,13 +6,12 @@ import (
 	"testing"
 	"time"
 
-	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
 	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/cache"
 	"github.com/Jeffail/benthos/v3/internal/old/output/writer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -167,8 +166,8 @@ func TestCacheBasic(t *testing.T) {
 		}
 	}
 
-	var memCache icache.V1
-	require.NoError(t, mgr.AccessCache(context.Background(), "foo", func(v icache.V1) {
+	var memCache cache.V1
+	require.NoError(t, mgr.AccessCache(context.Background(), "foo", func(v cache.V1) {
 		memCache = v
 	}))
 
@@ -219,8 +218,8 @@ func TestCacheBatches(t *testing.T) {
 		}
 	}
 
-	var memCache icache.V1
-	require.NoError(t, mgr.AccessCache(context.Background(), "foo", func(v icache.V1) {
+	var memCache cache.V1
+	require.NoError(t, mgr.AccessCache(context.Background(), "foo", func(v cache.V1) {
 		memCache = v
 	}))
 

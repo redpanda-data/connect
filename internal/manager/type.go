@@ -12,24 +12,20 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
-	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
-	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/buffer"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
-	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/buffer"
-	"github.com/Jeffail/benthos/v3/internal/old/cache"
 	"github.com/Jeffail/benthos/v3/internal/old/input"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 )
 
 // ErrResourceNotFound represents an error where a named resource could not be
@@ -71,10 +67,10 @@ type Type struct {
 	apiReg APIReg
 
 	inputs       map[string]iinput.Streamed
-	caches       map[string]icache.V1
+	caches       map[string]cache.V1
 	processors   map[string]iprocessor.V1
 	outputs      map[string]ioutput.Sync
-	rateLimits   map[string]iratelimit.V1
+	rateLimits   map[string]ratelimit.V1
 	resourceLock *sync.RWMutex
 
 	// Collections of component constructors
@@ -82,7 +78,7 @@ type Type struct {
 	bloblEnv *bloblang.Environment
 
 	logger log.Modular
-	stats  *imetrics.Namespaced
+	stats  *metrics.Namespaced
 
 	pipes    map[string]<-chan message.Transaction
 	pipeLock *sync.RWMutex
@@ -109,15 +105,15 @@ func OptSetBloblangEnvironment(env *bloblang.Environment) OptFunc {
 
 // NewV2 returns an instance of manager.Type, which can be shared amongst
 // components and logical threads of a Benthos service.
-func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats *imetrics.Namespaced, opts ...OptFunc) (*Type, error) {
+func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats *metrics.Namespaced, opts ...OptFunc) (*Type, error) {
 	t := &Type{
 		apiReg: apiReg,
 
 		inputs:       map[string]iinput.Streamed{},
-		caches:       map[string]icache.V1{},
+		caches:       map[string]cache.V1{},
 		processors:   map[string]iprocessor.V1{},
 		outputs:      map[string]ioutput.Sync{},
-		rateLimits:   map[string]iratelimit.V1{},
+		rateLimits:   map[string]ratelimit.V1{},
 		resourceLock: &sync.RWMutex{},
 
 		// Environment defaults to global (everything that was imported).
@@ -330,7 +326,7 @@ func (t *Type) UnsetPipe(name string, tran <-chan message.Transaction) {
 
 // WithMetricsMapping returns a manager with the stored metrics exporter wrapped
 // with a mapping.
-func (t *Type) WithMetricsMapping(m *imetrics.Mapping) *Type {
+func (t *Type) WithMetricsMapping(m *metrics.Mapping) *Type {
 	newT := *t
 	newT.stats = t.stats.WithMapping(m)
 	return &newT
@@ -389,7 +385,7 @@ func closeWithContext(ctx context.Context, c oldClosable) error {
 //------------------------------------------------------------------------------
 
 // NewBuffer attempts to create a new buffer component from a config.
-func (t *Type) NewBuffer(conf buffer.Config) (ibuffer.Streamed, error) {
+func (t *Type) NewBuffer(conf buffer.Config) (buffer.Streamed, error) {
 	return t.env.BufferInit(conf, t)
 }
 
@@ -408,7 +404,7 @@ func (t *Type) ProbeCache(name string) bool {
 // During the execution of the provided closure it is guaranteed that the
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
-func (t *Type) AccessCache(ctx context.Context, name string, fn func(icache.V1)) error {
+func (t *Type) AccessCache(ctx context.Context, name string, fn func(cache.V1)) error {
 	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
 	// profiling for heavy use within a busy loop.
 	t.resourceLock.RLock()
@@ -422,7 +418,7 @@ func (t *Type) AccessCache(ctx context.Context, name string, fn func(icache.V1))
 }
 
 // NewCache attempts to create a new cache component from a config.
-func (t *Type) NewCache(conf cache.Config) (icache.V1, error) {
+func (t *Type) NewCache(conf cache.Config) (cache.V1, error) {
 	return t.env.CacheInit(conf, t.forLabel(conf.Label))
 }
 
@@ -676,7 +672,7 @@ func (t *Type) ProbeRateLimit(name string) bool {
 // During the execution of the provided closure it is guaranteed that the
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
-func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(iratelimit.V1)) error {
+func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(ratelimit.V1)) error {
 	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
 	// profiling for heavy use within a busy loop.
 	t.resourceLock.RLock()
@@ -690,7 +686,7 @@ func (t *Type) AccessRateLimit(ctx context.Context, name string, fn func(irateli
 }
 
 // NewRateLimit attempts to create a new rate limit component from a config.
-func (t *Type) NewRateLimit(conf ratelimit.Config) (iratelimit.V1, error) {
+func (t *Type) NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error) {
 	return t.env.RateLimitInit(conf, t.forLabel(conf.Label))
 }
 

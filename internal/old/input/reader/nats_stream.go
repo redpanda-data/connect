@@ -14,9 +14,9 @@ import (
 	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/nats-io/nats.go"
 
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"github.com/gofrs/uuid"
 	"github.com/nats-io/stan.go"
 )

@@ -13,11 +13,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/interop"
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/impl/azure"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/internal/old/input/reader"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 )
 
 // AzureQueueStorage is a benthos reader.Type implementation that reads messages

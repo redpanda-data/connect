@@ -8,12 +8,12 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/api"
 	"github.com/Jeffail/benthos/v3/internal/component/input"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/old/broker"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"gopkg.in/yaml.v3"
 )
 

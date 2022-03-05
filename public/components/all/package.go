@@ -13,6 +13,8 @@ import (
 	_ "github.com/Jeffail/benthos/v3/internal/impl/dgraph"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/gcp"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/generic"
+	_ "github.com/Jeffail/benthos/v3/internal/impl/influxdb"
+	_ "github.com/Jeffail/benthos/v3/internal/impl/jaeger"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/kafka"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/maxmind"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/memcached"
@@ -20,9 +22,11 @@ import (
 	_ "github.com/Jeffail/benthos/v3/internal/impl/msgpack"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/nats"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/parquet"
+	_ "github.com/Jeffail/benthos/v3/internal/impl/prometheus"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/pulsar"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/redis"
 	_ "github.com/Jeffail/benthos/v3/internal/impl/sql"
+	_ "github.com/Jeffail/benthos/v3/internal/impl/statsd"
 	"github.com/Jeffail/benthos/v3/internal/template"
 
 	// Import all (supported) sql drivers

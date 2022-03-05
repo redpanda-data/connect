@@ -6,22 +6,19 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component"
-	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
-	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/cache"
 	"github.com/Jeffail/benthos/v3/internal/old/input"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -32,8 +29,8 @@ var _ bundle.NewManagement = &manager.Type{}
 
 //------------------------------------------------------------------------------
 
-func noopStats() *imetrics.Namespaced {
-	return imetrics.NewNamespaced(metrics.Noop())
+func noopStats() *metrics.Namespaced {
+	return metrics.NewNamespaced(metrics.Noop())
 }
 
 func TestManagerProcessorLabels(t *testing.T) {
@@ -115,13 +112,13 @@ func TestManagerCacheList(t *testing.T) {
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.NoError(t, err)
 
-	err = mgr.AccessCache(context.Background(), "foo", func(icache.V1) {})
+	err = mgr.AccessCache(context.Background(), "foo", func(cache.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessCache(context.Background(), "bar", func(icache.V1) {})
+	err = mgr.AccessCache(context.Background(), "bar", func(cache.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessCache(context.Background(), "baz", func(icache.V1) {})
+	err = mgr.AccessCache(context.Background(), "baz", func(cache.V1) {})
 	assert.EqualError(t, err, "unable to locate resource: baz")
 }
 
@@ -195,13 +192,13 @@ func TestManagerRateLimitList(t *testing.T) {
 	mgr, err := manager.NewV2(conf, nil, log.Noop(), noopStats())
 	require.NoError(t, err)
 
-	err = mgr.AccessRateLimit(context.Background(), "foo", func(iratelimit.V1) {})
+	err = mgr.AccessRateLimit(context.Background(), "foo", func(ratelimit.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessRateLimit(context.Background(), "bar", func(iratelimit.V1) {})
+	err = mgr.AccessRateLimit(context.Background(), "bar", func(ratelimit.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessRateLimit(context.Background(), "baz", func(iratelimit.V1) {})
+	err = mgr.AccessRateLimit(context.Background(), "baz", func(ratelimit.V1) {})
 	assert.EqualError(t, err, "unable to locate resource: baz")
 }
 

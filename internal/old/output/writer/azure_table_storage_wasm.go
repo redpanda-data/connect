@@ -6,8 +6,8 @@ package writer
 import (
 	"errors"
 
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 )
 
 //------------------------------------------------------------------------------

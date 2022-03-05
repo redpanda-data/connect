@@ -9,11 +9,11 @@ import (
 
 	"github.com/Azure/go-amqp"
 	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/impl/amqp1"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/benthos/v3/internal/metadata"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	btls "github.com/Jeffail/benthos/v3/internal/tls"
 )
 

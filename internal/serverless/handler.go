@@ -8,17 +8,16 @@ import (
 	"time"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
-	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
+	"github.com/Jeffail/benthos/v3/internal/component/tracer"
 	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
 	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"github.com/Jeffail/benthos/v3/internal/old/output"
-	"github.com/Jeffail/benthos/v3/internal/old/tracer"
 	"github.com/Jeffail/benthos/v3/internal/pipeline"
 	"github.com/Jeffail/benthos/v3/internal/transaction"
 )
@@ -111,17 +110,17 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	}
 
 	// Create our metrics type.
-	var stats *imetrics.Namespaced
+	var stats *metrics.Namespaced
 	if stats, err = bundle.AllMetrics.Init(conf.Metrics, logger); err != nil {
 		logger.Errorf("Failed to connect metrics aggregator: %v\n", err)
-		stats = imetrics.NewNamespaced(metrics.Noop())
+		stats = metrics.NewNamespaced(metrics.Noop())
 	}
 
 	// Create our tracer type.
-	var trac tracer.Type
-	if trac, err = bundle.AllTracers.Init(conf.Tracer); err != nil {
+	trac, err := bundle.AllTracers.Init(conf.Tracer)
+	if err != nil {
 		logger.Errorf("Failed to initialise tracer: %v\n", err)
-		trac = tracer.Noop()
+		trac = tracer.Noop{}
 	}
 
 	// Create resource manager.

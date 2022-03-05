@@ -7,9 +7,8 @@ import (
 	"testing"
 
 	"github.com/Jeffail/benthos/v3/internal/bundle"
-	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -20,7 +19,8 @@ func getTestProm(t *testing.T) (metrics.Type, http.HandlerFunc) {
 	t.Helper()
 
 	conf := metrics.NewConfig()
-	conf.Type = metrics.TypePrometheus
+	conf.Type = "prometheus"
+	conf.Prometheus.UseHistogramTiming = true
 
 	ns, err := bundle.AllMetrics.Init(conf, log.Noop())
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ func getPage(t *testing.T, handler http.HandlerFunc) string {
 func TestNamespacedNothing(t *testing.T) {
 	prom, handler := getTestProm(t)
 
-	nm := imetrics.NewNamespaced(prom)
+	nm := metrics.NewNamespaced(prom)
 
 	ctr := nm.GetCounter("counterone")
 	ctr.Incr(10)
@@ -71,17 +71,17 @@ func TestNamespacedNothing(t *testing.T) {
 
 	assert.Contains(t, body, "\ncounterone 21")
 	assert.Contains(t, body, "\ngaugeone 12")
-	assert.Contains(t, body, "\ntimerone_sum 13")
+	assert.Contains(t, body, "\ntimerone_sum 1.3e-08")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value1\"} 10")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value2\"} 11")
 	assert.Contains(t, body, "\ngaugetwo{label2=\"value3\"} 12")
-	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 13")
+	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 1.3e-08")
 }
 
 func TestNamespacedPrefix(t *testing.T) {
 	prom, handler := getTestProm(t)
 
-	nm := imetrics.NewNamespaced(prom)
+	nm := metrics.NewNamespaced(prom)
 
 	ctr := nm.GetCounter("counterone")
 	ctr.Incr(10)
@@ -110,18 +110,18 @@ func TestNamespacedPrefix(t *testing.T) {
 
 	assert.Contains(t, body, "\ncounterone 21")
 	assert.Contains(t, body, "\ngaugeone 12")
-	assert.Contains(t, body, "\ntimerone_sum 13")
+	assert.Contains(t, body, "\ntimerone_sum 1.3e-08")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value1\"} 10")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value2\"} 11")
 	assert.Contains(t, body, "\ngaugetwo{label2=\"value3\"} 12")
-	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 13")
+	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 1.3e-08")
 	assert.Contains(t, body, "\ncounterthree 22")
 }
 
 func TestNamespacedPrefixStaticLabels(t *testing.T) {
 	prom, handler := getTestProm(t)
 
-	nm := imetrics.NewNamespaced(prom).WithLabels("static1", "svalue1")
+	nm := metrics.NewNamespaced(prom).WithLabels("static1", "svalue1")
 
 	ctr := nm.GetCounter("counterone")
 	ctr.Incr(10)
@@ -152,24 +152,24 @@ func TestNamespacedPrefixStaticLabels(t *testing.T) {
 
 	assert.Contains(t, body, "\ncounterone{static1=\"svalue1\"} 21")
 	assert.Contains(t, body, "\ngaugeone{static1=\"svalue1\"} 12")
-	assert.Contains(t, body, "\ntimerone_sum{static1=\"svalue1\"} 13")
+	assert.Contains(t, body, "\ntimerone_sum{static1=\"svalue1\"} 1.3e-08")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value1\",static1=\"svalue1\"} 10")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value2\",static1=\"svalue1\"} 11")
 	assert.Contains(t, body, "\ngaugetwo{label2=\"value3\",static1=\"svalue1\"} 12")
-	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\",static1=\"svalue1\"} 13")
+	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\",static1=\"svalue1\"} 1.3e-08")
 	assert.Contains(t, body, "\ncounterthree{static1=\"svalue1\",static2=\"svalue2\"} 22")
 }
 
 func TestNamespacedPrefixStaticLabelsWithMappings(t *testing.T) {
 	prom, handler := getTestProm(t)
 
-	mappingFooToBar, err := imetrics.NewMapping(`root = this.replace_all("foo","bar")`, log.Noop())
+	mappingFooToBar, err := metrics.NewMapping(`root = this.replace_all("foo","bar")`, log.Noop())
 	require.NoError(t, err)
 
-	mappingBarToBaz, err := imetrics.NewMapping(`root = this.replace_all("bar","baz")`, log.Noop())
+	mappingBarToBaz, err := metrics.NewMapping(`root = this.replace_all("bar","baz")`, log.Noop())
 	require.NoError(t, err)
 
-	nm := imetrics.NewNamespaced(prom).WithLabels("static1", "svalue1")
+	nm := metrics.NewNamespaced(prom).WithLabels("static1", "svalue1")
 	nm = nm.WithMapping(mappingBarToBaz)
 	nm = nm.WithMapping(mappingFooToBar)
 
@@ -197,27 +197,27 @@ func TestNamespacedPrefixStaticLabelsWithMappings(t *testing.T) {
 
 	assert.Contains(t, body, "\ncounter{static1=\"svalue1\"} 21")
 	assert.Contains(t, body, "\ngauge{static1=\"svalue1\"} 12")
-	assert.Contains(t, body, "\ntimer_sum{static1=\"svalue1\"} 13")
+	assert.Contains(t, body, "\ntimer_sum{static1=\"svalue1\"} 1.3e-08")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value1\",static1=\"svalue1\"} 10")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value2\",static1=\"svalue1\"} 11")
 	assert.Contains(t, body, "\ngaugetwo{label2=\"value3\",static1=\"svalue1\"} 12")
-	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\",static1=\"svalue1\"} 13")
+	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\",static1=\"svalue1\"} 1.3e-08")
 }
 
 func TestNamespacedPrefixStaticLabelsWithMappingLabels(t *testing.T) {
 	prom, handler := getTestProm(t)
 
-	mappingFooToBar, err := imetrics.NewMapping(`meta = meta().map_each(kv -> kv.value.replace_all("value","bar"))
+	mappingFooToBar, err := metrics.NewMapping(`meta = meta().map_each(kv -> kv.value.replace_all("value","bar"))
 meta extra1 = "extravalue1"
 root = this.replace_all("foo","bar")`, log.Noop())
 	require.NoError(t, err)
 
-	mappingBarToBaz, err := imetrics.NewMapping(`meta = meta().map_each(kv -> kv.value.replace_all("bar","baz"))
+	mappingBarToBaz, err := metrics.NewMapping(`meta = meta().map_each(kv -> kv.value.replace_all("bar","baz"))
 meta extra2 = "extravalue2"
 root = this.replace_all("bar","baz")`, log.Noop())
 	require.NoError(t, err)
 
-	nm := imetrics.NewNamespaced(prom).WithLabels("static1", "svalue1")
+	nm := metrics.NewNamespaced(prom).WithLabels("static1", "svalue1")
 	nm = nm.WithMapping(mappingBarToBaz)
 	nm = nm.WithMapping(mappingFooToBar)
 
@@ -245,9 +245,9 @@ root = this.replace_all("bar","baz")`, log.Noop())
 
 	assert.Contains(t, body, "\ncounter{extra1=\"extravalue1\",extra2=\"extravalue2\",static1=\"sbaz1\"} 21")
 	assert.Contains(t, body, "\ngauge{extra1=\"extravalue1\",extra2=\"extravalue2\",static1=\"sbaz1\"} 12")
-	assert.Contains(t, body, "\ntimer_sum{extra1=\"extravalue1\",extra2=\"extravalue2\",static1=\"sbaz1\"} 13")
+	assert.Contains(t, body, "\ntimer_sum{extra1=\"extravalue1\",extra2=\"extravalue2\",static1=\"sbaz1\"} 1.3e-08")
 	assert.Contains(t, body, "\ncountertwo{extra1=\"extravalue1\",extra2=\"extravalue2\",label1=\"value1\",static1=\"sbaz1\"} 10")
 	assert.Contains(t, body, "\ncountertwo{extra1=\"extravalue1\",extra2=\"extravalue2\",label1=\"value2\",static1=\"sbaz1\"} 11")
 	assert.Contains(t, body, "\ngaugetwo{extra1=\"extravalue1\",extra2=\"extravalue2\",label2=\"value3\",static1=\"sbaz1\"} 12")
-	assert.Contains(t, body, "\ntimertwo_sum{extra1=\"extravalue1\",extra2=\"extravalue2\",label3=\"value4\",label4=\"value5\",static1=\"sbaz1\"} 13")
+	assert.Contains(t, body, "\ntimertwo_sum{extra1=\"extravalue1\",extra2=\"extravalue2\",label3=\"value4\",label4=\"value5\",static1=\"sbaz1\"} 1.3e-08")
 }

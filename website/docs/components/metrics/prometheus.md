@@ -39,7 +39,7 @@ metrics:
 # All config fields, showing default values
 metrics:
   prometheus:
-    use_histogram_timing: true
+    use_histogram_timing: false
     histogram_buckets: []
     add_process_metrics: false
     add_go_metrics: false
@@ -61,7 +61,7 @@ Metrics paths will differ from [the standard list](/docs/components/metrics/abou
 
 ### `use_histogram_timing`
 
-Whether to export timing metrics as a histogram, if `false` a summary is used instead. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.
+Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.
 
 
 Type: `bool`  

@@ -17,11 +17,11 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/api"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/component/tracer"
 	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
-	"github.com/Jeffail/benthos/v3/internal/old/tracer"
 	"github.com/Jeffail/benthos/v3/internal/stream"
 	strmmgr "github.com/Jeffail/benthos/v3/internal/stream/manager"
 	"gopkg.in/yaml.v3"
@@ -319,7 +319,7 @@ func cmdService(
 
 	// Create our tracer type.
 	var trac tracer.Type
-	if trac, err = tracer.New(conf.Tracer); err != nil {
+	if trac, err = bundle.AllTracers.Init(conf.Tracer); err != nil {
 		logger.Errorf("Failed to initialise tracer: %v\n", err)
 		return 1
 	}

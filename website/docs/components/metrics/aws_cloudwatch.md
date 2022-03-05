@@ -14,7 +14,6 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Send metrics to AWS CloudWatch using the PutMetricData endpoint.
 
 Introduced in version 3.36.0.
@@ -59,7 +58,13 @@ metrics:
 </TabItem>
 </Tabs>
 
-It is STRONGLY recommended that you reduce the metrics that are exposed with a `mapping` like this:
+### Timing Metrics
+
+The smallest timing unit that CloudWatch supports is microseconds, therefore timing metrics are automatically downgraded to microseconds (by dividing delta values by 1000). This conversion will also apply to custom timing metrics produced with a `metric` processor.
+
+### Billing
+
+AWS bills per metric series exported, it is therefore STRONGLY recommended that you reduce the metrics that are exposed with a `mapping` like this:
 
 ```yaml
 metrics:

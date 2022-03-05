@@ -88,14 +88,21 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 	return m
 }
 
-func defaultTypeByType(t Type) string {
+func defaultTypeByType(docProvider Provider, t Type) string {
+	if docProvider == nil {
+		docProvider = globalProvider
+	}
 	switch t {
 	case TypeBuffer:
 		return "none"
 	case TypeInput:
 		return "stdin"
 	case TypeMetrics:
-		return "prometheus"
+		// If prometheus isn't imported then fall back to none
+		if _, exists := docProvider.GetDocs("prometheus", TypeMetrics); exists {
+			return "prometheus"
+		}
+		return "none"
 	case TypeOutput:
 		return "stdout"
 	case TypeTracer:
@@ -109,6 +116,14 @@ func defaultTypeByType(t Type) string {
 		return ""
 	}
 	return ""
+}
+
+// DefaultTypeOf returns the standard default implementation of a given
+// component type, which is the implementation used in a stream when no config
+// for the component is present. Only some component types have a default, for
+// those that do not an empty string is returned.
+func DefaultTypeOf(t Type) string {
+	return defaultTypeByType(nil, t)
 }
 
 // GetInferenceCandidate checks a generic config structure for a component and
@@ -160,7 +175,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (st
 	}
 
 	if len(candidates) == 0 {
-		defaultType := defaultTypeByType(t)
+		defaultType := defaultTypeByType(docProvider, t)
 		if spec, exists := GetDocs(docProvider, defaultType, t); exists {
 			return defaultType, spec, nil
 		}

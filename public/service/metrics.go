@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 )
 
 // Metrics allows plugin authors to emit custom metrics from components that are
@@ -67,8 +67,11 @@ type MetricTimer struct {
 	tv metrics.StatTimerVec
 }
 
-// Timing adds a delta to a timing metric, the number of label values must match
-// the number and order of labels specified when the timing was created.
+// Timing adds a delta to a timing metric. Delta should be measured in
+// nanoseconds for consistency with other Benthos timing metrics.
+//
+// The number of label values must match the number and order of labels
+// specified when the timing was created.
 func (t *MetricTimer) Timing(delta int64, labelValues ...string) {
 	if t == nil {
 		return

@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/tracer"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/old/tracer"
 )
 
 // AllTracers is a set containing every single tracer that has been imported.
@@ -16,7 +17,7 @@ var AllTracers = &TracerSet{
 //------------------------------------------------------------------------------
 
 // TracerConstructor constructs an tracer component.
-type TracerConstructor tracer.ConstructorFunc
+type TracerConstructor func(tracer.Config) (tracer.Type, error)
 
 type tracerSpec struct {
 	constructor TracerConstructor
@@ -46,12 +47,12 @@ func (s *TracerSet) Add(constructor TracerConstructor, spec docs.ComponentSpec) 
 }
 
 // Init attempts to initialise an tracer from a config.
-func (s *TracerSet) Init(conf tracer.Config, opts ...func(tracer.Type)) (tracer.Type, error) {
+func (s *TracerSet) Init(conf tracer.Config) (tracer.Type, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, tracer.ErrInvalidTracerType
+		return nil, component.ErrInvalidTracerType
 	}
-	return spec.constructor(conf, opts...)
+	return spec.constructor(conf)
 }
 
 // Docs returns a slice of tracer specs, which document each method.

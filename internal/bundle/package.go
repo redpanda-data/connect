@@ -11,19 +11,16 @@ import (
 	"context"
 	"regexp"
 
-	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
-	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/buffer"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/old/buffer"
-	"github.com/Jeffail/benthos/v3/internal/old/cache"
 	"github.com/Jeffail/benthos/v3/internal/old/input"
 	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 )
 
 var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
@@ -34,12 +31,12 @@ var nameRegexp = regexp.MustCompile(nameRegexpRaw)
 type NewManagement interface {
 	interop.Manager
 
-	NewBuffer(conf buffer.Config) (ibuffer.Streamed, error)
-	NewCache(conf cache.Config) (icache.V1, error)
+	NewBuffer(conf buffer.Config) (buffer.Streamed, error)
+	NewCache(conf cache.Config) (cache.V1, error)
 	NewInput(conf input.Config, pipelines ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error)
 	NewProcessor(conf processor.Config) (iprocessor.V1, error)
 	NewOutput(conf output.Config, pipelines ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error)
-	NewRateLimit(conf ratelimit.Config) (iratelimit.V1, error)
+	NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error)
 
 	StoreCache(ctx context.Context, name string, conf cache.Config) error
 	StoreInput(ctx context.Context, name string, conf input.Config) error

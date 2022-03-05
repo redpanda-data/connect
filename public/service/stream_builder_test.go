@@ -15,6 +15,8 @@ import (
 	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	_ "github.com/Jeffail/benthos/v3/public/components/all"
 )
 
 func TestStreamBuilderDefault(t *testing.T) {

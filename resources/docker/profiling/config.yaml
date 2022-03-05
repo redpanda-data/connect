@@ -3,7 +3,7 @@ http:
   debug_endpoints: true
 
 input:
-  bloblang:
+  generate:
     interval: "1us"
     mapping: |
       root = {
@@ -16,7 +16,6 @@ input:
       }
 
 pipeline:
-  threads: 20
   processors:
     - resource: with_bloblang
     # - resource: with_jq
@@ -24,27 +23,24 @@ pipeline:
     - catch:
       - log:
           message: "Err: ${! error() }"
-    - bloblang: 'root = deleted()'
 
 output:
-  type: drop
+  drop: {}
 
-resources:
-  processors:
-    with_bloblang:
-      bloblang: '{"Cities":this.locations.filter(this.state == "WA").map_each(this.name).sort().join(", ")}'
+processor_resources:
+  - label: with_bloblang
+    bloblang: '{"Cities":this.locations.filter(this.state == "WA").map_each(this.name).sort().join(", ")}'
 
-    with_jq:
-      jq:
-        query: '{Cities: .locations | map(select(.state == "WA").name) | sort | join(", ") }'
+  - label: with_jq
+    jq:
+      query: '{Cities: .locations | map(select(.state == "WA").name) | sort | join(", ") }'
 
-    with_jmespath:
-      jmespath:
-        query: "locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}"
+  - label: with_jmespath
+    jmespath:
+      query: "locations[?state == 'WA'].name | sort(@) | {Cities: join(', ', @)}"
 
 metrics:
   prometheus:
-    prefix: benthos
     push_interval: 1s
     push_job_name: benthos_push
     push_url: "http://localhost:9091"

@@ -205,7 +205,9 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	}
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "type" {
-			name = node.Content[i+1].Value
+			if name = node.Content[i+1].Value; name == "" {
+				continue
+			}
 			if !conf.RemoveTypeField {
 				newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 			}

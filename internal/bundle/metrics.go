@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
-	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/component"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
 )
 
 // AllMetrics is a set containing every single metrics that has been imported.
@@ -18,7 +18,7 @@ var AllMetrics = &MetricsSet{
 //------------------------------------------------------------------------------
 
 // MetricConstructor constructs an metrics component.
-type MetricConstructor metrics.ConstructorFunc
+type MetricConstructor func(conf metrics.Config, log log.Modular) (metrics.Type, error)
 
 type metricsSpec struct {
 	constructor MetricConstructor
@@ -49,10 +49,10 @@ func (s *MetricsSet) Add(constructor MetricConstructor, spec docs.ComponentSpec)
 }
 
 // Init attempts to initialise an metrics from a config.
-func (s *MetricsSet) Init(conf metrics.Config, log log.Modular) (*imetrics.Namespaced, error) {
+func (s *MetricsSet) Init(conf metrics.Config, log log.Modular) (*metrics.Namespaced, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, metrics.ErrInvalidMetricOutputType
+		return nil, component.ErrInvalidMetricType
 	}
 
 	m, err := spec.constructor(conf, log)
@@ -60,9 +60,9 @@ func (s *MetricsSet) Init(conf metrics.Config, log log.Modular) (*imetrics.Names
 		return nil, err
 	}
 
-	ns := imetrics.NewNamespaced(m)
+	ns := metrics.NewNamespaced(m)
 	if conf.Mapping != "" {
-		mmap, err := imetrics.NewMapping(conf.Mapping, log)
+		mmap, err := metrics.NewMapping(conf.Mapping, log)
 		if err != nil {
 			return nil, err
 		}

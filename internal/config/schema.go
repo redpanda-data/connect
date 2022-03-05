@@ -2,11 +2,11 @@ package config
 
 import (
 	"github.com/Jeffail/benthos/v3/internal/api"
+	"github.com/Jeffail/benthos/v3/internal/component/metrics"
+	"github.com/Jeffail/benthos/v3/internal/component/tracer"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager"
-	"github.com/Jeffail/benthos/v3/internal/old/metrics"
-	"github.com/Jeffail/benthos/v3/internal/old/tracer"
 	"github.com/Jeffail/benthos/v3/internal/stream"
 )
 

@@ -7,20 +7,18 @@ import (
 
 	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
 	"github.com/Jeffail/benthos/v3/internal/bundle"
-	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	iratelimit "github.com/Jeffail/benthos/v3/internal/component/ratelimit"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/benthos/v3/internal/manager"
 	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/cache"
 	"github.com/Jeffail/benthos/v3/internal/old/input"
 	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 	"github.com/Jeffail/benthos/v3/template"
 	"gopkg.in/yaml.v3"
 )
@@ -157,7 +155,7 @@ func WithMetricsMapping(nm bundle.NewManagement, m *metrics.Mapping) bundle.NewM
 }
 
 func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
-	return set.Add(func(c cache.Config, nm bundle.NewManagement) (icache.V1, error) {
+	return set.Add(func(c cache.Config, nm bundle.NewManagement) (cache.V1, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -239,7 +237,7 @@ func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
 }
 
 func registerRateLimitTemplate(tmpl *compiled, set *bundle.RateLimitSet) error {
-	return set.Add(func(c ratelimit.Config, nm bundle.NewManagement) (iratelimit.V1, error) {
+	return set.Add(func(c ratelimit.Config, nm bundle.NewManagement) (ratelimit.V1, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err

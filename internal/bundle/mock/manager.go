@@ -11,12 +11,9 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/component/processor"
 	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	lbuffer "github.com/Jeffail/benthos/v3/internal/old/buffer"
-	lcache "github.com/Jeffail/benthos/v3/internal/old/cache"
 	linput "github.com/Jeffail/benthos/v3/internal/old/input"
 	loutput "github.com/Jeffail/benthos/v3/internal/old/output"
 	lprocessor "github.com/Jeffail/benthos/v3/internal/old/processor"
-	lratelimit "github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 )
 
 // Manager provides a mock benthos manager that components can use to test
@@ -33,17 +30,17 @@ func NewManager() *Manager {
 }
 
 // NewBuffer always errors on invalid type.
-func (m *Manager) NewBuffer(conf lbuffer.Config) (buffer.Streamed, error) {
+func (m *Manager) NewBuffer(conf buffer.Config) (buffer.Streamed, error) {
 	return nil, component.ErrInvalidBufferType
 }
 
 // NewCache always errors on invalid type.
-func (m *Manager) NewCache(conf lcache.Config) (cache.V1, error) {
+func (m *Manager) NewCache(conf cache.Config) (cache.V1, error) {
 	return nil, component.ErrInvalidCacheType
 }
 
 // StoreCache always errors on invalid type.
-func (m *Manager) StoreCache(ctx context.Context, name string, conf lcache.Config) error {
+func (m *Manager) StoreCache(ctx context.Context, name string, conf cache.Config) error {
 	return component.ErrInvalidCacheType
 }
 
@@ -78,11 +75,11 @@ func (m *Manager) StoreOutput(ctx context.Context, name string, conf loutput.Con
 }
 
 // NewRateLimit always errors on invalid type.
-func (m *Manager) NewRateLimit(conf lratelimit.Config) (ratelimit.V1, error) {
+func (m *Manager) NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error) {
 	return nil, component.ErrInvalidRateLimitType
 }
 
 // StoreRateLimit always errors on invalid type.
-func (m *Manager) StoreRateLimit(ctx context.Context, name string, conf lratelimit.Config) error {
+func (m *Manager) StoreRateLimit(ctx context.Context, name string, conf ratelimit.Config) error {
 	return component.ErrInvalidRateLimitType
 }

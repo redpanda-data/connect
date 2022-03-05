@@ -12,9 +12,6 @@ import (
 	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
 	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
 	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/buffer"
-	"github.com/Jeffail/benthos/v3/internal/old/input"
-	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/pipeline"
 )
 
@@ -91,13 +88,13 @@ func (t *Type) IsReady() bool {
 
 func (t *Type) start() (err error) {
 	// Constructors
-	iMgr := t.manager.IntoPath("input")
-	if t.inputLayer, err = input.New(t.conf.Input, iMgr, iMgr.Logger(), iMgr.Metrics()); err != nil {
+	iMgr := t.manager.IntoPath("input").(bundle.NewManagement)
+	if t.inputLayer, err = iMgr.NewInput(t.conf.Input); err != nil {
 		return
 	}
 	if t.conf.Buffer.Type != "none" {
-		bMgr := t.manager.IntoPath("buffer")
-		if t.bufferLayer, err = buffer.New(t.conf.Buffer, bMgr, bMgr.Logger(), bMgr.Metrics()); err != nil {
+		bMgr := t.manager.IntoPath("buffer").(bundle.NewManagement)
+		if t.bufferLayer, err = bMgr.NewBuffer(t.conf.Buffer); err != nil {
 			return
 		}
 	}
@@ -107,8 +104,8 @@ func (t *Type) start() (err error) {
 			return
 		}
 	}
-	oMgr := t.manager.IntoPath("output")
-	if t.outputLayer, err = output.New(t.conf.Output, oMgr, oMgr.Logger(), oMgr.Metrics()); err != nil {
+	oMgr := t.manager.IntoPath("output").(bundle.NewManagement)
+	if t.outputLayer, err = oMgr.NewOutput(t.conf.Output); err != nil {
 		return
 	}
 

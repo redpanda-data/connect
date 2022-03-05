@@ -14,7 +14,6 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collector.
 
 

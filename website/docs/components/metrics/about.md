@@ -14,6 +14,10 @@ metrics:
 
 The default metrics configuration is to expose Prometheus metrics on the [service-wide HTTP endpoint][http.about] at the endpoints `/metrics` and `/stats`.
 
+### Timings
+
+It's worth noting that timing metrics within Benthos are measured in nanoseconds and are therefore named with a `_ns` suffix. However, some exporters do not support this level of precision and are downgraded, or have the unit converted for convenience. In these cases the exporter documentation outlines the conversion and why it is made.
+
 ## Metric Names
 
 Each major Benthos component type emits one or more metrics with the name prefixed by the type. These metrics are intended to provide an overview of behaviour, performance and health. Some specific component implementations may provide their own unique metrics on top of these standardised ones, these extra metrics can be found listed on their respective documentation pages.

@@ -19,6 +19,8 @@ var (
 	ErrInvalidBufferType    = errors.New("buffer type was not recognised")
 	ErrInvalidInputType     = errors.New("input type was not recognised")
 	ErrInvalidOutputType    = errors.New("output type was not recognised")
+	ErrInvalidTracerType    = errors.New("tracer type was not recognised")
+	ErrInvalidMetricType    = errors.New("invalid metrics output type")
 
 	// ErrAlreadyStarted is returned when an input or output type gets started a
 	// second time.

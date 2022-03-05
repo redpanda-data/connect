@@ -1,11 +1,11 @@
 package manager
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/old/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
 	"github.com/Jeffail/benthos/v3/internal/old/input"
 	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/internal/old/ratelimit"
 )
 
 // ResourceConfig contains fields for specifying resource components at the root

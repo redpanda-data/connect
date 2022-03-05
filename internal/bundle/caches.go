@@ -5,9 +5,8 @@ import (
 	"sort"
 
 	"github.com/Jeffail/benthos/v3/internal/component"
-	icache "github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/Jeffail/benthos/v3/internal/component/cache"
 	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/old/cache"
 )
 
 // AllCaches is a set containing every single cache that has been imported.
@@ -24,7 +23,7 @@ func (e *Environment) CacheAdd(constructor CacheConstructor, spec docs.Component
 }
 
 // CacheInit attempts to initialise a cache from a config.
-func (e *Environment) CacheInit(conf cache.Config, mgr NewManagement) (icache.V1, error) {
+func (e *Environment) CacheInit(conf cache.Config, mgr NewManagement) (cache.V1, error) {
 	return e.caches.Init(conf, mgr)
 }
 
@@ -36,7 +35,7 @@ func (e *Environment) CacheDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // CacheConstructor constructs an cache component.
-type CacheConstructor func(cache.Config, NewManagement) (icache.V1, error)
+type CacheConstructor func(cache.Config, NewManagement) (cache.V1, error)
 
 type cacheSpec struct {
 	constructor CacheConstructor
@@ -66,7 +65,7 @@ func (s *CacheSet) Add(constructor CacheConstructor, spec docs.ComponentSpec) er
 }
 
 // Init attempts to initialise an cache from a config.
-func (s *CacheSet) Init(conf cache.Config, mgr NewManagement) (icache.V1, error) {
+func (s *CacheSet) Init(conf cache.Config, mgr NewManagement) (cache.V1, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidCacheType

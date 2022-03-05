@@ -17,7 +17,6 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-
 Send metrics to InfluxDB 1.x using the `/write` endpoint.
 
 Introduced in version 3.36.0.
@@ -162,7 +161,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
