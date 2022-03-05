@@ -1584,9 +1584,7 @@ var _ = registerSimpleMethod(
 	NewHiddenMethodSpec("replace").
 		Param(ParamString("old", "A string to match against.")).
 		Param(ParamString("new", "A string to replace with.")),
-	func(args *ParsedParams) (simpleMethod, error) {
-		return nil, errors.New("the method `replace` has been renamed to `replace_all`")
-	},
+	replaceAllImpl,
 )
 
 var _ = registerSimpleMethod(
@@ -1603,36 +1601,36 @@ var _ = registerSimpleMethod(
 	).
 		Param(ParamString("old", "A string to match against.")).
 		Param(ParamString("new", "A string to replace with.")),
-	func(args *ParsedParams) (simpleMethod, error) {
-		old, err := args.FieldString("old")
-		if err != nil {
-			return nil, err
-		}
-		new, err := args.FieldString("new")
-		if err != nil {
-			return nil, err
-		}
-		oldB, newB := []byte(old), []byte(new)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			switch t := v.(type) {
-			case string:
-				return strings.ReplaceAll(t, old, new), nil
-			case []byte:
-				return bytes.ReplaceAll(t, oldB, newB), nil
-			}
-			return nil, NewTypeError(v, ValueString)
-		}, nil
-	},
+	replaceAllImpl,
 )
+
+func replaceAllImpl(args *ParsedParams) (simpleMethod, error) {
+	oldStr, err := args.FieldString("old")
+	if err != nil {
+		return nil, err
+	}
+	newStr, err := args.FieldString("new")
+	if err != nil {
+		return nil, err
+	}
+	oldB, newB := []byte(oldStr), []byte(newStr)
+	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		switch t := v.(type) {
+		case string:
+			return strings.ReplaceAll(t, oldStr, newStr), nil
+		case []byte:
+			return bytes.ReplaceAll(t, oldB, newB), nil
+		}
+		return nil, NewTypeError(v, ValueString)
+	}, nil
+}
 
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
 	NewHiddenMethodSpec("replace_many").
 		Param(ParamArray("values", "An array of values, each even value will be replaced with the following odd value.")),
-	func(args *ParsedParams) (simpleMethod, error) {
-		return nil, errors.New("the method `replace_many` has been renamed to `replace_all_many`")
-	},
+	replaceAllManyImpl,
 )
 
 var _ = registerSimpleMethod(
@@ -1652,48 +1650,50 @@ var _ = registerSimpleMethod(
 			`{"new_value":"&lt;i&gt;Hello&lt;/i&gt; &lt;b&gt;World&lt;/b&gt;"}`,
 		),
 	).Param(ParamArray("values", "An array of values, each even value will be replaced with the following odd value.")),
-	func(args *ParsedParams) (simpleMethod, error) {
-		items, err := args.FieldArray("values")
-		if err != nil {
-			return nil, err
-		}
-		if len(items)%2 != 0 {
-			return nil, fmt.Errorf("invalid arg, replacements should be in pairs and must therefore be even: %v", items)
-		}
-
-		var replacePairs [][2]string
-		var replacePairsBytes [][2][]byte
-
-		for i := 0; i < len(items); i += 2 {
-			from, err := IGetString(items[i])
-			if err != nil {
-				return nil, fmt.Errorf("invalid replacement value at index %v: %w", i, err)
-			}
-			to, err := IGetString(items[i+1])
-			if err != nil {
-				return nil, fmt.Errorf("invalid replacement value at index %v: %w", i+1, err)
-			}
-			replacePairs = append(replacePairs, [2]string{from, to})
-			replacePairsBytes = append(replacePairsBytes, [2][]byte{[]byte(from), []byte(to)})
-		}
-
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			switch t := v.(type) {
-			case string:
-				for _, pair := range replacePairs {
-					t = strings.ReplaceAll(t, pair[0], pair[1])
-				}
-				return t, nil
-			case []byte:
-				for _, pair := range replacePairsBytes {
-					t = bytes.ReplaceAll(t, pair[0], pair[1])
-				}
-				return t, nil
-			}
-			return nil, NewTypeError(v, ValueString)
-		}, nil
-	},
+	replaceAllManyImpl,
 )
+
+func replaceAllManyImpl(args *ParsedParams) (simpleMethod, error) {
+	items, err := args.FieldArray("values")
+	if err != nil {
+		return nil, err
+	}
+	if len(items)%2 != 0 {
+		return nil, fmt.Errorf("invalid arg, replacements should be in pairs and must therefore be even: %v", items)
+	}
+
+	var replacePairs [][2]string
+	var replacePairsBytes [][2][]byte
+
+	for i := 0; i < len(items); i += 2 {
+		from, err := IGetString(items[i])
+		if err != nil {
+			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i, err)
+		}
+		to, err := IGetString(items[i+1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i+1, err)
+		}
+		replacePairs = append(replacePairs, [2]string{from, to})
+		replacePairsBytes = append(replacePairsBytes, [2][]byte{[]byte(from), []byte(to)})
+	}
+
+	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		switch t := v.(type) {
+		case string:
+			for _, pair := range replacePairs {
+				t = strings.ReplaceAll(t, pair[0], pair[1])
+			}
+			return t, nil
+		case []byte:
+			for _, pair := range replacePairsBytes {
+				t = bytes.ReplaceAll(t, pair[0], pair[1])
+			}
+			return t, nil
+		}
+		return nil, NewTypeError(v, ValueString)
+	}, nil
+}
 
 //------------------------------------------------------------------------------
 
@@ -1965,9 +1965,7 @@ var _ = registerSimpleMethod(
 	NewHiddenMethodSpec("re_replace").
 		Param(ParamString("pattern", "The pattern to match against.")).
 		Param(ParamString("value", "The value to replace with.")),
-	func(args *ParsedParams) (simpleMethod, error) {
-		return nil, errors.New("the method `re_replace` has been renamed to `re_replace_all`")
-	},
+	reReplaceAllImpl,
 )
 
 var _ = registerSimpleMethod(
@@ -1984,34 +1982,36 @@ var _ = registerSimpleMethod(
 	).
 		Param(ParamString("pattern", "The pattern to match against.")).
 		Param(ParamString("value", "The value to replace with.")),
-	func(args *ParsedParams) (simpleMethod, error) {
-		reStr, err := args.FieldString("pattern")
-		if err != nil {
-			return nil, err
-		}
-		re, err := regexp.Compile(reStr)
-		if err != nil {
-			return nil, err
-		}
-		with, err := args.FieldString("value")
-		if err != nil {
-			return nil, err
-		}
-		withBytes := []byte(with)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			var result string
-			switch t := v.(type) {
-			case string:
-				result = re.ReplaceAllString(t, with)
-			case []byte:
-				result = string(re.ReplaceAll(t, withBytes))
-			default:
-				return nil, NewTypeError(v, ValueString)
-			}
-			return result, nil
-		}, nil
-	},
+	reReplaceAllImpl,
 )
+
+func reReplaceAllImpl(args *ParsedParams) (simpleMethod, error) {
+	reStr, err := args.FieldString("pattern")
+	if err != nil {
+		return nil, err
+	}
+	re, err := regexp.Compile(reStr)
+	if err != nil {
+		return nil, err
+	}
+	with, err := args.FieldString("value")
+	if err != nil {
+		return nil, err
+	}
+	withBytes := []byte(with)
+	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		var result string
+		switch t := v.(type) {
+		case string:
+			result = re.ReplaceAllString(t, with)
+		case []byte:
+			result = string(re.ReplaceAll(t, withBytes))
+		default:
+			return nil, NewTypeError(v, ValueString)
+		}
+		return result, nil
+	}, nil
+}
 
 //------------------------------------------------------------------------------
 

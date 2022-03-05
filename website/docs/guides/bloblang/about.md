@@ -307,8 +307,8 @@ root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokem
 Methods also support both named and nameless style arguments:
 
 ```coffee
-root.foo_one = this.(bar | baz).trim().replace(old: "dog", new: "cat")
-root.foo_two = this.(bar | baz).trim().replace("dog", "cat")
+root.foo_one = this.(bar | baz).trim().replace_all(old: "dog", new: "cat")
+root.foo_two = this.(bar | baz).trim().replace_all("dog", "cat")
 ```
 
 You can find a full list of methods and their parameters in [the methods page][blobl.methods].
