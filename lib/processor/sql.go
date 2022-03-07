@@ -31,7 +31,7 @@ func init() {
 		Categories: []Category{
 			CategoryIntegration,
 		},
-		Status: docs.StatusDeprecated,
+		Status: docs.StatusStable,
 		Summary: `
 Runs an SQL prepared query against a target database for each message and, for
 queries that return rows, replaces it with the result according to a
@@ -39,25 +39,9 @@ queries that return rows, replaces it with the result according to a
 		Description: `
 ## Alternatives
 
-Use either the ` + "[`sql_insert`](/docs/components/processors/sql_insert)" + ` or the ` + "[`sql_select`](/docs/components/processors/sql_select)" + ` processor instead.
+For basic inserts or select queries use use either the ` + "[`sql_insert`](/docs/components/processors/sql_insert)" + ` or the ` + "[`sql_select`](/docs/components/processors/sql_select)" + ` processor.
 
-If a query contains arguments they can be set as an array of strings supporting
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries) in
-the ` + "`args`" + ` field.
-
-## Drivers
-
-The following is a list of supported drivers and their respective DSN formats:
-
-| Driver | Data Source Name Format |
-|---|---|
-` + "| `clickhouse` | [`tcp://[netloc][:port][?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn)" + `
-` + "| `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |" + `
-` + "| `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |" + `
-` + "| `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |" + `
-
-Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you
-can override this with the parameter ` + "`sslmode=disable`" + ` if required.`,
+For more complex queries use the ` + "[`sql_raw`](/docs/components/processors/sql_raw)" + ` processor.`,
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "Table Insert (MySQL)",

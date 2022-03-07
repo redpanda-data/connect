@@ -1,7 +1,7 @@
 ---
 title: sql
 type: output
-status: deprecated
+status: stable
 categories: ["Services"]
 ---
 
@@ -15,9 +15,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::warning DEPRECATED
-This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
-:::
 
 Runs an SQL prepared query against a target database for each message.
 
@@ -74,20 +71,7 @@ output:
 
 ## Alternatives
 
-Use the [`sql_insert`](/docs/components/outputs/sql_insert) output instead.
-
-## Drivers
-
-The following is a list of supported drivers and their respective DSN formats:
-
-| Driver | Data Source Name Format |
-|---|---|
-| `clickhouse` | [`tcp://[netloc][:port][?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn)
-| `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |
-| `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |
-| `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |
-
-Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
+For basic inserts use the [`sql_insert`](/docs/components/outputs/sql_insert) output instead. For more complex queries use the [`sql_raw`](/docs/components/outputs/sql_raw) output.
 
 ## Performance
 
