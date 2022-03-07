@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -30,7 +32,7 @@ type AzureTableStorage struct {
 	partitionKey *field.Expression
 	rowKey       *field.Expression
 	properties   map[string]*field.Expression
-	client       storage.TableServiceClient
+	client       *aztables.ServiceClient
 	timeout      time.Duration
 	log          log.Modular
 	stats        metrics.Type
@@ -53,15 +55,23 @@ func NewAzureTableStorageV2(
 	if conf.StorageAccount == "" && conf.StorageConnectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
-	var client storage.Client
+	var client *aztables.ServiceClient
 	if conf.StorageConnectionString != "" {
 		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
-			client, err = storage.NewEmulatorClient()
+			// Only here to support legacy configs that pass UseDevelopmentStorage=true;
+			// `UseDevelopmentStorage=true` is not available in the current SDK, neither `storage.NewEmulatorClient()` (which was used in the previous SDK).
+			// Instead, we use the http connection string to connect to the emulator endpoints with the default table storage port.
+			// https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azurite?tabs=visual-studio#http-connection-strings
+			client, err = aztables.NewServiceClientFromConnectionString("DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;", nil)
 		} else {
-			client, err = storage.NewClientFromConnectionString(conf.StorageConnectionString)
+			client, err = aztables.NewServiceClientFromConnectionString(conf.StorageConnectionString, nil)
 		}
 	} else {
-		client, err = storage.NewBasicClient(conf.StorageAccount, conf.StorageAccessKey)
+		cred, credErr := aztables.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
+		if credErr != nil {
+			return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
+		}
+		client, err = aztables.NewServiceClientWithSharedKey(fmt.Sprintf("https://%s.table.core.windows.net/", conf.StorageAccount), cred, nil)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
@@ -71,7 +81,7 @@ func NewAzureTableStorageV2(
 		log:     log,
 		stats:   stats,
 		timeout: timeout,
-		client:  client.GetTableService(),
+		client:  client,
 	}
 	if a.tableName, err = mgr.BloblEnvironment().NewField(conf.TableName); err != nil {
 		return nil, fmt.Errorf("failed to parse table name expression: %v", err)
@@ -109,23 +119,23 @@ func (a *AzureTableStorage) Write(msg *message.Batch) error {
 
 // WriteWithContext attempts to write message contents to a target storage account as files.
 func (a *AzureTableStorage) WriteWithContext(wctx context.Context, msg *message.Batch) error {
-	writeReqs := make(map[string]map[string][]*storage.Entity)
+	writeReqs := make(map[string]map[string][]*aztables.EDMEntity)
 	if err := IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		entity := &storage.Entity{}
+		entity := &aztables.EDMEntity{}
 		tableName := a.tableName.String(i, msg)
 		partitionKey := a.partitionKey.String(i, msg)
 		entity.PartitionKey = a.partitionKey.String(i, msg)
 		entity.RowKey = a.rowKey.String(i, msg)
 		entity.Properties = a.getProperties(i, p, msg)
 		if writeReqs[tableName] == nil {
-			writeReqs[tableName] = make(map[string][]*storage.Entity)
+			writeReqs[tableName] = make(map[string][]*aztables.EDMEntity)
 		}
 		writeReqs[tableName][partitionKey] = append(writeReqs[tableName][partitionKey], entity)
 		return nil
 	}); err != nil {
 		return err
 	}
-	return a.writeBatches(writeReqs)
+	return a.execBatch(writeReqs)
 }
 
 func (a *AzureTableStorage) getProperties(i int, p *message.Part, msg *message.Batch) map[string]interface{} {
@@ -153,22 +163,26 @@ func (a *AzureTableStorage) getProperties(i int, p *message.Part, msg *message.B
 	return properties
 }
 
-func (a *AzureTableStorage) writeBatches(writeReqs map[string]map[string][]*storage.Entity) error {
+func (a *AzureTableStorage) execBatch(writeReqs map[string]map[string][]*aztables.EDMEntity) error {
 	for tn, pks := range writeReqs {
-		table := a.client.GetTableReference(tn)
+		table := a.client.NewClient(tn)
+		_, err := table.Create(context.Background(), nil)
+		if !tableExists(err) {
+			return err
+		}
 		for _, entities := range pks {
-			tableBatch := table.NewBatch()
+			var batch []aztables.TransactionAction
 			ne := len(entities)
 			for i, entity := range entities {
-				entity.Table = table
-				if err := a.addToBatch(tableBatch, a.conf.InsertType, entity); err != nil {
+				batch, err = a.addToBatch(batch, a.conf.InsertType, entity)
+				if err != nil {
 					return err
 				}
 				if reachedBatchLimit(i) || isLastEntity(i, ne) {
-					if err := a.executeBatch(table, tableBatch); err != nil {
+					if _, err := table.SubmitTransaction(context.Background(), batch, nil); err != nil {
 						return err
 					}
-					tableBatch = table.NewBatch()
+					batch = nil
 				}
 			}
 		}
@@ -176,22 +190,13 @@ func (a *AzureTableStorage) writeBatches(writeReqs map[string]map[string][]*stor
 	return nil
 }
 
-func (a *AzureTableStorage) executeBatch(table *storage.Table, tableBatch *storage.TableBatch) error {
-	if err := tableBatch.ExecuteBatch(); err != nil {
-		if tableDoesNotExist(err) {
-			if cerr := table.Create(uint(10), storage.FullMetadata, nil); cerr != nil {
-				return cerr
-			}
-			err = tableBatch.ExecuteBatch()
-		}
-		return err
+func tableExists(err error) bool {
+	if err == nil {
+		return false
 	}
-	return nil
-}
-
-func tableDoesNotExist(err error) bool {
-	if cerr, ok := err.(storage.AzureStorageServiceError); ok {
-		return cerr.Code == "TableNotFound"
+	var azErr *azcore.ResponseError
+	if errors.As(err, &azErr) {
+		return azErr.StatusCode == http.StatusConflict
 	}
 	return false
 }
@@ -205,18 +210,37 @@ func reachedBatchLimit(i int) bool {
 	return (i+1)%batchSizeLimit == 0
 }
 
-func (a *AzureTableStorage) addToBatch(tableBatch *storage.TableBatch, insertType string, entity *storage.Entity) error {
-	switch insertType {
-	case "INSERT":
-		tableBatch.InsertEntity(entity)
-	case "INSERT_MERGE":
-		tableBatch.InsertOrMergeEntity(entity, true)
-	case "INSERT_REPLACE":
-		tableBatch.InsertOrReplaceEntity(entity, true)
-	default:
-		return fmt.Errorf("invalid insert type")
+func (a *AzureTableStorage) addToBatch(batch []aztables.TransactionAction, insertType string, entity *aztables.EDMEntity) ([]aztables.TransactionAction, error) {
+	appendFunc := func(b []aztables.TransactionAction, t aztables.TransactionType, e *aztables.EDMEntity) ([]aztables.TransactionAction, error) {
+		// marshal entity
+		m, err := json.Marshal(e)
+		if err != nil {
+			return nil, fmt.Errorf("error marshalling entity: %v", err)
+		}
+		b = append(b, aztables.TransactionAction{
+			ActionType: t,
+			Entity:     m,
+		})
+		return b, nil
 	}
-	return nil
+	var err error
+	switch strings.ToUpper(insertType) {
+	case "ADD":
+		batch, err = appendFunc(batch, aztables.Add, entity)
+	case "INSERT", "INSERT_MERGE", "INSERTMERGE":
+		batch, err = appendFunc(batch, aztables.InsertMerge, entity)
+	case "INSERT_REPLACE", "INSERTREPLACE":
+		batch, err = appendFunc(batch, aztables.InsertReplace, entity)
+	case "UPDATE", "UPDATE_MERGE", "UPDATEMERGE":
+		batch, err = appendFunc(batch, aztables.UpdateMerge, entity)
+	case "UPDATE_REPLACE", "UPDATEREPLACE":
+		batch, err = appendFunc(batch, aztables.UpdateReplace, entity)
+	case "DELETE":
+		batch, err = appendFunc(batch, aztables.Delete, entity)
+	default:
+		return batch, fmt.Errorf("invalid insert type")
+	}
+	return batch, err
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
