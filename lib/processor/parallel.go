@@ -154,8 +154,11 @@ func (p *Parallel) ProcessMessage(msg types.Message) ([]types.Message, types.Res
 			return nil
 		})
 	}
-	if resMsg.Len() == 0 && unAcks == int32(msg.Len()) {
-		return nil, response.NewUnack()
+	if resMsg.Len() == 0 {
+		if msg.Len() > 0 && unAcks == int32(msg.Len()) {
+			return nil, response.NewUnack()
+		}
+		return nil, response.NewAck()
 	}
 
 	p.mBatchSent.Incr(1)

@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 - New `sql_raw` processor and output.
 
+### Fixed
+
+- Corrected a case where nested `parallel` processors that result in emptied batches (all messages filtered) would propagate an unack rather than an acknowledgement.
+
 ### Changed
 
 - The `sql` processor and output are no longer marked as deprecated and will therefore not be removed in V4. This change was made in order to provide more time to migrate to the new `sql_raw` processor and output.
