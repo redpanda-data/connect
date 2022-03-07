@@ -184,18 +184,21 @@ func (s *sqlSelectProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		if s.argsMapping != nil {
 			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
 			if err != nil {
+				s.logger.Debugf("Arguments mapping failed: %v", err)
 				msg.SetError(err)
 				continue
 			}
 
 			iargs, err := resMsg.AsStructured()
 			if err != nil {
+				s.logger.Debugf("Mapping returned non-structured result: %v", err)
 				msg.SetError(fmt.Errorf("mapping returned non-structured result: %w", err))
 				continue
 			}
 
 			var ok bool
 			if args, ok = iargs.([]interface{}); !ok {
+				s.logger.Debugf("Mapping returned non-array result: %T", iargs)
 				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 				continue
 			}
@@ -208,11 +211,13 @@ func (s *sqlSelectProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 
 		rows, err := queryBuilder.RunWith(s.db).QueryContext(ctx)
 		if err != nil {
+			s.logger.Debugf("Failed to run query: %v", err)
 			msg.SetError(err)
 			continue
 		}
 
 		if jArray, err := sqlRowsToArray(rows); err != nil {
+			s.logger.Debugf("Failed to convert rows: %v", err)
 			msg.SetError(err)
 		} else {
 			msg.SetStructured(jArray)

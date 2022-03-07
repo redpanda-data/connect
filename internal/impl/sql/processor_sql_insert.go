@@ -39,7 +39,8 @@ If the insert fails to execute then the message will still remain unchanged and 
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the insert query.").
 			Optional().
-			Advanced()).
+			Advanced().
+			Example("ON CONFLICT (name) DO NOTHING")).
 		Version("3.59.0").
 		Example("Table Insert (MySQL)",
 			`
@@ -192,18 +193,21 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		var args []interface{}
 		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
 		if err != nil {
+			s.logger.Debugf("Arguments mapping failed: %v", err)
 			msg.SetError(err)
 			continue
 		}
 
 		iargs, err := resMsg.AsStructured()
 		if err != nil {
+			s.logger.Debugf("Mapping returned non-structured result: %v", err)
 			msg.SetError(fmt.Errorf("mapping returned non-structured result: %w", err))
 			continue
 		}
 
 		var ok bool
 		if args, ok = iargs.([]interface{}); !ok {
+			s.logger.Debugf("Mapping returned non-array result: %T", iargs)
 			msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 			continue
 		}
@@ -222,6 +226,7 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		err = tx.Commit()
 	}
 	if err != nil {
+		s.logger.Debugf("Failed to run query: %v", err)
 		return nil, err
 	}
 	return []service.MessageBatch{batch}, nil

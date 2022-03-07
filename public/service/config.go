@@ -163,6 +163,13 @@ func (c *ConfigField) Advanced() *ConfigField {
 	return c
 }
 
+// Deprecated marks a config field as being deprecated, and therefore it will not
+// appear in documentation examples.
+func (c *ConfigField) Deprecated() *ConfigField {
+	c.field = c.field.Deprecated()
+	return c
+}
+
 // Default specifies a default value that this field will assume if it is
 // omitted from a provided config. Fields that do not have a default value are
 // considered mandatory, and so parsing a config will fail in their absence.

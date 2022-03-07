@@ -9,51 +9,38 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/shutdown"
 	"github.com/Jeffail/benthos/v3/public/bloblang"
 	"github.com/Jeffail/benthos/v3/public/service"
-	"github.com/Masterminds/squirrel"
 )
 
-func sqlInsertOutputConfig() *service.ConfigSpec {
+func sqlRawOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
-		Summary("Inserts a row into an SQL database for each message.").
+		Summary("Executes an arbitrary SQL query for each message.").
 		Description(``).
 		Field(driverField).
 		Field(dsnField).
-		Field(service.NewStringField("table").
-			Description("The table to insert to.").
-			Example("foo")).
-		Field(service.NewStringListField("columns").
-			Description("A list of columns to insert.").
-			Example([]string{"foo", "bar", "baz"})).
+		Field(service.NewStringField("query").
+			Description("The query to execute.").
+			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBloblangField("args_mapping").
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of columns specified.").
+			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`)).
-		Field(service.NewStringField("prefix").
-			Description("An optional prefix to prepend to the insert query (before INSERT).").
-			Optional().
-			Advanced()).
-		Field(service.NewStringField("suffix").
-			Description("An optional suffix to append to the insert query.").
-			Optional().
-			Advanced().
-			Example("ON CONFLICT (name) DO NOTHING")).
+			Example(`root = [ meta("user.id") ]`).
+			Optional()).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of inserts to run in parallel.").
 			Default(64)).
 		Field(service.NewBatchPolicyField("batching")).
-		Version("3.59.0").
+		Version("3.65.0").
 		Example("Table Insert (MySQL)",
 			`
 Here we insert rows into a database by populating the columns id, name and topic with values extracted from messages and metadata:`,
 			`
 output:
-  sql_insert:
+  sql_raw:
     driver: mysql
     dsn: foouser:foopassword@tcp(localhost:3306)/foodb
-    table: footable
-    columns: [ id, name, topic ]
+    query: "INSERT INTO footable (id, name, topic) VALUES (?, ?, ?);"
     args_mapping: |
       root = [
         this.user.id,
@@ -66,7 +53,7 @@ output:
 
 func init() {
 	err := service.RegisterBatchOutput(
-		"sql_insert", sqlInsertOutputConfig(),
+		"sql_raw", sqlRawOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
 				return
@@ -74,7 +61,7 @@ func init() {
 			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
 				return
 			}
-			out, err = newSQLInsertOutputFromConfig(conf, mgr.Logger())
+			out, err = newSQLRawOutputFromConfig(conf, mgr.Logger())
 			return
 		})
 
@@ -85,12 +72,13 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-type sqlInsertOutput struct {
-	driver  string
-	dsn     string
-	db      *sql.DB
-	builder squirrel.InsertBuilder
-	dbMut   sync.RWMutex
+type sqlRawOutput struct {
+	driver string
+	dsn    string
+	db     *sql.DB
+	dbMut  sync.RWMutex
+
+	queryStatic string
 
 	useTxStmt   bool
 	argsMapping *bloblang.Executor
@@ -99,68 +87,55 @@ type sqlInsertOutput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlInsertOutput, error) {
-	s := &sqlInsertOutput{
-		logger:  logger,
-		shutSig: shutdown.NewSignaller(),
-	}
-
-	var err error
-
-	if s.driver, err = conf.FieldString("driver"); err != nil {
-		return nil, err
-	}
-	if _, in := map[string]struct{}{
-		"clickhouse": {},
-	}[s.driver]; in {
-		s.useTxStmt = true
-	}
-
-	if s.dsn, err = conf.FieldString("dsn"); err != nil {
-		return nil, err
-	}
-
-	tableStr, err := conf.FieldString("table")
+func newSQLRawOutputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawOutput, error) {
+	driverStr, err := conf.FieldString("driver")
 	if err != nil {
 		return nil, err
 	}
 
-	columns, err := conf.FieldStringList("columns")
+	dsnStr, err := conf.FieldString("dsn")
 	if err != nil {
 		return nil, err
 	}
 
+	queryStatic, err := conf.FieldString("query")
+	if err != nil {
+		return nil, err
+	}
+
+	var argsMapping *bloblang.Executor
 	if conf.Contains("args_mapping") {
-		if s.argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
+		if argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
 			return nil, err
 		}
 	}
 
-	s.builder = squirrel.Insert(tableStr).Columns(columns...)
-	if s.driver == "postgres" {
-		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
-	}
+	_, useTxStmt := map[string]struct{}{
+		"clickhouse": {},
+	}[driverStr]
 
-	if conf.Contains("prefix") {
-		prefixStr, err := conf.FieldString("prefix")
-		if err != nil {
-			return nil, err
-		}
-		s.builder = s.builder.Prefix(prefixStr)
-	}
-
-	if conf.Contains("suffix") {
-		suffixStr, err := conf.FieldString("suffix")
-		if err != nil {
-			return nil, err
-		}
-		s.builder = s.builder.Suffix(suffixStr)
-	}
-
-	return s, nil
+	return newSQLRawOutput(logger, driverStr, dsnStr, useTxStmt, queryStatic, argsMapping), nil
 }
 
-func (s *sqlInsertOutput) Connect(ctx context.Context) error {
+func newSQLRawOutput(
+	logger *service.Logger,
+	driverStr, dsnStr string,
+	useTxStmt bool,
+	queryStatic string,
+	argsMapping *bloblang.Executor,
+) *sqlRawOutput {
+	return &sqlRawOutput{
+		logger:      logger,
+		shutSig:     shutdown.NewSignaller(),
+		driver:      driverStr,
+		dsn:         dsnStr,
+		useTxStmt:   useTxStmt,
+		queryStatic: queryStatic,
+		argsMapping: argsMapping,
+	}
+}
+
+func (s *sqlRawOutput) Connect(ctx context.Context) error {
 	s.dbMut.Lock()
 	defer s.dbMut.Unlock()
 
@@ -185,11 +160,9 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	s.dbMut.RLock()
 	defer s.dbMut.RUnlock()
-
-	insertBuilder := s.builder
 
 	var tx *sql.Tx
 	var stmt *sql.Stmt
@@ -198,11 +171,7 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 		if tx, err = s.db.Begin(); err != nil {
 			return err
 		}
-		sqlStr, _, err := insertBuilder.Values().ToSql()
-		if err != nil {
-			return err
-		}
-		if stmt, err = tx.Prepare(sqlStr); err != nil {
+		if stmt, err = tx.Prepare(s.queryStatic); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -226,22 +195,22 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 		}
 
 		if tx == nil {
-			insertBuilder = insertBuilder.Values(args...)
+			if _, err = s.db.ExecContext(ctx, s.queryStatic, args...); err != nil {
+				return err
+			}
 		} else if _, err = stmt.Exec(args...); err != nil {
 			return err
 		}
 	}
 
 	var err error
-	if tx == nil {
-		_, err = insertBuilder.RunWith(s.db).ExecContext(ctx)
-	} else {
+	if tx != nil {
 		err = tx.Commit()
 	}
 	return err
 }
 
-func (s *sqlInsertOutput) Close(ctx context.Context) error {
+func (s *sqlRawOutput) Close(ctx context.Context) error {
 	s.shutSig.CloseNow()
 	s.dbMut.RLock()
 	isNil := s.db == nil
