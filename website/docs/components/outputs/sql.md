@@ -71,6 +71,10 @@ output:
 </TabItem>
 </Tabs>
 
+## Alternatives
+
+For basic inserts use the [`sql_insert`](/docs/components/outputs/sql) output. For more complex queries use the [`sql_raw`](/docs/components/outputs/sql_raw) output.
+
 ## Fields
 
 ### `driver`

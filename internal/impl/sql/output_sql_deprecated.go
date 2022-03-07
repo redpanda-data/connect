@@ -10,7 +10,10 @@ func sqlDeprecatedOutputConfig() *service.ConfigSpec {
 		Deprecated().
 		Categories("Services").
 		Summary("Executes an arbitrary SQL query for each message.").
-		Description(``).
+		Description(`
+## Alternatives
+
+For basic inserts use the ` + "[`sql_insert`](/docs/components/outputs/sql)" + ` output. For more complex queries use the ` + "[`sql_raw`](/docs/components/outputs/sql_raw)" + ` output.`).
 		Field(driverField).
 		Field(service.NewStringField("data_source_name")).
 		Field(service.NewStringField("query").
