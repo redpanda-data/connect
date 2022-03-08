@@ -50,6 +50,13 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 				[]map[string]interface{}{
 					{
 						"archive": map[string]interface{}{
+							"format": "concatenate",
+						},
+					},
+				},
+				[]map[string]interface{}{
+					{
+						"archive": map[string]interface{}{
 							"format": "lines",
 						},
 					},
@@ -59,11 +66,6 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 						"archive": map[string]interface{}{
 							"format": "json_array",
 						},
-					},
-				},
-				[]map[string]interface{}{
-					{
-						"merge_json": struct{}{},
 					},
 				},
 			).Array().Advanced().Optional(),
