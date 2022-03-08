@@ -37,6 +37,7 @@ http:
     Content-Type: application/octet-stream
   rate_limit: ""
   timeout: 5s
+  parallel: false
 ```
 
 </TabItem>
@@ -96,6 +97,7 @@ http:
   successful_on: []
   proxy_url: ""
   batch_as_multipart: false
+  parallel: false
 ```
 
 </TabItem>
@@ -667,6 +669,14 @@ Default: `""`
 ### `batch_as_multipart`
 
 Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
+
+
+Type: `bool`  
+Default: `false`  
+
+### `parallel`
+
+When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent serially.
 
 
 Type: `bool`  

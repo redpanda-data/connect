@@ -12,6 +12,8 @@ import (
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/manager/mock"
 	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHTTPClientRetries(t *testing.T) {
@@ -261,6 +263,49 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 	} else if exp, act := "baz", msgs[0].Get(0).MetaGet("foobar"); exp != act {
 		t.Errorf("Wrong metadata value: %v != %v", act, exp)
 	}
+}
+
+func TestHTTPClientSerial(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		if string(bodyBytes) == "bar" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte("foobar " + string(bodyBytes)))
+	}))
+	defer ts.Close()
+
+	conf := NewConfig()
+	conf.Type = "http"
+	conf.HTTP.Config.URL = ts.URL + "/testpost"
+
+	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	inputMsg := message.QuickBatch([][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+		[]byte("qux"),
+		[]byte("quz"),
+	})
+	inputMsg.Get(0).MetaSet("foo", "bar")
+	msgs, res := h.ProcessMessage(inputMsg)
+	require.NoError(t, res)
+	require.Len(t, msgs, 1)
+	require.Equal(t, 5, msgs[0].Len())
+
+	assert.Equal(t, "foobar foo", string(msgs[0].Get(0).Get()))
+	assert.Equal(t, "bar", string(msgs[0].Get(1).Get()))
+	assert.Contains(t, GetFail(msgs[0].Get(1)), "request returned unexpected response code")
+	assert.Equal(t, "foobar baz", string(msgs[0].Get(2).Get()))
+	assert.Equal(t, "foobar qux", string(msgs[0].Get(3).Get()))
+	assert.Equal(t, "foobar quz", string(msgs[0].Get(4).Get()))
 }
 
 func TestHTTPClientParallel(t *testing.T) {

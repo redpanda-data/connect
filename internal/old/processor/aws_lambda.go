@@ -81,8 +81,8 @@ services. It's also possible to set them explicitly at the component level,
 allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/cloud/aws).`,
 		FieldSpecs: docs.FieldSpecs{
-			docs.FieldDeprecated("parallel", "Whether messages of a batch should be dispatched in parallel.").HasDefault(true),
-			docs.FieldCommon("function", "The function to invoke."),
+			docs.FieldBool("parallel", "Whether messages of a batch should be dispatched in parallel.").HasDefault(false),
+			docs.FieldString("function", "The function to invoke."),
 			docs.FieldAdvanced("rate_limit", "An optional [`rate_limit`](/docs/components/rate_limits/about) to throttle invocations by."),
 		}.Merge(session.FieldSpecs()).Add(
 			docs.FieldAdvanced("timeout", "The maximum period of time to wait before abandoning an invocation."),
@@ -122,7 +122,7 @@ type LambdaConfig struct {
 // NewLambdaConfig returns a LambdaConfig with default values.
 func NewLambdaConfig() LambdaConfig {
 	return LambdaConfig{
-		Parallel:   true,
+		Parallel:   false,
 		Config:     session.NewConfig(),
 		Function:   "",
 		Timeout:    "5s",

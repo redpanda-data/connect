@@ -34,6 +34,7 @@ Introduced in version 3.36.0.
 # Common config fields, showing default values
 label: ""
 aws_lambda:
+  parallel: false
   function: ""
 ```
 
@@ -44,6 +45,7 @@ aws_lambda:
 # All config fields, showing default values
 label: ""
 aws_lambda:
+  parallel: false
   function: ""
   rate_limit: ""
   region: ""
@@ -130,6 +132,14 @@ pipeline:
 </Tabs>
 
 ## Fields
+
+### `parallel`
+
+Whether messages of a batch should be dispatched in parallel.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `function`
 
