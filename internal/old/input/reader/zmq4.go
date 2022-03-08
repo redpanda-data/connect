@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/message"
@@ -73,7 +74,7 @@ func getZMQType(t string) (zmq4.Type, error) {
 	case "PULL":
 		return zmq4.PULL, nil
 	}
-	return zmq4.PULL, component.ErrInvalidZMQType
+	return zmq4.PULL, errors.New("invalid ZMQ socket type")
 }
 
 //------------------------------------------------------------------------------
@@ -155,7 +156,7 @@ func (z *ZMQ4) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 		return nil, nil, err
 	}
 
-	return message.New(data), noopAsyncAckFn, nil
+	return message.QuickBatch(data), noopAsyncAckFn, nil
 }
 
 // CloseAsync shuts down the ZMQ4 input and stops processing requests.

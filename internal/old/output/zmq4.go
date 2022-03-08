@@ -54,9 +54,7 @@ func NewZMQ4(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Ty
 	if err != nil {
 		return nil, err
 	}
-	s, err := NewWriter(
-		"zmq4", z, log, stats,
-	)
+	s, err := NewAsyncWriter("zmq4", 1, z, log, stats)
 	if err != nil {
 		return nil, err
 	}

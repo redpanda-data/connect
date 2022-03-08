@@ -25,7 +25,7 @@ WORKDIR /
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /etc/passwd /etc/passwd
 COPY --from=build /go/src/github.com/Jeffail/benthos/target/bin/benthos .
-COPY ./config/env/default.yaml /benthos.yaml
+COPY ./config/docker.yaml /benthos.yaml
 
 USER benthos
 

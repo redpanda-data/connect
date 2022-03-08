@@ -4,10 +4,13 @@
 package writer
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/Jeffail/benthos/v3/internal/component"
 	"github.com/Jeffail/benthos/v3/internal/component/metrics"
 	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/Jeffail/benthos/v3/internal/message"
@@ -69,13 +72,13 @@ func getZMQType(t string) (zmq4.Type, error) {
 	case "PUSH":
 		return zmq4.PUSH, nil
 	}
-	return zmq4.PULL, component.ErrInvalidZMQType
+	return zmq4.PUSH, errors.New("invalid ZMQ socket type")
 }
 
 //------------------------------------------------------------------------------
 
-// Connect attempts to establish a connection to a ZMQ4 socket.
-func (z *ZMQ4) Connect() error {
+// ConnectWithContext attempts to establish a connection to a ZMQ4 socket.
+func (z *ZMQ4) ConnectWithContext(_ context.Context) error {
 	if z.socket != nil {
 		return nil
 	}
@@ -122,8 +125,8 @@ func (z *ZMQ4) Connect() error {
 	return nil
 }
 
-// Write will attempt to write a message to the ZMQ4 socket.
-func (z *ZMQ4) Write(msg *message.Batch) error {
+// WriteWithContext will attempt to write a message to the ZMQ4 socket.
+func (z *ZMQ4) WriteWithContext(_ context.Context, msg *message.Batch) error {
 	if z.socket == nil {
 		return component.ErrNotConnected
 	}
