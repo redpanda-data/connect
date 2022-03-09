@@ -7,21 +7,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/impl/mongodb"
-	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/manager"
-	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
 	"github.com/nsf/jsondiff"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/impl/mongodb"
+	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func TestProcessorIntegration(t *testing.T) {

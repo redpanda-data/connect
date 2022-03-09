@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/component/cache"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/Shopify/sarama"
+
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/interop"
 )
 
 // SASL specific error types.

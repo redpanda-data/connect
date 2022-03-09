@@ -5,11 +5,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/log"
 	statsd "github.com/smira/go-statsd"
+
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 func init() {
@@ -21,11 +22,7 @@ Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
 Supported tagging formats are 'none', 'datadog' and 'influxdb'.`,
 		Description: `
 The underlying client library has recently been updated in order to support
-tagging.
-
-The 'network' field is deprecated and scheduled for removal. If you currently
-rely on sending Statsd metrics over TCP and want it to be supported long term
-please [raise an issue](https://github.com/Jeffail/benthos/issues).`,
+tagging.`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("address", "The address to send metrics to.").HasDefault(""),
 			docs.FieldString("flush_period", "The time interval between metrics flushes.").HasDefault("100ms"),

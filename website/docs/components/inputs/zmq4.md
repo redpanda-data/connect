@@ -68,7 +68,7 @@ You can also build it into your project by getting libzmq installed on your
 machine, then build with the tag:
 
 ```sh
-go install -tags "ZMQ4" github.com/Jeffail/benthos/v3/cmd/benthos
+go install -tags "ZMQ4" github.com/benthosdev/benthos/v4/cmd/benthos
 ```
 
 ZMQ4 input supports PULL and SUB sockets only. If there is demand for other

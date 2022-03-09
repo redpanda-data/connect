@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestSQLSelectInputEmptyShutdown(t *testing.T) {

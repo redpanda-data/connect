@@ -8,7 +8,7 @@ on:
 
 jobs:
   cross-build:
-    if: ${{ github.repository == 'jeffail/benthos' || github.event_name != 'schedule' }}
+    if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
     strategy:
       matrix:
         go-version: [1.16.x, 1.17.x]
@@ -38,7 +38,7 @@ jobs:
       run: make
 
   test:
-    if: ${{ github.repository == 'jeffail/benthos' || github.event_name != 'schedule' }}
+    if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     steps:
 
@@ -71,7 +71,7 @@ jobs:
       run: make test
 
   golangci-lint:
-    if: ${{ github.repository == 'jeffail/benthos' || github.event_name != 'schedule' }}
+    if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     steps:
 

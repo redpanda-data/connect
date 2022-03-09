@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/integration"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
 var _ = registerIntegrationTest("nanomsg", func(t *testing.T) {

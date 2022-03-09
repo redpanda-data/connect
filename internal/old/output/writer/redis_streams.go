@@ -6,15 +6,16 @@ import (
 	"sync"
 	"time"
 
-	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/batch/policy"
-	"github.com/Jeffail/benthos/v3/internal/component"
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	bredis "github.com/Jeffail/benthos/v3/internal/impl/redis/old"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"github.com/go-redis/redis/v7"
+
+	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	bredis "github.com/benthosdev/benthos/v4/internal/impl/redis/old"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/metadata"
 )
 
 //------------------------------------------------------------------------------

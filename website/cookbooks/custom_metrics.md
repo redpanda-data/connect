@@ -244,7 +244,7 @@ input:
 pipeline:
   processors:
     - http:
-        url: https://api.github.com/repos/Jeffail/benthos/releases
+        url: https://api.github.com/repos/benthosdev/benthos/releases
         verb: GET
 
     - bloblang: |
@@ -318,7 +318,7 @@ processor_resources:
       processors:
         - try:
           - http:
-              url: https://api.github.com/repos/Jeffail/benthos/releases
+              url: https://api.github.com/repos/benthosdev/benthos/releases
               verb: GET
           - bloblang: |
               root = this.map_each(release -> release.assets.map_each(asset -> {

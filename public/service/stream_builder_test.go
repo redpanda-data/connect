@@ -12,11 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	"github.com/benthosdev/benthos/v4/public/service"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestStreamBuilderDefault(t *testing.T) {

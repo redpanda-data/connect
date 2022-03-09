@@ -9,12 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/component"
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/message"
-	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	nsq "github.com/nsqio/go-nsq"
+
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 //------------------------------------------------------------------------------

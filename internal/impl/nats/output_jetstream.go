@@ -6,11 +6,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
-	"github.com/Jeffail/benthos/v3/internal/old/output"
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/nats-io/nats.go"
+
+	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func natsJetStreamOutputConfig() *service.ConfigSpec {

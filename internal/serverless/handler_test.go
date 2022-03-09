@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/internal/old/output"
-	"github.com/Jeffail/benthos/v3/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/legacy"
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
 func TestHandlerAsync(t *testing.T) {

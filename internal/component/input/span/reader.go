@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/input/reader"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 // ExtractTracingSpanMappingDocs returns a docs spec for a mapping field.

@@ -10,10 +10,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/batch"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestArchiveBadAlgo(t *testing.T) {

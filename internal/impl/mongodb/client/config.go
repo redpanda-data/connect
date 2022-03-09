@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // Operation represents the operation that will be performed by MongoDB

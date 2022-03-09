@@ -3,7 +3,7 @@ package docs
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/benthosdev/benthos/v4/internal/bloblang"
 )
 
 // FieldType represents a field type.

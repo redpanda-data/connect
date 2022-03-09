@@ -6,8 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/Jeffail/gabs/v2"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 //------------------------------------------------------------------------------

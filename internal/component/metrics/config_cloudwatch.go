@@ -1,7 +1,7 @@
 package metrics
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/impl/aws/session"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 )
 
 // CloudWatchConfig contains config fields for the CloudWatch metrics type.

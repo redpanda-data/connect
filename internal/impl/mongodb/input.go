@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+
+	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func mongoConfigSpec() *service.ConfigSpec {

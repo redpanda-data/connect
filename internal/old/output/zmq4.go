@@ -4,12 +4,12 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/old/output/writer"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
 //------------------------------------------------------------------------------
@@ -31,7 +31,7 @@ You can also build it into your project by getting libzmq installed on your
 machine, then build with the tag:
 
 ` + "```sh" + `
-go install -tags "ZMQ4" github.com/Jeffail/benthos/v3/cmd/benthos
+go install -tags "ZMQ4" github.com/benthosdev/benthos/v4/cmd/benthos
 ` + "```" + ``,
 		FieldSpecs: docs.FieldSpecs{
 			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:5556"}).Array(),

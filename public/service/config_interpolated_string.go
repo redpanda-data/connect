@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // NewInterpolatedStringField defines a new config field that describes a

@@ -2,15 +2,15 @@ FROM golang:1.17 AS build
 
 ENV GOOS=linux
 
-WORKDIR /go/src/github.com/Jeffail/benthos/
+WORKDIR /go/src/github.com/benthosdev/benthos/
 # Update dependencies: On unchanged dependencies, cached layer will be reused
-COPY go.* /go/src/github.com/Jeffail/benthos/
+COPY go.* /go/src/github.com/benthosdev/benthos/
 RUN go mod download
 
 RUN apt-get update && apt-get install -y --no-install-recommends libzmq3-dev
 
 # Build
-COPY . /go/src/github.com/Jeffail/benthos/
+COPY . /go/src/github.com/benthosdev/benthos/
 
 RUN make TAGS=ZMQ4
 
@@ -24,7 +24,7 @@ WORKDIR /root/
 RUN apt-get update && apt-get install -y --no-install-recommends libzmq3-dev
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /go/src/github.com/Jeffail/benthos/target/bin/benthos .
+COPY --from=build /go/src/github.com/benthosdev/benthos/target/bin/benthos .
 COPY ./config/docker.yaml /benthos.yaml
 
 EXPOSE 4195

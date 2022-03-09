@@ -7,12 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/cenkalti/backoff/v4"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func s3CacheConfig() *service.ConfigSpec {

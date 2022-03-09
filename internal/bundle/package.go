@@ -11,16 +11,16 @@ import (
 	"context"
 	"regexp"
 
-	"github.com/Jeffail/benthos/v3/internal/component/buffer"
-	"github.com/Jeffail/benthos/v3/internal/component/cache"
-	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
-	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
-	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
-	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/old/input"
-	"github.com/Jeffail/benthos/v3/internal/old/output"
-	"github.com/Jeffail/benthos/v3/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/buffer"
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`

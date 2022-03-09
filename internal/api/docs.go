@@ -1,8 +1,8 @@
 package api
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	httpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	httpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
 )
 
 // Spec returns a field spec for the API configuration fields.

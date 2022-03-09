@@ -1,4 +1,4 @@
-module github.com/Jeffail/benthos/v3
+module github.com/benthosdev/benthos/v4
 
 require (
 	cloud.google.com/go v0.100.2 // indirect

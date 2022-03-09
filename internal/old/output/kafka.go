@@ -3,17 +3,17 @@ package output
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/batch/policy"
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/impl/kafka/sasl"
-	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/metadata"
-	"github.com/Jeffail/benthos/v3/internal/old/output/writer"
-	"github.com/Jeffail/benthos/v3/internal/old/util/retries"
-	"github.com/Jeffail/benthos/v3/internal/tls"
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
+	"github.com/benthosdev/benthos/v4/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/metadata"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
+	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
+	"github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {

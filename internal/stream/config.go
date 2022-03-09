@@ -1,12 +1,13 @@
 package stream
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/component/buffer"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/old/input"
-	"github.com/Jeffail/benthos/v3/internal/old/output"
-	"github.com/Jeffail/benthos/v3/internal/pipeline"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/component/buffer"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
 
 //------------------------------------------------------------------------------

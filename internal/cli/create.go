@@ -6,17 +6,18 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/component/cache"
-	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
-	"github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/old/input"
-	"github.com/Jeffail/benthos/v3/internal/old/output"
-	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/internal/pipeline"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
 
 func addExpression(conf *config.Type, expression string) error {

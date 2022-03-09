@@ -17,9 +17,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
 	"github.com/urfave/cli/v2"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 
 	_ "embed"
 )

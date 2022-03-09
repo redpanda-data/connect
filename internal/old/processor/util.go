@@ -1,9 +1,9 @@
 package processor
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 // ExecuteAll attempts to execute a slice of processors to a message. Returns

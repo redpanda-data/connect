@@ -7,17 +7,18 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/manager"
-	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	"github.com/Jeffail/benthos/v3/internal/old/processor"
 	"github.com/Jeffail/gabs/v2"
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 //------------------------------------------------------------------------------

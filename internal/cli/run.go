@@ -6,17 +6,18 @@ import (
 	"os"
 	"runtime/debug"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
-	"github.com/Jeffail/benthos/v3/internal/cli/blobl"
-	"github.com/Jeffail/benthos/v3/internal/cli/studio"
-	clitemplate "github.com/Jeffail/benthos/v3/internal/cli/template"
-	"github.com/Jeffail/benthos/v3/internal/cli/test"
-	"github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/filepath"
-	"github.com/Jeffail/benthos/v3/internal/template"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/cli/blobl"
+	"github.com/benthosdev/benthos/v4/internal/cli/studio"
+	clitemplate "github.com/benthosdev/benthos/v4/internal/cli/template"
+	"github.com/benthosdev/benthos/v4/internal/cli/test"
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/template"
 )
 
 //------------------------------------------------------------------------------
@@ -31,7 +32,7 @@ func init() {
 	if Version == "" {
 		if info, ok := debug.ReadBuildInfo(); ok {
 			for _, mod := range info.Deps {
-				if mod.Path == "github.com/Jeffail/benthos/v3" {
+				if mod.Path == "github.com/benthosdev/benthos/v4" {
 					Version = mod.Version
 				}
 			}
@@ -45,8 +46,8 @@ func init() {
 // OptSetVersionStamp creates an opt func for setting the version and date built
 // stamps that Benthos returns via --version and the /version endpoint. The
 // traditional way of setting these values is via the build flags:
-// -X github.com/Jeffail/benthos/v3/internal/old/service.Version=$(VERSION) and
-// -X github.com/Jeffail/benthos/v3/internal/old/service.DateBuilt=$(DATE)
+// -X github.com/benthosdev/benthos/v4/internal/old/service.Version=$(VERSION) and
+// -X github.com/benthosdev/benthos/v4/internal/old/service.DateBuilt=$(DATE)
 func OptSetVersionStamp(version, dateBuilt string) func() {
 	return func() {
 		Version = version
@@ -92,7 +93,7 @@ func cmdVersion() {
 		info, ok := debug.ReadBuildInfo()
 		if ok {
 			for _, mod := range info.Deps {
-				if mod.Path == "github.com/Jeffail/benthos/v3" {
+				if mod.Path == "github.com/benthosdev/benthos/v4" {
 					version = mod.Version
 				}
 			}

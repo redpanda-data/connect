@@ -4,8 +4,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/gorilla/handlers"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // ServerCORS contains configuration for allowing CORS headers.

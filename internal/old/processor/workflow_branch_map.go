@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/internal/interop"
 	"github.com/quipo/dependencysolver"
+
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/interop"
 )
 
 type workflowBranch interface {

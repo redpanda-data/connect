@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestMultilevelCacheErrors(t *testing.T) {

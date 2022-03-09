@@ -3,9 +3,10 @@ package influxdb
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 func TestInfluxTimers(t *testing.T) {

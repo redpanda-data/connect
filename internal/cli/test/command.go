@@ -7,11 +7,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/config"
-	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
-	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/fatih/color"
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/config"
+	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 var green = color.New(color.FgGreen).SprintFunc()

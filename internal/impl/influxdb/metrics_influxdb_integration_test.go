@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/log"
 	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/ory/dockertest/v3"
+
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 func TestInfluxIntegration(t *testing.T) {

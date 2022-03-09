@@ -3,16 +3,17 @@ package sasl_test
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/impl/kafka/sasl"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/manager"
-	"github.com/Jeffail/benthos/v3/internal/manager/mock"
 	"github.com/Shopify/sarama"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestApplyPlaintext(t *testing.T) {

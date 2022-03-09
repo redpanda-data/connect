@@ -9,11 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/segmentio/ksuid"
+
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 type fieldFunction struct {

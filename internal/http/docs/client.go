@@ -1,11 +1,12 @@
 package docs
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/http/docs/auth"
-	"github.com/Jeffail/benthos/v3/internal/metadata"
-	"github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Jeffail/gabs/v2"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
+	"github.com/benthosdev/benthos/v4/internal/metadata"
+	"github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 // ClientFieldSpec returns a field spec for an http client component.

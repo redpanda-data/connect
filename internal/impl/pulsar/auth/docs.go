@@ -1,6 +1,6 @@
 package auth
 
-import "github.com/Jeffail/benthos/v3/internal/docs"
+import "github.com/benthosdev/benthos/v4/internal/docs"
 
 // FieldSpec returns documentation authentication specs for Pulsar components
 func FieldSpec() docs.FieldSpec {

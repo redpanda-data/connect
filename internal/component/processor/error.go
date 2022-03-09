@@ -1,8 +1,8 @@
 package processor
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 // MarkErr marks a message part as having failed. This includes modifying

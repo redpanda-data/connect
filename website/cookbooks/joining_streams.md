@@ -233,4 +233,4 @@ You can find a full example [in the project repo][full-example], and with this c
 [outputs]: /docs/components/outputs/about
 [error-handling]: /docs/configuration/error_handling
 [processor.branch]: /docs/components/processors/branch
-[full-example]: https://github.com/Jeffail/benthos/blob/master/config/examples/joining_streams.yaml
+[full-example]: https://github.com/benthosdev/benthos/blob/master/config/examples/joining_streams.yaml

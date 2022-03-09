@@ -1,8 +1,8 @@
 package sql
 
 import (
-	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"github.com/Jeffail/benthos/v3/public/service"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // DeprecatedProcessorConfig returns a config spec for an sql processor.

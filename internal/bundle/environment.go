@@ -1,7 +1,7 @@
 package bundle
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // Environment is a collection of Benthos component plugins that can be used in

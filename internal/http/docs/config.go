@@ -1,9 +1,9 @@
 package docs
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/http/docs/auth"
-	"github.com/Jeffail/benthos/v3/internal/metadata"
-	"github.com/Jeffail/benthos/v3/internal/tls"
+	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
+	"github.com/benthosdev/benthos/v4/internal/metadata"
+	"github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 // Config is a configuration struct for an HTTP client.

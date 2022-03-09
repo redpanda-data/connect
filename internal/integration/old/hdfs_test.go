@@ -4,12 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/colinmarc/hdfs"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
 var _ = registerIntegrationTest("hdfs", func(t *testing.T) {

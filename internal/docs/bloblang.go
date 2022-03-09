@@ -5,8 +5,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 // LintBloblangMapping is function for linting a config field expected to be a

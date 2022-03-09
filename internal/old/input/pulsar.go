@@ -1,7 +1,7 @@
 package input
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/impl/pulsar/auth"
+	"github.com/benthosdev/benthos/v4/internal/impl/pulsar/auth"
 )
 
 // PulsarConfig contains configuration for the Pulsar input type.

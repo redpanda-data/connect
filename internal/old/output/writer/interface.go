@@ -3,7 +3,7 @@ package writer
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // Type is a type that writes Benthos messages to a third party sink. If the

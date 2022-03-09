@@ -3,10 +3,11 @@ package output_test
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/old/output"
 	"gopkg.in/yaml.v3"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestOutBrokerConfigDefaults(t *testing.T) {

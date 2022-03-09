@@ -9,11 +9,12 @@ import (
 	"sync"
 
 	"cloud.google.com/go/bigquery"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"golang.org/x/text/encoding/charmap"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
+
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type gcpBigQueryCSVConfig struct {

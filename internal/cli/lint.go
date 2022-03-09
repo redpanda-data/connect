@@ -9,12 +9,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
 )
 
 var red = color.New(color.FgRed).SprintFunc()

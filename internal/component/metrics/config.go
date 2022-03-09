@@ -3,8 +3,9 @@ package metrics
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // Config is the all encompassing configuration struct for all metric output

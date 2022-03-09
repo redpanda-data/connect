@@ -415,5 +415,5 @@ Why? That's a good question. Bloblang supports non-JSON formats too, so it can't
 [blobl.methods.apply]: /docs/guides/bloblang/methods#apply
 [blobl.methods.catch]: /docs/guides/bloblang/methods#catch
 [blobl.methods.or]: /docs/guides/bloblang/methods#or
-[plugin-api]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/bloblang
+[plugin-api]: https://pkg.go.dev/github.com/benthosdev/benthos/v4/public/bloblang
 [configuration.unit_testing]: /docs/configuration/unit_testing

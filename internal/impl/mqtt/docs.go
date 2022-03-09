@@ -3,7 +3,7 @@ package mqtt
 import (
 	"errors"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // Will holds configuration for the last will message that the broker emits,

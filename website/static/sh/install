@@ -13,7 +13,7 @@ Benthos Installer
 
 Website: https://benthos.dev
 Docs: https://benthos.dev/docs
-Repo: https://github.com/Jeffail/benthos
+Repo: https://github.com/benthosdev/benthos
 
 EOF
 }
@@ -113,7 +113,7 @@ install_benthos()
 
 	if [[ "$#" -eq 0 ]]; then
 		# get latest release
-		benthos_tag=$(curl -s https://api.github.com/repos/Jeffail/benthos/releases/latest | grep 'tag_name' | cut -d\" -f4)
+		benthos_tag=$(curl -s https://api.github.com/repos/benthosdev/benthos/releases/latest | grep 'tag_name' | cut -d\" -f4)
 		benthos_version=$(echo ${benthos_tag} | cut -c2-)
 	elif [[ "$#" -gt 1 ]]; then
 		echo "Too many arguments."
@@ -124,7 +124,7 @@ install_benthos()
 		benthos_version=$1
 	fi
 
-	benthos_url="https://github.com/Jeffail/benthos/releases/download/${benthos_tag}/benthos_${benthos_version}_${benthos_os}_${benthos_arch}${benthos_arm}.tar.gz"
+	benthos_url="https://github.com/benthosdev/benthos/releases/download/${benthos_tag}/benthos_${benthos_version}_${benthos_os}_${benthos_arch}${benthos_arm}.tar.gz"
 
 	dl="/tmp/$benthos_file"
 	rm -rf -- "$dl"

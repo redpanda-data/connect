@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 func TestReverseAirGapLogger(t *testing.T) {

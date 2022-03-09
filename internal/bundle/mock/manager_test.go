@@ -1,9 +1,9 @@
 package mock_test
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/bundle/mock"
-	"github.com/Jeffail/benthos/v3/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
+	"github.com/benthosdev/benthos/v4/internal/interop"
 )
 
 var _ interop.Manager = &mock.Manager{}

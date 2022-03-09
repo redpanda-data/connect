@@ -25,13 +25,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/impl/xml"
 	"github.com/OneOfOne/xxhash"
 	"github.com/itchyny/timefmt-go"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/rickb777/date/period"
 	"github.com/tilinna/z85"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/impl/xml"
 )
 
 var _ = registerSimpleMethod(

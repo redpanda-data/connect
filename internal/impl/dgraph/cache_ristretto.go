@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dgraph-io/ristretto"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func ristrettoCacheConfig() *service.ConfigSpec {

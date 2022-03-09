@@ -12,11 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	httpdocs "github.com/Jeffail/benthos/v3/internal/http/docs"
-	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	httpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 //------------------------------------------------------------------------------

@@ -6,7 +6,7 @@ package query
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // ErrRecoverable represents a function execution error that can optionally be

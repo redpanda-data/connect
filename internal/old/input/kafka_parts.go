@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/batch/policy"
-	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/Shopify/sarama"
+
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 type closureOffsetTracker struct {

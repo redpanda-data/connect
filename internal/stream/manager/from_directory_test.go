@@ -8,8 +8,9 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/stream"
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
 func TestFromDirectory(t *testing.T) {

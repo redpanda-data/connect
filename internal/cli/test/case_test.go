@@ -7,15 +7,16 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	"github.com/Jeffail/benthos/v3/internal/old/processor"
 	"github.com/fatih/color"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 type mockProvider map[string][]iprocessor.V1

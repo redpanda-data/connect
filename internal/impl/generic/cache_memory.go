@@ -5,8 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/OneOfOne/xxhash"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func memCacheConfig() *service.ConfigSpec {

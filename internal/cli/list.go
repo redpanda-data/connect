@@ -6,8 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/config/schema"
 	"github.com/urfave/cli/v2"
+
+	"github.com/benthosdev/benthos/v4/internal/config/schema"
 )
 
 func listCliCommand() *cli.Command {

@@ -5,11 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	"github.com/benthosdev/benthos/v4/internal/config"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestSetOverridesOnNothing(t *testing.T) {

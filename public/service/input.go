@@ -5,11 +5,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/component"
-	"github.com/Jeffail/benthos/v3/internal/component/input"
-	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/old/input/reader"
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // AckFunc is a common function returned by inputs that must be called once for

@@ -3,10 +3,11 @@ package tracing
 import (
 	"context"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 const (

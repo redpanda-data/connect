@@ -3,8 +3,9 @@ package buffer
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // Config is the all encompassing configuration struct for all buffer types.

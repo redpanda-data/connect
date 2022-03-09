@@ -1,6 +1,6 @@
 package sql
 
-import "github.com/Jeffail/benthos/v3/public/service"
+import "github.com/benthosdev/benthos/v4/public/service"
 
 var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql").
 	Description("A database [driver](#drivers) to use.")

@@ -1,8 +1,8 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
-	"github.com/Jeffail/benthos/v3/internal/tls"
+	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
+	"github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 // NATSJetStreamConfig contains configuration fields for the NATS Jetstream

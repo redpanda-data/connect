@@ -1,8 +1,9 @@
 package output
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/batch/policy"
 	"google.golang.org/api/googleapi"
+
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 )
 
 const (

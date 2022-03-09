@@ -6,13 +6,13 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/component"
-	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
-	iinput "github.com/Jeffail/benthos/v3/internal/component/input"
-	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
-	"github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/internal/pipeline"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	ibuffer "github.com/benthosdev/benthos/v4/internal/component/buffer"
+	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
 
 //------------------------------------------------------------------------------

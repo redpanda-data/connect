@@ -1,6 +1,6 @@
 package bloblang
 
-import "github.com/Jeffail/benthos/v3/internal/bloblang/parser"
+import "github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 
 // ParseError is a structured error type for Bloblang parser errors that
 // provides access to information such as the line and column where the error

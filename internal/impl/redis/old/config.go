@@ -6,9 +6,10 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/go-redis/redis/v7"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 // Config is a config struct for a redis connection.

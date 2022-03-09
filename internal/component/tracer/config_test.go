@@ -3,10 +3,11 @@ package tracer_test
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/component/tracer"
 	yaml "gopkg.in/yaml.v3"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	"github.com/benthosdev/benthos/v4/internal/component/tracer"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestConstructorConfigYAMLInference(t *testing.T) {

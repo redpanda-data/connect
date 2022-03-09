@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/manager/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func TestBloblangInterval(t *testing.T) {

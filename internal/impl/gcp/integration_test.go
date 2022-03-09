@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/iterator"
+
+	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
 func createGCPCloudStorageBucket(var1, id string) error {

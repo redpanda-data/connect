@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 func TestInference(t *testing.T) {

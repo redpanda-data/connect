@@ -5,7 +5,7 @@ package batch
 import (
 	"errors"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // Error is an error type that also allows storing granular errors for each

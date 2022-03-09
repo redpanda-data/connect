@@ -12,14 +12,15 @@ import (
 	"testing"
 	"time"
 
-	isql "github.com/Jeffail/benthos/v3/internal/impl/sql"
-	"github.com/Jeffail/benthos/v3/public/service"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	isql "github.com/benthosdev/benthos/v4/internal/impl/sql"
+	"github.com/benthosdev/benthos/v4/public/service"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 type testFn func(t *testing.T, driver, dsn, table string)

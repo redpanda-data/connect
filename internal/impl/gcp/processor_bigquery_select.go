@@ -6,11 +6,12 @@ import (
 	"fmt"
 
 	"cloud.google.com/go/bigquery"
-	"github.com/Jeffail/benthos/v3/internal/old/processor"
-	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type bigQuerySelectProcessorConfig struct {

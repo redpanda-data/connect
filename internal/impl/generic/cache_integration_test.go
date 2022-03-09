@@ -3,7 +3,7 @@ package generic
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/integration"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
 func TestIntegrationMultilevelCache(t *testing.T) {

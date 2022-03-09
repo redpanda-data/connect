@@ -5,10 +5,11 @@ import (
 	b64 "encoding/base64"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vmihailenco/msgpack/v5"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestMsgPackToJson(t *testing.T) {

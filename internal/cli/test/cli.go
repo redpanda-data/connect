@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Jeffail/benthos/v3/internal/filepath"
-	"github.com/Jeffail/benthos/v3/internal/log"
 	"github.com/urfave/cli/v2"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 // CliCommand is a cli.Command definition for unit testing.

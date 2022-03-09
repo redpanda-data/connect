@@ -1,8 +1,9 @@
 package manager
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/Jeffail/gabs/v2"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 func lintResource(ctx docs.LintContext, line, col int, v interface{}) []docs.Lint {

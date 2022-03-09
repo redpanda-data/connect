@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/component"
-	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
-	iprocessor "github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 // AllOutputs is a set containing every single output that has been imported.

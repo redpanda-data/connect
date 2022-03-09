@@ -8,13 +8,14 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	imetrics "github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/rcrowley/go-metrics"
+
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	imetrics "github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {

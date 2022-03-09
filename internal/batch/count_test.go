@@ -3,8 +3,9 @@ package batch
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestCount(t *testing.T) {

@@ -7,11 +7,12 @@ import (
 	"math"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/dustin/go-humanize"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
+
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func franzKafkaOutputConfig() *service.ConfigSpec {

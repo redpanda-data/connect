@@ -1,8 +1,9 @@
 package pulsar
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/log"
 	plog "github.com/apache/pulsar-client-go/pulsar/log"
+
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 // DefaultLogger returns a logger that wraps Benthos Modular logger.

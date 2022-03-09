@@ -3,8 +3,9 @@ package tracer
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // Type is an interface implemented by all tracer types.

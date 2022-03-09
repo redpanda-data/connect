@@ -1,6 +1,6 @@
 package session
 
-import "github.com/Jeffail/benthos/v3/internal/docs"
+import "github.com/benthosdev/benthos/v4/internal/docs"
 
 // FieldSpecs returns documentation specs for AWS session fields.
 func FieldSpecs() docs.FieldSpecs {

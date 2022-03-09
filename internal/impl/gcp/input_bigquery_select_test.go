@@ -5,9 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 var testBQInputYAML = `

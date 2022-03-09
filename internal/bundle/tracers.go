@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/component"
-	"github.com/Jeffail/benthos/v3/internal/component/tracer"
-	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/tracer"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // AllTracers is a set containing every single tracer that has been imported.

@@ -5,11 +5,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/internal/old/output"
-	"github.com/Jeffail/benthos/v3/internal/serverless"
 	"github.com/aws/aws-lambda-go/lambda"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/serverless"
 )
 
 var handler *serverless.Handler

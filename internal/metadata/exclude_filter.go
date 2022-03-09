@@ -3,8 +3,8 @@ package metadata
 import (
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // ExcludeFilterFields returns a docs spec for the fields within a metadata

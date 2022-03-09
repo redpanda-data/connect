@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 const mongoDuplicateKeyErrCode = 11000

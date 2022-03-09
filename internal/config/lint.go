@@ -6,8 +6,9 @@ import (
 	"os"
 	"unicode/utf8"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // ReadFileLinted will attempt to read a configuration file path into a

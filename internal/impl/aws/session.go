@@ -1,11 +1,12 @@
 package aws
 
 import (
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func sessionFields() []*service.ConfigField {

@@ -5,9 +5,10 @@ import (
 	"net"
 	"os"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // CredentialsDocs returns a documentation field spec for SFTP credentials

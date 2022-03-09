@@ -1,7 +1,7 @@
 package writer
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 )
 
 //------------------------------------------------------------------------------

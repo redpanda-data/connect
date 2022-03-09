@@ -1,8 +1,9 @@
 package service
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/bundle"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 )
 
 func extractConfig(

@@ -1,9 +1,10 @@
 package msgpack
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/public/bloblang"
 	"github.com/vmihailenco/msgpack/v5"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 func init() {

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/cli/test"
+	"github.com/benthosdev/benthos/v4/internal/cli/test"
 )
 
 func TestGetBothPaths(t *testing.T) {

@@ -3,7 +3,7 @@ package mock
 import (
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // Processor provides a mock processor implementation around a closure.

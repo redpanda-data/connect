@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 var errMockProc = errors.New("this is an error from mock processor")

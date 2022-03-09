@@ -155,7 +155,7 @@ How exciting! I don't know about you but I'm going to need to lie down for a whi
 [inputs]: /docs/components/inputs/about
 [outputs]: /docs/components/outputs/about
 [jmespath]: http://jmespath.org/
-[releases]: https://github.com/Jeffail/benthos/releases
+[releases]: https://github.com/benthosdev/benthos/releases
 [serverless]: /docs/guides/serverless/about
 [configuration]: /docs/configuration/about
 [monitoring]: /docs/guides/monitoring

@@ -1,6 +1,6 @@
 package output
 
-import "github.com/Jeffail/benthos/v3/internal/impl/pulsar/auth"
+import "github.com/benthosdev/benthos/v4/internal/impl/pulsar/auth"
 
 // PulsarConfig contains configuration for the Pulsar input type.
 type PulsarConfig struct {

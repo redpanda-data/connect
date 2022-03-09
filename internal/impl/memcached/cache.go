@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/cenkalti/backoff/v4"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func memcachedConfig() *service.ConfigSpec {

@@ -3,9 +3,10 @@ package service
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/old/input"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 func TestConfigDeprecatedExraction(t *testing.T) {

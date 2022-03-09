@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // AsyncAckFn is a function used to acknowledge receipt of a message batch. The

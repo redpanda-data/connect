@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // OutputWriter provides a mock implementation of types.OutputWriter.

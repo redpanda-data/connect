@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 // This example demonstrates how to create a Bloblang function with the simpler

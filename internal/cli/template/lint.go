@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"os"
 
-	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
-	"github.com/Jeffail/benthos/v3/internal/template"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
+
+	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/template"
 )
 
 var red = color.New(color.FgRed).SprintFunc()

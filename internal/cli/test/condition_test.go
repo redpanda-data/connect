@@ -8,12 +8,13 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/message"
 	"github.com/fatih/color"
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestConditionUnmarshal(t *testing.T) {

@@ -7,7 +7,7 @@ module.exports = {
   url: 'https://www.benthos.dev',
   baseUrl: '/',
   favicon: 'img/favicon.ico',
-  organizationName: 'Jeffail',
+  organizationName: 'benthosdev',
   projectName: 'benthos',
   customFields: {
     components: {
@@ -44,13 +44,13 @@ module.exports = {
         {to: 'videos', label: 'Videos', position: 'left'},
         {to: 'community', label: 'Community', position: 'right'},
         {
-          href: 'https://github.com/Jeffail/benthos/releases/latest',
+          href: 'https://github.com/benthosdev/benthos/releases/latest',
           position: 'right',
           className: 'header-download-link header-icon-link',
           'aria-label': 'Download',
         },
         {
-          href: 'https://github.com/Jeffail/benthos',
+          href: 'https://github.com/benthosdev/benthos',
           position: 'right',
           className: 'header-github-link header-icon-link',
           'aria-label': 'GitHub repository',
@@ -82,7 +82,7 @@ module.exports = {
             },
             {
               label: 'GitHub',
-              href: 'https://github.com/Jeffail/benthos',
+              href: 'https://github.com/benthosdev/benthos',
             },
           ],
         },
@@ -116,7 +116,7 @@ module.exports = {
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl:
-            'https://github.com/Jeffail/benthos/edit/master/website/',
+            'https://github.com/benthosdev/benthos/edit/master/website/',
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),

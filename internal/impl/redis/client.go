@@ -5,8 +5,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/go-redis/redis/v7"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func clientFields() []*service.ConfigField {

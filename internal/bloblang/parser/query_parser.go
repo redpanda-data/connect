@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 func queryParser(pCtx Context) func(input []rune) Result {

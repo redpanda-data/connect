@@ -5,8 +5,9 @@ import (
 	"fmt"
 
 	"cloud.google.com/go/bigquery"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/Masterminds/squirrel"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type bigqueryIterator interface {

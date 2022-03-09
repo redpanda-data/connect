@@ -84,7 +84,6 @@ pipeline:
 
 If the calculated result is less than or equal to zero the processor does not sleep at all. If the value of `doc.created_at` is a string then our method `.number()` will attempt to parse it into a number.
 
-[env_var_config]: https://github.com/Jeffail/benthos/blob/master/config/env/default.yaml
 [error_handling]: /docs/configuration/error_handling
 [field_paths]: /docs/configuration/field_paths
 [meta_proc]: /docs/components/processors/metadata

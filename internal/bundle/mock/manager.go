@@ -3,17 +3,17 @@ package mock
 import (
 	"context"
 
-	"github.com/Jeffail/benthos/v3/internal/component"
-	"github.com/Jeffail/benthos/v3/internal/component/buffer"
-	"github.com/Jeffail/benthos/v3/internal/component/cache"
-	"github.com/Jeffail/benthos/v3/internal/component/input"
-	"github.com/Jeffail/benthos/v3/internal/component/output"
-	"github.com/Jeffail/benthos/v3/internal/component/processor"
-	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
-	"github.com/Jeffail/benthos/v3/internal/manager/mock"
-	linput "github.com/Jeffail/benthos/v3/internal/old/input"
-	loutput "github.com/Jeffail/benthos/v3/internal/old/output"
-	lprocessor "github.com/Jeffail/benthos/v3/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/buffer"
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	linput "github.com/benthosdev/benthos/v4/internal/old/input"
+	loutput "github.com/benthosdev/benthos/v4/internal/old/output"
+	lprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 // Manager provides a mock benthos manager that components can use to test

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func getFreePort() (int, error) {

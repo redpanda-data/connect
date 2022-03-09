@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/component"
-	"github.com/Jeffail/benthos/v3/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
 )
 
 // CacheItem represents a cached key/ttl pair.

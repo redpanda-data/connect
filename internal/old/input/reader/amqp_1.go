@@ -10,12 +10,13 @@ import (
 	"time"
 
 	"github.com/Azure/go-amqp"
-	"github.com/Jeffail/benthos/v3/internal/component"
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/impl/amqp1"
-	"github.com/Jeffail/benthos/v3/internal/log"
-	"github.com/Jeffail/benthos/v3/internal/message"
-	btls "github.com/Jeffail/benthos/v3/internal/tls"
+
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/impl/amqp1"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 // AMQP1Config contains configuration for the AMQP1 input type.

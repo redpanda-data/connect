@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/public/bloblang"
 	"github.com/oschwald/geoip2-golang"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 func registerMaxmindMethodSpec(name, entity string, fn func(*geoip2.Reader, net.IP) (interface{}, error)) {

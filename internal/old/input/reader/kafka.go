@@ -1,10 +1,11 @@
 package reader
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/batch/policy"
-	"github.com/Jeffail/benthos/v3/internal/impl/kafka/sasl"
-	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"github.com/Shopify/sarama"
+
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
+	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 // KafkaBalancedGroupConfig contains config fields for Kafka consumer groups.

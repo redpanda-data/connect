@@ -4,11 +4,12 @@ import (
 	"testing"
 	"time"
 
-	sftpSetup "github.com/Jeffail/benthos/v3/internal/impl/sftp"
-	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	sftpSetup "github.com/benthosdev/benthos/v4/internal/impl/sftp"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
 var sftpUsername = "foo"

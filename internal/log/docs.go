@@ -1,6 +1,6 @@
 package log
 
-import "github.com/Jeffail/benthos/v3/internal/docs"
+import "github.com/benthosdev/benthos/v4/internal/docs"
 
 // Spec returns a field spec for the logger configuration fields.
 func Spec() docs.FieldSpecs {

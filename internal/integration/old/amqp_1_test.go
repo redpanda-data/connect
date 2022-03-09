@@ -7,10 +7,11 @@ import (
 	"time"
 
 	"github.com/Azure/go-amqp"
-	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
 var _ = registerIntegrationTest("amqp_1", func(t *testing.T) {

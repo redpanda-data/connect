@@ -5,9 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/go-redis/redis/v7"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func redisCacheConfig() *service.ConfigSpec {

@@ -1,8 +1,8 @@
 package processor
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
-	"github.com/Jeffail/benthos/v3/internal/old/util/retries"
+	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
 // MongoDBConfig contains configuration fields for the MongoDB processor.

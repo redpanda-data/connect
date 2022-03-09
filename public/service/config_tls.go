@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	btls "github.com/Jeffail/benthos/v3/internal/tls"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 // NewTLSField defines a new object type config field that describes TLS
