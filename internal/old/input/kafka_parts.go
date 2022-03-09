@@ -195,6 +195,9 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 
 	for topic, partitions := range k.topicPartitions {
 		for _, partition := range partitions {
+			topic := topic
+			partition := partition
+
 			offset := sarama.OffsetNewest
 			if k.conf.StartFromOldest {
 				offset = sarama.OffsetOldest
