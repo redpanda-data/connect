@@ -49,6 +49,7 @@ metrics:
     push_basic_auth:
       username: ""
       password: ""
+    file_output_path: ""
   mapping: ""
 ```
 
@@ -140,6 +141,14 @@ The Basic Authentication password.
 Type: `string`  
 Default: `""`  
 
+### `file_output_path`
+
+File path to a metrics file that should be written as an alternative or addition to the push gateway.
+
+
+Type: `string`  
+Default: `""`  
+
 ## Push Gateway
 
 The field `push_url` is optional and when set will trigger a push of
@@ -152,4 +161,3 @@ include the "/metrics/jobs/..." path in the push URL.
 
 If the Push Gateway requires HTTP Basic Authentication it can be configured with
 `push_basic_auth`.
-

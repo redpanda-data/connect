@@ -13,6 +13,7 @@ type PrometheusConfig struct {
 	PushBasicAuth      PrometheusPushBasicAuthConfig `json:"push_basic_auth" yaml:"push_basic_auth"`
 	PushInterval       string                        `json:"push_interval" yaml:"push_interval"`
 	PushJobName        string                        `json:"push_job_name" yaml:"push_job_name"`
+	FileOutputPath     string                        `json:"file_output_path" yaml:"file_output_path"`
 }
 
 // PrometheusPushBasicAuthConfig contains parameters for establishing basic
@@ -39,5 +40,6 @@ func NewPrometheusConfig() PrometheusConfig {
 		PushBasicAuth:      NewPrometheusPushBasicAuthConfig(),
 		PushInterval:       "",
 		PushJobName:        "benthos_push",
+		FileOutputPath:     "",
 	}
 }
