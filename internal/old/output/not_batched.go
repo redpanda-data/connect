@@ -1,7 +1,6 @@
 package output
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -18,13 +17,7 @@ type notBatchedOutput struct {
 	inChan  <-chan message.Transaction
 	outChan chan message.Transaction
 
-	ctx   context.Context
-	close func()
-
-	fullyCloseCtx context.Context
-	fullyClose    func()
-
-	closedChan chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 // OnlySinglePayloads expands message batches into individual payloads,
@@ -33,12 +26,10 @@ type notBatchedOutput struct {
 // mechanism internally, or does not support batching at all.
 func OnlySinglePayloads(out output.Streamed) output.Streamed {
 	n := &notBatchedOutput{
-		out:        out,
-		outChan:    make(chan message.Transaction),
-		closedChan: make(chan struct{}),
+		out:     out,
+		outChan: make(chan message.Transaction),
+		shutSig: shutdown.NewSignaller(),
 	}
-	n.ctx, n.close = context.WithCancel(context.Background())
-	n.fullyCloseCtx, n.fullyClose = context.WithCancel(context.Background())
 	return n
 }
 
@@ -63,13 +54,13 @@ func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
 	if err := msg.Iter(func(i int, p *message.Part) error {
 		index := i
 
-		tmpResChan := make(chan error)
+		tmpResChan := make(chan error, 1)
 		tmpMsg := message.QuickBatch(nil)
 		tmpMsg.Append(p)
 
 		select {
 		case n.outChan <- message.NewTransaction(tmpMsg, tmpResChan):
-		case <-n.ctx.Done():
+		case <-n.shutSig.CloseNowChan():
 			if index == 0 {
 				return component.ErrTypeClosed
 			}
@@ -84,7 +75,7 @@ func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
 			select {
 			case res := <-tmpResChan:
 				err = res
-			case <-n.fullyCloseCtx.Done():
+			case <-n.shutSig.CloseNowChan():
 				err = component.ErrTypeClosed
 			}
 			addBatchErr(index, err)
@@ -103,9 +94,10 @@ func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
 
 func (n *notBatchedOutput) loop() {
 	defer func() {
+		close(n.outChan)
 		n.out.CloseAsync()
 		_ = n.out.WaitForClose(shutdown.MaximumShutdownWait())
-		close(n.closedChan)
+		n.shutSig.ShutdownComplete()
 	}()
 
 	for {
@@ -116,14 +108,14 @@ func (n *notBatchedOutput) loop() {
 			if !open {
 				return
 			}
-		case <-n.ctx.Done():
+		case <-n.shutSig.CloseAtLeisureChan():
 			return
 		}
 
 		if tran.Payload.Len() == 1 {
 			select {
 			case n.outChan <- tran:
-			case <-n.ctx.Done():
+			case <-n.shutSig.CloseNowChan():
 				return
 			}
 		} else {
@@ -136,7 +128,7 @@ func (n *notBatchedOutput) loop() {
 			}
 			select {
 			case tran.ResponseChan <- res:
-			case <-n.fullyCloseCtx.Done():
+			case <-n.shutSig.CloseNowChan():
 				return
 			}
 		}
@@ -166,14 +158,13 @@ func (n *notBatchedOutput) Connected() bool {
 }
 
 func (n *notBatchedOutput) CloseAsync() {
-	n.close()
-	n.fullyClose()
+	n.shutSig.CloseAtLeisure()
 }
 
 // WaitForClose blocks until the File output has closed down.
 func (n *notBatchedOutput) WaitForClose(timeout time.Duration) error {
 	select {
-	case <-n.closedChan:
+	case <-n.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return component.ErrTimeout
 	}
