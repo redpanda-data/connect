@@ -352,12 +352,12 @@ func (p *prometheusMetrics) GetGaugeVec(path string, labelNames ...string) metri
 	}
 }
 
-func (p *prometheusMetrics) Close() (err error) {
+func (p *prometheusMetrics) Close() error {
 	if atomic.CompareAndSwapInt32(&p.running, 1, 0) {
 		close(p.closedChan)
 	}
 	if p.pusher != nil {
-		err = p.pusher.Push()
+		err := p.pusher.Push()
 		if err != nil {
 			return err
 		}
