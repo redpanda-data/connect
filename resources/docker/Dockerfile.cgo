@@ -1,5 +1,6 @@
 FROM golang:1.17 AS build
 
+ENV CGO_ENABLED=1
 ENV GOOS=linux
 
 WORKDIR /go/src/github.com/benthosdev/benthos/
@@ -12,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libzmq3-dev
 # Build
 COPY . /go/src/github.com/benthosdev/benthos/
 
-RUN make TAGS=ZMQ4
+RUN make
 
 # Pack
 FROM debian:stretch

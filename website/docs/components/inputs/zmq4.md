@@ -15,7 +15,6 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Consumes messages from a ZeroMQ socket.
 
 
@@ -26,30 +25,28 @@ Consumes messages from a ZeroMQ socket.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   zmq4:
-    urls:
-      - tcp://localhost:5555
+    urls: []
     bind: false
-    socket_type: PULL
+    socket_type: ""
     sub_filters: []
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
   zmq4:
-    urls:
-      - tcp://localhost:5555
+    urls: []
     bind: false
-    socket_type: PULL
+    socket_type: ""
     sub_filters: []
     high_water_mark: 0
     poll_timeout: 5s
@@ -58,21 +55,12 @@ input:
 </TabItem>
 </Tabs>
 
-ZMQ4 is supported but currently depends on C bindings. Since this is an
-annoyance when building or using Benthos it is not compiled by default.
+zmqInput is supported but currently depends on C bindings. Since this is an annoyance when building or using Benthos it is not compiled by default.
 
-There is a specific docker tag postfix `-cgo` for C builds containing
-ZMQ support.
+There is a specific docker tag postfix `-cgo` for C builds containing ZMQ support.
 
-You can also build it into your project by getting libzmq installed on your
-machine, then build with the tag:
+zmqInput input supports PULL and SUB sockets only. If there is demand for other socket types then they can be added easily.
 
-```sh
-go install -tags "ZMQ4" github.com/benthosdev/benthos/v4/cmd/benthos
-```
-
-ZMQ4 input supports PULL and SUB sockets only. If there is demand for other
-socket types then they can be added easily.
 
 ## Fields
 
@@ -82,11 +70,17 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["tcp://localhost:5555"]`  
+
+```yml
+# Examples
+
+urls:
+  - tcp://localhost:5555
+```
 
 ### `bind`
 
-Whether to bind to the specified URLs or connect.
+Whether to bind to the specified URLs (otherwise they are connected to).
 
 
 Type: `bool`  
@@ -98,7 +92,6 @@ The socket type to connect as.
 
 
 Type: `string`  
-Default: `"PULL"`  
 Options: `PULL`, `SUB`.
 
 ### `sub_filters`

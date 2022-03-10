@@ -197,7 +197,6 @@ const (
 	TypeSyncResponse       = "sync_response"
 	TypeSocket             = "socket"
 	TypeWebsocket          = "websocket"
-	TypeZMQ4               = "zmq4"
 )
 
 //------------------------------------------------------------------------------
@@ -258,7 +257,6 @@ type Config struct {
 	SyncResponse       struct{}                       `json:"sync_response" yaml:"sync_response"`
 	Socket             writer.SocketConfig            `json:"socket" yaml:"socket"`
 	Websocket          writer.WebsocketConfig         `json:"websocket" yaml:"websocket"`
-	ZMQ4               *writer.ZMQ4Config             `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors         []processor.Config             `json:"processors" yaml:"processors"`
 }
 
@@ -319,7 +317,6 @@ func NewConfig() Config {
 		SyncResponse:       struct{}{},
 		Socket:             writer.NewSocketConfig(),
 		Websocket:          writer.NewWebsocketConfig(),
-		ZMQ4:               writer.NewZMQ4Config(),
 		Processors:         []processor.Config{},
 	}
 }

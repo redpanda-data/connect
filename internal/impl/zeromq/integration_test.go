@@ -1,7 +1,7 @@
-//go:build ZMQ4
-// +build ZMQ4
+//go:build cgo
+// +build cgo
 
-package integration
+package zeromq
 
 import (
 	"testing"
@@ -10,7 +10,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
-var _ = registerIntegrationTest("zeromq", func(t *testing.T) {
+func TestIntegrationZMQ(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	template := `
@@ -52,4 +53,4 @@ input:
 			integration.StreamTestOptVarThree(`""`),
 		)
 	})
-})
+}

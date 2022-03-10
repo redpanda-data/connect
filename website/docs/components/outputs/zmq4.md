@@ -15,9 +15,7 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-The zmq4 output type attempts to send messages to a ZMQ4 port, currently only
-PUSH and PUB sockets are supported.
+Writes messages to a ZeroMQ socket.
 
 
 <Tabs defaultValue="common" values={[
@@ -27,29 +25,27 @@ PUSH and PUB sockets are supported.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   zmq4:
-    urls:
-      - tcp://*:5556
+    urls: []
     bind: true
-    socket_type: PUSH
+    socket_type: ""
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   zmq4:
-    urls:
-      - tcp://*:5556
+    urls: []
     bind: true
-    socket_type: PUSH
+    socket_type: ""
     high_water_mark: 0
     poll_timeout: 5s
 ```
@@ -57,18 +53,12 @@ output:
 </TabItem>
 </Tabs>
 
-ZMQ4 is supported but currently depends on C bindings. Since this is an
-annoyance when building or using Benthos it is not compiled by default.
+zmqOutput is supported but currently depends on C bindings. Since this is an annoyance when building or using Benthos it is not compiled by default.
 
-There is a specific docker tag postfix `-cgo` for C builds containing
-ZMQ support.
+There is a specific docker tag postfix `-cgo` for C builds containing ZMQ support.
 
-You can also build it into your project by getting libzmq installed on your
-machine, then build with the tag:
+zmqOutput input supports PULL and SUB sockets only. If there is demand for other socket types then they can be added easily.
 
-```sh
-go install -tags "ZMQ4" github.com/benthosdev/benthos/v4/cmd/benthos
-```
 
 ## Fields
 
@@ -78,9 +68,8 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["tcp://*:5556"]`  
 
-```yaml
+```yml
 # Examples
 
 urls:
@@ -89,7 +78,7 @@ urls:
 
 ### `bind`
 
-Whether the URLs listed should be bind (otherwise they are connected to).
+Whether to bind to the specified URLs (otherwise they are connected to).
 
 
 Type: `bool`  
@@ -97,11 +86,10 @@ Default: `true`
 
 ### `socket_type`
 
-The socket type to send with.
+The socket type to connect as.
 
 
 Type: `string`  
-Default: `"PUSH"`  
 Options: `PUSH`, `PUB`.
 
 ### `high_water_mark`
@@ -114,7 +102,7 @@ Default: `0`
 
 ### `poll_timeout`
 
-The maximum period of time to wait for a message to send before the request is abandoned and reattempted.
+The poll timeout to use.
 
 
 Type: `string`  

@@ -179,7 +179,6 @@ const (
 	TypeSTDIN             = "stdin"
 	TypeSubprocess        = "subprocess"
 	TypeWebsocket         = "websocket"
-	TypeZMQ4              = "zmq4"
 )
 
 //------------------------------------------------------------------------------
@@ -229,7 +228,6 @@ type Config struct {
 	STDIN             STDINConfig               `json:"stdin" yaml:"stdin"`
 	Subprocess        SubprocessConfig          `json:"subprocess" yaml:"subprocess"`
 	Websocket         reader.WebsocketConfig    `json:"websocket" yaml:"websocket"`
-	ZMQ4              *reader.ZMQ4Config        `json:"zmq4,omitempty" yaml:"zmq4,omitempty"`
 	Processors        []processor.Config        `json:"processors" yaml:"processors"`
 }
 
@@ -279,7 +277,6 @@ func NewConfig() Config {
 		STDIN:             NewSTDINConfig(),
 		Subprocess:        NewSubprocessConfig(),
 		Websocket:         reader.NewWebsocketConfig(),
-		ZMQ4:              reader.NewZMQ4Config(),
 		Processors:        []processor.Config{},
 	}
 }
