@@ -29,7 +29,7 @@ func init() {
 			stats metrics.Type,
 			pipelines ...iprocessor.PipelineConstructorFunc,
 		) (input.Streamed, error) {
-			pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
+			pipelines = AppendProcessorsFromConfig(conf, mgr, pipelines...)
 			return NewDynamic(conf, mgr, log, stats, pipelines...)
 		},
 		Summary: `

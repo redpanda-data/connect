@@ -68,8 +68,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 		ts: make(chan message.Transaction),
 	}
 
-	procs := 0
-	_, err := WrapWithPipeline(&procs, mockIn, func(i *int) (iprocessor.Pipeline, error) {
+	_, err := WrapWithPipeline(mockIn, func() (iprocessor.Pipeline, error) {
 		return nil, errors.New("nope")
 	})
 
@@ -77,7 +76,7 @@ func TestBasicWrapPipeline(t *testing.T) {
 		t.Error("Expected error from back constructor")
 	}
 
-	newInput, err := WrapWithPipeline(&procs, mockIn, func(i *int) (iprocessor.Pipeline, error) {
+	newInput, err := WrapWithPipeline(mockIn, func() (iprocessor.Pipeline, error) {
 		return mockPi, nil
 	})
 	if err != nil {
@@ -132,16 +131,16 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 		ts: make(chan message.Transaction),
 	}
 
-	_, err := WrapWithPipelines(mockIn, func(i *int) (iprocessor.Pipeline, error) {
+	_, err := WrapWithPipelines(mockIn, func() (iprocessor.Pipeline, error) {
 		return nil, errors.New("nope")
 	})
 	if err == nil {
 		t.Error("Expected error from back constructor")
 	}
 
-	newInput, err := WrapWithPipelines(mockIn, func(i *int) (iprocessor.Pipeline, error) {
+	newInput, err := WrapWithPipelines(mockIn, func() (iprocessor.Pipeline, error) {
 		return mockPi1, nil
-	}, func(i *int) (iprocessor.Pipeline, error) {
+	}, func() (iprocessor.Pipeline, error) {
 		return mockPi2, nil
 	})
 	if err != nil {
@@ -214,9 +213,9 @@ func TestBasicWrapProcessors(t *testing.T) {
 	pipe1 := pipeline.NewProcessor(mockProc{})
 	pipe2 := pipeline.NewProcessor(mockProc{})
 
-	newInput, err := WrapWithPipelines(mockIn, func(i *int) (iprocessor.Pipeline, error) {
+	newInput, err := WrapWithPipelines(mockIn, func() (iprocessor.Pipeline, error) {
 		return pipe1, nil
-	}, func(i *int) (iprocessor.Pipeline, error) {
+	}, func() (iprocessor.Pipeline, error) {
 		return pipe2, nil
 	})
 	if err != nil {
@@ -287,7 +286,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 
 	pipe1 := pipeline.NewProcessor(mockProc{}, mockProc{})
 
-	newInput, err := WrapWithPipelines(mockIn, func(i *int) (iprocessor.Pipeline, error) {
+	newInput, err := WrapWithPipelines(mockIn, func() (iprocessor.Pipeline, error) {
 		return pipe1, nil
 	})
 	if err != nil {

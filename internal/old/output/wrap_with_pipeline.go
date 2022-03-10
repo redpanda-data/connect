@@ -21,8 +21,8 @@ type WithPipeline struct {
 
 // WrapWithPipeline routes a processing pipeline directly into an output and
 // returns a type that manages both and acts like an ordinary output.
-func WrapWithPipeline(i *int, out output.Streamed, pipeConstructor iprocessor.PipelineConstructorFunc) (*WithPipeline, error) {
-	pipe, err := pipeConstructor(i)
+func WrapWithPipeline(out output.Streamed, pipeConstructor iprocessor.PipelineConstructorFunc) (*WithPipeline, error) {
+	pipe, err := pipeConstructor()
 	if err != nil {
 		return nil, err
 	}
@@ -38,10 +38,9 @@ func WrapWithPipeline(i *int, out output.Streamed, pipeConstructor iprocessor.Pi
 
 // WrapWithPipelines wraps an output with a variadic number of pipelines.
 func WrapWithPipelines(out output.Streamed, pipeConstructors ...iprocessor.PipelineConstructorFunc) (output.Streamed, error) {
-	procs := 0
 	var err error
 	for i := len(pipeConstructors) - 1; i >= 0; i-- {
-		if out, err = WrapWithPipeline(&procs, out, pipeConstructors[i]); err != nil {
+		if out, err = WrapWithPipeline(out, pipeConstructors[i]); err != nil {
 			return nil, err
 		}
 	}

@@ -57,28 +57,17 @@ type TypeSpec struct {
 // AppendProcessorsFromConfig takes a variant arg of pipeline constructor
 // functions and returns a new slice of them where the processors of the
 // provided output configuration will also be initialized.
-func AppendProcessorsFromConfig(
-	conf Config,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-	pipelines ...iprocessor.PipelineConstructorFunc,
-) []iprocessor.PipelineConstructorFunc {
+func AppendProcessorsFromConfig(conf Config, mgr interop.Manager, pipelines ...iprocessor.PipelineConstructorFunc) []iprocessor.PipelineConstructorFunc {
 	if len(conf.Processors) > 0 {
-		pipelines = append(pipelines, []iprocessor.PipelineConstructorFunc{func(i *int) (iprocessor.Pipeline, error) {
-			if i == nil {
-				procs := 0
-				i = &procs
-			}
+		pipelines = append(pipelines, []iprocessor.PipelineConstructorFunc{func() (iprocessor.Pipeline, error) {
 			processors := make([]iprocessor.V1, len(conf.Processors))
 			for j, procConf := range conf.Processors {
 				var err error
-				pMgr := mgr.IntoPath("processors", strconv.Itoa(*i))
+				pMgr := mgr.IntoPath("processors", strconv.Itoa(j))
 				processors[j], err = processor.New(procConf, pMgr, pMgr.Logger(), pMgr.Metrics())
 				if err != nil {
 					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 				}
-				*i++
 			}
 			return pipeline.NewProcessor(processors...), nil
 		}}...)
@@ -98,7 +87,7 @@ func fromSimpleConstructor(fn func(Config, interop.Manager, log.Modular, metrics
 		if err != nil {
 			return nil, fmt.Errorf("failed to create output '%v': %w", conf.Type, err)
 		}
-		pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
+		pipelines = AppendProcessorsFromConfig(conf, mgr, pipelines...)
 		return WrapWithPipelines(output, pipelines...)
 	}
 }

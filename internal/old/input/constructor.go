@@ -85,28 +85,17 @@ func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 // AppendProcessorsFromConfig takes a variant arg of pipeline constructor
 // functions and returns a new slice of them where the processors of the
 // provided input configuration will also be initialized.
-func AppendProcessorsFromConfig(
-	conf Config,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-	pipelines ...iprocessor.PipelineConstructorFunc,
-) []iprocessor.PipelineConstructorFunc {
+func AppendProcessorsFromConfig(conf Config, mgr interop.Manager, pipelines ...iprocessor.PipelineConstructorFunc) []iprocessor.PipelineConstructorFunc {
 	if len(conf.Processors) > 0 {
-		pipelines = append([]iprocessor.PipelineConstructorFunc{func(i *int) (iprocessor.Pipeline, error) {
-			if i == nil {
-				procs := 0
-				i = &procs
-			}
+		pipelines = append([]iprocessor.PipelineConstructorFunc{func() (iprocessor.Pipeline, error) {
 			processors := make([]iprocessor.V1, len(conf.Processors))
 			for j, procConf := range conf.Processors {
-				newMgr := mgr.IntoPath("processors", strconv.Itoa(*i))
+				newMgr := mgr.IntoPath("processors", strconv.Itoa(j))
 				var err error
 				processors[j], err = processor.New(procConf, newMgr, newMgr.Logger(), newMgr.Metrics())
 				if err != nil {
 					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 				}
-				*i++
 			}
 			return pipeline.NewProcessor(processors...), nil
 		}}, pipelines...)
@@ -126,7 +115,7 @@ func fromSimpleConstructor(fn func(Config, interop.Manager, log.Modular, metrics
 		if err != nil {
 			return nil, fmt.Errorf("failed to create input '%v': %w", conf.Type, err)
 		}
-		pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
+		pipelines = AppendProcessorsFromConfig(conf, mgr, pipelines...)
 		return WrapWithPipelines(input, pipelines...)
 	}
 }

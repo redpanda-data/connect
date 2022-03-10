@@ -139,7 +139,7 @@ func NewBroker(
 	stats metrics.Type,
 	pipelines ...iprocessor.PipelineConstructorFunc,
 ) (output.Streamed, error) {
-	pipelines = AppendProcessorsFromConfig(conf, mgr, log, stats, pipelines...)
+	pipelines = AppendProcessorsFromConfig(conf, mgr, pipelines...)
 
 	outputConfs := conf.Broker.Outputs
 

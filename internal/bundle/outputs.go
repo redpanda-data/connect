@@ -48,7 +48,7 @@ func OutputConstructorFromSimple(fn func(output.Config, NewManagement) (ioutput.
 		if err != nil {
 			return nil, fmt.Errorf("failed to create output '%v': %w", c.Type, err)
 		}
-		pcf = output.AppendProcessorsFromConfig(c, nm, nm.Logger(), nm.Metrics(), pcf...)
+		pcf = output.AppendProcessorsFromConfig(c, nm, pcf...)
 		return output.WrapWithPipelines(o, pcf...)
 	}
 }

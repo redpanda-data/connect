@@ -52,7 +52,7 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 
 	for _, spec := range b.OutputDocs() {
 		_ = tracedEnv.OutputAdd(func(conf output.Config, nm bundle.NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
-			pcf = output.AppendProcessorsFromConfig(conf, nm, nm.Logger(), nm.Metrics(), pcf...)
+			pcf = output.AppendProcessorsFromConfig(conf, nm, pcf...)
 			conf.Processors = nil
 
 			o, err := b.OutputInit(conf, nm)

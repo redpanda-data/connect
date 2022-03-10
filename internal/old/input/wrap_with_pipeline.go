@@ -20,8 +20,8 @@ type WithPipeline struct {
 
 // WrapWithPipeline routes an input directly into a processing pipeline and
 // returns a type that manages both and acts like an ordinary input.
-func WrapWithPipeline(procs *int, in input.Streamed, pipeConstructor iprocessor.PipelineConstructorFunc) (*WithPipeline, error) {
-	pipe, err := pipeConstructor(procs)
+func WrapWithPipeline(in input.Streamed, pipeConstructor iprocessor.PipelineConstructorFunc) (*WithPipeline, error) {
+	pipe, err := pipeConstructor()
 	if err != nil {
 		return nil, err
 	}
@@ -37,10 +37,9 @@ func WrapWithPipeline(procs *int, in input.Streamed, pipeConstructor iprocessor.
 
 // WrapWithPipelines wraps an input with a variadic number of pipelines.
 func WrapWithPipelines(in input.Streamed, pipeConstructors ...iprocessor.PipelineConstructorFunc) (input.Streamed, error) {
-	procs := 0
 	var err error
 	for _, ctor := range pipeConstructors {
-		if in, err = WrapWithPipeline(&procs, in, ctor); err != nil {
+		if in, err = WrapWithPipeline(in, ctor); err != nil {
 			return nil, err
 		}
 	}

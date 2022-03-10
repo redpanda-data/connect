@@ -48,7 +48,7 @@ func InputConstructorFromSimple(fn func(input.Config, NewManagement) (iinput.Str
 		if err != nil {
 			return nil, fmt.Errorf("failed to create input '%v': %w", c.Type, err)
 		}
-		pcf = input.AppendProcessorsFromConfig(c, nm, nm.Logger(), nm.Metrics(), pcf...)
+		pcf = input.AppendProcessorsFromConfig(c, nm, pcf...)
 		return input.WrapWithPipelines(i, pcf...)
 	}
 }

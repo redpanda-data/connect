@@ -78,15 +78,14 @@ func TestBasicWrapPipeline(t *testing.T) {
 		ts: make(chan message.Transaction),
 	}
 
-	procs := 0
-	_, err := WrapWithPipeline(&procs, mockOut, func(i *int) (iprocessor.Pipeline, error) {
+	_, err := WrapWithPipeline(mockOut, func() (iprocessor.Pipeline, error) {
 		return nil, errors.New("nope")
 	})
 	if err == nil {
 		t.Error("expected error from back constructor")
 	}
 
-	newOutput, err := WrapWithPipeline(&procs, mockOut, func(i *int) (iprocessor.Pipeline, error) {
+	newOutput, err := WrapWithPipeline(mockOut, func() (iprocessor.Pipeline, error) {
 		return mockPi, nil
 	})
 	if err != nil {
@@ -129,14 +128,14 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 
 	newOutput, err := WrapWithPipelines(
 		mockOut,
-		func(i *int) (iprocessor.Pipeline, error) {
+		func() (iprocessor.Pipeline, error) {
 			proc, err := processor.New(firstProc, mock.NewManager(), log.Noop(), metrics.Noop())
 			if err != nil {
 				return nil, err
 			}
 			return pipeline.NewProcessor(proc), nil
 		},
-		func(i *int) (iprocessor.Pipeline, error) {
+		func() (iprocessor.Pipeline, error) {
 			proc, err := processor.New(secondProc, mock.NewManager(), log.Noop(), metrics.Noop())
 			if err != nil {
 				return nil, err

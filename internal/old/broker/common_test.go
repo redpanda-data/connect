@@ -9,8 +9,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-//------------------------------------------------------------------------------
-
 // MockInputType implements the input.Type interface.
 type MockInputType struct {
 	closed int32
@@ -73,5 +71,3 @@ func (m *MockOutputType) CloseAsync() {
 func (m MockOutputType) WaitForClose(t time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------
