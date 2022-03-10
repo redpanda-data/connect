@@ -51,7 +51,7 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 				docs.FieldString("username", "The Basic Authentication username.").HasDefault(""),
 				docs.FieldString("password", "The Basic Authentication password.").HasDefault(""),
 			).Advanced(),
-			docs.FieldString("file_output_path", "An optional file path to write the metrics to.").Advanced().HasDefault(""),
+			docs.FieldString("file_output_path", "Optional file path to a metrics file that should be written.\n").Advanced().HasDefault(""),
 		),
 	})
 }

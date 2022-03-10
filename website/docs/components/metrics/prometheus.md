@@ -143,7 +143,7 @@ Default: `""`
 
 ### `file_output_path`
 
-File path to a metrics file that should be written as an alternative or addition to the push gateway.
+Optional file path to a metrics file that should be written.
 
 
 Type: `string`  
@@ -161,3 +161,4 @@ include the "/metrics/jobs/..." path in the push URL.
 
 If the Push Gateway requires HTTP Basic Authentication it can be configured with
 `push_basic_auth`.
+
