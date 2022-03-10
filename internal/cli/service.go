@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
@@ -30,42 +29,7 @@ import (
 
 //------------------------------------------------------------------------------
 
-var conf = config.New()
 var testSuffix = "_benthos_test"
-
-// OptSetServiceName creates an opt func that allows the default service name
-// config fields such as metrics and logging prefixes to be overridden.
-func OptSetServiceName(name string) func() {
-	return func() {
-		testSuffix = fmt.Sprintf("_%v_test", name)
-		conf.HTTP.RootPath = "/" + name
-		conf.Logger.StaticFields["@service"] = name
-	}
-}
-
-// OptOverrideConfigDefaults creates an opt func that allows the provided func
-// to override config struct default values before the user config is parsed.
-func OptOverrideConfigDefaults(fn func(c *config.Type)) func() {
-	return func() {
-		fn(&conf)
-	}
-}
-
-var apiOpts []api.OptFunc
-
-// OptWithAPIMiddleware adds an HTTP middleware to the Benthos API.
-func OptWithAPIMiddleware(m func(http.Handler) http.Handler) func() {
-	return func() {
-		apiOpts = append(apiOpts, api.OptWithMiddleware(m))
-	}
-}
-
-// OptWithAPITLS replaces the default TLS options of the Benthos API server.
-func OptWithAPITLS(c *tls.Config) func() {
-	return func() {
-		apiOpts = append(apiOpts, api.OptWithTLS(c))
-	}
-}
 
 type stoppable interface {
 	Stop(timeout time.Duration) error
@@ -203,6 +167,7 @@ func (s *swappableStopper) Replace(fn func() (stoppable, error)) error {
 }
 
 func initNormalMode(
+	conf config.Type,
 	strict, watching bool,
 	confReader *config.Reader,
 	manager *manager.Type,
@@ -268,6 +233,7 @@ func cmdService(
 	streamsPaths []string,
 ) int {
 	confReader := readConfig(confPath, streamsMode, resourcesPaths, streamsPaths, confOverrides)
+	conf := config.New()
 
 	lints, err := confReader.Read(&conf)
 	if err != nil {
@@ -338,7 +304,7 @@ func cmdService(
 		logger.Warnf("Failed to generate sanitised config: %v\n", err)
 	}
 	var httpServer *api.Type
-	if httpServer, err = api.New(Version, DateBuilt, conf.HTTP, sanitNode, logger, stats, apiOpts...); err != nil {
+	if httpServer, err = api.New(Version, DateBuilt, conf.HTTP, sanitNode, logger, stats); err != nil {
 		logger.Errorf("Failed to initialise API: %v\n", err)
 		return 1
 	}
@@ -364,7 +330,7 @@ func cmdService(
 	if streamsMode {
 		stoppableStream = initStreamsMode(strict, watching, enableStreamsAPI, confReader, strmAPITimeout, manager, logger, stats)
 	} else {
-		stoppableStream, dataStreamClosedChan = initNormalMode(strict, watching, confReader, manager, logger, stats)
+		stoppableStream, dataStreamClosedChan = initNormalMode(conf, strict, watching, confReader, manager, logger, stats)
 	}
 
 	// Start HTTP server.

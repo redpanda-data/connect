@@ -123,6 +123,8 @@ If the expression is omitted a default config is created.`[1:],
 			},
 		},
 		Action: func(c *cli.Context) error {
+			conf := config.New()
+
 			if expression := c.Args().First(); len(expression) > 0 {
 				if err := addExpression(&conf, expression); err != nil {
 					fmt.Fprintf(os.Stderr, "Generate error: %v\n", err)
