@@ -75,19 +75,21 @@ You can access these metadata fields using
 
 // AWSSQSConfig contains configuration values for the input type.
 type AWSSQSConfig struct {
-	sess.Config     `json:",inline" yaml:",inline"`
-	URL             string `json:"url" yaml:"url"`
-	DeleteMessage   bool   `json:"delete_message" yaml:"delete_message"`
-	ResetVisibility bool   `json:"reset_visibility" yaml:"reset_visibility"`
+	sess.Config         `json:",inline" yaml:",inline"`
+	URL                 string `json:"url" yaml:"url"`
+	DeleteMessage       bool   `json:"delete_message" yaml:"delete_message"`
+	ResetVisibility     bool   `json:"reset_visibility" yaml:"reset_visibility"`
+	MaxNumberOfMessages int    `json:"max_number_of_messages" yaml:"max_number_of_messages"`
 }
 
 // NewAWSSQSConfig creates a new Config with default values.
 func NewAWSSQSConfig() AWSSQSConfig {
 	return AWSSQSConfig{
-		Config:          sess.NewConfig(),
-		URL:             "",
-		DeleteMessage:   true,
-		ResetVisibility: true,
+		Config:              sess.NewConfig(),
+		URL:                 "",
+		DeleteMessage:       true,
+		ResetVisibility:     true,
+		MaxNumberOfMessages: 10,
 	}
 }
 
@@ -190,12 +192,12 @@ ackLoop:
 		select {
 		case h := <-a.ackMessagesChan:
 			pendingAcks = append(pendingAcks, h)
-			if len(pendingAcks) >= 10 {
+			if len(pendingAcks) >= a.conf.MaxNumberOfMessages {
 				flushAcks()
 			}
 		case h := <-a.nackMessagesChan:
 			pendingNacks = append(pendingNacks, h)
-			if len(pendingNacks) >= 10 {
+			if len(pendingNacks) >= a.conf.MaxNumberOfMessages {
 				flushNacks()
 			}
 		case <-flushTimer.C:
@@ -243,7 +245,7 @@ func (a *awsSQS) readLoop(wg *sync.WaitGroup) {
 		defer done()
 		res, err := a.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 			QueueUrl:              aws.String(a.conf.URL),
-			MaxNumberOfMessages:   aws.Int64(10),
+			MaxNumberOfMessages:   aws.Int64(int64(a.conf.MaxNumberOfMessages)),
 			AttributeNames:        []*string{aws.String("All")},
 			MessageAttributeNames: []*string{aws.String("All")},
 		})
@@ -296,7 +298,7 @@ func (a *awsSQS) deleteMessages(ctx context.Context, msgs ...sqsMessageHandle) e
 				Id:            aws.String(msg.id),
 				ReceiptHandle: aws.String(msg.receiptHandle),
 			})
-			if len(input.Entries) == 10 {
+			if len(input.Entries) == a.conf.MaxNumberOfMessages {
 				break
 			}
 		}
@@ -326,7 +328,7 @@ func (a *awsSQS) resetMessages(ctx context.Context, msgs ...sqsMessageHandle) er
 				ReceiptHandle:     aws.String(msg.receiptHandle),
 				VisibilityTimeout: aws.Int64(0),
 			})
-			if len(input.Entries) == 10 {
+			if len(input.Entries) == a.conf.MaxNumberOfMessages {
 				break
 			}
 		}
