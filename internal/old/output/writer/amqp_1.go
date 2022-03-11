@@ -11,7 +11,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/impl/amqp1"
+	"github.com/benthosdev/benthos/v4/internal/impl/amqp1/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
@@ -26,7 +26,7 @@ type AMQP1Config struct {
 	TargetAddress string                       `json:"target_address" yaml:"target_address"`
 	MaxInFlight   int                          `json:"max_in_flight" yaml:"max_in_flight"`
 	TLS           btls.Config                  `json:"tls" yaml:"tls"`
-	SASL          amqp1.SASLConfig             `json:"sasl" yaml:"sasl"`
+	SASL          shared.SASLConfig            `json:"sasl" yaml:"sasl"`
 	Metadata      metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
 }
 
@@ -37,7 +37,7 @@ func NewAMQP1Config() AMQP1Config {
 		TargetAddress: "",
 		MaxInFlight:   1,
 		TLS:           btls.NewConfig(),
-		SASL:          amqp1.NewSASLConfig(),
+		SASL:          shared.NewSASLConfig(),
 		Metadata:      metadata.NewExcludeFilterConfig(),
 	}
 }

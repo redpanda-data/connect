@@ -13,7 +13,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/impl/amqp1"
+	"github.com/benthosdev/benthos/v4/internal/impl/amqp1/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
@@ -21,11 +21,11 @@ import (
 
 // AMQP1Config contains configuration for the AMQP1 input type.
 type AMQP1Config struct {
-	URL            string           `json:"url" yaml:"url"`
-	SourceAddress  string           `json:"source_address" yaml:"source_address"`
-	AzureRenewLock bool             `json:"azure_renew_lock" yaml:"azure_renew_lock"`
-	TLS            btls.Config      `json:"tls" yaml:"tls"`
-	SASL           amqp1.SASLConfig `json:"sasl" yaml:"sasl"`
+	URL            string            `json:"url" yaml:"url"`
+	SourceAddress  string            `json:"source_address" yaml:"source_address"`
+	AzureRenewLock bool              `json:"azure_renew_lock" yaml:"azure_renew_lock"`
+	TLS            btls.Config       `json:"tls" yaml:"tls"`
+	SASL           shared.SASLConfig `json:"sasl" yaml:"sasl"`
 }
 
 // NewAMQP1Config creates a new AMQP1Config with default values.
@@ -34,7 +34,7 @@ func NewAMQP1Config() AMQP1Config {
 		URL:           "",
 		SourceAddress: "",
 		TLS:           btls.NewConfig(),
-		SASL:          amqp1.NewSASLConfig(),
+		SASL:          shared.NewSASLConfig(),
 	}
 }
 

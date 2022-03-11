@@ -1,4 +1,4 @@
-package integration
+package azure
 
 import (
 	"fmt"
@@ -60,7 +60,8 @@ func (t AzuriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, err
 }
 
-var _ = registerIntegrationTest("azure", func(t *testing.T) {
+func TestIntegrationAzure(t *testing.T) {
+	integration.CheckSkip(t)
 	// Don't run this test by default, because it messes around with the
 	// http.DefaultClient
 	t.Skip()
@@ -190,4 +191,4 @@ input:
 			integration.StreamTestOptVarOne(dummyQueue),
 		)
 	})
-})
+}

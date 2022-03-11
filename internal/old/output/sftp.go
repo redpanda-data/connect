@@ -16,7 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	sftpSetup "github.com/benthosdev/benthos/v4/internal/impl/sftp"
+	sftpSetup "github.com/benthosdev/benthos/v4/internal/impl/sftp/shared"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"

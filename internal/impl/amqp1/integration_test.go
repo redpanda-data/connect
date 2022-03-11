@@ -1,26 +1,35 @@
-package integration
+package amqp1
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
-	"github.com/nats-io/stan.go"
+	"github.com/Azure/go-amqp"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
-var _ = registerIntegrationTest("nats_stream", func(t *testing.T) {
+func TestIntegrationAMQP1(t *testing.T) {
+	integration.CheckSkip(t)
+	if runtime.GOOS == "darwin" {
+		t.Skip("skipping test on macos")
+	}
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
 	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("nats-streaming", "latest", nil)
+	resource, err := pool.Run("rmohr/activemq", "latest", nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		assert.NoError(t, pool.Purge(resource))
@@ -28,49 +37,42 @@ var _ = registerIntegrationTest("nats_stream", func(t *testing.T) {
 
 	resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		natsConn, err := stan.Connect(
-			"test-cluster", "benthos_test_client",
-			stan.NatsURL(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp"))),
-		)
-		if err != nil {
-			return err
+		client, err := amqp.Dial(fmt.Sprintf("amqp://guest:guest@localhost:%v/", resource.GetPort("5672/tcp")))
+		if err == nil {
+			client.Close()
 		}
-		natsConn.Close()
-		return nil
+		return err
 	}))
 
 	template := `
 output:
-  nats_stream:
-    urls: [ nats://localhost:$PORT ]
-    cluster_id: test-cluster
-    client_id: client-output-$ID
-    subject: subject-$ID
+  amqp_1:
+    url: amqp://guest:guest@localhost:$PORT/
+    target_address: "queue:/$ID"
     max_in_flight: $MAX_IN_FLIGHT
+    metadata:
+      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
 
 input:
-  nats_stream:
-    urls: [ nats://localhost:$PORT ]
-    cluster_id: test-cluster
-    client_id: client-input-$ID
-    queue: queue-$ID
-    subject: subject-$ID
-    ack_wait: 5s
+  amqp_1:
+    url: amqp://guest:guest@localhost:$PORT/
+    source_address: "queue:/$ID"
 `
 	suite := integration.StreamTests(
 		integration.StreamTestOpenClose(),
-		// integration.StreamTestMetadata(), TODO
 		integration.StreamTestSendBatch(10),
-		integration.StreamTestStreamParallel(1000),
 		integration.StreamTestStreamSequential(1000),
+		integration.StreamTestStreamParallel(1000),
 		integration.StreamTestStreamParallelLossy(1000),
 		integration.StreamTestStreamParallelLossyThroughReconnect(1000),
+		integration.StreamTestMetadata(),
+		integration.StreamTestMetadataFilter(),
 	)
 	suite.Run(
 		t, template,
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-		integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
+		integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
@@ -78,8 +80,8 @@ input:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
+			integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
 			integration.StreamTestOptMaxInFlight(10),
 		)
 	})
-})
+}

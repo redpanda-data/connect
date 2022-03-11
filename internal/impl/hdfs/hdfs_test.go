@@ -1,4 +1,4 @@
-package integration
+package hdfs
 
 import (
 	"testing"
@@ -11,9 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
-var _ = registerIntegrationTest("hdfs", func(t *testing.T) {
+func TestIntegrationHDFS(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Skip() // Skip until we fix the static port bindings
 	t.Parallel()
 
@@ -88,4 +92,4 @@ input:
 		integration.StreamTestStreamIsolated(10),
 		integration.StreamTestSendBatchCountIsolated(10),
 	).Run(t, template)
-})
+}

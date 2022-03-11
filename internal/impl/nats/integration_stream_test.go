@@ -1,20 +1,22 @@
 package nats
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/stan.go"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
-func TestIntegrationNats(t *testing.T) {
+func TestIntegrationNatsStream(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -22,43 +24,47 @@ func TestIntegrationNats(t *testing.T) {
 	require.NoError(t, err)
 
 	pool.MaxWait = time.Second * 30
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "nats",
-		Tag:        "latest",
-		Cmd:        []string{"--js"},
-	})
+	resource, err := pool.Run("nats-streaming", "latest", nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	var natsConn *nats.Conn
 	resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		natsConn, err = nats.Connect(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp")))
-		return err
-	}))
-	t.Cleanup(func() {
+		natsConn, err := stan.Connect(
+			"test-cluster", "benthos_test_client",
+			stan.NatsURL(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp"))),
+		)
+		if err != nil {
+			return err
+		}
 		natsConn.Close()
-	})
+		return nil
+	}))
 
 	template := `
 output:
-  nats_jetstream:
+  nats_stream:
     urls: [ nats://localhost:$PORT ]
+    cluster_id: test-cluster
+    client_id: client-output-$ID
     subject: subject-$ID
+    max_in_flight: $MAX_IN_FLIGHT
 
 input:
-  nats_jetstream:
+  nats_stream:
     urls: [ nats://localhost:$PORT ]
+    cluster_id: test-cluster
+    client_id: client-input-$ID
+    queue: queue-$ID
     subject: subject-$ID
-    durable: durable-$ID
+    ack_wait: 5s
 `
 	suite := integration.StreamTests(
 		integration.StreamTestOpenClose(),
 		// integration.StreamTestMetadata(), TODO
 		integration.StreamTestSendBatch(10),
-		integration.StreamTestAtLeastOnceDelivery(), // TODO: SubscribeSync doesn't seem to honor durable setting
 		integration.StreamTestStreamParallel(1000),
 		integration.StreamTestStreamSequential(1000),
 		integration.StreamTestStreamParallelLossy(1000),
@@ -66,20 +72,18 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-			js, err := natsConn.JetStream()
-			require.NoError(t, err)
-
-			streamName := "stream-" + testID
-
-			_, err = js.AddStream(&nats.StreamConfig{
-				Name:     streamName,
-				Subjects: []string{"subject-" + testID},
-			})
-			require.NoError(t, err)
-		}),
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
 		integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
 	)
+	t.Run("with max in flight", func(t *testing.T) {
+		t.Parallel()
+		suite.Run(
+			t, template,
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
+			integration.StreamTestOptMaxInFlight(10),
+		)
+	})
 }

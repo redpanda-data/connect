@@ -4,7 +4,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/amqp1"
+	"github.com/benthosdev/benthos/v4/internal/impl/amqp1/shared"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
@@ -45,7 +45,7 @@ You can access these metadata fields using
 			docs.FieldCommon("source_address", "The source address to consume from.", "/foo", "queue:/bar", "topic:/baz"),
 			docs.FieldAdvanced("azure_renew_lock", "Experimental: Azure service bus specific option to renew lock if processing takes more then configured lock time").AtVersion("3.45.0"),
 			tls.FieldSpec(),
-			amqp1.SASLFieldSpec(),
+			shared.SASLFieldSpec(),
 		},
 	}
 }

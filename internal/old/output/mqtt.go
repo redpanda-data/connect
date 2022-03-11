@@ -4,7 +4,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	mqttconf "github.com/benthosdev/benthos/v4/internal/impl/mqtt"
+	mqttconf "github.com/benthosdev/benthos/v4/internal/impl/mqtt/shared"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/old/output/writer"

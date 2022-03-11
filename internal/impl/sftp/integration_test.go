@@ -1,4 +1,4 @@
-package integration
+package sftp
 
 import (
 	"testing"
@@ -8,14 +8,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	sftpSetup "github.com/benthosdev/benthos/v4/internal/impl/sftp"
+	"github.com/benthosdev/benthos/v4/internal/impl/sftp/shared"
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	// Bring in all other components
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 var sftpUsername = "foo"
 var sftpPassword = "pass"
 
-var _ = registerIntegrationTest("sftp", func(t *testing.T) {
+func TestIntegrationSFTP(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -36,7 +40,7 @@ var _ = registerIntegrationTest("sftp", func(t *testing.T) {
 
 	resource.Expire(900)
 
-	creds := sftpSetup.Credentials{
+	creds := shared.Credentials{
 		Username: sftpUsername,
 		Password: sftpPassword,
 	}
@@ -103,4 +107,4 @@ cache_resources:
 			integration.StreamTestOptVarTwo("true"),
 		)
 	})
-})
+}

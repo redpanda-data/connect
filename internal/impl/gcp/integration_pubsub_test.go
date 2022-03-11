@@ -1,4 +1,4 @@
-package integration
+package gcp
 
 import (
 	"context"
@@ -16,7 +16,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
-var _ = registerIntegrationTest("gcp_pubsub", func(t *testing.T) {
+func TestIntegrationGCPPubSub(t *testing.T) {
+	integration.CheckSkip(t)
 	if runtime.GOOS == "darwin" {
 		t.Skip("skipping test on macos")
 	}
@@ -114,4 +115,4 @@ input:
 			append([]integration.StreamTestOptFunc{integration.StreamTestOptMaxInFlight(10)}, suiteOpts...)...,
 		)
 	})
-})
+}

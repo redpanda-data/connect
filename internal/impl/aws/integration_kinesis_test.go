@@ -1,4 +1,4 @@
-package integration
+package aws
 
 import (
 	"context"
@@ -15,6 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
 func createKinesisShards(ctx context.Context, awsPort, id string, numShards int) error {
@@ -40,7 +43,8 @@ func createKinesisShards(ctx context.Context, awsPort, id string, numShards int)
 	})
 }
 
-var _ = registerIntegrationTest("aws_kinesis", func(t *testing.T) {
+func TestIntegrationAWSKinesis(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -149,4 +153,4 @@ input:
 			integration.StreamTestOptVarTwo("10"),
 		)
 	})
-})
+}

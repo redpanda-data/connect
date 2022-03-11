@@ -1,4 +1,4 @@
-package integration
+package elasticsearch
 
 import (
 	"context"
@@ -13,6 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
 var elasticIndex = `{
@@ -34,9 +37,9 @@ var elasticIndex = `{
 	}
 }`
 
-var _ = registerIntegrationTest("elasticsearch", func(t *testing.T) {
+func TestIntegrationElasticsearch(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Skip("This uses a ton of memory so we don't run it by default")
-
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -114,9 +117,11 @@ output:
 		t, template,
 		integration.StreamTestOptPort(resource.GetPort("9200/tcp")),
 	)
-})
+}
 
-var _ = registerIntegrationBench("elasticsearch", func(b *testing.B) {
+func BenchmarkIntegrationElasticsearch(b *testing.B) {
+	integration.CheckSkip(b)
+
 	pool, err := dockertest.NewPool("")
 	require.NoError(b, err)
 
@@ -173,4 +178,4 @@ output:
 		b, template,
 		integration.StreamTestOptPort(resource.GetPort("9200/tcp")),
 	)
-})
+}

@@ -13,7 +13,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	mqttconf "github.com/benthosdev/benthos/v4/internal/impl/mqtt"
+	mqttconf "github.com/benthosdev/benthos/v4/internal/impl/mqtt/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tls"

@@ -1,4 +1,4 @@
-package integration
+package aws
 
 import (
 	"context"
@@ -17,6 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
 func createBucketQueue(s3Port, sqsPort, id string) error {
@@ -101,7 +104,8 @@ func createBucketQueue(s3Port, sqsPort, id string) error {
 	return nil
 }
 
-var _ = registerIntegrationTest("aws", func(t *testing.T) {
+func TestIntegrationAWS(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -317,4 +321,4 @@ input:
 			integration.StreamTestOptPort(servicePort),
 		)
 	})
-})
+}

@@ -34,7 +34,7 @@ import (
 
 // CheckSkip marks a test to be skipped unless the integration test has been
 // specifically requested using the -run flag.
-func CheckSkip(t *testing.T) {
+func CheckSkip(t testing.TB) {
 	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
 		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
 	}

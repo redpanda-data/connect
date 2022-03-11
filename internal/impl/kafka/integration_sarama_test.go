@@ -1,4 +1,4 @@
-package integration
+package kafka
 
 import (
 	"context"
@@ -21,9 +21,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
-var _ = registerIntegrationTest("kafka_redpanda", func(t *testing.T) {
+func TestIntegrationSaramaRedpanda(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -31,7 +35,7 @@ var _ = registerIntegrationTest("kafka_redpanda", func(t *testing.T) {
 
 	pool.MaxWait = time.Second * 30
 
-	kafkaPort, err := getFreePort()
+	kafkaPort, err := integration.GetFreePort()
 	require.NoError(t, err)
 
 	kafkaPortStr := strconv.Itoa(kafkaPort)
@@ -67,7 +71,7 @@ var _ = registerIntegrationTest("kafka_redpanda", func(t *testing.T) {
 			return serr
 		}
 		defer tmpOutput.CloseAsync()
-		if serr = tmpOutput.Connect(); serr != nil {
+		if serr := tmpOutput.Connect(); serr != nil {
 			return serr
 		}
 		return tmpOutput.Write(message.QuickBatch([][]byte{
@@ -109,10 +113,14 @@ input:
 		integration.StreamTestSendBatchCount(10),
 	)
 	// In some modes include testing input level batching
-	suiteExt := append(suite, integration.StreamTestReceiveBatchCount(10))
+	var suiteExt integration.StreamTestList
+	suiteExt = append(suiteExt, suite...)
+	suiteExt = append(suiteExt, integration.StreamTestReceiveBatchCount(10))
 
 	// Only for checkpointed tests
-	suiteSingleCheckpointedStream := append(suite, integration.StreamTestCheckpointCapture())
+	var suiteSingleCheckpointedStream integration.StreamTestList
+	suiteSingleCheckpointedStream = append(suiteSingleCheckpointedStream, suite...)
+	suiteSingleCheckpointedStream = append(suiteSingleCheckpointedStream, integration.StreamTestCheckpointCapture())
 
 	t.Run("balanced", func(t *testing.T) {
 		t.Parallel()
@@ -272,7 +280,7 @@ input:
 		)
 	})
 
-})
+}
 
 func createKafkaTopic(address, id string, partitions int32) error {
 	topicName := fmt.Sprintf("topic-%v", id)
@@ -323,7 +331,8 @@ func createKafkaTopic(address, id string, partitions int32) error {
 	return nil
 }
 
-var _ = registerIntegrationTest("kafka_old", func(t *testing.T) {
+func TestIntegrationSaramaOld(t *testing.T) {
+	integration.CheckSkip(t)
 	if runtime.GOOS == "darwin" {
 		t.Skip("skipping test on macos")
 	}
@@ -354,7 +363,7 @@ var _ = registerIntegrationTest("kafka_old", func(t *testing.T) {
 	zkResource.Expire(900)
 	zkAddr := fmt.Sprintf("%v:2181", zkResource.Container.NetworkSettings.IPAddress)
 
-	kafkaPort, err := getFreePort()
+	kafkaPort, err := integration.GetFreePort()
 	require.NoError(t, err)
 
 	kafkaPortStr := strconv.Itoa(kafkaPort)
@@ -395,7 +404,7 @@ var _ = registerIntegrationTest("kafka_old", func(t *testing.T) {
 			return serr
 		}
 		defer tmpOutput.CloseAsync()
-		if serr = tmpOutput.Connect(); serr != nil {
+		if serr := tmpOutput.Connect(); serr != nil {
 			return serr
 		}
 		return tmpOutput.Write(message.QuickBatch([][]byte{
@@ -433,10 +442,14 @@ input:
 		integration.StreamTestSendBatchCount(10),
 	)
 	// In some tests include testing input level batching
-	suiteExt := append(suite, integration.StreamTestReceiveBatchCount(10))
+	var suiteExt integration.StreamTestList
+	suiteExt = append(suiteExt, suite...)
+	suiteExt = append(suiteExt, integration.StreamTestReceiveBatchCount(10))
 
 	// Only for checkpointed tests
-	suiteSingleCheckpointedStream := append(suiteExt, integration.StreamTestCheckpointCapture())
+	var suiteSingleCheckpointedStream integration.StreamTestList
+	suiteSingleCheckpointedStream = append(suiteSingleCheckpointedStream, suite...)
+	suiteSingleCheckpointedStream = append(suiteSingleCheckpointedStream, integration.StreamTestCheckpointCapture())
 
 	t.Run("balanced", func(t *testing.T) {
 		t.Parallel()
@@ -546,4 +559,4 @@ input:
 			})
 		})
 	})
-})
+}

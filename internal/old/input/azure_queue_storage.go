@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/impl/azure"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
@@ -36,7 +36,7 @@ type azureQueueStorage struct {
 
 // newAzureQueueStorage creates a new Azure Storage Queue input type.
 func newAzureQueueStorage(conf AzureQueueStorageConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*azureQueueStorage, error) {
-	serviceURL, err := azure.GetQueueServiceURL(conf.StorageAccount, conf.StorageAccessKey, conf.StorageConnectionString)
+	serviceURL, err := shared.GetQueueServiceURL(conf.StorageAccount, conf.StorageAccessKey, conf.StorageConnectionString)
 	if err != nil {
 		return nil, err
 	}

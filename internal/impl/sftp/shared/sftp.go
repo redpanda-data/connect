@@ -1,4 +1,7 @@
-package sftp
+// Package shared contains docs fields that need to be shared across old and new
+// component implementations, it needs to be separate from the parent package in
+// order to avoid circular dependencies (for now).
+package shared
 
 import (
 	"fmt"

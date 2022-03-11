@@ -1,4 +1,4 @@
-package integration
+package mqtt
 
 import (
 	"fmt"
@@ -11,9 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
-var _ = registerIntegrationTest("mqtt", func(t *testing.T) {
+func TestIntegrationMQTT(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -93,4 +97,4 @@ input:
 			integration.StreamTestOptVarOne("nanoid"),
 		)
 	})
-})
+}

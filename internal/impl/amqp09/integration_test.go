@@ -1,4 +1,4 @@
-package integration
+package amqp09
 
 import (
 	"fmt"
@@ -11,9 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
-var _ = registerIntegrationTest("amqp_0_9", func(t *testing.T) {
+func TestIntegrationAMQP09(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -86,4 +90,4 @@ input:
 		integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
 		integration.StreamTestOptVarOne("false"),
 	)
-})
+}

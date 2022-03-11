@@ -1,4 +1,4 @@
-package integration
+package redis
 
 import (
 	"context"
@@ -15,9 +15,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
-var _ = registerIntegrationTest("redis", func(t *testing.T) {
+func TestIntegrationRedis(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -221,9 +225,11 @@ output:
 			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
 		)
 	})
-})
+}
 
-var _ = registerIntegrationBench("redis", func(b *testing.B) {
+func BenchmarkIntegrationRedis(b *testing.B) {
+	integration.CheckSkip(b)
+
 	pool, err := dockertest.NewPool("")
 	require.NoError(b, err)
 
@@ -344,4 +350,4 @@ input:
 			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
 		)
 	})
-})
+}

@@ -1,4 +1,4 @@
-package integration
+package cassandra
 
 import (
 	"context"
@@ -14,9 +14,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	// Bring in legacy definition
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
-var _ = registerIntegrationTest("cassandra", func(t *testing.T) {
+func TestIntegrationCassandra(t *testing.T) {
+	integration.CheckSkip(t)
 	if runtime.GOOS == "darwin" {
 		t.Skip("skipping test on macos")
 	}
@@ -191,4 +195,4 @@ output:
 			}),
 		)
 	})
-})
+}
