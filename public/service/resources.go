@@ -55,10 +55,24 @@ func (r *Resources) AccessCache(ctx context.Context, name string, fn func(c Cach
 	})
 }
 
+// HasCache confirms whether a cache with a given name has been registered as a
+// resource. This method is useful during component initialisation as it is
+// defensive against ordering.
+func (r *Resources) HasCache(name string) bool {
+	return r.mgr.ProbeCache(name)
+}
+
 // AccessRateLimit attempts to access a rate limit resource by name. This action
 // can block if CRUD operations are being actively performed on the resource.
 func (r *Resources) AccessRateLimit(ctx context.Context, name string, fn func(r RateLimit)) error {
 	return r.mgr.AccessRateLimit(ctx, name, func(r ratelimit.V1) {
 		fn(newReverseAirGapRateLimit(r))
 	})
+}
+
+// HasRateLimit confirms whether a rate limit with a given name has been
+// registered as a resource. This method is useful during component
+// initialisation as it is defensive against ordering.
+func (r *Resources) HasRateLimit(name string) bool {
+	return r.mgr.ProbeRateLimit(name)
 }

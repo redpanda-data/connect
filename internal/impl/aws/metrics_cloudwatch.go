@@ -25,6 +25,7 @@ func init() {
 	}, docs.ComponentSpec{
 		Name:    "aws_cloudwatch",
 		Type:    docs.TypeMetrics,
+		Status:  docs.StatusStable,
 		Version: "3.36.0",
 		Summary: `Send metrics to AWS CloudWatch using the PutMetricData endpoint.`,
 		Description: `

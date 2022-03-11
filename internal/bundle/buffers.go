@@ -56,6 +56,7 @@ func (s *BufferSet) Add(constructor BufferConstructor, spec docs.ComponentSpec) 
 	if s.specs == nil {
 		s.specs = map[string]bufferSpec{}
 	}
+	spec.Type = docs.TypeBuffer
 	s.specs[spec.Name] = bufferSpec{
 		constructor: constructor,
 		spec:        spec,

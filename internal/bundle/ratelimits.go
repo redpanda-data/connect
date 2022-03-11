@@ -56,6 +56,7 @@ func (s *RateLimitSet) Add(constructor RateLimitConstructor, spec docs.Component
 	if s.specs == nil {
 		s.specs = map[string]rateLimitSpec{}
 	}
+	spec.Type = docs.TypeRateLimit
 	s.specs[spec.Name] = rateLimitSpec{
 		constructor: constructor,
 		spec:        spec,

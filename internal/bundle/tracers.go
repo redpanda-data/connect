@@ -38,6 +38,7 @@ func (s *TracerSet) Add(constructor TracerConstructor, spec docs.ComponentSpec) 
 	if s.specs == nil {
 		s.specs = map[string]tracerSpec{}
 	}
+	spec.Type = docs.TypeTracer
 	s.specs[spec.Name] = tracerSpec{
 		constructor: constructor,
 		spec:        spec,

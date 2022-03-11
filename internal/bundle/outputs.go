@@ -77,6 +77,7 @@ func (s *OutputSet) Add(constructor OutputConstructor, spec docs.ComponentSpec) 
 	if s.specs == nil {
 		s.specs = map[string]outputSpec{}
 	}
+	spec.Type = docs.TypeOutput
 	s.specs[spec.Name] = outputSpec{
 		constructor: constructor,
 		spec:        spec,

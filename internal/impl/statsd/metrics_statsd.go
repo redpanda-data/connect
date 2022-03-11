@@ -15,8 +15,9 @@ import (
 
 func init() {
 	_ = bundle.AllMetrics.Add(newStatsd, docs.ComponentSpec{
-		Name: "statsd",
-		Type: docs.TypeMetrics,
+		Name:   "statsd",
+		Type:   docs.TypeMetrics,
+		Status: docs.StatusStable,
 		Summary: `
 Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd).
 Supported tagging formats are 'none', 'datadog' and 'influxdb'.`,

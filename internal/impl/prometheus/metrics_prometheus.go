@@ -21,8 +21,9 @@ import (
 
 func init() {
 	_ = bundle.AllMetrics.Add(newPrometheus, docs.ComponentSpec{
-		Name: "prometheus",
-		Type: docs.TypeMetrics,
+		Name:   "prometheus",
+		Type:   docs.TypeMetrics,
+		Status: docs.StatusStable,
 		Summary: `
 Host endpoints (` + "`/metrics` and `/stats`" + `) for Prometheus scraping.`,
 		Description: `

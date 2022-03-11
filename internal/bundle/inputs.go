@@ -76,6 +76,7 @@ func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) er
 	if s.specs == nil {
 		s.specs = map[string]inputSpec{}
 	}
+	spec.Type = docs.TypeInput
 	s.specs[spec.Name] = inputSpec{
 		constructor: constructor,
 		spec:        spec,

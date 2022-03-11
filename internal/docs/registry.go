@@ -32,6 +32,8 @@ func RegisterDocs(spec ComponentSpec) {
 		globalProvider.rateLimitMap[spec.Name] = spec
 	case TypeTracer:
 		globalProvider.tracerMap[spec.Name] = spec
+	default:
+		panic("no spec type provided for component: " + spec.Name)
 	}
 	globalProvider.componentLock.Unlock()
 }

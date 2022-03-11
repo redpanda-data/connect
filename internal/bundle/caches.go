@@ -56,6 +56,7 @@ func (s *CacheSet) Add(constructor CacheConstructor, spec docs.ComponentSpec) er
 	if s.specs == nil {
 		s.specs = map[string]cacheSpec{}
 	}
+	spec.Type = docs.TypeCache
 	s.specs[spec.Name] = cacheSpec{
 		constructor: constructor,
 		spec:        spec,

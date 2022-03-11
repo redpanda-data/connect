@@ -59,6 +59,7 @@ func (s *ProcessorSet) Add(constructor ProcessorConstructor, spec docs.Component
 	if s.specs == nil {
 		s.specs = map[string]processorSpec{}
 	}
+	spec.Type = docs.TypeProcessor
 	s.specs[spec.Name] = processorSpec{
 		constructor: constructor,
 		spec:        spec,

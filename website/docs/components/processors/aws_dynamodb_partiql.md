@@ -36,9 +36,6 @@ label: ""
 aws_dynamodb_partiql:
   query: ""
   args_mapping: ""
-  region: ""
-  credentials:
-    profile: ""
 ```
 
 </TabItem>

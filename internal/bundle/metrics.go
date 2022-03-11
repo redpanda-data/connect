@@ -40,6 +40,7 @@ func (s *MetricsSet) Add(constructor MetricConstructor, spec docs.ComponentSpec)
 	if s.specs == nil {
 		s.specs = map[string]metricsSpec{}
 	}
+	spec.Type = docs.TypeMetrics
 	s.specs[spec.Name] = metricsSpec{
 		constructor: constructor,
 		spec:        spec,

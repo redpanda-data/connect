@@ -32,9 +32,6 @@ label: ""
 aws_s3:
   bucket: ""
   content_type: application/octet-stream
-  region: ""
-  credentials:
-    profile: ""
 ```
 
 </TabItem>

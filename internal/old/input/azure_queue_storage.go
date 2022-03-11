@@ -1,6 +1,3 @@
-//go:build !wasm
-// +build !wasm
-
 package input
 
 import (
@@ -9,13 +6,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
-	"github.com/benthosdev/benthos/v4/internal/interop"
-
 	"github.com/Azure/azure-storage-queue-go/azqueue"
 
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
+	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/input/reader"

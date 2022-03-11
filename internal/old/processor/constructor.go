@@ -101,7 +101,6 @@ const (
 	TypeArchive      = "archive"
 	TypeAvro         = "avro"
 	TypeAWK          = "awk"
-	TypeAWSLambda    = "aws_lambda"
 	TypeBloblang     = "bloblang"
 	TypeBoundsCheck  = "bounds_check"
 	TypeBranch       = "branch"
@@ -154,7 +153,6 @@ type Config struct {
 	Archive      ArchiveConfig      `json:"archive" yaml:"archive"`
 	Avro         AvroConfig         `json:"avro" yaml:"avro"`
 	AWK          AWKConfig          `json:"awk" yaml:"awk"`
-	AWSLambda    LambdaConfig       `json:"aws_lambda" yaml:"aws_lambda"`
 	Bloblang     BloblangConfig     `json:"bloblang" yaml:"bloblang"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
 	Branch       BranchConfig       `json:"branch" yaml:"branch"`
@@ -207,7 +205,6 @@ func NewConfig() Config {
 		Archive:      NewArchiveConfig(),
 		Avro:         NewAvroConfig(),
 		AWK:          NewAWKConfig(),
-		AWSLambda:    NewLambdaConfig(),
 		Bloblang:     NewBloblangConfig(),
 		BoundsCheck:  NewBoundsCheckConfig(),
 		Branch:       NewBranchConfig(),

@@ -34,9 +34,6 @@ aws_dynamodb:
   table: ""
   hash_key: ""
   data_key: ""
-  region: ""
-  credentials:
-    profile: ""
 ```
 
 </TabItem>

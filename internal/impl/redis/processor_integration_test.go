@@ -1,13 +1,10 @@
-package processor
+package redis
 
 import (
-	"flag"
 	"fmt"
 	"net/url"
 	"reflect"
-	"regexp"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
@@ -17,19 +14,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
-func TestRedisIntegration(t *testing.T) {
-	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
-		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
-	}
-
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+func TestIntegrationRedisProcessor(t *testing.T) {
+	integration.CheckSkip(t)
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {
@@ -82,14 +75,15 @@ func TestRedisIntegration(t *testing.T) {
 }
 
 func testRedisKeys(t *testing.T, client *redis.Client, url string) {
-	conf := NewConfig()
-	conf.Type = TypeRedis
-	conf.Redis.URL = url
-	conf.Redis.Operator = "keys"
-	conf.Redis.Key = "foo*"
+	conf := oprocessor.NewRedisConfig()
+	conf.URL = url
+	conf.Operator = "keys"
+	conf.Key = "foo*"
 
-	r, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rp, err := newRedisProc(conf, mock.NewManager())
 	require.NoError(t, err)
+
+	r := processor.NewV2BatchedToV1Processor("redis", rp, metrics.Noop())
 
 	for _, key := range []string{
 		"bar1", "bar2", "fooa", "foob", "baz1", "fooc",
@@ -124,16 +118,15 @@ func testRedisKeys(t *testing.T, client *redis.Client, url string) {
 }
 
 func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
-	conf := NewConfig()
-	conf.Type = TypeRedis
-	conf.Redis.URL = url
-	conf.Redis.Operator = "sadd"
-	conf.Redis.Key = "${! meta(\"key\") }"
+	conf := oprocessor.NewRedisConfig()
+	conf.URL = url
+	conf.Operator = "sadd"
+	conf.Key = "${! meta(\"key\") }"
 
-	r, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rp, err := newRedisProc(conf, mock.NewManager())
+	require.NoError(t, err)
+
+	r := processor.NewV2BatchedToV1Processor("redis", rp, metrics.Noop())
 
 	msg := message.QuickBatch([][]byte{
 		[]byte(`foo`),
@@ -187,16 +180,15 @@ func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
 
 func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 	// WARNING: Relies on testRedisSAdd succeeding.
-	conf := NewConfig()
-	conf.Type = TypeRedis
-	conf.Redis.URL = url
-	conf.Redis.Operator = "scard"
-	conf.Redis.Key = "${!content()}"
+	conf := oprocessor.NewRedisConfig()
+	conf.URL = url
+	conf.Operator = "scard"
+	conf.Key = "${! content() }"
 
-	r, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rp, err := newRedisProc(conf, mock.NewManager())
+	require.NoError(t, err)
+
+	r := processor.NewV2BatchedToV1Processor("redis", rp, metrics.Noop())
 
 	msg := message.QuickBatch([][]byte{
 		[]byte(`doesntexist`),
@@ -222,16 +214,15 @@ func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 }
 
 func testRedisIncrby(t *testing.T, client *redis.Client, url string) {
-	conf := NewConfig()
-	conf.Type = TypeRedis
-	conf.Redis.URL = url
-	conf.Redis.Operator = "incrby"
-	conf.Redis.Key = "incrby"
+	conf := oprocessor.NewRedisConfig()
+	conf.URL = url
+	conf.Operator = "incrby"
+	conf.Key = "incrby"
 
-	r, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rp, err := newRedisProc(conf, mock.NewManager())
+	require.NoError(t, err)
+
+	r := processor.NewV2BatchedToV1Processor("redis", rp, metrics.Noop())
 
 	msg := message.QuickBatch([][]byte{
 		[]byte(`2`),
