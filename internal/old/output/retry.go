@@ -1,6 +1,7 @@
 package output
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -108,8 +109,7 @@ func (r RetryConfig) MarshalYAML() (interface{}, error) {
 // Retry is an output type that continuously writes a message to a child output
 // until the send is successful.
 type Retry struct {
-	running int32
-	conf    RetryConfig
+	conf RetryConfig
 
 	wrapped     output.Streamed
 	backoffCtor func() backoff.BackOff
@@ -120,8 +120,7 @@ type Retry struct {
 	transactionsIn  <-chan message.Transaction
 	transactionsOut chan message.Transaction
 
-	closeChan  chan struct{}
-	closedChan chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 // NewRetry creates a new Retry input type.
@@ -146,8 +145,7 @@ func NewRetry(
 	}
 
 	return &Retry{
-		running: 1,
-		conf:    conf.Retry,
+		conf: conf.Retry,
 
 		log:             log,
 		stats:           stats,
@@ -155,8 +153,7 @@ func NewRetry(
 		backoffCtor:     boffCtor,
 		transactionsOut: make(chan message.Transaction),
 
-		closeChan:  make(chan struct{}),
-		closedChan: make(chan struct{}),
+		shutSig: shutdown.NewSignaller(),
 	}, nil
 }
 
@@ -170,13 +167,16 @@ func (r *Retry) loop() {
 		close(r.transactionsOut)
 		r.wrapped.CloseAsync()
 		_ = r.wrapped.WaitForClose(shutdown.MaximumShutdownWait())
-		close(r.closedChan)
+		r.shutSig.ShutdownComplete()
 	}()
+
+	ctx, done := r.shutSig.CloseAtLeisureCtx(context.Background())
+	defer done()
 
 	errInterruptChan := make(chan struct{})
 	var errLooped int64
 
-	for atomic.LoadInt32(&r.running) == 1 {
+	for !r.shutSig.ShouldCloseAtLeisure() {
 		// Do not consume another message while pending messages are being
 		// reattempted.
 		for atomic.LoadInt64(&errLooped) > 0 {
@@ -184,7 +184,7 @@ func (r *Retry) loop() {
 			case <-errInterruptChan:
 			case <-time.After(time.Millisecond * 100):
 				// Just incase an interrupt doesn't arrive.
-			case <-r.closeChan:
+			case <-r.shutSig.CloseAtLeisureChan():
 				return
 			}
 		}
@@ -196,14 +196,14 @@ func (r *Retry) loop() {
 			if !open {
 				return
 			}
-		case <-r.closeChan:
+		case <-r.shutSig.CloseAtLeisureChan():
 			return
 		}
 
 		rChan := make(chan error)
 		select {
 		case r.transactionsOut <- message.NewTransaction(tran.Payload, rChan):
-		case <-r.closeChan:
+		case <-r.shutSig.CloseAtLeisureChan():
 			return
 		}
 
@@ -227,11 +227,11 @@ func (r *Retry) loop() {
 				}
 			}()
 
-			for atomic.LoadInt32(&r.running) == 1 {
+			for !r.shutSig.ShouldCloseAtLeisure() {
 				var res error
 				select {
 				case res = <-resChan:
-				case <-r.closeChan:
+				case <-r.shutSig.CloseAtLeisureChan():
 					return
 				}
 
@@ -255,13 +255,13 @@ func (r *Retry) loop() {
 					}
 					select {
 					case <-time.After(nextBackoff):
-					case <-r.closeChan:
+					case <-r.shutSig.CloseAtLeisureChan():
 						return
 					}
 
 					select {
 					case r.transactionsOut <- message.NewTransaction(ts.Payload, resChan):
-					case <-r.closeChan:
+					case <-r.shutSig.CloseAtLeisureChan():
 						return
 					}
 				} else {
@@ -270,9 +270,7 @@ func (r *Retry) loop() {
 				}
 			}
 
-			select {
-			case ts.ResponseChan <- resOut:
-			case <-r.closeChan:
+			if err := ts.Ack(ctx, resOut); err != nil && ctx.Err() != nil {
 				return
 			}
 		}(tran, rChan)
@@ -307,15 +305,13 @@ func (r *Retry) MaxInFlight() (int, bool) {
 
 // CloseAsync shuts down the Retry input and stops processing requests.
 func (r *Retry) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&r.running, 1, 0) {
-		close(r.closeChan)
-	}
+	r.shutSig.CloseAtLeisure()
 }
 
 // WaitForClose blocks until the Retry input has closed down.
 func (r *Retry) WaitForClose(timeout time.Duration) error {
 	select {
-	case <-r.closedChan:
+	case <-r.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return component.ErrTimeout
 	}

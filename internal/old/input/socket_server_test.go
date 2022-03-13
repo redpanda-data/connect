@@ -1,6 +1,7 @@
 package input
 
 import (
+	"context"
 	"errors"
 	"net"
 	"path/filepath"
@@ -19,6 +20,9 @@ import (
 )
 
 func TestSocketServerBasic(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
@@ -55,11 +59,7 @@ func TestSocketServerBasic(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -86,6 +86,9 @@ func TestSocketServerBasic(t *testing.T) {
 }
 
 func TestSocketServerRetries(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
@@ -126,11 +129,7 @@ func TestSocketServerRetries(t *testing.T) {
 			if reject {
 				res = errors.New("test err")
 			}
-			select {
-			case tran.ResponseChan <- res:
-			case <-time.After(time.Second * 5):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, res))
 		case <-time.After(time.Second * 5):
 			return nil, errors.New("timed out")
 		}
@@ -195,6 +194,9 @@ func TestSocketServerWriteClosed(t *testing.T) {
 }
 
 func TestSocketServerRecon(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
@@ -238,11 +240,7 @@ func TestSocketServerRecon(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -270,6 +268,9 @@ func TestSocketServerRecon(t *testing.T) {
 }
 
 func TestSocketServerMpart(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
@@ -311,11 +312,7 @@ func TestSocketServerMpart(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -337,6 +334,9 @@ func TestSocketServerMpart(t *testing.T) {
 }
 
 func TestSocketServerMpartCDelim(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
@@ -378,11 +378,7 @@ func TestSocketServerMpartCDelim(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -404,6 +400,9 @@ func TestSocketServerMpartCDelim(t *testing.T) {
 }
 
 func TestSocketServerMpartSdown(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	tmpDir := t.TempDir()
 
 	conf := NewConfig()
@@ -447,11 +446,7 @@ func TestSocketServerMpartSdown(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -472,6 +467,9 @@ func TestSocketServerMpartSdown(t *testing.T) {
 }
 
 func TestSocketUDPServerBasic(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
@@ -510,11 +508,7 @@ func TestSocketUDPServerBasic(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -541,6 +535,9 @@ func TestSocketUDPServerBasic(t *testing.T) {
 }
 
 func TestSocketUDPServerRetries(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
@@ -583,11 +580,7 @@ func TestSocketUDPServerRetries(t *testing.T) {
 			if reject {
 				res = errors.New("test err")
 			}
-			select {
-			case tran.ResponseChan <- res:
-			case <-time.After(time.Second * 5):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, res))
 		case <-time.After(time.Second * 5):
 			return nil, errors.New("timed out")
 		}
@@ -652,6 +645,9 @@ func TestUDPServerWriteToClosed(t *testing.T) {
 }
 
 func TestSocketUDPServerReconnect(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
@@ -694,11 +690,7 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -725,6 +717,9 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 }
 
 func TestSocketUDPServerCustomDelim(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
@@ -767,11 +762,7 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -803,6 +794,9 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 }
 
 func TestSocketUDPServerShutdown(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "udp"
 	conf.SocketServer.Address = "127.0.0.1:0"
@@ -845,11 +839,7 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -880,6 +870,9 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 }
 
 func TestTCPSocketServerBasic(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "tcp"
 	conf.SocketServer.Address = "127.0.0.1:0"
@@ -918,11 +911,7 @@ func TestTCPSocketServerBasic(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -949,6 +938,9 @@ func TestTCPSocketServerBasic(t *testing.T) {
 }
 
 func TestTCPSocketServerReconnect(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "tcp"
 	conf.SocketServer.Address = "127.0.0.1:0"
@@ -992,11 +984,7 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -1023,6 +1011,9 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 }
 
 func TestTCPSocketServerMultipart(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "tcp"
 	conf.SocketServer.Address = "127.0.0.1:0"
@@ -1065,11 +1056,7 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -1091,6 +1078,9 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 }
 
 func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "tcp"
 	conf.SocketServer.Address = "127.0.0.1:0"
@@ -1133,11 +1123,7 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -1159,6 +1145,9 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 }
 
 func TestTCPSocketServerMultipartShutdown(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := NewConfig()
 	conf.SocketServer.Network = "tcp"
 	conf.SocketServer.Address = "127.0.0.1:0"
@@ -1202,11 +1191,7 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}

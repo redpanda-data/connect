@@ -2,9 +2,12 @@ package broker
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -27,6 +30,9 @@ func TestGreedyDoubleClose(t *testing.T) {
 //------------------------------------------------------------------------------
 
 func TestBasicGreedy(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nMsgs := 1000
 
 	outputs := []output.Streamed{}
@@ -67,13 +73,7 @@ func TestBasicGreedy(t *testing.T) {
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
-
-			select {
-			case ts.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Timed out responding to broker")
-				return
-			}
+			require.NoError(t, ts.Ack(tCtx, nil))
 		}()
 
 		select {

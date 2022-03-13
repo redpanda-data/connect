@@ -1,10 +1,13 @@
 package input
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -208,6 +211,9 @@ func (m mockProc) WaitForClose(timeout time.Duration) error {
 //------------------------------------------------------------------------------
 
 func TestBasicWrapProcessors(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	mockIn := &mockInput{ts: make(chan message.Transaction)}
 
 	pipe1 := pipeline.NewProcessor(mockProc{})
@@ -255,11 +261,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 
 	// Send error
 	go func() {
-		select {
-		case ts.ResponseChan <- errFailed:
-		case <-time.After(time.Second):
-			t.Error("action timed out")
-		}
+		require.NoError(t, ts.Ack(tCtx, errFailed))
 	}()
 
 	// Receive again
@@ -282,6 +284,9 @@ func TestBasicWrapProcessors(t *testing.T) {
 }
 
 func TestBasicWrapDoubleProcessors(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	mockIn := &mockInput{ts: make(chan message.Transaction)}
 
 	pipe1 := pipeline.NewProcessor(mockProc{}, mockProc{})
@@ -326,11 +331,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 
 	// Send error
 	go func() {
-		select {
-		case ts.ResponseChan <- errFailed:
-		case <-time.After(time.Second):
-			t.Error("action timed out")
-		}
+		require.NoError(t, ts.Ack(tCtx, errFailed))
 	}()
 
 	// Receive again

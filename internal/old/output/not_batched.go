@@ -1,6 +1,7 @@
 package output
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -100,6 +101,9 @@ func (n *notBatchedOutput) loop() {
 		n.shutSig.ShutdownComplete()
 	}()
 
+	ctx, done := n.shutSig.CloseNowCtx(context.Background())
+	defer done()
+
 	for {
 		var tran message.Transaction
 		var open bool
@@ -126,11 +130,7 @@ func (n *notBatchedOutput) loop() {
 				}
 				res = err
 			}
-			select {
-			case tran.ResponseChan <- res:
-			case <-n.shutSig.CloseNowChan():
-				return
-			}
+			_ = tran.Ack(ctx, res)
 		}
 	}
 }

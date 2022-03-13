@@ -2,9 +2,12 @@ package broker
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -28,6 +31,9 @@ func TestRoundRobinDoubleClose(t *testing.T) {
 //------------------------------------------------------------------------------
 
 func TestBasicRoundRobin(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nMsgs := 1000
 
 	outputs := []output.Streamed{}
@@ -80,13 +86,7 @@ func TestBasicRoundRobin(t *testing.T) {
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
-
-			select {
-			case ts.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Timed out responding to broker")
-				return
-			}
+			require.NoError(t, ts.Ack(tCtx, nil))
 		}()
 
 		select {
@@ -109,6 +109,9 @@ func TestBasicRoundRobin(t *testing.T) {
 //------------------------------------------------------------------------------
 
 func BenchmarkBasicRoundRobin(b *testing.B) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nOutputs, nMsgs := 3, b.N
 
 	outputs := []output.Streamed{}
@@ -139,7 +142,7 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 	for i := 0; i < nMsgs; i++ {
 		readChan <- message.NewTransaction(message.QuickBatch(content), resChan)
 		ts := <-mockOutputs[i%3].TChan
-		ts.ResponseChan <- nil
+		require.NoError(b, ts.Ack(tCtx, nil))
 		res := <-resChan
 		if res != nil {
 			b.Errorf("Received unexpected errors from broker: %v", res)

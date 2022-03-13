@@ -173,9 +173,7 @@ func (t *Try) loop() {
 					}
 				}
 			}
-			select {
-			case tran.ResponseChan <- res:
-			case <-t.ctx.Done():
+			if err := tran.Ack(t.ctx, res); err != nil && t.ctx.Err() != nil {
 				return
 			}
 		}

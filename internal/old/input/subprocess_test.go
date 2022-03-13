@@ -1,6 +1,7 @@
 package input
 
 import (
+	"context"
 	"os"
 	"path"
 	"testing"
@@ -28,13 +29,13 @@ func testProgram(t *testing.T, program string) string {
 
 func readMsg(t *testing.T, tranChan <-chan message.Transaction) *message.Batch {
 	t.Helper()
+
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
 	select {
 	case tran := <-tranChan:
-		select {
-		case tran.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Fatal("timed out")
-		}
+		require.NoError(t, tran.Ack(tCtx, nil))
 		return tran.Payload
 	case <-time.After(time.Second * 5):
 	}

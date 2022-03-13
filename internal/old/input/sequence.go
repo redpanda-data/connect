@@ -1,6 +1,7 @@
 package input
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -552,6 +553,9 @@ func (r *Sequence) loop() {
 
 	target, finalInSequence := r.getTarget()
 
+	shutNowCtx, done := r.shutSig.CloseNowCtx(context.Background())
+	defer done()
+
 runLoop:
 	for {
 		if target == nil {
@@ -607,9 +611,7 @@ runLoop:
 			r.joiner.Add(tran.Payload.DeepCopy(), finalInSequence, func(msg *message.Batch) {
 				r.dispatchJoinedMessage(&shardJoinWG, msg)
 			})
-			select {
-			case tran.ResponseChan <- nil:
-			case <-r.shutSig.CloseNowChan():
+			if err := tran.Ack(shutNowCtx, nil); err != nil && shutNowCtx.Err() != nil {
 				return
 			}
 		} else {

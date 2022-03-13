@@ -54,6 +54,9 @@ func (a apiRegGorillaMutWrapper) RegisterEndpoint(path, desc string, h http.Hand
 }
 
 func TestHTTPBasic(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	t.Parallel()
 
 	nTestLoops := 100
@@ -111,11 +114,7 @@ func TestHTTPBasic(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
 	// Test MIME multipart parsing, as defined in RFC 2046
@@ -159,11 +158,7 @@ func TestHTTPBasic(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
 	// Test requests without content-type
@@ -205,11 +200,7 @@ func TestHTTPBasic(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
 	h.CloseAsync()
@@ -230,6 +221,9 @@ func getFreePort() (int, error) {
 }
 
 func TestHTTPServerLifecycle(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	freePort, err := getFreePort()
 	require.NoError(t, err)
 
@@ -261,11 +255,7 @@ func TestHTTPServerLifecycle(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-in.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(timeout):
-				return nil, errors.New("timed out 1")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(timeout):
 			return nil, errors.New("timed out 2")
 		}
@@ -313,6 +303,9 @@ func TestHTTPServerLifecycle(t *testing.T) {
 }
 
 func TestHTTPServerMetadata(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 	mgr, err := manager.NewV2(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -352,11 +345,7 @@ func TestHTTPServerMetadata(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-server.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(timeout):
-				return nil, errors.New("timed out 1")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(timeout):
 			return nil, errors.New("timed out 2")
 		}
@@ -376,6 +365,9 @@ func TestHTTPServerMetadata(t *testing.T) {
 }
 
 func TestHTTPtServerPathParameters(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 	mgr, err := manager.NewV2(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
@@ -417,11 +409,7 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-server.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				return nil, errors.New("timed out")
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -517,6 +505,9 @@ func TestHTTPTimeout(t *testing.T) {
 }
 
 func TestHTTPRateLimit(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
@@ -554,11 +545,7 @@ rate_limit_resources:
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}()
 
 	var res *http.Response
@@ -593,6 +580,9 @@ rate_limit_resources:
 }
 
 func TestHTTPServerWebsockets(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
@@ -644,11 +634,7 @@ func TestHTTPServerWebsockets(t *testing.T) {
 	if exp, act := `[hello world 1]`, fmt.Sprintf("%s", message.GetAllBytes(ts.Payload)); exp != act {
 		t.Errorf("Unexpected message: %v != %v", act, exp)
 	}
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for response")
-	}
+	require.NoError(t, ts.Ack(tCtx, nil))
 	wg.Wait()
 
 	wg.Add(1)
@@ -669,11 +655,7 @@ func TestHTTPServerWebsockets(t *testing.T) {
 	if exp, act := `[hello world 2]`, fmt.Sprintf("%s", message.GetAllBytes(ts.Payload)); exp != act {
 		t.Errorf("Unexpected message: %v != %v", act, exp)
 	}
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for response")
-	}
+	require.NoError(t, ts.Ack(tCtx, nil))
 	wg.Wait()
 
 	h.CloseAsync()
@@ -683,6 +665,9 @@ func TestHTTPServerWebsockets(t *testing.T) {
 }
 
 func TestHTTPServerWSRateLimit(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
@@ -733,11 +718,7 @@ rate_limit_resources:
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for response")
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}()
 
 	var msgBytes []byte
@@ -774,6 +755,9 @@ rate_limit_resources:
 }
 
 func TestHTTPSyncResponseHeaders(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
@@ -852,11 +836,7 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message")
 	}
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for response")
-	}
+	require.NoError(t, ts.Ack(tCtx, nil))
 
 	h.CloseAsync()
 	if err := h.WaitForClose(time.Second * 5); err != nil {
@@ -923,6 +903,9 @@ func readMultipart(res *http.Response) ([]string, error) {
 }
 
 func TestHTTPSyncResponseMultipart(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
@@ -982,11 +965,7 @@ func TestHTTPSyncResponseMultipart(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message")
 	}
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for response")
-	}
+	require.NoError(t, ts.Ack(tCtx, nil))
 
 	h.CloseAsync()
 	err = h.WaitForClose(time.Second * 5)
@@ -996,6 +975,9 @@ func TestHTTPSyncResponseMultipart(t *testing.T) {
 }
 
 func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
@@ -1085,11 +1067,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message")
 	}
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for response")
-	}
+	require.NoError(t, ts.Ack(tCtx, nil))
 
 	// Errored message
 	select {
@@ -1102,11 +1080,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message")
 	}
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for response")
-	}
+	require.NoError(t, ts.Ack(tCtx, nil))
 
 	h.CloseAsync()
 	if err := h.WaitForClose(time.Second * 5); err != nil {

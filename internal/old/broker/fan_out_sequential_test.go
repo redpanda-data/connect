@@ -46,6 +46,9 @@ func TestBasicFanOutSequential(t *testing.T) {
 		t.Error("Not connected")
 	}
 
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
@@ -54,7 +57,7 @@ func TestBasicFanOutSequential(t *testing.T) {
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
-		resChanSlice := []chan<- error{}
+		resFnSlice := []func(context.Context, error) error{}
 		for j := 0; j < nOutputs; j++ {
 			var ts message.Transaction
 			select {
@@ -62,17 +65,12 @@ func TestBasicFanOutSequential(t *testing.T) {
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
-				resChanSlice = append(resChanSlice, ts.ResponseChan)
+				resFnSlice = append(resFnSlice, ts.Ack)
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
-			select {
-			case resChanSlice[j] <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Timed out responding to broker")
-				return
-			}
+			require.NoError(t, resFnSlice[j](tCtx, nil))
 		}
 		select {
 		case res := <-resChan:

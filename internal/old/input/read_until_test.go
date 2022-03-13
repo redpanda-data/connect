@@ -1,12 +1,14 @@
 package input
 
 import (
+	"context"
 	"errors"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -57,6 +59,9 @@ baz`)
 }
 
 func testReadUntilBasic(inConf Config, t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	rConf := NewConfig()
 	rConf.Type = "read_until"
 	rConf.ReadUntil.Input = &inConf
@@ -94,12 +99,7 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 		} else if exp, act := "", tran.Payload.Get(0).MetaGet("benthos_read_until"); exp != act {
 			t.Errorf("Metadata final message metadata added to non-final message: %v", act)
 		}
-
-		select {
-		case tran.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Fatal("timed out")
-		}
+		require.NoError(t, tran.Ack(tCtx, nil))
 	}
 
 	// Should close automatically now
@@ -118,6 +118,9 @@ func testReadUntilBasic(inConf Config, t *testing.T) {
 }
 
 func testReadUntilRetry(inConf Config, t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	rConf := NewConfig()
 	rConf.Type = "read_until"
 	rConf.ReadUntil.Input = &inConf
@@ -136,7 +139,7 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 	var tran message.Transaction
 	var open bool
 
-	resChans := []chan<- error{}
+	resFns := []func(context.Context, error) error{}
 	i := 0
 	for len(expMsgs) > 0 && i < 10 {
 		// First try
@@ -156,7 +159,10 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 		} else {
 			delete(expMsgs, act)
 		}
-		resChans = append(resChans, tran.ResponseChan)
+		{
+			tmpTran := tran
+			resFns = append(resFns, tmpTran.Ack)
+		}
 	}
 
 	select {
@@ -166,12 +172,8 @@ func testReadUntilRetry(inConf Config, t *testing.T) {
 	case <-time.After(time.Millisecond * 500):
 	}
 
-	for _, rChan := range resChans {
-		select {
-		case rChan <- errors.New("failed"):
-		case <-time.After(time.Second):
-			t.Fatal("timed out")
-		}
+	for _, rFn := range resFns {
+		require.NoError(t, rFn(tCtx, errors.New("failed")))
 	}
 
 	expMsgs = map[string]struct{}{
@@ -198,12 +200,7 @@ remainingLoop:
 		} else {
 			delete(expMsgs, act)
 		}
-
-		select {
-		case tran.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Fatal("timed out")
-		}
+		require.NoError(t, tran.Ack(tCtx, nil))
 	}
 	if len(expMsgs) == 3 {
 		t.Error("Expected at least one extra message")

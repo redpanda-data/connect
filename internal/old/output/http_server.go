@@ -9,7 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -23,6 +23,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
@@ -93,8 +94,6 @@ func NewHTTPServerConfig() HTTPServerConfig {
 
 // HTTPServer is an output type that serves HTTPServer GET requests.
 type HTTPServer struct {
-	running int32
-
 	conf  Config
 	stats metrics.Type
 	log   log.Modular
@@ -104,9 +103,6 @@ type HTTPServer struct {
 	timeout time.Duration
 
 	transactions <-chan message.Transaction
-
-	closeChan  chan struct{}
-	closedChan chan struct{}
 
 	allowedVerbs map[string]struct{}
 
@@ -121,6 +117,9 @@ type HTTPServer struct {
 	mStreamSent      metrics.StatCounter
 	mStreamBatchSent metrics.StatCounter
 	mStreamError     metrics.StatCounter
+
+	closeServerOnce sync.Once
+	shutSig         *shutdown.Signaller
 }
 
 // NewHTTPServer creates a new HTTPServer output type.
@@ -151,14 +150,12 @@ func NewHTTPServer(conf Config, mgr interop.Manager, log log.Modular, stats metr
 	mError := stats.GetCounterVec("output_error", "endpoint")
 
 	h := HTTPServer{
-		running:    1,
-		conf:       conf,
-		stats:      stats,
-		log:        log,
-		mux:        mux,
-		server:     server,
-		closeChan:  make(chan struct{}),
-		closedChan: make(chan struct{}),
+		shutSig: shutdown.NewSignaller(),
+		conf:    conf,
+		stats:   stats,
+		log:     log,
+		mux:     mux,
+		server:  server,
 
 		allowedVerbs: verbs,
 
@@ -220,10 +217,13 @@ func NewHTTPServer(conf Config, mgr interop.Manager, log log.Modular, stats metr
 //------------------------------------------------------------------------------
 
 func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
-	if atomic.LoadInt32(&h.running) != 1 {
+	if h.shutSig.ShouldCloseAtLeisure() {
 		http.Error(w, "Server closed", http.StatusServiceUnavailable)
 		return
 	}
+
+	ctx, done := h.shutSig.CloseAtLeisureCtx(r.Context())
+	defer done()
 
 	if _, exists := h.allowedVerbs[r.Method]; !exists {
 		http.Error(w, "Incorrect method", http.StatusMethodNotAllowed)
@@ -272,11 +272,7 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	h.mGetBatchSent.Incr(1)
 	h.mGetSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 
-	select {
-	case ts.ResponseChan <- nil:
-	case <-h.closeChan:
-		return
-	}
+	_ = ts.Ack(ctx, nil)
 }
 
 func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
@@ -292,7 +288,10 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for atomic.LoadInt32(&h.running) == 1 {
+	ctx, done := h.shutSig.CloseAtLeisureCtx(r.Context())
+	defer done()
+
+	for !h.shutSig.ShouldCloseAtLeisure() {
 		var ts message.Transaction
 		var open bool
 
@@ -314,11 +313,7 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		_, err := w.Write(data)
-		select {
-		case ts.ResponseChan <- err:
-		case <-h.closeChan:
-			return
-		}
+		_ = ts.Ack(ctx, err)
 		if err != nil {
 			h.mStreamError.Incr(1)
 			return
@@ -349,7 +344,10 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
-	for atomic.LoadInt32(&h.running) == 1 {
+	ctx, done := h.shutSig.CloseAtLeisureCtx(r.Context())
+	defer done()
+
+	for !h.shutSig.ShouldCloseAtLeisure() {
 		var ts message.Transaction
 		var open bool
 
@@ -361,7 +359,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-r.Context().Done():
 			return
-		case <-h.closeChan:
+		case <-h.shutSig.CloseAtLeisureChan():
 			return
 		}
 
@@ -376,11 +374,7 @@ func (h *HTTPServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		if werr != nil {
 			h.mWSError.Incr(1)
 		}
-		select {
-		case ts.ResponseChan <- werr:
-		case <-h.closeChan:
-			return
-		}
+		_ = ts.Ack(ctx, werr)
 	}
 }
 
@@ -415,9 +409,8 @@ func (h *HTTPServer) Consume(ts <-chan message.Transaction) error {
 				}
 			}
 
-			atomic.StoreInt32(&h.running, 0)
-			close(h.closeChan)
-			close(h.closedChan)
+			h.shutSig.CloseAtLeisure()
+			h.shutSig.ShutdownComplete()
 		}()
 	}
 	return nil
@@ -432,19 +425,19 @@ func (h *HTTPServer) Connected() bool {
 
 // CloseAsync shuts down the HTTPServer output and stops processing requests.
 func (h *HTTPServer) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&h.running, 1, 0) {
+	h.shutSig.CloseAtLeisure()
+	h.closeServerOnce.Do(func() {
 		if h.server != nil {
 			h.server.Shutdown(context.Background())
-		} else {
-			close(h.closedChan)
 		}
-	}
+		h.shutSig.ShutdownComplete()
+	})
 }
 
 // WaitForClose blocks until the HTTPServer output has closed down.
 func (h *HTTPServer) WaitForClose(timeout time.Duration) error {
 	select {
-	case <-h.closedChan:
+	case <-h.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return component.ErrTimeout
 	}

@@ -1,6 +1,7 @@
 package input
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +26,9 @@ func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
 }
 
 func TestSequenceHappy(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -63,11 +67,7 @@ consumeLoop:
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
 			act = append(act, string(tran.Payload.Get(0).Get()))
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Minute):
-				t.Fatalf("failed to ack after: %v", act)
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
 		}
@@ -80,6 +80,9 @@ consumeLoop:
 }
 
 func TestSequenceJoins(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -132,11 +135,7 @@ consumeLoop:
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
 			act = append(act, string(tran.Payload.Get(0).Get()))
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Minute):
-				t.Fatalf("failed to ack after: %v", act)
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
 		}
@@ -151,6 +150,9 @@ consumeLoop:
 }
 
 func TestSequenceJoinsMergeStrategies(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
 	t.Parallel()
 
 	testCases := []struct {
@@ -255,11 +257,7 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 					}
 					assert.Equal(t, 1, tran.Payload.Len())
 					act = append(act, string(tran.Payload.Get(0).Get()))
-					select {
-					case tran.ResponseChan <- nil:
-					case <-time.After(time.Minute):
-						t.Fatalf("failed to ack after: %v", act)
-					}
+					require.NoError(t, tran.Ack(tCtx, nil))
 				case <-time.After(time.Minute):
 					t.Fatalf("Failed to consume message after: %v", act)
 				}
@@ -278,6 +276,9 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 func TestSequenceJoinsBig(t *testing.T) {
 	t.Skip()
 	t.Parallel()
+
+	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
 
 	tmpDir := t.TempDir()
 
@@ -341,11 +342,7 @@ consumeLoop:
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
 			act = append(act, string(tran.Payload.Get(0).Get()))
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Minute):
-				t.Fatalf("failed to ack after: %v", act)
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
 		}
@@ -360,6 +357,9 @@ consumeLoop:
 }
 
 func TestSequenceSad(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -396,11 +396,7 @@ func TestSequenceSad(t *testing.T) {
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
 			assert.Equal(t, str, string(tran.Payload.Get(0).Get()))
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Minute):
-				t.Fatalf("failed to ack after: %v", str)
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message %v", i)
 		}
@@ -426,11 +422,7 @@ func TestSequenceSad(t *testing.T) {
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
 			assert.Equal(t, str, string(tran.Payload.Get(0).Get()))
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Minute):
-				t.Fatalf("failed to ack after: %v", str)
-			}
+			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message %v", i)
 		}

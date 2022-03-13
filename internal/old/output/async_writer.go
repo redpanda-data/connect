@@ -190,6 +190,9 @@ func (w *AsyncWriter) loop() {
 	connBackoff.MaxInterval = time.Second
 	connBackoff.MaxElapsedTime = 0
 
+	closeLeisureCtx, done := w.shutSig.CloseAtLeisureCtx(context.Background())
+	defer done()
+
 	initConnection := func() bool {
 		initConnCtx, initConnDone := w.shutSig.CloseAtLeisureCtx(context.Background())
 		defer initConnDone()
@@ -306,11 +309,7 @@ func (w *AsyncWriter) loop() {
 				s.Finish()
 			}
 
-			select {
-			case ts.ResponseChan <- err:
-			case <-w.shutSig.CloseAtLeisureChan():
-				return
-			}
+			_ = ts.Ack(closeLeisureCtx, err)
 		}
 	}
 

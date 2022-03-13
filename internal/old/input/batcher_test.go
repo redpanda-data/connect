@@ -1,6 +1,7 @@
 package input
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -18,6 +19,9 @@ import (
 )
 
 func TestBatcherStandard(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	mockInput := &mockInput{
 		ts: make(chan message.Transaction),
 	}
@@ -53,7 +57,7 @@ func TestBatcherStandard(t *testing.T) {
 		close(doneReadsChan)
 	}()
 
-	resChans := []chan<- error{}
+	resFns := []func(context.Context, error) error{}
 
 	var tran message.Transaction
 	select {
@@ -61,7 +65,10 @@ func TestBatcherStandard(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
-	resChans = append(resChans, tran.ResponseChan)
+	{
+		tmpTran := tran
+		resFns = append(resFns, tmpTran.Ack)
+	}
 
 	if exp, act := 3, tran.Payload.Len(); exp != act {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
@@ -78,7 +85,10 @@ func TestBatcherStandard(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
-	resChans = append(resChans, tran.ResponseChan)
+	{
+		tmpTran := tran
+		resFns = append(resFns, tmpTran.Ack)
+	}
 
 	if exp, act := 3, tran.Payload.Len(); exp != act {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
@@ -108,7 +118,10 @@ func TestBatcherStandard(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
-	resChans = append(resChans, tran.ResponseChan)
+	{
+		tmpTran := tran
+		resFns = append(resFns, tmpTran.Ack)
+	}
 
 	if exp, act := 2, tran.Payload.Len(); exp != act {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
@@ -120,12 +133,8 @@ func TestBatcherStandard(t *testing.T) {
 		return nil
 	})
 
-	for i, rChan := range resChans {
-		select {
-		case rChan <- fmt.Errorf("testerr%v", i):
-		case <-time.After(time.Second):
-			t.Fatal("timed out")
-		}
+	for i, rFn := range resFns {
+		require.NoError(t, rFn(tCtx, fmt.Errorf("testerr%v", i)))
 	}
 
 	select {
@@ -153,6 +162,9 @@ func TestBatcherStandard(t *testing.T) {
 }
 
 func TestBatcherErrorTracking(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	mockInput := &mockInput{
 		ts: make(chan message.Transaction),
 	}
@@ -199,11 +211,7 @@ func TestBatcherErrorTracking(t *testing.T) {
 
 	batchErr := ibatch.NewError(tran.Payload, errors.New("ignore this"))
 	batchErr.Failed(1, errors.New("message specific error"))
-	select {
-	case tran.ResponseChan <- batchErr:
-	case <-time.After(time.Second * 5):
-		t.Fatal("timed out")
-	}
+	require.NoError(t, tran.Ack(tCtx, batchErr))
 
 	select {
 	case <-doneReadsChan:
@@ -221,6 +229,9 @@ func TestBatcherErrorTracking(t *testing.T) {
 }
 
 func TestBatcherTiming(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	mockInput := &mockInput{
 		ts: make(chan message.Transaction),
 	}
@@ -258,11 +269,7 @@ func TestBatcherTiming(t *testing.T) {
 	}
 
 	errSend := errors.New("this is a test error")
-	select {
-	case tran.ResponseChan <- errSend:
-	case <-time.After(time.Second):
-		t.Fatal("timed out")
-	}
+	require.NoError(t, tran.Ack(tCtx, errSend))
 	select {
 	case err := <-resChan:
 		if err != errSend {
@@ -293,11 +300,7 @@ func TestBatcherTiming(t *testing.T) {
 
 	batcher.CloseAsync()
 
-	select {
-	case tran.ResponseChan <- errSend:
-	case <-time.After(time.Second):
-		t.Fatal("timed out")
-	}
+	require.NoError(t, tran.Ack(tCtx, errSend))
 	select {
 	case err := <-resChan:
 		if err != errSend {
@@ -313,6 +316,9 @@ func TestBatcherTiming(t *testing.T) {
 }
 
 func TestBatcherFinalFlush(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	mockInput := &mockInput{
 		ts: make(chan message.Transaction),
 	}
@@ -349,12 +355,7 @@ func TestBatcherFinalFlush(t *testing.T) {
 	}
 
 	batcher.CloseAsync()
-
-	select {
-	case tran.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Fatal("timed out")
-	}
+	require.NoError(t, tran.Ack(tCtx, nil))
 
 	if err := batcher.WaitForClose(time.Second); err != nil {
 		t.Error(err)

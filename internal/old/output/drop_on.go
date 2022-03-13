@@ -274,9 +274,7 @@ func (d *dropOn) loop() {
 			res = nil
 		}
 
-		select {
-		case ts.ResponseChan <- res:
-		case <-d.ctx.Done():
+		if err := ts.Ack(d.ctx, res); err != nil && d.ctx.Err() != nil {
 			return
 		}
 	}

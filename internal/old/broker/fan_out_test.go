@@ -373,6 +373,9 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 //------------------------------------------------------------------------------
 
 func BenchmarkBasicFanOut(b *testing.B) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nOutputs, nMsgs := 3, b.N
 
 	outputs := []output.Streamed{}
@@ -399,7 +402,7 @@ func BenchmarkBasicFanOut(b *testing.B) {
 	}
 
 	content := [][]byte{[]byte("hello world")}
-	rChanSlice := make([]chan<- error, nOutputs)
+	rFnSlice := make([]func(context.Context, error) error, nOutputs)
 
 	b.ReportAllocs()
 	b.StartTimer()
@@ -408,10 +411,10 @@ func BenchmarkBasicFanOut(b *testing.B) {
 		readChan <- message.NewTransaction(message.QuickBatch(content), resChan)
 		for j := 0; j < nOutputs; j++ {
 			ts := <-mockOutputs[j].TChan
-			rChanSlice[j] = ts.ResponseChan
+			rFnSlice[j] = ts.Ack
 		}
 		for j := 0; j < nOutputs; j++ {
-			rChanSlice[j] <- nil
+			require.NoError(b, rFnSlice[j](tCtx, nil))
 		}
 		res := <-resChan
 		if res != nil {

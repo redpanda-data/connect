@@ -2,6 +2,7 @@ package input
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -23,6 +24,9 @@ import (
 )
 
 func TestHTTPClientGET(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	inputs := []string{
 		"foo1",
 		"foo2",
@@ -72,12 +76,7 @@ func TestHTTPClientGET(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
-
-		select {
-		case tr.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-		}
+		require.NoError(t, tr.Ack(tCtx, nil))
 	}
 
 	h.CloseAsync()
@@ -91,6 +90,9 @@ func TestHTTPClientGET(t *testing.T) {
 }
 
 func TestHTTPClientPagination(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	var paths []string
 	var pathsLock sync.Mutex
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -121,11 +123,7 @@ func TestHTTPClientPagination(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
-		select {
-		case tr.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Fatal("Action timed out")
-		}
+		require.NoError(t, tr.Ack(tCtx, nil))
 	}
 
 	h.CloseAsync()
@@ -259,6 +257,9 @@ func TestHTTPClientGETStreamError(t *testing.T) {
 }
 
 func TestHTTPClientPOST(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	var reqCount uint32
 	inputs := []string{
 		"foo1",
@@ -320,12 +321,7 @@ func TestHTTPClientPOST(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
-
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
 	h.CloseAsync()
@@ -339,6 +335,9 @@ func TestHTTPClientPOST(t *testing.T) {
 }
 
 func TestHTTPClientGETMultipart(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	var reqCount uint32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if exp, act := "GET", r.Method; exp != act {
@@ -404,12 +403,7 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 	}
-
-	select {
-	case tr.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Errorf("Action timed out")
-	}
+	require.NoError(t, tr.Ack(tCtx, nil))
 	h.CloseAsync()
 
 	if err := h.WaitForClose(time.Second); err != nil {
@@ -422,6 +416,9 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 }
 
 func TestHTTPClientGETMultipartLoop(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	tests := [][]string{
 		{
 			"Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
@@ -512,11 +509,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 		}
 
 		reqMut.Lock()
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
 	h.CloseAsync()
@@ -534,6 +527,9 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 }
 
 func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	tests := [][]string{
 		{
 			"Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
@@ -608,12 +604,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Errorf("Action timed out")
 		}
-
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Errorf("Action timed out")
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
 	h.CloseAsync()
@@ -623,6 +614,9 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 }
 
 func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	msgs := [][]string{
 		{"foo", "bar"},
 		{"foo", "baz"},
@@ -679,12 +673,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
-
-			select {
-			case ts.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Action timed out")
-			}
+			require.NoError(t, ts.Ack(tCtx, nil))
 		}
 	}
 
@@ -695,6 +684,9 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 }
 
 func TestHTTPClientStreamGETRecover(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	msgs := []string{"foo", "bar"}
 
 	tserve := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -742,12 +734,7 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
-
-			select {
-			case ts.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Action timed out")
-			}
+			require.NoError(t, ts.Ack(tCtx, nil))
 		}
 	}
 
@@ -758,6 +745,9 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 }
 
 func TestHTTPClientStreamGETTokenization(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	msgs := []string{`{"token":"foo"}`, `{"token":"bar"}`}
 
 	var tokensLock sync.Mutex
@@ -810,12 +800,7 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
-
-			select {
-			case ts.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Action timed out")
-			}
+			require.NoError(t, ts.Ack(tCtx, nil))
 		}
 	}
 
@@ -830,6 +815,9 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 }
 
 func BenchmarkHTTPClientGETMultipart(b *testing.B) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	parts := []string{
 		"Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
 		"Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.",
@@ -889,7 +877,7 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 				b.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		}
-		ts.ResponseChan <- nil
+		require.NoError(b, ts.Ack(tCtx, nil))
 	}
 
 	b.StopTimer()

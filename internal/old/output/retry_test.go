@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -44,9 +46,7 @@ func TestRetryBasic(t *testing.T) {
 		t.Fatal("Failed to cast")
 	}
 
-	mOut := &mockOutput{
-		ts: make(chan message.Transaction),
-	}
+	mOut := &mockOutput{}
 	ret.wrapped = mOut
 
 	tChan := make(chan message.Transaction)
@@ -92,9 +92,7 @@ func TestRetryBasic(t *testing.T) {
 	}
 
 	output.CloseAsync()
-	if err = output.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, output.WaitForClose(time.Second*30))
 }
 
 func TestRetrySadPath(t *testing.T) {
@@ -115,9 +113,7 @@ func TestRetrySadPath(t *testing.T) {
 		t.Fatal("Failed to cast")
 	}
 
-	mOut := &mockOutput{
-		ts: make(chan message.Transaction),
-	}
+	mOut := &mockOutput{}
 	ret.wrapped = mOut
 
 	tChan := make(chan message.Transaction)
@@ -186,9 +182,7 @@ func TestRetrySadPath(t *testing.T) {
 	}
 
 	output.CloseAsync()
-	if err = output.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, output.WaitForClose(time.Second*30))
 }
 
 func expectFromRetry(
@@ -281,9 +275,7 @@ func TestRetryParallel(t *testing.T) {
 		t.Fatal("Failed to cast")
 	}
 
-	mOut := &mockOutput{
-		ts: make(chan message.Transaction),
-	}
+	mOut := &mockOutput{}
 	ret.wrapped = mOut
 
 	tChan := make(chan message.Transaction)
@@ -318,7 +310,5 @@ func TestRetryParallel(t *testing.T) {
 	ackForRetry(nil, resChan2, t)
 
 	output.CloseAsync()
-	if err = output.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, output.WaitForClose(time.Second*30))
 }

@@ -1,6 +1,7 @@
 package output
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -133,57 +134,57 @@ func TestBatcherBasic(t *testing.T) {
 		}
 	}()
 
-	sendResponse := func(rChan chan<- error, err error) {
+	sendResponse := func(tran message.Transaction, err error) {
+		sCtx, done := context.WithTimeout(context.Background(), time.Second)
+		defer done()
 		defer wg.Done()
-		select {
-		case rChan <- err:
-		case <-time.After(time.Second):
-			t.Error("timed out")
-		}
+		require.NoError(t, tran.Ack(sCtx, err))
 	}
 
 	// Receive first batch on output
-	var outTr message.Transaction
 	select {
-	case outTr = <-tOutChan:
+	case outTr := <-tOutChan:
+		if exp, act := firstBatchExpected, message.GetAllBytes(outTr.Payload); !reflect.DeepEqual(exp, act) {
+			t.Errorf("Wrong result from batch: %s != %s", act, exp)
+		}
+		wg.Add(1)
+		go sendResponse(outTr, firstErr)
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message read")
 	}
-	if exp, act := firstBatchExpected, message.GetAllBytes(outTr.Payload); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong result from batch: %s != %s", act, exp)
-	}
-	wg.Add(1)
-	go sendResponse(outTr.ResponseChan, firstErr)
 
 	// Receive second batch on output
 	select {
-	case outTr = <-tOutChan:
+	case outTr := <-tOutChan:
+		if exp, act := secondBatchExpected, message.GetAllBytes(outTr.Payload); !reflect.DeepEqual(exp, act) {
+			t.Errorf("Wrong result from batch: %s != %s", act, exp)
+		}
+		wg.Add(1)
+		go sendResponse(outTr, secondErr)
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message read")
 	}
-	if exp, act := secondBatchExpected, message.GetAllBytes(outTr.Payload); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong result from batch: %s != %s", act, exp)
-	}
-	wg.Add(1)
-	go sendResponse(outTr.ResponseChan, secondErr)
 
 	// Receive final batch on output
 	select {
-	case outTr = <-tOutChan:
+	case outTr := <-tOutChan:
+		if exp, act := finalBatchExpected, message.GetAllBytes(outTr.Payload); !reflect.DeepEqual(exp, act) {
+			t.Errorf("Wrong result from batch: %s != %s", act, exp)
+		}
+		wg.Add(1)
+		go sendResponse(outTr, finalErr)
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message read")
 	}
-	if exp, act := finalBatchExpected, message.GetAllBytes(outTr.Payload); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong result from batch: %s != %s", act, exp)
-	}
-	wg.Add(1)
-	go sendResponse(outTr.ResponseChan, finalErr)
 
 	require.NoError(t, b.WaitForClose(time.Second*10))
 	wg.Wait()
 }
 
 func TestBatcherBatchError(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	tInChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
@@ -224,11 +225,7 @@ func TestBatcherBatchError(t *testing.T) {
 		batchErr := batchInternal.NewError(outTr.Payload, errors.New("foo")).
 			Failed(0, firstErr).Failed(2, thirdErr)
 
-		select {
-		case outTr.ResponseChan <- batchErr:
-		case <-time.After(time.Second):
-			t.Error("timed out")
-		}
+		require.NoError(t, outTr.Ack(tCtx, batchErr))
 	}()
 
 	for i := 0; i < 4; i++ {

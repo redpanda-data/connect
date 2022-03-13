@@ -268,6 +268,9 @@ func TestAsyncReaderTypeClosedOnReread(t *testing.T) {
 //------------------------------------------------------------------------------
 
 func TestAsyncReaderCanReconnect(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	readerImpl := newMockAsyncReader()
 
 	r, err := NewAsyncReader(
@@ -312,12 +315,7 @@ func TestAsyncReaderCanReconnect(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
-
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out")
-	}
+	require.NoError(t, ts.Ack(tCtx, nil))
 
 	// We will be failing to send but should still exit immediately.
 	r.CloseAsync()
@@ -336,6 +334,9 @@ func TestAsyncReaderCanReconnect(t *testing.T) {
 }
 
 func TestAsyncReaderFailsReconnect(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	readerImpl := newMockAsyncReader()
 
 	r, err := NewAsyncReader(
@@ -384,12 +385,7 @@ func TestAsyncReaderFailsReconnect(t *testing.T) {
 	case <-time.After(time.Second * 2):
 		t.Error("Timed out")
 	}
-
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out")
-	}
+	require.NoError(t, ts.Ack(tCtx, nil))
 
 	// We will be failing to send but should still exit immediately.
 	r.CloseAsync()
@@ -447,6 +443,9 @@ func TestAsyncReaderCloseDuringReconnect(t *testing.T) {
 }
 
 func TestAsyncReaderHappyPath(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 
 	readerImpl := newMockAsyncReader()
@@ -491,12 +490,7 @@ func TestAsyncReaderHappyPath(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
-
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Fatal("Timed out")
-	}
+	require.NoError(t, ts.Ack(tCtx, nil))
 
 	// We will be failing to send but should still exit immediately.
 	r.CloseAsync()
@@ -514,6 +508,9 @@ func TestAsyncReaderHappyPath(t *testing.T) {
 }
 
 func TestAsyncReaderCloseWithPendingAcks(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	exp := [][]byte{[]byte("hello world")}
 
 	readerImpl := newMockAsyncReader()
@@ -545,12 +542,7 @@ func TestAsyncReaderCloseWithPendingAcks(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
-
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Fatal("Timed out")
-	}
+	require.NoError(t, ts.Ack(tCtx, nil))
 
 	// Blocking the reader ack for now
 	r.CloseAsync()
@@ -580,6 +572,9 @@ func TestAsyncReaderCloseWithPendingAcks(t *testing.T) {
 }
 
 func TestAsyncReaderSadPath(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	exp := [][]byte{[]byte("foo"), []byte("bar")}
 	expErr := errors.New("test error")
 
@@ -629,12 +624,7 @@ func TestAsyncReaderSadPath(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Timed out")
 	}
-
-	select {
-	case ts.ResponseChan <- expErr:
-	case <-time.After(time.Second):
-		t.Fatal("Timed out")
-	}
+	require.NoError(t, ts.Ack(tCtx, expErr))
 
 	// We will be failing to send but should still exit immediately.
 	r.CloseAsync()
@@ -652,6 +642,9 @@ func TestAsyncReaderSadPath(t *testing.T) {
 }
 
 func TestAsyncReaderParallel(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	expMsgs := []string{}
 	for i := 0; i < 10; i++ {
 		expMsgs = append(expMsgs, fmt.Sprintf("message: %v", i))
@@ -689,7 +682,7 @@ func TestAsyncReaderParallel(t *testing.T) {
 		expErrs = append(expErrs, fmt.Errorf("err %v", i))
 	}
 
-	resChans := make([]chan<- error, len(expMsgs))
+	resFns := make([]func(context.Context, error) error, len(expMsgs))
 	for i, mStr := range expMsgs {
 		var ts message.Transaction
 		var open bool
@@ -701,7 +694,7 @@ func TestAsyncReaderParallel(t *testing.T) {
 			if act, exp := string(ts.Payload.Get(0).Get()), mStr; exp != act {
 				t.Errorf("Wrong message returned: %v != %v", act, exp)
 			}
-			resChans[i] = ts.ResponseChan
+			resFns[i] = ts.Ack
 		case <-time.After(time.Second):
 			t.Fatal("Timed out")
 		}
@@ -717,11 +710,7 @@ func TestAsyncReaderParallel(t *testing.T) {
 	}()
 
 	for i, e := range expErrs {
-		select {
-		case resChans[i] <- e:
-		case <-time.After(time.Second):
-			t.Fatal("Timed out")
-		}
+		require.NoError(t, resFns[i](tCtx, e))
 	}
 
 	// We will be failing to send but should still exit immediately.
@@ -758,6 +747,9 @@ func BenchmarkAsyncReaderGenerateN1000(b *testing.B) {
 }
 
 func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	bloblConf := NewBloblangConfig()
 	bloblConf.Count = 0
 	bloblConf.Interval = ""
@@ -777,7 +769,7 @@ func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
 		}
 	})
 
-	resChans := make([]chan<- error, capacity)
+	resFns := make([]func(context.Context, error) error, capacity)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -787,18 +779,14 @@ func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
 			select {
 			case ts, open := <-r.TransactionChan():
 				require.True(b, open)
-				resChans[j] = ts.ResponseChan
+				resFns[j] = ts.Ack
 			case <-time.After(time.Second):
 				b.Fatal("Timed out")
 			}
 		}
 
 		for j := 0; j < capacity; j++ {
-			select {
-			case resChans[j] <- nil:
-			case <-time.After(time.Second):
-				b.Fatal("Timed out")
-			}
+			require.NoError(b, resFns[j](tCtx, nil))
 		}
 	}
 }

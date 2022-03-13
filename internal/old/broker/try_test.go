@@ -2,12 +2,15 @@ package broker
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -30,6 +33,9 @@ func TestTryDoubleClose(t *testing.T) {
 //------------------------------------------------------------------------------
 
 func TestTryHappyPath(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{
 		{},
@@ -80,13 +86,7 @@ func TestTryHappyPath(t *testing.T) {
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
-
-			select {
-			case ts.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Timed out responding to broker")
-				return
-			}
+			require.NoError(t, ts.Ack(tCtx, nil))
 		}()
 
 		select {
@@ -107,6 +107,9 @@ func TestTryHappyPath(t *testing.T) {
 }
 
 func TestTryHappyishPath(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{
 		{},
@@ -157,13 +160,7 @@ func TestTryHappyishPath(t *testing.T) {
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
-
-			select {
-			case ts.ResponseChan <- errors.New("test err"):
-			case <-time.After(time.Second):
-				t.Errorf("Timed out responding to broker")
-				return
-			}
+			require.NoError(t, ts.Ack(tCtx, errors.New("test err")))
 
 			select {
 			case ts = <-mockOutputs[1].TChan:
@@ -180,13 +177,7 @@ func TestTryHappyishPath(t *testing.T) {
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
-
-			select {
-			case ts.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Timed out responding to broker")
-				return
-			}
+			require.NoError(t, ts.Ack(tCtx, nil))
 		}()
 
 		select {
@@ -207,6 +198,9 @@ func TestTryHappyishPath(t *testing.T) {
 }
 
 func TestTryAllFail(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{
 		{},
@@ -256,12 +250,7 @@ func TestTryAllFail(t *testing.T) {
 					t.Errorf("Timed out waiting for broker propagate")
 					return
 				}
-
-				select {
-				case ts.ResponseChan <- testErr:
-				case <-time.After(time.Second):
-					t.Errorf("Timed out responding to broker")
-				}
+				require.NoError(t, ts.Ack(tCtx, testErr))
 			}
 		}()
 
@@ -282,6 +271,9 @@ func TestTryAllFail(t *testing.T) {
 }
 
 func TestTryAllFailParallel(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	outputs := []output.Streamed{}
 	mockOutputs := []*MockOutputType{
 		{},
@@ -342,12 +334,7 @@ func TestTryAllFailParallel(t *testing.T) {
 				}
 
 				<-startChan
-
-				select {
-				case ts.ResponseChan <- testErr:
-				case <-time.After(time.Second):
-					t.Errorf("Timed out responding to broker")
-				}
+				require.NoError(t, ts.Ack(tCtx, testErr))
 			}
 		}()
 		select {

@@ -1,10 +1,10 @@
 package input
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -17,9 +17,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
-
-//------------------------------------------------------------------------------
 
 func init() {
 	Constructors[TypeReadUntil] = TypeSpec{
@@ -124,8 +123,7 @@ func (r ReadUntilConfig) MarshalYAML() (interface{}, error) {
 // ReadUntil is an input type that continuously reads another input type until a
 // condition returns true on a message consumed.
 type ReadUntil struct {
-	running int32
-	conf    ReadUntilConfig
+	conf ReadUntilConfig
 
 	wrapped input.Streamed
 	check   *mapping.Executor
@@ -139,8 +137,7 @@ type ReadUntil struct {
 
 	transactions chan message.Transaction
 
-	closeChan  chan struct{}
-	closedChan chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 // NewReadUntil creates a new ReadUntil input type.
@@ -173,8 +170,7 @@ func NewReadUntil(
 	}
 
 	rdr := &ReadUntil{
-		running: 1,
-		conf:    conf.ReadUntil,
+		conf: conf.ReadUntil,
 
 		wrapperLog:   wLog,
 		wrapperStats: wStats,
@@ -185,8 +181,8 @@ func NewReadUntil(
 		wrapped:      wrapped,
 		check:        check,
 		transactions: make(chan message.Transaction),
-		closeChan:    make(chan struct{}),
-		closedChan:   make(chan struct{}),
+
+		shutSig: shutdown.NewSignaller(),
 	}
 
 	go rdr.loop()
@@ -207,7 +203,7 @@ func (r *ReadUntil) loop() {
 		}
 
 		close(r.transactions)
-		close(r.closedChan)
+		r.shutSig.ShutdownComplete()
 	}()
 
 	// Prevents busy loop when an input never yields messages.
@@ -218,13 +214,16 @@ func (r *ReadUntil) loop() {
 
 	var open bool
 
+	closeCtx, done := r.shutSig.CloseAtLeisureCtx(context.Background())
+	defer done()
+
 runLoop:
-	for atomic.LoadInt32(&r.running) == 1 {
+	for !r.shutSig.ShouldCloseAtLeisure() {
 		if r.wrapped == nil {
 			if r.conf.Restart {
 				select {
 				case <-time.After(restartBackoff.NextBackOff()):
-				case <-r.closeChan:
+				case <-r.shutSig.CloseAtLeisureChan():
 					return
 				}
 				var err error
@@ -245,7 +244,7 @@ runLoop:
 				continue runLoop
 			}
 			restartBackoff.Reset()
-		case <-r.closeChan:
+		case <-r.shutSig.CloseAtLeisureChan():
 			return
 		}
 
@@ -257,7 +256,7 @@ runLoop:
 		if !check {
 			select {
 			case r.transactions <- tran:
-			case <-r.closeChan:
+			case <-r.shutSig.CloseAtLeisureChan():
 				return
 			}
 			continue
@@ -269,7 +268,7 @@ runLoop:
 		tmpRes := make(chan error)
 		select {
 		case r.transactions <- message.NewTransaction(tran.Payload, tmpRes):
-		case <-r.closeChan:
+		case <-r.shutSig.CloseAtLeisureChan():
 			return
 		}
 
@@ -280,15 +279,13 @@ runLoop:
 				return
 			}
 			streamEnds := res == nil
-			select {
-			case tran.ResponseChan <- res:
-			case <-r.closeChan:
+			if err := tran.Ack(closeCtx, res); err != nil && r.shutSig.ShouldCloseAtLeisure() {
 				return
 			}
 			if streamEnds {
 				return
 			}
-		case <-r.closeChan:
+		case <-r.shutSig.CloseAtLeisureChan():
 			return
 		}
 	}
@@ -308,19 +305,15 @@ func (r *ReadUntil) Connected() bool {
 
 // CloseAsync shuts down the ReadUntil input and stops processing requests.
 func (r *ReadUntil) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&r.running, 1, 0) {
-		close(r.closeChan)
-	}
+	r.shutSig.CloseAtLeisure()
 }
 
 // WaitForClose blocks until the ReadUntil input has closed down.
 func (r *ReadUntil) WaitForClose(timeout time.Duration) error {
 	select {
-	case <-r.closedChan:
+	case <-r.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return component.ErrTimeout
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------
