@@ -357,11 +357,7 @@ func StreamTestReceiveBatchCount(n int) StreamTestDefinition {
 				return nil
 			})
 
-			select {
-			case tran.ResponseChan <- nil:
-			case <-env.ctx.Done():
-				t.Fatal("timed out on response")
-			}
+			require.NoError(t, tran.Ack(env.ctx, nil))
 		},
 	)
 }
@@ -452,28 +448,28 @@ func StreamTestCheckpointCapture() StreamTestDefinition {
 			}()
 
 			var msg *message.Part
-			responseChans := make([]chan<- error, 5)
+			responseFns := make([]func(context.Context, error) error, 5)
 
-			msg, responseChans[0] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+			msg, responseFns[0] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
 			assert.Equal(t, "A", string(msg.Get()))
-			sendResponse(env.ctx, t, responseChans[0], nil)
+			require.NoError(t, responseFns[0](env.ctx, nil))
 
-			msg, responseChans[1] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+			msg, responseFns[1] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
 			assert.Equal(t, "B", string(msg.Get()))
-			sendResponse(env.ctx, t, responseChans[1], nil)
+			require.NoError(t, responseFns[1](env.ctx, nil))
 
-			msg, responseChans[2] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+			msg, responseFns[2] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
 			assert.Equal(t, "C", string(msg.Get()))
 
-			msg, responseChans[3] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+			msg, responseFns[3] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
 			assert.Equal(t, "D", string(msg.Get()))
-			sendResponse(env.ctx, t, responseChans[3], nil)
+			require.NoError(t, responseFns[3](env.ctx, nil))
 
-			msg, responseChans[4] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+			msg, responseFns[4] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
 			assert.Equal(t, "E", string(msg.Get()))
 
-			sendResponse(env.ctx, t, responseChans[2], errors.New("rejecting just cus"))
-			sendResponse(env.ctx, t, responseChans[4], errors.New("rejecting just cus"))
+			require.NoError(t, responseFns[2](env.ctx, errors.New("rejecting just cus")))
+			require.NoError(t, responseFns[4](env.ctx, errors.New("rejecting just cus")))
 
 			closeConnectors(t, input, nil)
 
@@ -567,16 +563,16 @@ func StreamTestStreamSaturatedUnacked(n int) StreamTestDefinition {
 				require.NoError(t, sendMessage(env.ctx, t, tranChan, payload))
 			}
 
-			resChans := make([]chan<- error, n/2)
-			for i := range resChans {
+			resFns := make([]func(context.Context, error) error, n/2)
+			for i := range resFns {
 				var b *message.Part
-				b, resChans[i] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+				b, resFns[i] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
 				messageInSet(t, true, env.allowDuplicateMessages, b, set)
 			}
 
 			<-time.After(time.Second * 5)
-			for _, rChan := range resChans {
-				sendResponse(env.ctx, t, rChan, nil)
+			for _, rFn := range resFns {
+				require.NoError(t, rFn(env.ctx, nil))
 			}
 
 			// Consume all remaining messages
@@ -611,22 +607,22 @@ func StreamTestAtLeastOnceDelivery() StreamTestDefinition {
 			}()
 
 			var msg *message.Part
-			badResponseChans := []chan<- error{}
+			badResponseFns := []func(context.Context, error) error{}
 
 			for i := 0; i < len(expectedMessages); i++ {
-				msg, responseChan := receiveMessageNoRes(env.ctx, t, input.TransactionChan())
+				msg, responseFn := receiveMessageNoRes(env.ctx, t, input.TransactionChan())
 				key := string(msg.Get())
 				assert.Contains(t, expectedMessages, key)
 				delete(expectedMessages, key)
 				if key != "C" && key != "E" {
-					sendResponse(env.ctx, t, responseChan, nil)
+					require.NoError(t, responseFn(env.ctx, nil))
 				} else {
-					badResponseChans = append(badResponseChans, responseChan)
+					badResponseFns = append(badResponseFns, responseFn)
 				}
 			}
 
-			for _, rChan := range badResponseChans {
-				sendResponse(env.ctx, t, rChan, errors.New("rejecting just cus"))
+			for _, rFn := range badResponseFns {
+				require.NoError(t, rFn(env.ctx, errors.New("rejecting just cus")))
 			}
 
 			select {

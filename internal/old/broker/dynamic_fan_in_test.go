@@ -2,6 +2,7 @@ package broker
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -9,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -19,6 +22,9 @@ import (
 var _ input.Streamed = &DynamicFanIn{}
 
 func TestStaticBasicDynamicFanIn(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nInputs, nMsgs := 10, 1000
 
 	Inputs := map[string]DynamicInput{}
@@ -58,12 +64,7 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 					t.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
 					return
 				}
-				select {
-				case ts.ResponseChan <- nil:
-				case <-time.After(time.Second):
-					t.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
-					return
-				}
+				require.NoError(t, ts.Ack(tCtx, nil))
 			}()
 			select {
 			case <-resChan:
@@ -82,6 +83,9 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 }
 
 func TestBasicDynamicFanIn(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nMsgs := 1000
 
 	inputOne := &MockInputType{
@@ -133,12 +137,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
 			return
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for response to broker: %v", i)
-			return
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
 	if err = fanIn.SetInput("foo", inputTwo, time.Second); err != nil {
@@ -157,12 +156,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
 			return
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for response to broker: %v", i)
-			return
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
 	wg.Wait()
@@ -261,6 +255,9 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 }
 
 func TestStaticDynamicFanInAsync(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nInputs, nMsgs := 10, 1000
 
 	Inputs := map[string]DynamicInput{}
@@ -316,12 +313,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
 			return
 		}
-		select {
-		case ts.ResponseChan <- errors.New(string(ts.Payload.Get(0).Get())):
-		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for response to broker: %v", i)
-			return
-		}
+		require.NoError(t, ts.Ack(tCtx, errors.New(string(ts.Payload.Get(0).Get()))))
 	}
 
 	wg.Wait()

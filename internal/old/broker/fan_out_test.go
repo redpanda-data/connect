@@ -2,11 +2,14 @@ package broker
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -48,6 +51,9 @@ func TestBasicFanOut(t *testing.T) {
 		t.Error("Not connected")
 	}
 
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	defer done()
+
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 		select {
@@ -56,7 +62,7 @@ func TestBasicFanOut(t *testing.T) {
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
-		resChanSlice := []chan<- error{}
+		resFnSlice := []func(context.Context, error) error{}
 		for j := 0; j < nOutputs; j++ {
 			var ts message.Transaction
 			select {
@@ -64,19 +70,14 @@ func TestBasicFanOut(t *testing.T) {
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
-				resChanSlice = append(resChanSlice, ts.ResponseChan)
+				resFnSlice = append(resFnSlice, ts.Ack)
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
 		}
 		for j := 0; j < nOutputs; j++ {
-			select {
-			case resChanSlice[j] <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Timed out responding to broker")
-				return
-			}
+			require.NoError(t, resFnSlice[j](tCtx, err))
 		}
 		select {
 		case res := <-resChan:
@@ -112,6 +113,9 @@ func TestFanOutBackPressure(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+	defer done()
+
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	doneChan := make(chan struct{})
@@ -121,11 +125,7 @@ func TestFanOutBackPressure(t *testing.T) {
 		for {
 			select {
 			case ts := <-mockOne.TChan:
-				select {
-				case ts.ResponseChan <- nil:
-				case <-doneChan:
-					return
-				}
+				require.NoError(t, ts.Ack(ctx, nil))
 			case <-doneChan:
 				return
 			}
@@ -146,11 +146,15 @@ bpLoop:
 	}
 
 	close(readChan)
+	done()
 	close(doneChan)
 	wg.Wait()
 }
 
 func TestFanOutAtLeastOnce(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
@@ -192,18 +196,8 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 		t.Error("Timed out waiting for mockOne")
 		return
 	}
-	select {
-	case ts1.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to broker")
-		return
-	}
-	select {
-	case ts2.ResponseChan <- errors.New("this is a test"):
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to broker")
-		return
-	}
+	require.NoError(t, ts1.Ack(tCtx, nil))
+	require.NoError(t, ts2.Ack(tCtx, errors.New("this is a test")))
 	select {
 	case <-mockOne.TChan:
 		t.Error("Received duplicate message to mockOne")
@@ -214,12 +208,7 @@ func TestFanOutAtLeastOnce(t *testing.T) {
 		t.Error("Timed out waiting for mockTwo")
 		return
 	}
-	select {
-	case ts2.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to broker")
-		return
-	}
+	require.NoError(t, ts2.Ack(tCtx, nil))
 	select {
 	case res := <-resChan:
 		if res != nil {
@@ -273,11 +262,9 @@ func TestFanOutShutDownFromErrorResponse(t *testing.T) {
 		t.Error("Timed out waiting for msg rcv")
 	}
 
-	select {
-	case ts.ResponseChan <- errors.New("test"):
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for res send")
-	}
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+	require.NoError(t, ts.Ack(tCtx, errors.New("test")))
 
 	oTM.CloseAsync()
 	if err := oTM.WaitForClose(time.Second); err != nil {

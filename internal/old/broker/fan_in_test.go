@@ -2,11 +2,14 @@ package broker
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -18,6 +21,9 @@ var _ input.Streamed = &FanIn{}
 //------------------------------------------------------------------------------
 
 func TestBasicFanIn(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nInputs, nMsgs := 10, 1000
 
 	Inputs := []input.Streamed{}
@@ -57,11 +63,7 @@ func TestBasicFanIn(t *testing.T) {
 				case <-time.After(time.Second * 5):
 					t.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
 				}
-				select {
-				case ts.ResponseChan <- nil:
-				case <-time.After(time.Second * 5):
-					t.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
-				}
+				require.NoError(t, ts.Ack(tCtx, nil))
 			}()
 			select {
 			case <-resChan:
@@ -119,6 +121,9 @@ func TestFanInShutdown(t *testing.T) {
 }
 
 func TestFanInAsync(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nInputs, nMsgs := 10, 1000
 
 	Inputs := []input.Streamed{}
@@ -173,18 +178,16 @@ func TestFanInAsync(t *testing.T) {
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
 			return
 		}
-		select {
-		case ts.ResponseChan <- errors.New(string(ts.Payload.Get(0).Get())):
-		case <-time.After(time.Second * 5):
-			t.Errorf("Timed out waiting for response to broker: %v", i)
-			return
-		}
+		require.NoError(t, ts.Ack(tCtx, errors.New(string(ts.Payload.Get(0).Get()))))
 	}
 
 	wg.Wait()
 }
 
 func BenchmarkBasicFanIn(b *testing.B) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nInputs := 10
 
 	Inputs := []input.Streamed{}
@@ -230,12 +233,7 @@ func BenchmarkBasicFanIn(b *testing.B) {
 				b.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
 				return
 			}
-			select {
-			case ts.ResponseChan <- nil:
-			case <-time.After(time.Second * 5):
-				b.Errorf("Timed out waiting for response to broker: %v, %v", i, j)
-				return
-			}
+			require.NoError(b, ts.Ack(tCtx, nil))
 			select {
 			case <-resChan:
 			case <-time.After(time.Second * 5):

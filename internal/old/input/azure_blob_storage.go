@@ -17,11 +17,88 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
+
+func init() {
+	Constructors[TypeAzureBlobStorage] = TypeSpec{
+		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+			r, err := newAzureBlobStorage(conf.AzureBlobStorage, log, stats)
+			if err != nil {
+				return nil, err
+			}
+			return NewAsyncReader(
+				TypeAzureBlobStorage,
+				true,
+				reader.NewAsyncPreserver(r),
+				log, stats,
+			)
+		}),
+		Status:  docs.StatusBeta,
+		Version: "3.36.0",
+		Summary: `
+Downloads objects within an Azure Blob Storage container, optionally filtered by
+a prefix.`,
+		Description: `
+Downloads objects within an Azure Blob Storage container, optionally filtered by a prefix.
+
+## Downloading Large Files
+
+When downloading large files it's often necessary to process it in streamed parts in order to avoid loading the entire file in memory at a given time. In order to do this a ` + "[`codec`](#codec)" + ` can be specified that determines how to break the input into smaller individual messages.
+
+## Metadata
+
+This input adds the following metadata fields to each message:
+
+` + "```" + `
+- blob_storage_key
+- blob_storage_container
+- blob_storage_last_modified
+- blob_storage_last_modified_unix
+- blob_storage_content_type
+- blob_storage_content_encoding
+- All user defined metadata
+` + "```" + `
+
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
+		FieldSpecs: docs.FieldSpecs{
+			docs.FieldCommon(
+				"storage_account",
+				"The storage account to download blobs from. This field is ignored if `storage_connection_string` is set.",
+			),
+			docs.FieldCommon(
+				"storage_access_key",
+				"The storage account access key. This field is ignored if `storage_connection_string` is set.",
+			),
+			docs.FieldCommon(
+				"storage_sas_token",
+				"The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.",
+			).AtVersion("3.38.0"),
+			docs.FieldCommon(
+				"storage_connection_string",
+				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.",
+			),
+			docs.FieldCommon(
+				"container", "The name of the container from which to download blobs.",
+			),
+			docs.FieldCommon("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
+			codec.ReaderDocs,
+			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the blob once they are processed."),
+		},
+		Categories: []Category{
+			CategoryServices,
+			CategoryAzure,
+		},
+	}
+}
+
+//------------------------------------------------------------------------------
 
 type azureObjectTarget struct {
 	key   string

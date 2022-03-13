@@ -179,11 +179,7 @@ func (o *FanOut) loop() {
 			}
 
 			if owg.Wait() == nil {
-				select {
-				case ts.ResponseChan <- nil:
-				case <-o.ctx.Done():
-					return
-				}
+				_ = ts.Ack(o.ctx, nil)
 			}
 		}
 	}

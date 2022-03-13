@@ -2,10 +2,13 @@ package broker
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -90,6 +93,9 @@ func TestBasicFanOutSequential(t *testing.T) {
 }
 
 func TestFanOutSequentialAtLeastOnce(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	defer done()
+
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
@@ -120,24 +126,14 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 		t.Error("Timed out waiting for mockOne")
 		return
 	}
-	select {
-	case ts1.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to broker")
-		return
-	}
+	require.NoError(t, ts1.Ack(tCtx, nil))
 	select {
 	case ts2 = <-mockTwo.TChan:
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for mockOne")
 		return
 	}
-	select {
-	case ts2.ResponseChan <- errors.New("this is a test"):
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to broker")
-		return
-	}
+	require.NoError(t, ts2.Ack(tCtx, errors.New("this is a test")))
 	select {
 	case <-mockOne.TChan:
 		t.Error("Received duplicate message to mockOne")
@@ -148,12 +144,7 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 		t.Error("Timed out waiting for mockTwo")
 		return
 	}
-	select {
-	case ts2.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to broker")
-		return
-	}
+	require.NoError(t, ts2.Ack(tCtx, nil))
 	select {
 	case res := <-resChan:
 		if res != nil {
@@ -172,6 +163,9 @@ func TestFanOutSequentialAtLeastOnce(t *testing.T) {
 }
 
 func TestFanOutSequentialBlock(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	defer done()
+
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
@@ -202,12 +196,7 @@ func TestFanOutSequentialBlock(t *testing.T) {
 		t.Error("Timed out waiting for mockOne")
 		return
 	}
-	select {
-	case ts1.ResponseChan <- errors.New("this is a test"):
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to broker")
-		return
-	}
+	require.NoError(t, ts1.Ack(tCtx, errors.New("this is a test")))
 	select {
 	case ts1 = <-mockOne.TChan:
 	case <-mockTwo.TChan:
@@ -218,12 +207,7 @@ func TestFanOutSequentialBlock(t *testing.T) {
 		t.Error("Timed out waiting for mockOne")
 		return
 	}
-	select {
-	case ts1.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to broker")
-		return
-	}
+	require.NoError(t, ts1.Ack(tCtx, nil))
 
 	select {
 	case ts2 = <-mockTwo.TChan:
@@ -231,12 +215,8 @@ func TestFanOutSequentialBlock(t *testing.T) {
 		t.Error("Timed out waiting for mockOne")
 		return
 	}
-	select {
-	case ts2.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to broker")
-		return
-	}
+
+	require.NoError(t, ts2.Ack(tCtx, nil))
 	select {
 	case res := <-resChan:
 		if res != nil {

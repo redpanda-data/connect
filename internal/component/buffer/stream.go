@@ -117,13 +117,7 @@ func (m *Stream) inputLoop() {
 		var ackOnce sync.Once
 		ackFunc := func(ctx context.Context, ackErr error) (err error) {
 			ackOnce.Do(func() {
-				select {
-				case tr.ResponseChan <- ackErr:
-				case <-ctx.Done():
-					err = ctx.Err()
-				case <-m.shutSig.CloseNowChan():
-					err = component.ErrTypeClosed
-				}
+				err = tr.Ack(ctx, ackErr)
 				ackGroup.Done()
 			})
 			return

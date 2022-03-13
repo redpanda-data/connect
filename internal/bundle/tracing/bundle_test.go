@@ -1,6 +1,7 @@
 package tracing_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -45,14 +46,12 @@ func TestBundleInputTracing(t *testing.T) {
 	in, err := mgr.NewInput(inConfig)
 	require.NoError(t, err)
 
+	ctx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
 	for i := 0; i < 10; i++ {
 		select {
 		case tran := <-in.TransactionChan():
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				t.Fatal("timed out")
-			}
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}

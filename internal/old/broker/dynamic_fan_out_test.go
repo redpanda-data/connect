@@ -2,6 +2,7 @@ package broker
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -21,6 +22,9 @@ import (
 var _ output.Streamed = &DynamicFanOut{}
 
 func TestBasicDynamicFanOut(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nOutputs, nMsgs := 10, 1000
 
 	outputs := map[string]DynamicOutput{}
@@ -63,12 +67,7 @@ func TestBasicDynamicFanOut(t *testing.T) {
 					t.Errorf("Timed out waiting for broker propagate")
 					return
 				}
-				select {
-				case ts.ResponseChan <- nil:
-				case <-time.After(time.Second):
-					t.Errorf("Timed out responding to broker")
-					return
-				}
+				require.NoError(t, ts.Ack(tCtx, nil))
 			}(j)
 		}
 		select {
@@ -97,6 +96,9 @@ func TestBasicDynamicFanOut(t *testing.T) {
 }
 
 func TestDynamicFanOutChangeOutputs(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	nOutputs := 10
 
 	outputs := map[string]*MockOutputType{}
@@ -141,12 +143,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 					t.Errorf("Timed out waiting for broker propagate")
 					return
 				}
-				select {
-				case ts.ResponseChan <- nil:
-				case <-time.After(time.Second):
-					t.Errorf("Timed out responding to broker")
-					return
-				}
+				require.NoError(t, ts.Ack(tCtx, nil))
 			}(k, v)
 		}
 
@@ -188,12 +185,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 					t.Errorf("Timed out waiting for broker propagate")
 					return
 				}
-				select {
-				case ts.ResponseChan <- nil:
-				case <-time.After(time.Second):
-					t.Errorf("Timed out responding to broker")
-					return
-				}
+				require.NoError(t, ts.Ack(tCtx, nil))
 			}(k, v)
 		}
 
@@ -231,6 +223,9 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 }
 
 func TestDynamicFanOutAtLeastOnce(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
@@ -260,14 +255,7 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 			t.Error("Timed out waiting for mockOne")
 			return
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-mockOne.TChan:
-			t.Error("Received duplicate message to mockOne")
-		case <-time.After(time.Second):
-			t.Error("Timed out responding to broker")
-			return
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}()
 	go func() {
 		defer wg.Done()
@@ -278,24 +266,14 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 			t.Error("Timed out waiting for mockOne")
 			return
 		}
-		select {
-		case ts.ResponseChan <- errors.New("this is a test"):
-		case <-time.After(time.Second):
-			t.Error("Timed out responding to broker")
-			return
-		}
+		require.NoError(t, ts.Ack(tCtx, errors.New("this is a test")))
 		select {
 		case ts = <-mockTwo.TChan:
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for mockTwo")
 			return
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Error("Timed out responding to broker")
-			return
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}()
 
 	select {
@@ -321,6 +299,9 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 }
 
 func TestDynamicFanOutStartEmpty(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	mockOne := MockOutputType{}
 
 	readChan := make(chan message.Transaction)
@@ -359,14 +340,7 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 			t.Error("Timed out waiting for mockOne")
 			return
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-mockOne.TChan:
-			t.Error("Received duplicate message to mockOne")
-		case <-time.After(time.Second):
-			t.Error("Timed out responding to broker")
-			return
-		}
+		require.NoError(t, ts.Ack(tCtx, nil))
 	}()
 
 	wg.Wait()
@@ -386,6 +360,9 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 }
 
 func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	mockOutput := &MockOutputType{}
 	outputs := map[string]DynamicOutput{
 		"test": mockOutput,
@@ -430,11 +407,7 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 		t.Error("Timed out waiting for msg rcv")
 	}
 
-	select {
-	case ts.ResponseChan <- errors.New("test"):
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for res send")
-	}
+	require.NoError(t, ts.Ack(tCtx, errors.New("test")))
 
 	oTM.CloseAsync()
 	if err := oTM.WaitForClose(time.Second); err != nil {

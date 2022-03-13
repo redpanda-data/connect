@@ -583,22 +583,13 @@ func receiveMessage(
 ) *message.Part {
 	t.Helper()
 
-	b, resChan := receiveMessageNoRes(ctx, t, tranChan)
-	sendResponse(ctx, t, resChan, err)
+	b, ackFn := receiveMessageNoRes(ctx, t, tranChan)
+	require.NoError(t, ackFn(ctx, err))
 	return b
 }
 
-func sendResponse(ctx context.Context, t testing.TB, resChan chan<- error, err error) {
-	res := err
-	select {
-	case resChan <- res:
-	case <-ctx.Done():
-		t.Fatal("timed out on response")
-	}
-}
-
 // nolint:gocritic // Ignore unnamedResult false positive
-func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, chan<- error) {
+func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, func(context.Context, error) error) {
 	t.Helper()
 
 	var tran message.Transaction
@@ -612,7 +603,7 @@ func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan mess
 	require.True(t, open)
 	require.Equal(t, tran.Payload.Len(), 1)
 
-	return tran.Payload.Get(0), tran.ResponseChan
+	return tran.Payload.Get(0), tran.Ack
 }
 
 func messageMatch(t testing.TB, p *message.Part, content string, metadata ...string) {

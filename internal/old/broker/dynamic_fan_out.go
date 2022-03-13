@@ -356,11 +356,7 @@ func (d *DynamicFanOut) loop() {
 			d.outputsMut.RUnlock()
 
 			if owg.Wait() == nil {
-				select {
-				case ts.ResponseChan <- nil:
-				case <-d.ctx.Done():
-					return
-				}
+				_ = ts.Ack(d.ctx, nil)
 			}
 		}
 	}
