@@ -662,13 +662,7 @@ func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
 				return nil
 			})
 			err := s.consumerFunc(context.Background(), batch)
-			var res error
-			if err != nil {
-				res = err
-			} else {
-				res = nil
-			}
-			tran.ResponseChan <- res
+			_ = tran.Ack(context.Background(), err)
 		}
 	}()
 	return nil

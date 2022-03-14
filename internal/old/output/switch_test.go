@@ -2,6 +2,7 @@ package output
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -42,6 +43,9 @@ func newSwitch(t *testing.T, conf Config, mockOutputs []*MockOutputType) *Switch
 //------------------------------------------------------------------------------
 
 func TestSwitchNoConditions(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	nOutputs, nMsgs := 10, 1000
 
 	conf := NewConfig()
@@ -67,27 +71,21 @@ func TestSwitchNoConditions(t *testing.T) {
 			t.Errorf("Timed out waiting for broker send")
 			return
 		}
-		resChanSlice := []chan<- error{}
+		resFnSlice := []func(context.Context, error) error{}
 		for j := 0; j < nOutputs; j++ {
-			var ts message.Transaction
 			select {
-			case ts = <-mockOutputs[j].TChan:
+			case ts := <-mockOutputs[j].TChan:
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
-				resChanSlice = append(resChanSlice, ts.ResponseChan)
+				resFnSlice = append(resFnSlice, ts.Ack)
 			case <-time.After(time.Second):
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
 		}
 		for j := 0; j < nOutputs; j++ {
-			select {
-			case resChanSlice[j] <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Timed out responding to broker")
-				return
-			}
+			require.NoError(t, resFnSlice[j](ctx, nil))
 		}
 		select {
 		case res := <-resChan:
@@ -108,6 +106,9 @@ func TestSwitchNoConditions(t *testing.T) {
 }
 
 func TestSwitchNoRetries(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	nOutputs, nMsgs := 10, 1000
 
 	conf := NewConfig()
@@ -133,15 +134,14 @@ func TestSwitchNoRetries(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("Timed out waiting for broker send")
 		}
-		resChanSlice := []chan<- error{}
+		resFnSlice := []func(context.Context, error) error{}
 		for j := 0; j < nOutputs; j++ {
-			var ts message.Transaction
 			select {
-			case ts = <-mockOutputs[j].TChan:
+			case ts := <-mockOutputs[j].TChan:
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
-				resChanSlice = append(resChanSlice, ts.ResponseChan)
+				resFnSlice = append(resFnSlice, ts.Ack)
 			case <-time.After(time.Second):
 				t.Fatal("Timed out waiting for broker propagate")
 			}
@@ -153,11 +153,7 @@ func TestSwitchNoRetries(t *testing.T) {
 			} else {
 				res = nil
 			}
-			select {
-			case resChanSlice[j] <- res:
-			case <-time.After(time.Second):
-				t.Fatal("Timed out responding to broker")
-			}
+			require.NoError(t, resFnSlice[j](ctx, res))
 		}
 		select {
 		case res := <-resChan:
@@ -251,6 +247,9 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 }
 
 func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	conf := NewConfig()
 	conf.Switch.RetryUntilSuccess = false
 	mockOutputs := []*MockOutputType{}
@@ -301,11 +300,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 		} else {
 			res = nil
 		}
-		select {
-		case transactions[j].ResponseChan <- res:
-		case <-time.After(time.Second):
-			t.Fatal("Timed out responding to broker")
-		}
+		require.NoError(t, transactions[j].Ack(ctx, res))
 	}
 
 	select {
@@ -339,6 +334,9 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 }
 
 func TestSwitchWithConditions(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	nMsgs := 100
 
 	mockOutputs := []*MockOutputType{{}, {}, {}}
@@ -400,10 +398,7 @@ func TestSwitchWithConditions(t *testing.T) {
 				break outputLoop
 			}
 
-			select {
-			case ts.ResponseChan <- nil:
-			case <-time.After(time.Second):
-				t.Errorf("Timed out responding to output")
+			if !assert.NoError(t, ts.Ack(ctx, nil)) {
 				break outputLoop
 			}
 		}
@@ -443,6 +438,9 @@ func TestSwitchWithConditions(t *testing.T) {
 }
 
 func TestSwitchError(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOutputs := []*MockOutputType{{}, {}, {}}
 
 	conf := NewConfig()
@@ -490,10 +488,7 @@ func TestSwitchError(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for output to propagate")
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-		}
+		require.NoError(t, ts.Ack(ctx, nil))
 	}
 
 	select {
@@ -510,6 +505,9 @@ func TestSwitchError(t *testing.T) {
 }
 
 func TestSwitchBatchSplit(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOutputs := []*MockOutputType{{}, {}, {}}
 
 	conf := NewConfig()
@@ -556,10 +554,7 @@ func TestSwitchBatchSplit(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for output to propagate")
 		}
-		select {
-		case ts.ResponseChan <- nil:
-		case <-time.After(time.Second):
-		}
+		require.NoError(t, ts.Ack(ctx, nil))
 	}
 
 	select {
@@ -576,6 +571,9 @@ func TestSwitchBatchSplit(t *testing.T) {
 }
 
 func TestSwitchBatchGroup(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOutputs := []*MockOutputType{{}, {}, {}}
 
 	conf := NewConfig()
@@ -622,10 +620,7 @@ func TestSwitchBatchGroup(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for output to propagate")
 	}
-	select {
-	case ts.ResponseChan <- nil:
-	case <-time.After(time.Second):
-	}
+	require.NoError(t, ts.Ack(ctx, nil))
 
 	select {
 	case <-mockOutputs[0].TChan:
@@ -732,6 +727,9 @@ func TestSwitchNoMatchStrict(t *testing.T) {
 }
 
 func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	nMsgs := 100
 
 	mockOutputs := []*MockOutputType{{}, {}, {}}
@@ -761,13 +759,10 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 
 	outputLoop:
 		for closed < len(mockOutputs) {
-			var ts message.Transaction
-			var ok bool
-
-			resChans := []chan<- error{}
-			for len(resChans) < 1 {
+			resFns := []func(context.Context, error) error{}
+			for len(resFns) < 1 {
 				select {
-				case ts, ok = <-mockOutputs[0].TChan:
+				case ts, ok := <-mockOutputs[0].TChan:
 					if !ok {
 						closed++
 						continue outputLoop
@@ -775,7 +770,8 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 					if act := string(ts.Payload.Get(0).Get()); act != bar {
 						t.Errorf("Expected output 0 msgs to equal %s, got %s", bar, act)
 					}
-				case ts, ok = <-mockOutputs[1].TChan:
+					resFns = append(resFns, ts.Ack)
+				case ts, ok := <-mockOutputs[1].TChan:
 					if !ok {
 						closed++
 						continue outputLoop
@@ -783,7 +779,8 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 					if act := string(ts.Payload.Get(0).Get()); act != baz {
 						t.Errorf("Expected output 1 msgs to equal %s, got %s", baz, act)
 					}
-				case ts, ok = <-mockOutputs[2].TChan:
+					resFns = append(resFns, ts.Ack)
+				case _, ok := <-mockOutputs[2].TChan:
 					if !ok {
 						closed++
 						continue outputLoop
@@ -793,18 +790,10 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 					t.Error("Timed out waiting for output to propagate")
 					break outputLoop
 				}
-				if ts.ResponseChan != nil {
-					resChans = append(resChans, ts.ResponseChan)
-				}
 			}
 
-			for i := 0; i < len(resChans); i++ {
-				select {
-				case resChans[i] <- nil:
-				case <-time.After(time.Second):
-					t.Errorf("Timed out responding to output")
-					break outputLoop
-				}
+			for i := 0; i < len(resFns); i++ {
+				require.NoError(t, resFns[i](ctx, nil))
 			}
 		}
 	}()
@@ -843,6 +832,9 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 }
 
 func TestSwitchAtLeastOnce(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOne := MockOutputType{}
 	mockTwo := MockOutputType{}
 
@@ -885,18 +877,8 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 		t.Error("Timed out waiting for mockOne")
 		return
 	}
-	select {
-	case ts1.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to output")
-		return
-	}
-	select {
-	case ts2.ResponseChan <- errors.New("this is a test"):
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to output")
-		return
-	}
+	require.NoError(t, ts1.Ack(ctx, nil))
+	require.NoError(t, ts2.Ack(ctx, errors.New("this is a test")))
 	select {
 	case <-mockOne.TChan:
 		t.Error("Received duplicate message to mockOne")
@@ -907,12 +889,7 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 		t.Error("Timed out waiting for mockTwo")
 		return
 	}
-	select {
-	case ts2.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Error("Timed out responding to output")
-		return
-	}
+	require.NoError(t, ts2.Ack(ctx, nil))
 	select {
 	case res := <-resChan:
 		if res != nil {
@@ -931,6 +908,9 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 }
 
 func TestSwitchShutDownFromErrorResponse(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOutputs := []*MockOutputType{{}, {}}
 
 	conf := NewConfig()
@@ -970,12 +950,7 @@ func TestSwitchShutDownFromErrorResponse(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg rcv")
 	}
-
-	select {
-	case ts.ResponseChan <- errors.New("test"):
-	case <-time.After(time.Second):
-		t.Error("Timed out waiting for res send")
-	}
+	require.NoError(t, ts.Ack(ctx, errors.New("test")))
 
 	s.CloseAsync()
 	if err := s.WaitForClose(time.Second); err != nil {
@@ -1076,6 +1051,9 @@ func TestSwitchShutDownFromSend(t *testing.T) {
 }
 
 func TestSwitchBackPressure(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	t.Parallel()
 
 	mockOutputs := []*MockOutputType{{}, {}}
@@ -1102,11 +1080,7 @@ func TestSwitchBackPressure(t *testing.T) {
 		for {
 			select {
 			case ts := <-mockOutputs[0].TChan:
-				select {
-				case ts.ResponseChan <- nil:
-				case <-doneChan:
-					return
-				}
+				require.NoError(t, ts.Ack(ctx, nil))
 			case <-doneChan:
 				return
 			}

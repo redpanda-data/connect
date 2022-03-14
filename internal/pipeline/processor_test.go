@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/stretchr/testify/require"
 )
 
 var errMockProc = errors.New("this is an error from mock processor")
@@ -48,6 +50,9 @@ func (m *mockMsgProcessor) WaitForClose(timeout time.Duration) error {
 }
 
 func TestProcessorPipeline(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockProc := &mockMsgProcessor{dropChan: make(chan bool)}
 
 	// Drop first message
@@ -132,17 +137,7 @@ func TestProcessorPipeline(t *testing.T) {
 
 	// Respond without error
 	go func() {
-		select {
-		case procT.ResponseChan <- nil:
-		case _, open := <-resChan:
-			if !open {
-				t.Error("Closed early")
-			} else {
-				t.Error("Premature response prop")
-			}
-		case <-time.After(time.Second):
-			t.Error("Timed out")
-		}
+		require.NoError(t, procT.Ack(ctx, nil))
 	}()
 
 	// Receive response
@@ -203,6 +198,9 @@ func (m *mockMultiMsgProcessor) WaitForClose(timeout time.Duration) error {
 }
 
 func TestProcessorMultiMsgs(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
 	proc := NewProcessor(mockProc)
@@ -225,7 +223,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 		expMsgs[fmt.Sprintf("test%v", i)] = struct{}{}
 	}
 
-	resChans := []chan<- error{}
+	resFns := []func(context.Context, error) error{}
 
 	// Receive N messages
 	for i := 0; i < mockProc.N; i++ {
@@ -240,7 +238,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 			} else {
 				delete(expMsgs, act)
 			}
-			resChans = append(resChans, procT.ResponseChan)
+			resFns = append(resFns, procT.Ack)
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -252,11 +250,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 
 	// Respond without error N times
 	for i := 0; i < mockProc.N; i++ {
-		select {
-		case resChans[i] <- nil:
-		case <-time.After(time.Second):
-			t.Error("Timed out")
-		}
+		require.NoError(t, resFns[i](ctx, nil))
 	}
 
 	// Receive error
@@ -284,6 +278,9 @@ func TestProcessorMultiMsgs(t *testing.T) {
 }
 
 func TestProcessorMultiMsgsOddSync(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
 	proc := NewProcessor(mockProc)
@@ -306,7 +303,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		t.Error("Timed out")
 	}
 
-	var errResChan chan<- error
+	var errResFn func(context.Context, error) error
 
 	// Receive 1 message
 	select {
@@ -318,19 +315,15 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		if _, exists := expMsgs[act]; !exists {
 			t.Errorf("Unexpected result: %v", act)
 		}
-		errResChan = procT.ResponseChan
+		errResFn = procT.Ack
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
 
 	// Respond with 1 error
-	select {
-	case errResChan <- errors.New("foo"):
-	case <-time.After(time.Second):
-		t.Error("Timed out")
-	}
+	require.NoError(t, errResFn(ctx, errors.New("foo")))
 
-	resChans := []chan<- error{}
+	resFns := []func(context.Context, error) error{}
 
 	// Receive N messages
 	for i := 0; i < mockProc.N; i++ {
@@ -345,7 +338,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 			} else {
 				delete(expMsgs, act)
 			}
-			resChans = append(resChans, procT.ResponseChan)
+			resFns = append(resFns, procT.Ack)
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
@@ -357,11 +350,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 
 	// Respond without error N times
 	for i := 0; i < mockProc.N; i++ {
-		select {
-		case resChans[i] <- nil:
-		case <-time.After(time.Second):
-			t.Error("Timed out")
-		}
+		require.NoError(t, resFns[i](ctx, nil))
 	}
 
 	// Receive error

@@ -1,6 +1,7 @@
 package output
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -31,6 +32,9 @@ func TestRetryConfigErrs(t *testing.T) {
 }
 
 func TestRetryBasic(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	conf := NewConfig()
 
 	childConf := NewConfig()
@@ -75,12 +79,7 @@ func TestRetryBasic(t *testing.T) {
 	if tran.Payload != testMsg {
 		t.Error("Wrong payload returned")
 	}
-
-	select {
-	case tran.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Fatal("timed out")
-	}
+	require.NoError(t, tran.Ack(ctx, nil))
 
 	select {
 	case res := <-resChan:
@@ -96,6 +95,9 @@ func TestRetryBasic(t *testing.T) {
 }
 
 func TestRetrySadPath(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	conf := NewConfig()
 
 	childConf := NewConfig()
@@ -146,12 +148,7 @@ func TestRetrySadPath(t *testing.T) {
 		if tran.Payload != testMsg {
 			t.Error("Wrong payload returned")
 		}
-
-		select {
-		case tran.ResponseChan <- component.ErrFailedSend:
-		case <-time.After(time.Second):
-			t.Fatal("timed out")
-		}
+		require.NoError(t, tran.Ack(ctx, component.ErrFailedSend))
 	}
 
 	select {
@@ -165,12 +162,7 @@ func TestRetrySadPath(t *testing.T) {
 	if tran.Payload != testMsg {
 		t.Error("Wrong payload returned")
 	}
-
-	select {
-	case tran.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Fatal("timed out")
-	}
+	require.NoError(t, tran.Ack(ctx, nil))
 
 	select {
 	case res := <-resChan:
@@ -192,12 +184,15 @@ func expectFromRetry(
 	responsesSlice ...string) {
 	t.Helper()
 
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	responses := map[string]struct{}{}
 	for _, k := range responsesSlice {
 		responses[k] = struct{}{}
 	}
 
-	resChans := []chan<- error{}
+	resFns := []func(context.Context, error) error{}
 
 	for len(responses) > 0 {
 		select {
@@ -208,18 +203,14 @@ func expectFromRetry(
 			} else {
 				t.Errorf("Wrong result: %v", act)
 			}
-			resChans = append(resChans, tran.ResponseChan)
+			resFns = append(resFns, tran.Ack)
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
 	}
 
-	for _, resChan := range resChans {
-		select {
-		case resChan <- resReturn:
-		case <-time.After(time.Second):
-			t.Fatal("timed out")
-		}
+	for _, resFn := range resFns {
+		require.NoError(t, resFn(ctx, resReturn))
 	}
 }
 

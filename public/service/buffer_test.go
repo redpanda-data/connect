@@ -71,6 +71,9 @@ func (m *memoryBuffer) Close(ctx context.Context) error {
 }
 
 func TestStreamMemoryBuffer(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	var incr, total uint8 = 100, 50
 
 	tChan := make(chan message.Transaction)
@@ -112,11 +115,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		}
 
 		// Response from output
-		select {
-		case outTr.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Fatalf("Timed out waiting for unbuffered response send back %v", i)
-		}
+		require.NoError(t, outTr.Ack(ctx, nil))
 	}
 
 	for i = 0; i <= total; i++ {
@@ -164,7 +163,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	select {
 	case outTr = <-b.TransactionChan():
 		assert.Equal(t, byte(0), outTr.Payload.Get(0).Get()[0])
-		outTr.ResponseChan <- nil
+		require.NoError(t, outTr.Ack(ctx, nil))
 	case <-time.After(time.Second):
 		t.Fatalf("Timed out waiting for final buffered message read")
 	}
@@ -185,12 +184,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v read", i)
 		}
-
-		select {
-		case outTr.ResponseChan <- nil:
-		case <-time.After(time.Second):
-			t.Fatalf("Timed out waiting for buffered response send back %v", i)
-		}
+		require.NoError(t, outTr.Ack(ctx, nil))
 	}
 
 	// Get final message
@@ -199,12 +193,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("Timed out waiting for buffered message %v read", i)
 	}
-
-	select {
-	case outTr.ResponseChan <- nil:
-	case <-time.After(time.Second):
-		t.Fatalf("Timed out waiting for buffered response send back %v", i)
-	}
+	require.NoError(t, outTr.Ack(ctx, nil))
 
 	b.CloseAsync()
 	require.NoError(t, b.WaitForClose(time.Second))
@@ -214,6 +203,9 @@ func TestStreamMemoryBuffer(t *testing.T) {
 }
 
 func TestStreamBufferClosing(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	var incr, total uint8 = 100, 5
 
 	tChan := make(chan message.Transaction)
@@ -251,7 +243,7 @@ func TestStreamBufferClosing(t *testing.T) {
 		select {
 		case val := <-b.TransactionChan():
 			assert.Equal(t, i, val.Payload.Get(0).Get()[0])
-			val.ResponseChan <- nil
+			require.NoError(t, val.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for final buffered message read")
 		}

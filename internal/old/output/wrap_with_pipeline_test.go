@@ -1,6 +1,7 @@
 package output
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
+	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------
@@ -112,6 +114,9 @@ func TestBasicWrapPipeline(t *testing.T) {
 }
 
 func TestBasicWrapPipelinesOrdering(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOut := &mockOutput{}
 
 	firstProc := processor.NewConfig()
@@ -176,11 +181,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 	}
 
 	go func() {
-		select {
-		case <-time.After(time.Second):
-			t.Error("timed out")
-		case tran.ResponseChan <- nil:
-		}
+		require.NoError(t, tran.Ack(ctx, nil))
 	}()
 
 	select {

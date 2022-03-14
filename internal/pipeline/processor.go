@@ -1,8 +1,8 @@
 package pipeline
 
 import (
+	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -10,6 +10,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 //------------------------------------------------------------------------------
@@ -18,8 +19,6 @@ import (
 // The processor will read from a source, perform some processing, and then
 // either propagate a new message or drop it.
 type Processor struct {
-	running int32
-
 	msgProcessors []iprocessor.V1
 
 	messagesOut chan message.Transaction
@@ -27,19 +26,16 @@ type Processor struct {
 
 	messagesIn <-chan message.Transaction
 
-	closeChan chan struct{}
-	closed    chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 // NewProcessor returns a new message processing pipeline.
 func NewProcessor(msgProcessors ...iprocessor.V1) *Processor {
 	return &Processor{
-		running:       1,
 		msgProcessors: msgProcessors,
 		messagesOut:   make(chan message.Transaction),
 		responsesIn:   make(chan error),
-		closeChan:     make(chan struct{}),
-		closed:        make(chan struct{}),
+		shutSig:       shutdown.NewSignaller(),
 	}
 }
 
@@ -54,37 +50,38 @@ func (p *Processor) loop() {
 		}
 
 		close(p.messagesOut)
-		close(p.closed)
+		p.shutSig.ShutdownComplete()
 	}()
 
+	closeCtx, done := p.shutSig.CloseAtLeisureCtx(context.Background())
+	defer done()
+
 	var open bool
-	for atomic.LoadInt32(&p.running) == 1 {
+	for !p.shutSig.ShouldCloseAtLeisure() {
 		var tran message.Transaction
 		select {
 		case tran, open = <-p.messagesIn:
 			if !open {
 				return
 			}
-		case <-p.closeChan:
+		case <-p.shutSig.CloseAtLeisureChan():
 			return
 		}
 
 		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
-			select {
-			case tran.ResponseChan <- resultRes:
-			case <-p.closeChan:
+			if err := tran.Ack(closeCtx, resultRes); err != nil && closeCtx.Err() != nil {
 				return
 			}
 			continue
 		}
 
 		if len(resultMsgs) > 1 {
-			p.dispatchMessages(resultMsgs, tran.ResponseChan)
+			p.dispatchMessages(closeCtx, resultMsgs, tran.Ack)
 		} else {
 			select {
 			case p.messagesOut <- message.NewTransaction(resultMsgs[0], tran.ResponseChan):
-			case <-p.closeChan:
+			case <-p.shutSig.CloseAtLeisureChan():
 				return
 			}
 		}
@@ -93,8 +90,8 @@ func (p *Processor) loop() {
 
 // dispatchMessages attempts to send a multiple messages results of processors
 // over the shared messages channel. This send is retried until success.
-func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- error) {
-	throt := throttle.New(throttle.OptCloseChan(p.closeChan))
+func (p *Processor) dispatchMessages(ctx context.Context, msgs []*message.Batch, ackFn func(context.Context, error) error) {
+	throt := throttle.New(throttle.OptCloseChan(p.shutSig.CloseAtLeisureChan()))
 
 	sendMsg := func(m *message.Batch) {
 		resChan := make(chan error)
@@ -103,7 +100,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- err
 		for {
 			select {
 			case p.messagesOut <- transac:
-			case <-p.closeChan:
+			case <-ctx.Done():
 				return
 			}
 
@@ -114,7 +111,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- err
 				if !open {
 					return
 				}
-			case <-p.closeChan:
+			case <-ctx.Done():
 				return
 			}
 
@@ -142,11 +139,7 @@ func (p *Processor) dispatchMessages(msgs []*message.Batch, ogResChan chan<- err
 	// TODO: V4 Exit before ack if closing
 	throt.Reset()
 
-	select {
-	case ogResChan <- nil:
-	case <-p.closeChan:
-		return
-	}
+	_ = ackFn(ctx, nil)
 }
 
 //------------------------------------------------------------------------------
@@ -169,13 +162,11 @@ func (p *Processor) TransactionChan() <-chan message.Transaction {
 
 // CloseAsync shuts down the pipeline and stops processing messages.
 func (p *Processor) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&p.running, 1, 0) {
-		close(p.closeChan)
+	p.shutSig.CloseAtLeisure()
 
-		// Signal all children to close.
-		for _, c := range p.msgProcessors {
-			c.CloseAsync()
-		}
+	// Signal all children to close.
+	for _, c := range p.msgProcessors {
+		c.CloseAsync()
 	}
 }
 
@@ -183,7 +174,7 @@ func (p *Processor) CloseAsync() {
 func (p *Processor) WaitForClose(timeout time.Duration) error {
 	stopBy := time.Now().Add(timeout)
 	select {
-	case <-p.closed:
+	case <-p.shutSig.HasClosedChan():
 	case <-time.After(time.Until(stopBy)):
 		return component.ErrTimeout
 	}

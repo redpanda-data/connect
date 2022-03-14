@@ -150,7 +150,7 @@ func (m *Batcher) loop() {
 				return
 			}
 
-			trackedTran := transaction.NewTracked(tran.Payload, tran.ResponseChan)
+			trackedTran := transaction.NewTracked(tran.Payload, tran.Ack)
 			_ = trackedTran.Message().Iter(func(i int, p *message.Part) error {
 				if m.batcher.Add(p) {
 					flushBatch = true

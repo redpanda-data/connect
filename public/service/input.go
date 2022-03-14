@@ -244,21 +244,7 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 		b = append(b, newMessageFromPart(part))
 		return nil
 	})
-
-	return b, func(actx context.Context, err error) error {
-		var res error
-		if err != nil {
-			res = err
-		} else {
-			res = nil
-		}
-		select {
-		case tran.ResponseChan <- res:
-		case <-actx.Done():
-			return actx.Err()
-		}
-		return nil
-	}, nil
+	return b, tran.Ack, nil
 }
 
 // Close the input.

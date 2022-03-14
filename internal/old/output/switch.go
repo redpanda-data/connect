@@ -522,9 +522,7 @@ func (o *Switch) loop() {
 				}
 				return nil
 			}); checksErr != nil {
-				select {
-				case ts.ResponseChan <- checksErr:
-				case <-o.ctx.Done():
+				if err := ts.Ack(o.ctx, checksErr); err != nil && o.ctx.Err() != nil {
 					return
 				}
 				continue
@@ -536,14 +534,7 @@ func (o *Switch) loop() {
 			} else {
 				resErr = o.dispatchNoRetries(group, trackedMsg, outputTargets)
 			}
-
-			var oResponse error
-			if resErr != nil {
-				oResponse = resErr
-			}
-			select {
-			case ts.ResponseChan <- oResponse:
-			case <-o.ctx.Done():
+			if err := ts.Ack(o.ctx, resErr); err != nil && o.ctx.Err() != nil {
 				return
 			}
 		}

@@ -12,9 +12,9 @@ import (
 // that an error returned resulting from multiple transaction messages can be
 // reduced.
 type Tracked struct {
-	msg     *message.Batch
-	group   *message.SortGroup
-	resChan chan<- error
+	msg   *message.Batch
+	group *message.SortGroup
+	ackFn func(context.Context, error) error
 }
 
 // NewTracked creates a transaction from a message batch and a response channel.
@@ -22,23 +22,18 @@ type Tracked struct {
 // is returned from a downstream component that merged messages from other
 // transactions the tag can be used in order to determine whether the message
 // owned by this transaction succeeded.
-func NewTracked(msg *message.Batch, resChan chan<- error) *Tracked {
+func NewTracked(msg *message.Batch, ackFn func(context.Context, error) error) *Tracked {
 	group, trackedMsg := message.NewSortGroup(msg)
 	return &Tracked{
-		msg:     trackedMsg,
-		resChan: resChan,
-		group:   group,
+		msg:   trackedMsg,
+		group: group,
+		ackFn: ackFn,
 	}
 }
 
 // Message returns the message owned by this transaction.
 func (t *Tracked) Message() *message.Batch {
 	return t.msg
-}
-
-// ResponseChan returns the response channel owned by this transaction.
-func (t *Tracked) ResponseChan() chan<- error {
-	return t.resChan
 }
 
 func (t *Tracked) getResFromGroup(walkable batch.WalkableError) error {
@@ -72,23 +67,15 @@ func (t *Tracked) getResFromGroup(walkable batch.WalkableError) error {
 }
 
 func (t *Tracked) resFromError(err error) error {
-	var res error
 	if err != nil {
 		if walkable, ok := err.(batch.WalkableError); ok {
-			res = t.getResFromGroup(walkable)
-		} else {
-			res = err
+			err = t.getResFromGroup(walkable)
 		}
 	}
-	return res
+	return err
 }
 
 // Ack provides a response to the upstream service from an error.
 func (t *Tracked) Ack(ctx context.Context, err error) error {
-	select {
-	case t.resChan <- t.resFromError(err):
-	case <-ctx.Done():
-		return context.Canceled
-	}
-	return nil
+	return t.ackFn(ctx, t.resFromError(err))
 }

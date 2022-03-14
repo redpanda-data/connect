@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"testing"
@@ -16,6 +17,9 @@ import (
 )
 
 func TestPoolBasic(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockProc := &mockMsgProcessor{dropChan: make(chan bool)}
 	go func() {
 		mockProc.dropChan <- true
@@ -88,11 +92,7 @@ func TestPoolBasic(t *testing.T) {
 
 	// Respond without error
 	go func() {
-		select {
-		case procT.ResponseChan <- nil:
-		case <-time.After(time.Second * 5):
-			t.Error("Timed out")
-		}
+		require.NoError(t, procT.Ack(ctx, nil))
 	}()
 
 	// Receive response
@@ -115,6 +115,9 @@ func TestPoolBasic(t *testing.T) {
 }
 
 func TestPoolMultiMsgs(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
 	proc, err := newPoolV2(1, log.Noop(), mockProc)
@@ -160,12 +163,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 			}
 
 			// Respond with no error
-			select {
-			case procT.ResponseChan <- nil:
-			case <-time.After(time.Second * 5):
-				t.Fatal("Timed out")
-			}
-
+			require.NoError(t, procT.Ack(ctx, nil))
 		}
 
 		// Receive response
@@ -192,6 +190,9 @@ func TestPoolMultiMsgs(t *testing.T) {
 }
 
 func TestPoolMultiThreads(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	conf := NewConfig()
 	conf.Threads = 2
 	conf.Processors = append(conf.Processors, processor.NewConfig())
@@ -237,11 +238,7 @@ func TestPoolMultiThreads(t *testing.T) {
 
 		go func(tran message.Transaction) {
 			// Respond with no error
-			select {
-			case tran.ResponseChan <- nil:
-			case <-time.After(time.Second * 5):
-				t.Error("Timed out")
-			}
+			require.NoError(t, tran.Ack(ctx, nil))
 		}(procT)
 	}
 	for j := 0; j < conf.Threads; j++ {
