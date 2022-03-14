@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -14,7 +16,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
-	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------

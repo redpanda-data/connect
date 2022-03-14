@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 var errMockProc = errors.New("this is an error from mock processor")
