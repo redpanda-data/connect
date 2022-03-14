@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.0.0 - TBD
+
+This is a major version release, for more information and guidance on how to migrate please refer to [https://benthos.dev/docs/guides/migration/v4](https://www.benthos.dev/docs/guides/migration/v4).
+
+### Fixed
+
+- The `sftp` output no longer opens files in both read and write mode.
+
 ## 3.65.0 - 2022-03-07
 
 ### Added

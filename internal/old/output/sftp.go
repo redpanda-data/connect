@@ -174,7 +174,7 @@ func (s *sftpWriter) WriteWithContext(ctx context.Context, msg *message.Batch) e
 			}
 		}
 
-		flag := os.O_CREATE | os.O_RDWR
+		flag := os.O_CREATE | os.O_WRONLY
 		if s.codecConf.Append {
 			flag |= os.O_APPEND
 		}
