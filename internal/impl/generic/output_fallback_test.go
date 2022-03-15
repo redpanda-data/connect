@@ -1,10 +1,13 @@
-package broker
+package generic
 
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,15 +15,100 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
-var _ output.Streamed = &Try{}
+var _ output.Streamed = &fallbackBroker{}
 
-func TestTryDoubleClose(t *testing.T) {
-	oTM, err := NewTry([]output.Streamed{&MockOutputType{}}, metrics.Noop())
+func TestFallbackOutputBasic(t *testing.T) {
+	dir := t.TempDir()
+
+	outOne, outTwo, outThree := ooutput.NewConfig(), ooutput.NewConfig(), ooutput.NewConfig()
+	outOne.Type, outTwo.Type, outThree.Type = "http_client", "file", "file"
+	outOne.HTTPClient.URL = "http://localhost:11111111/badurl"
+	outOne.HTTPClient.NumRetries = 1
+	outOne.HTTPClient.Retry = "1ms"
+	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("fallbacktofoo")}-${!count("fallbacktobar")}.txt`)
+	outTwo.File.Codec = "all-bytes"
+	outThree.File.Path = "/dev/null"
+
+	procOne, procTwo, procThree := processor.NewConfig(), processor.NewConfig(), processor.NewConfig()
+	procOne.Type, procTwo.Type, procThree.Type = "bloblang", "bloblang", "bloblang"
+	procOne.Bloblang = `root = "this-should-never-appear %v".format(count("fallbacktofoo")) + content()`
+	procTwo.Bloblang = `root = "two-" + content()`
+	procThree.Bloblang = `root = "this-should-never-appear %v".format(count("fallbacktobar")) + content()`
+
+	outOne.Processors = append(outOne.Processors, procOne)
+	outTwo.Processors = append(outTwo.Processors, procTwo)
+	outThree.Processors = append(outThree.Processors, procThree)
+
+	conf := ooutput.NewConfig()
+	conf.Type = "fallback"
+	conf.Fallback = append(conf.Fallback, outOne, outTwo, outThree)
+
+	s, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
+	require.NoError(t, err)
+
+	sendChan := make(chan message.Transaction)
+	resChan := make(chan error)
+	require.NoError(t, s.Consume(sendChan))
+
+	t.Cleanup(func() {
+		s.CloseAsync()
+		require.NoError(t, s.WaitForClose(time.Second))
+	})
+
+	inputs := []string{
+		"first", "second", "third", "fourth",
+	}
+	expFiles := map[string]string{
+		"./two/bar-2-1.txt": "two-first",
+		"./two/bar-4-2.txt": "two-second",
+		"./two/bar-6-3.txt": "two-third",
+		"./two/bar-8-4.txt": "two-fourth",
+	}
+
+	for _, input := range inputs {
+		testMsg := message.QuickBatch([][]byte{[]byte(input)})
+		select {
+		case sendChan <- message.NewTransaction(testMsg, resChan):
+		case <-time.After(time.Second * 2):
+			t.Fatal("Action timed out")
+		}
+
+		select {
+		case res := <-resChan:
+			if res != nil {
+				t.Fatal(res)
+			}
+		case <-time.After(time.Second * 2):
+			t.Fatal("Action timed out")
+		}
+	}
+
+	for k, exp := range expFiles {
+		k = filepath.Join(dir, k)
+		fileBytes, err := os.ReadFile(k)
+		if err != nil {
+			t.Errorf("Expected file '%v' could not be read: %v", k, err)
+			continue
+		}
+		if act := string(fileBytes); exp != act {
+			t.Errorf("Wrong contents for file '%v': %v != %v", k, act, exp)
+		}
+	}
+}
+
+func TestFallbackDoubleClose(t *testing.T) {
+	oTM, err := newFallbackBroker([]output.Streamed{&mock.OutputChanneled{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,12 +120,12 @@ func TestTryDoubleClose(t *testing.T) {
 
 //------------------------------------------------------------------------------
 
-func TestTryHappyPath(t *testing.T) {
+func TestFallbackHappyPath(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
 	outputs := []output.Streamed{}
-	mockOutputs := []*MockOutputType{
+	mockOutputs := []*mock.OutputChanneled{
 		{},
 		{},
 		{},
@@ -50,7 +138,7 @@ func TestTryHappyPath(t *testing.T) {
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	oTM, err := NewTry(outputs, metrics.Noop())
+	oTM, err := newFallbackBroker(outputs)
 	if err != nil {
 		t.Error(err)
 		return
@@ -106,12 +194,12 @@ func TestTryHappyPath(t *testing.T) {
 	}
 }
 
-func TestTryHappyishPath(t *testing.T) {
+func TestFallbackHappyishPath(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
 	outputs := []output.Streamed{}
-	mockOutputs := []*MockOutputType{
+	mockOutputs := []*mock.OutputChanneled{
 		{},
 		{},
 		{},
@@ -124,7 +212,7 @@ func TestTryHappyishPath(t *testing.T) {
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	oTM, err := NewTry(outputs, metrics.Noop())
+	oTM, err := newFallbackBroker(outputs)
 	if err != nil {
 		t.Error(err)
 		return
@@ -160,7 +248,9 @@ func TestTryHappyishPath(t *testing.T) {
 				t.Errorf("Timed out waiting for broker propagate")
 				return
 			}
-			require.NoError(t, ts.Ack(tCtx, errors.New("test err")))
+			go func() {
+				require.NoError(t, ts.Ack(tCtx, errors.New("test err")))
+			}()
 
 			select {
 			case ts = <-mockOutputs[1].TChan:
@@ -191,18 +281,18 @@ func TestTryHappyishPath(t *testing.T) {
 		}
 	}
 
-	oTM.CloseAsync()
+	close(readChan)
 	if err := oTM.WaitForClose(time.Second * 10); err != nil {
 		t.Error(err)
 	}
 }
 
-func TestTryAllFail(t *testing.T) {
+func TestFallbackAllFail(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
 	outputs := []output.Streamed{}
-	mockOutputs := []*MockOutputType{
+	mockOutputs := []*mock.OutputChanneled{
 		{},
 		{},
 		{},
@@ -215,7 +305,7 @@ func TestTryAllFail(t *testing.T) {
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	oTM, err := NewTry(outputs, metrics.Noop())
+	oTM, err := newFallbackBroker(outputs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +340,9 @@ func TestTryAllFail(t *testing.T) {
 					t.Errorf("Timed out waiting for broker propagate")
 					return
 				}
-				require.NoError(t, ts.Ack(tCtx, testErr))
+				go func() {
+					require.NoError(t, ts.Ack(tCtx, testErr))
+				}()
 			}
 		}()
 
@@ -270,12 +362,12 @@ func TestTryAllFail(t *testing.T) {
 	}
 }
 
-func TestTryAllFailParallel(t *testing.T) {
+func TestFallbackAllFailParallel(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
 	outputs := []output.Streamed{}
-	mockOutputs := []*MockOutputType{
+	mockOutputs := []*mock.OutputChanneled{
 		{},
 		{},
 		{},
@@ -287,64 +379,50 @@ func TestTryAllFailParallel(t *testing.T) {
 
 	readChan := make(chan message.Transaction)
 
-	oTM, err := NewTry(outputs, metrics.Noop())
+	oTM, err := newFallbackBroker(outputs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	oTM = oTM.WithMaxInFlight(50)
 	if err = oTM.Consume(readChan); err != nil {
 		t.Fatal(err)
 	}
 
 	resChans := make([]chan error, 10)
 	for i := range resChans {
-		resChans[i] = make(chan error)
+		resChans[i] = make(chan error, 1)
 	}
 
 	tallies := [3]int32{}
 
-	wg, wgStart := sync.WaitGroup{}, sync.WaitGroup{}
+	wg := sync.WaitGroup{}
+	wg.Add(len(mockOutputs))
 	testErr := errors.New("test error")
-	startChan := make(chan struct{})
-	for _, resChan := range resChans {
-		wg.Add(1)
-		wgStart.Add(1)
+
+	for i, o := range mockOutputs {
+		i := i
+		o := o
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 3; j++ {
-				var ts message.Transaction
-				var index int
+			for range resChans {
 				select {
-				case ts = <-mockOutputs[j%3].TChan:
-					index = j % 3
-				case ts = <-mockOutputs[(j+1)%3].TChan:
-					index = (j + 1) % 3
-				case ts = <-mockOutputs[(j+2)%3].TChan:
-					index = (j + 2) % 3
+				case ts := <-o.TChan:
+					go require.NoError(t, ts.Ack(tCtx, testErr))
 				case <-time.After(time.Second):
 					t.Errorf("Timed out waiting for broker propagate")
-					if j == 0 {
-						wgStart.Done()
-					}
 					return
 				}
-				atomic.AddInt32(&tallies[index], 1)
-				if j == 0 {
-					wgStart.Done()
-				}
-
-				<-startChan
-				require.NoError(t, ts.Ack(tCtx, testErr))
+				atomic.AddInt32(&tallies[i], 1)
 			}
 		}()
+	}
+
+	for i, resChan := range resChans {
 		select {
 		case readChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
 		case <-time.After(time.Second):
-			t.Fatalf("Timed out waiting for broker send")
+			t.Fatal("Timed out waiting for broker send", strconv.Itoa(i))
 		}
 	}
-	wgStart.Wait()
-	close(startChan)
 
 	for _, resChan := range resChans {
 		select {
@@ -364,7 +442,7 @@ func TestTryAllFailParallel(t *testing.T) {
 		}
 	}
 
-	oTM.CloseAsync()
+	close(readChan)
 	if err := oTM.WaitForClose(time.Second * 10); err != nil {
 		t.Error(err)
 	}

@@ -203,8 +203,6 @@ func NewBroker(
 		b, err = broker.NewRoundRobin(outputs, stats)
 	case "greedy":
 		b, err = broker.NewGreedy(outputs)
-	case "try":
-		b, err = broker.NewTry(outputs, stats)
 	default:
 		return nil, fmt.Errorf("broker pattern was not recognised: %v", conf.Broker.Pattern)
 	}
