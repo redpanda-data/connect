@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -316,6 +317,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		if _, exists := expMsgs[act]; !exists {
 			t.Errorf("Unexpected result: %v", act)
 		}
+		delete(expMsgs, act)
 		errResFn = procT.Ack
 	case <-time.After(time.Second):
 		t.Error("Timed out")
@@ -327,7 +329,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	resFns := []func(context.Context, error) error{}
 
 	// Receive N messages
-	for i := 0; i < mockProc.N; i++ {
+	for i := 0; i < mockProc.N-1; i++ {
 		select {
 		case procT, open := <-proc.TransactionChan():
 			if !open {
@@ -350,11 +352,27 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 	}
 
 	// Respond without error N times
-	for i := 0; i < mockProc.N; i++ {
+	for i := 0; i < mockProc.N-1; i++ {
 		require.NoError(t, resFns[i](ctx, nil))
 	}
 
-	// Receive error
+	// Receive 1 message
+	select {
+	case procT, open := <-proc.TransactionChan():
+		if !open {
+			t.Error("Closed early")
+		}
+		act := string(procT.Payload.Get(0).Get())
+		assert.Equal(t, "test0", act)
+		errResFn = procT.Ack
+	case <-time.After(time.Second):
+		t.Error("Timed out")
+	}
+
+	// Respond with nil error
+	require.NoError(t, errResFn(ctx, nil))
+
+	// Receive overall ack
 	select {
 	case res, open := <-resChan:
 		if !open {

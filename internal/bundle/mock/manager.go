@@ -3,13 +3,16 @@ package mock
 import (
 	"context"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	linput "github.com/benthosdev/benthos/v4/internal/old/input"
 	loutput "github.com/benthosdev/benthos/v4/internal/old/output"
@@ -29,6 +32,15 @@ func NewManager() *Manager {
 	}
 }
 
+// ForStream returns the same mock manager.
+func (m *Manager) ForStream(id string) interop.Manager { return m }
+
+// IntoPath returns the same mock manager.
+func (m *Manager) IntoPath(segments ...string) interop.Manager { return m }
+
+// WithAddedMetrics returns the same mock manager.
+func (m *Manager) WithAddedMetrics(m2 metrics.Type) interop.Manager { return m }
+
 // NewBuffer always errors on invalid type.
 func (m *Manager) NewBuffer(conf buffer.Config) (buffer.Streamed, error) {
 	return nil, component.ErrInvalidBufferType
@@ -36,7 +48,7 @@ func (m *Manager) NewBuffer(conf buffer.Config) (buffer.Streamed, error) {
 
 // NewCache always errors on invalid type.
 func (m *Manager) NewCache(conf cache.Config) (cache.V1, error) {
-	return nil, component.ErrInvalidCacheType
+	return bundle.AllCaches.Init(conf, m)
 }
 
 // StoreCache always errors on invalid type.
@@ -46,7 +58,7 @@ func (m *Manager) StoreCache(ctx context.Context, name string, conf cache.Config
 
 // NewInput always errors on invalid type.
 func (m *Manager) NewInput(conf linput.Config, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
-	return nil, component.ErrInvalidInputType
+	return bundle.AllInputs.Init(conf, m, pipelines...)
 }
 
 // StoreInput always errors on invalid type.
@@ -56,7 +68,7 @@ func (m *Manager) StoreInput(ctx context.Context, name string, conf linput.Confi
 
 // NewProcessor always errors on invalid type.
 func (m *Manager) NewProcessor(conf lprocessor.Config) (processor.V1, error) {
-	return nil, component.ErrInvalidProcessorType
+	return bundle.AllProcessors.Init(conf, m)
 }
 
 // StoreProcessor always errors on invalid type.
@@ -66,7 +78,7 @@ func (m *Manager) StoreProcessor(ctx context.Context, name string, conf lprocess
 
 // NewOutput always errors on invalid type.
 func (m *Manager) NewOutput(conf loutput.Config, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error) {
-	return nil, component.ErrInvalidOutputType
+	return bundle.AllOutputs.Init(conf, m, pipelines...)
 }
 
 // StoreOutput always errors on invalid type.
@@ -76,7 +88,7 @@ func (m *Manager) StoreOutput(ctx context.Context, name string, conf loutput.Con
 
 // NewRateLimit always errors on invalid type.
 func (m *Manager) NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error) {
-	return nil, component.ErrInvalidRateLimitType
+	return bundle.AllRateLimits.Init(conf, m)
 }
 
 // StoreRateLimit always errors on invalid type.

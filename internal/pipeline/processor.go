@@ -80,7 +80,7 @@ func (p *Processor) loop() {
 			p.dispatchMessages(closeCtx, resultMsgs, tran.Ack)
 		} else {
 			select {
-			case p.messagesOut <- message.NewTransaction(resultMsgs[0], tran.ResponseChan):
+			case p.messagesOut <- message.NewTransactionFunc(resultMsgs[0], tran.Ack):
 			case <-p.shutSig.CloseAtLeisureChan():
 				return
 			}
@@ -93,52 +93,41 @@ func (p *Processor) loop() {
 func (p *Processor) dispatchMessages(ctx context.Context, msgs []*message.Batch, ackFn func(context.Context, error) error) {
 	throt := throttle.New(throttle.OptCloseChan(p.shutSig.CloseAtLeisureChan()))
 
-	sendMsg := func(m *message.Batch) {
-		resChan := make(chan error)
-		transac := message.NewTransaction(m, resChan)
+	pending := msgs
+	for len(pending) > 0 {
+		wg := sync.WaitGroup{}
+		wg.Add(len(pending))
 
-		for {
+		var newPending []*message.Batch
+		var newPendingMut sync.Mutex
+
+		for _, b := range pending {
+			b := b
+			transac := message.NewTransactionFunc(b, func(ctx context.Context, err error) error {
+				if err != nil {
+					newPendingMut.Lock()
+					newPending = append(newPending, b)
+					newPendingMut.Unlock()
+				}
+				wg.Done()
+				return nil
+			})
+
 			select {
 			case p.messagesOut <- transac:
 			case <-ctx.Done():
 				return
 			}
+		}
+		wg.Wait()
 
-			var open bool
-			var res error
-			select {
-			case res, open = <-resChan:
-				if !open {
-					return
-				}
-			case <-ctx.Done():
-				return
-			}
-
-			if res == nil {
-				return
-			}
-			if !throt.Retry() {
-				return
-			}
+		if pending = newPending; len(pending) > 0 && !throt.Retry() {
+			return
 		}
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(len(msgs))
-
-	for _, msg := range msgs {
-		go func(m *message.Batch) {
-			sendMsg(m)
-			wg.Done()
-		}(msg)
-	}
-
-	wg.Wait()
-
 	// TODO: V4 Exit before ack if closing
 	throt.Reset()
-
 	_ = ackFn(ctx, nil)
 }
 
