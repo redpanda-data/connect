@@ -18,7 +18,7 @@ import (
 )
 
 func init() {
-	bundle.AllOutputs.Add(newFallback, docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(newFallback, docs.ComponentSpec{
 		Name:    "fallback",
 		Version: "3.58.0",
 		Summary: `
@@ -70,6 +70,9 @@ However, depending on the output and the error returned it is sometimes not poss
 		},
 		Config: docs.FieldComponent().Array().HasType(docs.FieldTypeOutput),
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -80,7 +83,7 @@ func newFallback(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...pro
 	outputConfs := conf.Fallback
 
 	if len(outputConfs) == 0 {
-		return nil, ooutput.ErrBrokerNoOutputs
+		return nil, ErrBrokerNoOutputs
 	}
 	outputs := make([]output.Streamed, len(outputConfs))
 

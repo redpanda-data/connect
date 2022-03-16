@@ -1,4 +1,4 @@
-package input
+package generic
 
 import (
 	"errors"
@@ -6,27 +6,21 @@ import (
 	"strconv"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/old/broker"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
-
-//------------------------------------------------------------------------------
 
 var (
 	// ErrBrokerNoInputs is returned when creating a broker with zero inputs.
 	ErrBrokerNoInputs = errors.New("attempting to create broker input type with no inputs")
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeBroker] = TypeSpec{
-		constructor: NewBroker,
+	err := bundle.AllInputs.Add(newBrokerInput, docs.ComponentSpec{
+		Name: "broker",
 		Summary: `
 Allows you to combine multiple inputs into a single stream of data, where each input will be read in parallel.`,
 		Description: `
@@ -78,46 +72,22 @@ the broker level, where they will be applied to _all_ child inputs, as well as
 on the individual child inputs. If you have processors at both the broker level
 _and_ on child inputs then the broker processors will be applied _after_ the
 child nodes processors.`,
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldAdvanced("copies", "Whatever is specified within `inputs` will be created this many times."),
-			docs.FieldCommon("inputs", "A list of inputs to create.").Array().HasType(docs.FieldTypeInput),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldInt("copies", "Whatever is specified within `inputs` will be created this many times.").Advanced().HasDefault(1),
+			docs.FieldCommon("inputs", "A list of inputs to create.").Array().HasType(docs.FieldTypeInput).HasDefault([]interface{}{}),
 			policy.FieldSpec(),
-		},
+		),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// BrokerConfig contains configuration fields for the Broker input type.
-type BrokerConfig struct {
-	Copies   int           `json:"copies" yaml:"copies"`
-	Inputs   []Config      `json:"inputs" yaml:"inputs"`
-	Batching policy.Config `json:"batching" yaml:"batching"`
-}
-
-// NewBrokerConfig creates a new BrokerConfig with default values.
-func NewBrokerConfig() BrokerConfig {
-	return BrokerConfig{
-		Copies:   1,
-		Inputs:   []Config{},
-		Batching: policy.NewConfig(),
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// NewBroker creates a new Broker input type.
-func NewBroker(
-	conf Config,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-	pipelines ...iprocessor.PipelineConstructorFunc,
-) (input.Streamed, error) {
-	pipelines = AppendProcessorsFromConfig(conf, mgr, pipelines...)
+func newBrokerInput(conf oinput.Config, mgr bundle.NewManagement, pipelines ...iprocessor.PipelineConstructorFunc) (input.Streamed, error) {
+	pipelines = oinput.AppendProcessorsFromConfig(conf, mgr, pipelines...)
 
 	lInputs := len(conf.Broker.Inputs) * conf.Broker.Copies
 
@@ -128,7 +98,7 @@ func NewBroker(
 	var err error
 	var b input.Streamed
 	if lInputs == 1 {
-		if b, err = New(conf.Broker.Inputs[0], mgr, log, stats, pipelines...); err != nil {
+		if b, err = mgr.NewInput(conf.Broker.Inputs[0], pipelines...); err != nil {
 			return nil, err
 		}
 	} else {
@@ -136,15 +106,15 @@ func NewBroker(
 
 		for j := 0; j < conf.Broker.Copies; j++ {
 			for i, iConf := range conf.Broker.Inputs {
-				iMgr := mgr.IntoPath("broker", "inputs", strconv.Itoa(i))
-				inputs[len(conf.Broker.Inputs)*j+i], err = New(iConf, iMgr, iMgr.Logger(), iMgr.Metrics(), pipelines...)
+				iMgr := mgr.IntoPath("broker", "inputs", strconv.Itoa(i)).(bundle.NewManagement)
+				inputs[len(conf.Broker.Inputs)*j+i], err = iMgr.NewInput(iConf, pipelines...)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create input '%v' type '%v': %v", i, iConf.Type, err)
 				}
 			}
 		}
 
-		if b, err = broker.NewFanIn(inputs, stats); err != nil {
+		if b, err = newFanInInputBroker(inputs); err != nil {
 			return nil, err
 		}
 	}
@@ -159,7 +129,5 @@ func NewBroker(
 		return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 	}
 
-	return NewBatcher(policy, b, log, stats), nil
+	return oinput.NewBatcher(policy, b, mgr.Logger(), mgr.Metrics()), nil
 }
-
-//------------------------------------------------------------------------------

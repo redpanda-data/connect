@@ -26,7 +26,6 @@ input:
   dynamic:
     inputs: {}
     prefix: ""
-    timeout: 5s
 ```
 
 To GET a JSON map of input identifiers with their current uptimes use the
@@ -54,13 +53,5 @@ A path prefix for HTTP endpoints that are registered.
 
 Type: `string`  
 Default: `""`  
-
-### `timeout`
-
-The server side timeout of HTTP requests.
-
-
-Type: `string`  
-Default: `"5s"`  
 
 

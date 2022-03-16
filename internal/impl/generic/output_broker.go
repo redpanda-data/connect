@@ -1,4 +1,4 @@
-package output
+package generic
 
 import (
 	"errors"
@@ -6,13 +6,11 @@ import (
 	"strconv"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/old/broker"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 var (
@@ -21,11 +19,9 @@ var (
 	ErrBrokerNoOutputs = errors.New("attempting to create broker output type with no outputs")
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeBroker] = TypeSpec{
-		constructor: NewBroker,
+	err := bundle.AllOutputs.Add(newBroker, docs.ComponentSpec{
+		Name: "broker",
 		Summary: `
 Allows you to route messages to multiple child outputs using a range of
 brokering [patterns](#patterns).`,
@@ -88,58 +84,27 @@ is sent to a single output, which is determined by allowing outputs to claim
 messages as soon as they are able to process them. This results in certain
 faster outputs potentially processing more messages at the cost of slower
 outputs.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldAdvanced("copies", "The number of copies of each configured output to spawn."),
-			docs.FieldCommon("pattern", "The brokering pattern to use.").HasOptions(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldInt("copies", "The number of copies of each configured output to spawn.").Advanced().HasDefault(1),
+			docs.FieldString("pattern", "The brokering pattern to use.").HasOptions(
 				"fan_out", "fan_out_sequential", "round_robin", "greedy",
-			),
-			docs.FieldAdvanced(
-				"max_in_flight",
-				"The maximum number of parallel message batches to have in flight at any given time. Note that if a child output has a higher `max_in_flight` then the switch output will automatically match it, therefore this value is the minimum `max_in_flight` to set in cases where the child values can't be inferred (such as when using resource outputs as children). Only relevant for `fan_out`, `fan_out_sequential` brokers.",
-			),
-			docs.FieldCommon("outputs", "A list of child outputs to broker.").Array().HasType(docs.FieldTypeOutput),
+			).HasDefault("fan_out"),
+			docs.FieldCommon("outputs", "A list of child outputs to broker.").Array().HasType(docs.FieldTypeOutput).HasDefault([]interface{}{}),
 			policy.FieldSpec(),
+		),
+		Categories: []string{
+			"Utility",
 		},
-		Categories: []Category{
-			CategoryUtility,
-		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// BrokerConfig contains configuration fields for the Broker output type.
-type BrokerConfig struct {
-	Copies      int           `json:"copies" yaml:"copies"`
-	Pattern     string        `json:"pattern" yaml:"pattern"`
-	MaxInFlight int           `json:"max_in_flight" yaml:"max_in_flight"`
-	Outputs     []Config      `json:"outputs" yaml:"outputs"`
-	Batching    policy.Config `json:"batching" yaml:"batching"`
-}
-
-// NewBrokerConfig creates a new BrokerConfig with default values.
-func NewBrokerConfig() BrokerConfig {
-	return BrokerConfig{
-		Copies:      1,
-		Pattern:     "fan_out",
-		MaxInFlight: 1,
-		Outputs:     []Config{},
-		Batching:    policy.NewConfig(),
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// NewBroker creates a new Broker output type. Messages will be sent out to the
-// list of outputs according to the chosen broker pattern.
-func NewBroker(
-	conf Config,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-	pipelines ...iprocessor.PipelineConstructorFunc,
-) (output.Streamed, error) {
-	pipelines = AppendProcessorsFromConfig(conf, mgr, pipelines...)
+func newBroker(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error) {
+	pipelines = ooutput.AppendProcessorsFromConfig(conf, mgr, pipelines...)
 
 	outputConfs := conf.Broker.Outputs
 
@@ -149,11 +114,11 @@ func NewBroker(
 		return nil, ErrBrokerNoOutputs
 	}
 	if lOutputs == 1 {
-		b, err := New(outputConfs[0], mgr, log, stats, pipelines...)
+		b, err := ooutput.New(outputConfs[0], mgr, mgr.Logger(), mgr.Metrics(), pipelines...)
 		if err != nil {
 			return nil, err
 		}
-		if b, err = NewBatcherFromConfig(conf.Broker.Batching, b, mgr, log, stats); err != nil {
+		if b, err = ooutput.NewBatcherFromConfig(conf.Broker.Batching, b, mgr, mgr.Logger(), mgr.Metrics()); err != nil {
 			return nil, err
 		}
 		return b, nil
@@ -166,48 +131,47 @@ func NewBroker(
 		"greedy":      {},
 	}[conf.Broker.Pattern]
 
+	_, isRetryWrapped := map[string]struct{}{
+		"fan_out":            {},
+		"fan_out_sequential": {},
+	}[conf.Broker.Pattern]
+
 	var err error
 	for j := 0; j < conf.Broker.Copies; j++ {
 		for i, oConf := range outputConfs {
-			var pipes []iprocessor.PipelineConstructorFunc
+			var pipes []processor.PipelineConstructorFunc
 			if isThreaded {
 				pipes = pipelines
 			}
 			oMgr := mgr.IntoPath("broker", "outputs", strconv.Itoa(i))
-			if outputs[j*len(outputConfs)+i], err = New(oConf, oMgr, oMgr.Logger(), oMgr.Metrics(), pipes...); err != nil {
+			tmpOut, err := ooutput.New(oConf, oMgr, oMgr.Logger(), oMgr.Metrics(), pipes...)
+			if err != nil {
 				return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Type, err)
 			}
-		}
-	}
-
-	maxInFlight := conf.Broker.MaxInFlight
-	for _, out := range outputs {
-		if mif, ok := output.GetMaxInFlight(out); ok && mif > maxInFlight {
-			maxInFlight = mif
+			if isRetryWrapped {
+				if tmpOut, err = RetryOutputIndefinitely(mgr, tmpOut); err != nil {
+					return nil, err
+				}
+			}
+			outputs[j*len(outputConfs)+i] = tmpOut
 		}
 	}
 
 	var b output.Streamed
 	switch conf.Broker.Pattern {
 	case "fan_out":
-		var bTmp *broker.FanOut
-		if bTmp, err = broker.NewFanOut(outputs, log, stats); err == nil {
-			b = bTmp.WithMaxInFlight(maxInFlight)
-		}
+		b, err = newFanOutOutputBroker(outputs)
 	case "fan_out_sequential":
-		var bTmp *broker.FanOutSequential
-		if bTmp, err = broker.NewFanOutSequential(outputs, log, stats); err == nil {
-			b = bTmp.WithMaxInFlight(maxInFlight)
-		}
+		b, err = newFanOutSequentialOutputBroker(outputs)
 	case "round_robin":
-		b, err = broker.NewRoundRobin(outputs, stats)
+		b, err = newRoundRobinOutputBroker(outputs)
 	case "greedy":
-		b, err = broker.NewGreedy(outputs)
+		b, err = newGreedyOutputBroker(outputs)
 	default:
 		return nil, fmt.Errorf("broker pattern was not recognised: %v", conf.Broker.Pattern)
 	}
 	if err == nil && !isThreaded {
-		b, err = WrapWithPipelines(b, pipelines...)
+		b, err = ooutput.WrapWithPipelines(b, pipelines...)
 	}
 
 	if !conf.Broker.Batching.IsNoop() {
@@ -215,7 +179,7 @@ func NewBroker(
 		if err != nil {
 			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 		}
-		b = NewBatcher(policy, b, log, stats)
+		b = ooutput.NewBatcher(policy, b, mgr.Logger(), mgr.Metrics())
 	}
 	return b, err
 }

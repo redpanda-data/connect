@@ -1,4 +1,4 @@
-package broker
+package generic
 
 import (
 	"bytes"
@@ -9,15 +9,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-var _ output.Streamed = &RoundRobin{}
+var _ output.Streamed = &roundRobinOutputBroker{}
 
 func TestRoundRobinDoubleClose(t *testing.T) {
-	oTM, err := NewRoundRobin([]output.Streamed{}, metrics.Noop())
+	oTM, err := newRoundRobinOutputBroker([]output.Streamed{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -37,7 +37,7 @@ func TestBasicRoundRobin(t *testing.T) {
 	nMsgs := 1000
 
 	outputs := []output.Streamed{}
-	mockOutputs := []*MockOutputType{
+	mockOutputs := []*mock.OutputChanneled{
 		{},
 		{},
 		{},
@@ -50,7 +50,7 @@ func TestBasicRoundRobin(t *testing.T) {
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	oTM, err := NewRoundRobin(outputs, metrics.Noop())
+	oTM, err := newRoundRobinOutputBroker(outputs)
 	if err != nil {
 		t.Error(err)
 		return
@@ -115,17 +115,17 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 	nOutputs, nMsgs := 3, b.N
 
 	outputs := []output.Streamed{}
-	mockOutputs := []*MockOutputType{}
+	mockOutputs := []*mock.OutputChanneled{}
 
 	for i := 0; i < nOutputs; i++ {
-		mockOutputs = append(mockOutputs, &MockOutputType{})
+		mockOutputs = append(mockOutputs, &mock.OutputChanneled{})
 		outputs = append(outputs, mockOutputs[i])
 	}
 
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	oTM, err := NewRoundRobin(outputs, metrics.Noop())
+	oTM, err := newRoundRobinOutputBroker(outputs)
 	if err != nil {
 		b.Error(err)
 		return

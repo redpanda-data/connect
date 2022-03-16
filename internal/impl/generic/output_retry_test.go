@@ -1,4 +1,4 @@
-package output
+package generic
 
 import (
 	"context"
@@ -7,26 +7,27 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func TestRetryConfigErrs(t *testing.T) {
-	conf := NewConfig()
+	conf := ooutput.NewConfig()
 	conf.Type = "retry"
 
-	if _, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err == nil {
+	if _, err := bundle.AllOutputs.Init(conf, bmock.NewManager()); err == nil {
 		t.Error("Expected error from bad retry output")
 	}
 
-	oConf := NewConfig()
+	oConf := ooutput.NewConfig()
 	conf.Retry.Output = &oConf
 	conf.Retry.Backoff.InitialInterval = "not a time period"
 
-	if _, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err == nil {
+	if _, err := bundle.AllOutputs.Init(conf, bmock.NewManager()); err == nil {
 		t.Error("Expected error from bad initial period")
 	}
 }
@@ -35,22 +36,23 @@ func TestRetryBasic(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := NewConfig()
+	conf := ooutput.NewConfig()
+	conf.Type = "retry"
 
-	childConf := NewConfig()
+	childConf := ooutput.NewConfig()
 	conf.Retry.Output = &childConf
 
-	output, err := NewRetry(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	output, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ret, ok := output.(*Retry)
+	ret, ok := output.(*indefiniteRetry)
 	if !ok {
-		t.Fatal("Failed to cast")
+		t.Fatalf("Failed to cast: %T", output)
 	}
 
-	mOut := &mockOutput{}
+	mOut := &mock.OutputChanneled{}
 	ret.wrapped = mOut
 
 	tChan := make(chan message.Transaction)
@@ -71,7 +73,7 @@ func TestRetryBasic(t *testing.T) {
 
 	var tran message.Transaction
 	select {
-	case tran = <-mOut.ts:
+	case tran = <-mOut.TChan:
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
@@ -98,24 +100,25 @@ func TestRetrySadPath(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := NewConfig()
+	conf := ooutput.NewConfig()
+	conf.Type = "retry"
 
-	childConf := NewConfig()
+	childConf := ooutput.NewConfig()
 	conf.Retry.Output = &childConf
 	conf.Retry.Backoff.InitialInterval = "10us"
 	conf.Retry.Backoff.MaxInterval = "10us"
 
-	output, err := NewRetry(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	output, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ret, ok := output.(*Retry)
+	ret, ok := output.(*indefiniteRetry)
 	if !ok {
 		t.Fatal("Failed to cast")
 	}
 
-	mOut := &mockOutput{}
+	mOut := &mock.OutputChanneled{}
 	ret.wrapped = mOut
 
 	tChan := make(chan message.Transaction)
@@ -138,7 +141,7 @@ func TestRetrySadPath(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		select {
-		case tran = <-mOut.ts:
+		case tran = <-mOut.TChan:
 		case <-resChan:
 			t.Fatal("Received response not retry")
 		case <-time.After(time.Second):
@@ -152,7 +155,7 @@ func TestRetrySadPath(t *testing.T) {
 	}
 
 	select {
-	case tran = <-mOut.ts:
+	case tran = <-mOut.TChan:
 	case <-resChan:
 		t.Fatal("Received response not retry")
 	case <-time.After(time.Second):
@@ -249,24 +252,25 @@ func ackForRetry(
 }
 
 func TestRetryParallel(t *testing.T) {
-	conf := NewConfig()
+	conf := ooutput.NewConfig()
+	conf.Type = "retry"
 
-	childConf := NewConfig()
+	childConf := ooutput.NewConfig()
 	conf.Retry.Output = &childConf
 	conf.Retry.Backoff.InitialInterval = "10us"
 	conf.Retry.Backoff.MaxInterval = "10us"
 
-	output, err := NewRetry(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	output, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ret, ok := output.(*Retry)
+	ret, ok := output.(*indefiniteRetry)
 	if !ok {
 		t.Fatal("Failed to cast")
 	}
 
-	mOut := &mockOutput{}
+	mOut := &mock.OutputChanneled{}
 	ret.wrapped = mOut
 
 	tChan := make(chan message.Transaction)
@@ -276,28 +280,28 @@ func TestRetryParallel(t *testing.T) {
 
 	resChan1, resChan2 := make(chan error), make(chan error)
 	sendForRetry("first", tChan, resChan1, t)
-	expectFromRetry(component.ErrFailedSend, mOut.ts, t, "first")
+	expectFromRetry(component.ErrFailedSend, mOut.TChan, t, "first")
 
 	sendForRetry("second", tChan, resChan2, t)
-	expectFromRetry(component.ErrFailedSend, mOut.ts, t, "first", "second")
+	expectFromRetry(component.ErrFailedSend, mOut.TChan, t, "first", "second")
 
 	select {
 	case tChan <- message.NewTransaction(nil, nil):
 		t.Fatal("Accepted transaction during retry loop")
 	default:
 	}
-	expectFromRetry(nil, mOut.ts, t, "first", "second")
+	expectFromRetry(nil, mOut.TChan, t, "first", "second")
 	ackForRetry(nil, resChan1, t)
 	ackForRetry(nil, resChan2, t)
 
 	sendForRetry("third", tChan, resChan1, t)
-	expectFromRetry(nil, mOut.ts, t, "third")
+	expectFromRetry(nil, mOut.TChan, t, "third")
 	ackForRetry(nil, resChan1, t)
 
 	sendForRetry("fourth", tChan, resChan2, t)
-	expectFromRetry(component.ErrFailedSend, mOut.ts, t, "fourth")
+	expectFromRetry(component.ErrFailedSend, mOut.TChan, t, "fourth")
 
-	expectFromRetry(nil, mOut.ts, t, "fourth")
+	expectFromRetry(nil, mOut.TChan, t, "fourth")
 	ackForRetry(nil, resChan2, t)
 
 	output.CloseAsync()

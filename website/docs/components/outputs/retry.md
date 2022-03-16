@@ -90,7 +90,7 @@ The initial period to wait between retry attempts.
 
 
 Type: `string`  
-Default: `"500ms"`  
+Default: `"100ms"`  
 
 ### `backoff.max_interval`
 
@@ -98,7 +98,7 @@ The maximum period to wait between retry attempts.
 
 
 Type: `string`  
-Default: `"3s"`  
+Default: `"1s"`  
 
 ### `backoff.max_elapsed_time`
 
@@ -114,6 +114,5 @@ A child output.
 
 
 Type: `output`  
-Default: `{}`  
 
 

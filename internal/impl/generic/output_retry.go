@@ -1,8 +1,7 @@
-package output
+package generic
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -11,22 +10,22 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeRetry] = TypeSpec{
-		constructor: fromSimpleConstructor(NewRetry),
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(conf ooutput.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+		return retryOutputFromConfig(conf.Retry, mgr)
+	}), docs.ComponentSpec{
+		Name: "retry",
 		Summary: `
 Attempts to write messages to a child output and if the write fails for any
 reason the message is retried either until success or, if the retries or max
@@ -43,79 +42,76 @@ we want to avoid reapplying to the same message more than once in the pipeline.
 Rather than retrying the same output you may wish to retry the send using a
 different output target (a dead letter queue). In which case you should instead
 use the ` + "[`fallback`](/docs/components/outputs/fallback)" + ` output type.`,
-		FieldSpecs: retries.FieldSpecs().Add(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldInt("max_retries", "The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.").HasDefault(0).Advanced(),
+			docs.FieldObject("backoff", "Control time intervals between retry attempts.").WithChildren(
+				docs.FieldString("initial_interval", "The initial period to wait between retry attempts.").HasDefault("100ms"),
+				docs.FieldString("max_interval", "The maximum period to wait between retry attempts.").HasDefault("1s"),
+				docs.FieldString("max_elapsed_time", "The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.").HasDefault("0s"),
+			).Advanced(),
 			docs.FieldCommon("output", "A child output.").HasType(docs.FieldTypeOutput),
 		),
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// RetryConfig contains configuration values for the Retry output type.
-type RetryConfig struct {
-	Output         *Config `json:"output" yaml:"output"`
-	retries.Config `json:",inline" yaml:",inline"`
+// RetryOutputIndefinitely returns a wrapped variant of the provided output
+// where send errors downstream are automatically caught and retried rather than
+// propagated upstream as nacks.
+func RetryOutputIndefinitely(mgr interop.Manager, wrapped output.Streamed) (output.Streamed, error) {
+	return newIndefiniteRetry(mgr, nil, wrapped)
 }
 
-// NewRetryConfig creates a new RetryConfig with default values.
-func NewRetryConfig() RetryConfig {
-	rConf := retries.NewConfig()
-	rConf.MaxRetries = 0
-	rConf.Backoff.InitialInterval = "100ms"
-	rConf.Backoff.MaxInterval = "1s"
-	rConf.Backoff.MaxElapsedTime = "0s"
-	return RetryConfig{
-		Output: nil,
-		Config: retries.NewConfig(),
+func retryOutputFromConfig(conf ooutput.RetryConfig, mgr interop.Manager) (output.Streamed, error) {
+	if conf.Output == nil {
+		return nil, errors.New("cannot create retry output without a child")
 	}
+
+	wrapped, err := ooutput.New(*conf.Output, mgr, mgr.Logger(), mgr.Metrics())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create output '%v': %v", conf.Output.Type, err)
+	}
+
+	var boffCtor func() backoff.BackOff
+	if boffCtor, err = conf.GetCtor(); err != nil {
+		return nil, err
+	}
+
+	return newIndefiniteRetry(mgr, boffCtor, wrapped)
 }
 
-//------------------------------------------------------------------------------
+func newIndefiniteRetry(mgr interop.Manager, backoffCtor func() backoff.BackOff, wrapped output.Streamed) (*indefiniteRetry, error) {
+	if backoffCtor == nil {
+		tmpConf := ooutput.NewRetryConfig()
+		var err error
+		if backoffCtor, err = tmpConf.GetCtor(); err != nil {
+			return nil, err
+		}
+	}
 
-type dummyRetryConfig struct {
-	Output         interface{} `json:"output" yaml:"output"`
-	retries.Config `json:",inline" yaml:",inline"`
+	return &indefiniteRetry{
+		log:             mgr.Logger(),
+		wrapped:         wrapped,
+		backoffCtor:     backoffCtor,
+		transactionsOut: make(chan message.Transaction),
+		shutSig:         shutdown.NewSignaller(),
+	}, nil
 }
 
-// MarshalJSON prints an empty object instead of nil.
-func (r RetryConfig) MarshalJSON() ([]byte, error) {
-	dummy := dummyRetryConfig{
-		Output: r.Output,
-		Config: r.Config,
-	}
-	if r.Output == nil {
-		dummy.Output = struct{}{}
-	}
-	return json.Marshal(dummy)
-}
-
-// MarshalYAML prints an empty object instead of nil.
-func (r RetryConfig) MarshalYAML() (interface{}, error) {
-	dummy := dummyRetryConfig{
-		Output: r.Output,
-		Config: r.Config,
-	}
-	if r.Output == nil {
-		dummy.Output = struct{}{}
-	}
-	return dummy, nil
-}
-
-//------------------------------------------------------------------------------
-
-// Retry is an output type that continuously writes a message to a child output
-// until the send is successful.
-type Retry struct {
-	conf RetryConfig
-
+// indefiniteRetry is an output type that continuously writes a message to a
+// child output until the send is successful.
+type indefiniteRetry struct {
 	wrapped     output.Streamed
 	backoffCtor func() backoff.BackOff
 
-	stats metrics.Type
-	log   log.Modular
+	log log.Modular
 
 	transactionsIn  <-chan message.Transaction
 	transactionsOut chan message.Transaction
@@ -123,43 +119,7 @@ type Retry struct {
 	shutSig *shutdown.Signaller
 }
 
-// NewRetry creates a new Retry input type.
-func NewRetry(
-	conf Config,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-) (output.Streamed, error) {
-	if conf.Retry.Output == nil {
-		return nil, errors.New("cannot create retry output without a child")
-	}
-
-	wrapped, err := New(*conf.Retry.Output, mgr, log, stats)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create output '%v': %v", conf.Retry.Output.Type, err)
-	}
-
-	var boffCtor func() backoff.BackOff
-	if boffCtor, err = conf.Retry.GetCtor(); err != nil {
-		return nil, err
-	}
-
-	return &Retry{
-		conf: conf.Retry,
-
-		log:             log,
-		stats:           stats,
-		wrapped:         wrapped,
-		backoffCtor:     boffCtor,
-		transactionsOut: make(chan message.Transaction),
-
-		shutSig: shutdown.NewSignaller(),
-	}, nil
-}
-
-//------------------------------------------------------------------------------
-
-func (r *Retry) loop() {
+func (r *indefiniteRetry) loop() {
 	wg := sync.WaitGroup{}
 
 	defer func() {
@@ -278,7 +238,7 @@ func (r *Retry) loop() {
 }
 
 // Consume assigns a messages channel for the output to read.
-func (r *Retry) Consume(ts <-chan message.Transaction) error {
+func (r *indefiniteRetry) Consume(ts <-chan message.Transaction) error {
 	if r.transactionsIn != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -292,24 +252,17 @@ func (r *Retry) Consume(ts <-chan message.Transaction) error {
 
 // Connected returns a boolean indicating whether this output is currently
 // connected to its target.
-func (r *Retry) Connected() bool {
+func (r *indefiniteRetry) Connected() bool {
 	return r.wrapped.Connected()
 }
 
-// MaxInFlight returns the maximum number of in flight messages permitted by the
-// output. This value can be used to determine a sensible value for parent
-// outputs, but should not be relied upon as part of dispatcher logic.
-func (r *Retry) MaxInFlight() (int, bool) {
-	return output.GetMaxInFlight(r.wrapped)
-}
-
 // CloseAsync shuts down the Retry input and stops processing requests.
-func (r *Retry) CloseAsync() {
+func (r *indefiniteRetry) CloseAsync() {
 	r.shutSig.CloseAtLeisure()
 }
 
 // WaitForClose blocks until the Retry input has closed down.
-func (r *Retry) WaitForClose(timeout time.Duration) error {
+func (r *indefiniteRetry) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-r.shutSig.HasClosedChan():
 	case <-time.After(timeout):
@@ -317,5 +270,3 @@ func (r *Retry) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

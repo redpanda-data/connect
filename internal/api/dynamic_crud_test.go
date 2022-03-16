@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -84,14 +85,14 @@ func TestDynamicDelete(t *testing.T) {
 	removed := []string{}
 	failRemove := true
 
-	dAPI.OnDelete(func(id string) error {
+	dAPI.OnDelete(func(ctx context.Context, id string) error {
 		if failRemove {
 			return errors.New("foo err")
 		}
 		removed = append(removed, id)
 		return nil
 	})
-	dAPI.OnUpdate(func(id string, content []byte) error {
+	dAPI.OnUpdate(func(ctx context.Context, id string, content []byte) error {
 		t.Error("Unexpected update called")
 		return nil
 	})
@@ -125,7 +126,7 @@ func TestDynamicBasicCRUD(t *testing.T) {
 
 	deleteExp := ""
 	var deleteErr error
-	dAPI.OnDelete(func(id string) error {
+	dAPI.OnDelete(func(ctx context.Context, id string) error {
 		if exp, act := deleteExp, id; exp != act {
 			t.Errorf("Wrong content on delete: %v != %v", act, exp)
 		}
@@ -134,7 +135,7 @@ func TestDynamicBasicCRUD(t *testing.T) {
 
 	updateExp := []byte("hello world")
 	var updateErr error
-	dAPI.OnUpdate(func(id string, content []byte) error {
+	dAPI.OnUpdate(func(ctx context.Context, id string, content []byte) error {
 		if exp, act := updateExp, content; !reflect.DeepEqual(exp, act) {
 			t.Errorf("Wrong content on update: %s != %s", act, exp)
 		}
@@ -190,11 +191,11 @@ func TestDynamicListing(t *testing.T) {
 	dAPI := NewDynamic()
 	r := router(dAPI)
 
-	dAPI.OnDelete(func(id string) error {
+	dAPI.OnDelete(func(ctx context.Context, id string) error {
 		return nil
 	})
 
-	dAPI.OnUpdate(func(id string, content []byte) error {
+	dAPI.OnUpdate(func(ctx context.Context, id string, content []byte) error {
 		return nil
 	})
 

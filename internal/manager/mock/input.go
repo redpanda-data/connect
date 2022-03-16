@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"sync"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -8,7 +9,8 @@ import (
 
 // Input provides a mocked input implementation.
 type Input struct {
-	ts chan message.Transaction
+	TChan     chan message.Transaction
+	closeOnce sync.Once
 }
 
 // NewInput creates a new mock input that will return transactions containing a
@@ -22,7 +24,7 @@ func NewInput(batches []*message.Batch) *Input {
 			ts <- message.NewTransaction(b, resChan)
 		}
 	}()
-	return &Input{ts: ts}
+	return &Input{TChan: ts}
 }
 
 // Connected always returns true.
@@ -32,11 +34,14 @@ func (f *Input) Connected() bool {
 
 // TransactionChan returns a transaction channel.
 func (f *Input) TransactionChan() <-chan message.Transaction {
-	return f.ts
+	return f.TChan
 }
 
 // CloseAsync does nothing.
 func (f *Input) CloseAsync() {
+	f.closeOnce.Do(func() {
+		close(f.TChan)
+	})
 }
 
 // WaitForClose does nothing.

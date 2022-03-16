@@ -1,4 +1,4 @@
-package broker
+package generic
 
 import (
 	"bytes"
@@ -12,13 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-var _ input.Streamed = &FanIn{}
-
-//------------------------------------------------------------------------------
+var _ input.Streamed = &fanInInputBroker{}
 
 func TestBasicFanIn(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
@@ -27,18 +25,18 @@ func TestBasicFanIn(t *testing.T) {
 	nInputs, nMsgs := 10, 1000
 
 	Inputs := []input.Streamed{}
-	mockInputs := []*MockInputType{}
+	mockInputs := []*mock.Input{}
 
 	resChan := make(chan error)
 
 	for i := 0; i < nInputs; i++ {
-		mockInputs = append(mockInputs, &MockInputType{
+		mockInputs = append(mockInputs, &mock.Input{
 			TChan: make(chan message.Transaction),
 		})
 		Inputs = append(Inputs, mockInputs[i])
 	}
 
-	fanIn, err := NewFanIn(Inputs, metrics.Noop())
+	fanIn, err := newFanInInputBroker(Inputs)
 	if err != nil {
 		t.Error(err)
 		return
@@ -85,16 +83,16 @@ func TestFanInShutdown(t *testing.T) {
 	nInputs := 10
 
 	Inputs := []input.Streamed{}
-	mockInputs := []*MockInputType{}
+	mockInputs := []*mock.Input{}
 
 	for i := 0; i < nInputs; i++ {
-		mockInputs = append(mockInputs, &MockInputType{
+		mockInputs = append(mockInputs, &mock.Input{
 			TChan: make(chan message.Transaction),
 		})
 		Inputs = append(Inputs, mockInputs[i])
 	}
 
-	fanIn, err := NewFanIn(Inputs, metrics.Noop())
+	fanIn, err := newFanInInputBroker(Inputs)
 	if err != nil {
 		t.Error(err)
 		return
@@ -127,16 +125,16 @@ func TestFanInAsync(t *testing.T) {
 	nInputs, nMsgs := 10, 1000
 
 	Inputs := []input.Streamed{}
-	mockInputs := []*MockInputType{}
+	mockInputs := []*mock.Input{}
 
 	for i := 0; i < nInputs; i++ {
-		mockInputs = append(mockInputs, &MockInputType{
+		mockInputs = append(mockInputs, &mock.Input{
 			TChan: make(chan message.Transaction),
 		})
 		Inputs = append(Inputs, mockInputs[i])
 	}
 
-	fanIn, err := NewFanIn(Inputs, metrics.Noop())
+	fanIn, err := newFanInInputBroker(Inputs)
 	if err != nil {
 		t.Error(err)
 		return
@@ -191,17 +189,17 @@ func BenchmarkBasicFanIn(b *testing.B) {
 	nInputs := 10
 
 	Inputs := []input.Streamed{}
-	mockInputs := []*MockInputType{}
+	mockInputs := []*mock.Input{}
 	resChan := make(chan error)
 
 	for i := 0; i < nInputs; i++ {
-		mockInputs = append(mockInputs, &MockInputType{
+		mockInputs = append(mockInputs, &mock.Input{
 			TChan: make(chan message.Transaction),
 		})
 		Inputs = append(Inputs, mockInputs[i])
 	}
 
-	fanIn, err := NewFanIn(Inputs, metrics.Noop())
+	fanIn, err := newFanInInputBroker(Inputs)
 	if err != nil {
 		b.Error(err)
 		return
@@ -245,5 +243,3 @@ func BenchmarkBasicFanIn(b *testing.B) {
 
 	b.StopTimer()
 }
-
-//------------------------------------------------------------------------------

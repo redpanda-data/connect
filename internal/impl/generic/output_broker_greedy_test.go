@@ -1,4 +1,4 @@
-package broker
+package generic
 
 import (
 	"bytes"
@@ -10,13 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-var _ output.Streamed = &Greedy{}
+var _ output.Streamed = &greedyOutputBroker{}
 
 func TestGreedyDoubleClose(t *testing.T) {
-	oTM, err := NewGreedy([]output.Streamed{})
+	oTM, err := newGreedyOutputBroker([]output.Streamed{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -36,7 +37,7 @@ func TestBasicGreedy(t *testing.T) {
 	nMsgs := 1000
 
 	outputs := []output.Streamed{}
-	mockOutputs := []*MockOutputType{
+	mockOutputs := []*mock.OutputChanneled{
 		{},
 		{},
 		{},
@@ -49,7 +50,7 @@ func TestBasicGreedy(t *testing.T) {
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	oTM, err := NewGreedy(outputs)
+	oTM, err := newGreedyOutputBroker(outputs)
 	if err != nil {
 		t.Error(err)
 		return
@@ -99,5 +100,3 @@ func TestBasicGreedy(t *testing.T) {
 		t.Error(err)
 	}
 }
-
-//------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-package broker
+package generic
 
 import (
 	"bytes"
@@ -14,12 +14,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-var _ input.Streamed = &DynamicFanIn{}
+var _ input.Streamed = &dynamicFanInInput{}
 
 func TestStaticBasicDynamicFanIn(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
@@ -27,18 +27,18 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 
 	nInputs, nMsgs := 10, 1000
 
-	Inputs := map[string]DynamicInput{}
-	mockInputs := []*MockInputType{}
+	Inputs := map[string]input.Streamed{}
+	mockInputs := []*mock.Input{}
 	resChan := make(chan error)
 
 	for i := 0; i < nInputs; i++ {
-		mockInputs = append(mockInputs, &MockInputType{
+		mockInputs = append(mockInputs, &mock.Input{
 			TChan: make(chan message.Transaction),
 		})
 		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
 	}
 
-	fanIn, err := NewDynamicFanIn(Inputs, log.Noop(), metrics.Noop())
+	fanIn, err := newDynamicFanInInput(Inputs, log.Noop(), nil, nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -88,25 +88,28 @@ func TestBasicDynamicFanIn(t *testing.T) {
 
 	nMsgs := 1000
 
-	inputOne := &MockInputType{
+	inputOne := &mock.Input{
 		TChan: make(chan message.Transaction),
 	}
-	inputTwo := &MockInputType{
+	inputTwo := &mock.Input{
 		TChan: make(chan message.Transaction),
 	}
 
-	fanIn, err := NewDynamicFanIn(nil, log.Noop(), metrics.Noop())
+	fanIn, err := newDynamicFanInInput(nil, log.Noop(), nil, nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	if err = fanIn.SetInput("foo", inputOne, time.Second); err != nil {
+	ctx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
+	if err = fanIn.SetInput(ctx, "foo", inputOne); err != nil {
 		t.Fatal(err)
 	}
 
 	wg := sync.WaitGroup{}
-	sendAllTestMessages := func(input *MockInputType, label string) {
+	sendAllTestMessages := func(input *mock.Input, label string) {
 		rChan := make(chan error)
 		for i := 0; i < nMsgs; i++ {
 			content := [][]byte{[]byte(fmt.Sprintf("%v-%v", label, i))}
@@ -140,7 +143,7 @@ func TestBasicDynamicFanIn(t *testing.T) {
 		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
-	if err = fanIn.SetInput("foo", inputTwo, time.Second); err != nil {
+	if err = fanIn.SetInput(ctx, "foo", inputTwo); err != nil {
 		t.Fatal(err)
 	}
 
@@ -171,13 +174,13 @@ func TestBasicDynamicFanIn(t *testing.T) {
 func TestStaticDynamicFanInShutdown(t *testing.T) {
 	nInputs := 10
 
-	Inputs := map[string]DynamicInput{}
-	mockInputs := []*MockInputType{}
+	Inputs := map[string]input.Streamed{}
+	mockInputs := []*mock.Input{}
 
 	expInputAddedList := []string{}
 	expInputRemovedList := []string{}
 	for i := 0; i < nInputs; i++ {
-		mockInputs = append(mockInputs, &MockInputType{
+		mockInputs = append(mockInputs, &mock.Input{
 			TChan: make(chan message.Transaction),
 		})
 		label := fmt.Sprintf("testinput%v", i)
@@ -190,17 +193,18 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 	inputAddedList := []string{}
 	inputRemovedList := []string{}
 
-	fanIn, err := NewDynamicFanIn(
-		Inputs, log.Noop(), metrics.Noop(),
-		OptDynamicFanInSetOnAdd(func(label string) {
+	fanIn, err := newDynamicFanInInput(
+		Inputs, log.Noop(),
+		func(ctx context.Context, label string) {
 			mapMut.Lock()
 			inputAddedList = append(inputAddedList, label)
 			mapMut.Unlock()
-		}), OptDynamicFanInSetOnRemove(func(label string) {
+		},
+		func(ctx context.Context, label string) {
 			mapMut.Lock()
 			inputRemovedList = append(inputRemovedList, label)
 			mapMut.Unlock()
-		}),
+		},
 	)
 	if err != nil {
 		t.Error(err)
@@ -260,17 +264,17 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 
 	nInputs, nMsgs := 10, 1000
 
-	Inputs := map[string]DynamicInput{}
-	mockInputs := []*MockInputType{}
+	Inputs := map[string]input.Streamed{}
+	mockInputs := []*mock.Input{}
 
 	for i := 0; i < nInputs; i++ {
-		mockInputs = append(mockInputs, &MockInputType{
+		mockInputs = append(mockInputs, &mock.Input{
 			TChan: make(chan message.Transaction),
 		})
 		Inputs[fmt.Sprintf("testinput%v", i)] = mockInputs[i]
 	}
 
-	fanIn, err := NewDynamicFanIn(Inputs, log.Noop(), metrics.Noop())
+	fanIn, err := newDynamicFanInInput(Inputs, log.Noop(), nil, nil)
 	if err != nil {
 		t.Error(err)
 		return

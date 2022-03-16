@@ -26,8 +26,6 @@ output:
   dynamic:
     outputs: {}
     prefix: ""
-    timeout: 5s
-    max_in_flight: 1
 ```
 
 The broker pattern used is always `fan_out`, meaning each message will
@@ -58,21 +56,5 @@ A path prefix for HTTP endpoints that are registered.
 
 Type: `string`  
 Default: `""`  
-
-### `timeout`
-
-The server side timeout of HTTP requests.
-
-
-Type: `string`  
-Default: `"5s"`  
-
-### `max_in_flight`
-
-The maximum number of messages to dispatch across child outputs at any given time.
-
-
-Type: `int`  
-Default: `1`  
 
 

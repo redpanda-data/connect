@@ -206,7 +206,6 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

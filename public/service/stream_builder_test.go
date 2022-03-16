@@ -460,7 +460,6 @@ func TestStreamBuilderSetYAMLBrokers(t *testing.T) {
     broker:
         copies: 1
         pattern: fan_out
-        max_in_flight: 1
         outputs:`,
 		`            - label: ""
               nats:`,

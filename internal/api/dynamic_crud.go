@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -75,8 +76,8 @@ func (d *dynamicConfMgr) Remove(id string) {
 // to configuration changes, and these events should be forwarded to the
 // dynamic broker.
 type Dynamic struct {
-	onUpdate func(id string, conf []byte) error
-	onDelete func(id string) error
+	onUpdate func(ctx context.Context, id string, conf []byte) error
+	onDelete func(ctx context.Context, id string) error
 
 	// configs is a map of the latest sanitised configs from our CRUD clients.
 	configs      map[string][]byte
@@ -92,8 +93,8 @@ type Dynamic struct {
 // NewDynamic creates a new Dynamic API type.
 func NewDynamic() *Dynamic {
 	return &Dynamic{
-		onUpdate:     func(id string, conf []byte) error { return nil },
-		onDelete:     func(id string) error { return nil },
+		onUpdate:     func(ctx context.Context, id string, conf []byte) error { return nil },
+		onDelete:     func(ctx context.Context, id string) error { return nil },
 		configs:      map[string][]byte{},
 		configHashes: newDynamicConfMgr(),
 		ids:          map[string]time.Time{},
@@ -105,14 +106,14 @@ func NewDynamic() *Dynamic {
 // OnUpdate registers a func to handle CRUD events where a request wants to set
 // a new value for a dynamic configuration. An error should be returned if the
 // configuration is invalid or the component failed.
-func (d *Dynamic) OnUpdate(onUpdate func(id string, conf []byte) error) {
+func (d *Dynamic) OnUpdate(onUpdate func(ctx context.Context, id string, conf []byte) error) {
 	d.onUpdate = onUpdate
 }
 
 // OnDelete registers a func to handle CRUD events where a request wants to
 // remove a dynamic configuration. An error should be returned if the component
 // failed to close.
-func (d *Dynamic) OnDelete(onDelete func(id string) error) {
+func (d *Dynamic) OnDelete(onDelete func(ctx context.Context, id string) error) {
 	d.onDelete = onDelete
 }
 
@@ -220,7 +221,7 @@ func (d *Dynamic) handlePOSTInput(w http.ResponseWriter, r *http.Request) error 
 		return nil
 	}
 
-	if err := d.onUpdate(id, reqBytes); err != nil {
+	if err := d.onUpdate(r.Context(), id, reqBytes); err != nil {
 		return err
 	}
 
@@ -233,7 +234,7 @@ func (d *Dynamic) handlePOSTInput(w http.ResponseWriter, r *http.Request) error 
 func (d *Dynamic) handleDELInput(w http.ResponseWriter, r *http.Request) error {
 	id := mux.Vars(r)["id"]
 
-	if err := d.onDelete(id); err != nil {
+	if err := d.onDelete(r.Context(), id); err != nil {
 		return err
 	}
 

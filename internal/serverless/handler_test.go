@@ -14,7 +14,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestHandlerAsync(t *testing.T) {

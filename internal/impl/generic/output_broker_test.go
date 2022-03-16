@@ -1,4 +1,4 @@
-package output
+package generic
 
 import (
 	"os"
@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func TestFanOutBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	outOne, outTwo := NewConfig(), NewConfig()
-	outOne.Type, outTwo.Type = TypeFile, TypeFile
+	outOne, outTwo := ooutput.NewConfig(), ooutput.NewConfig()
+	outOne.Type, outTwo.Type = "file", "file"
 	outOne.File.Path = filepath.Join(dir, "one", `foo-${!count("1s")}.txt`)
 	outOne.File.Codec = "all-bytes"
 	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("2s")}.txt`)
@@ -31,12 +31,12 @@ func TestFanOutBroker(t *testing.T) {
 	outOne.Processors = append(outOne.Processors, procOne)
 	outTwo.Processors = append(outTwo.Processors, procTwo)
 
-	conf := NewConfig()
-	conf.Type = TypeBroker
+	conf := ooutput.NewConfig()
+	conf.Type = "broker"
 	conf.Broker.Pattern = "fan_out"
 	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
 
-	s, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	s, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,8 +100,8 @@ func TestFanOutBroker(t *testing.T) {
 func TestRoundRobinBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	outOne, outTwo := NewConfig(), NewConfig()
-	outOne.Type, outTwo.Type = TypeFile, TypeFile
+	outOne, outTwo := ooutput.NewConfig(), ooutput.NewConfig()
+	outOne.Type, outTwo.Type = "file", "file"
 	outOne.File.Path = filepath.Join(dir, "one", `foo-${!count("rrfoo")}.txt`)
 	outOne.File.Codec = "all-bytes"
 	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("rrbar")}.txt`)
@@ -115,12 +115,12 @@ func TestRoundRobinBroker(t *testing.T) {
 	outOne.Processors = append(outOne.Processors, procOne)
 	outTwo.Processors = append(outTwo.Processors, procTwo)
 
-	conf := NewConfig()
-	conf.Type = TypeBroker
+	conf := ooutput.NewConfig()
+	conf.Type = "broker"
 	conf.Broker.Pattern = "round_robin"
 	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
 
-	s, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	s, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,8 +182,8 @@ func TestRoundRobinBroker(t *testing.T) {
 func TestGreedyBroker(t *testing.T) {
 	dir := t.TempDir()
 
-	outOne, outTwo := NewConfig(), NewConfig()
-	outOne.Type, outTwo.Type = TypeFile, TypeFile
+	outOne, outTwo := ooutput.NewConfig(), ooutput.NewConfig()
+	outOne.Type, outTwo.Type = "file", "file"
 	outOne.File.Path = filepath.Join(dir, "one", `foo-${!count("gfoo")}.txt`)
 	outOne.File.Codec = "all-bytes"
 	outTwo.File.Path = filepath.Join(dir, "two", `bar-${!count("gbar")}.txt`)
@@ -205,12 +205,12 @@ func TestGreedyBroker(t *testing.T) {
 	outOne.Processors = append(outOne.Processors, procOne)
 	outTwo.Processors = append(outTwo.Processors, procTwo)
 
-	conf := NewConfig()
-	conf.Type = TypeBroker
+	conf := ooutput.NewConfig()
+	conf.Type = "broker"
 	conf.Broker.Pattern = "greedy"
 	conf.Broker.Outputs = append(conf.Broker.Outputs, outOne, outTwo)
 
-	s, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	s, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

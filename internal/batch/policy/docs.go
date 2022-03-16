@@ -29,7 +29,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).`,
 			docs.FieldInt(
 				"count",
 				"A number of messages at which the batch should be flushed. If `0` disables count based batching.",
-			),
+			).HasDefault(0),
 			docs.FieldInt(
 				"byte_size",
 				"An amount of bytes at which the batch should be flushed. If `0` disables size based batching.",

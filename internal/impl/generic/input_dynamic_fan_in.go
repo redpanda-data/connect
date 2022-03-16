@@ -1,82 +1,69 @@
-package broker
+package generic
 
 import (
+	"context"
 	"sync/atomic"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-//------------------------------------------------------------------------------
-
-// DynamicInput is an interface of input types that must be closable.
-type DynamicInput interface {
-	input.Streamed
-}
-
-// wrappedInput is a struct that wraps a DynamicInput with an identifying name.
+// wrappedInput is a struct that wraps a input.Streamed with an identifying name.
 type wrappedInput struct {
+	ctx     context.Context
 	Name    string
-	Input   DynamicInput
-	Timeout time.Duration
+	Input   input.Streamed
 	ResChan chan<- error
 }
 
-//------------------------------------------------------------------------------
-
-// DynamicFanIn is a broker that implements types.Producer and manages a map of
-// inputs to unique string identifiers, routing them through a single message
-// channel. Inputs can be added and removed dynamically as the broker runs.
-type DynamicFanIn struct {
+type dynamicFanInInput struct {
 	running int32
 
-	stats metrics.Type
-	log   log.Modular
+	log log.Modular
 
 	transactionChan chan message.Transaction
 
-	onAdd    func(label string)
-	onRemove func(label string)
+	onAdd    func(ctx context.Context, label string)
+	onRemove func(ctx context.Context, label string)
 
 	newInputChan     chan wrappedInput
-	inputs           map[string]DynamicInput
+	inputs           map[string]input.Streamed
 	inputClosedChans map[string]chan struct{}
 
 	closedChan chan struct{}
 	closeChan  chan struct{}
 }
 
-// NewDynamicFanIn creates a new DynamicFanIn type by providing an initial map
-// map of inputs.
-func NewDynamicFanIn(
-	inputs map[string]DynamicInput,
+func newDynamicFanInInput(
+	inputs map[string]input.Streamed,
 	logger log.Modular,
-	stats metrics.Type,
-	options ...func(*DynamicFanIn),
-) (*DynamicFanIn, error) {
-	d := &DynamicFanIn{
+	onAdd func(ctx context.Context, l string),
+	onRemove func(ctx context.Context, l string),
+) (*dynamicFanInInput, error) {
+	d := &dynamicFanInInput{
 		running: 1,
-		stats:   stats,
 		log:     logger,
 
 		transactionChan: make(chan message.Transaction),
 
-		onAdd:    func(l string) {},
-		onRemove: func(l string) {},
+		onAdd:    func(ctx context.Context, l string) {},
+		onRemove: func(ctx context.Context, l string) {},
 
 		newInputChan:     make(chan wrappedInput),
-		inputs:           make(map[string]DynamicInput),
+		inputs:           make(map[string]input.Streamed),
 		inputClosedChans: make(map[string]chan struct{}),
 
 		closedChan: make(chan struct{}),
 		closeChan:  make(chan struct{}),
 	}
-	for _, opt := range options {
-		opt(d)
+	if onAdd != nil {
+		d.onAdd = onAdd
+	}
+	if onRemove != nil {
+		d.onRemove = onRemove
 	}
 	for key, input := range inputs {
 		if err := d.addInput(key, input); err != nil {
@@ -93,17 +80,17 @@ func NewDynamicFanIn(
 //
 // A nil input is safe and will simply remove the previous input under the
 // indentifier, if there was one.
-func (d *DynamicFanIn) SetInput(ident string, input DynamicInput, timeout time.Duration) error {
+func (d *dynamicFanInInput) SetInput(ctx context.Context, ident string, input input.Streamed) error {
 	if atomic.LoadInt32(&d.running) != 1 {
 		return component.ErrTypeClosed
 	}
 	resChan := make(chan error)
 	select {
 	case d.newInputChan <- wrappedInput{
+		ctx:     ctx,
 		Name:    ident,
 		Input:   input,
 		ResChan: resChan,
-		Timeout: timeout,
 	}:
 	case <-d.closeChan:
 		return component.ErrTypeClosed
@@ -111,66 +98,42 @@ func (d *DynamicFanIn) SetInput(ident string, input DynamicInput, timeout time.D
 	return <-resChan
 }
 
-// TransactionChan returns the channel used for consuming messages from this
-// broker.
-func (d *DynamicFanIn) TransactionChan() <-chan message.Transaction {
+func (d *dynamicFanInInput) TransactionChan() <-chan message.Transaction {
 	return d.transactionChan
 }
 
-// Connected returns a boolean indicating whether this output is currently
-// connected to its target.
-func (d *DynamicFanIn) Connected() bool {
+func (d *dynamicFanInInput) Connected() bool {
 	// Always return true as this is fuzzy right now.
 	return true
 }
 
-//------------------------------------------------------------------------------
-
-// OptDynamicFanInSetOnAdd sets the function that is called whenever a dynamic
-// input is added.
-func OptDynamicFanInSetOnAdd(onAddFunc func(label string)) func(*DynamicFanIn) {
-	return func(d *DynamicFanIn) {
-		d.onAdd = onAddFunc
-	}
-}
-
-// OptDynamicFanInSetOnRemove sets the function that is called whenever a
-// dynamic input is removed.
-func OptDynamicFanInSetOnRemove(onRemoveFunc func(label string)) func(*DynamicFanIn) {
-	return func(d *DynamicFanIn) {
-		d.onRemove = onRemoveFunc
-	}
-}
-
-//------------------------------------------------------------------------------
-
-func (d *DynamicFanIn) addInput(ident string, input DynamicInput) error {
+func (d *dynamicFanInInput) addInput(ident string, in input.Streamed) error {
 	closedChan := make(chan struct{})
 	// Launch goroutine that async writes input into single channel
-	go func(in DynamicInput, cChan chan struct{}) {
+	go func(in input.Streamed, cChan chan struct{}) {
 		defer func() {
-			d.onRemove(ident)
+			d.onRemove(context.Background(), ident)
 			close(cChan)
 		}()
-		d.onAdd(ident)
+		d.onAdd(context.Background(), ident)
 		for {
-			in, open := <-input.TransactionChan()
+			in, open := <-in.TransactionChan()
 			if !open {
 				// Race condition: This will be called when shutting down.
 				return
 			}
 			d.transactionChan <- in
 		}
-	}(input, closedChan)
+	}(in, closedChan)
 
 	// Add new input to our map
-	d.inputs[ident] = input
+	d.inputs[ident] = in
 	d.inputClosedChans[ident] = closedChan
 
 	return nil
 }
 
-func (d *DynamicFanIn) removeInput(ident string, timeout time.Duration) error {
+func (d *dynamicFanInInput) removeInput(ctx context.Context, ident string) error {
 	input, exists := d.inputs[ident]
 	if !exists {
 		// Nothing to do
@@ -180,10 +143,10 @@ func (d *DynamicFanIn) removeInput(ident string, timeout time.Duration) error {
 	input.CloseAsync()
 	select {
 	case <-d.inputClosedChans[ident]:
-	case <-time.After(timeout):
+	case <-ctx.Done():
 		// Do NOT remove inputs from our map unless we are sure they are
 		// closed.
-		return component.ErrTimeout
+		return ctx.Err()
 	}
 
 	delete(d.inputs, ident)
@@ -193,15 +156,15 @@ func (d *DynamicFanIn) removeInput(ident string, timeout time.Duration) error {
 }
 
 // managerLoop is an internal loop that monitors new and dead input types.
-func (d *DynamicFanIn) managerLoop() {
+func (d *dynamicFanInInput) managerLoop() {
 	defer func() {
 		for _, i := range d.inputs {
 			i.CloseAsync()
 		}
 		for key := range d.inputs {
-			if err := d.removeInput(key, time.Second); err != nil {
+			if err := d.removeInput(context.Background(), key); err != nil {
 				for err != nil {
-					err = d.removeInput(key, time.Second)
+					err = d.removeInput(context.Background(), key)
 				}
 			}
 		}
@@ -217,7 +180,7 @@ func (d *DynamicFanIn) managerLoop() {
 			}
 			var err error
 			if _, exists := d.inputs[wrappedInput.Name]; exists {
-				if err = d.removeInput(wrappedInput.Name, wrappedInput.Timeout); err != nil {
+				if err = d.removeInput(wrappedInput.ctx, wrappedInput.Name); err != nil {
 					d.log.Errorf("Failed to stop old copy of dynamic input '%v': %v\n", wrappedInput.Name, err)
 				}
 			}
@@ -239,15 +202,13 @@ func (d *DynamicFanIn) managerLoop() {
 	}
 }
 
-// CloseAsync shuts down the DynamicFanIn broker and stops processing requests.
-func (d *DynamicFanIn) CloseAsync() {
+func (d *dynamicFanInInput) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&d.running, 1, 0) {
 		close(d.closeChan)
 	}
 }
 
-// WaitForClose blocks until the DynamicFanIn broker has closed down.
-func (d *DynamicFanIn) WaitForClose(timeout time.Duration) error {
+func (d *dynamicFanInInput) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-d.closedChan:
 	case <-time.After(timeout):
@@ -255,5 +216,3 @@ func (d *DynamicFanIn) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

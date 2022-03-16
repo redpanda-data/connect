@@ -1,4 +1,4 @@
-package broker
+package generic
 
 import (
 	"bytes"
@@ -13,13 +13,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-var _ output.Streamed = &DynamicFanOut{}
+var _ output.Streamed = &dynamicFanOutOutputBroker{}
 
 func TestBasicDynamicFanOut(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
@@ -27,34 +27,31 @@ func TestBasicDynamicFanOut(t *testing.T) {
 
 	nOutputs, nMsgs := 10, 1000
 
-	outputs := map[string]DynamicOutput{}
-	mockOutputs := []*MockOutputType{}
+	outputs := map[string]output.Streamed{}
+	mockOutputs := []*mock.OutputChanneled{}
 
 	for i := 0; i < nOutputs; i++ {
-		mockOutputs = append(mockOutputs, &MockOutputType{})
+		mockOutputs = append(mockOutputs, &mock.OutputChanneled{})
 		outputs[fmt.Sprintf("out-%v", i)] = mockOutputs[i]
 	}
 
 	readChan := make(chan message.Transaction)
-	resChan := make(chan error)
+	resChan := make(chan error, 1)
 
-	oTM, err := NewDynamicFanOut(
-		outputs, log.Noop(), metrics.Noop(),
-	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
-		return
-	}
+	oTM, err := newDynamicFanOutOutputBroker(outputs, log.Noop(), nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, oTM.Consume(readChan))
 
 	for i := 0; i < nMsgs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
+		select {
+		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
+		case <-time.After(time.Second):
+			t.Fatal("Timed out waiting for broker send")
+		}
 		wg := sync.WaitGroup{}
-		wg.Add(nOutputs)
 		for j := 0; j < nOutputs; j++ {
+			wg.Add(1)
 			go func(index int) {
 				defer wg.Done()
 				var ts message.Transaction
@@ -64,35 +61,22 @@ func TestBasicDynamicFanOut(t *testing.T) {
 						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 					}
 				case <-time.After(time.Second):
-					t.Errorf("Timed out waiting for broker propagate")
-					return
+					t.Error("Timed out waiting for broker propagate", index)
 				}
 				require.NoError(t, ts.Ack(tCtx, nil))
 			}(j)
 		}
-		select {
-		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
-		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for broker send")
-			return
-		}
 		wg.Wait()
 		select {
 		case res := <-resChan:
-			if res != nil {
-				t.Errorf("Received unexpected errors from broker: %v", res)
-			}
+			require.NoError(t, res)
 		case <-time.After(time.Second):
-			t.Errorf("Timed out responding to broker")
-			return
+			t.Fatal("Timed out responding to broker")
 		}
 	}
 
 	oTM.CloseAsync()
-
-	if err := oTM.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, oTM.WaitForClose(time.Second*5))
 }
 
 func TestDynamicFanOutChangeOutputs(t *testing.T) {
@@ -101,37 +85,27 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 
 	nOutputs := 10
 
-	outputs := map[string]*MockOutputType{}
+	outputs := map[string]*mock.OutputChanneled{}
 	readChan := make(chan message.Transaction)
-	resChan := make(chan error)
+	resChan := make(chan error, 1)
 
-	oTM, err := NewDynamicFanOut(
-		nil, log.Noop(), metrics.Noop(),
-	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
-		return
-	}
+	oTM, err := newDynamicFanOutOutputBroker(nil, log.Noop(), nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, oTM.Consume(readChan))
 
 	for i := 0; i < nOutputs; i++ {
 		content := [][]byte{[]byte(fmt.Sprintf("hello world %v", i))}
 
-		newOutput := &MockOutputType{}
+		newOutput := &mock.OutputChanneled{}
 		newOutputName := fmt.Sprintf("output-%v", i)
 
 		outputs[newOutputName] = newOutput
-		if err := oTM.SetOutput(newOutputName, newOutput, time.Second); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, oTM.SetOutput(context.Background(), newOutputName, newOutput))
 
 		wg := sync.WaitGroup{}
 		wg.Add(len(outputs))
 		for k, v := range outputs {
-			go func(name string, out *MockOutputType) {
+			go func(name string, out *mock.OutputChanneled) {
 				defer wg.Done()
 				var ts message.Transaction
 				select {
@@ -140,7 +114,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 						t.Errorf("Wrong content returned for output '%v': %s != %s", name, ts.Payload.Get(0).Get(), content[0])
 					}
 				case <-time.After(time.Second):
-					t.Errorf("Timed out waiting for broker propagate")
+					t.Error("Timed out waiting for broker propagate")
 					return
 				}
 				require.NoError(t, ts.Ack(tCtx, nil))
@@ -150,20 +124,16 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		select {
 		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for broker send")
-			return
+			t.Fatal("Timed out waiting for broker send")
 		}
 
 		wg.Wait()
 
 		select {
 		case res := <-resChan:
-			if res != nil {
-				t.Errorf("Received unexpected errors from broker: %v", res)
-			}
+			require.NoError(t, res)
 		case <-time.After(time.Second):
-			t.Errorf("Timed out responding to broker")
-			return
+			t.Fatal("Timed out responding to broker")
 		}
 	}
 
@@ -173,7 +143,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(len(outputs))
 		for k, v := range outputs {
-			go func(name string, out *MockOutputType) {
+			go func(name string, out *mock.OutputChanneled) {
 				defer wg.Done()
 				var ts message.Transaction
 				select {
@@ -182,7 +152,7 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 						t.Errorf("Wrong content returned for output '%v': %s != %s", name, ts.Payload.Get(0).Get(), content[0])
 					}
 				case <-time.After(time.Second):
-					t.Errorf("Timed out waiting for broker propagate")
+					t.Error("Timed out waiting for broker propagate")
 					return
 				}
 				require.NoError(t, ts.Ack(tCtx, nil))
@@ -192,53 +162,42 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		select {
 		case readChan <- message.NewTransaction(message.QuickBatch(content), resChan):
 		case <-time.After(time.Second):
-			t.Errorf("Timed out waiting for broker send")
-			return
+			t.Fatal("Timed out waiting for broker send")
 		}
 
 		wg.Wait()
 
 		select {
 		case res := <-resChan:
-			if res != nil {
-				t.Errorf("Received unexpected errors from broker: %v", res)
-			}
+			require.NoError(t, res)
 		case <-time.After(time.Second):
-			t.Errorf("Timed out responding to broker")
-			return
+			t.Fatal("Timed out responding to broker")
 		}
 
 		oldOutputName := fmt.Sprintf("output-%v", i)
-		if err := oTM.SetOutput(oldOutputName, nil, time.Second); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, oTM.SetOutput(context.Background(), oldOutputName, nil))
 		delete(outputs, oldOutputName)
 	}
 
 	oTM.CloseAsync()
-
-	if err := oTM.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, oTM.WaitForClose(time.Second*5))
 }
 
 func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	mockOne := MockOutputType{}
-	mockTwo := MockOutputType{}
+	mockOne := mock.OutputChanneled{}
+	mockTwo := mock.OutputChanneled{}
 
-	outputs := map[string]DynamicOutput{
+	outputs := map[string]output.Streamed{
 		"first":  &mockOne,
 		"second": &mockTwo,
 	}
 	readChan := make(chan message.Transaction)
-	resChan := make(chan error)
+	resChan := make(chan error, 1)
 
-	oTM, err := NewDynamicFanOut(
-		outputs, log.Noop(), metrics.Noop(),
-	)
+	oTM, err := newDynamicFanOutOutputBroker(outputs, log.Noop(), nil, nil)
 	require.NoError(t, err)
 	require.NoError(t, oTM.Consume(readChan))
 	assert.NotNil(t, oTM.Consume(readChan), "Expected error on duplicate receive call")
@@ -267,13 +226,6 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 			return
 		}
 		require.NoError(t, ts.Ack(tCtx, errors.New("this is a test")))
-		select {
-		case ts = <-mockTwo.TChan:
-		case <-time.After(time.Second):
-			t.Error("Timed out waiting for mockTwo")
-			return
-		}
-		require.NoError(t, ts.Ack(tCtx, nil))
 	}()
 
 	select {
@@ -286,15 +238,12 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		if res != nil {
-			t.Errorf("Fan out returned error %v", res)
-		}
+		require.EqualError(t, res, "this is a test")
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 	}
 
 	close(readChan)
-
 	assert.NoError(t, oTM.WaitForClose(time.Second*5))
 }
 
@@ -302,17 +251,16 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	mockOne := MockOutputType{}
+	mockOne := mock.OutputChanneled{}
 
 	readChan := make(chan message.Transaction)
-	resChan := make(chan error)
+	resChan := make(chan error, 1)
 
-	outputs := map[string]DynamicOutput{}
+	outputs := map[string]output.Streamed{}
 
-	oTM, err := NewDynamicFanOut(outputs, log.Noop(), metrics.Noop())
+	oTM, err := newDynamicFanOutOutputBroker(outputs, log.Noop(), nil, nil)
 	require.NoError(t, err)
 
-	oTM.WithMaxInFlight(10)
 	require.NoError(t, oTM.Consume(readChan))
 	assert.NotNil(t, oTM.Consume(readChan), "Expected error on duplicate receive call")
 
@@ -329,7 +277,7 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 		}
 	}()
 
-	require.NoError(t, oTM.SetOutput("first", &mockOne, time.Second))
+	require.NoError(t, oTM.SetOutput(context.Background(), "first", &mockOne))
 
 	go func() {
 		defer wg.Done()
@@ -347,15 +295,12 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 
 	select {
 	case res := <-resChan:
-		if res != nil {
-			t.Errorf("Fan out returned error %v", res)
-		}
+		require.NoError(t, res)
 	case <-time.After(time.Second):
 		t.Error("Timed out responding to broker")
 	}
 
 	close(readChan)
-
 	assert.NoError(t, oTM.WaitForClose(time.Second*5))
 }
 
@@ -363,64 +308,53 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	mockOutput := &MockOutputType{}
-	outputs := map[string]DynamicOutput{
+	mockOutput := &mock.OutputChanneled{}
+	outputs := map[string]output.Streamed{
 		"test": mockOutput,
 	}
 	readChan := make(chan message.Transaction)
-	resChan := make(chan error)
+	resChan := make(chan error, 1)
 
 	outputAddedList := []string{}
 	outputRemovedList := []string{}
 
-	oTM, err := NewDynamicFanOut(
-		outputs, log.Noop(), metrics.Noop(),
-		OptDynamicFanOutSetOnAdd(func(label string) {
+	oTM, err := newDynamicFanOutOutputBroker(
+		outputs, log.Noop(),
+		func(label string) {
 			outputAddedList = append(outputAddedList, label)
-		}), OptDynamicFanOutSetOnRemove(func(label string) {
+		},
+		func(label string) {
 			outputRemovedList = append(outputRemovedList, label)
-		}),
+		},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+	require.NoError(t, oTM.Consume(readChan))
 
 	select {
 	case readChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg send")
+		t.Fatal("Timed out waiting for msg send")
 	}
 
 	var ts message.Transaction
 	var open bool
 	select {
 	case ts, open = <-mockOutput.TChan:
-		if !open {
-			t.Error("fan out output closed early")
-		}
+		require.True(t, open)
 	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg rcv")
+		t.Fatal("Timed out waiting for msg rcv")
 	}
 
 	require.NoError(t, ts.Ack(tCtx, errors.New("test")))
 
 	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, oTM.WaitForClose(time.Second))
 
 	select {
 	case _, open := <-mockOutput.TChan:
-		if open {
-			t.Error("fan out output still open after closure")
-		}
+		require.False(t, open)
 	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg rcv")
+		t.Fatal("Timed out waiting for msg rcv")
 	}
 
 	if exp, act := []string{"test"}, outputAddedList; !reflect.DeepEqual(exp, act) {
@@ -432,94 +366,66 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 }
 
 func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
-	mockOutput := &MockOutputType{}
-	outputs := map[string]DynamicOutput{
+	mockOutput := &mock.OutputChanneled{}
+	outputs := map[string]output.Streamed{
 		"test": mockOutput,
 	}
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	oTM, err := NewDynamicFanOut(
-		outputs, log.Noop(), metrics.Noop(),
-	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
-		return
-	}
+	oTM, err := newDynamicFanOutOutputBroker(outputs, log.Noop(), nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, oTM.Consume(readChan))
 
 	select {
 	case readChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg send")
+		t.Fatal("Timed out waiting for msg send")
 	}
 
 	select {
 	case _, open := <-mockOutput.TChan:
-		if !open {
-			t.Error("fan out output closed early")
-		}
+		require.True(t, open)
 	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg rcv")
+		t.Fatal("Timed out waiting for msg rcv")
 	}
 
 	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, oTM.WaitForClose(time.Second))
 
 	select {
 	case _, open := <-mockOutput.TChan:
-		if open {
-			t.Error("fan out output still open after closure")
-		}
+		assert.False(t, open)
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg rcv")
 	}
 }
 
 func TestDynamicFanOutShutDownFromSend(t *testing.T) {
-	mockOutput := &MockOutputType{}
-	outputs := map[string]DynamicOutput{
+	mockOutput := &mock.OutputChanneled{}
+	outputs := map[string]output.Streamed{
 		"test": mockOutput,
 	}
 	readChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	oTM, err := NewDynamicFanOut(
-		outputs, log.Noop(), metrics.Noop(),
-	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if err = oTM.Consume(readChan); err != nil {
-		t.Error(err)
-		return
-	}
+	oTM, err := newDynamicFanOutOutputBroker(outputs, log.Noop(), nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, oTM.Consume(readChan))
 
 	select {
 	case readChan <- message.NewTransaction(message.QuickBatch(nil), resChan):
 	case <-time.After(time.Second):
-		t.Error("Timed out waiting for msg send")
+		t.Fatal("Timed out waiting for msg send")
 	}
 
 	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, oTM.WaitForClose(time.Second))
 
 	select {
 	case _, open := <-mockOutput.TChan:
-		if open {
-			t.Error("fan out output still open after closure")
-		}
+		assert.False(t, open)
 	case <-time.After(time.Second):
 		t.Error("Timed out waiting for msg rcv")
 	}
 }
-
-//------------------------------------------------------------------------------

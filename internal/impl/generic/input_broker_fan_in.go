@@ -1,21 +1,14 @@
-package broker
+package generic
 
 import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-//------------------------------------------------------------------------------
-
-// FanIn is a broker that implements types.Producer, takes an array of inputs
-// and routes them through a single message channel.
-type FanIn struct {
-	stats metrics.Type
-
+type fanInInputBroker struct {
 	transactions chan message.Transaction
 
 	closables       []input.Streamed
@@ -25,11 +18,8 @@ type FanIn struct {
 	closedChan chan struct{}
 }
 
-// NewFanIn creates a new FanIn type by providing inputs.
-func NewFanIn(inputs []input.Streamed, stats metrics.Type) (*FanIn, error) {
-	i := &FanIn{
-		stats: stats,
-
+func newFanInInputBroker(inputs []input.Streamed) (*fanInInputBroker, error) {
+	i := &fanInInputBroker{
 		transactions: make(chan message.Transaction),
 
 		inputClosedChan: make(chan int),
@@ -65,17 +55,11 @@ func NewFanIn(inputs []input.Streamed, stats metrics.Type) (*FanIn, error) {
 	return i, nil
 }
 
-//------------------------------------------------------------------------------
-
-// TransactionChan returns the channel used for consuming transactions from this
-// broker.
-func (i *FanIn) TransactionChan() <-chan message.Transaction {
+func (i *fanInInputBroker) TransactionChan() <-chan message.Transaction {
 	return i.transactions
 }
 
-// Connected returns a boolean indicating whether this output is currently
-// connected to its target.
-func (i *FanIn) Connected() bool {
+func (i *fanInInputBroker) Connected() bool {
 	type connector interface {
 		Connected() bool
 	}
@@ -89,10 +73,7 @@ func (i *FanIn) Connected() bool {
 	return true
 }
 
-//------------------------------------------------------------------------------
-
-// loop is an internal loop that brokers incoming messages to many outputs.
-func (i *FanIn) loop() {
+func (i *fanInInputBroker) loop() {
 	defer func() {
 		close(i.inputClosedChan)
 		close(i.transactions)
@@ -105,15 +86,13 @@ func (i *FanIn) loop() {
 	}
 }
 
-// CloseAsync shuts down the FanIn broker and stops processing requests.
-func (i *FanIn) CloseAsync() {
+func (i *fanInInputBroker) CloseAsync() {
 	for _, closable := range i.closables {
 		closable.CloseAsync()
 	}
 }
 
-// WaitForClose blocks until the FanIn broker has closed down.
-func (i *FanIn) WaitForClose(timeout time.Duration) error {
+func (i *fanInInputBroker) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-i.closedChan:
 	case <-time.After(timeout):
@@ -121,5 +100,3 @@ func (i *FanIn) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------
