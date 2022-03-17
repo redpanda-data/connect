@@ -9,9 +9,40 @@ All notable changes to this project will be documented in this file.
 
 This is a major version release, for more information and guidance on how to migrate please refer to [https://benthos.dev/docs/guides/migration/v4](https://www.benthos.dev/docs/guides/migration/v4).
 
+### Added
+
+- In Bloblang it is now possible to reference the `root` of the document being created within a mapping query.
+
 ### Fixed
 
 - The `sftp` output no longer opens files in both read and write mode.
+
+### Changed
+
+- All components, features and configuration fields that were marked as deprecated have been removed.
+- The field `pipeline.threads` field now defaults to `-1`, which automatically matches the host machine CPU count.
+- Old style interpolation functions (`${!json:foo,1}`) are removed in favour of the newer Bloblang syntax (`${! json("foo") }`).
+- The Bloblang functions `meta`, `root_meta`, `error` and `env` now return `null` when the target value does not exist.
+- Docker images no longer come with a default config that contains generated environment variables, use `-s` flag arguments instead.
+- All cache components have had their retry/backoff fields modified for consistency.
+- All cache components that support a general default TTL now have a field `default_ttl` with a duration string, replacing the previous field.
+- The `http` processor and `http_client` output now execute message batch requests as individual requests by default. This behaviour can be disabled by explicitly setting `batch_as_multipart` to `true`.
+- The `switch` output field `retry_until_success` now defaults to `false`.
+- All AWS components now have a default `region` field that is empty, allowing environment variables or profile values to be used by default.
+- Serverless distributions of Benthos (AWS lambda, etc) have had the default output config changed to reject messages when the processing fails, this should make it easier to handle errors from invocation.
+- The standard metrics emitted by Benthos have been largely simplified and improved, for more information [check out the metrics page](/docs/components/metrics/about).
+- The default metrics type is now `prometheus`.
+- The `http_server` metrics type has been renamed to `json_api`.
+- The `stdout` metrics type has been renamed to `logger`.
+- The `logger` configuration section has been simplified, with `logfmt` being the new default format.
+- The `logger` field `add_timestamp` is now `false` by default.
+- Field `parts` has been removed from all processors.
+- The `dedupe` processor now acts upon individual messages by default, and the `hash` field has been removed.
+- The `log` processor now executes for each individual message of a batch.
+- The `sleep` processor now executes for each individual message of a batch.
+- Go API: Module name has changed to `github.com/benthosdev/benthos/v4`.
+- Go API: All packages within the `lib` directory have been removed in favour of the newer [APIs within `public`](https://pkg.go.dev/github.com/benthosdev/benthos/v4/public).
+- Go API: Distributed tracing is now via the Open Telemetry client library.
 
 ## 3.65.0 - 2022-03-07
 
