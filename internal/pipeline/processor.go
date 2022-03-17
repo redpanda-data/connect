@@ -126,7 +126,6 @@ func (p *Processor) dispatchMessages(ctx context.Context, msgs []*message.Batch,
 		}
 	}
 
-	// TODO: V4 Exit before ack if closing
 	throt.Reset()
 	_ = ackFn(ctx, nil)
 }

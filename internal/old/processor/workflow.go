@@ -487,7 +487,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
 	_ = payload.Iter(func(i int, p *message.Part) error {
-		p.Get() // TODO: V4 Ensure metadata initialized
+		p.Get()
 		_ = p.MetaIter(func(k, v string) error { return nil })
 		if jObj, err := p.JSON(); err == nil {
 			skipOnMeta[i] = w.skipFromMeta(jObj)

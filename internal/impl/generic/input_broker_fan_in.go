@@ -60,14 +60,9 @@ func (i *fanInInputBroker) TransactionChan() <-chan message.Transaction {
 }
 
 func (i *fanInInputBroker) Connected() bool {
-	type connector interface {
-		Connected() bool
-	}
 	for _, in := range i.closables {
-		if c, ok := in.(connector); ok {
-			if !c.Connected() {
-				return false
-			}
+		if !in.Connected() {
+			return false
 		}
 	}
 	return true

@@ -66,10 +66,10 @@ type Type struct {
 
 	apiReg APIReg
 
-	inputs       map[string]iinput.Streamed
+	inputs       map[string]*inputWrapper
 	caches       map[string]cache.V1
 	processors   map[string]iprocessor.V1
-	outputs      map[string]ioutput.Sync
+	outputs      map[string]*outputWrapper
 	rateLimits   map[string]ratelimit.V1
 	resourceLock *sync.RWMutex
 
@@ -109,10 +109,10 @@ func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats *metrics.N
 	t := &Type{
 		apiReg: apiReg,
 
-		inputs:       map[string]iinput.Streamed{},
+		inputs:       map[string]*inputWrapper{},
 		caches:       map[string]cache.V1{},
 		processors:   map[string]iprocessor.V1{},
-		outputs:      map[string]ioutput.Sync{},
+		outputs:      map[string]*outputWrapper{},
 		rateLimits:   map[string]ratelimit.V1{},
 		resourceLock: &sync.RWMutex{},
 
@@ -491,12 +491,12 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 	t.resourceLock.Lock()
 	defer t.resourceLock.Unlock()
 
-	i, ok := t.inputs[name]
-	if ok && i != nil {
+	i, exists := t.inputs[name]
+	if exists && i != nil {
 		// If a previous resource exists with the same name then we do NOT allow
 		// it to be replaced unless it can be successfully closed. This ensures
 		// that we do not leak connections.
-		if err := closeWithContext(ctx, i); err != nil {
+		if err := i.closeExistingInput(ctx); err != nil {
 			return err
 		}
 	}
@@ -513,7 +513,11 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 		)
 	}
 
-	t.inputs[name] = newInput
+	if exists && i != nil {
+		i.swapInput(newInput)
+	} else {
+		t.inputs[name] = wrapInput(newInput)
+	}
 	return nil
 }
 

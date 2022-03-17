@@ -10,6 +10,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
+var _ ioutput.Sync = &outputWrapper{}
+
 type outputWrapper struct {
 	output ioutput.Streamed
 
@@ -44,12 +46,12 @@ func (w *outputWrapper) Connected() bool {
 }
 
 func (w *outputWrapper) CloseAsync() {
-	w.output.CloseAsync()
-}
-
-func (w *outputWrapper) WaitForClose(timeout time.Duration) error {
 	w.closeOnce.Do(func() {
 		close(w.tranChan)
 	})
+}
+
+func (w *outputWrapper) WaitForClose(timeout time.Duration) error {
+	w.output.CloseAsync()
 	return w.output.WaitForClose(timeout)
 }

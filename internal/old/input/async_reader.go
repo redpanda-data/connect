@@ -18,8 +18,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
-//------------------------------------------------------------------------------
-
 // AsyncReader is an input implementation that reads messages from a
 // reader.Async component.
 type AsyncReader struct {
@@ -240,5 +238,3 @@ func (r *AsyncReader) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

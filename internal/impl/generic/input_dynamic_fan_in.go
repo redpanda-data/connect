@@ -2,13 +2,13 @@ package generic
 
 import (
 	"context"
-	"sync/atomic"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // wrappedInput is a struct that wraps a input.Streamed with an identifying name.
@@ -20,8 +20,6 @@ type wrappedInput struct {
 }
 
 type dynamicFanInInput struct {
-	running int32
-
 	log log.Modular
 
 	transactionChan chan message.Transaction
@@ -33,8 +31,7 @@ type dynamicFanInInput struct {
 	inputs           map[string]input.Streamed
 	inputClosedChans map[string]chan struct{}
 
-	closedChan chan struct{}
-	closeChan  chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 func newDynamicFanInInput(
@@ -44,8 +41,7 @@ func newDynamicFanInInput(
 	onRemove func(ctx context.Context, l string),
 ) (*dynamicFanInInput, error) {
 	d := &dynamicFanInInput{
-		running: 1,
-		log:     logger,
+		log: logger,
 
 		transactionChan: make(chan message.Transaction),
 
@@ -56,8 +52,7 @@ func newDynamicFanInInput(
 		inputs:           make(map[string]input.Streamed),
 		inputClosedChans: make(map[string]chan struct{}),
 
-		closedChan: make(chan struct{}),
-		closeChan:  make(chan struct{}),
+		shutSig: shutdown.NewSignaller(),
 	}
 	if onAdd != nil {
 		d.onAdd = onAdd
@@ -81,7 +76,7 @@ func newDynamicFanInInput(
 // A nil input is safe and will simply remove the previous input under the
 // indentifier, if there was one.
 func (d *dynamicFanInInput) SetInput(ctx context.Context, ident string, input input.Streamed) error {
-	if atomic.LoadInt32(&d.running) != 1 {
+	if d.shutSig.ShouldCloseAtLeisure() {
 		return component.ErrTypeClosed
 	}
 	resChan := make(chan error)
@@ -92,7 +87,7 @@ func (d *dynamicFanInInput) SetInput(ctx context.Context, ident string, input in
 		Input:   input,
 		ResChan: resChan,
 	}:
-	case <-d.closeChan:
+	case <-d.shutSig.CloseAtLeisureChan():
 		return component.ErrTypeClosed
 	}
 	return <-resChan
@@ -169,7 +164,7 @@ func (d *dynamicFanInInput) managerLoop() {
 			}
 		}
 		close(d.transactionChan)
-		close(d.closedChan)
+		d.shutSig.ShutdownComplete()
 	}()
 
 	for {
@@ -192,25 +187,27 @@ func (d *dynamicFanInInput) managerLoop() {
 			}
 			select {
 			case wrappedInput.ResChan <- err:
-			case <-d.closeChan:
+			case <-d.shutSig.CloseAtLeisureChan():
 				close(wrappedInput.ResChan)
 				return
 			}
-		case <-d.closeChan:
+		case <-d.shutSig.CloseAtLeisureChan():
 			return
 		}
 	}
 }
 
 func (d *dynamicFanInInput) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&d.running, 1, 0) {
-		close(d.closeChan)
-	}
+	d.shutSig.CloseAtLeisure()
 }
 
 func (d *dynamicFanInInput) WaitForClose(timeout time.Duration) error {
+	go func() {
+		<-time.After(timeout - time.Second)
+		d.shutSig.CloseNow()
+	}()
 	select {
-	case <-d.closedChan:
+	case <-d.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return component.ErrTimeout
 	}
