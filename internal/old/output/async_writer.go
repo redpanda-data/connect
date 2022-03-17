@@ -335,13 +335,6 @@ func (w *AsyncWriter) Connected() bool {
 	return atomic.LoadInt32(&w.isConnected) == 1
 }
 
-// MaxInFlight returns the maximum number of in flight messages permitted by the
-// output. This value can be used to determine a sensible value for parent
-// outputs, but should not be relied upon as part of dispatcher logic.
-func (w *AsyncWriter) MaxInFlight() (int, bool) {
-	return w.maxInflight, true
-}
-
 // CloseAsync shuts down the File output and stops processing messages.
 func (w *AsyncWriter) CloseAsync() {
 	w.shutSig.CloseAtLeisure()

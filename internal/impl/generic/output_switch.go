@@ -1,4 +1,4 @@
-package output
+package generic
 
 import (
 	"context"
@@ -6,21 +6,20 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
@@ -31,22 +30,22 @@ var (
 	// ErrSwitchNoCasesMatched is returned when a message does not match any
 	// output cases.
 	ErrSwitchNoCasesMatched = errors.New("no switch cases were matched by message")
-	// ErrSwitchNoOutputs is returned when creating a Switch type with less than
+	// ErrSwitchNoOutputs is returned when creating a switchOutput type with less than
 	// 2 outputs.
 	ErrSwitchNoOutputs = errors.New("attempting to create switch with fewer than 2 cases")
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeSwitch] = TypeSpec{
-		constructor: fromSimpleConstructor(NewSwitch),
+	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		return newSwitchOutput(c.Switch, nm)
+	}), docs.ComponentSpec{
+		Name: "switch",
 		Summary: `
 The switch output type allows you to route messages to different outputs based on their contents.`,
 		Description: `
 Messages must successfully route to one or more outputs, otherwise this is considered an error and the message is reprocessed. In order to explicitly drop messages that do not match your cases add one final case with a [drop output](/docs/components/outputs/drop).`,
-		config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldBool(
 				"retry_until_success", `
 If a selected output fails to send a message this field determines whether it is
 reattempted indefinitely. If set to false the error is instead propagated back
@@ -54,17 +53,14 @@ to the input level.
 
 If a message can be routed to >1 outputs it is usually best to set this to true
 in order to avoid duplicate messages being routed to an output.`,
-			),
-			docs.FieldAdvanced(
+			).HasDefault(false),
+			docs.FieldBool(
 				"strict_mode", `
 This field determines whether an error should be reported if no condition is met.
 If set to true, an error is propagated back to the input level. The default
 behavior is false, which will drop the message.`,
-			),
-			docs.FieldAdvanced(
-				"max_in_flight", "The maximum number of parallel message batches to have in flight at any given time. Note that if a child output has a higher `max_in_flight` then the switch output will automatically match it, therefore this value is the minimum `max_in_flight` to set in cases where the child values can't be inferred (such as when using resource outputs as children).",
-			),
-			docs.FieldCommon(
+			).Advanced().HasDefault(false),
+			docs.FieldObject(
 				"cases",
 				"A list of switch cases, outlining outputs that can be routed to.",
 				[]interface{}{
@@ -97,11 +93,11 @@ behavior is false, which will drop the message.`,
 				docs.FieldCommon(
 					"output", "An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.",
 				).HasDefault(map[string]interface{}{}).HasType(docs.FieldTypeOutput),
-				docs.FieldAdvanced(
+				docs.FieldBool(
 					"continue",
 					"Indicates whether, if this case passes for a message, the next case should also be tested.",
-				).HasDefault(false).HasType(docs.FieldTypeBool),
-			),
+				).HasDefault(false).Advanced(),
+			).HasDefault([]interface{}{}),
 		).Linter(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
 			if _, ok := value.(map[string]interface{}); !ok {
 				return nil
@@ -122,8 +118,8 @@ behavior is false, which will drop the message.`,
 			}
 			return nil
 		}),
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Examples: []docs.AnnotatedExample{
 			{
@@ -183,89 +179,33 @@ output:
 `,
 			},
 		},
-	}
+	})
 }
 
-//------------------------------------------------------------------------------
-
-// SwitchConfig contains configuration fields for the Switch output type.
-type SwitchConfig struct {
-	RetryUntilSuccess bool               `json:"retry_until_success" yaml:"retry_until_success"`
-	StrictMode        bool               `json:"strict_mode" yaml:"strict_mode"`
-	MaxInFlight       int                `json:"max_in_flight" yaml:"max_in_flight"`
-	Cases             []SwitchConfigCase `json:"cases" yaml:"cases"`
-}
-
-// NewSwitchConfig creates a new SwitchConfig with default values.
-func NewSwitchConfig() SwitchConfig {
-	return SwitchConfig{
-		RetryUntilSuccess: false,
-		StrictMode:        false,
-		MaxInFlight:       1,
-		Cases:             []SwitchConfigCase{},
-	}
-}
-
-// SwitchConfigCase contains configuration fields per output of a switch type.
-type SwitchConfigCase struct {
-	Check    string `json:"check" yaml:"check"`
-	Continue bool   `json:"continue" yaml:"continue"`
-	Output   Config `json:"output" yaml:"output"`
-}
-
-// NewSwitchConfigCase creates a new switch output config with default values.
-func NewSwitchConfigCase() SwitchConfigCase {
-	return SwitchConfigCase{
-		Check:    "",
-		Continue: false,
-		Output:   NewConfig(),
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// Switch is a broker that implements types.Consumer and broadcasts each message
-// out to an array of outputs.
-type Switch struct {
+type switchOutput struct {
 	logger log.Modular
 
-	maxInFlight  int
 	transactions <-chan message.Transaction
 
-	retryUntilSuccess bool
-	strictMode        bool
-	outputTSChans     []chan message.Transaction
-	outputs           []output.Streamed
-	checks            []*mapping.Executor
-	continues         []bool
-	fallthroughs      []bool
+	strictMode    bool
+	outputTSChans []chan message.Transaction
+	outputs       []output.Streamed
+	checks        []*mapping.Executor
+	continues     []bool
+	fallthroughs  []bool
 
-	ctx        context.Context
-	close      func()
-	closedChan chan struct{}
+	shutSig *shutdown.Signaller
 }
 
-// NewSwitch creates a new Switch type by providing outputs. Messages will be
-// sent to a subset of outputs according to condition and fallthrough settings.
-func NewSwitch(
-	conf Config,
-	mgr interop.Manager,
-	logger log.Modular,
-	stats metrics.Type,
-) (output.Streamed, error) {
-	ctx, done := context.WithCancel(context.Background())
-	o := &Switch{
-		logger:            logger,
-		maxInFlight:       conf.Switch.MaxInFlight,
-		transactions:      nil,
-		retryUntilSuccess: conf.Switch.RetryUntilSuccess,
-		strictMode:        conf.Switch.StrictMode,
-		closedChan:        make(chan struct{}),
-		ctx:               ctx,
-		close:             done,
+func newSwitchOutput(conf ooutput.SwitchConfig, mgr bundle.NewManagement) (output.Streamed, error) {
+	o := &switchOutput{
+		logger:       mgr.Logger(),
+		transactions: nil,
+		strictMode:   conf.StrictMode,
+		shutSig:      shutdown.NewSignaller(),
 	}
 
-	lCases := len(conf.Switch.Cases)
+	lCases := len(conf.Cases)
 	if lCases < 2 {
 		return nil, ErrSwitchNoOutputs
 	}
@@ -277,10 +217,15 @@ func NewSwitch(
 	}
 
 	var err error
-	for i, cConf := range conf.Switch.Cases {
-		oMgr := mgr.IntoPath("switch", strconv.Itoa(i), "output")
-		if o.outputs[i], err = New(cConf.Output, oMgr, oMgr.Logger(), oMgr.Metrics()); err != nil {
+	for i, cConf := range conf.Cases {
+		oMgr := mgr.IntoPath("switch", strconv.Itoa(i), "output").(bundle.NewManagement)
+		if o.outputs[i], err = oMgr.NewOutput(cConf.Output); err != nil {
 			return nil, fmt.Errorf("failed to create case '%v' output type '%v': %v", i, cConf.Output.Type, err)
+		}
+		if conf.RetryUntilSuccess {
+			if o.outputs[i], err = RetryOutputIndefinitely(oMgr, o.outputs[i]); err != nil {
+				return nil, fmt.Errorf("failed to create case '%v' output type '%v': %v", i, cConf.Output.Type, err)
+			}
 		}
 		if len(cConf.Check) > 0 {
 			if o.checks[i], err = mgr.BloblEnvironment().NewMapping(cConf.Check); err != nil {
@@ -292,9 +237,6 @@ func NewSwitch(
 
 	o.outputTSChans = make([]chan message.Transaction, len(o.outputs))
 	for i := range o.outputTSChans {
-		if mif, ok := output.GetMaxInFlight(o.outputs[i]); ok && mif > o.maxInFlight {
-			o.maxInFlight = mif
-		}
 		o.outputTSChans[i] = make(chan message.Transaction)
 		if err := o.outputs[i].Consume(o.outputTSChans[i]); err != nil {
 			return nil, err
@@ -303,10 +245,7 @@ func NewSwitch(
 	return o, nil
 }
 
-//------------------------------------------------------------------------------
-
-// Consume assigns a new transactions channel for the broker to read.
-func (o *Switch) Consume(transactions <-chan message.Transaction) error {
+func (o *switchOutput) Consume(transactions <-chan message.Transaction) error {
 	if o.transactions != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -316,16 +255,7 @@ func (o *Switch) Consume(transactions <-chan message.Transaction) error {
 	return nil
 }
 
-// MaxInFlight returns the maximum number of in flight messages permitted by the
-// output. This value can be used to determine a sensible value for parent
-// outputs, but should not be relied upon as part of dispatcher logic.
-func (o *Switch) MaxInFlight() (int, bool) {
-	return o.maxInFlight, true
-}
-
-// Connected returns a boolean indicating whether this output is currently
-// connected to its target.
-func (o *Switch) Connected() bool {
+func (o *switchOutput) Connected() bool {
 	for _, out := range o.outputs {
 		if !out.Connected() {
 			return false
@@ -334,49 +264,12 @@ func (o *Switch) Connected() bool {
 	return true
 }
 
-//------------------------------------------------------------------------------
-
-func (o *Switch) dispatchRetryOnErr(outputTargets [][]*message.Part) error {
-	var owg errgroup.Group
-	for target, parts := range outputTargets {
-		if len(parts) == 0 {
-			continue
-		}
-		msgCopy, i := message.QuickBatch(nil), target
-		msgCopy.SetAll(parts)
-		owg.Go(func() error {
-			throt := throttle.New(throttle.OptCloseChan(o.ctx.Done()))
-			resChan := make(chan error)
-
-			// Try until success or shutdown.
-			for {
-				select {
-				case o.outputTSChans[i] <- message.NewTransaction(msgCopy, resChan):
-				case <-o.ctx.Done():
-					return component.ErrTypeClosed
-				}
-				select {
-				case res := <-resChan:
-					if res != nil {
-						o.logger.Errorf("Failed to dispatch switch message: %v\n", res)
-						if !throt.Retry() {
-							return component.ErrTypeClosed
-						}
-					} else {
-						return nil
-					}
-				case <-o.ctx.Done():
-					return component.ErrTypeClosed
-				}
-			}
-		})
-	}
-	return owg.Wait()
-}
-
-func (o *Switch) dispatchNoRetries(group *message.SortGroup, sourceMessage *message.Batch, outputTargets [][]*message.Part) error {
-	var wg sync.WaitGroup
-
+func (o *switchOutput) dispatchToTargets(
+	group *message.SortGroup,
+	sourceMessage *message.Batch,
+	outputTargets [][]*message.Part,
+	ackFn func(context.Context, error) error,
+) {
 	var setErr func(error)
 	var setErrForPart func(*message.Part, error)
 	var getErr func() error
@@ -419,143 +312,153 @@ func (o *Switch) dispatchNoRetries(group *message.SortGroup, sourceMessage *mess
 		}
 	}
 
+	var pendingResponses int64
+	for _, parts := range outputTargets {
+		if len(parts) == 0 {
+			continue
+		}
+		pendingResponses++
+	}
+	if pendingResponses == 0 {
+		ctx, done := o.shutSig.CloseAtLeisureCtx(context.Background())
+		defer done()
+		_ = ackFn(ctx, nil)
+	}
+
 	for target, parts := range outputTargets {
 		if len(parts) == 0 {
 			continue
 		}
-		wg.Add(1)
+
 		msgCopy, i := message.QuickBatch(nil), target
 		msgCopy.SetAll(parts)
 
-		go func() {
-			defer wg.Done()
-
-			resChan := make(chan error)
-			select {
-			case o.outputTSChans[i] <- message.NewTransaction(msgCopy, resChan):
-			case <-o.ctx.Done():
-				setErr(component.ErrTypeClosed)
-				return
-			}
-			select {
-			case res := <-resChan:
-				if res != nil {
-					if bErr, ok := res.(*batch.Error); ok {
-						bErr.WalkParts(func(i int, p *message.Part, e error) bool {
-							if e != nil {
-								setErrForPart(p, e)
-							}
-							return true
-						})
-					} else {
-						_ = msgCopy.Iter(func(i int, p *message.Part) error {
-							setErrForPart(p, res)
-							return nil
-						})
-					}
+		select {
+		case o.outputTSChans[i] <- message.NewTransactionFunc(msgCopy, func(ctx context.Context, err error) error {
+			if err != nil {
+				if bErr, ok := err.(*batch.Error); ok {
+					bErr.WalkParts(func(i int, p *message.Part, e error) bool {
+						if e != nil {
+							setErrForPart(p, e)
+						}
+						return true
+					})
+				} else {
+					_ = msgCopy.Iter(func(i int, p *message.Part) error {
+						setErrForPart(p, err)
+						return nil
+					})
 				}
-			case <-o.ctx.Done():
-				setErr(component.ErrTypeClosed)
 			}
-		}()
+			if atomic.AddInt64(&pendingResponses, -1) <= 0 {
+				return ackFn(ctx, getErr())
+			}
+			return nil
+		}):
+		case <-o.shutSig.CloseAtLeisureChan():
+			setErr(component.ErrTypeClosed)
+			return
+		}
 	}
-
-	wg.Wait()
-	return getErr()
 }
 
-// loop is an internal loop that brokers incoming messages to many outputs.
-func (o *Switch) loop() {
-	var wg sync.WaitGroup
+func (o *switchOutput) loop() {
+	ackInterruptChan := make(chan struct{})
+	var ackPending int64
 
 	defer func() {
-		wg.Wait()
-		for i, output := range o.outputs {
+		// Wait for pending acks to be resolved, or forceful termination
+	ackWaitLoop:
+		for atomic.LoadInt64(&ackPending) > 0 {
+			select {
+			case <-ackInterruptChan:
+			case <-time.After(time.Millisecond * 100):
+				// Just incase an interrupt doesn't arrive.
+			case <-o.shutSig.CloseAtLeisureChan():
+				break ackWaitLoop
+			}
+		}
+		for _, tChan := range o.outputTSChans {
+			close(tChan)
+		}
+		for _, output := range o.outputs {
 			output.CloseAsync()
-			close(o.outputTSChans[i])
 		}
 		for _, output := range o.outputs {
 			_ = output.WaitForClose(shutdown.MaximumShutdownWait())
 		}
-		close(o.closedChan)
+		o.shutSig.ShutdownComplete()
 	}()
 
-	sendLoop := func() {
-		defer wg.Done()
-		for {
-			var ts message.Transaction
-			var open bool
+	shutCtx, done := o.shutSig.CloseAtLeisureCtx(context.Background())
+	defer done()
 
-			select {
-			case ts, open = <-o.transactions:
-				if !open {
-					return
-				}
-			case <-o.ctx.Done():
+	for !o.shutSig.ShouldCloseAtLeisure() {
+		var ts message.Transaction
+		var open bool
+
+		select {
+		case ts, open = <-o.transactions:
+			if !open {
 				return
 			}
-
-			group, trackedMsg := message.NewSortGroup(ts.Payload)
-
-			outputTargets := make([][]*message.Part, len(o.checks))
-			if checksErr := trackedMsg.Iter(func(i int, p *message.Part) error {
-				routedAtLeastOnce := false
-				for j, exe := range o.checks {
-					test := true
-					if exe != nil {
-						var err error
-						if test, err = exe.QueryPart(i, trackedMsg); err != nil {
-							test = false
-							o.logger.Errorf("Failed to test case %v: %v\n", j, err)
-						}
-					}
-					if test {
-						routedAtLeastOnce = true
-						outputTargets[j] = append(outputTargets[j], p.Copy())
-						if !o.continues[j] {
-							return nil
-						}
-					}
-				}
-				if !routedAtLeastOnce && o.strictMode {
-					return ErrSwitchNoConditionMet
-				}
-				return nil
-			}); checksErr != nil {
-				if err := ts.Ack(o.ctx, checksErr); err != nil && o.ctx.Err() != nil {
-					return
-				}
-				continue
-			}
-
-			var resErr error
-			if o.retryUntilSuccess {
-				resErr = o.dispatchRetryOnErr(outputTargets)
-			} else {
-				resErr = o.dispatchNoRetries(group, trackedMsg, outputTargets)
-			}
-			if err := ts.Ack(o.ctx, resErr); err != nil && o.ctx.Err() != nil {
-				return
-			}
+		case <-o.shutSig.CloseAtLeisureChan():
+			return
 		}
-	}
 
-	// Max in flight
-	for i := 0; i < o.maxInFlight; i++ {
-		wg.Add(1)
-		go sendLoop()
+		group, trackedMsg := message.NewSortGroup(ts.Payload)
+
+		outputTargets := make([][]*message.Part, len(o.checks))
+		if checksErr := trackedMsg.Iter(func(i int, p *message.Part) error {
+			routedAtLeastOnce := false
+			for j, exe := range o.checks {
+				test := true
+				if exe != nil {
+					var err error
+					if test, err = exe.QueryPart(i, trackedMsg); err != nil {
+						test = false
+						o.logger.Errorf("Failed to test case %v: %v\n", j, err)
+					}
+				}
+				if test {
+					routedAtLeastOnce = true
+					outputTargets[j] = append(outputTargets[j], p.Copy())
+					if !o.continues[j] {
+						return nil
+					}
+				}
+			}
+			if !routedAtLeastOnce && o.strictMode {
+				return ErrSwitchNoConditionMet
+			}
+			return nil
+		}); checksErr != nil {
+			if err := ts.Ack(shutCtx, checksErr); err != nil && shutCtx.Err() != nil {
+				return
+			}
+			continue
+		}
+
+		_ = atomic.AddInt64(&ackPending, 1)
+		o.dispatchToTargets(group, trackedMsg, outputTargets, func(ctx context.Context, err error) error {
+			ackErr := ts.Ack(ctx, err)
+			_ = atomic.AddInt64(&ackPending, -1)
+			select {
+			case ackInterruptChan <- struct{}{}:
+			default:
+			}
+			return ackErr
+		})
 	}
 }
 
-// CloseAsync shuts down the Switch broker and stops processing requests.
-func (o *Switch) CloseAsync() {
-	o.close()
+func (o *switchOutput) CloseAsync() {
+	o.shutSig.CloseAtLeisure()
 }
 
-// WaitForClose blocks until the Switch broker has closed down.
-func (o *Switch) WaitForClose(timeout time.Duration) error {
+func (o *switchOutput) WaitForClose(timeout time.Duration) error {
 	select {
-	case <-o.closedChan:
+	case <-o.shutSig.HasClosedChan():
 	case <-time.After(timeout):
 		return component.ErrTimeout
 	}

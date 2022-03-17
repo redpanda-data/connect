@@ -299,10 +299,6 @@ func (d *dropOn) Connected() bool {
 	return d.wrapped.Connected()
 }
 
-func (d *dropOn) MaxInFlight() (int, bool) {
-	return output.GetMaxInFlight(d.wrapped)
-}
-
 // CloseAsync shuts down the DropOnError input and stops processing requests.
 func (d *dropOn) CloseAsync() {
 	d.done()

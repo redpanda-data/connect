@@ -45,7 +45,6 @@ output:
   switch:
     retry_until_success: false
     strict_mode: false
-    max_in_flight: 1
     cases: []
 ```
 
@@ -147,14 +146,6 @@ behavior is false, which will drop the message.
 
 Type: `bool`  
 Default: `false`  
-
-### `max_in_flight`
-
-The maximum number of parallel message batches to have in flight at any given time. Note that if a child output has a higher `max_in_flight` then the switch output will automatically match it, therefore this value is the minimum `max_in_flight` to set in cases where the child values can't be inferred (such as when using resource outputs as children).
-
-
-Type: `int`  
-Default: `1`  
 
 ### `cases`
 

@@ -149,10 +149,6 @@ func (n *notBatchedOutput) Consume(ts <-chan message.Transaction) error {
 	return nil
 }
 
-func (n *notBatchedOutput) MaxInFlight() (int, bool) {
-	return output.GetMaxInFlight(n.out)
-}
-
 func (n *notBatchedOutput) Connected() bool {
 	return n.out.Connected()
 }
