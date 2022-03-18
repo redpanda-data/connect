@@ -26,6 +26,10 @@ type Manager struct {
 	Outputs    map[string]OutputWriter
 	Processors map[string]Processor
 	Pipes      map[string]<-chan message.Transaction
+
+	// OnRegisterEndpoint can be set in order to intercept endpoints registered
+	// by components.
+	OnRegisterEndpoint func(path string, h http.HandlerFunc)
 }
 
 // NewManager provides a new mock manager.
@@ -62,7 +66,11 @@ func (m *Manager) Metrics() metrics.Type { return metrics.Noop() }
 func (m *Manager) Logger() log.Modular { return log.Noop() }
 
 // RegisterEndpoint registers a server wide HTTP endpoint.
-func (m *Manager) RegisterEndpoint(path, desc string, h http.HandlerFunc) {}
+func (m *Manager) RegisterEndpoint(path, desc string, h http.HandlerFunc) {
+	if m.OnRegisterEndpoint != nil {
+		m.OnRegisterEndpoint(path, h)
+	}
+}
 
 // BloblEnvironment always returns the global environment.
 func (m *Manager) BloblEnvironment() *bloblang.Environment {

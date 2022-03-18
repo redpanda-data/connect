@@ -71,10 +71,17 @@ func newDynamicInput(conf oinput.Config, mgr bundle.NewManagement, pipelines ...
 			if !exists {
 				return
 			}
-			_ = uConf
 
-			// TODO: V4
 			var confBytes []byte
+			var node yaml.Node
+			if err := node.Encode(uConf); err == nil {
+				if err := docs.FieldCommon("input", "").HasType(docs.FieldTypeInput).SanitiseYAML(&node, docs.SanitiseConfig{
+					RemoveTypeField: true,
+				}); err == nil {
+					confBytes, _ = yaml.Marshal(node)
+				}
+			}
+
 			dynAPI.Started(l, confBytes)
 			delete(inputConfigs, l)
 		},

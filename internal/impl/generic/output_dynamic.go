@@ -73,10 +73,17 @@ func newDynamicOutput(conf ooutput.Config, mgr bundle.NewManagement) (output.Str
 			if !exists {
 				return
 			}
-			_ = uConf
 
-			// TODO: V4 Implement this
 			var confBytes []byte
+			var node yaml.Node
+			if err := node.Encode(uConf); err == nil {
+				if err := docs.FieldCommon("output", "").HasType(docs.FieldTypeOutput).SanitiseYAML(&node, docs.SanitiseConfig{
+					RemoveTypeField: true,
+				}); err == nil {
+					confBytes, _ = yaml.Marshal(node)
+				}
+			}
+
 			dynAPI.Started(l, confBytes)
 			delete(outputConfigs, l)
 		},
