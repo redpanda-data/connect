@@ -28,7 +28,7 @@ func NewCacheConfig() CacheConfig {
 	return CacheConfig{
 		Target:      "",
 		Key:         `${!count("items")}-${!timestamp_unix_nano()}`,
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 	}
 }
 

@@ -34,7 +34,7 @@ func NewRedisListConfig() RedisListConfig {
 	return RedisListConfig{
 		Config:      bredis.NewConfig(),
 		Key:         "",
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 		Batching:    policy.NewConfig(),
 	}
 }

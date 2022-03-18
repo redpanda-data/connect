@@ -105,7 +105,7 @@ func newWorkflowBranchMap(conf WorkflowConfig, mgr interop.Manager) (*workflowBr
 
 		child, err := newBranch(v, mgr.IntoPath("workflow", "branches", k))
 		if err != nil {
-			return nil, fmt.Errorf("failed to create branch '%v': %v", k, err)
+			return nil, err
 		}
 
 		dynamicBranches[k] = &normalBranch{child}

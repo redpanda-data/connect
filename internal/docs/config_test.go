@@ -58,7 +58,7 @@ func TestInference(t *testing.T) {
 				"bar":        "yep",
 				"processors": "yep",
 			},
-			err: "unable to infer output type, candidates were: [bar foo]",
+			err: "unable to infer output type from candidates: [bar foo]",
 		},
 		{
 			inputType: docs.TypeInput,
@@ -67,7 +67,7 @@ func TestInference(t *testing.T) {
 				"bar":        "yep",
 				"processors": "yep",
 			},
-			err: "unable to infer input type, candidates were: [bar foo]",
+			err: "unable to infer input type from candidates: [bar foo]",
 		},
 		{
 			inputType: docs.TypeTracer,

@@ -186,7 +186,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (st
 
 	if inferred == "" {
 		sort.Strings(candidates)
-		return "", ComponentSpec{}, fmt.Errorf("unable to infer %v type, candidates were: %v", string(t), candidates)
+		return "", ComponentSpec{}, fmt.Errorf("unable to infer %v type from candidates: %v", string(t), candidates)
 	}
 	return inferred, inferredSpec, nil
 }

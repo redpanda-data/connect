@@ -182,7 +182,7 @@ func NewCassandraConfig() CassandraConfig {
 		Consistency:              gocql.Quorum.String(),
 		Timeout:                  "600ms",
 		Config:                   rConf,
-		MaxInFlight:              1,
+		MaxInFlight:              64,
 		Batching:                 policy.NewConfig(),
 	}
 }

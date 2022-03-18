@@ -37,7 +37,7 @@ input:
     dynamodb:
       table: ""
       create: false
-    checkpoint_limit: 1
+    checkpoint_limit: 1024
     commit_period: 5s
     start_from_oldest: true
     batching:
@@ -62,7 +62,7 @@ input:
       billing_mode: PAY_PER_REQUEST
       read_capacity_units: 0
       write_capacity_units: 0
-    checkpoint_limit: 1
+    checkpoint_limit: 1024
     commit_period: 5s
     rebalance_period: 30s
     lease_period: 30s
@@ -89,15 +89,20 @@ input:
 
 Consumes messages from one or more Kinesis streams either by automatically balancing shards across other instances of this input, or by consuming shards listed explicitly. The latest message sequence consumed by this input is stored within a [DynamoDB table](#table-schema), which allows it to resume at the correct sequence of the shard during restarts. This table is also used for coordination across distributed inputs when shard balancing.
 
-Benthos will not store a consumed sequence unless it is acknowledged at the output level, which ensures at-least-once delivery guarantees. However, this also means that by default messages of a given shard cannot be processed concurrently. In order to increase the number of shard messages that can be processed concurrently increase the field `checkpoint_limit`.
+Benthos will not store a consumed sequence unless it is acknowledged at the output level, which ensures at-least-once delivery guarantees.
 
-## Table Schema
+### Ordering
+
+By default messages of a shard can be processed in parallel, up to a limit determined by the field `checkpoint_limit`. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
+
+### Table Schema
 
 It's possible to configure Benthos to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key `StreamID` and a string RANGE key `ShardID`. 
 
-## Batching
+### Batching
 
-Use the `batching` fields to configure an optional [batching policy](/docs/configuration/batching#batch-policy). Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated. Any other batching mechanism will stall with this input due its sequential transaction model.
+Use the `batching` fields to configure an optional [batching policy](/docs/configuration/batching#batch-policy). Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.
+
 
 ## Fields
 
@@ -163,7 +168,7 @@ The maximum gap between the in flight sequence versus the latest acknowledged se
 
 
 Type: `int`  
-Default: `1`  
+Default: `1024`  
 
 ### `commit_period`
 

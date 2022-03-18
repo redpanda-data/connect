@@ -34,7 +34,7 @@ output:
     nsqd_tcp_address: ""
     topic: ""
     user_agent: ""
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
@@ -55,7 +55,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
@@ -219,6 +219,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 

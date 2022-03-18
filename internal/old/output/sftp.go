@@ -91,7 +91,7 @@ func NewSFTPConfig() SFTPConfig {
 			Username: "",
 			Password: "",
 		},
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 	}
 }
 

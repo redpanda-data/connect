@@ -17,7 +17,7 @@ func NewPulsarConfig() PulsarConfig {
 	return PulsarConfig{
 		URL:         "",
 		Topic:       "",
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 		Key:         "",
 		OrderingKey: "",
 		Auth:        auth.New(),

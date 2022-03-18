@@ -64,7 +64,8 @@ test_cache_plugin_with_config:
 	require.NoError(t, err)
 
 	_, err = mgr.NewCache(cacheConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -103,7 +104,8 @@ test_cache_plugin_without_config: null
 	require.NoError(t, err)
 
 	_, err = mgr.NewCache(cacheConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -150,7 +152,8 @@ test_input_plugin_with_config:
 	require.NoError(t, err)
 
 	_, err = mgr.NewInput(inConf)
-	assert.EqualError(t, err, "failed to create input 'test_input_plugin_with_config': this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -189,7 +192,8 @@ test_input_plugin_without_config: null
 	require.NoError(t, err)
 
 	_, err = mgr.NewInput(inConf)
-	assert.EqualError(t, err, "failed to create input 'test_input_plugin_without_config': this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -236,7 +240,8 @@ test_output_plugin_with_config:
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
-	assert.EqualError(t, err, "failed to create output 'test_output_plugin_with_config': this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -275,7 +280,8 @@ test_output_plugin_without_config: null
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
-	assert.EqualError(t, err, "failed to create output 'test_output_plugin_without_config': this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -325,7 +331,8 @@ test_batch_output_plugin_with_config:
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
-	assert.EqualError(t, err, "failed to create output 'test_batch_output_plugin_with_config': this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, 21, initConf.Count)
@@ -365,7 +372,8 @@ test_batch_output_plugin_without_config: null
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
-	assert.EqualError(t, err, "failed to create output 'test_batch_output_plugin_without_config': this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -412,7 +420,8 @@ test_processor_plugin_with_config:
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -451,7 +460,8 @@ test_processor_plugin_without_config: null
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -498,7 +508,8 @@ test_batch_processor_plugin_with_config:
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -537,7 +548,8 @@ test_batch_processor_plugin_without_config: null
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -584,7 +596,8 @@ test_rate_limit_plugin_with_config:
 	require.NoError(t, err)
 
 	_, err = mgr.NewRateLimit(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -623,6 +636,7 @@ test_rate_limit_plugin_without_config: null
 	require.NoError(t, err)
 
 	_, err = mgr.NewRateLimit(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }

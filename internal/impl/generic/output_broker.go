@@ -146,7 +146,7 @@ func newBroker(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...proce
 			oMgr := mgr.IntoPath("broker", "outputs", strconv.Itoa(i))
 			tmpOut, err := ooutput.New(oConf, oMgr, oMgr.Logger(), oMgr.Metrics(), pipes...)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Type, err)
+				return nil, err
 			}
 			if isRetryWrapped {
 				if tmpOut, err = RetryOutputIndefinitely(mgr, tmpOut); err != nil {

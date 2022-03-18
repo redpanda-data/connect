@@ -38,7 +38,7 @@ func NewNATSConfig() NATSConfig {
 	return NATSConfig{
 		URLs:        []string{},
 		Subject:     "",
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 		TLS:         btls.NewConfig(),
 		Auth:        auth.New(),
 	}

@@ -43,7 +43,7 @@ func (m *Manager) WithAddedMetrics(m2 metrics.Type) interop.Manager { return m }
 
 // NewBuffer always errors on invalid type.
 func (m *Manager) NewBuffer(conf buffer.Config) (buffer.Streamed, error) {
-	return nil, component.ErrInvalidBufferType
+	return nil, component.ErrInvalidType("buffer", conf.Type)
 }
 
 // NewCache always errors on invalid type.
@@ -53,7 +53,7 @@ func (m *Manager) NewCache(conf cache.Config) (cache.V1, error) {
 
 // StoreCache always errors on invalid type.
 func (m *Manager) StoreCache(ctx context.Context, name string, conf cache.Config) error {
-	return component.ErrInvalidCacheType
+	return component.ErrInvalidType("cache", conf.Type)
 }
 
 // NewInput always errors on invalid type.
@@ -63,7 +63,7 @@ func (m *Manager) NewInput(conf linput.Config, pipelines ...processor.PipelineCo
 
 // StoreInput always errors on invalid type.
 func (m *Manager) StoreInput(ctx context.Context, name string, conf linput.Config) error {
-	return component.ErrInvalidInputType
+	return component.ErrInvalidType("input", conf.Type)
 }
 
 // NewProcessor always errors on invalid type.
@@ -73,7 +73,7 @@ func (m *Manager) NewProcessor(conf lprocessor.Config) (processor.V1, error) {
 
 // StoreProcessor always errors on invalid type.
 func (m *Manager) StoreProcessor(ctx context.Context, name string, conf lprocessor.Config) error {
-	return component.ErrInvalidProcessorType
+	return component.ErrInvalidType("processor", conf.Type)
 }
 
 // NewOutput always errors on invalid type.
@@ -83,7 +83,7 @@ func (m *Manager) NewOutput(conf loutput.Config, pipelines ...processor.Pipeline
 
 // StoreOutput always errors on invalid type.
 func (m *Manager) StoreOutput(ctx context.Context, name string, conf loutput.Config) error {
-	return component.ErrInvalidOutputType
+	return component.ErrInvalidType("output", conf.Type)
 }
 
 // NewRateLimit always errors on invalid type.
@@ -93,5 +93,5 @@ func (m *Manager) NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error) {
 
 // StoreRateLimit always errors on invalid type.
 func (m *Manager) StoreRateLimit(ctx context.Context, name string, conf ratelimit.Config) error {
-	return component.ErrInvalidRateLimitType
+	return component.ErrInvalidType("rate_limit", conf.Type)
 }

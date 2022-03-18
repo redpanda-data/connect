@@ -109,7 +109,7 @@ func newBrokerInput(conf oinput.Config, mgr bundle.NewManagement, pipelines ...i
 				iMgr := mgr.IntoPath("broker", "inputs", strconv.Itoa(i)).(bundle.NewManagement)
 				inputs[len(conf.Broker.Inputs)*j+i], err = iMgr.NewInput(iConf, pipelines...)
 				if err != nil {
-					return nil, fmt.Errorf("failed to create input '%v' type '%v': %v", i, iConf.Type, err)
+					return nil, err
 				}
 			}
 		}

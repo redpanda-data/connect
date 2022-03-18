@@ -35,7 +35,7 @@ input:
     topics: []
     target_version: 2.0.0
     consumer_group: ""
-    checkpoint_limit: 1
+    checkpoint_limit: 1024
 ```
 
 </TabItem>
@@ -67,7 +67,7 @@ input:
     client_id: benthos
     rack_id: ""
     start_from_oldest: true
-    checkpoint_limit: 1
+    checkpoint_limit: 1024
     commit_period: 1s
     max_processing_period: 100ms
     extract_tracing_map: ""
@@ -110,6 +110,10 @@ This input adds the following metadata fields to each message:
 The field `kafka_lag` is the calculated difference between the high water mark offset of the partition at the time of ingestion and the current message offset.
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+
+### Ordering
+
+By default messages of a topic partition can be processed in parallel, up to a limit determined by the field `checkpoint_limit`. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
 
 ### Troubleshooting
 
@@ -411,7 +415,7 @@ The maximum number of messages of the same topic and partition that can be proce
 
 
 Type: `int`  
-Default: `1`  
+Default: `1024`  
 Requires version 3.33.0 or newer  
 
 ### `commit_period`

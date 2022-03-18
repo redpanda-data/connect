@@ -51,7 +51,7 @@ func (s *TracerSet) Add(constructor TracerConstructor, spec docs.ComponentSpec) 
 func (s *TracerSet) Init(conf tracer.Config) (tracer.Type, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, component.ErrInvalidTracerType
+		return nil, component.ErrInvalidType("tracer", conf.Type)
 	}
 	return spec.constructor(conf)
 }

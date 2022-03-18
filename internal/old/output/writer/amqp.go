@@ -58,7 +58,7 @@ type AMQPConfig struct {
 func NewAMQPConfig() AMQPConfig {
 	return AMQPConfig{
 		URLs:        []string{},
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 		Exchange:    "",
 		ExchangeDeclare: AMQPExchangeDeclareConfig{
 			Enabled: false,

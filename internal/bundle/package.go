@@ -9,8 +9,10 @@ package bundle
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
@@ -43,4 +45,19 @@ type NewManagement interface {
 	StoreProcessor(ctx context.Context, name string, conf processor.Config) error
 	StoreOutput(ctx context.Context, name string, conf output.Config) error
 	StoreRateLimit(ctx context.Context, name string, conf ratelimit.Config) error
+}
+
+func wrapComponentErr(mgr NewManagement, typeStr string, err error) error {
+	if err == nil {
+		return nil
+	}
+	annotation := "<no label>"
+	if mgr.Label() != "" {
+		annotation = "'" + mgr.Label() + "'"
+	}
+	if p := mgr.Path(); len(p) > 0 {
+		annotation += "path root."
+		annotation += query.SliceToDotPath(mgr.Path()...)
+	}
+	return fmt.Errorf("failed to init %v %v: %w", typeStr, annotation, err)
 }

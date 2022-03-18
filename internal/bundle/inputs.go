@@ -46,7 +46,7 @@ func InputConstructorFromSimple(fn func(input.Config, NewManagement) (iinput.Str
 	return func(c input.Config, nm NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 		i, err := fn(c, nm)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create input '%v': %w", c.Type, err)
+			return nil, err
 		}
 		pcf = input.AppendProcessorsFromConfig(c, nm, pcf...)
 		return input.WrapWithPipelines(i, pcf...)
@@ -89,9 +89,11 @@ func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) er
 func (s *InputSet) Init(conf input.Config, mgr NewManagement, pipelines ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, component.ErrInvalidInputType
+		return nil, component.ErrInvalidType("input", conf.Type)
 	}
-	return spec.constructor(conf, mgr, pipelines...)
+	c, err := spec.constructor(conf, mgr, pipelines...)
+	err = wrapComponentErr(mgr, "input", err)
+	return c, err
 }
 
 // Docs returns a slice of input specs, which document each method.

@@ -46,7 +46,7 @@ func OutputConstructorFromSimple(fn func(output.Config, NewManagement) (ioutput.
 	return func(c output.Config, nm NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
 		o, err := fn(c, nm)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create output '%v': %w", c.Type, err)
+			return nil, err
 		}
 		pcf = output.AppendProcessorsFromConfig(c, nm, pcf...)
 		return output.WrapWithPipelines(o, pcf...)
@@ -94,9 +94,11 @@ func (s *OutputSet) Init(
 ) (ioutput.Streamed, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, component.ErrInvalidOutputType
+		return nil, component.ErrInvalidType("output", conf.Type)
 	}
-	return spec.constructor(conf, mgr, pipelines...)
+	c, err := spec.constructor(conf, mgr, pipelines...)
+	err = wrapComponentErr(mgr, "output", err)
+	return c, err
 }
 
 // Docs returns a slice of output specs, which document each method.

@@ -69,9 +69,11 @@ func (s *BufferSet) Add(constructor BufferConstructor, spec docs.ComponentSpec) 
 func (s *BufferSet) Init(conf buffer.Config, mgr NewManagement) (buffer.Streamed, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, component.ErrInvalidBufferType
+		return nil, component.ErrInvalidType("buffer", conf.Type)
 	}
-	return spec.constructor(conf, mgr)
+	c, err := spec.constructor(conf, mgr)
+	err = wrapComponentErr(mgr, "buffer", err)
+	return c, err
 }
 
 // Docs returns a slice of buffer specs, which document each method.

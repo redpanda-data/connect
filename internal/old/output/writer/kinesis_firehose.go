@@ -42,7 +42,7 @@ func NewKinesisFirehoseConfig() KinesisFirehoseConfig {
 			Config: sess.NewConfig(),
 		},
 		Stream:      "",
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 		Config:      rConf,
 		Batching:    policy.NewConfig(),
 	}

@@ -27,7 +27,63 @@ import (
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-//------------------------------------------------------------------------------
+// KafkaBalancedGroupConfig contains config fields for Kafka consumer groups.
+type KafkaBalancedGroupConfig struct {
+	SessionTimeout    string `json:"session_timeout" yaml:"session_timeout"`
+	HeartbeatInterval string `json:"heartbeat_interval" yaml:"heartbeat_interval"`
+	RebalanceTimeout  string `json:"rebalance_timeout" yaml:"rebalance_timeout"`
+}
+
+// NewKafkaBalancedGroupConfig returns a KafkaBalancedGroupConfig with default
+// values.
+func NewKafkaBalancedGroupConfig() KafkaBalancedGroupConfig {
+	return KafkaBalancedGroupConfig{
+		SessionTimeout:    "10s",
+		HeartbeatInterval: "3s",
+		RebalanceTimeout:  "60s",
+	}
+}
+
+// KafkaConfig contains configuration fields for the Kafka input type.
+type KafkaConfig struct {
+	Addresses           []string                 `json:"addresses" yaml:"addresses"`
+	Topics              []string                 `json:"topics" yaml:"topics"`
+	ClientID            string                   `json:"client_id" yaml:"client_id"`
+	RackID              string                   `json:"rack_id" yaml:"rack_id"`
+	ConsumerGroup       string                   `json:"consumer_group" yaml:"consumer_group"`
+	Group               KafkaBalancedGroupConfig `json:"group" yaml:"group"`
+	CommitPeriod        string                   `json:"commit_period" yaml:"commit_period"`
+	CheckpointLimit     int                      `json:"checkpoint_limit" yaml:"checkpoint_limit"`
+	ExtractTracingMap   string                   `json:"extract_tracing_map" yaml:"extract_tracing_map"`
+	MaxProcessingPeriod string                   `json:"max_processing_period" yaml:"max_processing_period"`
+	FetchBufferCap      int                      `json:"fetch_buffer_cap" yaml:"fetch_buffer_cap"`
+	StartFromOldest     bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	TargetVersion       string                   `json:"target_version" yaml:"target_version"`
+	TLS                 btls.Config              `json:"tls" yaml:"tls"`
+	SASL                sasl.Config              `json:"sasl" yaml:"sasl"`
+	Batching            policy.Config            `json:"batching" yaml:"batching"`
+}
+
+// NewKafkaConfig creates a new KafkaConfig with default values.
+func NewKafkaConfig() KafkaConfig {
+	return KafkaConfig{
+		Addresses:           []string{},
+		Topics:              []string{},
+		ClientID:            "benthos",
+		RackID:              "",
+		ConsumerGroup:       "",
+		Group:               NewKafkaBalancedGroupConfig(),
+		CommitPeriod:        "1s",
+		CheckpointLimit:     1024,
+		MaxProcessingPeriod: "100ms",
+		FetchBufferCap:      256,
+		StartFromOldest:     true,
+		TargetVersion:       sarama.V2_0_0_0.String(),
+		TLS:                 btls.NewConfig(),
+		SASL:                sasl.NewConfig(),
+		Batching:            policy.NewConfig(),
+	}
+}
 
 func init() {
 	Constructors[TypeKafka] = TypeSpec{
@@ -58,6 +114,10 @@ This input adds the following metadata fields to each message:
 The field ` + "`kafka_lag`" + ` is the calculated difference between the high water mark offset of the partition at the time of ingestion and the current message offset.
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
+
+### Ordering
+
+By default messages of a topic partition can be processed in parallel, up to a limit determined by the field ` + "`checkpoint_limit`" + `. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
 
 ### Troubleshooting
 
@@ -160,7 +220,7 @@ type kafkaReader struct {
 	msgChan         chan asyncMessage
 	session         offsetMarker
 
-	conf  reader.KafkaConfig
+	conf  KafkaConfig
 	stats metrics.Type
 	log   log.Modular
 	mgr   interop.Manager
@@ -202,7 +262,7 @@ func parsePartitions(expr string) ([]int32, error) {
 }
 
 func newKafkaReader(
-	conf reader.KafkaConfig, mgr interop.Manager, log log.Modular, stats metrics.Type,
+	conf KafkaConfig, mgr interop.Manager, log log.Modular, stats metrics.Type,
 ) (*kafkaReader, error) {
 	if conf.Batching.IsNoop() {
 		conf.Batching.Count = 1

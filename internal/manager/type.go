@@ -441,10 +441,7 @@ func (t *Type) StoreCache(ctx context.Context, name string, conf cache.Config) e
 
 	newCache, err := t.intoPath("cache_resources").NewCache(conf)
 	if err != nil {
-		return fmt.Errorf(
-			"failed to create cache resource '%v' of type '%v': %w",
-			name, conf.Type, err,
-		)
+		return err
 	}
 
 	t.caches[name] = newCache
@@ -507,10 +504,7 @@ func (t *Type) StoreInput(ctx context.Context, name string, conf input.Config) e
 
 	newInput, err := t.intoPath("input_resources").NewInput(conf)
 	if err != nil {
-		return fmt.Errorf(
-			"failed to create input resource '%v' of type '%v': %w",
-			name, conf.Type, err,
-		)
+		return err
 	}
 
 	if exists && i != nil {
@@ -579,10 +573,7 @@ func (t *Type) StoreProcessor(ctx context.Context, name string, conf processor.C
 
 	newProcessor, err := t.intoPath("processor_resources").NewProcessor(conf)
 	if err != nil {
-		return fmt.Errorf(
-			"failed to create processor resource '%v' of type '%v': %w",
-			name, conf.Type, err,
-		)
+		return err
 	}
 
 	t.processors[name] = newProcessor
@@ -651,10 +642,7 @@ func (t *Type) StoreOutput(ctx context.Context, name string, conf output.Config)
 		}
 	}
 	if err != nil {
-		return fmt.Errorf(
-			"failed to create output resource '%v' of type '%v': %w",
-			name, conf.Type, err,
-		)
+		return err
 	}
 	return nil
 }
@@ -713,10 +701,7 @@ func (t *Type) StoreRateLimit(ctx context.Context, name string, conf ratelimit.C
 
 	newRateLimit, err := t.intoPath("rate_limit_resources").NewRateLimit(conf)
 	if err != nil {
-		return fmt.Errorf(
-			"failed to create rate limit resource '%v' of type '%v': %w",
-			name, conf.Type, err,
-		)
+		return err
 	}
 
 	t.rateLimits[name] = newRateLimit

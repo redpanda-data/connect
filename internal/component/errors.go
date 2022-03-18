@@ -6,21 +6,30 @@ import (
 	"strings"
 )
 
+type errInvalidType struct {
+	typeStr string
+	tried   string
+}
+
+func (e *errInvalidType) Error() string {
+	return fmt.Sprintf("%v type of '%v' was not recognised", e.typeStr, e.tried)
+}
+
+// ErrInvalidType creates an error that describes a component type being
+// initialised with an unrecognised implementation.
+func ErrInvalidType(typeStr, tried string) error {
+	return &errInvalidType{
+		typeStr: typeStr,
+		tried:   tried,
+	}
+}
+
 // Errors used throughout the codebase
 var (
 	ErrTimeout    = errors.New("action timed out")
 	ErrTypeClosed = errors.New("type was closed")
 
 	ErrNotConnected = errors.New("not connected to target source or sink")
-
-	ErrInvalidProcessorType = errors.New("processor type was not recognised")
-	ErrInvalidCacheType     = errors.New("cache type was not recognised")
-	ErrInvalidRateLimitType = errors.New("rate_limit type was not recognised")
-	ErrInvalidBufferType    = errors.New("buffer type was not recognised")
-	ErrInvalidInputType     = errors.New("input type was not recognised")
-	ErrInvalidOutputType    = errors.New("output type was not recognised")
-	ErrInvalidTracerType    = errors.New("tracer type was not recognised")
-	ErrInvalidMetricType    = errors.New("invalid metrics output type")
 
 	// ErrAlreadyStarted is returned when an input or output type gets started a
 	// second time.

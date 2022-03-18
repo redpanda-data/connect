@@ -35,7 +35,7 @@ output:
       password: ""
       private_key_file: ""
       private_key_pass: ""
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
@@ -155,6 +155,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 

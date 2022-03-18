@@ -155,7 +155,7 @@ func NewReadUntil(
 	wLog, wStats := wMgr.Logger(), wMgr.Metrics()
 	wrapped, err := New(*conf.ReadUntil.Input, wMgr, wLog, wStats)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create input '%v': %v", conf.ReadUntil.Input.Type, err)
+		return nil, err
 	}
 
 	var check *mapping.Executor

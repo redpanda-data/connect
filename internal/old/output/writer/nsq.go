@@ -38,7 +38,7 @@ func NewNSQConfig() NSQConfig {
 		Topic:       "",
 		UserAgent:   "",
 		TLS:         btls.NewConfig(),
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 	}
 }
 

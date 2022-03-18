@@ -196,7 +196,7 @@ type Config struct {
 	HTTPClient        HTTPClientConfig          `json:"http_client" yaml:"http_client"`
 	HTTPServer        HTTPServerConfig          `json:"http_server" yaml:"http_server"`
 	Inproc            InprocConfig              `json:"inproc" yaml:"inproc"`
-	Kafka             reader.KafkaConfig        `json:"kafka" yaml:"kafka"`
+	Kafka             KafkaConfig               `json:"kafka" yaml:"kafka"`
 	MQTT              reader.MQTTConfig         `json:"mqtt" yaml:"mqtt"`
 	Nanomsg           reader.ScaleProtoConfig   `json:"nanomsg" yaml:"nanomsg"`
 	NATS              reader.NATSConfig         `json:"nats" yaml:"nats"`
@@ -245,7 +245,7 @@ func NewConfig() Config {
 		HTTPClient:        NewHTTPClientConfig(),
 		HTTPServer:        NewHTTPServerConfig(),
 		Inproc:            NewInprocConfig(),
-		Kafka:             reader.NewKafkaConfig(),
+		Kafka:             NewKafkaConfig(),
 		MQTT:              reader.NewMQTTConfig(),
 		Nanomsg:           reader.NewScaleProtoConfig(),
 		NATS:              reader.NewNATSConfig(),
@@ -320,5 +320,5 @@ func New(
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats, pipelines...)
 	}
-	return nil, component.ErrInvalidInputType
+	return nil, component.ErrInvalidType("input", conf.Type)
 }

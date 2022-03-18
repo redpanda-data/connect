@@ -34,7 +34,7 @@ output:
   label: ""
   aws_kinesis_firehose:
     stream: ""
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -51,7 +51,7 @@ output:
   label: ""
   aws_kinesis_firehose:
     stream: ""
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -110,7 +110,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `batching`
 

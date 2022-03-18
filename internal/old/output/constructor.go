@@ -66,7 +66,7 @@ func AppendProcessorsFromConfig(conf Config, mgr interop.Manager, pipelines ...i
 				pMgr := mgr.IntoPath("processors", strconv.Itoa(j))
 				processors[j], err = processor.New(procConf, pMgr, pMgr.Logger(), pMgr.Metrics())
 				if err != nil {
-					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
+					return nil, err
 				}
 			}
 			return pipeline.NewProcessor(processors...), nil
@@ -85,7 +85,7 @@ func fromSimpleConstructor(fn func(Config, interop.Manager, log.Modular, metrics
 	) (output.Streamed, error) {
 		output, err := fn(conf, mgr, log, stats)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create output '%v': %w", conf.Type, err)
+			return nil, err
 		}
 		pipelines = AppendProcessorsFromConfig(conf, mgr, pipelines...)
 		return WrapWithPipelines(output, pipelines...)
@@ -360,5 +360,5 @@ func New(
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats, pipelines...)
 	}
-	return nil, component.ErrInvalidOutputType
+	return nil, component.ErrInvalidType("output", conf.Type)
 }

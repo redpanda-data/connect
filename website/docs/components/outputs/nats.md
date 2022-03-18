@@ -34,7 +34,7 @@ output:
     urls: []
     subject: ""
     headers: {}
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
@@ -48,7 +48,7 @@ output:
     urls: []
     subject: ""
     headers: {}
-    max_in_flight: 1
+    max_in_flight: 64
     tls:
       enabled: false
       skip_cert_verify: false
@@ -152,7 +152,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `tls`
 

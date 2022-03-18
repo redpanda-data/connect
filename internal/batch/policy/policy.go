@@ -134,7 +134,7 @@ func New(conf Config, mgr interop.Manager) (*Batcher, error) {
 		pMgr := mgr.IntoPath("processors", strconv.Itoa(i))
 		proc, err := processor.New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
 		if err != nil {
-			return nil, fmt.Errorf("failed to create processor '%v': %v", i, err)
+			return nil, err
 		}
 		procs = append(procs, proc)
 	}

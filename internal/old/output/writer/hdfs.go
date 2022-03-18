@@ -37,7 +37,7 @@ func NewHDFSConfig() HDFSConfig {
 		User:        "",
 		Directory:   "",
 		Path:        `${!count("files")}-${!timestamp_unix_nano()}.txt`,
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 		Batching:    policy.NewConfig(),
 	}
 }

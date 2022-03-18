@@ -72,9 +72,11 @@ func (s *ProcessorSet) Add(constructor ProcessorConstructor, spec docs.Component
 func (s *ProcessorSet) Init(conf processor.Config, mgr NewManagement) (iprocessor.V1, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, component.ErrInvalidProcessorType
+		return nil, component.ErrInvalidType("processor", conf.Type)
 	}
-	return spec.constructor(conf, mgr)
+	c, err := spec.constructor(conf, mgr)
+	err = wrapComponentErr(mgr, "processor", err)
+	return c, err
 }
 
 // Docs returns a slice of processor specs, which document each method.

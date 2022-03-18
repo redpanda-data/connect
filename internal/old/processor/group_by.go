@@ -133,7 +133,7 @@ func newGroupBy(conf GroupByConfig, mgr interop.Manager) (processor.V2Batched, e
 			pMgr := mgr.IntoPath("group_by", strconv.Itoa(i), "processors", strconv.Itoa(j))
 			proc, err := New(pConf, pMgr, pMgr.Logger(), pMgr.Metrics())
 			if err != nil {
-				return nil, fmt.Errorf("failed to create processor '%v' for group '%v': %v", j, i, err)
+				return nil, err
 			}
 			groups[i].Processors = append(groups[i].Processors, proc)
 		}

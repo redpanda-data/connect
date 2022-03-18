@@ -29,7 +29,33 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
-//------------------------------------------------------------------------------
+// AWSKinesisConfig is configuration values for the input type.
+type AWSKinesisConfig struct {
+	session.Config  `json:",inline" yaml:",inline"`
+	Streams         []string                 `json:"streams" yaml:"streams"`
+	DynamoDB        DynamoDBCheckpointConfig `json:"dynamodb" yaml:"dynamodb"`
+	CheckpointLimit int                      `json:"checkpoint_limit" yaml:"checkpoint_limit"`
+	CommitPeriod    string                   `json:"commit_period" yaml:"commit_period"`
+	LeasePeriod     string                   `json:"lease_period" yaml:"lease_period"`
+	RebalancePeriod string                   `json:"rebalance_period" yaml:"rebalance_period"`
+	StartFromOldest bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
+	Batching        policy.Config            `json:"batching" yaml:"batching"`
+}
+
+// NewAWSKinesisConfig creates a new Config with default values.
+func NewAWSKinesisConfig() AWSKinesisConfig {
+	return AWSKinesisConfig{
+		Config:          session.NewConfig(),
+		Streams:         []string{},
+		DynamoDB:        NewDynamoDBCheckpointConfig(),
+		CheckpointLimit: 1024,
+		CommitPeriod:    "5s",
+		LeasePeriod:     "30s",
+		RebalancePeriod: "30s",
+		StartFromOldest: true,
+		Batching:        policy.NewConfig(),
+	}
+}
 
 func init() {
 	Constructors[TypeAWSKinesis] = TypeSpec{
@@ -47,15 +73,20 @@ Receive messages from one or more Kinesis streams.`,
 		Description: `
 Consumes messages from one or more Kinesis streams either by automatically balancing shards across other instances of this input, or by consuming shards listed explicitly. The latest message sequence consumed by this input is stored within a [DynamoDB table](#table-schema), which allows it to resume at the correct sequence of the shard during restarts. This table is also used for coordination across distributed inputs when shard balancing.
 
-Benthos will not store a consumed sequence unless it is acknowledged at the output level, which ensures at-least-once delivery guarantees. However, this also means that by default messages of a given shard cannot be processed concurrently. In order to increase the number of shard messages that can be processed concurrently increase the field ` + "`checkpoint_limit`" + `.
+Benthos will not store a consumed sequence unless it is acknowledged at the output level, which ensures at-least-once delivery guarantees.
 
-## Table Schema
+### Ordering
+
+By default messages of a shard can be processed in parallel, up to a limit determined by the field ` + "`checkpoint_limit`" + `. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
+
+### Table Schema
 
 It's possible to configure Benthos to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key ` + "`StreamID`" + ` and a string RANGE key ` + "`ShardID`" + `. 
 
-## Batching
+### Batching
 
-Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/docs/configuration/batching#batch-policy). Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated. Any other batching mechanism will stall with this input due its sequential transaction model.`,
+Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/docs/configuration/batching#batch-policy). Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.
+`,
 		FieldSpecs: append(
 			append(docs.FieldSpecs{
 				docs.FieldString("streams", "One or more Kinesis data streams to consume from. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").Array(),
@@ -76,36 +107,6 @@ Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/
 			CategoryServices,
 			CategoryAWS,
 		},
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// AWSKinesisConfig is configuration values for the input type.
-type AWSKinesisConfig struct {
-	session.Config  `json:",inline" yaml:",inline"`
-	Streams         []string                 `json:"streams" yaml:"streams"`
-	DynamoDB        DynamoDBCheckpointConfig `json:"dynamodb" yaml:"dynamodb"`
-	CheckpointLimit int                      `json:"checkpoint_limit" yaml:"checkpoint_limit"`
-	CommitPeriod    string                   `json:"commit_period" yaml:"commit_period"`
-	LeasePeriod     string                   `json:"lease_period" yaml:"lease_period"`
-	RebalancePeriod string                   `json:"rebalance_period" yaml:"rebalance_period"`
-	StartFromOldest bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
-	Batching        policy.Config            `json:"batching" yaml:"batching"`
-}
-
-// NewAWSKinesisConfig creates a new Config with default values.
-func NewAWSKinesisConfig() AWSKinesisConfig {
-	return AWSKinesisConfig{
-		Config:          session.NewConfig(),
-		Streams:         []string{},
-		DynamoDB:        NewDynamoDBCheckpointConfig(),
-		CheckpointLimit: 1,
-		CommitPeriod:    "5s",
-		LeasePeriod:     "30s",
-		RebalancePeriod: "30s",
-		StartFromOldest: true,
-		Batching:        policy.NewConfig(),
 	}
 }
 

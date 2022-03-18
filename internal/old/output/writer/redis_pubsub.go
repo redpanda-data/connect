@@ -35,7 +35,7 @@ func NewRedisPubSubConfig() RedisPubSubConfig {
 	return RedisPubSubConfig{
 		Config:      bredis.NewConfig(),
 		Channel:     "",
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 		Batching:    policy.NewConfig(),
 	}
 }

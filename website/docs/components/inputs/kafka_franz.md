@@ -51,7 +51,7 @@ input:
     seed_brokers: []
     topics: []
     consumer_group: ""
-    checkpoint_limit: 100
+    checkpoint_limit: 1024
     tls:
       enabled: false
       skip_cert_verify: false
@@ -130,7 +130,7 @@ Determines how many messages of the same partition can be processed in parallel 
 
 
 Type: `int`  
-Default: `100`  
+Default: `1024`  
 
 ### `tls`
 

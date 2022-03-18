@@ -220,7 +220,7 @@ func newSwitchOutput(conf ooutput.SwitchConfig, mgr bundle.NewManagement) (outpu
 	for i, cConf := range conf.Cases {
 		oMgr := mgr.IntoPath("switch", strconv.Itoa(i), "output").(bundle.NewManagement)
 		if o.outputs[i], err = oMgr.NewOutput(cConf.Output); err != nil {
-			return nil, fmt.Errorf("failed to create case '%v' output type '%v': %v", i, cConf.Output.Type, err)
+			return nil, err
 		}
 		if conf.RetryUntilSuccess {
 			if o.outputs[i], err = RetryOutputIndefinitely(oMgr, o.outputs[i]); err != nil {

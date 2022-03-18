@@ -300,5 +300,5 @@ func New(
 	if c, ok := Constructors[conf.Type]; ok {
 		return c.constructor(conf, mgr, log, stats)
 	}
-	return nil, component.ErrInvalidProcessorType
+	return nil, component.ErrInvalidType("processor", conf.Type)
 }

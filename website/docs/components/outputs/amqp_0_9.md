@@ -38,7 +38,7 @@ output:
     type: ""
     metadata:
       exclude_prefixes: []
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
@@ -62,7 +62,7 @@ output:
     metadata:
       exclude_prefixes: []
     priority: ""
-    max_in_flight: 1
+    max_in_flight: 64
     persistent: false
     mandatory: false
     immediate: false
@@ -237,7 +237,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `persistent`
 

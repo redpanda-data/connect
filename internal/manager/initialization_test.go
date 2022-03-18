@@ -73,43 +73,52 @@ func TestInitialization(t *testing.T) {
 	bConf := buffer.NewConfig()
 	bConf.Type = "testbuffer"
 	_, err = mgr.NewBuffer(bConf)
-	assert.EqualError(t, err, "not this buffer")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not this buffer")
 
 	cConf := cache.NewConfig()
 	cConf.Type = "testcache"
 	_, err = mgr.NewCache(cConf)
-	assert.EqualError(t, err, "not this cache")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not this cache")
 
 	iConf := input.NewConfig()
 	iConf.Type = "testinput"
 	_, err = mgr.NewInput(iConf, nil, nil)
-	assert.EqualError(t, err, "not this input")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not this input")
 	assert.Equal(t, 2, lenInputProcs)
 
 	_, err = input.New(iConf, mgr, log.Noop(), metrics.Noop())
-	assert.EqualError(t, err, "not this input")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not this input")
 
 	oConf := output.NewConfig()
 	oConf.Type = "testoutput"
 	_, err = mgr.NewOutput(oConf, nil, nil, nil)
-	assert.EqualError(t, err, "not this output")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not this output")
 	assert.Equal(t, 3, lenOutputProcs)
 
 	_, err = output.New(oConf, mgr, log.Noop(), metrics.Noop())
-	assert.EqualError(t, err, "not this output")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not this output")
 
 	pConf := processor.NewConfig()
 	pConf.Type = "testprocessor"
 	_, err = mgr.NewProcessor(pConf)
-	assert.EqualError(t, err, "not this processor")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not this processor")
 
 	_, err = processor.New(pConf, mgr, log.Noop(), metrics.Noop())
-	assert.EqualError(t, err, "not this processor")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not this processor")
 
 	rConf := ratelimit.NewConfig()
 	rConf.Type = "testratelimit"
 	_, err = mgr.NewRateLimit(rConf)
-	assert.EqualError(t, err, "not this rate limit")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not this rate limit")
 }
 
 func TestInitializationOrdering(t *testing.T) {

@@ -53,7 +53,7 @@ func (s *MetricsSet) Add(constructor MetricConstructor, spec docs.ComponentSpec)
 func (s *MetricsSet) Init(conf metrics.Config, log log.Modular) (*metrics.Namespaced, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, component.ErrInvalidMetricType
+		return nil, component.ErrInvalidType("metric", conf.Type)
 	}
 
 	m, err := spec.constructor(conf, log)

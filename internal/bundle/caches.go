@@ -69,9 +69,11 @@ func (s *CacheSet) Add(constructor CacheConstructor, spec docs.ComponentSpec) er
 func (s *CacheSet) Init(conf cache.Config, mgr NewManagement) (cache.V1, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, component.ErrInvalidCacheType
+		return nil, component.ErrInvalidType("cache", conf.Type)
 	}
-	return spec.constructor(conf, mgr)
+	c, err := spec.constructor(conf, mgr)
+	err = wrapComponentErr(mgr, "cache", err)
+	return c, err
 }
 
 // Docs returns a slice of cache specs, which document each method.

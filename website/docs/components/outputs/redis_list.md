@@ -34,7 +34,7 @@ output:
   redis_list:
     url: ""
     key: ""
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -61,7 +61,7 @@ output:
       root_cas_file: ""
       client_certs: []
     key: ""
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -291,7 +291,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `batching`
 

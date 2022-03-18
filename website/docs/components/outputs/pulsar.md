@@ -39,7 +39,7 @@ output:
     topic: ""
     key: ""
     ordering_key: ""
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
@@ -54,7 +54,7 @@ output:
     topic: ""
     key: ""
     ordering_key: ""
-    max_in_flight: 1
+    max_in_flight: 64
     auth:
       oauth2:
         enabled: false
@@ -121,7 +121,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `auth`
 

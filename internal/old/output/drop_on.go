@@ -27,7 +27,7 @@ func init() {
 			}
 			wrapped, err := New(*conf.DropOn.Output, mgr, log, stats)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create output '%v': %v", conf.DropOn.Output.Type, err)
+				return nil, err
 			}
 			return newDropOn(conf.DropOn.DropOnConditions, wrapped, log, stats)
 		}),

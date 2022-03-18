@@ -69,9 +69,11 @@ func (s *RateLimitSet) Add(constructor RateLimitConstructor, spec docs.Component
 func (s *RateLimitSet) Init(conf ratelimit.Config, mgr NewManagement) (ratelimit.V1, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, component.ErrInvalidRateLimitType
+		return nil, component.ErrInvalidType("rate_limit", conf.Type)
 	}
-	return spec.constructor(conf, mgr)
+	c, err := spec.constructor(conf, mgr)
+	err = wrapComponentErr(mgr, "rate_limit", err)
+	return c, err
 }
 
 // Docs returns a slice of ratelimit specs, which document each method.

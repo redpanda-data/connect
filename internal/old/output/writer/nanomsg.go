@@ -39,7 +39,7 @@ func NewNanomsgConfig() NanomsgConfig {
 		Bind:        false,
 		SocketType:  "PUSH",
 		PollTimeout: "5s",
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 	}
 }
 

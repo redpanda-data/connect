@@ -43,7 +43,7 @@ func NewNATSStreamConfig() NATSStreamConfig {
 		ClusterID:   "",
 		ClientID:    "",
 		Subject:     "",
-		MaxInFlight: 1,
+		MaxInFlight: 64,
 		TLS:         btls.NewConfig(),
 		Auth:        auth.New(),
 	}

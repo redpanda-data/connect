@@ -3,7 +3,6 @@ package generic
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -91,7 +90,7 @@ func newFallback(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...pro
 	for i, oConf := range outputConfs {
 		oMgr := mgr.IntoPath("fallback", strconv.Itoa(i)).(bundle.NewManagement)
 		if outputs[i], err = oMgr.NewOutput(oConf); err != nil {
-			return nil, fmt.Errorf("failed to create output '%v' type '%v': %v", i, oConf.Type, err)
+			return nil, err
 		}
 	}
 

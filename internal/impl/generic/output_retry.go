@@ -3,7 +3,6 @@ package generic
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -76,7 +75,7 @@ func retryOutputFromConfig(conf ooutput.RetryConfig, mgr interop.Manager) (outpu
 
 	wrapped, err := ooutput.New(*conf.Output, mgr, mgr.Logger(), mgr.Metrics())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create output '%v': %v", conf.Output.Type, err)
+		return nil, err
 	}
 
 	var boffCtor func() backoff.BackOff

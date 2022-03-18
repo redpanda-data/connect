@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"fmt"
 	"strconv"
 
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -40,7 +39,7 @@ func New(conf Config, mgr interop.Manager) (Type, error) {
 		pMgr := mgr.IntoPath("processors", strconv.Itoa(j))
 		processors[j], err = processor.New(procConf, pMgr, pMgr.Logger(), pMgr.Metrics())
 		if err != nil {
-			return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
+			return nil, err
 		}
 	}
 	if conf.Threads == 1 {
