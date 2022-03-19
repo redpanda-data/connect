@@ -214,7 +214,7 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		}, true, nil
 	case "csv":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
-			return newCSVReader(r, fn, nil)
+			return newCSVReader(r, fn, nil, nil)
 		}, true, nil
 	case "tar":
 		return newTarReader, true, nil
@@ -239,7 +239,7 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		}
 		byRune := byRunes[0]
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
-			return newCSVReader(r, fn, &byRune)
+			return newCSVReader(r, fn, &byRune, nil)
 		}, true, nil
 	}
 	if strings.HasPrefix(codec, "chunker:") {
@@ -426,11 +426,15 @@ type csvReader struct {
 	pending  int32
 }
 
-func newCSVReader(r io.ReadCloser, ackFn ReaderAckFn, customComma *rune) (Reader, error) {
+func newCSVReader(r io.ReadCloser, ackFn ReaderAckFn, customComma *rune, lazyQuotes *bool) (Reader, error) {
 	scanner := csv.NewReader(r)
 	scanner.ReuseRecord = true
 	if customComma != nil {
 		scanner.Comma = *customComma
+	}
+
+	if lazyQuotes != nil {
+		scanner.LazyQuotes = *lazyQuotes
 	}
 
 	headers, err := scanner.Read()
