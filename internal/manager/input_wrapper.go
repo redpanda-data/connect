@@ -3,27 +3,37 @@ package manager
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
-var _ iinput.Streamed = &inputWrapper{}
+var _ input.Streamed = &inputWrapper{}
 
-type inputWrapper struct {
-	input     iinput.Streamed
-	inputLock sync.Mutex
-	tranChan  chan message.Transaction
-
-	shutSig *shutdown.Signaller
+type inputCtrl struct {
+	input         input.Streamed
+	closedForSwap *int32
 }
 
-func wrapInput(i iinput.Streamed) *inputWrapper {
+type inputWrapper struct {
+	ctrl      *inputCtrl
+	inputLock sync.Mutex
+
+	tranChan chan message.Transaction
+	shutSig  *shutdown.Signaller
+}
+
+func wrapInput(i input.Streamed) *inputWrapper {
+	var s int32
 	w := &inputWrapper{
-		input:    i,
+		ctrl: &inputCtrl{
+			input:         i,
+			closedForSwap: &s,
+		},
 		tranChan: make(chan message.Transaction),
 		shutSig:  shutdown.NewSignaller(),
 	}
@@ -33,16 +43,23 @@ func wrapInput(i iinput.Streamed) *inputWrapper {
 
 func (w *inputWrapper) closeExistingInput(ctx context.Context) error {
 	w.inputLock.Lock()
-	tmpInput := w.input
+	tmpInput := w.ctrl.input
+	atomic.StoreInt32(w.ctrl.closedForSwap, 1)
 	w.inputLock.Unlock()
 
 	if tmpInput == nil {
 		return nil
 	}
 
+	deadline, hasDeadline := ctx.Deadline()
+	tFor := time.Millisecond * 100
+	if hasDeadline {
+		tFor = time.Until(deadline)
+	}
+
 	tmpInput.CloseAsync()
 	for {
-		if err := tmpInput.WaitForClose(time.Millisecond * 100); err == nil {
+		if err := tmpInput.WaitForClose(tFor); err == nil {
 			return nil
 		}
 		if ctx.Err() != nil {
@@ -51,9 +68,13 @@ func (w *inputWrapper) closeExistingInput(ctx context.Context) error {
 	}
 }
 
-func (w *inputWrapper) swapInput(i iinput.Streamed) {
+func (w *inputWrapper) swapInput(i input.Streamed) {
+	var s int32
 	w.inputLock.Lock()
-	w.input = i
+	w.ctrl = &inputCtrl{
+		input:         i,
+		closedForSwap: &s,
+	}
 	w.inputLock.Unlock()
 }
 
@@ -63,7 +84,7 @@ func (w *inputWrapper) TransactionChan() <-chan message.Transaction {
 
 func (w *inputWrapper) Connected() bool {
 	w.inputLock.Lock()
-	con := w.input != nil && w.input.Connected()
+	con := w.ctrl.input != nil && w.ctrl.input.Connected()
 	w.inputLock.Unlock()
 	return con
 }
@@ -71,7 +92,7 @@ func (w *inputWrapper) Connected() bool {
 func (w *inputWrapper) loop() {
 	defer func() {
 		w.inputLock.Lock()
-		tmpInput := w.input
+		tmpInput := w.ctrl.input
 		w.inputLock.Unlock()
 
 		if tmpInput != nil {
@@ -89,9 +110,12 @@ func (w *inputWrapper) loop() {
 
 	for {
 		var tChan <-chan message.Transaction
+		var closedForSwap *int32
+
 		w.inputLock.Lock()
-		if w.input != nil {
-			tChan = w.input.TransactionChan()
+		if w.ctrl.input != nil {
+			tChan = w.ctrl.input.TransactionChan()
+			closedForSwap = w.ctrl.closedForSwap
 		}
 		w.inputLock.Unlock()
 
@@ -101,15 +125,19 @@ func (w *inputWrapper) loop() {
 		if tChan != nil {
 			select {
 			case t, open = <-tChan:
+				// If closed and is natural (not closed for swap) then exit
+				// gracefully.
+				if !open && atomic.LoadInt32(closedForSwap) == 0 {
+					return
+				}
 			case <-w.shutSig.CloseAtLeisureChan():
 				return
 			}
 		}
 
-		// TODO: Should a natural shutdown be allowed to propagate here?
 		if !open {
 			select {
-			case <-time.After(time.Second):
+			case <-time.After(time.Millisecond * 100):
 			case <-w.shutSig.CloseAtLeisureChan():
 				return
 			}
