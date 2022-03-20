@@ -200,7 +200,6 @@ type Config struct {
 	MQTT              reader.MQTTConfig         `json:"mqtt" yaml:"mqtt"`
 	Nanomsg           reader.ScaleProtoConfig   `json:"nanomsg" yaml:"nanomsg"`
 	NATS              reader.NATSConfig         `json:"nats" yaml:"nats"`
-	NATSJetStream     NATSJetStreamConfig       `json:"nats_jetstream" yaml:"nats_jetstream"`
 	NATSStream        reader.NATSStreamConfig   `json:"nats_stream" yaml:"nats_stream"`
 	NSQ               reader.NSQConfig          `json:"nsq" yaml:"nsq"`
 	Plugin            interface{}               `json:"plugin,omitempty" yaml:"plugin,omitempty"`
@@ -249,7 +248,6 @@ func NewConfig() Config {
 		MQTT:              reader.NewMQTTConfig(),
 		Nanomsg:           reader.NewScaleProtoConfig(),
 		NATS:              reader.NewNATSConfig(),
-		NATSJetStream:     NewNATSJetStreamConfig(),
 		NATSStream:        reader.NewNATSStreamConfig(),
 		NSQ:               reader.NewNSQConfig(),
 		Plugin:            nil,

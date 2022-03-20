@@ -57,11 +57,11 @@ func init() {
 //------------------------------------------------------------------------------
 
 type jetStreamOutput struct {
-	urls       string
-	conf       output.NATSJetStreamConfig
-	subjectStr *service.InterpolatedString
-	authConf   auth.Config
-	tlsConf    *tls.Config
+	urls          string
+	subjectStrRaw string
+	subjectStr    *service.InterpolatedString
+	authConf      auth.Config
+	tlsConf       *tls.Config
 
 	log *service.Logger
 
@@ -83,6 +83,10 @@ func newJetStreamWriterFromConfig(conf *service.ParsedConfig, log *service.Logge
 		return nil, err
 	}
 	j.urls = strings.Join(urlList, ",")
+
+	if j.subjectStrRaw, err = conf.FieldString("subject"); err != nil {
+		return nil, err
+	}
 
 	if j.subjectStr, err = conf.FieldInterpolatedString("subject"); err != nil {
 		return nil, err
@@ -135,7 +139,7 @@ func (j *jetStreamOutput) Connect(ctx context.Context) error {
 		return err
 	}
 
-	j.log.Infof("Sending NATS messages to JetStream subject: %v", j.conf.Subject)
+	j.log.Infof("Sending NATS messages to JetStream subject: %v", j.subjectStrRaw)
 
 	j.natsConn = natsConn
 	j.jCtx = jCtx

@@ -142,7 +142,7 @@ Type: `string`
 
 ### `subject`
 
-A subject to consume from. Supports wildcards for consuming multiple subjects.
+A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.
 
 
 Type: `string`  
@@ -168,14 +168,14 @@ Type: `string`
 
 ### `stream`
 
-The name of the stream to read from.
+A stream to consume from. Either a subject or stream must be specified.
 
 
 Type: `string`  
 
 ### `bind`
 
-Indicates that subscription should use an existing consumer.
+Indicates that the subscription should use an existing consumer.
 
 
 Type: `bool`  

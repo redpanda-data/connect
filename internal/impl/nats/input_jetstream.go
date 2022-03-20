@@ -43,17 +43,17 @@ You can access these metadata fields using
 			Description("An optional queue group to consume as.").
 			Optional()).
 		Field(service.NewStringField("subject").
-			Description("A subject to consume from. Supports wildcards for consuming multiple subjects.").
+			Description("A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.").
 			Optional().
 			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
 		Field(service.NewStringField("durable").
 			Description("Preserve the state of your consumer under a durable name.").
 			Optional()).
 		Field(service.NewStringField("stream").
-			Description("The name of the stream to read from.").
+			Description("A stream to consume from. Either a subject or stream must be specified.").
 			Optional()).
 		Field(service.NewBoolField("bind").
-			Description("Indicates that subscription should use an existing consumer.").
+			Description("Indicates that the subscription should use an existing consumer.").
 			Optional()).
 		Field(service.NewStringAnnotatedEnumField("deliver", map[string]string{
 			"all":  "Deliver all available messages.",

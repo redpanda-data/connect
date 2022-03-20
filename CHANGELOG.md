@@ -12,6 +12,7 @@ This is a major version release, for more information and guidance on how to mig
 ### Added
 
 - In Bloblang it is now possible to reference the `root` of the document being created within a mapping query.
+- The `nats_jetstream` input now supports pull consumers.
 
 ### Fixed
 
