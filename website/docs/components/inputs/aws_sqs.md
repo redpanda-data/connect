@@ -45,6 +45,7 @@ input:
     url: ""
     delete_message: true
     reset_visibility: true
+    max_number_of_messages: 10
     region: ""
     endpoint: ""
     credentials:
@@ -106,6 +107,14 @@ Whether to set the visibility timeout of the consumed message to zero once it is
 Type: `bool`  
 Default: `true`  
 Requires version 3.58.0 or newer  
+
+### `max_number_of_messages`
+
+The maximum number of messages to return on one poll. Valid values: 1 to 10.
+
+
+Type: `int`  
+Default: `10`  
 
 ### `region`
 
