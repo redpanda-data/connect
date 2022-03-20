@@ -44,9 +44,16 @@ You can access these metadata fields using
 			Optional()).
 		Field(service.NewStringField("subject").
 			Description("A subject to consume from. Supports wildcards for consuming multiple subjects.").
+			Optional().
 			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
 		Field(service.NewStringField("durable").
 			Description("Preserve the state of your consumer under a durable name.").
+			Optional()).
+		Field(service.NewStringField("stream").
+			Description("The name of the stream to read from.").
+			Optional()).
+		Field(service.NewBoolField("bind").
+			Description("Indicates that subscription should use an existing consumer.").
 			Optional()).
 		Field(service.NewStringAnnotatedEnumField("deliver", map[string]string{
 			"all":  "Deliver all available messages.",
@@ -87,6 +94,9 @@ type jetStreamReader struct {
 	deliverOpt    nats.SubOpt
 	subject       string
 	queue         string
+	stream        string
+	bind          bool
+	pull          bool
 	durable       string
 	ackWait       time.Duration
 	maxAckPending int
@@ -127,8 +137,10 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, log *service.Logge
 		return nil, fmt.Errorf("deliver option %v was not recognised", deliver)
 	}
 
-	if j.subject, err = conf.FieldString("subject"); err != nil {
-		return nil, err
+	if conf.Contains("subject") {
+		if j.subject, err = conf.FieldString("subject"); err != nil {
+			return nil, err
+		}
 	}
 	if conf.Contains("queue") {
 		if j.queue, err = conf.FieldString("queue"); err != nil {
@@ -138,6 +150,26 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, log *service.Logge
 	if conf.Contains("durable") {
 		if j.durable, err = conf.FieldString("durable"); err != nil {
 			return nil, err
+		}
+	}
+
+	if conf.Contains("stream") {
+		if j.stream, err = conf.FieldString("stream"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("bind") {
+		if j.bind, err = conf.FieldBool("bind"); err != nil {
+			return nil, err
+		}
+	}
+	if j.bind {
+		if j.stream == "" || j.durable == "" {
+			return nil, fmt.Errorf("stream or durable is required, when bind is true")
+		}
+	} else {
+		if j.subject == "" {
+			return nil, fmt.Errorf("subject is empty")
 		}
 	}
 
@@ -210,24 +242,56 @@ func (j *jetStreamReader) Connect(ctx context.Context) error {
 		return err
 	}
 
+	if j.bind && j.stream != "" && j.durable != "" {
+		info, err := jCtx.ConsumerInfo(j.stream, j.durable)
+		if err != nil {
+			return err
+		}
+
+		if j.subject == "" {
+			if info.Config.DeliverSubject != "" {
+				j.subject = info.Config.DeliverSubject
+			} else if info.Config.FilterSubject != "" {
+				j.subject = info.Config.FilterSubject
+			}
+		}
+
+		j.pull = info.Config.DeliverSubject == ""
+	}
+
 	options := []nats.SubOpt{
 		nats.ManualAck(),
 	}
-	if j.durable != "" {
-		options = append(options, nats.Durable(j.durable))
-	}
-	options = append(options, j.deliverOpt)
-	if j.ackWait > 0 {
-		options = append(options, nats.AckWait(j.ackWait))
-	}
-	if j.maxAckPending != 0 {
-		options = append(options, nats.MaxAckPending(j.maxAckPending))
-	}
 
-	if j.queue == "" {
-		natsSub, err = jCtx.SubscribeSync(j.subject, options...)
+	if j.pull {
+		options = append(options, nats.Bind(j.stream, j.durable))
+
+		natsSub, err = jCtx.PullSubscribe(j.subject, j.durable, options...)
 	} else {
-		natsSub, err = jCtx.QueueSubscribeSync(j.subject, j.queue, options...)
+		if j.durable != "" {
+			options = append(options, nats.Durable(j.durable))
+		}
+		options = append(options, j.deliverOpt)
+		if j.ackWait > 0 {
+			options = append(options, nats.AckWait(j.ackWait))
+		}
+		if j.maxAckPending != 0 {
+			options = append(options, nats.MaxAckPending(j.maxAckPending))
+		}
+
+		if j.bind {
+			if j.stream != "" && j.durable != "" {
+				options = append(options, nats.Bind(j.stream, j.durable))
+			} else if j.stream != "" {
+				options = append(options, nats.BindStream(j.stream))
+			}
+		}
+
+		if j.queue == "" {
+			natsSub, err = jCtx.SubscribeSync(j.subject, options...)
+		} else {
+			natsSub, err = jCtx.QueueSubscribeSync(j.subject, j.queue, options...)
+		}
 	}
 	if err != nil {
 		return err
@@ -262,21 +326,35 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 		return nil, nil, service.ErrNotConnected
 	}
 
-	nmsg, err := natsSub.NextMsgWithContext(ctx)
-	if err != nil {
-		// TODO: Any errors need capturing here to signal a lost connection?
-		return nil, nil, err
+	if !j.pull {
+		nmsg, err := natsSub.NextMsgWithContext(ctx)
+		if err != nil {
+			// TODO: Any errors need capturing here to signal a lost connection?
+			return nil, nil, err
+		}
+		return convertMessage(nmsg)
 	}
 
-	msg := service.NewMessage(nmsg.Data)
-	msg.MetaSet("nats_subject", nmsg.Subject)
-
-	return msg, func(ctx context.Context, res error) error {
-		if res == nil {
-			return nmsg.Ack()
+	for {
+		msgs, err := natsSub.Fetch(1, nats.Context(ctx))
+		if err != nil {
+			if err == nats.ErrTimeout || err == context.DeadlineExceeded {
+				// NATS enforces its own context that might time out faster than the original context
+				// Let's check if it was the original context that timed out
+				select {
+				case <-ctx.Done():
+					return nil, nil, ctx.Err()
+				default:
+					continue
+				}
+			}
+			return nil, nil, err
 		}
-		return nmsg.Nak()
-	}, nil
+		if len(msgs) == 0 {
+			continue
+		}
+		return convertMessage(msgs[0])
+	}
 }
 
 func (j *jetStreamReader) Close(ctx context.Context) error {
@@ -290,4 +368,16 @@ func (j *jetStreamReader) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 	return nil
+}
+
+func convertMessage(m *nats.Msg) (*service.Message, service.AckFunc, error) {
+	msg := service.NewMessage(m.Data)
+	msg.MetaSet("nats_subject", m.Subject)
+
+	return msg, func(ctx context.Context, res error) error {
+		if res == nil {
+			return m.Ack()
+		}
+		return m.Nak()
+	}, nil
 }

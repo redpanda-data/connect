@@ -12,6 +12,8 @@ type NATSJetStreamConfig struct {
 	Subject       string      `json:"subject" yaml:"subject"`
 	Queue         string      `json:"queue" yaml:"queue"`
 	Durable       string      `json:"durable" yaml:"durable"`
+	Stream        string      `json:"stream" yaml:"stream"`
+	Bind          bool        `json:"bind" yaml:"bind"`
 	Deliver       string      `json:"deliver" yaml:"deliver"`
 	AckWait       string      `json:"ack_wait" yaml:"ack_wait"`
 	MaxAckPending int         `json:"max_ack_pending" yaml:"max_ack_pending"`
