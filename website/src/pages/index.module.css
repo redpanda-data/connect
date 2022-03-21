@@ -104,3 +104,14 @@
   height: 45px;
   margin: 10px 0;
 }
+
+.opalaImg {
+  height: 45px;
+  margin: 10px;
+}
+
+.numaryImg {
+  height: 60px;
+  margin: 0;
+  background-color: white;
+}
