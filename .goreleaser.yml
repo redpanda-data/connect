@@ -49,7 +49,7 @@ archives:
 dist: target/dist
 release:
   github:
-    owner: Jeffail
+    owner: benthosdev
     name: benthos
   prerelease: auto
   disable: false
