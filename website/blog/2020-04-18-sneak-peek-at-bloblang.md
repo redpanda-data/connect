@@ -23,7 +23,7 @@ For the last few weekends I've been dipping my toes in a mapping language design
 
 My life has no meaning. Also, mapping is one of the most common boring tasks in stream and event processing. Given Benthos is meant to specialise in the boring and mundane it makes sense to treat mapping as a first class citizen.
 
-Up until now the story for mapping documents in Benthos has been to use [JMESPath][processor.jmespath], [AWK][processor.awk] or a string of the general purpose [JSON processors][processor.json]. Time and time again it has been made apparent that it ain't good enough for many use cases.
+Up until now the story for mapping documents in Benthos has been to use [JMESPath][processor.jmespath], [AWK][processor.awk] or a string of the general purpose JSON processors. Time and time again it has been made apparent that it ain't good enough for many use cases.
 
 I should mention at this point that there's also the option of [IDML][idml], and although Benthos hasn't supported it internally there is a solution to [running it in your pipeline][processor.subprocess].
 
@@ -59,7 +59,7 @@ A simpler language specifically designed for mappings is a much more scalable so
 
 ### JSON Processor
 
-The [JSON processor][processor.json] is pretty flexible and would be the highest performer of all options here. However, beyond one or two mutations a mapping becomes an absolute mess of YAML, and if we need to add conditional maps into the mix it becomes much worse.
+The JSON processor is pretty flexible and would be the highest performer of all options here. However, beyond one or two mutations a mapping becomes an absolute mess of YAML, and if we need to add conditional maps into the mix it becomes much worse.
 
 It has been clear to me for a while that this processor is so quickly and easily outgrown by a typical user config that it perhaps ought to be entirely replaced with a real mapping solution.
 
@@ -138,7 +138,6 @@ Until I'm allowed to practice with my professional rock paper scissors team agai
 [function-interpolations]: /docs/configuration/interpolation
 [windowed-processing]: /docs/configuration/windowed_processing
 [processor.jmespath]: /docs/components/processors/jmespath
-[processor.json]: /docs/components/processors/json
 [processor.awk]: /docs/components/processors/awk
 [idml]: https://idml.io/
 [processor.subprocess]: /docs/components/processors/subprocess

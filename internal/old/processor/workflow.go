@@ -39,7 +39,7 @@ performing them in parallel where possible.`,
 
 Most of the time the best way to compose processors is also the simplest, just configure them in series. This is because processors are often CPU bound, low-latency, and you can gain vertical scaling by increasing the number of processor pipeline threads, allowing Benthos to process [multiple messages in parallel][configuration.pipelines].
 
-However, some processors such as ` + "[`http`][processors.http], [`lambda`][processors.lambda] or [`cache`][processors.cache]" + ` interact with external services and therefore spend most of their time waiting for a response. These processors tend to be high-latency and low CPU activity, which causes messages to process slowly.
+However, some processors such as ` + "[`http`][processors.http], [`aws_lambda`][processors.aws_lambda] or [`cache`][processors.cache]" + ` interact with external services and therefore spend most of their time waiting for a response. These processors tend to be high-latency and low CPU activity, which causes messages to process slowly.
 
 When a processing pipeline contains multiple network processors that aren't dependent on each other we can benefit from performing these processors in parallel for each individual message, reducing the overall message processing latency.
 
@@ -116,7 +116,7 @@ However, if structured metadata is disabled by setting the field ` + "`meta_path
 [dag_wiki]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
 [processors.switch]: /docs/components/processors/switch
 [processors.http]: /docs/components/processors/http
-[processors.lambda]: /docs/components/processors/lambda
+[processors.aws_lambda]: /docs/components/processors/aws_lambda
 [processors.cache]: /docs/components/processors/cache
 [processors.branch]: /docs/components/processors/branch
 [guides.bloblang]: /docs/guides/bloblang/about
