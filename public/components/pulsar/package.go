@@ -1,3 +1,6 @@
 package pulsar
 
-import _ "github.com/benthosdev/benthos/v4/internal/impl/pulsar"
+import (
+	// Bring in the internal plugin definitions.
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pulsar"
+)
