@@ -10,17 +10,8 @@ import (
 
 	"github.com/apache/pulsar-client-go/pulsar"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/impl/pulsar/auth"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 const (
@@ -28,25 +19,18 @@ const (
 )
 
 func init() {
-	bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
-		var a reader.Async
-		var err error
-		if a, err = newPulsarReader(c.Pulsar, nm.Logger(), nm.Metrics()); err != nil {
-			return nil, err
-		}
-		return input.NewAsyncReader(input.TypePulsar, false, a, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
-		Name:    input.TypePulsar,
-		Type:    docs.TypeInput,
-		Status:  docs.StatusExperimental,
-		Version: "3.43.0",
-		Summary: `Reads messages from an Apache Pulsar server.`,
-		Description: `
+	err := service.RegisterInput(
+		"pulsar",
+		service.NewConfigSpec().
+			Version("3.43.0").
+			Categories("Services").
+			Summary("Reads messages from an Apache Pulsar server.").
+			Description(`
 ### Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "```text" + `
+`+"```text"+`
 - pulsar_message_id
 - pulsar_key
 - pulsar_ordering_key
@@ -56,28 +40,30 @@ This input adds the following metadata fields to each message:
 - pulsar_producer_name
 - pulsar_redelivery_count
 - All properties of the message
-` + "```" + `
+`+"```"+`
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).`,
-		Categories: []string{
-			string(input.CategoryServices),
-		},
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("url",
-				"A URL to connect to.",
-				"pulsar://localhost:6650",
-				"pulsar://pulsar.us-west.example.com:6650",
-				"pulsar+ssl://pulsar.us-west.example.com:6651",
-			),
-			docs.FieldString("topics", "A list of topics to subscribe to.").Array(),
-			docs.FieldCommon("subscription_name", "Specify the subscription name for this consumer."),
-			docs.FieldCommon("subscription_type", "Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See [Pulsar documentation](https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement) and [this Github issue](https://github.com/apache/pulsar/issues/12208) for more details.").
-				HasOptions("shared", "key_shared", "failover", "exclusive").
-				HasDefault(defaultSubscriptionType),
-			auth.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(input.NewPulsarConfig()),
-	})
+[function interpolation](/docs/configuration/interpolation#metadata).
+`).
+			Field(service.NewStringField("url").
+				Description("A URL to connect to.").
+				Example("pulsar://localhost:6650").
+				Example("pulsar://pulsar.us-west.example.com:6650").
+				Example("pulsar+ssl://pulsar.us-west.example.com:6651")).
+			Field(service.NewStringListField("topics").
+				Description("A list of topics to subscribe to.")).
+			Field(service.NewStringField("subscription_name").
+				Description("Specify the subscription name for this consumer.")).
+			Field(service.NewStringEnumField("subscription_type", "shared", "key_shared", "failover", "exclusive").
+				Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See [Pulsar documentation](https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement) and [this Github issue](https://github.com/apache/pulsar/issues/12208) for more details.").
+				Default(defaultSubscriptionType)).
+			Field(authField()),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			return newPulsarReaderFromParsed(conf, mgr.Logger())
+		})
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -85,42 +71,62 @@ You can access these metadata fields using
 type pulsarReader struct {
 	client   pulsar.Client
 	consumer pulsar.Consumer
+	m        sync.RWMutex
 
-	conf  input.PulsarConfig
-	stats metrics.Type
-	log   log.Modular
+	log *service.Logger
 
-	m       sync.RWMutex
-	shutSig *shutdown.Signaller
+	authConf authConfig
+	url      string
+	topics   []string
+	subName  string
+	subType  string
 }
 
-func newPulsarReader(conf input.PulsarConfig, log log.Modular, stats metrics.Type) (*pulsarReader, error) {
-	if conf.URL == "" {
-		return nil, errors.New("field url must not be empty")
-	}
-	if len(conf.Topics) == 0 {
-		return nil, errors.New("field topics must not be empty")
-	}
-	if conf.SubscriptionName == "" {
-		return nil, errors.New("field subscription_name must not be empty")
-	}
-	if conf.SubscriptionType == "" {
-		conf.SubscriptionType = defaultSubscriptionType // set default subscription type if empty
-	}
-	if _, err := parseSubscriptionType(conf.SubscriptionType); err != nil {
-		return nil, fmt.Errorf("field subscription_type is invalid: %v", err)
-	}
-	if err := conf.Auth.Validate(); err != nil {
-		return nil, fmt.Errorf("field auth is invalid: %v", err)
+func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) (p *pulsarReader, err error) {
+	p = &pulsarReader{
+		log: log,
 	}
 
-	p := pulsarReader{
-		conf:    conf,
-		stats:   stats,
-		log:     log,
-		shutSig: shutdown.NewSignaller(),
+	if p.authConf, err = authFromParsed(conf); err != nil {
+		return
 	}
-	return &p, nil
+
+	if p.url, err = conf.FieldString("url"); err != nil {
+		return
+	}
+	if p.topics, err = conf.FieldStringList("topics"); err != nil {
+		return
+	}
+	if p.subName, err = conf.FieldString("subscription_name"); err != nil {
+		return
+	}
+	if p.subType, err = conf.FieldString("subscription_type"); err != nil {
+		return
+	}
+
+	if p.url == "" {
+		err = errors.New("field url must not be empty")
+		return
+	}
+	if len(p.topics) == 0 {
+		err = errors.New("field topics must not be empty")
+		return
+	}
+	if p.subName == "" {
+		err = errors.New("field subscription_name must not be empty")
+		return
+	}
+	if p.subType == "" {
+		p.subType = defaultSubscriptionType // set default subscription type if empty
+	}
+	if _, err = parseSubscriptionType(p.subType); err != nil {
+		err = fmt.Errorf("field subscription_type is invalid: %v", err)
+		return
+	}
+	if err = p.authConf.Validate(); err != nil {
+		err = fmt.Errorf("field auth is invalid: %v", err)
+	}
+	return
 }
 
 func parseSubscriptionType(subType string) (pulsar.SubscriptionType, error) {
@@ -140,8 +146,7 @@ func parseSubscriptionType(subType string) (pulsar.SubscriptionType, error) {
 
 //------------------------------------------------------------------------------
 
-// ConnectWithContext establishes a connection to an Pulsar server.
-func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
+func (p *pulsarReader) Connect(ctx context.Context) error {
 	p.m.Lock()
 	defer p.m.Unlock()
 
@@ -157,28 +162,28 @@ func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
 	)
 
 	opts := pulsar.ClientOptions{
-		Logger:            DefaultLogger(p.log),
+		Logger:            createDefaultLogger(p.log),
 		ConnectionTimeout: time.Second * 3,
-		URL:               p.conf.URL,
+		URL:               p.url,
 	}
 
-	if p.conf.Auth.OAuth2.Enabled {
-		opts.Authentication = pulsar.NewAuthenticationOAuth2(p.conf.Auth.OAuth2.ToMap())
-	} else if p.conf.Auth.Token.Enabled {
-		opts.Authentication = pulsar.NewAuthenticationToken(p.conf.Auth.Token.Token)
+	if p.authConf.OAuth2.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationOAuth2(p.authConf.OAuth2.ToMap())
+	} else if p.authConf.Token.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationToken(p.authConf.Token.Token)
 	}
 
 	if client, err = pulsar.NewClient(opts); err != nil {
 		return err
 	}
 
-	if subType, err = parseSubscriptionType(p.conf.SubscriptionType); err != nil {
+	if subType, err = parseSubscriptionType(p.subType); err != nil {
 		return err
 	}
 
 	if consumer, err = client.Subscribe(pulsar.ConsumerOptions{
-		Topics:           p.conf.Topics,
-		SubscriptionName: p.conf.SubscriptionName,
+		Topics:           p.topics,
+		SubscriptionName: p.subName,
 		Type:             subType,
 		KeySharedPolicy: &pulsar.KeySharedPolicy{
 			AllowOutOfOrderDelivery: true,
@@ -191,11 +196,10 @@ func (p *pulsarReader) ConnectWithContext(ctx context.Context) error {
 	p.client = client
 	p.consumer = consumer
 
-	p.log.Infof("Receiving Pulsar messages to URL: %v\n", p.conf.URL)
+	p.log.Infof("Receiving Pulsar messages to URL: %v\n", p.url)
 	return nil
 }
 
-// disconnect safely closes a connection to an Pulsar server.
 func (p *pulsarReader) disconnect(ctx context.Context) error {
 	p.m.Lock()
 	defer p.m.Unlock()
@@ -209,17 +213,10 @@ func (p *pulsarReader) disconnect(ctx context.Context) error {
 
 	p.consumer = nil
 	p.client = nil
-
-	if p.shutSig.ShouldCloseAtLeisure() {
-		p.shutSig.ShutdownComplete()
-	}
 	return nil
 }
 
-//------------------------------------------------------------------------------
-
-// ReadWithContext a new Pulsar message.
-func (p *pulsarReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (p *pulsarReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	var r pulsar.Consumer
 	p.m.RLock()
 	if p.consumer != nil {
@@ -244,31 +241,27 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 		return nil, nil, err
 	}
 
-	msg := message.QuickBatch(nil)
+	msg := service.NewMessage(pulMsg.Payload())
 
-	part := message.NewPart(pulMsg.Payload())
-
-	part.MetaSet("pulsar_message_id", string(pulMsg.ID().Serialize()))
-	part.MetaSet("pulsar_topic", pulMsg.Topic())
-	part.MetaSet("pulsar_publish_time_unix", strconv.FormatInt(pulMsg.PublishTime().Unix(), 10))
-	part.MetaSet("pulsar_redelivery_count", strconv.FormatInt(int64(pulMsg.RedeliveryCount()), 10))
+	msg.MetaSet("pulsar_message_id", string(pulMsg.ID().Serialize()))
+	msg.MetaSet("pulsar_topic", pulMsg.Topic())
+	msg.MetaSet("pulsar_publish_time_unix", strconv.FormatInt(pulMsg.PublishTime().Unix(), 10))
+	msg.MetaSet("pulsar_redelivery_count", strconv.FormatInt(int64(pulMsg.RedeliveryCount()), 10))
 	if key := pulMsg.Key(); len(key) > 0 {
-		part.MetaSet("pulsar_key", key)
+		msg.MetaSet("pulsar_key", key)
 	}
 	if orderingKey := pulMsg.OrderingKey(); len(orderingKey) > 0 {
-		part.MetaSet("pulsar_ordering_key", orderingKey)
+		msg.MetaSet("pulsar_ordering_key", orderingKey)
 	}
 	if !pulMsg.EventTime().IsZero() {
-		part.MetaSet("pulsar_event_time_unix", strconv.FormatInt(pulMsg.EventTime().Unix(), 10))
+		msg.MetaSet("pulsar_event_time_unix", strconv.FormatInt(pulMsg.EventTime().Unix(), 10))
 	}
 	if producerName := pulMsg.ProducerName(); producerName != "" {
-		part.MetaSet("pulsar_producer_name", producerName)
+		msg.MetaSet("pulsar_producer_name", producerName)
 	}
 	for k, v := range pulMsg.Properties() {
-		part.MetaSet(k, v)
+		msg.MetaSet(k, v)
 	}
-
-	msg.Append(part)
 
 	return msg, func(ctx context.Context, res error) error {
 		var r pulsar.Consumer
@@ -288,20 +281,6 @@ func (p *pulsarReader) ReadWithContext(ctx context.Context) (*message.Batch, rea
 	}, nil
 }
 
-// CloseAsync shuts down the Pulsar input and stops processing requests.
-func (p *pulsarReader) CloseAsync() {
-	p.shutSig.CloseAtLeisure()
-	go p.disconnect(context.Background())
+func (p *pulsarReader) Close(ctx context.Context) error {
+	return p.disconnect(ctx)
 }
-
-// WaitForClose blocks until the Pulsar input has closed down.
-func (p *pulsarReader) WaitForClose(timeout time.Duration) error {
-	select {
-	case <-p.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
-	}
-	return nil
-}
-
-//------------------------------------------------------------------------------

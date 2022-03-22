@@ -22,6 +22,7 @@ This is a major version release, for more information and guidance on how to mig
 ### Changed
 
 - All components, features and configuration fields that were marked as deprecated have been removed.
+- The `pulsar` input and output are no longer included in the default Benthos builds.
 - The field `pipeline.threads` field now defaults to `-1`, which automatically matches the host machine CPU count.
 - Old style interpolation functions (`${!json:foo,1}`) are removed in favour of the newer Bloblang syntax (`${! json("foo") }`).
 - The Bloblang functions `meta`, `root_meta`, `error` and `env` now return `null` when the target value does not exist.

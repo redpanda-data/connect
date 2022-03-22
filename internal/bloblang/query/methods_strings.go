@@ -30,6 +30,8 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/rickb777/date/period"
 	"github.com/tilinna/z85"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/xml"
@@ -72,9 +74,9 @@ var _ = registerSimpleMethod(
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
-				return strings.Title(t), nil
+				return cases.Title(language.English).String(t), nil
 			case []byte:
-				return bytes.Title(t), nil
+				return cases.Title(language.English).Bytes(t), nil
 			}
 			return nil, NewTypeError(v, ValueString)
 		}, nil

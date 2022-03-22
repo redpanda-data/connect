@@ -25,7 +25,7 @@ func TestIntegrationPulsar(t *testing.T) {
 		pool.MaxWait = time.Until(dline)
 	}
 
-	resource, err := pool.Run("apachepulsar/pulsar-standalone", "latest", nil)
+	resource, err := pool.Run("apachepulsar/pulsar-standalone", "2.8.3", nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		assert.NoError(t, pool.Purge(resource))
@@ -77,6 +77,7 @@ input:
 		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
 		integration.StreamTestOptPort(resource.GetPort("6650/tcp")),
+		integration.StreamTestOptLogging("TRACE"),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()

@@ -171,7 +171,6 @@ const (
 	TypeNATSJetStream      = "nats_jetstream"
 	TypeNATSStream         = "nats_stream"
 	TypeNSQ                = "nsq"
-	TypePulsar             = "pulsar"
 	TypeRedisHash          = "redis_hash"
 	TypeRedisList          = "redis_list"
 	TypeRedisPubSub        = "redis_pubsub"
@@ -230,7 +229,6 @@ type Config struct {
 	NATSStream         writer.NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
 	NSQ                writer.NSQConfig               `json:"nsq" yaml:"nsq"`
 	Plugin             interface{}                    `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	Pulsar             PulsarConfig                   `json:"pulsar" yaml:"pulsar"`
 	RedisHash          writer.RedisHashConfig         `json:"redis_hash" yaml:"redis_hash"`
 	RedisList          writer.RedisListConfig         `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub        writer.RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`
@@ -289,7 +287,6 @@ func NewConfig() Config {
 		NATSStream:         writer.NewNATSStreamConfig(),
 		NSQ:                writer.NewNSQConfig(),
 		Plugin:             nil,
-		Pulsar:             NewPulsarConfig(),
 		RedisHash:          writer.NewRedisHashConfig(),
 		RedisList:          writer.NewRedisListConfig(),
 		RedisPubSub:        writer.NewRedisPubSubConfig(),

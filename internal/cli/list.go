@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/urfave/cli/v2"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/benthosdev/benthos/v4/internal/config/schema"
 )
@@ -69,7 +71,7 @@ func listComponents(c *cli.Context) {
 				fmt.Println("")
 			}
 			i++
-			title := strings.Title(strings.ReplaceAll(k, "-", " "))
+			title := cases.Title(language.English).String(strings.ReplaceAll(k, "-", " "))
 			fmt.Printf("%v:\n", title)
 			for _, t := range flat[k] {
 				fmt.Printf("  - %v\n", t)
