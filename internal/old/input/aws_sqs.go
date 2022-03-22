@@ -317,6 +317,10 @@ func (a *awsSQS) deleteMessages(ctx context.Context, msgs ...sqsMessageHandle) e
 }
 
 func (a *awsSQS) resetMessages(ctx context.Context, msgs ...sqsMessageHandle) error {
+	if !a.conf.ResetVisibility {
+		return nil
+	}
+
 	for len(msgs) > 0 {
 		input := sqs.ChangeMessageVisibilityBatchInput{
 			QueueUrl: aws.String(a.conf.URL),
@@ -413,9 +417,6 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (*message.Batch, reader.As
 			return nil
 		}
 
-		if !a.conf.ResetVisibility {
-			return nil
-		}
 		select {
 		case <-rctx.Done():
 			return rctx.Err()
