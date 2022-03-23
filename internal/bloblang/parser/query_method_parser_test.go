@@ -465,7 +465,7 @@ func TestMethodParser(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, perr := tryParseQuery(test.input, false)
+			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
 			res := query.ExecToString(e, query.FunctionContext{
 				Index:    test.index,
@@ -511,7 +511,7 @@ func TestMethodErrors(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, perr := tryParseQuery(test.input, false)
+			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
 
 			_, err := e.Exec(query.FunctionContext{
@@ -612,7 +612,7 @@ func TestMethodMaps(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, perr := tryParseQuery(test.input, false)
+			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
 
 			res, err := e.Exec(query.FunctionContext{

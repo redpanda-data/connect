@@ -11,23 +11,16 @@ import (
 
 func TestFunctionParserErrors(t *testing.T) {
 	tests := map[string]struct {
-		input      string
-		err        string
-		deprecated bool
+		input string
+		err   string
 	}{
-		"bad function": {
-			input:      `not a function`,
-			deprecated: true,
-			err:        `line 1 char 4: expected function arguments`,
-		},
 		"bad function 2": {
 			input: `not_a_function()`,
 			err:   `line 1 char 1: unrecognised function 'not_a_function'`,
 		},
 		"bad args 2": {
-			input:      `json("foo`,
-			deprecated: true,
-			err:        `line 1 char 10: required: expected end quote`,
+			input: `json("foo`,
+			err:   `line 1 char 10: required: expected end quote`,
 		},
 		"bad args 3": {
 			input: `json(`,
@@ -36,11 +29,6 @@ func TestFunctionParserErrors(t *testing.T) {
 		"bad args 4": {
 			input: `json(0,`,
 			err:   `line 1 char 8: required: expected function argument`,
-		},
-		"bad args 5": {
-			input:      `json`,
-			deprecated: true,
-			err:        `line 1 char 5: expected function arguments`,
 		},
 		"bad args 7": {
 			input: `json(5)`,
@@ -83,9 +71,8 @@ func TestFunctionParserErrors(t *testing.T) {
 			err:   `line 1 char 13: unrecognised method 'not_a_thing'`,
 		},
 		"bad method 2": {
-			input:      `json("foo").not_a_thing()`,
-			deprecated: true,
-			err:        `line 1 char 13: unrecognised method 'not_a_thing'`,
+			input: `json("foo").not_a_thing()`,
+			err:   `line 1 char 13: unrecognised method 'not_a_thing'`,
 		},
 		"bad method args 2": {
 			input: `json("foo").from(`,
@@ -141,7 +128,7 @@ func TestFunctionParserErrors(t *testing.T) {
 		test := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := tryParseQuery(test.input, test.deprecated)
+			_, err := tryParseQuery(test.input)
 			require.NotNil(t, err)
 			assert.Equal(t, test.err, err.ErrorAtPosition([]rune(test.input)))
 		})
@@ -150,9 +137,8 @@ func TestFunctionParserErrors(t *testing.T) {
 
 func TestFunctionParserLimits(t *testing.T) {
 	tests := map[string]struct {
-		input      string
-		remaining  string
-		deprecated bool
+		input     string
+		remaining string
 	}{
 		"nothing": {
 			input:     `json("foo") + meta("bar")`,
@@ -250,16 +236,10 @@ not this`,
 		test := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-
-			var res Result
-			if test.deprecated {
-				res = ParseInterpolation(GlobalContext())([]rune(test.input))
-			} else {
-				res = queryParser(Context{
-					Functions: query.AllFunctions,
-					Methods:   query.AllMethods,
-				})([]rune(test.input))
-			}
+			res := queryParser(Context{
+				Functions: query.AllFunctions,
+				Methods:   query.AllMethods,
+			})([]rune(test.input))
 			require.Nil(t, res.Err)
 			assert.Equal(t, test.remaining, string(res.Remaining))
 		})

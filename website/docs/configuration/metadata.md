@@ -102,7 +102,7 @@ pipeline:
 output:
   kafka:
     addresses: [ TODO ]
-    topic: ${! meta("_target_topic")
+    topic: ${! meta("_target_topic") }
     metadata:
       exclude_prefixes: [ "_" ]
 ```

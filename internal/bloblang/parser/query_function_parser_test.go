@@ -22,12 +22,11 @@ func TestFunctionQueries(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		input      string
-		deprecated bool
-		output     string
-		messages   []easyMsg
-		value      *interface{}
-		index      int
+		input    string
+		output   string
+		messages []easyMsg
+		value    *interface{}
+		index    int
 	}{
 		"without method": {
 			input: `this.without("bar","baz")`,
@@ -694,7 +693,7 @@ bar""")`,
 				msg.Append(part)
 			}
 
-			e, perr := tryParseQuery(test.input, test.deprecated)
+			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
 
 			res := query.ExecToString(e, query.FunctionContext{
@@ -725,7 +724,7 @@ func TestCountersFunction(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		e, perr := tryParseQuery(test[0], false)
+		e, perr := tryParseQuery(test[0])
 		require.Nil(t, perr)
 
 		res := query.ExecToString(e, query.FunctionContext{
@@ -739,7 +738,7 @@ func TestUUIDV4Function(t *testing.T) {
 	results := map[string]struct{}{}
 
 	for i := 0; i < 100; i++ {
-		e, perr := tryParseQuery("uuid_v4()", false)
+		e, perr := tryParseQuery("uuid_v4()")
 		require.Nil(t, perr)
 
 		res := query.ExecToString(e, query.FunctionContext{
@@ -755,7 +754,7 @@ func TestUUIDV4Function(t *testing.T) {
 func TestTimestamps(t *testing.T) {
 	now := time.Now()
 
-	e, perr := tryParseQuery("timestamp_unix_nano()", false)
+	e, perr := tryParseQuery("timestamp_unix_nano()")
 	require.Nil(t, perr)
 
 	tStamp := query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
@@ -771,7 +770,7 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = tryParseQuery("timestamp_unix()", false)
+	e, perr = tryParseQuery("timestamp_unix()")
 	if !assert.Nil(t, perr) {
 		require.NoError(t, perr.Err)
 	}
@@ -789,7 +788,7 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = tryParseQuery("timestamp_unix()", false)
+	e, perr = tryParseQuery("timestamp_unix()")
 	if !assert.Nil(t, perr) {
 		require.NoError(t, perr.Err)
 	}

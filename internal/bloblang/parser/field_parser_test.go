@@ -39,7 +39,7 @@ func TestFieldExpressionParserErrors(t *testing.T) {
 	}{
 		"bad function": {
 			input: `static string ${!not a function} hello world`,
-			err:   `char 21: required: expected function arguments`,
+			err:   `char 22: required: expected end of expression`,
 		},
 		"bad function 2": {
 			input: `static string ${!not_a_function()} hello world`,
@@ -51,7 +51,7 @@ func TestFieldExpressionParserErrors(t *testing.T) {
 		},
 		"bad args 2": {
 			input: `foo ${!json("foo} bar`,
-			err:   `char 17: required: expected end quote`,
+			err:   `char 22: required: expected end quote`,
 		},
 		"bad args 3": {
 			input: `foo ${!json(} bar`,
@@ -61,9 +61,9 @@ func TestFieldExpressionParserErrors(t *testing.T) {
 			input: `foo ${!json(0,} bar`,
 			err:   `char 15: required: expected function argument`,
 		},
-		"bad args 5": {
-			input: `foo ${!json} bar`,
-			err:   `char 12: required: expected function arguments`,
+		"unfinished escape": {
+			input: `a string that ends ${{!with unfinished escapes`,
+			err:   `char 24: required: expected end of escaped expression`,
 		},
 	}
 
@@ -94,14 +94,6 @@ func TestFieldExpressions(t *testing.T) {
 		"static string": {
 			input:  `static string hello world`,
 			output: `static string hello world`,
-		},
-		"unsuspicious string": {
-			input:  `${{! not a thing`,
-			output: `${{! not a thing`,
-		},
-		"unsuspicious string 2": {
-			input:  `${! not a thing`,
-			output: `${! not a thing`,
 		},
 		"dollar on its own": {
 			input:  `hello $ world`,

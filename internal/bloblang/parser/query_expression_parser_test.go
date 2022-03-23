@@ -268,7 +268,7 @@ func TestExpressionsParser(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParseQuery(test.input, true)
+			e, err := tryParseQuery(test.input)
 			require.Nil(t, err)
 
 			res := query.ExecToString(e, query.FunctionContext{

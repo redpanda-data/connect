@@ -315,7 +315,7 @@ func TestArithmeticParser(t *testing.T) {
 				msg.Append(part)
 			}
 
-			e, err := tryParseQuery(test.input, false)
+			e, err := tryParseQuery(test.input)
 			require.Nil(t, err)
 
 			res := query.ExecToString(e, query.FunctionContext{
@@ -372,7 +372,7 @@ func TestArithmeticLiteralsParser(t *testing.T) {
 
 	for k, v := range tests {
 		msg := message.QuickBatch(nil)
-		e, err := tryParseQuery(k, false)
+		e, err := tryParseQuery(k)
 		require.Nil(t, err)
 
 		res := query.ExecToString(e, query.FunctionContext{

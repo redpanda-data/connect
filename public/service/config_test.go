@@ -454,7 +454,7 @@ func TestConfigInterpolatedString(t *testing.T) {
 
 	parsedConfig, err := spec.ParseYAML(`
 a: foo ${! content() } bar
-b: this is ${! json } an invalid interp string
+b: this is ${! json( } an invalid interp string
 `, nil)
 	require.NoError(t, err)
 

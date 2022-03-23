@@ -29,7 +29,7 @@ func TestLiteralParserErrors(t *testing.T) {
 		test := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := tryParseQuery(test.input, false)
+			_, err := tryParseQuery(test.input)
 			assert.Equal(t, test.err, err.ErrorAtPosition([]rune(test.input)))
 		})
 	}
