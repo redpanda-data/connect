@@ -1,4 +1,4 @@
-package input
+package aws
 
 import (
 	"context"
@@ -17,55 +17,28 @@ import (
 	"github.com/gofrs/uuid"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
-// AWSKinesisConfig is configuration values for the input type.
-type AWSKinesisConfig struct {
-	session.Config  `json:",inline" yaml:",inline"`
-	Streams         []string                 `json:"streams" yaml:"streams"`
-	DynamoDB        DynamoDBCheckpointConfig `json:"dynamodb" yaml:"dynamodb"`
-	CheckpointLimit int                      `json:"checkpoint_limit" yaml:"checkpoint_limit"`
-	CommitPeriod    string                   `json:"commit_period" yaml:"commit_period"`
-	LeasePeriod     string                   `json:"lease_period" yaml:"lease_period"`
-	RebalancePeriod string                   `json:"rebalance_period" yaml:"rebalance_period"`
-	StartFromOldest bool                     `json:"start_from_oldest" yaml:"start_from_oldest"`
-	Batching        policy.Config            `json:"batching" yaml:"batching"`
-}
-
-// NewAWSKinesisConfig creates a new Config with default values.
-func NewAWSKinesisConfig() AWSKinesisConfig {
-	return AWSKinesisConfig{
-		Config:          session.NewConfig(),
-		Streams:         []string{},
-		DynamoDB:        NewDynamoDBCheckpointConfig(),
-		CheckpointLimit: 1024,
-		CommitPeriod:    "5s",
-		LeasePeriod:     "30s",
-		RebalancePeriod: "30s",
-		StartFromOldest: true,
-		Batching:        policy.NewConfig(),
-	}
-}
-
 func init() {
-	Constructors[TypeAWSKinesis] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-			rdr, err := newKinesisReader(conf.AWSKinesis, mgr, log, stats)
-			if err != nil {
-				return nil, err
-			}
-			return NewAsyncReader(TypeKinesis, false, reader.NewAsyncPreserver(rdr), log, stats)
-		}),
+	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+		rdr, err := newKinesisReader(c.AWSKinesis, nm)
+		if err != nil {
+			return nil, err
+		}
+		return oinput.NewAsyncReader("aws_kinesis", false, reader.NewAsyncPreserver(rdr), nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:    "aws_kinesis",
 		Status:  docs.StatusStable,
 		Version: "3.36.0",
 		Summary: `
@@ -91,7 +64,13 @@ Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/
 			docs.FieldString("streams", "One or more Kinesis data streams to consume from. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").Array(),
 			docs.FieldObject(
 				"dynamodb", "Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams.",
-			).WithChildren(dynamoDBCheckpointFields...),
+			).WithChildren(
+				docs.FieldString("table", "The name of the table to access."),
+				docs.FieldBool("create", "Whether, if the table does not exist, it should be created."),
+				docs.FieldString("billing_mode", "When creating the table determines the billing mode.").HasOptions("PROVISIONED", "PAY_PER_REQUEST").Advanced(),
+				docs.FieldInt("read_capacity_units", "Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.").Advanced(),
+				docs.FieldInt("write_capacity_units", "Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").Advanced(),
+			),
 			docs.FieldInt(
 				"checkpoint_limit", "The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
 			),
@@ -99,11 +78,16 @@ Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/
 			docs.FieldString("rebalance_period", "The period of time between each attempt to rebalance shards across clients.").Advanced(),
 			docs.FieldString("lease_period", "The period of time after which a client that has failed to update a shard checkpoint is assumed to be inactive.").Advanced(),
 			docs.FieldBool("start_from_oldest", "Whether to consume from the oldest message when a sequence does not yet exist for the stream."),
-		).WithChildren(session.FieldSpecs()...).WithChildren(policy.FieldSpec()),
+		).WithChildren(session.FieldSpecs()...).
+			WithChildren(policy.FieldSpec()).
+			ChildDefaultAndTypesFromStruct(oinput.NewAWSKinesisConfig()),
 		Categories: []string{
 			"Services",
 			"AWS",
 		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
@@ -113,13 +97,17 @@ var (
 	awsKinesisDefaultLimit = int64(10e3)
 )
 
+type asyncMessage struct {
+	msg   *message.Batch
+	ackFn reader.AsyncAckFn
+}
+
 type kinesisReader struct {
-	conf     AWSKinesisConfig
+	conf     oinput.AWSKinesisConfig
 	clientID string
 
-	stats metrics.Type
-	log   log.Modular
-	mgr   interop.Manager
+	log log.Modular
+	mgr interop.Manager
 
 	backoffCtor func() backoff.BackOff
 	boffPool    sync.Pool
@@ -146,17 +134,14 @@ type kinesisReader struct {
 
 var errCannotMixBalancedShards = errors.New("it is not currently possible to include balanced and explicit shard streams in the same kinesis input")
 
-func newKinesisReader(
-	conf AWSKinesisConfig, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (*kinesisReader, error) {
+func newKinesisReader(conf oinput.AWSKinesisConfig, mgr interop.Manager) (*kinesisReader, error) {
 	if conf.Batching.IsNoop() {
 		conf.Batching.Count = 1
 	}
 
 	k := kinesisReader{
 		conf:         conf,
-		stats:        stats,
-		log:          log,
+		log:          mgr.Logger(),
 		mgr:          mgr,
 		closedChan:   make(chan struct{}),
 		streamShards: map[string][]string{},

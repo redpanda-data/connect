@@ -1,4 +1,4 @@
-package input
+package aws
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package input
+package aws
 
 // Inspired by Patrick Robinson https://github.com/patrobinson/gokini
 
@@ -14,42 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
-
-//------------------------------------------------------------------------------
-
-var dynamoDBCheckpointFields = docs.FieldSpecs{
-	docs.FieldString("table", "The name of the table to access."),
-	docs.FieldBool("create", "Whether, if the table does not exist, it should be created."),
-	docs.FieldString("billing_mode", "When creating the table determines the billing mode.").HasOptions("PROVISIONED", "PAY_PER_REQUEST").Advanced(),
-	docs.FieldInt("read_capacity_units", "Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.").Advanced(),
-	docs.FieldInt("write_capacity_units", "Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").Advanced(),
-}
-
-// DynamoDBCheckpointConfig contains configuration parameters for a DynamoDB
-// based checkpoint store for Kinesis.
-type DynamoDBCheckpointConfig struct {
-	Table              string `json:"table" yaml:"table"`
-	Create             bool   `json:"create" yaml:"create"`
-	ReadCapacityUnits  int64  `json:"read_capacity_units" yaml:"read_capacity_units"`
-	WriteCapacityUnits int64  `json:"write_capacity_units" yaml:"write_capacity_units"`
-	BillingMode        string `json:"billing_mode" yaml:"billing_mode"`
-}
-
-// NewDynamoDBCheckpointConfig returns a DynamoDBCheckpoint config struct with
-// default values.
-func NewDynamoDBCheckpointConfig() DynamoDBCheckpointConfig {
-	return DynamoDBCheckpointConfig{
-		Table:              "",
-		Create:             false,
-		ReadCapacityUnits:  0,
-		WriteCapacityUnits: 0,
-		BillingMode:        "PAY_PER_REQUEST",
-	}
-}
-
-//------------------------------------------------------------------------------
 
 // Common errors that might occur throughout checkpointing.
 var (
@@ -59,7 +25,7 @@ var (
 // awsKinesisCheckpointer manages the shard checkpointing for a given client
 // identifier.
 type awsKinesisCheckpointer struct {
-	conf DynamoDBCheckpointConfig
+	conf oinput.DynamoDBCheckpointConfig
 
 	clientID      string
 	leaseDuration time.Duration
@@ -72,7 +38,7 @@ type awsKinesisCheckpointer struct {
 func newAWSKinesisCheckpointer(
 	session *session.Session,
 	clientID string,
-	conf DynamoDBCheckpointConfig,
+	conf oinput.DynamoDBCheckpointConfig,
 	leaseDuration time.Duration,
 	commitPeriod time.Duration,
 ) (*awsKinesisCheckpointer, error) {
@@ -437,5 +403,3 @@ func (k *awsKinesisCheckpointer) Delete(ctx context.Context, streamID, shardID s
 	})
 	return err
 }
-
-//------------------------------------------------------------------------------
