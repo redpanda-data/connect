@@ -101,6 +101,7 @@ func TestHTTPClientMultipartDisabled(t *testing.T) {
 	conf.Type = TypeHTTPClient
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 	conf.HTTPClient.BatchAsMultipart = false
+	conf.HTTPClient.MaxInFlight = 1
 
 	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)

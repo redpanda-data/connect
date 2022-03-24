@@ -63,10 +63,10 @@ var labelField = FieldString(
 func reservedFieldsByType(t Type) map[string]FieldSpec {
 	m := map[string]FieldSpec{
 		"type":   FieldString("type", ""),
-		"plugin": FieldCommon("plugin", "").HasType(FieldTypeObject),
+		"plugin": FieldObject("plugin", ""),
 	}
 	if t == TypeInput || t == TypeOutput {
-		m["processors"] = FieldCommon("processors", "").Array().HasType(FieldTypeProcessor).OmitWhen(func(field, _ interface{}) (string, bool) {
+		m["processors"] = FieldProcessor("processors", "").Array().OmitWhen(func(field, _ interface{}) (string, bool) {
 			if arr, ok := field.([]interface{}); ok && len(arr) == 0 {
 				return "field processors is empty and can be removed", true
 			}

@@ -19,15 +19,15 @@ Send messages over a Nanomsg socket.`,
 		Description: `
 Currently only PUSH and PUB sockets are supported.`,
 		Async: true,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:5556"}).Array(),
-			docs.FieldCommon("bind", "Whether the URLs listed should be bind (otherwise they are connected to)."),
-			docs.FieldCommon("socket_type", "The socket type to send with.").HasOptions("PUSH", "PUB"),
-			docs.FieldCommon("poll_timeout", "The maximum period of time to wait for a message to send before the request is abandoned and reattempted."),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		},
-		Categories: []Category{
-			CategoryNetwork,
+			docs.FieldBool("bind", "Whether the URLs listed should be bind (otherwise they are connected to)."),
+			docs.FieldString("socket_type", "The socket type to send with.").HasOptions("PUSH", "PUB"),
+			docs.FieldString("poll_timeout", "The maximum period of time to wait for a message to send before the request is abandoned and reattempted."),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		),
+		Categories: []string{
+			"Network",
 		},
 	}
 }

@@ -18,7 +18,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Reads messages from an AMQP (1.0) server.
 
 
@@ -193,7 +192,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -245,6 +243,7 @@ Enables SASL authentication.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `sasl.mechanism`
 

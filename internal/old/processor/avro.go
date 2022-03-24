@@ -28,8 +28,8 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("avro", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryParsing,
+		Categories: []string{
+			"Parsing",
 		},
 		Summary: `
 Performs Avro based operations on messages based on a schema.`,
@@ -49,16 +49,16 @@ specifies how the source documents are encoded.
 
 Attempts to convert JSON documents into Avro documents according to the
 specified encoding.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
-			docs.FieldCommon("encoding", "An Avro encoding format to use for conversions to and from a schema.").HasOptions("textual", "binary", "single"),
-			docs.FieldCommon("schema", "A full Avro schema to use."),
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
+			docs.FieldString("encoding", "An Avro encoding format to use for conversions to and from a schema.").HasOptions("textual", "binary", "single"),
+			docs.FieldString("schema", "A full Avro schema to use."),
+			docs.FieldString(
 				"schema_path", "The path of a schema document to apply. Use either this or the `schema` field.",
 				"file://path/to/spec.avsc",
 				"http://localhost:8081/path/to/spec/versions/1",
 			),
-		},
+		),
 	}
 }
 

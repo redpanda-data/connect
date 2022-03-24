@@ -16,10 +16,10 @@ func init() {
 		constructor: fromSimpleConstructor(NewDrop),
 		Summary: `
 Drops all messages.`,
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
-		config: docs.FieldComponent().HasType(docs.FieldTypeObject),
+		Config: docs.FieldObject("", ""),
 	}
 }
 

@@ -1,4 +1,4 @@
-package writer
+package amqp1
 
 import (
 	"context"
@@ -9,64 +9,80 @@ import (
 
 	"github.com/Azure/go-amqp"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/amqp1/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
-	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
+	itls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-//------------------------------------------------------------------------------
+func init() {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		a, err := newAMQP1Writer(c.AMQP1, nm.Logger())
+		if err != nil {
+			return nil, err
+		}
+		w, err := ooutput.NewAsyncWriter("amqp_1", c.AMQP1.MaxInFlight, a, nm.Logger(), nm.Metrics())
+		if err != nil {
+			return nil, err
+		}
+		return ooutput.OnlySinglePayloads(w), nil
+	}), docs.ComponentSpec{
+		Name:    "amqp_1",
+		Status:  docs.StatusBeta,
+		Summary: `Sends messages to an AMQP (1.0) server.`,
+		Description: output.Description(true, false, `
+### Metadata
 
-// AMQP1Config contains configuration fields for the AMQP1 output type.
-type AMQP1Config struct {
-	URL           string                       `json:"url" yaml:"url"`
-	TargetAddress string                       `json:"target_address" yaml:"target_address"`
-	MaxInFlight   int                          `json:"max_in_flight" yaml:"max_in_flight"`
-	TLS           btls.Config                  `json:"tls" yaml:"tls"`
-	SASL          shared.SASLConfig            `json:"sasl" yaml:"sasl"`
-	Metadata      metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
-}
-
-// NewAMQP1Config creates a new AMQP1Config with default values.
-func NewAMQP1Config() AMQP1Config {
-	return AMQP1Config{
-		URL:           "",
-		TargetAddress: "",
-		MaxInFlight:   1,
-		TLS:           btls.NewConfig(),
-		SASL:          shared.NewSASLConfig(),
-		Metadata:      metadata.NewExcludeFilterConfig(),
+Message metadata is added to each AMQP message as string annotations. In order to control which metadata keys are added use the `+"`metadata`"+` config field.`),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("url",
+				"A URL to connect to.",
+				"amqp://localhost:5672/",
+				"amqps://guest:guest@localhost:5672/",
+			).HasDefault(""),
+			docs.FieldString("target_address", "The target address to write to.", "/foo", "queue:/bar", "topic:/baz").HasDefault(""),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").HasDefault(64),
+			itls.FieldSpec(),
+			shared.SASLFieldSpec(),
+			docs.FieldObject("metadata", "Specify criteria for which metadata values are attached to messages as headers.").
+				WithChildren(metadata.ExcludeFilterFields()...).
+				HasDefault(map[string]interface{}{}),
+		),
+		Categories: []string{
+			"Services",
+		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// AMQP1 is an output type that serves AMQP1 messages.
-type AMQP1 struct {
+type amqp1Writer struct {
 	client  *amqp.Client
 	session *amqp.Session
 	sender  *amqp.Sender
 
 	metaFilter *metadata.ExcludeFilter
 
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 
-	conf    AMQP1Config
+	conf    ooutput.AMQP1Config
 	tlsConf *tls.Config
 
 	connLock sync.RWMutex
 }
 
-// NewAMQP1 creates a new AMQP1 writer type.
-func NewAMQP1(conf AMQP1Config, log log.Modular, stats metrics.Type) (*AMQP1, error) {
-	a := AMQP1{
-		log:   log,
-		stats: stats,
-		conf:  conf,
+func newAMQP1Writer(conf ooutput.AMQP1Config, log log.Modular) (*amqp1Writer, error) {
+	a := amqp1Writer{
+		log:  log,
+		conf: conf,
 	}
 	var err error
 	if conf.TLS.Enabled {
@@ -80,15 +96,11 @@ func NewAMQP1(conf AMQP1Config, log log.Modular, stats metrics.Type) (*AMQP1, er
 	return &a, nil
 }
 
-//------------------------------------------------------------------------------
-
-// Connect establishes a connection to an AMQP1 server.
-func (a *AMQP1) Connect() error {
+func (a *amqp1Writer) Connect() error {
 	return a.ConnectWithContext(context.Background())
 }
 
-// ConnectWithContext establishes a connection to an AMQP1 server.
-func (a *AMQP1) ConnectWithContext(ctx context.Context) error {
+func (a *amqp1Writer) ConnectWithContext(ctx context.Context) error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
 
@@ -139,8 +151,7 @@ func (a *AMQP1) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// disconnect safely closes a connection to an AMQP1 server.
-func (a *AMQP1) disconnect(ctx context.Context) error {
+func (a *amqp1Writer) disconnect(ctx context.Context) error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
 
@@ -166,15 +177,7 @@ func (a *AMQP1) disconnect(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// Write will attempt to write a message over AMQP1, wait for acknowledgement,
-// and returns an error if applicable.
-func (a *AMQP1) Write(msg *message.Batch) error {
-	return a.WriteWithContext(context.Background(), msg)
-}
-
-// WriteWithContext will attempt to write a message over AMQP1, wait for
-// acknowledgement, and returns an error if applicable.
-func (a *AMQP1) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *amqp1Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	var s *amqp.Sender
 	a.connLock.RLock()
 	if a.sender != nil {
@@ -186,7 +189,7 @@ func (a *AMQP1) WriteWithContext(ctx context.Context, msg *message.Batch) error 
 		return component.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		m := amqp.NewMessage(p.Get())
 		a.metaFilter.Iter(p, func(k, v string) error {
 			if m.Annotations == nil {
@@ -213,14 +216,10 @@ func (a *AMQP1) WriteWithContext(ctx context.Context, msg *message.Batch) error 
 	})
 }
 
-// CloseAsync shuts down the AMQP1 output and stops processing messages.
-func (a *AMQP1) CloseAsync() {
+func (a *amqp1Writer) CloseAsync() {
 	_ = a.disconnect(context.Background())
 }
 
-// WaitForClose blocks until the AMQP1 output has closed down.
-func (a *AMQP1) WaitForClose(timeout time.Duration) error {
+func (a *amqp1Writer) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

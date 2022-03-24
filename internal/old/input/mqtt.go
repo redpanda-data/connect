@@ -33,7 +33,7 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").Array(),
 			docs.FieldString("topics", "A list of topics to consume from.").Array(),
 			docs.FieldString("client_id", "An identifier for the client connection."),
@@ -48,9 +48,9 @@ You can access these metadata fields using
 			docs.FieldString("password", "A password to provide for the connection.").Advanced(),
 			docs.FieldInt("keepalive", "Max seconds of inactivity before a keepalive message is sent.").Advanced(),
 			tls.FieldSpec().AtVersion("3.45.0"),
-		},
-		Categories: []Category{
-			CategoryServices,
+		),
+		Categories: []string{
+			"Services",
 		},
 	}
 }

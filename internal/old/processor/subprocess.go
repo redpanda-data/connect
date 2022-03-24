@@ -35,8 +35,8 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("subprocess", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryIntegration,
+		Categories: []string{
+			"Integration",
 		},
 		Summary: `
 Executes a command as a subprocess and, for each message, will pipe its contents to the stdin stream of the process followed by a newline.`,
@@ -56,17 +56,17 @@ It is required that subprocesses flush their stdout and stderr pipes for each li
 ## Messages containing line breaks
 
 If a message contains line breaks each line of the message is piped to the subprocess and flushed, and a response is expected from the subprocess before another line is fed in.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
 			docs.FieldString("args", "A list of arguments to provide the command.").Array(),
-			docs.FieldAdvanced("max_buffer", "The maximum expected response size."),
-			docs.FieldAdvanced(
+			docs.FieldInt("max_buffer", "The maximum expected response size.").Advanced(),
+			docs.FieldString(
 				"codec_send", "Determines how messages written to the subprocess are encoded, which allows them to be logically separated.",
-			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0"),
-			docs.FieldAdvanced(
+			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0").Advanced(),
+			docs.FieldString(
 				"codec_recv", "Determines how messages read from the subprocess are decoded, which allows them to be logically separated.",
-			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0"),
-		},
+			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0").Advanced(),
+		),
 	}
 }
 

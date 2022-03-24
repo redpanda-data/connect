@@ -34,10 +34,10 @@ var branchFields = docs.FieldSpecs{
 	deleted()
 }`,
 	).HasDefault(""),
-	docs.FieldCommon(
+	docs.FieldProcessor(
 		"processors",
 		"A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors.",
-	).Array().HasType(docs.FieldTypeProcessor).HasDefault([]interface{}{}),
+	).Array().HasDefault([]interface{}{}),
 	docs.FieldBloblang(
 		"result_map",
 		"A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).",
@@ -61,8 +61,8 @@ func init() {
 		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
 			return newBranch(conf.Branch, mgr)
 		},
-		Categories: []Category{
-			CategoryComposition,
+		Categories: []string{
+			"Composition",
 		},
 		Summary: `
 The ` + "`branch`" + ` processor allows you to create a new request message via
@@ -181,7 +181,7 @@ pipeline:
 `,
 			},
 		},
-		FieldSpecs: branchFields,
+		Config: docs.FieldComponent().WithChildren(branchFields...),
 	}
 }
 

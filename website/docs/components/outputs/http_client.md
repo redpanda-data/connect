@@ -37,7 +37,7 @@ output:
       Content-Type: application/octet-stream
     rate_limit: ""
     timeout: 5s
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -104,7 +104,7 @@ output:
     proxy_url: ""
     batch_as_multipart: false
     propagate_response: false
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -667,7 +667,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `batching`
 

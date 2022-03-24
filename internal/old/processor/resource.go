@@ -16,8 +16,8 @@ import (
 func init() {
 	Constructors[TypeResource] = TypeSpec{
 		constructor: NewResource,
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Summary: `
 Resource is a processor type that runs a processor resource identified by its label.`,
@@ -49,7 +49,7 @@ processor_resources:
 ` + "```" + `
 
 You can find out more about resources [in this document.](/docs/configuration/resources)`,
-		config: docs.FieldComponent().HasType(docs.FieldTypeString).HasDefault(""),
+		Config: docs.FieldString("", "").HasDefault(""),
 	}
 }
 

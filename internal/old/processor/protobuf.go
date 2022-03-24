@@ -35,8 +35,8 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("protobuf", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryParsing,
+		Categories: []string{
+			"Parsing",
 		},
 		Summary: `
 Performs conversions to or from a protobuf message. This processor uses
@@ -64,11 +64,11 @@ to manipulate the contents of the document within Benthos.
 ### ` + "`from_json`" + `
 
 Attempts to create a target protobuf message from a generic JSON structure.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
-			docs.FieldCommon("message", "The fully qualified name of the protobuf message to convert to/from."),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
+			docs.FieldString("message", "The fully qualified name of the protobuf message to convert to/from."),
 			docs.FieldString("import_paths", "A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").Array(),
-		},
+		),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "JSON to Protobuf",

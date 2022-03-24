@@ -35,7 +35,7 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 	return GCPPubSubConfig{
 		ProjectID:      "",
 		TopicID:        "",
-		MaxInFlight:    1,
+		MaxInFlight:    64,
 		PublishTimeout: "60s",
 		Metadata:       metadata.NewExcludeFilterConfig(),
 		OrderingKey:    "",

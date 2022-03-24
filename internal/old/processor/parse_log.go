@@ -27,28 +27,28 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("parse_log", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryParsing,
+		Categories: []string{
+			"Parsing",
 		},
 		Summary: `
 Parses common log [formats](#formats) into [structured data](#codecs). This is
 easier and often much faster than ` + "[`grok`](/docs/components/processors/grok)" + `.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("format", "A common log [format](#formats) to parse.").HasOptions(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("format", "A common log [format](#formats) to parse.").HasOptions(
 				"syslog_rfc5424", "syslog_rfc3164",
 			),
-			docs.FieldCommon("codec", "Specifies the structured format to parse a log into.").HasOptions(
+			docs.FieldString("codec", "Specifies the structured format to parse a log into.").HasOptions(
 				"json",
 			),
-			docs.FieldAdvanced("best_effort", "Still returns partially parsed messages even if an error occurs."),
-			docs.FieldAdvanced("allow_rfc3339", "Also accept timestamps in rfc3339 format while parsing."+
-				" Applicable to format `syslog_rfc3164`."),
-			docs.FieldAdvanced("default_year", "Sets the strategy used to set the year for rfc3164 timestamps."+
+			docs.FieldBool("best_effort", "Still returns partially parsed messages even if an error occurs.").Advanced(),
+			docs.FieldBool("allow_rfc3339", "Also accept timestamps in rfc3339 format while parsing."+
+				" Applicable to format `syslog_rfc3164`.").Advanced(),
+			docs.FieldString("default_year", "Sets the strategy used to set the year for rfc3164 timestamps."+
 				" Applicable to format `syslog_rfc3164`. When set to `current` the current year will be set, when"+
-				" set to an integer that value will be used. Leave this field empty to not set a default year at all."),
-			docs.FieldAdvanced("default_timezone", "Sets the strategy to decide the timezone for rfc3164 timestamps."+
-				" Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format."),
-		},
+				" set to an integer that value will be used. Leave this field empty to not set a default year at all.").Advanced(),
+			docs.FieldString("default_timezone", "Sets the strategy to decide the timezone for rfc3164 timestamps."+
+				" Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format.").Advanced(),
+		),
 		Footnotes: `
 ## Codecs
 

@@ -33,7 +33,7 @@ func TestSetYAMLPath(t *testing.T) {
 		Name: "dynamic",
 		Type: docs.TypeInput,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("inputs", "").HasType(docs.FieldTypeInput).Map(),
+			docs.FieldInput("inputs", "").Map(),
 		),
 	})
 	mockProv.RegisterDocs(docs.ComponentSpec{
@@ -406,7 +406,7 @@ func TestYAMLLabelsToPath(t *testing.T) {
 		Name: "dynamic",
 		Type: docs.TypeInput,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("inputs", "").HasType(docs.FieldTypeInput).Map(),
+			docs.FieldInput("inputs", "").Map(),
 		),
 	})
 	mockProv.RegisterDocs(docs.ComponentSpec{
@@ -429,21 +429,21 @@ func TestYAMLLabelsToPath(t *testing.T) {
 		Name: "for_each",
 		Type: docs.TypeProcessor,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("things", "").HasType(docs.FieldTypeProcessor).Array(),
+			docs.FieldProcessor("things", "").Array(),
 		),
 	})
 	mockProv.RegisterDocs(docs.ComponentSpec{
 		Name: "mega_for_each",
 		Type: docs.TypeProcessor,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("things", "").HasType(docs.FieldTypeProcessor).ArrayOfArrays(),
+			docs.FieldProcessor("things", "").ArrayOfArrays(),
 		),
 	})
 	mockProv.RegisterDocs(docs.ComponentSpec{
 		Name: "workflow",
 		Type: docs.TypeProcessor,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("things", "").HasType(docs.FieldTypeProcessor).Map(),
+			docs.FieldProcessor("things", "").Map(),
 		),
 	})
 

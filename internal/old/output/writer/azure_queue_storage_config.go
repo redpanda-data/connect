@@ -23,7 +23,7 @@ func NewAzureQueueStorageConfig() AzureQueueStorageConfig {
 		StorageConnectionString: "",
 		QueueName:               "",
 		TTL:                     "",
-		MaxInFlight:             1,
+		MaxInFlight:             64,
 		Batching:                policy.NewConfig(),
 	}
 }

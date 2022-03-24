@@ -140,8 +140,8 @@ input:
 `,
 			},
 		},
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldAdvanced(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldObject(
 				"sharded_join",
 				`EXPERIMENTAL: Provides a way to perform outter joins of arbitrarily structured and unordered data resulting from the input sequence, even when the overall size of the data surpasses the memory available on the machine.
 
@@ -149,18 +149,18 @@ When configured the sequence of inputs will be consumed one or more times accord
 
 Each message must be structured (JSON or otherwise processed into a structured form) and the fields will be aggregated with those of other messages sharing the ID. At the end of each iteration the joined messages are flushed downstream before the next iteration begins, hence keeping memory usage limited.`,
 			).WithChildren(
-				docs.FieldCommon("type", "The type of join to perform. A `full-outter` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outter` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outter join. With an `outter` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears.").HasOptions("none", "full-outter", "outter"),
-				docs.FieldCommon("id_path", "A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped. This field must be set in order to enable joins."),
-				docs.FieldCommon("iterations", "The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset."),
-				docs.FieldCommon(
+				docs.FieldString("type", "The type of join to perform. A `full-outter` ensures that all identifiers seen in any of the input sequences are sent, and is performed by consuming all input sequences before flushing the joined results. An `outter` join consumes all input sequences but only writes data joined from the last input in the sequence, similar to a left or right outter join. With an `outter` join if an identifier appears multiple times within the final sequence input it will be flushed each time it appears.").HasOptions("none", "full-outter", "outter"),
+				docs.FieldString("id_path", "A [dot path](/docs/configuration/field_paths) that points to a common field within messages of each fragmented data set and can be used to join them. Messages that are not structured or are missing this field will be dropped. This field must be set in order to enable joins."),
+				docs.FieldInt("iterations", "The total number of iterations (shards), increasing this number will increase the overall time taken to process the data, but reduces the memory used in the process. The real memory usage required is significantly higher than the real size of the data and therefore the number of iterations should be at least an order of magnitude higher than the available memory divided by the overall size of the dataset."),
+				docs.FieldString(
 					"merge_strategy",
 					"The chosen strategy to use when a data join would otherwise result in a collision of field values. The strategy `array` means non-array colliding values are placed into an array and colliding arrays are merged. The strategy `replace` replaces old values with new values. The strategy `keep` keeps the old value.",
 				).HasOptions("array", "replace", "keep"),
-			).AtVersion("3.40.0"),
-			docs.FieldCommon("inputs", "An array of inputs to read from sequentially.").Array().HasType(docs.FieldTypeInput),
-		},
-		Categories: []Category{
-			CategoryUtility,
+			).AtVersion("3.40.0").Advanced(),
+			docs.FieldInput("inputs", "An array of inputs to read from sequentially.").Array(),
+		),
+		Categories: []string{
+			"Utility",
 		},
 	}
 }

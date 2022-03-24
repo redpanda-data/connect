@@ -24,17 +24,17 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("bounds_check", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Summary: `
 Removes messages (and batches) that do not fit within certain size boundaries.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("max_part_size", "The maximum size of a message to allow (in bytes)"),
-			docs.FieldCommon("min_part_size", "The minimum size of a message to allow (in bytes)"),
-			docs.FieldAdvanced("max_parts", "The maximum size of message batches to allow (in message count)"),
-			docs.FieldAdvanced("min_parts", "The minimum size of message batches to allow (in message count)"),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldInt("max_part_size", "The maximum size of a message to allow (in bytes)"),
+			docs.FieldInt("min_part_size", "The minimum size of a message to allow (in bytes)"),
+			docs.FieldInt("max_parts", "The maximum size of message batches to allow (in message count)").Advanced(),
+			docs.FieldInt("min_parts", "The minimum size of message batches to allow (in message count)").Advanced(),
+		),
 	}
 }
 

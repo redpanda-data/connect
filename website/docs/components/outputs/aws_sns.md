@@ -36,7 +36,7 @@ output:
     topic_arn: ""
     message_group_id: ""
     message_deduplication_id: ""
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
 ```
@@ -52,7 +52,7 @@ output:
     topic_arn: ""
     message_group_id: ""
     message_deduplication_id: ""
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
     timeout: 5s
@@ -119,7 +119,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `metadata`
 

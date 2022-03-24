@@ -30,12 +30,12 @@ If the multipart option is set to true then lines are interpretted as message
 parts, and an empty line indicates the end of the message.
 
 If the delimiter field is left empty then line feed (\n) is used.`,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			codec.ReaderDocs.AtVersion("3.42.0"),
-			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
-		},
-		Categories: []Category{
-			CategoryLocal,
+			docs.FieldInt("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed.").Advanced(),
+		),
+		Categories: []string{
+			"Local",
 		},
 	}
 }

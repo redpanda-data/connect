@@ -62,7 +62,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 		MessageGroupID:         "",
 		MessageDeduplicationID: "",
 		Metadata:               metadata.NewExcludeFilterConfig(),
-		MaxInFlight:            1,
+		MaxInFlight:            64,
 		Config:                 rConf,
 		Batching:               policy.NewConfig(),
 	}

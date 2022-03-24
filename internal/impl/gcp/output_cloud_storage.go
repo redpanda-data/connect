@@ -19,7 +19,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
@@ -37,14 +36,11 @@ func init() {
 		w = output.OnlySinglePayloads(w)
 		return output.NewBatcherFromConfig(c.GCPCloudStorage.Batching, w, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
-		Name:    output.TypeGCPCloudStorage,
-		Type:    docs.TypeOutput,
-		Status:  docs.StatusBeta,
-		Version: "3.43.0",
-		Categories: []string{
-			string(input.CategoryServices),
-			string(input.CategoryGCP),
-		},
+		Name:       output.TypeGCPCloudStorage,
+		Type:       docs.TypeOutput,
+		Status:     docs.StatusBeta,
+		Version:    "3.43.0",
+		Categories: []string{"Services", "GCP"},
 		Summary: `
 Sends message parts as objects to a Google Cloud Storage bucket. Each object is
 uploaded with the path specified with the ` + "`path`" + ` field.`,
@@ -103,15 +99,15 @@ output:
             format: json_array
 `+"```"+``),
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("bucket", "The bucket to upload messages to."),
-			docs.FieldCommon(
+			docs.FieldString("bucket", "The bucket to upload messages to."),
+			docs.FieldString(
 				"path", "The path of each message to upload.",
 				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
 				`${!meta("kafka_key")}.json`,
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).IsInterpolated(),
-			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
-			docs.FieldCommon("collision_mode", `Determines how file path collisions should be dealt with.`).
+			docs.FieldString("content_type", "The content type to set for each object.").IsInterpolated(),
+			docs.FieldString("collision_mode", `Determines how file path collisions should be dealt with.`).
 				HasDefault(`overwrite`).
 				HasAnnotatedOptions(
 					"overwrite", "Replace the existing file with the new one.",
@@ -119,9 +115,9 @@ output:
 					"error-if-exists", "Return an error, this is the equivalent of a nack.",
 					"ignore", "Do not modify the original file, the new data will be dropped.",
 				).AtVersion("3.53.0"),
-			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
-			docs.FieldAdvanced("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled."),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldString("content_encoding", "An optional content encoding to set for each object.").IsInterpolated().Advanced(),
+			docs.FieldInt("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").Advanced(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPCloudStorageConfig()),
 	})

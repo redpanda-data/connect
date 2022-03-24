@@ -18,7 +18,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Sends messages to an AMQP (1.0) server.
 
 
@@ -36,7 +35,7 @@ output:
   amqp_1:
     url: ""
     target_address: ""
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
 ```
@@ -51,7 +50,7 @@ output:
   amqp_1:
     url: ""
     target_address: ""
-    max_in_flight: 1
+    max_in_flight: 64
     tls:
       enabled: false
       skip_cert_verify: false
@@ -122,7 +121,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `tls`
 
@@ -193,7 +192,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -245,6 +243,7 @@ Enables SASL authentication.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `sasl.mechanism`
 
@@ -294,6 +293,7 @@ Specify criteria for which metadata values are attached to messages as headers.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `metadata.exclude_prefixes`
 

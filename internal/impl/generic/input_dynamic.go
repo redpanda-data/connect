@@ -36,7 +36,7 @@ already exists it will be changed.`,
 			"Utility",
 		},
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("inputs", "A map of inputs to statically create.").Map().HasType(docs.FieldTypeInput).HasDefault(map[string]interface{}{}),
+			docs.FieldInput("inputs", "A map of inputs to statically create.").Map().HasDefault(map[string]interface{}{}),
 			docs.FieldString("prefix", "A path prefix for HTTP endpoints that are registered.").HasDefault(""),
 		),
 	})
@@ -75,7 +75,7 @@ func newDynamicInput(conf oinput.Config, mgr bundle.NewManagement, pipelines ...
 			var confBytes []byte
 			var node yaml.Node
 			if err := node.Encode(uConf); err == nil {
-				if err := docs.FieldCommon("input", "").HasType(docs.FieldTypeInput).SanitiseYAML(&node, docs.SanitiseConfig{
+				if err := docs.FieldInput("input", "").SanitiseYAML(&node, docs.SanitiseConfig{
 					RemoveTypeField: true,
 				}); err == nil {
 					confBytes, _ = yaml.Marshal(node)

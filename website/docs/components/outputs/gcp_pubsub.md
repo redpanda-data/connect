@@ -33,7 +33,7 @@ output:
   gcp_pubsub:
     project: ""
     topic: ""
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
 ```
@@ -48,7 +48,7 @@ output:
   gcp_pubsub:
     project: ""
     topic: ""
-    max_in_flight: 1
+    max_in_flight: 64
     publish_timeout: 60s
     ordering_key: ""
     metadata:
@@ -112,7 +112,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `publish_timeout`
 

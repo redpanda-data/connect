@@ -67,15 +67,11 @@ func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, ove
 func initStreamsMode(
 	strict, watching, enableAPI bool,
 	confReader *config.Reader,
-	strmAPITimeout time.Duration,
 	manager *manager.Type,
 	logger log.Modular,
 	stats *metrics.Namespaced,
 ) stoppable {
-	streamMgr := strmmgr.New(manager,
-		strmmgr.OptSetAPITimeout(strmAPITimeout),
-		strmmgr.OptAPIEnabled(enableAPI),
-	)
+	streamMgr := strmmgr.New(manager, strmmgr.OptAPIEnabled(enableAPI))
 
 	streamConfs := map[string]stream.Config{}
 	lints, err := confReader.ReadStreams(streamConfs)
@@ -319,16 +315,9 @@ func cmdService(
 	var stoppableStream stoppable
 	var dataStreamClosedChan chan struct{}
 
-	strmAPITimeout := 5 * time.Second
-	if cTout := conf.HTTP.ReadTimeout; cTout != "" {
-		if tmpTout, _ := time.ParseDuration(cTout); tmpTout > 0 {
-			strmAPITimeout = tmpTout
-		}
-	}
-
 	// Create data streams.
 	if streamsMode {
-		stoppableStream = initStreamsMode(strict, watching, enableStreamsAPI, confReader, strmAPITimeout, manager, logger, stats)
+		stoppableStream = initStreamsMode(strict, watching, enableStreamsAPI, confReader, manager, logger, stats)
 	} else {
 		stoppableStream, dataStreamClosedChan = initNormalMode(conf, strict, watching, confReader, manager, logger, stats)
 	}

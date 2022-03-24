@@ -37,19 +37,17 @@ func init() {
 		}
 		return iprocessor.NewV2BatchedToV1Processor("", v2Proc, nm.Metrics()), nil
 	}, docs.ComponentSpec{
-		Name:    processor.TypeMongoDB,
-		Type:    docs.TypeProcessor,
-		Status:  docs.StatusExperimental,
-		Version: "3.43.0",
-		Categories: []string{
-			string(processor.CategoryIntegration),
-		},
-		Summary: `Performs operations against MongoDB for each message, allowing you to store or retrieve data within message payloads.`,
+		Name:       processor.TypeMongoDB,
+		Type:       docs.TypeProcessor,
+		Status:     docs.StatusExperimental,
+		Version:    "3.43.0",
+		Categories: []string{"Integration"},
+		Summary:    `Performs operations against MongoDB for each message, allowing you to store or retrieve data within message payloads.`,
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
 				processorOperationDocs(client.OperationInsertOne),
-				docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
-				docs.FieldCommon(
+				docs.FieldString("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
+				docs.FieldObject(
 					"write_concern",
 					"The write_concern settings for the mongo connection.",
 				).WithChildren(writeConcernDocs()...),
@@ -73,15 +71,15 @@ func init() {
 						"except insert-one. It is used to improve performance of finding the documents in the mongodb.",
 					mapExamples()...,
 				),
-				docs.FieldCommon(
+				docs.FieldBool(
 					"upsert",
 					"The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,"+
 						"the document is updated or replaced accordingly, otherwise it is created.",
-				).HasDefault(false).HasType(docs.FieldTypeBool).AtVersion("3.60.0"),
-				docs.FieldAdvanced(
+				).HasDefault(false).AtVersion("3.60.0"),
+				docs.FieldString(
 					"json_marshal_mode",
 					"The json_marshal_mode setting is optional and controls the format of the output message.",
-				).HasDefault(client.JSONMarshalModeCanonical).HasType(docs.FieldTypeString).HasAnnotatedOptions(
+				).HasDefault(client.JSONMarshalModeCanonical).Advanced().HasAnnotatedOptions(
 					string(client.JSONMarshalModeCanonical), "A string format that emphasizes type preservation at the expense of readability and interoperability. "+
 						"That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases. ",
 					string(client.JSONMarshalModeRelaxed), "A string format that emphasizes readability and interoperability at the expense of type preservation."+

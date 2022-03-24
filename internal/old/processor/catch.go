@@ -25,8 +25,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("catch", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryComposition,
+		Categories: []string{
+			"Composition",
 		},
 		Summary: `
 Applies a list of child processors _only_ when a previous processing step has
@@ -57,7 +57,7 @@ is useful for when it's possible to recover failed messages, or when special
 actions (such as logging/metrics) are required before dropping them.
 
 More information about error handing can be found [here](/docs/configuration/error_handling).`,
-		config: docs.FieldComponent().Array().HasType(docs.FieldTypeProcessor).
+		Config: docs.FieldProcessor("", "").Array().
 			Linter(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
 				childProcs, ok := value.([]interface{})
 				if !ok {

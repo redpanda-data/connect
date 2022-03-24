@@ -92,7 +92,6 @@ type Type struct {
 	streams map[string]*StreamStatus
 
 	manager    bundle.NewManagement
-	apiTimeout time.Duration
 	apiEnabled bool
 
 	lock sync.Mutex
@@ -102,7 +101,6 @@ type Type struct {
 func New(mgr bundle.NewManagement, opts ...func(*Type)) *Type {
 	t := &Type{
 		streams:    map[string]*StreamStatus{},
-		apiTimeout: time.Second * 5,
 		apiEnabled: true,
 		manager:    mgr,
 	}
@@ -120,13 +118,6 @@ func New(mgr bundle.NewManagement, opts ...func(*Type)) *Type {
 func OptAPIEnabled(b bool) func(*Type) {
 	return func(t *Type) {
 		t.apiEnabled = b
-	}
-}
-
-// OptSetAPITimeout sets the default timeout for HTTP API requests.
-func OptSetAPITimeout(tout time.Duration) func(*Type) {
-	return func(t *Type) {
-		t.apiTimeout = tout
 	}
 }
 

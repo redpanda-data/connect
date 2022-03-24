@@ -17,12 +17,12 @@ func init() {
 		constructor: fromSimpleConstructor(NewRedisList),
 		Summary: `
 Pops messages from the beginning of a Redis list using the BLPop command.`,
-		FieldSpecs: old.ConfigDocs().Add(
-			docs.FieldCommon("key", "The key of a list to read from."),
-			docs.FieldAdvanced("timeout", "The length of time to poll for new messages before reattempting."),
+		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
+			docs.FieldString("key", "The key of a list to read from."),
+			docs.FieldString("timeout", "The length of time to poll for new messages before reattempting.").Advanced(),
 		),
-		Categories: []Category{
-			CategoryServices,
+		Categories: []string{
+			"Services",
 		},
 	}
 }

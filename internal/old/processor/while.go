@@ -28,8 +28,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("while", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryComposition,
+		Categories: []string{
+			"Composition",
 		},
 		Summary: `
 A processor that checks a [Bloblang query](/docs/guides/bloblang/about/) against each batch of messages and executes child processors on them for as long as the query resolves to true.`,
@@ -39,17 +39,17 @@ The field ` + "`at_least_once`" + `, if true, ensures that the child processors 
 The field ` + "`max_loops`" + `, if greater than zero, caps the number of loops for a message batch to this value.
 
 If following a loop execution the number of messages in a batch is reduced to zero the loop is exited regardless of the condition result. If following a loop execution there are more than 1 message batches the query is checked against the first batch only.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("at_least_once", "Whether to always run the child processors at least one time."),
-			docs.FieldAdvanced("max_loops", "An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops."),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldBool("at_least_once", "Whether to always run the child processors at least one time."),
+			docs.FieldInt("max_loops", "An optional maximum number of loops to execute. Helps protect against accidentally creating infinite loops.").Advanced(),
 			docs.FieldBloblang(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the while loop should execute again.",
 				`errored()`,
 				`this.urls.unprocessed.length() > 0`,
 			).HasDefault(""),
-			docs.FieldCommon("processors", "A list of child processors to execute on each loop.").Array().HasType(docs.FieldTypeProcessor),
-		},
+			docs.FieldProcessor("processors", "A list of child processors to execute on each loop.").Array(),
+		),
 		UsesBatches: true,
 	}
 }

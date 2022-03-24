@@ -34,7 +34,7 @@ fields. However, you may need to set ` + "`sniff` and `healthcheck`" + ` to
 false for connections to succeed.`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"http://localhost:9200"}).Array(),
 			docs.FieldString("index", "The index to place messages.").IsInterpolated(),
 			docs.FieldString("action", "The action to take on the document.").IsInterpolated().HasOptions("index", "update", "delete").Advanced(),
@@ -47,18 +47,18 @@ false for connections to succeed.`,
 			docs.FieldString("timeout", "The maximum time to wait before abandoning a request (and trying again).").Advanced(),
 			tls.FieldSpec(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		}.Merge(retries.FieldSpecs()).Add(
+		).WithChildren(retries.FieldSpecs()...).WithChildren(
 			auth.BasicAuthFieldSpec(),
 			policy.FieldSpec(),
-			docs.FieldAdvanced("aws", "Enables and customises connectivity to Amazon Elastic Service.").WithChildren(
+			docs.FieldObject("aws", "Enables and customises connectivity to Amazon Elastic Service.").WithChildren(
 				docs.FieldSpecs{
-					docs.FieldCommon("enabled", "Whether to connect to Amazon Elastic Service."),
+					docs.FieldBool("enabled", "Whether to connect to Amazon Elastic Service."),
 				}.Merge(sess.FieldSpecs())...,
-			),
+			).Advanced(),
 			docs.FieldBool("gzip_compression", "Enable gzip compression on the request side.").Advanced(),
 		),
-		Categories: []Category{
-			CategoryServices,
+		Categories: []string{
+			"Services",
 		},
 	}
 }

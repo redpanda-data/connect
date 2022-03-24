@@ -23,8 +23,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("try", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryComposition,
+		Categories: []string{
+			"Composition",
 		},
 		Summary: `Executes a list of child processors on messages only if no prior processors have failed (or the errors have been cleared).`,
 		Description: `
@@ -70,7 +70,7 @@ pipeline:
 
 
 `,
-		config: docs.FieldComponent().Array().HasType(docs.FieldTypeProcessor),
+		Config: docs.FieldProcessor("", "").Array(),
 	}
 }
 

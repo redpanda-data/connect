@@ -1,4 +1,4 @@
-package reader
+package amqp1
 
 import (
 	"context"
@@ -16,11 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
-func TestAMQP1Integration(t *testing.T) {
+func TestIntegrationAzureServiceBus(t *testing.T) {
 	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
 		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
 	}
@@ -46,12 +46,12 @@ func TestAMQP1Integration(t *testing.T) {
 func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	ctx := context.Background()
 
-	conf := NewAMQP1Config()
+	conf := oinput.NewAMQP1Config()
 	conf.URL = url
 	conf.SourceAddress = sourceAddress
 	conf.AzureRenewLock = true
 
-	m, err := NewAMQP1(conf, log.Noop(), metrics.Noop())
+	m, err := newAMQP1Reader(conf, log.Noop())
 	require.NoError(t, err)
 
 	err = m.ConnectWithContext(ctx)
@@ -133,12 +133,12 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
 	ctx := context.Background()
 
-	conf := NewAMQP1Config()
+	conf := oinput.NewAMQP1Config()
 	conf.URL = url
 	conf.SourceAddress = sourceAddress
 	conf.AzureRenewLock = true
 
-	m, err := NewAMQP1(conf, log.Noop(), metrics.Noop())
+	m, err := newAMQP1Reader(conf, log.Noop())
 	require.NoError(t, err)
 
 	err = m.ConnectWithContext(ctx)

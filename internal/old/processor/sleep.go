@@ -26,13 +26,13 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("sleep", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Summary: `Sleep for a period of time specified as a duration string for each message. This processor will interpolate functions within the ` + "`duration`" + ` field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldInterpolatedString("duration", "The duration of time to sleep for each execution."),
-		},
+		),
 	}
 }
 

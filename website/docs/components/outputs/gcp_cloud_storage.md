@@ -41,7 +41,7 @@ output:
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     content_type: application/octet-stream
     collision_mode: overwrite
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -63,7 +63,7 @@ output:
     collision_mode: overwrite
     content_encoding: ""
     chunk_size: 16777216
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -217,7 +217,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `batching`
 

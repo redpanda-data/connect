@@ -34,16 +34,16 @@ allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/cloud/aws).`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("stream", "The stream to publish messages to."),
-			docs.FieldCommon("partition_key", "A required key for partitioning messages.").IsInterpolated(),
-			docs.FieldAdvanced("hash_key", "A optional hash key for partitioning messages.").IsInterpolated(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("stream", "The stream to publish messages to."),
+			docs.FieldString("partition_key", "A required key for partitioning messages.").IsInterpolated(),
+			docs.FieldString("hash_key", "A optional hash key for partitioning messages.").IsInterpolated().Advanced(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
-		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
-		Categories: []Category{
-			CategoryServices,
-			CategoryAWS,
+		).WithChildren(session.FieldSpecs()...).WithChildren(retries.FieldSpecs()...),
+		Categories: []string{
+			"Services",
+			"AWS",
 		},
 	}
 }

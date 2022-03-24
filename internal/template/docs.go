@@ -22,7 +22,7 @@ func DocsMarkdown() ([]byte, error) {
 
 	var buf bytes.Buffer
 	err := template.Must(template.New("templates").Parse(templateDocsTemplate)).Execute(&buf, templateContext{
-		Fields: docs.FieldCommon("", "").WithChildren(ConfigSpec()...).FlattenChildrenForDocs(),
+		Fields: docs.FieldObject("", "").WithChildren(ConfigSpec()...).FlattenChildrenForDocs(),
 	})
 
 	return buf.Bytes(), err

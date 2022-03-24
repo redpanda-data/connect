@@ -40,7 +40,7 @@ output:
     storage_access_key: ""
     storage_connection_string: ""
     queue_name: ""
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -61,7 +61,7 @@ output:
     storage_connection_string: ""
     queue_name: ""
     ttl: ""
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -147,7 +147,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 Requires version 3.45.0 or newer  
 
 ### `batching`

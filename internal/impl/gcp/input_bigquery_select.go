@@ -8,7 +8,6 @@ import (
 	"cloud.google.com/go/bigquery"
 	"google.golang.org/api/iterator"
 
-	"github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -74,10 +73,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Beta().
 		Version("3.63.0").
-		Categories(
-			string(input.CategoryServices),
-			string(input.CategoryGCP),
-		).
+		Categories("Services", "GCP").
 		Summary("Executes a `SELECT` query against BigQuery and creates a message for each row received.").
 		Description(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).

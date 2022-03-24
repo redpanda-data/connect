@@ -326,7 +326,7 @@ func TestDocumentationCoverage(t *testing.T) {
 		conf := config.New()
 		tConf := reflect.TypeOf(conf)
 
-		spec := docs.FieldCommon("", "").WithChildren(config.Spec()...)
+		spec := docs.FieldObject("", "").WithChildren(config.Spec()...)
 		walkTypeWithConfig(t, "root", spec, tConf)
 	})
 

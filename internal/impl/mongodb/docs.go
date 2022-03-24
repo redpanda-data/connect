@@ -12,7 +12,7 @@ func processorOperationDocs(defaultOperation client.Operation) docs.FieldSpec {
 }
 
 func outputOperationDocs(defaultOperation client.Operation) docs.FieldSpec {
-	return docs.FieldCommon(
+	return docs.FieldString(
 		"operation",
 		"The mongodb operation to perform.",
 	).HasOptions(
@@ -26,9 +26,9 @@ func outputOperationDocs(defaultOperation client.Operation) docs.FieldSpec {
 
 func writeConcernDocs() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldCommon("w", "W requests acknowledgement that write operations propagate to the specified number of mongodb instances."),
-		docs.FieldCommon("j", "J requests acknowledgement from MongoDB that write operations are written to the journal."),
-		docs.FieldCommon("w_timeout", "The write concern timeout."),
+		docs.FieldString("w", "W requests acknowledgement that write operations propagate to the specified number of mongodb instances."),
+		docs.FieldBool("j", "J requests acknowledgement from MongoDB that write operations are written to the journal."),
+		docs.FieldString("w_timeout", "The write concern timeout."),
 	}
 }
 

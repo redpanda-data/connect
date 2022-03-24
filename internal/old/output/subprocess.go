@@ -36,15 +36,15 @@ Messages are written according to a specified codec. The process is expected to 
 If the subprocess exits unexpectedly then Benthos will log anything printed to stderr and will log the exit code, and will attempt to execute the command again until success.
 
 The execution environment of the subprocess is the same as the Benthos instance, including environment variables and the current working directory.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("name", "The command to execute as a subprocess."),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("name", "The command to execute as a subprocess."),
 			docs.FieldString("args", "A list of arguments to provide the command.").Array(),
-			docs.FieldCommon(
+			docs.FieldString(
 				"codec", "The way in which messages should be written to the subprocess.",
 			).HasOptions("lines"),
-		},
-		Categories: []Category{
-			CategoryUtility,
+		),
+		Categories: []string{
+			"Utility",
 		},
 	}
 }

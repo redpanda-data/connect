@@ -45,7 +45,7 @@ If you're seeing issues writing to or reading from Kafka with this component the
 Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: append(docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.", []string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"}).Array(),
 			tls.FieldSpec(),
 			sasl.FieldSpec(),
@@ -66,9 +66,9 @@ Unfortunately this error message will appear for a wide range of connection prob
 			docs.FieldString("timeout", "The maximum period of time to wait for message sends before abandoning the request and retrying.").Advanced(),
 			docs.FieldBool("retry_as_batch", "When enabled forces an entire batch of messages to be retried if any individual message fails on a send, otherwise only the individual messages that failed are retried. Disabling this helps to reduce message duplicates during intermittent errors, but also makes it impossible to guarantee strict ordering of messages.").Advanced(),
 			policy.FieldSpec(),
-		}, retries.FieldSpecs()...),
-		Categories: []Category{
-			CategoryServices,
+		).WithChildren(retries.FieldSpecs()...),
+		Categories: []string{
+			"Services",
 		},
 	}
 }

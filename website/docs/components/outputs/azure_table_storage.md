@@ -43,7 +43,7 @@ output:
     partition_key: ""
     row_key: ""
     properties: {}
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -67,7 +67,7 @@ output:
     row_key: ""
     properties: {}
     insert_type: INSERT
-    max_in_flight: 1
+    max_in_flight: 64
     timeout: 5s
     batching:
       count: 0
@@ -224,7 +224,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `timeout`
 

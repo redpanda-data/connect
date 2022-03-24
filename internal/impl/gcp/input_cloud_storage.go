@@ -37,14 +37,11 @@ func init() {
 			nm.Logger(), nm.Metrics(),
 		)
 	}), docs.ComponentSpec{
-		Name:    input.TypeGCPCloudStorage,
-		Type:    docs.TypeInput,
-		Status:  docs.StatusBeta,
-		Version: "3.43.0",
-		Categories: []string{
-			string(input.CategoryServices),
-			string(input.CategoryGCP),
-		},
+		Name:       input.TypeGCPCloudStorage,
+		Type:       docs.TypeInput,
+		Status:     docs.StatusBeta,
+		Version:    "3.43.0",
+		Categories: []string{"Services", "GCP"},
 		Summary: `
 Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`,
 		Description: `
@@ -73,10 +70,10 @@ You can access these metadata fields using [function interpolation](/docs/config
 By default Benthos will use a shared credentials file when connecting to GCP
 services. You can find out more [in this document](/docs/guides/cloud/gcp).`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("bucket", "The name of the bucket from which to download objects."),
-			docs.FieldCommon("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
+			docs.FieldString("bucket", "The name of the bucket from which to download objects."),
+			docs.FieldString("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
 			codec.ReaderDocs,
-			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed."),
+			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewGCPCloudStorageConfig()),
 	})
 }

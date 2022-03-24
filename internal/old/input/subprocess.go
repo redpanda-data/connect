@@ -40,17 +40,17 @@ Messages are consumed according to a specified codec. The command is executed on
 The field ` + "`max_buffer`" + ` defines the maximum message size able to be read from the subprocess. This value should be set significantly above the real expected maximum message size.
 
 The execution environment of the subprocess is the same as the Benthos instance, including environment variables and the current working directory.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("name", "The command to execute as a subprocess.", "cat", "sed", "awk"),
 			docs.FieldString("args", "A list of arguments to provide the command.").Array(),
-			docs.FieldCommon(
+			docs.FieldString(
 				"codec", "The way in which messages should be consumed from the subprocess.",
 			).HasOptions("lines"),
-			docs.FieldCommon("restart_on_exit", "Whether the command should be re-executed each time the subprocess ends."),
-			docs.FieldAdvanced("max_buffer", "The maximum expected size of an individual message."),
-		},
-		Categories: []Category{
-			CategoryUtility,
+			docs.FieldBool("restart_on_exit", "Whether the command should be re-executed each time the subprocess ends."),
+			docs.FieldInt("max_buffer", "The maximum expected size of an individual message.").Advanced(),
+		),
+		Categories: []string{
+			"Utility",
 		},
 	}
 }

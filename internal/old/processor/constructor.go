@@ -14,18 +14,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
-// Category describes the general purpose of a processor.
-type Category string
-
-// Processor categories
-var (
-	CategoryMapping     Category = "Mapping"
-	CategoryParsing     Category = "Parsing"
-	CategoryIntegration Category = "Integration"
-	CategoryComposition Category = "Composition"
-	CategoryUtility     Category = "Utility"
-)
-
 type procConstructor func(
 	conf Config,
 	mgr interop.Manager,
@@ -45,10 +33,9 @@ type TypeSpec struct {
 	Version     string
 	Summary     string
 	Description string
-	Categories  []Category
+	Categories  []string
 	Footnotes   string
-	config      docs.FieldSpec
-	FieldSpecs  docs.FieldSpecs
+	Config      docs.FieldSpec
 	Examples    []docs.AnnotatedExample
 }
 
@@ -59,28 +46,19 @@ type ConstructorFunc func(Config, interop.Manager, log.Modular, metrics.Type) (p
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 	inferred := docs.ComponentFieldsFromConf(NewConfig())
 	for k, v := range Constructors {
-		conf := v.config
-		if len(v.FieldSpecs) > 0 {
-			conf = docs.FieldComponent().WithChildren(v.FieldSpecs.DefaultAndTypeFrom(inferred[k])...)
-		} else {
-			conf.Children = conf.Children.DefaultAndTypeFrom(inferred[k])
-		}
+		conf := v.Config
+		conf.Children = conf.Children.DefaultAndTypeFrom(inferred[k])
 		spec := docs.ComponentSpec{
 			Type:        docs.TypeProcessor,
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
+			Categories:  v.Categories,
 			Examples:    v.Examples,
 			Footnotes:   v.Footnotes,
 			Config:      conf,
 			Status:      v.Status,
 			Version:     v.Version,
-		}
-		if len(v.Categories) > 0 {
-			spec.Categories = make([]string, 0, len(v.Categories))
-			for _, cat := range v.Categories {
-				spec.Categories = append(spec.Categories, string(cat))
-			}
 		}
 		if v.UsesBatches {
 			spec.Description = spec.Description + "\n" + DocsUsesBatches

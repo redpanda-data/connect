@@ -41,17 +41,17 @@ pipeline:
     - bloblang: meta = deleted()
 ` + "```" + ``,
 		Async: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("project", "The project ID of the topic to publish to."),
-			docs.FieldCommon("topic", "The topic to publish to.").IsInterpolated(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldAdvanced("publish_timeout", "The maximum length of time to wait before abandoning a publish attempt for a message.", "10s", "5m", "60m"),
-			docs.FieldAdvanced("ordering_key", "The ordering key to use for publishing messages.").IsInterpolated(),
-			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent as attributes.").WithChildren(metadata.ExcludeFilterFields()...),
-		},
-		Categories: []Category{
-			CategoryServices,
-			CategoryGCP,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("project", "The project ID of the topic to publish to."),
+			docs.FieldString("topic", "The topic to publish to.").IsInterpolated(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldString("publish_timeout", "The maximum length of time to wait before abandoning a publish attempt for a message.", "10s", "5m", "60m").Advanced(),
+			docs.FieldString("ordering_key", "The ordering key to use for publishing messages.").IsInterpolated().Advanced(),
+			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as attributes.").WithChildren(metadata.ExcludeFilterFields()...),
+		),
+		Categories: []string{
+			"Services",
+			"GCP",
 		},
 	}
 }

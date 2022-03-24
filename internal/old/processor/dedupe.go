@@ -28,8 +28,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("dedupe", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Summary: `Deduplicates messages by storing a key value in a cache using the ` + "`add`" + ` operator. If the key already exists within the cache it is dropped.`,
 		Description: `
@@ -46,11 +46,11 @@ This processor enacts on individual messages only, in order to perform a dedupli
 Performing deduplication on a stream using a distributed cache voids any at-least-once guarantees that it previously had. This is because the cache will preserve message signatures even if the message fails to leave the Benthos pipeline, which would cause message loss in the event of an outage at the output sink followed by a restart of the Benthos instance (or a server crash, etc).
 
 This problem can be mitigated by using an in-memory cache and distributing messages to horizontally scaled Benthos pipelines partitioned by the deduplication key. However, in situations where at-least-once delivery guarantees are important it is worth avoiding deduplication in favour of implement idempotent behaviour at the edge of your stream pipelines.`,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("cache", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),
 			docs.FieldString("key", "An interpolated string yielding the key to deduplicate by for each message.", `${! meta("kafka_key") }`, `${! content().hash("xxhash64") }`).IsInterpolated(),
 			docs.FieldBool("drop_on_err", "Whether messages should be dropped when the cache returns a general error such as a network issue."),
-		},
+		),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title:   "Deduplicate based on Kafka key",

@@ -13,7 +13,7 @@ import (
 )
 
 // WriterDocs is a static field documentation for output codecs.
-var WriterDocs = docs.FieldCommon(
+var WriterDocs = docs.FieldString(
 	"codec", "The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.", "lines", "delim:\t", "delim:foobar",
 ).HasAnnotatedOptions(
 	"all-bytes", "Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted.",

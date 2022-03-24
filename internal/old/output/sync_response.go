@@ -54,10 +54,10 @@ Using the above example and posting the message 'hello world' to the endpoint
 ` + "`foo_topic`" + ` and also respond with 'HELLO WORLD'.
 
 For more information please read [Synchronous Responses](/docs/guides/sync_responses).`,
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
-		config: docs.FieldComponent().HasType(docs.FieldTypeObject),
+		Config: docs.FieldObject("", ""),
 	}
 }
 

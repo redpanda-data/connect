@@ -12,14 +12,14 @@ import (
 // ClientFieldSpec returns a field spec for an http client component.
 func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.FieldSpec {
 	httpSpecs := docs.FieldSpecs{
-		docs.FieldCommon("url", "The URL to connect to.").HasType("string").IsInterpolated(),
-		docs.FieldCommon("verb", "A verb to connect with", "POST", "GET", "DELETE").HasType("string"),
+		docs.FieldString("url", "The URL to connect to.").IsInterpolated(),
+		docs.FieldString("verb", "A verb to connect with", "POST", "GET", "DELETE"),
 		docs.FieldString("headers", "A map of headers to add to the request.", map[string]interface{}{
 			"Content-Type": "application/octet-stream",
 		}).IsInterpolated().Map().HasDefault(map[string]interface{}{
 			"Content-Type": "application/octet-stream",
 		}),
-		docs.FieldAdvanced("metadata", "Specify optional matching rules to determine which metadata keys should be added to the HTTP request as headers.").
+		docs.FieldObject("metadata", "Specify optional matching rules to determine which metadata keys should be added to the HTTP request as headers.").Advanced().
 			WithChildren(metadata.IncludeFilterDocs()...),
 	}
 
@@ -30,9 +30,7 @@ func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.Field
 
 	httpSpecs = append(httpSpecs, auth.FieldSpecsExpanded()...)
 	httpSpecs = append(httpSpecs, tls.FieldSpec(),
-		docs.FieldDeprecated("copy_response_headers", "Sets whether to copy the headers from the response to the resulting payload.").
-			HasType(docs.FieldTypeBool).Advanced(),
-		docs.FieldAdvanced("extract_headers", extractHeadersDesc).WithChildren(metadata.IncludeFilterDocs()...),
+		docs.FieldObject("extract_headers", extractHeadersDesc).WithChildren(metadata.IncludeFilterDocs()...).Advanced(),
 		docs.FieldString("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
 		docs.FieldString("timeout", "A static timeout to apply to requests."),
 		docs.FieldString("retry_period", "The base period to wait between failed requests.").Advanced(),

@@ -18,12 +18,12 @@ func init() {
 		constructor: fromSimpleConstructor(NewWebsocket),
 		Summary: `
 Sends messages to an HTTP server via a websocket connection.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "The URL to connect to."),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("url", "The URL to connect to."),
 			btls.FieldSpec(),
-		}.Merge(auth.FieldSpecs()),
-		Categories: []Category{
-			CategoryNetwork,
+		).WithChildren(auth.FieldSpecs()...),
+		Categories: []string{
+			"Network",
 		},
 	}
 }

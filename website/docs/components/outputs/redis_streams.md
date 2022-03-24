@@ -36,7 +36,7 @@ output:
     stream: ""
     body_key: body
     max_length: 0
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
     batching:
@@ -67,7 +67,7 @@ output:
     stream: ""
     body_key: body
     max_length: 0
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
     batching:
@@ -307,7 +307,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `metadata`
 

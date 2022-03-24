@@ -48,7 +48,7 @@ use the ` + "[`fallback`](/docs/components/outputs/fallback)" + ` output type.`,
 				docs.FieldString("max_interval", "The maximum period to wait between retry attempts.").HasDefault("1s"),
 				docs.FieldString("max_elapsed_time", "The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.").HasDefault("0s"),
 			).Advanced(),
-			docs.FieldCommon("output", "A child output.").HasType(docs.FieldTypeOutput),
+			docs.FieldOutput("output", "A child output."),
 		),
 		Categories: []string{
 			"Utility",

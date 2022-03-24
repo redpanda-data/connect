@@ -25,7 +25,7 @@ func NewAzureBlobStorageConfig() AzureBlobStorageConfig {
 		Path:                    `${!count("files")}-${!timestamp_unix_nano()}.txt`,
 		BlobType:                "BLOCK",
 		PublicAccessLevel:       "PRIVATE",
-		MaxInFlight:             1,
+		MaxInFlight:             64,
 	}
 }
 

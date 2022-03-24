@@ -83,32 +83,30 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata). Note that user defined metadata is case insensitive within AWS, and it is likely that the keys will be received in a capitalized form, if you wish to make them consistent you can map all metadata keys to lower or uppercase using a Bloblang mapping such as ` + "`meta = meta().map_each_key(key -> key.lowercase())`" + `.`,
-
-		FieldSpecs: append(
-			append(docs.FieldSpecs{
-				docs.FieldCommon("bucket", "The bucket to consume from. If the field `sqs.url` is specified this field is optional."),
-				docs.FieldCommon("prefix", "An optional path prefix, if set only objects with the prefix are consumed when walking a bucket."),
-			}, sess.FieldSpecs()...),
-			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints."),
-			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed."),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("bucket", "The bucket to consume from. If the field `sqs.url` is specified this field is optional."),
+			docs.FieldString("prefix", "An optional path prefix, if set only objects with the prefix are consumed when walking a bucket."),
+		).WithChildren(sess.FieldSpecs()...).WithChildren(
+			docs.FieldBool("force_path_style_urls", "Forces the client API to use path style URLs for downloading keys, which is often required when connecting to custom endpoints.").Advanced(),
+			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
 			codec.ReaderDocs,
-			docs.FieldCommon("sqs", "Consume SQS messages in order to trigger key downloads.").WithChildren(
-				docs.FieldCommon("url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded."),
-				docs.FieldAdvanced("endpoint", "A custom endpoint to use when connecting to SQS."),
-				docs.FieldCommon("key_path", "A [dot path](/docs/configuration/field_paths) whereby object keys are found in SQS messages."),
-				docs.FieldCommon("bucket_path", "A [dot path](/docs/configuration/field_paths) whereby the bucket name can be found in SQS messages."),
-				docs.FieldCommon("envelope_path", "A [dot path](/docs/configuration/field_paths) of a field to extract an enveloped JSON payload for further extracting the key and bucket from SQS messages. This is specifically useful when subscribing an SQS queue to an SNS topic that receives bucket events.", "Message"),
-				docs.FieldAdvanced(
+			docs.FieldObject("sqs", "Consume SQS messages in order to trigger key downloads.").WithChildren(
+				docs.FieldString("url", "An optional SQS URL to connect to. When specified this queue will control which objects are downloaded."),
+				docs.FieldString("endpoint", "A custom endpoint to use when connecting to SQS.").Advanced(),
+				docs.FieldString("key_path", "A [dot path](/docs/configuration/field_paths) whereby object keys are found in SQS messages."),
+				docs.FieldString("bucket_path", "A [dot path](/docs/configuration/field_paths) whereby the bucket name can be found in SQS messages."),
+				docs.FieldString("envelope_path", "A [dot path](/docs/configuration/field_paths) of a field to extract an enveloped JSON payload for further extracting the key and bucket from SQS messages. This is specifically useful when subscribing an SQS queue to an SNS topic that receives bucket events.", "Message"),
+				docs.FieldString(
 					"delay_period",
 					"An optional period of time to wait from when a notification was originally sent to when the target key download is attempted.",
 					"10s", "5m",
-				),
-				docs.FieldAdvanced("max_messages", "The maximum number of SQS messages to consume from each request."),
+				).Advanced(),
+				docs.FieldInt("max_messages", "The maximum number of SQS messages to consume from each request.").Advanced(),
 			),
 		),
-		Categories: []Category{
-			CategoryServices,
-			CategoryAWS,
+		Categories: []string{
+			"Services",
+			"AWS",
 		},
 	}
 }

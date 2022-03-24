@@ -22,8 +22,8 @@ import (
 func init() {
 	Constructors[TypeLog] = TypeSpec{
 		constructor: NewLog,
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Summary: `Prints a log event for each message. Messages always remain unchanged. The log message can be set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries) which allows you to log the contents and metadata of messages.`,
 		Description: `
@@ -46,7 +46,7 @@ pipeline:
           root.kafka_topic = meta("kafka_topic")
 ` + "```" + `
 `,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("level", "The log level to use.").HasOptions("FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL"),
 			docs.FieldString("fields", "A map of fields to print along with the log message.").IsInterpolated().Map().Deprecated(),
 			docs.FieldString(
@@ -57,7 +57,7 @@ root.age = this.user.age.number()
 root.kafka_topic = meta("kafka_topic")`,
 			).AtVersion("3.40.0").IsBloblang(),
 			docs.FieldString("message", "The message to print.").IsInterpolated(),
-		},
+		),
 	}
 }
 

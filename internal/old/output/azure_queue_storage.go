@@ -25,21 +25,21 @@ Only one authentication method is required, ` + "`storage_connection_string`" + 
 In order to set the ` + "`queue_name`" + ` you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("storage_account", "The storage account to upload messages to. This field is ignored if `storage_connection_string` is set."),
-			docs.FieldCommon("storage_access_key", "The storage account access key. This field is ignored if `storage_connection_string` is set."),
-			docs.FieldCommon("storage_connection_string", "A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set."),
-			docs.FieldCommon("queue_name", "The name of the target Queue Storage queue.").IsInterpolated(),
-			docs.FieldAdvanced(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("storage_account", "The storage account to upload messages to. This field is ignored if `storage_connection_string` is set."),
+			docs.FieldString("storage_access_key", "The storage account access key. This field is ignored if `storage_connection_string` is set."),
+			docs.FieldString("storage_connection_string", "A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set."),
+			docs.FieldString("queue_name", "The name of the target Queue Storage queue.").IsInterpolated(),
+			docs.FieldString(
 				"ttl", "The TTL of each individual message as a duration string. Defaults to 0, meaning no retention period is set",
 				"60s", "5m", "36h",
-			).IsInterpolated(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").AtVersion("3.45.0"),
+			).IsInterpolated().Advanced(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").AtVersion("3.45.0"),
 			policy.FieldSpec(),
-		},
-		Categories: []Category{
-			CategoryServices,
-			CategoryAzure,
+		),
+		Categories: []string{
+			"Services",
+			"Azure",
 		},
 	}
 }

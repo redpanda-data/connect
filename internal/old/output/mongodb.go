@@ -35,7 +35,7 @@ func NewMongoDBConfig() MongoDBConfig {
 	return MongoDBConfig{
 		MongoConfig:  client.NewConfig(),
 		Operation:    "update-one",
-		MaxInFlight:  1,
+		MaxInFlight:  64,
 		RetryConfig:  rConf,
 		Batching:     policy.NewConfig(),
 		WriteConcern: client.WriteConcern{},

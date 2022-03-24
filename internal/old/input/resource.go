@@ -58,10 +58,10 @@ input_resources:
  ` + "```" + `
 
 You can find out more about resources [in this document.](/docs/configuration/resources)`,
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
-		config: docs.FieldComponent().HasType(docs.FieldTypeString).HasDefault(""),
+		Config: docs.FieldString("", "").HasDefault(""),
 	}
 }
 

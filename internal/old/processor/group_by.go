@@ -28,8 +28,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("group_by", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryComposition,
+		Categories: []string{
+			"Composition",
 		},
 		Summary: `
 Splits a [batch of messages](/docs/configuration/batching/) into N batches, where each resulting batch contains a group of messages determined by a [Bloblang query](/docs/guides/bloblang/about/).`,
@@ -66,7 +66,7 @@ output:
 `,
 			},
 		},
-		config: docs.FieldComponent().Array().WithChildren(
+		Config: docs.FieldComponent().Array().WithChildren(
 			docs.FieldBloblang(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message belongs to a given group.",
@@ -74,10 +74,10 @@ output:
 				`this.contents.urls.contains("https://benthos.dev/")`,
 				`true`,
 			).HasDefault(""),
-			docs.FieldCommon(
+			docs.FieldProcessor(
 				"processors",
 				"A list of [processors](/docs/components/processors/about/) to execute on the newly formed group.",
-			).HasDefault([]interface{}{}).Array().HasType(docs.FieldTypeProcessor),
+			).HasDefault([]interface{}{}).Array(),
 		),
 		UsesBatches: true,
 	}

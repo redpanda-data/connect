@@ -37,7 +37,7 @@ b:
 c: true`,
 			fields: docs.FieldSpecs{
 				docs.FieldString("a", "").HasDefault("foo"),
-				docs.FieldCommon("b", "").WithChildren(
+				docs.FieldObject("b", "").WithChildren(
 					docs.FieldString("d", "").HasDefault("bar"),
 					docs.FieldInt("e", "").HasDefault(int64(22)),
 				),
@@ -68,7 +68,7 @@ c: true`,
     - foo
     - bar`,
 			fields: docs.FieldSpecs{
-				docs.FieldCommon("a", "").WithChildren(
+				docs.FieldObject("a", "").WithChildren(
 					docs.FieldString("b", "").Array().HasDefault([]string{"foo", "bar"}),
 				),
 			},
@@ -91,10 +91,10 @@ func TestFieldsNodeToMap(t *testing.T) {
 	spec := docs.FieldSpecs{
 		docs.FieldString("a", ""),
 		docs.FieldInt("b", "").HasDefault(11),
-		docs.FieldCommon("c", "").WithChildren(
+		docs.FieldObject("c", "").WithChildren(
 			docs.FieldBool("d", "").HasDefault(true),
 			docs.FieldString("e", "").HasDefault("evalue"),
-			docs.FieldCommon("f", "").WithChildren(
+			docs.FieldObject("f", "").WithChildren(
 				docs.FieldInt("g", "").HasDefault(12),
 				docs.FieldString("h", ""),
 				docs.FieldFloat("i", "").HasDefault(13.0),
@@ -141,12 +141,12 @@ func TestFieldsNodeToMapTypeCoercion(t *testing.T) {
 		{
 			name: "string fields",
 			spec: docs.FieldSpecs{
-				docs.FieldCommon("a", "").HasType("string"),
-				docs.FieldCommon("b", "").HasType("string"),
-				docs.FieldCommon("c", "").HasType("string"),
-				docs.FieldCommon("d", "").HasType("string"),
-				docs.FieldCommon("e", "").HasType("string").Array(),
-				docs.FieldCommon("f", "").HasType("string").Map(),
+				docs.FieldString("a", ""),
+				docs.FieldString("b", ""),
+				docs.FieldString("c", ""),
+				docs.FieldString("d", ""),
+				docs.FieldString("e", "").Array(),
+				docs.FieldString("f", "").Map(),
 			},
 			yaml: `
 a: no
@@ -178,11 +178,11 @@ f:
 		{
 			name: "bool fields",
 			spec: docs.FieldSpecs{
-				docs.FieldCommon("a", "").HasType("bool"),
-				docs.FieldCommon("b", "").HasType("bool"),
-				docs.FieldCommon("c", "").HasType("bool"),
-				docs.FieldCommon("d", "").HasType("bool").Array(),
-				docs.FieldCommon("e", "").HasType("bool").Map(),
+				docs.FieldBool("a", ""),
+				docs.FieldBool("b", ""),
+				docs.FieldBool("c", ""),
+				docs.FieldBool("d", "").Array(),
+				docs.FieldBool("e", "").Map(),
 			},
 			yaml: `
 a: no
@@ -212,11 +212,11 @@ e:
 		{
 			name: "int fields",
 			spec: docs.FieldSpecs{
-				docs.FieldCommon("a", "").HasType("int"),
-				docs.FieldCommon("b", "").HasType("int"),
-				docs.FieldCommon("c", "").HasType("int"),
-				docs.FieldCommon("d", "").HasType("int").Array(),
-				docs.FieldCommon("e", "").HasType("int").Map(),
+				docs.FieldInt("a", ""),
+				docs.FieldInt("b", ""),
+				docs.FieldInt("c", ""),
+				docs.FieldInt("d", "").Array(),
+				docs.FieldInt("e", "").Map(),
 			},
 			yaml: `
 a: 11
@@ -246,11 +246,11 @@ e:
 		{
 			name: "float fields",
 			spec: docs.FieldSpecs{
-				docs.FieldCommon("a", "").HasType("float"),
-				docs.FieldCommon("b", "").HasType("float"),
-				docs.FieldCommon("c", "").HasType("float"),
-				docs.FieldCommon("d", "").HasType("float").Array(),
-				docs.FieldCommon("e", "").HasType("float").Map(),
+				docs.FieldFloat("a", ""),
+				docs.FieldFloat("b", ""),
+				docs.FieldFloat("c", ""),
+				docs.FieldFloat("d", "").Array(),
+				docs.FieldFloat("e", "").Map(),
 			},
 			yaml: `
 a: 11
@@ -280,9 +280,9 @@ e:
 		{
 			name: "recurse array of objects",
 			spec: docs.FieldSpecs{
-				docs.FieldCommon("foo", "").WithChildren(
-					docs.FieldCommon("eles", "").Array().WithChildren(
-						docs.FieldCommon("bar", "").HasType(docs.FieldTypeString).HasDefault("default"),
+				docs.FieldObject("foo", "").WithChildren(
+					docs.FieldObject("eles", "").Array().WithChildren(
+						docs.FieldString("bar", "").HasDefault("default"),
 					),
 				),
 			},
@@ -308,9 +308,9 @@ foo:
 		{
 			name: "recurse map of objects",
 			spec: docs.FieldSpecs{
-				docs.FieldCommon("foo", "").WithChildren(
-					docs.FieldCommon("eles", "").Map().WithChildren(
-						docs.FieldCommon("bar", "").HasType(docs.FieldTypeString).HasDefault("default"),
+				docs.FieldObject("foo", "").WithChildren(
+					docs.FieldObject("eles", "").Map().WithChildren(
+						docs.FieldString("bar", "").HasDefault("default"),
 					),
 				),
 			},
@@ -339,7 +339,7 @@ foo:
 			name: "component field",
 			spec: docs.FieldSpecs{
 				docs.FieldString("a", "").HasDefault("adefault"),
-				docs.FieldCommon("b", "").HasType(docs.FieldTypeProcessor),
+				docs.FieldProcessor("b", ""),
 				docs.FieldBool("c", ""),
 			},
 			yaml: `
@@ -379,7 +379,7 @@ c: true
 			name: "component field in array",
 			spec: docs.FieldSpecs{
 				docs.FieldString("a", "").HasDefault("adefault"),
-				docs.FieldCommon("b", "").Array().HasType(docs.FieldTypeProcessor),
+				docs.FieldProcessor("b", "").Array(),
 				docs.FieldBool("c", ""),
 			},
 			yaml: `
@@ -421,7 +421,7 @@ c: true
 			name: "component field in map",
 			spec: docs.FieldSpecs{
 				docs.FieldString("a", "").HasDefault("adefault"),
-				docs.FieldCommon("b", "").Map().HasType(docs.FieldTypeProcessor),
+				docs.FieldProcessor("b", "").Map(),
 				docs.FieldBool("c", ""),
 			},
 			yaml: `
@@ -529,34 +529,34 @@ func TestFieldToNode(t *testing.T) {
 	}{
 		{
 			name: "no recurse single node null",
-			spec: docs.FieldCommon("foo", ""),
+			spec: docs.FieldObject("foo", ""),
 			expected: `null
 `,
 		},
 		{
 			name: "no recurse with children",
-			spec: docs.FieldCommon("foo", "").WithChildren(
-				docs.FieldCommon("bar", ""),
-				docs.FieldCommon("baz", ""),
+			spec: docs.FieldObject("foo", "").WithChildren(
+				docs.FieldString("bar", ""),
+				docs.FieldString("baz", ""),
 			),
 			expected: `{}
 `,
 		},
 		{
 			name: "no recurse map",
-			spec: docs.FieldCommon("foo", "").Map(),
+			spec: docs.FieldString("foo", "").Map(),
 			expected: `{}
 `,
 		},
 		{
 			name: "recurse with children",
-			spec: docs.FieldCommon("foo", "").WithChildren(
-				docs.FieldCommon("bar", "").HasType(docs.FieldTypeString),
-				docs.FieldCommon("baz", "").HasType(docs.FieldTypeString).HasDefault("baz default"),
-				docs.FieldCommon("buz", "").HasType(docs.FieldTypeInt),
-				docs.FieldCommon("bev", "").HasType(docs.FieldTypeFloat),
-				docs.FieldCommon("bun", "").HasType(docs.FieldTypeBool),
-				docs.FieldCommon("bud", "").Array(),
+			spec: docs.FieldObject("foo", "").WithChildren(
+				docs.FieldString("bar", ""),
+				docs.FieldString("baz", "").HasDefault("baz default"),
+				docs.FieldInt("buz", ""),
+				docs.FieldFloat("bev", ""),
+				docs.FieldBool("bun", ""),
+				docs.FieldString("bud", "").Array(),
 			),
 			recurse: true,
 			expected: `bar: ""
@@ -603,16 +603,16 @@ func TestYAMLComponentLinting(t *testing.T) {
 					}
 					return "", false
 				}).Optional(),
-				docs.FieldCommon("foo3", "").HasType(docs.FieldTypeProcessor).Optional(),
-				docs.FieldAdvanced("foo4", "").Array().HasType(docs.FieldTypeProcessor).Optional(),
-				docs.FieldCommon("foo5", "").Map().HasType(docs.FieldTypeProcessor).Optional(),
-				docs.FieldDeprecated("foo6").Optional(),
-				docs.FieldAdvanced("foo7", "").Array().WithChildren(
+				docs.FieldProcessor("foo3", "").Optional(),
+				docs.FieldProcessor("foo4", "").Array().Advanced().Optional(),
+				docs.FieldProcessor("foo5", "").Map().Optional(),
+				docs.FieldString("foo6", "").Optional().Deprecated(),
+				docs.FieldObject("foo7", "").Array().WithChildren(
 					docs.FieldString("foochild1", "").Optional(),
-				).Optional(),
-				docs.FieldAdvanced("foo8", "").Map().WithChildren(
+				).Optional().Advanced(),
+				docs.FieldObject("foo8", "").Map().WithChildren(
 					docs.FieldInt("foochild1", "").Optional(),
-				).Optional(),
+				).Optional().Advanced(),
 			),
 		})
 		docs.RegisterDocs(docs.ComponentSpec{
@@ -956,7 +956,7 @@ func TestYAMLLinting(t *testing.T) {
 		},
 		{
 			name: "expected object got string",
-			inputSpec: docs.FieldCommon("foo", "").WithChildren(
+			inputSpec: docs.FieldObject("foo", "").WithChildren(
 				docs.FieldString("bar", ""),
 			),
 			inputConf: `"foo"`,
@@ -966,7 +966,7 @@ func TestYAMLLinting(t *testing.T) {
 		},
 		{
 			name: "expected string got object",
-			inputSpec: docs.FieldCommon("foo", "").WithChildren(
+			inputSpec: docs.FieldObject("foo", "").WithChildren(
 				docs.FieldString("bar", ""),
 			),
 			inputConf: `bar: {}`,
@@ -976,8 +976,8 @@ func TestYAMLLinting(t *testing.T) {
 		},
 		{
 			name: "expected string got object nested",
-			inputSpec: docs.FieldCommon("foo", "").WithChildren(
-				docs.FieldCommon("bar", "").WithChildren(
+			inputSpec: docs.FieldObject("foo", "").WithChildren(
+				docs.FieldObject("bar", "").WithChildren(
 					docs.FieldString("baz", ""),
 				),
 			),
@@ -989,7 +989,7 @@ func TestYAMLLinting(t *testing.T) {
 		},
 		{
 			name: "missing non-optional field",
-			inputSpec: docs.FieldCommon("foo", "").WithChildren(
+			inputSpec: docs.FieldObject("foo", "").WithChildren(
 				docs.FieldString("bar", "").HasDefault("barv"),
 				docs.FieldString("baz", ""),
 				docs.FieldString("buz", "").Optional(),
@@ -1020,30 +1020,30 @@ func TestYAMLSanitation(t *testing.T) {
 			Name: fmt.Sprintf("testyamlsanitfoo%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().WithChildren(
-				docs.FieldCommon("foo1", ""),
-				docs.FieldAdvanced("foo2", ""),
-				docs.FieldCommon("foo3", "").HasType(docs.FieldTypeProcessor),
-				docs.FieldAdvanced("foo4", "").Array().HasType(docs.FieldTypeProcessor),
-				docs.FieldCommon("foo5", "").Map().HasType(docs.FieldTypeProcessor),
-				docs.FieldDeprecated("foo6"),
+				docs.FieldString("foo1", ""),
+				docs.FieldString("foo2", "").Advanced(),
+				docs.FieldProcessor("foo3", ""),
+				docs.FieldProcessor("foo4", "").Array().Advanced(),
+				docs.FieldProcessor("foo5", "").Map(),
+				docs.FieldString("foo6", "").Deprecated(),
 			),
 		})
 		docs.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testyamlsanitbar%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().Array().WithChildren(
-				docs.FieldCommon("bar1", ""),
-				docs.FieldAdvanced("bar2", ""),
-				docs.FieldCommon("bar3", "").HasType(docs.FieldTypeProcessor),
+				docs.FieldString("bar1", ""),
+				docs.FieldString("bar2", "").Advanced(),
+				docs.FieldProcessor("bar3", ""),
 			),
 		})
 		docs.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testyamlsanitbaz%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().Map().WithChildren(
-				docs.FieldCommon("baz1", ""),
-				docs.FieldAdvanced("baz2", ""),
-				docs.FieldCommon("baz3", "").HasType(docs.FieldTypeProcessor),
+				docs.FieldString("baz1", ""),
+				docs.FieldString("baz2", "").Advanced(),
+				docs.FieldProcessor("baz3", ""),
 			),
 		})
 	}

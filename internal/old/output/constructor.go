@@ -18,20 +18,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
 
-// Category describes the general category of an output.
-type Category string
-
-// Output categories
-var (
-	CategoryLocal    Category = "Local"
-	CategoryAWS      Category = "AWS"
-	CategoryGCP      Category = "GCP"
-	CategoryAzure    Category = "Azure"
-	CategoryServices Category = "Services"
-	CategoryNetwork  Category = "Network"
-	CategoryUtility  Category = "Utility"
-)
-
 // TypeSpec is a constructor and a usage description for each output type.
 type TypeSpec struct {
 	constructor ConstructorFunc
@@ -46,10 +32,9 @@ type TypeSpec struct {
 	Status      docs.Status
 	Summary     string
 	Description string
-	Categories  []Category
+	Categories  []string
 	Footnotes   string
-	config      docs.FieldSpec
-	FieldSpecs  docs.FieldSpecs
+	Config      docs.FieldSpec
 	Examples    []docs.AnnotatedExample
 	Version     string
 }
@@ -99,28 +84,19 @@ type ConstructorFunc func(Config, interop.Manager, log.Modular, metrics.Type, ..
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 	inferred := docs.ComponentFieldsFromConf(NewConfig())
 	for k, v := range Constructors {
-		conf := v.config
-		if len(v.FieldSpecs) > 0 {
-			conf = docs.FieldComponent().WithChildren(v.FieldSpecs.DefaultAndTypeFrom(inferred[k])...)
-		} else {
-			conf.Children = conf.Children.DefaultAndTypeFrom(inferred[k])
-		}
+		conf := v.Config
+		conf.Children = conf.Children.DefaultAndTypeFrom(inferred[k])
 		spec := docs.ComponentSpec{
 			Type:        docs.TypeOutput,
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
+			Categories:  v.Categories,
 			Config:      conf,
 			Examples:    v.Examples,
 			Status:      v.Status,
 			Version:     v.Version,
-		}
-		if len(v.Categories) > 0 {
-			spec.Categories = make([]string, 0, len(v.Categories))
-			for _, cat := range v.Categories {
-				spec.Categories = append(spec.Categories, string(cat))
-			}
 		}
 		spec.Description = output.Description(v.Async, v.Batches, spec.Description)
 		fn(v.constructor, spec)
@@ -195,8 +171,8 @@ const (
 type Config struct {
 	Label              string                         `json:"label" yaml:"label"`
 	Type               string                         `json:"type" yaml:"type"`
-	AMQP09             writer.AMQPConfig              `json:"amqp_0_9" yaml:"amqp_0_9"`
-	AMQP1              writer.AMQP1Config             `json:"amqp_1" yaml:"amqp_1"`
+	AMQP09             AMQPConfig                     `json:"amqp_0_9" yaml:"amqp_0_9"`
+	AMQP1              AMQP1Config                    `json:"amqp_1" yaml:"amqp_1"`
 	AWSDynamoDB        writer.DynamoDBConfig          `json:"aws_dynamodb" yaml:"aws_dynamodb"`
 	AWSKinesis         writer.KinesisConfig           `json:"aws_kinesis" yaml:"aws_kinesis"`
 	AWSKinesisFirehose writer.KinesisFirehoseConfig   `json:"aws_kinesis_firehose" yaml:"aws_kinesis_firehose"`
@@ -253,8 +229,8 @@ func NewConfig() Config {
 	return Config{
 		Label:              "",
 		Type:               "stdout",
-		AMQP09:             writer.NewAMQPConfig(),
-		AMQP1:              writer.NewAMQP1Config(),
+		AMQP09:             NewAMQPConfig(),
+		AMQP1:              NewAMQP1Config(),
 		AWSDynamoDB:        writer.NewDynamoDBConfig(),
 		AWSKinesis:         writer.NewKinesisConfig(),
 		AWSKinesisFirehose: writer.NewKinesisFirehoseConfig(),

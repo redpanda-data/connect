@@ -38,7 +38,7 @@ func NewRedisHashConfig() RedisHashConfig {
 		WalkMetadata:   false,
 		WalkJSONObject: false,
 		Fields:         map[string]string{},
-		MaxInFlight:    1,
+		MaxInFlight:    64,
 	}
 }
 

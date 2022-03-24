@@ -42,17 +42,17 @@ allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/cloud/aws).`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("url", "The URL of the target SQS queue."),
-			docs.FieldCommon("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
-			docs.FieldCommon("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldCommon("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(metadata.ExcludeFilterFields()...),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("url", "The URL of the target SQS queue."),
+			docs.FieldString("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
+			docs.FieldString("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(metadata.ExcludeFilterFields()...),
 			policy.FieldSpec(),
-		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
-		Categories: []Category{
-			CategoryServices,
-			CategoryAWS,
+		).WithChildren(session.FieldSpecs()...).WithChildren(retries.FieldSpecs()...),
+		Categories: []string{
+			"Services",
+			"AWS",
 		},
 	}
 }

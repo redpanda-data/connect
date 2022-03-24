@@ -135,6 +135,7 @@ Optionally declare the target exchange (passive).
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `exchange_declare.enabled`
 
@@ -203,6 +204,7 @@ Specify criteria for which metadata values are attached to messages as headers.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `metadata.exclude_prefixes`
 
@@ -332,7 +334,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

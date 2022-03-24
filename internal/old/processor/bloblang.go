@@ -26,11 +26,11 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("bloblang", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryMapping,
-			CategoryParsing,
+		Categories: []string{
+			"Mapping",
+			"Parsing",
 		},
-		config: docs.FieldComponent().HasType(docs.FieldTypeString).IsBloblang().HasDefault(""),
+		Config: docs.FieldString("", "").IsBloblang().HasDefault(""),
 		Summary: `
 Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.`,
 		Description: `

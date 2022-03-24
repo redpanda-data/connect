@@ -40,19 +40,19 @@ Sets up an HTTP server that will send messages over HTTP(S) GET requests. If the
 Three endpoints will be registered at the paths specified by the fields ` + "`path`, `stream_path` and `ws_path`" + `. Which allow you to consume a single message batch, a continuous stream of line delimited messages, or a websocket of messages for each request respectively.
 
 When messages are batched the ` + "`path`" + ` endpoint encodes the batch according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This behaviour can be overridden by [archiving your batches](/docs/configuration/batching#post-batch-processing).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("address", "An optional address to listen from. If left empty the service wide HTTP server is used."),
-			docs.FieldCommon("path", "The path from which discrete messages can be consumed."),
-			docs.FieldCommon("stream_path", "The path from which a continuous stream of messages can be consumed."),
-			docs.FieldCommon("ws_path", "The path from which websocket connections can be established."),
-			docs.FieldCommon("allowed_verbs", "An array of verbs that are allowed for the `path` and `stream_path` HTTP endpoint.").Array(),
-			docs.FieldAdvanced("timeout", "The maximum time to wait before a blocking, inactive connection is dropped (only applies to the `path` endpoint)."),
-			docs.FieldAdvanced("cert_file", "An optional certificate file to use for TLS connections. Only applicable when an `address` is specified."),
-			docs.FieldAdvanced("key_file", "An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified."),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("address", "An optional address to listen from. If left empty the service wide HTTP server is used."),
+			docs.FieldString("path", "The path from which discrete messages can be consumed."),
+			docs.FieldString("stream_path", "The path from which a continuous stream of messages can be consumed."),
+			docs.FieldString("ws_path", "The path from which websocket connections can be established."),
+			docs.FieldString("allowed_verbs", "An array of verbs that are allowed for the `path` and `stream_path` HTTP endpoint.").Array(),
+			docs.FieldString("timeout", "The maximum time to wait before a blocking, inactive connection is dropped (only applies to the `path` endpoint).").Advanced(),
+			docs.FieldString("cert_file", "An optional certificate file to use for TLS connections. Only applicable when an `address` is specified.").Advanced(),
+			docs.FieldString("key_file", "An optional certificate key file to use for TLS connections. Only applicable when an `address` is specified.").Advanced(),
 			corsSpec,
-		},
-		Categories: []Category{
-			CategoryNetwork,
+		),
+		Categories: []string{
+			"Network",
 		},
 	}
 }

@@ -25,8 +25,8 @@ func init() {
 			p, err := NewWorkflow(conf.Workflow, mgr)
 			return p, err
 		},
-		Categories: []Category{
-			CategoryComposition,
+		Categories: []string{
+			"Composition",
 		},
 		Status: docs.StatusStable,
 		Summary: `
@@ -241,7 +241,7 @@ processor_resources:
 `,
 			},
 		},
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("meta_path", "A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution."),
 			docs.FieldString(
 				"order",
@@ -253,11 +253,11 @@ processor_resources:
 				"branch_resources",
 				"An optional list of [`branch` processor](/docs/components/processors/branch) names that are configured as [resources](#resources). These resources will be included in the workflow with any branches configured inline within the [`branches`](#branches) field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.",
 			).AtVersion("3.38.0").Advanced().Array(),
-			docs.FieldCommon(
+			docs.FieldObject(
 				"branches",
 				"An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.",
 			).Map().WithChildren(branchFields...),
-		},
+		),
 	}
 }
 

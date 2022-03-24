@@ -19,6 +19,5 @@ func Spec() docs.FieldSpecs {
 		docs.FieldString("cert_file", "An optional certificate file for enabling TLS.").Advanced().HasDefault(""),
 		docs.FieldString("key_file", "An optional key file for enabling TLS.").Advanced().HasDefault(""),
 		httpdocs.ServerCORSFieldSpec(),
-		docs.FieldDeprecated("read_timeout"),
 	}
 }

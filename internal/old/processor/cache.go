@@ -29,23 +29,23 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("cache", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryIntegration,
+		Categories: []string{
+			"Integration",
 		},
 		Summary: `
 Performs operations against a [cache resource](/docs/components/caches/about) for each message, allowing you to store or retrieve data within message payloads.`,
 		Description: `
 This processor will interpolate functions within the ` + "`key` and `value`" + ` fields individually for each message. This allows you to specify dynamic keys and values based on the contents of the message payloads and metadata. You can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("resource", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),
-			docs.FieldCommon("operator", "The [operation](#operators) to perform with the cache.").HasOptions("set", "add", "get", "delete"),
-			docs.FieldCommon("key", "A key to use with the cache.").IsInterpolated(),
-			docs.FieldCommon("value", "A value to use with the cache (when applicable).").IsInterpolated(),
-			docs.FieldAdvanced(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("resource", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),
+			docs.FieldString("operator", "The [operation](#operators) to perform with the cache.").HasOptions("set", "add", "get", "delete"),
+			docs.FieldString("key", "A key to use with the cache.").IsInterpolated(),
+			docs.FieldString("value", "A value to use with the cache (when applicable).").IsInterpolated(),
+			docs.FieldString(
 				"ttl", "The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, those that do will have a configuration field `default_ttl`, and those that do not will fall back to their generally configured TTL setting.",
 				"60s", "5m", "36h",
-			).IsInterpolated().AtVersion("3.33.0"),
-		},
+			).IsInterpolated().AtVersion("3.33.0").Advanced(),
+		),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "Deduplication",

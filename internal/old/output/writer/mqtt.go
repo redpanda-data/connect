@@ -54,7 +54,7 @@ func NewMQTTConfig() MQTTConfig {
 		Password:       "",
 		ConnectTimeout: "30s",
 		WriteTimeout:   "3s",
-		MaxInFlight:    1,
+		MaxInFlight:    64,
 		KeepAlive:      30,
 		TLS:            tls.NewConfig(),
 	}

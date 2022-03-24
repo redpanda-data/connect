@@ -48,24 +48,24 @@ In order to have a different path for each object you should use function interp
 
 ` + multipartCodecDoc,
 		Async: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString(
 				"address",
 				"The address of the server to connect to that has the target files.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"path",
 				"The file to save the messages to on the server.",
 			),
 			codec.WriterDocs,
-			docs.FieldCommon(
+			docs.FieldObject(
 				"credentials",
 				"The credentials to use to log into the server.",
 			).WithChildren(sftpSetup.CredentialsDocs()...),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		},
-		Categories: []Category{
-			CategoryNetwork,
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		),
+		Categories: []string{
+			"Network",
 		},
 	}
 }

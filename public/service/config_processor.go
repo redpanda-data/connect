@@ -15,7 +15,7 @@ import (
 // FieldProcessor.
 func NewProcessorField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeProcessor),
+		field: docs.FieldProcessor(name, ""),
 	}
 }
 
@@ -50,7 +50,7 @@ func (p *ParsedConfig) FieldProcessor(path ...string) (*OwnedProcessor, error) {
 // method FieldProcessorList.
 func NewProcessorListField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").Array().HasType(docs.FieldTypeProcessor),
+		field: docs.FieldProcessor(name, "").Array(),
 	}
 }
 

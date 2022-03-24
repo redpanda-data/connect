@@ -25,16 +25,16 @@ The field ` + "`key`" + ` supports
 you to create a unique key for each message.`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: old.ConfigDocs().Add(
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
+			docs.FieldString(
 				"key", "The key for each message, function interpolations can be optionally used to create a unique key per message.",
 				"benthos_list", "${!meta(\"kafka_key\")}", "${!json(\"doc.id\")}", "${!count(\"msgs\")}",
 			).IsInterpolated(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
 		),
-		Categories: []Category{
-			CategoryServices,
+		Categories: []string{
+			"Services",
 		},
 	}
 }

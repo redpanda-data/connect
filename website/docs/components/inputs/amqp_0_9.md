@@ -140,6 +140,7 @@ then the declaration passively verifies that they match the target fields.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `queue_declare.enabled`
 
@@ -306,7 +307,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples

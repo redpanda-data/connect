@@ -34,20 +34,18 @@ func init() {
 	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 		return NewOutput(c.MongoDB, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
-		Name:    output.TypeMongoDB,
-		Type:    docs.TypeOutput,
-		Status:  docs.StatusExperimental,
-		Version: "3.43.0",
-		Categories: []string{
-			string(output.CategoryServices),
-		},
+		Name:        output.TypeMongoDB,
+		Type:        docs.TypeOutput,
+		Status:      docs.StatusExperimental,
+		Version:     "3.43.0",
+		Categories:  []string{"Services"},
 		Summary:     `Inserts items into a MongoDB collection.`,
 		Description: ioutput.Description(true, true, ""),
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
 				outputOperationDocs(client.OperationUpdateOne),
-				docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
-				docs.FieldCommon(
+				docs.FieldString("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
+				docs.FieldObject(
 					"write_concern",
 					"The write concern settings for the mongo connection.",
 				).WithChildren(writeConcernDocs()...),
@@ -71,12 +69,12 @@ func init() {
 						"except insert-one. It is used to improve performance of finding the documents in the mongodb.",
 					mapExamples()...,
 				),
-				docs.FieldCommon(
+				docs.FieldBool(
 					"upsert",
 					"The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,"+
 						"the document is updated or replaced accordingly, otherwise it is created.",
-				).HasDefault(false).HasType(docs.FieldTypeBool).AtVersion("3.60.0"),
-				docs.FieldCommon(
+				).HasDefault(false).AtVersion("3.60.0"),
+				docs.FieldInt(
 					"max_in_flight",
 					"The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 				policy.FieldSpec(),

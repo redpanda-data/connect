@@ -77,7 +77,7 @@ child nodes processors.`,
 		},
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldInt("copies", "Whatever is specified within `inputs` will be created this many times.").Advanced().HasDefault(1),
-			docs.FieldCommon("inputs", "A list of inputs to create.").Array().HasType(docs.FieldTypeInput).HasDefault([]interface{}{}),
+			docs.FieldInput("inputs", "A list of inputs to create.").Array().HasDefault([]interface{}{}),
 			policy.FieldSpec(),
 		),
 	})

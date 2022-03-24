@@ -35,8 +35,8 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("awk", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryMapping,
+		Categories: []string{
+			"Mapping",
 		},
 		Summary: `
 Executes an AWK program on messages. This processor is very powerful as it
@@ -296,10 +296,10 @@ optional, and if omitted the level ` + "`INFO`" + ` will be used.
 
 [goawk]: https://github.com/benhoyt/goawk
 [goawk.differences]: https://github.com/benhoyt/goawk#differences-from-awk`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("codec", "A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.").HasOptions("none", "text", "json"),
-			docs.FieldCommon("program", "An AWK program to execute"),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("codec", "A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.").HasOptions("none", "text", "json"),
+			docs.FieldString("program", "An AWK program to execute"),
+		),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "JSON Mapping and Arithmetic",

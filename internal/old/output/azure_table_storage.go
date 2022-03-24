@@ -57,40 +57,40 @@ properties:
 ` + "```" + ``,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString(
 				"storage_account",
 				"The storage account to upload messages to. This field is ignored if `storage_connection_string` is set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_access_key",
 				"The storage account access key. This field is ignored if `storage_connection_string` is set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_connection_string",
 				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.",
 			),
-			docs.FieldCommon("table_name", "The table to store messages into.",
+			docs.FieldString("table_name", "The table to store messages into.",
 				`${!meta("kafka_topic")}`,
 			).IsInterpolated(),
-			docs.FieldCommon("partition_key", "The partition key.",
+			docs.FieldString("partition_key", "The partition key.",
 				`${!json("date")}`,
 			).IsInterpolated(),
-			docs.FieldCommon("row_key", "The row key.",
+			docs.FieldString("row_key", "The row key.",
 				`${!json("device")}-${!uuid_v4()}`,
 			).IsInterpolated(),
 			docs.FieldString("properties", "A map of properties to store into the table.").IsInterpolated().Map(),
-			docs.FieldAdvanced("insert_type", "Type of insert operation").HasOptions(
+			docs.FieldString("insert_type", "Type of insert operation").HasOptions(
 				"INSERT", "INSERT_MERGE", "INSERT_REPLACE",
-			).IsInterpolated(),
-			docs.FieldCommon("max_in_flight",
+			).IsInterpolated().Advanced(),
+			docs.FieldInt("max_in_flight",
 				"The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
+			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
 			policy.FieldSpec(),
-		},
-		Categories: []Category{
-			CategoryServices,
-			CategoryAzure,
+		),
+		Categories: []string{
+			"Services",
+			"Azure",
 		},
 	}
 }

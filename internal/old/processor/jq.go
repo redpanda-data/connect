@@ -26,8 +26,8 @@ func init() {
 			return processor.NewV2ToV1Processor("jq", p, mgr.Metrics()), nil
 		},
 		Status: docs.StatusStable,
-		Categories: []Category{
-			CategoryMapping,
+		Categories: []string{
+			"Mapping",
 		},
 		Summary: `
 Transforms and filters messages using jq queries.`,
@@ -95,11 +95,11 @@ pipeline:
 `,
 			},
 		},
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("query", "The jq query to filter and transform messages with."),
-			docs.FieldAdvanced("raw", "Whether to process the input as a raw string instead of as JSON."),
-			docs.FieldAdvanced("output_raw", "Whether to output raw text (unquoted) instead of JSON strings when the emitted values are string types."),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("query", "The jq query to filter and transform messages with."),
+			docs.FieldBool("raw", "Whether to process the input as a raw string instead of as JSON.").Advanced(),
+			docs.FieldBool("output_raw", "Whether to output raw text (unquoted) instead of JSON strings when the emitted values are string types.").Advanced(),
+		),
 	}
 }
 

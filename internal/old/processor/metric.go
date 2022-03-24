@@ -22,22 +22,22 @@ import (
 func init() {
 	Constructors[TypeMetric] = TypeSpec{
 		constructor: NewMetric,
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Summary: "Emit custom metrics by extracting values from messages.",
 		Description: `
 This processor works by evaluating an [interpolated field ` + "`value`" + `](/docs/configuration/interpolation#bloblang-queries) for each message and updating a emitted metric according to the [type](#types).
 
 Custom metrics such as these are emitted along with Benthos internal metrics, where you can customize where metrics are sent, which metric names are emitted and rename them as/when appropriate. For more information check out the [metrics docs here](/docs/components/metrics/about).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("type", "The metric [type](#types) to create.").HasOptions(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("type", "The metric [type](#types) to create.").HasOptions(
 				"counter",
 				"counter_by",
 				"gauge",
 				"timing",
 			),
-			docs.FieldCommon("name", "The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics."),
+			docs.FieldString("name", "The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics."),
 			docs.FieldString(
 				"labels", "A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.",
 				map[string]string{
@@ -45,8 +45,8 @@ Custom metrics such as these are emitted along with Benthos internal metrics, wh
 					"topic": "${! meta(\"kafka_topic\") }",
 				},
 			).IsInterpolated().Map(),
-			docs.FieldCommon("value", "For some metric types specifies a value to set, increment.").IsInterpolated(),
-		},
+			docs.FieldString("value", "For some metric types specifies a value to set, increment.").IsInterpolated(),
+		),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title:   "Counter",

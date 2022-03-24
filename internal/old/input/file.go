@@ -27,12 +27,12 @@ func init() {
 		constructor: fromSimpleConstructor(NewFile),
 		Summary: `
 Consumes data from files on disk, emitting messages according to a chosen codec.`,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("paths", "A list of paths to consume sequentially. Glob patterns are supported, including super globs (double star).").Array(),
 			codec.ReaderDocs,
-			docs.FieldAdvanced("max_buffer", "The largest token size expected when consuming delimited files."),
-			docs.FieldAdvanced("delete_on_finish", "Whether to delete consumed files from the disk once they are fully consumed."),
-		},
+			docs.FieldInt("max_buffer", "The largest token size expected when consuming delimited files.").Advanced(),
+			docs.FieldBool("delete_on_finish", "Whether to delete consumed files from the disk once they are fully consumed.").Advanced(),
+		),
 		Description: `
 ### Metadata
 
@@ -44,8 +44,8 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
-		Categories: []Category{
-			CategoryLocal,
+		Categories: []string{
+			"Local",
 		},
 		Examples: []docs.AnnotatedExample{
 			{

@@ -45,11 +45,11 @@ func init() {
 		Summary: `
 Prints messages to stdout as a continuous stream of data, dividing messages according to the specified codec.`,
 		Description: multipartCodecDoc,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			codec.WriterDocs.AtVersion("3.46.0"),
-		},
-		Categories: []Category{
-			CategoryLocal,
+		),
+		Categories: []string{
+			"Local",
 		},
 	}
 }

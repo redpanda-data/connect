@@ -1,4 +1,4 @@
-package reader
+package amqp09
 
 import (
 	"context"
@@ -14,67 +14,109 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-var errAMQP09Connect = errors.New("AMQP 0.9 Connect")
+func init() {
+	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+		var a reader.Async
+		var err error
+		if a, err = newAMQP09Reader(c.AMQP09, nm.Logger()); err != nil {
+			return nil, err
+		}
+		return oinput.NewAsyncReader("amqp_0_9", true, a, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name: "amqp_0_9",
+		Summary: `
+Connects to an AMQP (0.91) queue. AMQP is a messaging protocol used by various
+message brokers, including RabbitMQ.`,
+		Description: `
+TLS is automatic when connecting to an ` + "`amqps`" + ` URL, but custom
+settings can be enabled in the ` + "`tls`" + ` section.
 
-// AMQP09QueueDeclareConfig contains fields indicating whether the target AMQP09
-// queue needs to be declared and bound to an exchange, as well as any fields
-// specifying how to accomplish that.
-type AMQP09QueueDeclareConfig struct {
-	Enabled bool `json:"enabled" yaml:"enabled"`
-	Durable bool `json:"durable" yaml:"durable"`
-}
+### Metadata
 
-// AMQP09BindingConfig contains fields describing a queue binding to be
-// declared.
-type AMQP09BindingConfig struct {
-	Exchange   string `json:"exchange" yaml:"exchange"`
-	RoutingKey string `json:"key" yaml:"key"`
-}
+This input adds the following metadata fields to each message:
 
-// AMQP09Config contains configuration for the AMQP09 input type.
-type AMQP09Config struct {
-	URLs               []string                 `json:"urls" yaml:"urls"`
-	Queue              string                   `json:"queue" yaml:"queue"`
-	QueueDeclare       AMQP09QueueDeclareConfig `json:"queue_declare" yaml:"queue_declare"`
-	BindingsDeclare    []AMQP09BindingConfig    `json:"bindings_declare" yaml:"bindings_declare"`
-	ConsumerTag        string                   `json:"consumer_tag" yaml:"consumer_tag"`
-	AutoAck            bool                     `json:"auto_ack" yaml:"auto_ack"`
-	NackRejectPatterns []string                 `json:"nack_reject_patterns" yaml:"nack_reject_patterns"`
-	PrefetchCount      int                      `json:"prefetch_count" yaml:"prefetch_count"`
-	PrefetchSize       int                      `json:"prefetch_size" yaml:"prefetch_size"`
-	TLS                btls.Config              `json:"tls" yaml:"tls"`
-}
+` + "``` text" + `
+- amqp_content_type
+- amqp_content_encoding
+- amqp_delivery_mode
+- amqp_priority
+- amqp_correlation_id
+- amqp_reply_to
+- amqp_expiration
+- amqp_message_id
+- amqp_timestamp
+- amqp_type
+- amqp_user_id
+- amqp_app_id
+- amqp_consumer_tag
+- amqp_delivery_tag
+- amqp_redelivered
+- amqp_exchange
+- amqp_routing_key
+- All existing message headers, including nested headers prefixed with the key of their respective parent.
+` + "```" + `
 
-// NewAMQP09Config creates a new AMQP09Config with default values.
-func NewAMQP09Config() AMQP09Config {
-	return AMQP09Config{
-		URLs:  []string{},
-		Queue: "",
-		QueueDeclare: AMQP09QueueDeclareConfig{
-			Enabled: false,
-			Durable: true,
+You can access these metadata fields using
+[function interpolation](/docs/configuration/interpolation#metadata).`,
+		Categories: []string{
+			"Services",
 		},
-		ConsumerTag:        "",
-		AutoAck:            false,
-		NackRejectPatterns: []string{},
-		PrefetchCount:      10,
-		PrefetchSize:       0,
-		TLS:                btls.NewConfig(),
-		BindingsDeclare:    []AMQP09BindingConfig{},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("urls",
+				"A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.",
+				[]string{"amqp://guest:guest@127.0.0.1:5672/"},
+				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},
+				[]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"},
+			).Array().AtVersion("3.58.0").HasDefault([]interface{}{}),
+			docs.FieldString("queue", "An AMQP queue to consume from.").HasDefault(""),
+			docs.FieldObject("queue_declare", `
+Allows you to passively declare the target queue. If the queue already exists
+then the declaration passively verifies that they match the target fields.`,
+			).WithChildren(
+				docs.FieldBool("enabled", "Whether to enable queue declaration.").HasDefault(false),
+				docs.FieldBool("durable", "Whether the declared queue is durable.").HasDefault(false),
+			).Advanced().HasDefault(map[string]interface{}{}),
+			docs.FieldObject("bindings_declare",
+				"Allows you to passively declare bindings for the target queue.",
+				[]interface{}{
+					map[string]interface{}{
+						"exchange": "foo",
+						"key":      "bar",
+					},
+				},
+			).Array().WithChildren(
+				docs.FieldString("exchange", "The exchange of the declared binding.").HasDefault(""),
+				docs.FieldString("key", "The key of the declared binding.").HasDefault(""),
+			).Advanced().HasDefault([]interface{}{}),
+			docs.FieldString("consumer_tag", "A consumer tag.").HasDefault(""),
+			docs.FieldBool("auto_ack", "Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees.").Advanced().HasDefault(false),
+			docs.FieldString("nack_reject_patterns", "A list of regular expression patterns whereby if a message that has failed to be delivered by Benthos has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.", []string{"^reject me please:.+$"}).Array().Advanced().AtVersion("3.64.0").HasDefault([]interface{}{}),
+			docs.FieldInt("prefetch_count", "The maximum number of pending messages to have consumed at a time.").HasDefault(10),
+			docs.FieldInt("prefetch_size", "The maximum amount of pending messages measured in bytes to have consumed at a time.").Advanced().HasDefault(0),
+			btls.FieldSpec(),
+		),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// AMQP09 is an input type that reads messages via the AMQP09 0.9 protocol.
-type AMQP09 struct {
+var errAMQP09Connect = errors.New("failed to connect to server")
+
+type amqp09Reader struct {
 	conn         *amqp.Connection
 	amqpChan     *amqp.Channel
 	consumerChan <-chan amqp.Delivery
@@ -84,19 +126,16 @@ type AMQP09 struct {
 
 	nackRejectPattens []*regexp.Regexp
 
-	conf  AMQP09Config
-	stats metrics.Type
-	log   log.Modular
+	conf oinput.AMQP09Config
+	log  log.Modular
 
 	m sync.RWMutex
 }
 
-// NewAMQP09 creates a new AMQP09 input type.
-func NewAMQP09(conf AMQP09Config, log log.Modular, stats metrics.Type) (*AMQP09, error) {
-	a := AMQP09{
-		conf:  conf,
-		stats: stats,
-		log:   log,
+func newAMQP09Reader(conf oinput.AMQP09Config, log log.Modular) (*amqp09Reader, error) {
+	a := amqp09Reader{
+		conf: conf,
+		log:  log,
 	}
 
 	if len(conf.URLs) == 0 {
@@ -131,7 +170,7 @@ func NewAMQP09(conf AMQP09Config, log log.Modular, stats metrics.Type) (*AMQP09,
 //------------------------------------------------------------------------------
 
 // ConnectWithContext establishes a connection to an AMQP09 server.
-func (a *AMQP09) ConnectWithContext(ctx context.Context) (err error) {
+func (a *amqp09Reader) ConnectWithContext(ctx context.Context) (err error) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
@@ -204,7 +243,7 @@ func (a *AMQP09) ConnectWithContext(ctx context.Context) (err error) {
 }
 
 // disconnect safely closes a connection to an AMQP09 server.
-func (a *AMQP09) disconnect() error {
+func (a *amqp09Reader) disconnect() error {
 	a.m.Lock()
 	defer a.m.Unlock()
 
@@ -272,7 +311,7 @@ func amqpSetMetadata(p *message.Part, k string, v interface{}) {
 }
 
 // ReadWithContext a new AMQP09 message.
-func (a *AMQP09) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
+func (a *amqp09Reader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	var c <-chan amqp.Delivery
 
 	a.m.RLock()
@@ -350,17 +389,17 @@ func (a *AMQP09) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckF
 }
 
 // CloseAsync shuts down the AMQP09 input and stops processing requests.
-func (a *AMQP09) CloseAsync() {
+func (a *amqp09Reader) CloseAsync() {
 	_ = a.disconnect()
 }
 
 // WaitForClose blocks until the AMQP09 input has closed down.
-func (a *AMQP09) WaitForClose(timeout time.Duration) error {
+func (a *amqp09Reader) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
 // reDial connection to amqp with one or more fallback URLs
-func (a *AMQP09) reDial(urls []string) (conn *amqp.Connection, err error) {
+func (a *amqp09Reader) reDial(urls []string) (conn *amqp.Connection, err error) {
 	for _, u := range urls {
 		conn, err = a.dial(u)
 		if err != nil {
@@ -375,7 +414,7 @@ func (a *AMQP09) reDial(urls []string) (conn *amqp.Connection, err error) {
 }
 
 // dial attempts to connect to amqp URL
-func (a *AMQP09) dial(amqpURL string) (conn *amqp.Connection, err error) {
+func (a *amqp09Reader) dial(amqpURL string) (conn *amqp.Connection, err error) {
 	u, err := url.Parse(amqpURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid AMQP URL: %w", err)
@@ -402,5 +441,3 @@ func (a *AMQP09) dial(amqpURL string) (conn *amqp.Connection, err error) {
 
 	return conn, nil
 }
-
-//------------------------------------------------------------------------------

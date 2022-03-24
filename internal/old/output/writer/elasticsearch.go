@@ -83,7 +83,7 @@ func NewElasticsearchConfig() ElasticsearchConfig {
 			Config:  sess.NewConfig(),
 		},
 		GzipCompression: false,
-		MaxInFlight:     1,
+		MaxInFlight:     64,
 		Config:          rConf,
 		Batching:        policy.NewConfig(),
 	}

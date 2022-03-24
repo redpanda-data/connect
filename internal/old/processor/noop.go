@@ -17,7 +17,7 @@ func init() {
 	Constructors[TypeNoop] = TypeSpec{
 		constructor: NewNoop,
 		Summary:     "Noop is a processor that does nothing, the message passes through unchanged. Why? Sometimes doing nothing is the braver option.",
-		config:      docs.FieldComponent().HasType(docs.FieldTypeObject),
+		Config:      docs.FieldObject("", ""),
 	}
 }
 

@@ -25,8 +25,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("insert_part", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryComposition,
+		Categories: []string{
+			"Composition",
 		},
 		Summary: `
 Insert a new message into a batch at an index. If the specified index is greater
@@ -43,10 +43,10 @@ the batch.
 
 This processor will interpolate functions within the 'content' field, you can
 find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("index", "The index within the batch to insert the message at."),
-			docs.FieldCommon("content", "The content of the message being inserted.").IsInterpolated(),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldInt("index", "The index within the batch to insert the message at."),
+			docs.FieldString("content", "The content of the message being inserted.").IsInterpolated(),
+		),
 	}
 }
 

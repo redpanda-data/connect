@@ -23,8 +23,8 @@ func init() {
 			return processor.NewV2ToV1Processor("xml", p, mgr.Metrics()), nil
 		},
 		Status: docs.StatusBeta,
-		Categories: []Category{
-			CategoryParsing,
+		Categories: []string{
+			"Parsing",
 		},
 		Summary: `
 Parses messages as an XML document, performs a mutation on the data, and then
@@ -93,10 +93,10 @@ With cast set to true, the resulting JSON structure would look like this:
   }
 }
 ` + "```" + ``,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("operator", "An XML [operation](#operators) to apply to messages.").HasOptions("to_json"),
-			docs.FieldCommon("cast", "Whether to try to cast values that are numbers and booleans to the right type. Default: all values are strings."),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("operator", "An XML [operation](#operators) to apply to messages.").HasOptions("to_json"),
+			docs.FieldBool("cast", "Whether to try to cast values that are numbers and booleans to the right type. Default: all values are strings."),
+		),
 	}
 }
 

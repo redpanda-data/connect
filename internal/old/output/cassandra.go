@@ -89,7 +89,7 @@ output:
 `,
 			},
 		},
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"addresses",
 				"A list of Cassandra nodes to connect to. Multiple comma separated addresses can be specified on a single line.",
@@ -98,39 +98,39 @@ output:
 				[]string{"foo:9042,bar:9042"},
 			).Array(),
 			btls.FieldSpec(),
-			docs.FieldAdvanced(
+			docs.FieldObject(
 				"password_authenticator",
 				"An object containing the username and password.",
 			).WithChildren(
-				docs.FieldCommon("enabled", "Whether to use password authentication."),
-				docs.FieldCommon("username", "A username."),
-				docs.FieldCommon("password", "A password."),
-			),
-			docs.FieldAdvanced(
+				docs.FieldBool("enabled", "Whether to use password authentication."),
+				docs.FieldString("username", "A username."),
+				docs.FieldString("password", "A password."),
+			).Advanced(),
+			docs.FieldBool(
 				"disable_initial_host_lookup",
 				"If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.",
-			),
-			docs.FieldCommon("query", "A query to execute for each message."),
+			).Advanced(),
+			docs.FieldString("query", "A query to execute for each message."),
 			docs.FieldBloblang(
 				"args_mapping",
 				"A [Bloblang mapping](/docs/guides/bloblang/about) that can be used to provide arguments to Cassandra queries. The result of the query must be an array containing a matching number of elements to the query arguments.").AtVersion("3.55.0"),
-			docs.FieldAdvanced(
+			docs.FieldString(
 				"consistency",
 				"The consistency level to use.",
 			).HasOptions(
 				"ANY", "ONE", "TWO", "THREE", "QUORUM", "ALL", "LOCAL_QUORUM", "EACH_QUORUM", "LOCAL_ONE",
-			),
-			docs.FieldAdvanced("max_retries", "The maximum number of retries before giving up on a request."),
-			docs.FieldAdvanced("backoff", "Control time intervals between retry attempts.").WithChildren(
-				docs.FieldAdvanced("initial_interval", "The initial period to wait between retry attempts."),
-				docs.FieldAdvanced("max_interval", "The maximum period to wait between retry attempts."),
-				docs.FieldDeprecated("max_elapsed_time"),
-			),
+			).Advanced(),
+			docs.FieldInt("max_retries", "The maximum number of retries before giving up on a request.").Advanced(),
+			docs.FieldObject("backoff", "Control time intervals between retry attempts.").WithChildren(
+				docs.FieldString("initial_interval", "The initial period to wait between retry attempts."),
+				docs.FieldString("max_interval", "The maximum period to wait between retry attempts."),
+				docs.FieldString("max_elapsed_time", "").Deprecated(),
+			).Advanced(),
 			docs.FieldString("timeout", "The client connection timeout.").AtVersion("3.63.0"),
-		}.Merge(docs.FieldSpecs{
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		).WithChildren(
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
-		}),
+		),
 	}
 }
 

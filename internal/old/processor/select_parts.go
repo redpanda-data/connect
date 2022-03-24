@@ -21,8 +21,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("select_parts", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Summary: `
 Cherry pick a set of messages from a batch by their index. Indexes larger than
@@ -42,9 +42,9 @@ the last element with be selected, and so on.
 
 This processor is only applicable to [batched messages](/docs/configuration/batching).`,
 		UsesBatches: true,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldInt("parts", `An array of message indexes of a batch. Indexes can be negative, and if so the part will be selected from the end counting backwards starting from -1.`).Array(),
-		},
+		),
 	}
 }
 

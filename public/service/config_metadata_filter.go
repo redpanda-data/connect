@@ -14,7 +14,7 @@ import (
 // regular expression based methods. This field is often used for making
 // metadata written to output destinations explicit.
 func NewMetadataFilterField(name string) *ConfigField {
-	field := docs.FieldCommon(name, "").WithChildren(metadata.IncludeFilterDocs()...)
+	field := docs.FieldObject(name, "").WithChildren(metadata.IncludeFilterDocs()...)
 	return &ConfigField{field: field}
 }
 

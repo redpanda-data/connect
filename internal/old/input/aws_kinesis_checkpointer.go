@@ -20,11 +20,11 @@ import (
 //------------------------------------------------------------------------------
 
 var dynamoDBCheckpointFields = docs.FieldSpecs{
-	docs.FieldCommon("table", "The name of the table to access."),
-	docs.FieldCommon("create", "Whether, if the table does not exist, it should be created."),
-	docs.FieldAdvanced("billing_mode", "When creating the table determines the billing mode.").HasOptions("PROVISIONED", "PAY_PER_REQUEST"),
-	docs.FieldAdvanced("read_capacity_units", "Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`."),
-	docs.FieldAdvanced("write_capacity_units", "Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`."),
+	docs.FieldString("table", "The name of the table to access."),
+	docs.FieldBool("create", "Whether, if the table does not exist, it should be created."),
+	docs.FieldString("billing_mode", "When creating the table determines the billing mode.").HasOptions("PROVISIONED", "PAY_PER_REQUEST").Advanced(),
+	docs.FieldInt("read_capacity_units", "Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.").Advanced(),
+	docs.FieldInt("write_capacity_units", "Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").Advanced(),
 }
 
 // DynamoDBCheckpointConfig contains configuration parameters for a DynamoDB

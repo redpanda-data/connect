@@ -31,16 +31,16 @@ will also be set as key/value pairs, if there is a key collision between
 a metadata item and the body then the body takes precedence.`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: old.ConfigDocs().Add(
-			docs.FieldCommon("stream", "The stream to add messages to."),
-			docs.FieldCommon("body_key", "A key to set the raw body of the message to."),
-			docs.FieldCommon("max_length", "When greater than zero enforces a rough cap on the length of the target stream."),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldCommon("metadata", "Specify criteria for which metadata values are included in the message body.").WithChildren(metadata.ExcludeFilterFields()...),
+		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
+			docs.FieldString("stream", "The stream to add messages to."),
+			docs.FieldString("body_key", "A key to set the raw body of the message to."),
+			docs.FieldInt("max_length", "When greater than zero enforces a rough cap on the length of the target stream."),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldObject("metadata", "Specify criteria for which metadata values are included in the message body.").WithChildren(metadata.ExcludeFilterFields()...),
 			policy.FieldSpec(),
 		),
-		Categories: []Category{
-			CategoryServices,
+		Categories: []string{
+			"Services",
 		},
 	}
 }

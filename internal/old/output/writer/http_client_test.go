@@ -179,7 +179,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 	conf := NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.PropagateResponse = true
-	conf.CopyResponseHeaders = true
+	conf.ExtractMetadata.IncludePatterns = []string{".*"}
 
 	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {

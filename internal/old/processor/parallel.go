@@ -26,8 +26,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("parallel", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryComposition,
+		Categories: []string{
+			"Composition",
 		},
 		Summary: `
 A processor that applies a list of child processors to messages of a batch as
@@ -38,10 +38,10 @@ processed in parallel.`,
 The field ` + "`cap`" + `, if greater than zero, caps the maximum number of
 parallel processing threads.`,
 		UsesBatches: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("cap", "The maximum number of messages to have processing at a given time."),
-			docs.FieldCommon("processors", "A list of child processors to apply.").Array().HasType(docs.FieldTypeProcessor),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldInt("cap", "The maximum number of messages to have processing at a given time."),
+			docs.FieldProcessor("processors", "A list of child processors to apply.").Array(),
+		),
 	}
 }
 

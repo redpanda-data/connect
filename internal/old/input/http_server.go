@@ -90,32 +90,34 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("address", "An alternative address to host from. If left empty the service wide address is used."),
-			docs.FieldCommon("path", "The endpoint path to listen for POST requests."),
-			docs.FieldCommon("ws_path", "The endpoint path to create websocket connections from."),
-			docs.FieldAdvanced("ws_welcome_message", "An optional message to deliver to fresh websocket connections."),
-			docs.FieldAdvanced("ws_rate_limit_message", "An optional message to delivery to websocket connections that are rate limited."),
-			docs.FieldCommon("allowed_verbs", "An array of verbs that are allowed for the `path` endpoint.").AtVersion("3.33.0").Array(),
-			docs.FieldCommon("timeout", "Timeout for requests. If a consumed messages takes longer than this to be delivered the connection is closed, but the message may still be delivered."),
-			docs.FieldCommon("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
-			docs.FieldAdvanced("cert_file", "Enable TLS by specifying a certificate and key file. Only valid with a custom `address`."),
-			docs.FieldAdvanced("key_file", "Enable TLS by specifying a certificate and key file. Only valid with a custom `address`."),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("address", "An alternative address to host from. If left empty the service wide address is used."),
+			docs.FieldString("path", "The endpoint path to listen for POST requests."),
+			docs.FieldString("ws_path", "The endpoint path to create websocket connections from."),
+			docs.FieldString("ws_welcome_message", "An optional message to deliver to fresh websocket connections.").Advanced(),
+			docs.FieldString("ws_rate_limit_message", "An optional message to delivery to websocket connections that are rate limited.").Advanced(),
+			docs.FieldString("allowed_verbs", "An array of verbs that are allowed for the `path` endpoint.").AtVersion("3.33.0").Array(),
+			docs.FieldString("timeout", "Timeout for requests. If a consumed messages takes longer than this to be delivered the connection is closed, but the message may still be delivered."),
+			docs.FieldString("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),
+			docs.FieldString("cert_file", "Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.").Advanced(),
+			docs.FieldString("key_file", "Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.").Advanced(),
 			corsSpec,
-			docs.FieldAdvanced("sync_response", "Customise messages returned via [synchronous responses](/docs/guides/sync_responses).").WithChildren(
-				docs.FieldCommon(
+			docs.FieldObject("sync_response", "Customise messages returned via [synchronous responses](/docs/guides/sync_responses).").WithChildren(
+				docs.FieldString(
 					"status",
 					"Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.",
 					"200", `${! json("status") }`, `${! meta("status") }`,
 				).IsInterpolated(),
-				docs.FieldString("headers", "Specify headers to return with synchronous responses.").IsInterpolated().Map().HasDefault(map[string]string{
-					"Content-Type": "application/octet-stream",
-				}),
-				docs.FieldCommon("metadata_headers", "Specify criteria for which metadata values are added to the response as headers.").WithChildren(imetadata.IncludeFilterDocs()...),
-			),
-		},
-		Categories: []Category{
-			CategoryNetwork,
+				docs.FieldString("headers", "Specify headers to return with synchronous responses.").
+					IsInterpolated().Map().
+					HasDefault(map[string]string{
+						"Content-Type": "application/octet-stream",
+					}),
+				docs.FieldObject("metadata_headers", "Specify criteria for which metadata values are added to the response as headers.").WithChildren(imetadata.IncludeFilterDocs()...),
+			).Advanced(),
+		),
+		Categories: []string{
+			"Network",
 		},
 	}
 }

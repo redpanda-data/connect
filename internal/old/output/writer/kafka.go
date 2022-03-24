@@ -78,7 +78,7 @@ func NewKafkaConfig() KafkaConfig {
 		Metadata:      metadata.NewExcludeFilterConfig(),
 		TLS:           btls.NewConfig(),
 		SASL:          sasl.NewConfig(),
-		MaxInFlight:   1,
+		MaxInFlight:   64,
 		Config:        rConf,
 		RetryAsBatch:  false,
 		Batching:      policy.NewConfig(),

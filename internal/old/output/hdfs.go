@@ -22,7 +22,7 @@ Each file is written with the path specified with the 'path' field, in order to
 have a different path for each object you should use function interpolations
 described [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async: true,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("hosts", "A list of hosts to connect to.", "localhost:9000").Array(),
 			docs.FieldString("user", "A user identifier."),
 			docs.FieldString("directory", "A directory to store message files within. If the directory does not exist it will be created."),
@@ -32,9 +32,9 @@ described [here](/docs/configuration/interpolation#bloblang-queries).`,
 			).IsInterpolated(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
-		},
-		Categories: []Category{
-			CategoryServices,
+		),
+		Categories: []string{
+			"Services",
 		},
 	}
 }

@@ -47,7 +47,7 @@ func NewSNSConfig() SNSConfig {
 		MessageDeduplicationID: "",
 		Metadata:               metadata.NewExcludeFilterConfig(),
 		Timeout:                "5s",
-		MaxInFlight:            1,
+		MaxInFlight:            64,
 	}
 }
 

@@ -315,56 +315,89 @@ func (f FieldSpec) GetLintFunc() LintFunc {
 	return nil
 }
 
+// FieldAnything returns a field spec for any typed field.
+func FieldAnything(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeUnknown)
+}
+
 // FieldObject returns a field spec for an object typed field.
 func FieldObject(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeObject)
+	return newField(name, description, examples...).HasType(FieldTypeObject)
 }
 
 // FieldString returns a field spec for a common string typed field.
 func FieldString(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeString)
+	return newField(name, description, examples...).HasType(FieldTypeString)
 }
 
 // FieldInterpolatedString returns a field spec for a string typed field
 // supporting dynamic interpolated functions.
 func FieldInterpolatedString(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeString).IsInterpolated()
+	return newField(name, description, examples...).HasType(FieldTypeString).IsInterpolated()
 }
 
 // FieldBloblang returns a field spec for a string typed field containing a
 // Bloblang mapping.
 func FieldBloblang(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeString).IsBloblang()
+	return newField(name, description, examples...).HasType(FieldTypeString).IsBloblang()
 }
 
 // FieldInt returns a field spec for a common int typed field.
 func FieldInt(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeInt)
+	return newField(name, description, examples...).HasType(FieldTypeInt)
 }
 
 // FieldFloat returns a field spec for a common float typed field.
 func FieldFloat(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeFloat)
+	return newField(name, description, examples...).HasType(FieldTypeFloat)
 }
 
 // FieldBool returns a field spec for a common bool typed field.
 func FieldBool(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeBool)
+	return newField(name, description, examples...).HasType(FieldTypeBool)
 }
 
-// FieldAdvanced returns a field spec for an advanced field.
-func FieldAdvanced(name, description string, examples ...interface{}) FieldSpec {
-	return FieldSpec{
-		Name:        name,
-		Description: description,
-		Kind:        KindScalar,
-		IsAdvanced:  true,
-		Examples:    examples,
-	}
+// FieldInput returns a field spec for an input typed field.
+func FieldInput(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeInput)
 }
 
-// FieldCommon returns a field spec for a common field.
-func FieldCommon(name, description string, examples ...interface{}) FieldSpec {
+// FieldProcessor returns a field spec for a processor typed field.
+func FieldProcessor(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeProcessor)
+}
+
+// FieldOutput returns a field spec for an output typed field.
+func FieldOutput(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeOutput)
+}
+
+// FieldBuffer returns a field spec for a buffer typed field.
+func FieldBuffer(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeBuffer)
+}
+
+// FieldCache returns a field spec for a cache typed field.
+func FieldCache(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeCache)
+}
+
+// FieldRateLimit returns a field spec for a rate limit typed field.
+func FieldRateLimit(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeRateLimit)
+}
+
+// FieldMetrics returns a field spec for a metrics typed field.
+func FieldMetrics(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeMetrics)
+}
+
+// FieldTracer returns a field spec for a tracer typed field.
+func FieldTracer(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeTracer)
+}
+
+func newField(name, description string, examples ...interface{}) FieldSpec {
 	return FieldSpec{
 		Name:        name,
 		Description: description,
@@ -377,20 +410,6 @@ func FieldCommon(name, description string, examples ...interface{}) FieldSpec {
 func FieldComponent() FieldSpec {
 	return FieldSpec{
 		Kind: KindScalar,
-	}
-}
-
-// FieldDeprecated returns a field spec for a deprecated field.
-func FieldDeprecated(name string, description ...string) FieldSpec {
-	desc := "DEPRECATED: Do not use."
-	if len(description) > 0 {
-		desc = "DEPRECATED: " + description[0]
-	}
-	return FieldSpec{
-		Name:         name,
-		Description:  desc,
-		Kind:         KindScalar,
-		IsDeprecated: true,
 	}
 }
 

@@ -10,7 +10,6 @@ import (
 	"net/http/pprof"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/gorilla/mux"
 	yaml "gopkg.in/yaml.v3"
@@ -26,7 +25,6 @@ import (
 type Config struct {
 	Address        string              `json:"address" yaml:"address"`
 	Enabled        bool                `json:"enabled" yaml:"enabled"`
-	ReadTimeout    string              `json:"read_timeout" yaml:"read_timeout"`
 	RootPath       string              `json:"root_path" yaml:"root_path"`
 	DebugEndpoints bool                `json:"debug_endpoints" yaml:"debug_endpoints"`
 	CertFile       string              `json:"cert_file" yaml:"cert_file"`
@@ -39,7 +37,6 @@ func NewConfig() Config {
 	return Config{
 		Address:        "0.0.0.0:4195",
 		Enabled:        true,
-		ReadTimeout:    "5s",
 		RootPath:       "/benthos",
 		DebugEndpoints: false,
 		CertFile:       "",
@@ -110,11 +107,6 @@ func New(
 		}
 	}
 
-	if tout := conf.ReadTimeout; len(tout) > 0 {
-		if server.ReadTimeout, err = time.ParseDuration(tout); err != nil {
-			return nil, fmt.Errorf("failed to parse read timeout string: %v", err)
-		}
-	}
 	t := &Type{
 		conf:      conf,
 		endpoints: map[string]string{},

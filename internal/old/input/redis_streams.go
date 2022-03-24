@@ -22,7 +22,7 @@ Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
 Redis stream entries are key/value pairs, as such it is necessary to specify the
 key that contains the body of the message. All other keys/value pairs are saved
 as metadata fields.`,
-		FieldSpecs: old.ConfigDocs().Add(
+		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
 			docs.FieldString("body_key", "The field key to extract the raw message from. All other keys will be stored in the message as metadata."),
 			docs.FieldString("streams", "A list of streams to consume from.").Array(),
 			docs.FieldInt("limit", "The maximum number of messages to consume from a single request."),
@@ -33,8 +33,8 @@ as metadata fields.`,
 			docs.FieldString("commit_period", "The period of time between each commit of the current offset. Offsets are always committed during shutdown.").Advanced(),
 			docs.FieldString("timeout", "The length of time to poll for new messages before reattempting.").Advanced(),
 		),
-		Categories: []Category{
-			CategoryServices,
+		Categories: []string{
+			"Services",
 		},
 	}
 }

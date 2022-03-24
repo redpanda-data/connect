@@ -18,20 +18,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
 
-// Category describes the general category of an input.
-type Category string
-
-// Input categories
-var (
-	CategoryLocal    Category = "Local"
-	CategoryAWS      Category = "AWS"
-	CategoryGCP      Category = "GCP"
-	CategoryAzure    Category = "Azure"
-	CategoryServices Category = "Services"
-	CategoryNetwork  Category = "Network"
-	CategoryUtility  Category = "Utility"
-)
-
 // TypeSpec is a struct containing constructors, markdown descriptions and an
 // optional sanitisation function for each input type.
 type TypeSpec struct {
@@ -41,10 +27,9 @@ type TypeSpec struct {
 	Version     string
 	Summary     string
 	Description string
-	Categories  []Category
+	Categories  []string
 	Footnotes   string
-	config      docs.FieldSpec
-	FieldSpecs  docs.FieldSpecs
+	Config      docs.FieldSpec
 	Examples    []docs.AnnotatedExample
 }
 
@@ -55,28 +40,19 @@ type ConstructorFunc func(Config, interop.Manager, log.Modular, metrics.Type, ..
 func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
 	inferred := docs.ComponentFieldsFromConf(NewConfig())
 	for k, v := range Constructors {
-		conf := v.config
-		if len(v.FieldSpecs) > 0 {
-			conf = docs.FieldComponent().WithChildren(v.FieldSpecs.DefaultAndTypeFrom(inferred[k])...)
-		} else {
-			conf.Children = conf.Children.DefaultAndTypeFrom(inferred[k])
-		}
+		conf := v.Config
+		conf.Children = conf.Children.DefaultAndTypeFrom(inferred[k])
 		spec := docs.ComponentSpec{
 			Type:        docs.TypeInput,
 			Name:        k,
 			Summary:     v.Summary,
 			Description: v.Description,
 			Footnotes:   v.Footnotes,
+			Categories:  v.Categories,
 			Config:      conf,
 			Examples:    v.Examples,
 			Status:      v.Status,
 			Version:     v.Version,
-		}
-		if len(v.Categories) > 0 {
-			spec.Categories = make([]string, 0, len(v.Categories))
-			for _, cat := range v.Categories {
-				spec.Categories = append(spec.Categories, string(cat))
-			}
 		}
 		fn(v.constructor, spec)
 	}
@@ -130,7 +106,6 @@ var Constructors = map[string]TypeSpec{}
 // APIs. Examples can be found in: ./internal/impl
 const (
 	TypeAMQP09            = "amqp_0_9"
-	TypeAMQP1             = "amqp_1"
 	TypeAWSKinesis        = "aws_kinesis"
 	TypeAWSS3             = "aws_s3"
 	TypeAWSSQS            = "aws_sqs"
@@ -177,8 +152,8 @@ const (
 type Config struct {
 	Label             string                    `json:"label" yaml:"label"`
 	Type              string                    `json:"type" yaml:"type"`
-	AMQP09            reader.AMQP09Config       `json:"amqp_0_9" yaml:"amqp_0_9"`
-	AMQP1             reader.AMQP1Config        `json:"amqp_1" yaml:"amqp_1"`
+	AMQP09            AMQP09Config              `json:"amqp_0_9" yaml:"amqp_0_9"`
+	AMQP1             AMQP1Config               `json:"amqp_1" yaml:"amqp_1"`
 	AWSKinesis        AWSKinesisConfig          `json:"aws_kinesis" yaml:"aws_kinesis"`
 	AWSS3             AWSS3Config               `json:"aws_s3" yaml:"aws_s3"`
 	AWSSQS            AWSSQSConfig              `json:"aws_sqs" yaml:"aws_sqs"`
@@ -224,8 +199,8 @@ func NewConfig() Config {
 	return Config{
 		Label:             "",
 		Type:              "stdin",
-		AMQP09:            reader.NewAMQP09Config(),
-		AMQP1:             reader.NewAMQP1Config(),
+		AMQP09:            NewAMQP09Config(),
+		AMQP1:             NewAMQP1Config(),
 		AWSKinesis:        NewAWSKinesisConfig(),
 		AWSS3:             NewAWSS3Config(),
 		AWSSQS:            NewAWSSQSConfig(),

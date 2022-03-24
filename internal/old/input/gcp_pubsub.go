@@ -31,17 +31,17 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
-		Categories: []Category{
-			CategoryServices,
-			CategoryGCP,
+		Categories: []string{
+			"Services",
+			"GCP",
 		},
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("project", "The project ID of the target subscription."),
-			docs.FieldCommon("subscription", "The target subscription ID."),
-			docs.FieldCommon("sync", "Enable synchronous pull mode."),
-			docs.FieldCommon("max_outstanding_messages", "The maximum number of outstanding pending messages to be consumed at a given time."),
-			docs.FieldCommon("max_outstanding_bytes", "The maximum number of outstanding pending messages to be consumed measured in bytes."),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("project", "The project ID of the target subscription."),
+			docs.FieldString("subscription", "The target subscription ID."),
+			docs.FieldBool("sync", "Enable synchronous pull mode."),
+			docs.FieldInt("max_outstanding_messages", "The maximum number of outstanding pending messages to be consumed at a given time."),
+			docs.FieldInt("max_outstanding_bytes", "The maximum number of outstanding pending messages to be consumed measured in bytes."),
+		),
 	}
 }
 

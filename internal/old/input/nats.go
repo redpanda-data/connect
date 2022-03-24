@@ -32,7 +32,7 @@ You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).
 
 ` + auth.Description(),
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"urls",
 				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
@@ -44,9 +44,9 @@ You can access these metadata fields using
 			docs.FieldInt("prefetch_count", "The maximum number of messages to pull at a time.").Advanced(),
 			tls.FieldSpec(),
 			auth.FieldSpec(),
-		},
-		Categories: []Category{
-			CategoryServices,
+		),
+		Categories: []string{
+			"Services",
 		},
 	}
 }

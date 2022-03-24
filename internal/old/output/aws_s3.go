@@ -93,9 +93,9 @@ output:
             format: json_array
 ` + "```" + ``,
 		Async: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("bucket", "The bucket to upload messages to."),
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("bucket", "The bucket to upload messages to."),
+			docs.FieldString(
 				"path", "The path of each message to upload.",
 				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
 				`${!meta("kafka_key")}.json`,
@@ -108,26 +108,26 @@ output:
 					"Timestamp": `${!meta("Timestamp")}`,
 				},
 			).IsInterpolated().Map(),
-			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
-			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
+			docs.FieldString("content_type", "The content type to set for each object.").IsInterpolated(),
+			docs.FieldString("content_encoding", "An optional content encoding to set for each object.").IsInterpolated().Advanced(),
 			docs.FieldString("cache_control", "The cache control to set for each object.").Advanced().IsInterpolated(),
 			docs.FieldString("content_disposition", "The content disposition to set for each object.").Advanced().IsInterpolated(),
 			docs.FieldString("content_language", "The content language to set for each object.").Advanced().IsInterpolated(),
 			docs.FieldString("website_redirect_location", "The website redirect location to set for each object.").Advanced().IsInterpolated(),
-			docs.FieldCommon("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(metadata.ExcludeFilterFields()...),
-			docs.FieldAdvanced("storage_class", "The storage class to set for each object.").HasOptions(
+			docs.FieldObject("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(metadata.ExcludeFilterFields()...),
+			docs.FieldString("storage_class", "The storage class to set for each object.").HasOptions(
 				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
-			).IsInterpolated(),
-			docs.FieldAdvanced("kms_key_id", "An optional server side encryption key."),
-			docs.FieldAdvanced("server_side_encryption", "An optional server side encryption algorithm.").AtVersion("3.63.0"),
-			docs.FieldAdvanced("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints."),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			docs.FieldAdvanced("timeout", "The maximum period to wait on an upload before abandoning it and reattempting."),
+			).IsInterpolated().Advanced(),
+			docs.FieldString("kms_key_id", "An optional server side encryption key.").Advanced(),
+			docs.FieldString("server_side_encryption", "An optional server side encryption algorithm.").AtVersion("3.63.0").Advanced(),
+			docs.FieldBool("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints.").Advanced(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
 			policy.FieldSpec(),
-		}.Merge(session.FieldSpecs()),
-		Categories: []Category{
-			CategoryServices,
-			CategoryAWS,
+		).WithChildren(session.FieldSpecs()...),
+		Categories: []string{
+			"Services",
+			"AWS",
 		},
 	}
 }

@@ -19,7 +19,7 @@ func init() {
 			Summary: `Serves metrics as JSON object with the service wide HTTP service at the endpoints ` + "`/stats` and `/metrics`" + `.`,
 			Description: `
 This metrics type is useful for debugging as it provides a human readable format that you can parse with tools such as ` + "`jq`" + ``,
-			Config: docs.FieldComponent().HasType(docs.FieldTypeObject),
+			Config: docs.FieldObject("", ""),
 		})
 }
 

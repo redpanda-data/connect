@@ -30,8 +30,8 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("unarchive", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryParsing, CategoryUtility,
+		Categories: []string{
+			"Parsing", "Utility",
 		},
 		Summary: `
 Unarchives messages according to the selected archive [format](#formats) into
@@ -45,11 +45,11 @@ allowing you to [error handle them](/docs/configuration/error_handling).
 For the unarchive formats that contain file information (tar, zip), a metadata
 field is added to each message called ` + "`archive_filename`" + ` with the
 extracted filename.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("format", "The unarchive [format](#formats) to use.").HasOptions(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("format", "The unarchive [format](#formats) to use.").HasOptions(
 				"tar", "zip", "binary", "lines", "json_documents", "json_array", "json_map", "csv",
 			),
-		},
+		),
 		Footnotes: `
 ## Formats
 

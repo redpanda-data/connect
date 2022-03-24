@@ -67,7 +67,7 @@ func NewAmazonS3Config() AmazonS3Config {
 		Timeout:                 "5s",
 		KMSKeyID:                "",
 		ServerSideEncryption:    "",
-		MaxInFlight:             1,
+		MaxInFlight:             64,
 		Batching:                policy.NewConfig(),
 	}
 }

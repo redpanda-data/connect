@@ -25,21 +25,21 @@ import (
 
 func init() {
 	watcherDocs := docs.FieldSpecs{
-		docs.FieldCommon(
+		docs.FieldBool(
 			"enabled",
 			"Whether file watching is enabled.",
 		),
-		docs.FieldCommon(
+		docs.FieldString(
 			"minimum_age",
 			"The minimum period of time since a file was last updated before attempting to consume it. Increasing this period decreases the likelihood that a file will be consumed whilst it is still being written to.",
 			"10s", "1m", "10m",
 		),
-		docs.FieldCommon(
+		docs.FieldString(
 			"poll_interval",
 			"The interval between each attempt to scan the target paths for new files.",
 			"100ms", "1s",
 		),
-		docs.FieldCommon(
+		docs.FieldString(
 			"cache",
 			"A [cache resource](/docs/components/caches/about) for storing the paths of files already consumed.",
 		),
@@ -71,12 +71,12 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString(
 				"address",
 				"The address of the server to connect to that has the target files.",
 			),
-			docs.FieldCommon(
+			docs.FieldObject(
 				"credentials",
 				"The credentials to use to log into the server.",
 			).WithChildren(sftpSetup.CredentialsDocs()...),
@@ -85,15 +85,15 @@ You can access these metadata fields using [function interpolation](/docs/config
 				"A list of paths to consume sequentially. Glob patterns are supported.",
 			).Array(),
 			codec.ReaderDocs,
-			docs.FieldAdvanced("delete_on_finish", "Whether to delete files from the server once they are processed."),
-			docs.FieldAdvanced("max_buffer", "The largest token size expected when consuming delimited files."),
-			docs.FieldCommon(
+			docs.FieldBool("delete_on_finish", "Whether to delete files from the server once they are processed.").Advanced(),
+			docs.FieldInt("max_buffer", "The largest token size expected when consuming delimited files.").Advanced(),
+			docs.FieldObject(
 				"watcher",
 				"An experimental mode whereby the input will periodically scan the target paths for new files and consume them, when all files are consumed the input will continue polling for new files.",
 			).WithChildren(watcherDocs...).AtVersion("3.42.0"),
-		},
-		Categories: []Category{
-			CategoryNetwork,
+		),
+		Categories: []string{
+			"Network",
 		},
 	}
 }

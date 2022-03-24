@@ -45,35 +45,35 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 Only one authentication method is required, ` + "`storage_connection_string`" + ` or ` + "`storage_account` and `storage_access_key`" + `. If both are set then the ` + "`storage_connection_string`" + ` is given priority.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString(
 				"storage_account",
 				"The storage account to dequeue messages from. This field is ignored if `storage_connection_string` is set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_access_key",
 				"The storage account access key. This field is ignored if `storage_connection_string` is set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_sas_token",
 				"The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_connection_string",
 				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"queue_name", "The name of the source storage queue.", "foo_queue", `${! env("MESSAGE_TYPE").lowercase() }`,
 			).IsInterpolated(),
-			docs.FieldAdvanced(
+			docs.FieldString(
 				"dequeue_visibility_timeout", "The timeout duration until a dequeued message gets visible again, 30s by default",
-			).AtVersion("3.45.0"),
-			docs.FieldAdvanced("max_in_flight", "The maximum number of unprocessed messages to fetch at a given time."),
-			docs.FieldAdvanced("track_properties", "If set to `true` the queue is polled on each read request for information such as the queue message lag. These properties are added to consumed messages as metadata, but will also have a negative performance impact."),
-		},
-		Categories: []Category{
-			CategoryServices,
-			CategoryAzure,
+			).AtVersion("3.45.0").Advanced(),
+			docs.FieldInt("max_in_flight", "The maximum number of unprocessed messages to fetch at a given time.").Advanced(),
+			docs.FieldBool("track_properties", "If set to `true` the queue is polled on each read request for information such as the queue message lag. These properties are added to consumed messages as metadata, but will also have a negative performance impact.").Advanced(),
+		),
+		Categories: []string{
+			"Services",
+			"Azure",
 		},
 	}
 }

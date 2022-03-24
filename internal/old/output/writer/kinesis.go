@@ -57,7 +57,7 @@ func NewKinesisConfig() KinesisConfig {
 		Stream:       "",
 		HashKey:      "",
 		PartitionKey: "",
-		MaxInFlight:  1,
+		MaxInFlight:  64,
 		Config:       rConf,
 		Batching:     policy.NewConfig(),
 	}

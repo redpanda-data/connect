@@ -67,33 +67,33 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString(
 				"storage_account",
 				"The storage account to download blobs from. This field is ignored if `storage_connection_string` is set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_access_key",
 				"The storage account access key. This field is ignored if `storage_connection_string` is set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_sas_token",
 				"The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` are set.",
 			).AtVersion("3.38.0"),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_connection_string",
 				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` / `storage_sas_token` are not set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"container", "The name of the container from which to download blobs.",
 			),
-			docs.FieldCommon("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
+			docs.FieldString("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
 			codec.ReaderDocs,
-			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the blob once they are processed."),
-		},
-		Categories: []Category{
-			CategoryServices,
-			CategoryAzure,
+			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the blob once they are processed.").Advanced(),
+		),
+		Categories: []string{
+			"Services",
+			"Azure",
 		},
 	}
 }

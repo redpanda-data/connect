@@ -26,8 +26,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("for_each", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryComposition,
+		Categories: []string{
+			"Composition",
 		},
 		Summary: `
 A processor that applies a list of child processors to messages of a batch as
@@ -40,7 +40,7 @@ on individual message parts of a batch instead.
 
 Please note that most processors already process per message of a batch, and
 this processor is not needed in those cases.`,
-		config: docs.FieldComponent().Array().HasType(docs.FieldTypeProcessor),
+		Config: docs.FieldProcessor("", "").Array(),
 	}
 }
 

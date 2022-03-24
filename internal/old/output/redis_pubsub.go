@@ -24,13 +24,13 @@ This output will interpolate functions within the channel field, you
 can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: old.ConfigDocs().Add(
-			docs.FieldCommon("channel", "The channel to publish messages to.").IsInterpolated(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
+			docs.FieldString("channel", "The channel to publish messages to.").IsInterpolated(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
 		),
-		Categories: []Category{
-			CategoryServices,
+		Categories: []string{
+			"Services",
 		},
 	}
 }

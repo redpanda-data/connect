@@ -43,7 +43,7 @@ func NewHTTPClientConfig() HTTPClientConfig {
 	return HTTPClientConfig{
 		Config:            docs.NewConfig(),
 		BatchAsMultipart:  false,
-		MaxInFlight:       1, // TODO: Increase this default?
+		MaxInFlight:       64,
 		PropagateResponse: false,
 		Batching:          policy.NewConfig(),
 	}

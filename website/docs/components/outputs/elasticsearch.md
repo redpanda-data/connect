@@ -35,7 +35,7 @@ output:
     urls: []
     index: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -67,7 +67,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    max_in_flight: 1
+    max_in_flight: 64
     max_retries: 0
     backoff:
       initial_interval: 1s
@@ -328,7 +328,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `max_retries`
 

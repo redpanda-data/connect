@@ -18,10 +18,10 @@ import (
 // fields within a Config.
 func CredentialsDocs() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldCommon("username", "The username to connect to the SFTP server."),
-		docs.FieldCommon("password", "The password for the username to connect to the SFTP server."),
-		docs.FieldCommon("private_key_file", "The private key for the username to connect to the SFTP server."),
-		docs.FieldCommon("private_key_pass", "Optional passphrase for private key."),
+		docs.FieldString("username", "The username to connect to the SFTP server."),
+		docs.FieldString("password", "The password for the username to connect to the SFTP server."),
+		docs.FieldString("private_key_file", "The private key for the username to connect to the SFTP server."),
+		docs.FieldString("private_key_pass", "Optional passphrase for private key."),
 	}
 }
 

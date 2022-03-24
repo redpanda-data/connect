@@ -28,15 +28,15 @@ func init() {
 		constructor: fromSimpleConstructor(NewCSVFile),
 		Status:      docs.StatusStable,
 		Summary:     "Reads one or more CSV files as structured records following the format described in RFC 4180.",
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"paths", "A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).",
 				[]string{"/tmp/foo.csv", "/tmp/bar/*.csv", "/tmp/data/**/*.csv"},
 			).Array(),
-			docs.FieldCommon("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row."),
-			docs.FieldCommon("delimiter", `The delimiter to use for splitting values in each record, must be a single character.`),
-			docs.FieldAdvanced("batch_count", `Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`),
-		},
+			docs.FieldBool("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row."),
+			docs.FieldString("delimiter", `The delimiter to use for splitting values in each record, must be a single character.`),
+			docs.FieldInt("batch_count", `Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).Advanced(),
+		),
 		Description: `
 This input offers more control over CSV parsing than the ` + "[`file` input](/docs/components/inputs/file)" + `.
 
@@ -61,8 +61,8 @@ If, however, the field ` + "`parse_header_row` is set to `false`" + ` then array
 ["first foo","first bar","first baz"]
 ["second foo","second bar","second baz"]
 ` + "```" + ``,
-		Categories: []Category{
-			CategoryLocal,
+		Categories: []string{
+			"Local",
 		},
 		Footnotes: `
 This input is particularly useful when consuming CSV from files too large to

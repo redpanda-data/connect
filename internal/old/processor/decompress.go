@@ -32,15 +32,15 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("decompress", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryParsing,
+		Categories: []string{
+			"Parsing",
 		},
 		Summary: `
 Decompresses messages according to the selected algorithm. Supported
 decompression types are: gzip, zlib, bzip2, flate, snappy, lz4.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "zlib", "bzip2", "flate", "snappy", "lz4"),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("algorithm", "The decompression algorithm to use.").HasOptions("gzip", "zlib", "bzip2", "flate", "snappy", "lz4"),
+		),
 	}
 }
 

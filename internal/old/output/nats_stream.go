@@ -20,7 +20,7 @@ func init() {
 Publish to a NATS Stream subject.`,
 		Description: auth.Description(),
 		Async:       true,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"urls",
 				"A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.",
@@ -33,9 +33,9 @@ Publish to a NATS Stream subject.`,
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			tls.FieldSpec(),
 			auth.FieldSpec(),
-		},
-		Categories: []Category{
-			CategoryServices,
+		),
+		Categories: []string{
+			"Services",
 		},
 	}
 }

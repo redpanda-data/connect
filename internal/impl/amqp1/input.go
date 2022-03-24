@@ -1,4 +1,4 @@
-package reader
+package amqp1
 
 import (
 	"context"
@@ -6,39 +6,69 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Azure/go-amqp"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/amqp1/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	btls "github.com/benthosdev/benthos/v4/internal/tls"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
+	itls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-// AMQP1Config contains configuration for the AMQP1 input type.
-type AMQP1Config struct {
-	URL            string            `json:"url" yaml:"url"`
-	SourceAddress  string            `json:"source_address" yaml:"source_address"`
-	AzureRenewLock bool              `json:"azure_renew_lock" yaml:"azure_renew_lock"`
-	TLS            btls.Config       `json:"tls" yaml:"tls"`
-	SASL           shared.SASLConfig `json:"sasl" yaml:"sasl"`
-}
+func init() {
+	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+		a, err := newAMQP1Reader(c.AMQP1, nm.Logger())
+		if err != nil {
+			return nil, err
+		}
+		return oinput.NewAsyncReader("amqp_1", true, a, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:    "amqp_1",
+		Status:  docs.StatusBeta,
+		Summary: `Reads messages from an AMQP (1.0) server.`,
+		Description: `
+### Metadata
 
-// NewAMQP1Config creates a new AMQP1Config with default values.
-func NewAMQP1Config() AMQP1Config {
-	return AMQP1Config{
-		URL:           "",
-		SourceAddress: "",
-		TLS:           btls.NewConfig(),
-		SASL:          shared.NewSASLConfig(),
+This input adds the following metadata fields to each message:
+
+` + "``` text" + `
+- amqp_content_type
+- amqp_content_encoding
+- amqp_creation_time
+- All string typed message annotations
+` + "```" + `
+
+You can access these metadata fields using
+[function interpolation](/docs/configuration/interpolation#metadata).`,
+		Categories: []string{
+			"Services",
+		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("url",
+				"A URL to connect to.",
+				"amqp://localhost:5672/",
+				"amqps://guest:guest@localhost:5672/",
+			).HasDefault(""),
+			docs.FieldString("source_address", "The source address to consume from.", "/foo", "queue:/bar", "topic:/baz").HasDefault(""),
+			docs.FieldBool("azure_renew_lock", "Experimental: Azure service bus specific option to renew lock if processing takes more then configured lock time").AtVersion("3.45.0").HasDefault(false).Advanced(),
+			itls.FieldSpec(),
+			shared.SASLFieldSpec(),
+		),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
-
-//------------------------------------------------------------------------------
 
 type amqp1Conn struct {
 	client            *amqp.Client
@@ -81,24 +111,20 @@ func (c *amqp1Conn) Close(ctx context.Context) {
 
 //------------------------------------------------------------------------------
 
-// AMQP1 is an input type that reads messages via the AMQP 1.0 protocol.
-type AMQP1 struct {
+type amqp1Reader struct {
 	tlsConf *tls.Config
 
-	conf  AMQP1Config
-	stats metrics.Type
-	log   log.Modular
+	conf oinput.AMQP1Config
+	log  log.Modular
 
 	m    sync.RWMutex
 	conn *amqp1Conn
 }
 
-// NewAMQP1 creates a new AMQP1 input type.
-func NewAMQP1(conf AMQP1Config, log log.Modular, stats metrics.Type) (*AMQP1, error) {
-	a := AMQP1{
-		conf:  conf,
-		stats: stats,
-		log:   log,
+func newAMQP1Reader(conf oinput.AMQP1Config, log log.Modular) (*amqp1Reader, error) {
+	a := amqp1Reader{
+		conf: conf,
+		log:  log,
 	}
 	if conf.TLS.Enabled {
 		var err error
@@ -109,10 +135,7 @@ func NewAMQP1(conf AMQP1Config, log log.Modular, stats metrics.Type) (*AMQP1, er
 	return &a, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ConnectWithContext establishes a connection to an AMQP1 server.
-func (a *AMQP1) ConnectWithContext(ctx context.Context) error {
+func (a *amqp1Reader) ConnectWithContext(ctx context.Context) error {
 	a.m.Lock()
 	defer a.m.Unlock()
 
@@ -179,8 +202,7 @@ func (a *AMQP1) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// disconnect safely closes a connection to an AMQP1 server.
-func (a *AMQP1) disconnect(ctx context.Context) error {
+func (a *amqp1Reader) disconnect(ctx context.Context) error {
 	a.m.Lock()
 	defer a.m.Unlock()
 
@@ -191,10 +213,7 @@ func (a *AMQP1) disconnect(ctx context.Context) error {
 	return nil
 }
 
-//------------------------------------------------------------------------------
-
-// ReadWithContext a new AMQP1 message.
-func (a *AMQP1) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
+func (a *amqp1Reader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	a.m.RLock()
 	conn := a.conn
 	a.m.RUnlock()
@@ -262,16 +281,14 @@ func (a *AMQP1) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn
 }
 
 // CloseAsync shuts down the AMQP1 input and stops processing requests.
-func (a *AMQP1) CloseAsync() {
+func (a *amqp1Reader) CloseAsync() {
 	_ = a.disconnect(context.Background())
 }
 
 // WaitForClose blocks until the AMQP1 input has closed down.
-func (a *AMQP1) WaitForClose(timeout time.Duration) error {
+func (a *amqp1Reader) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------
 
 const (
 	lockRenewResponseSuffix = "-response"
@@ -290,7 +307,7 @@ func randomString(n int) string {
 	return string(b)
 }
 
-func (a *AMQP1) startRenewJob(amqpMsg *amqp.Message) chan struct{} {
+func (a *amqp1Reader) startRenewJob(amqpMsg *amqp.Message) chan struct{} {
 	done := make(chan struct{})
 	go func() {
 		ctx := context.Background()
@@ -342,7 +359,7 @@ func uuidFromLockTokenBytes(bytes []byte) (*amqp.UUID, error) {
 	return &amqpUUID, nil
 }
 
-func (a *AMQP1) renewWithContext(ctx context.Context, msg *amqp.Message) (time.Time, error) {
+func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (time.Time, error) {
 	a.m.RLock()
 	conn := a.conn
 	a.m.RUnlock()
@@ -394,4 +411,40 @@ func (a *AMQP1) renewWithContext(ctx context.Context, msg *amqp.Message) (time.T
 	}
 
 	return expirations[0], nil
+}
+
+func amqpSetMetadata(p *message.Part, k string, v interface{}) {
+	var metaValue string
+	var metaKey = strings.ReplaceAll(k, "-", "_")
+
+	switch v := v.(type) {
+	case bool:
+		metaValue = strconv.FormatBool(v)
+	case float32:
+		metaValue = strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		metaValue = strconv.FormatFloat(v, 'f', -1, 64)
+	case byte:
+		metaValue = strconv.Itoa(int(v))
+	case int16:
+		metaValue = strconv.Itoa(int(v))
+	case int32:
+		metaValue = strconv.Itoa(int(v))
+	case int64:
+		metaValue = strconv.Itoa(int(v))
+	case nil:
+		metaValue = ""
+	case string:
+		metaValue = v
+	case []byte:
+		metaValue = string(v)
+	case time.Time:
+		metaValue = v.Format(time.RFC3339)
+	default:
+		metaValue = ""
+	}
+
+	if metaValue != "" {
+		p.MetaSet(metaKey, metaValue)
+	}
 }

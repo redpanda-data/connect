@@ -59,7 +59,7 @@ func NewDynamoDBConfig() DynamoDBConfig {
 		JSONMapColumns: map[string]string{},
 		TTL:            "",
 		TTLKey:         "",
-		MaxInFlight:    1,
+		MaxInFlight:    64,
 		Config:         rConf,
 		Batching:       policy.NewConfig(),
 	}

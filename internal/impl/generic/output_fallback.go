@@ -67,7 +67,7 @@ However, depending on the output and the error returned it is sometimes not poss
 		Categories: []string{
 			"Utility",
 		},
-		Config: docs.FieldComponent().Array().HasType(docs.FieldTypeOutput),
+		Config: docs.FieldOutput("", "").Array(),
 	})
 	if err != nil {
 		panic(err)

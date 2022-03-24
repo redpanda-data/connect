@@ -25,8 +25,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("group_by_value", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryComposition,
+		Categories: []string{
+			"Composition",
 		},
 		Summary: `Splits a batch of messages into N batches, where each resulting batch contains a group of messages determined by a [function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated per message.`,
 		Description: `
@@ -54,12 +54,12 @@ output:
     bucket: TODO
     path: docs/${! meta("kafka_key") }/${! count("files") }-${! timestamp_unix_nano() }.tar.gz
 ` + "```" + ``,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString(
 				"value", "The interpolated string to group based on.",
 				"${! meta(\"kafka_key\") }", "${! json(\"foo.bar\") }-${! meta(\"baz\") }",
 			).IsInterpolated(),
-		},
+		),
 		UsesBatches: true,
 	}
 }

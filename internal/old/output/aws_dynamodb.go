@@ -66,8 +66,8 @@ allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/cloud/aws).`,
 		Async:   true,
 		Batches: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("table", "The table to store messages in."),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("table", "The table to store messages in."),
 			docs.FieldString("string_columns", "A map of column keys to string values to store.",
 				map[string]string{
 					"id":           "${!json(\"id\")}",
@@ -85,14 +85,14 @@ allowing you to transfer data across accounts. You can find out more
 					"": ".",
 				},
 			).Map(),
-			docs.FieldAdvanced("ttl", "An optional TTL to set for items, calculated from the moment the message is sent."),
-			docs.FieldAdvanced("ttl_key", "The column key to place the TTL value within."),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldString("ttl", "An optional TTL to set for items, calculated from the moment the message is sent.").Advanced(),
+			docs.FieldString("ttl_key", "The column key to place the TTL value within.").Advanced(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
-		}.Merge(session.FieldSpecs()).Merge(retries.FieldSpecs()),
-		Categories: []Category{
-			CategoryServices,
-			CategoryAWS,
+		).WithChildren(session.FieldSpecs()...).WithChildren(retries.FieldSpecs()...),
+		Categories: []string{
+			"Services",
+			"AWS",
 		},
 	}
 }

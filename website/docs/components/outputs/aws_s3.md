@@ -40,7 +40,7 @@ output:
     content_type: application/octet-stream
     metadata:
       exclude_prefixes: []
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -71,7 +71,7 @@ output:
     kms_key_id: ""
     server_side_encryption: ""
     force_path_style_urls: false
-    max_in_flight: 1
+    max_in_flight: 64
     timeout: 5s
     batching:
       count: 0
@@ -326,7 +326,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `timeout`
 

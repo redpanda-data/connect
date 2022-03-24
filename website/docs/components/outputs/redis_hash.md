@@ -36,7 +36,7 @@ output:
     walk_metadata: false
     walk_json_object: false
     fields: {}
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
@@ -61,7 +61,7 @@ output:
     walk_metadata: false
     walk_json_object: false
     fields: {}
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
@@ -334,6 +334,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 

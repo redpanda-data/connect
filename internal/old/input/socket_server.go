@@ -27,16 +27,16 @@ func init() {
 		Summary:     `Creates a server that receives a stream of messages over a tcp, udp or unix socket.`,
 		Description: `
 The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to allocate _per connection_ for buffering lines of data. If a line of data from a connection exceeds this value then the connection will be closed.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("network", "A network type to accept (unix|tcp|udp).").HasOptions(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("network", "A network type to accept (unix|tcp|udp).").HasOptions(
 				"unix", "tcp", "udp",
 			),
-			docs.FieldCommon("address", "The address to listen from.", "/tmp/benthos.sock", "0.0.0.0:6000"),
+			docs.FieldString("address", "The address to listen from.", "/tmp/benthos.sock", "0.0.0.0:6000"),
 			codec.ReaderDocs.AtVersion("3.42.0"),
-			docs.FieldAdvanced("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed."),
-		},
-		Categories: []Category{
-			CategoryNetwork,
+			docs.FieldInt("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed.").Advanced(),
+		),
+		Categories: []string{
+			"Network",
 		},
 	}
 }

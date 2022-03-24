@@ -44,17 +44,17 @@ interpolations on the 'path' field as described
 
 The resulting archived message adopts the metadata of the _first_ message part
 of the batch.`,
-		Categories: []Category{
-			CategoryParsing, CategoryUtility,
+		Categories: []string{
+			"Parsing", "Utility",
 		},
 		UsesBatches: true,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("format", "The archiving [format](#formats) to apply.").HasOptions("tar", "zip", "binary", "lines", "json_array", "concatenate"),
 			docs.FieldString(
 				"path", "The path to set for each message in the archive (when applicable).",
 				"${!count(\"files\")}-${!timestamp_unix_nano()}.txt", "${!meta(\"kafka_key\")}-${!json(\"id\")}.json",
 			).IsInterpolated(),
-		},
+		),
 		Footnotes: `
 ## Formats
 

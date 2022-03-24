@@ -245,7 +245,7 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 	conf := NewConfig()
 	conf.Type = "http"
 	conf.HTTP.Config.URL = ts.URL + "/testpost"
-	conf.HTTP.Config.CopyResponseHeaders = true
+	conf.HTTP.ExtractMetadata.IncludePatterns = []string{".*"}
 
 	h, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {

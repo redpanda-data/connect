@@ -41,7 +41,7 @@ func NewGCPCloudStorageConfig() GCPCloudStorageConfig {
 		ContentType:     "application/octet-stream",
 		ContentEncoding: "",
 		ChunkSize:       googleapi.DefaultUploadChunkSize,
-		MaxInFlight:     1,
+		MaxInFlight:     64,
 		Batching:        policy.NewConfig(),
 		CollisionMode:   GCPCloudStorageOverwriteCollisionMode,
 	}

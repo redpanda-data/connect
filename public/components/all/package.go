@@ -8,6 +8,8 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 
 	// Import new service packages.
+	_ "github.com/benthosdev/benthos/v4/internal/impl/amqp09"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/amqp1"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/aws"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/confluent"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/dgraph"

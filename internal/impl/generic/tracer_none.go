@@ -14,7 +14,7 @@ func init() {
 		Type:    docs.TypeTracer,
 		Status:  docs.StatusStable,
 		Summary: `Do not send tracing events anywhere.`,
-		Config:  docs.FieldComponent().HasType(docs.FieldTypeObject),
+		Config:  docs.FieldObject("", ""),
 	})
 }
 

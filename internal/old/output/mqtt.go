@@ -23,7 +23,7 @@ The ` + "`topic`" + ` field can be dynamically set using function interpolations
 described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched
 messages these interpolations are performed per message part.`,
 		Async: true,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:1883"}).Array(),
 			docs.FieldString("topic", "The topic to publish messages to."),
 			docs.FieldString("client_id", "An identifier for the client connection."),
@@ -40,10 +40,10 @@ messages these interpolations are performed per message part.`,
 			docs.FieldString("password", "A password to connect with.").Advanced(),
 			docs.FieldInt("keepalive", "Max seconds of inactivity before a keepalive message is sent.").Advanced(),
 			tls.FieldSpec().AtVersion("3.45.0"),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		},
-		Categories: []Category{
-			CategoryServices,
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		),
+		Categories: []string{
+			"Services",
 		},
 	}
 }

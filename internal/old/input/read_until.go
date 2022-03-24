@@ -50,18 +50,18 @@ input:
 `,
 			},
 		},
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("input", "The child input to consume from.").HasType(docs.FieldTypeInput),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldInput("input", "The child input to consume from."),
 			docs.FieldBloblang(
 				"check",
 				"A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether the input should now be closed.",
 				`this.type == "foo"`,
 				`count("messages") >= 100`,
 			).HasDefault(""),
-			docs.FieldCommon("restart_input", "Whether the input should be reopened if it closes itself before the condition has resolved to true."),
-		},
-		Categories: []Category{
-			CategoryUtility,
+			docs.FieldBool("restart_input", "Whether the input should be reopened if it closes itself before the condition has resolved to true.").HasDefault(false),
+		),
+		Categories: []string{
+			"Utility",
 		},
 	}
 }

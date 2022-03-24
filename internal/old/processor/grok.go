@@ -31,8 +31,8 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("grok", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryParsing,
+		Categories: []string{
+			"Parsing",
 		},
 		Summary: `
 Parses messages into a structured format by attempting to apply a list of Grok expressions, the first expression to result in at least one value replaces the original message with a JSON object containing the values.`,
@@ -42,14 +42,14 @@ Type hints within patterns are respected, therefore with the pattern ` + "`%{WOR
 ### Performance
 
 This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regular expression engine, which is guaranteed to run in time linear to the size of the input. However, this property often makes it less performant than PCRE based implementations of grok. For more information see [https://swtch.com/~rsc/regexp/regexp1.html](https://swtch.com/~rsc/regexp/regexp1.html).`,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("expressions", "One or more Grok expressions to attempt against incoming messages. The first expression to match at least one value will be used to form a result.").Array(),
 			docs.FieldString("pattern_definitions", "A map of pattern definitions that can be referenced within `patterns`.").Map(),
 			docs.FieldString("pattern_paths", "A list of paths to load Grok patterns from. This field supports wildcards, including super globs (double star).").Array(),
-			docs.FieldAdvanced("named_captures_only", "Whether to only capture values from named patterns."),
-			docs.FieldAdvanced("use_default_patterns", "Whether to use a [default set of patterns](#default-patterns)."),
-			docs.FieldAdvanced("remove_empty_values", "Whether to remove values that are empty from the resulting structure."),
-		},
+			docs.FieldBool("named_captures_only", "Whether to only capture values from named patterns.").Advanced(),
+			docs.FieldBool("use_default_patterns", "Whether to use a [default set of patterns](#default-patterns).").Advanced(),
+			docs.FieldBool("remove_empty_values", "Whether to remove values that are empty from the resulting structure.").Advanced(),
+		),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "VPC Flow Logs",

@@ -14,7 +14,7 @@ import (
 // OwnedInput from the resulting parsed config with the method FieldInput.
 func NewInputField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeInput),
+		field: docs.FieldInput(name, ""),
 	}
 }
 
@@ -49,7 +49,7 @@ func (p *ParsedConfig) FieldInput(path ...string) (*OwnedInput, error) {
 // method FieldInputList.
 func NewInputListField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").Array().HasType(docs.FieldTypeInput),
+		field: docs.FieldInput(name, "").Array(),
 	}
 }
 

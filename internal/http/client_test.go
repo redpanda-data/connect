@@ -358,38 +358,6 @@ bar_b:
 `, string(resMsg.Get(0).Get()))
 }
 
-func TestHTTPClientReceiveHeaders(t *testing.T) {
-	nTestLoops := 1000
-
-	j := 0
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testStr := fmt.Sprintf("test%v", j)
-		j++
-		w.Header().Set("foo-bar", "baz-0")
-		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(testStr + "PART-A"))
-	}))
-	defer ts.Close()
-
-	conf := docs.NewConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.CopyResponseHeaders = true
-
-	h, err := NewClient(conf)
-	require.NoError(t, err)
-
-	for i := 0; i < nTestLoops; i++ {
-		testStr := fmt.Sprintf("test%v", j)
-		resMsg, err := h.Send(context.Background(), nil, nil)
-		require.NoError(t, err)
-
-		assert.Equal(t, 1, resMsg.Len())
-		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).Get()))
-		assert.Equal(t, "baz-0", resMsg.Get(0).MetaGet("foo-bar"))
-		assert.Equal(t, "201", resMsg.Get(0).MetaGet("http_status_code"))
-	}
-}
-
 func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("foobar", "baz")
@@ -402,19 +370,14 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 	conf.URL = ts.URL
 
 	for _, tt := range []struct {
-		name                string
-		noExtraMetadata     bool
-		copyResponseHeaders bool
-		includePrefixes     []string
-		includePatterns     []string
+		name            string
+		noExtraMetadata bool
+		includePrefixes []string
+		includePatterns []string
 	}{
 		{
 			name:            "no extra metadata",
 			noExtraMetadata: true,
-		},
-		{
-			name:                "copy_response_headers only",
-			copyResponseHeaders: true,
 		},
 		{
 			name:            "include_prefixes only",
@@ -424,13 +387,7 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 			name:            "include_patterns only",
 			includePatterns: []string{".*bar"},
 		},
-		{
-			name:                "both copy_response_headers and include_prefixes",
-			copyResponseHeaders: true,
-			includePrefixes:     []string{"foo"},
-		},
 	} {
-		conf.CopyResponseHeaders = tt.copyResponseHeaders
 		conf.ExtractMetadata.IncludePrefixes = tt.includePrefixes
 		conf.ExtractMetadata.IncludePatterns = tt.includePatterns
 		h, err := NewClient(conf)
@@ -455,13 +412,6 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 			}
 		} else if exp, act := "baz", resMsg.Get(0).MetaGet("foobar"); exp != act {
 			t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
-		} else if tt.copyResponseHeaders && h.metaExtractFilter.IsSet() {
-			if metadataCount < 3 {
-				t.Errorf("%s: wrong number of metadata items: %d", tt.name, metadataCount)
-			}
-			if exp, act := "val", resMsg.Get(0).MetaGet("extra"); exp != act {
-				t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
-			}
 		}
 	}
 }
@@ -516,61 +466,6 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 		assert.Equal(t, "", resMsg.Get(0).MetaGet("foo-bar"))
 		assert.Equal(t, "201", resMsg.Get(0).MetaGet("http_status_code"))
 		assert.Equal(t, "", resMsg.Get(1).MetaGet("foo-bar"))
-		assert.Equal(t, "201", resMsg.Get(1).MetaGet("http_status_code"))
-	}
-}
-
-func TestHTTPClientReceiveMultipartWithHeaders(t *testing.T) {
-	nTestLoops := 1000
-
-	j := 0
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testStr := fmt.Sprintf("test%v", j)
-		j++
-		msg := message.QuickBatch([][]byte{
-			[]byte(testStr + "PART-A"),
-			[]byte(testStr + "PART-B"),
-		})
-
-		body := &bytes.Buffer{}
-		writer := multipart.NewWriter(body)
-
-		for i := 0; i < msg.Len(); i++ {
-			part, err := writer.CreatePart(textproto.MIMEHeader{
-				"Content-Type": []string{"application/octet-stream"},
-				"foo-bar":      []string{"baz-" + strconv.Itoa(i), "ignored"},
-			})
-			require.NoError(t, err)
-
-			_, err = io.Copy(part, bytes.NewReader(msg.Get(i).Get()))
-			require.NoError(t, err)
-		}
-		writer.Close()
-
-		w.Header().Add("Content-Type", writer.FormDataContentType())
-		w.WriteHeader(http.StatusCreated)
-		w.Write(body.Bytes())
-	}))
-	defer ts.Close()
-
-	conf := docs.NewConfig()
-	conf.URL = ts.URL + "/testpost"
-	conf.CopyResponseHeaders = true
-
-	h, err := NewClient(conf)
-	require.NoError(t, err)
-
-	for i := 0; i < nTestLoops; i++ {
-		testStr := fmt.Sprintf("test%v", j)
-		resMsg, err := h.Send(context.Background(), nil, nil)
-		require.NoError(t, err)
-
-		assert.Equal(t, 2, resMsg.Len())
-		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).Get()))
-		assert.Equal(t, testStr+"PART-B", string(resMsg.Get(1).Get()))
-		assert.Equal(t, "baz-0", resMsg.Get(0).MetaGet("foo-bar"))
-		assert.Equal(t, "201", resMsg.Get(0).MetaGet("http_status_code"))
-		assert.Equal(t, "baz-1", resMsg.Get(1).MetaGet("foo-bar"))
 		assert.Equal(t, "201", resMsg.Get(1).MetaGet("http_status_code"))
 	}
 }

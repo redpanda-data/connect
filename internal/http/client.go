@@ -417,11 +417,11 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg *message.Batch, err e
 				index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
 				bufferIndex += bytesRead
 
-				if h.conf.CopyResponseHeaders || h.metaExtractFilter.IsSet() {
+				if h.metaExtractFilter.IsSet() {
 					part := resMsg.Get(index)
 					for k, values := range p.Header {
 						normalisedHeader := strings.ToLower(k)
-						if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaExtractFilter.Match(normalisedHeader)) {
+						if len(values) > 0 && h.metaExtractFilter.Match(normalisedHeader) {
 							part.MetaSet(normalisedHeader, values[0])
 						}
 					}
@@ -438,11 +438,11 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg *message.Batch, err e
 			} else {
 				resMsg.Append(message.NewPart(nil))
 			}
-			if h.conf.CopyResponseHeaders || h.metaExtractFilter.IsSet() {
+			if h.metaExtractFilter.IsSet() {
 				part := resMsg.Get(0)
 				for k, values := range res.Header {
 					normalisedHeader := strings.ToLower(k)
-					if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaExtractFilter.Match(normalisedHeader)) {
+					if len(values) > 0 && h.metaExtractFilter.Match(normalisedHeader) {
 						part.MetaSet(normalisedHeader, values[0])
 					}
 				}

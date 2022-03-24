@@ -17,7 +17,7 @@ func init() {
 		constructor: fromSimpleConstructor(NewNSQ),
 		Summary: `
 Subscribe to an NSQ instance topic and channel.`,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("nsqd_tcp_addresses", "A list of nsqd addresses to connect to.").Array(),
 			docs.FieldString("lookupd_http_addresses", "A list of nsqlookupd addresses to connect to.").Array(),
 			tls.FieldSpec(),
@@ -25,9 +25,9 @@ Subscribe to an NSQ instance topic and channel.`,
 			docs.FieldString("channel", "The channel to consume from."),
 			docs.FieldString("user_agent", "A user agent to assume when connecting."),
 			docs.FieldInt("max_in_flight", "The maximum number of pending messages to consume at any given time."),
-		},
-		Categories: []Category{
-			CategoryServices,
+		),
+		Categories: []string{
+			"Services",
 		},
 	}
 }

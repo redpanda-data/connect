@@ -25,44 +25,44 @@ In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.`,
 		Async: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString(
 				"storage_account",
 				"The storage account to upload messages to. This field is ignored if `storage_connection_string` is set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_access_key",
 				"The storage account access key. This field is ignored if `storage_connection_string` is set.",
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_sas_token",
 				"The storage account SAS token. This field is ignored if `storage_connection_string` or `storage_access_key` / `storage_sas_token` are set.",
 			).AtVersion("3.38.0"),
-			docs.FieldCommon(
+			docs.FieldString(
 				"storage_connection_string",
 				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.",
 			),
-			docs.FieldAdvanced("public_access_level", `The container's public access level. The default value is `+"`PRIVATE`"+`.`).HasOptions(
+			docs.FieldString("public_access_level", `The container's public access level. The default value is `+"`PRIVATE`"+`.`).HasOptions(
 				"PRIVATE", "BLOB", "CONTAINER",
-			),
-			docs.FieldCommon(
+			).Advanced(),
+			docs.FieldString(
 				"container", "The container for uploading the messages to.",
 				`messages-${!timestamp("2006")}`,
 			).IsInterpolated(),
-			docs.FieldCommon(
+			docs.FieldString(
 				"path", "The path of each message to upload.",
 				`${!count("files")}-${!timestamp_unix_nano()}.json`,
 				`${!meta("kafka_key")}.json`,
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).IsInterpolated(),
-			docs.FieldAdvanced("blob_type", "Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").HasOptions(
+			docs.FieldString("blob_type", "Block and Append blobs are comprised of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").HasOptions(
 				"BLOCK", "APPEND",
-			).IsInterpolated(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		},
-		Categories: []Category{
-			CategoryServices,
-			CategoryAzure,
+			).IsInterpolated().Advanced(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		),
+		Categories: []string{
+			"Services",
+			"Azure",
 		},
 	}
 }

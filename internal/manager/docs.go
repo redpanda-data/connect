@@ -23,24 +23,24 @@ func lintResource(ctx docs.LintContext, line, col int, v interface{}) []docs.Lin
 // Spec returns a field spec for the manager configuration.
 func Spec() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldCommon(
+		docs.FieldInput(
 			"input_resources", "A list of input resources, each must have a unique label.",
-		).Array().HasType(docs.FieldTypeInput).Linter(lintResource),
+		).Array().Linter(lintResource),
 
-		docs.FieldCommon(
+		docs.FieldProcessor(
 			"processor_resources", "A list of processor resources, each must have a unique label.",
-		).Array().HasType(docs.FieldTypeProcessor).Linter(lintResource),
+		).Array().Linter(lintResource),
 
-		docs.FieldCommon(
+		docs.FieldOutput(
 			"output_resources", "A list of output resources, each must have a unique label.",
-		).Array().HasType(docs.FieldTypeOutput).Linter(lintResource),
+		).Array().Linter(lintResource),
 
-		docs.FieldCommon(
+		docs.FieldCache(
 			"cache_resources", "A list of cache resources, each must have a unique label.",
-		).Array().HasType(docs.FieldTypeCache).Linter(lintResource),
+		).Array().Linter(lintResource),
 
-		docs.FieldCommon(
+		docs.FieldRateLimit(
 			"rate_limit_resources", "A list of rate limit resources, each must have a unique label.",
-		).Array().HasType(docs.FieldTypeRateLimit).Linter(lintResource),
+		).Array().Linter(lintResource),
 	}
 }

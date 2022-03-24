@@ -25,17 +25,17 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("rate_limit", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Summary: `
 Throttles the throughput of a pipeline according to a specified
 ` + "[`rate_limit`](/docs/components/rate_limits/about)" + ` resource. Rate limits are
 shared across components and therefore apply globally to all processing
 pipelines.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("resource", "The target [`rate_limit` resource](/docs/components/rate_limits/about)."),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("resource", "The target [`rate_limit` resource](/docs/components/rate_limits/about)."),
+		),
 	}
 }
 

@@ -1,4 +1,4 @@
-package writer
+package amqp09
 
 import (
 	"context"
@@ -14,74 +14,85 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-var errAMQP09Connect = errors.New("AMQP 0.9 Connect")
+func init() {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		a, err := newAMQP09Writer(nm, c.AMQP09, nm.Logger())
+		if err != nil {
+			return nil, err
+		}
+		w, err := ooutput.NewAsyncWriter("amqp_0_9", c.AMQP09.MaxInFlight, a, nm.Logger(), nm.Metrics())
+		if err != nil {
+			return nil, err
+		}
+		return ooutput.OnlySinglePayloads(w), nil
 
-//------------------------------------------------------------------------------
+	}), docs.ComponentSpec{
+		Name: "amqp_0_9",
+		Summary: `
+Sends messages to an AMQP (0.91) exchange. AMQP is a messaging protocol used by
+various message brokers, including RabbitMQ.`,
+		Description: output.Description(true, false, `
+The metadata from each message are delivered as headers.
 
-// AMQPExchangeDeclareConfig contains fields indicating whether the target AMQP
-// exchange needs to be declared, as well as any fields specifying how to
-// accomplish that.
-type AMQPExchangeDeclareConfig struct {
-	Enabled bool   `json:"enabled" yaml:"enabled"`
-	Type    string `json:"type" yaml:"type"`
-	Durable bool   `json:"durable" yaml:"durable"`
-}
+It's possible for this output type to create the target exchange by setting
+`+"`exchange_declare.enabled` to `true`"+`, if the exchange already exists
+then the declaration passively verifies that the settings match.
 
-// AMQPConfig contains configuration fields for the AMQP output type.
-type AMQPConfig struct {
-	URLs            []string                     `json:"urls" yaml:"urls"`
-	MaxInFlight     int                          `json:"max_in_flight" yaml:"max_in_flight"`
-	Exchange        string                       `json:"exchange" yaml:"exchange"`
-	ExchangeDeclare AMQPExchangeDeclareConfig    `json:"exchange_declare" yaml:"exchange_declare"`
-	BindingKey      string                       `json:"key" yaml:"key"`
-	Type            string                       `json:"type" yaml:"type"`
-	ContentType     string                       `json:"content_type" yaml:"content_type"`
-	ContentEncoding string                       `json:"content_encoding" yaml:"content_encoding"`
-	Metadata        metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
-	Priority        string                       `json:"priority" yaml:"priority"`
-	Persistent      bool                         `json:"persistent" yaml:"persistent"`
-	Mandatory       bool                         `json:"mandatory" yaml:"mandatory"`
-	Immediate       bool                         `json:"immediate" yaml:"immediate"`
-	TLS             btls.Config                  `json:"tls" yaml:"tls"`
-}
+TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom
+settings can be enabled in the `+"`tls`"+` section.
 
-// NewAMQPConfig creates a new AMQPConfig with default values.
-func NewAMQPConfig() AMQPConfig {
-	return AMQPConfig{
-		URLs:        []string{},
-		MaxInFlight: 64,
-		Exchange:    "",
-		ExchangeDeclare: AMQPExchangeDeclareConfig{
-			Enabled: false,
-			Type:    "direct",
-			Durable: true,
+The fields 'key' and 'type' can be dynamically set using function interpolations described
+[here](/docs/configuration/interpolation#bloblang-queries).`),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("urls",
+				"A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.",
+				[]string{"amqp://guest:guest@127.0.0.1:5672/"},
+				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},
+				[]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"},
+			).Array().AtVersion("3.58.0").HasDefault([]interface{}{}),
+			docs.FieldString("exchange", "An AMQP exchange to publish to.").HasDefault(""),
+			docs.FieldObject("exchange_declare", "Optionally declare the target exchange (passive).").WithChildren(
+				docs.FieldBool("enabled", "Whether to declare the exchange.").HasDefault(false),
+				docs.FieldString("type", "The type of the exchange.").HasOptions(
+					"direct", "fanout", "topic", "x-custom",
+				).HasDefault("direct"),
+				docs.FieldBool("durable", "Whether the exchange should be durable.").HasDefault(true),
+			).Advanced().HasDefault(map[string]interface{}{}),
+			docs.FieldString("key", "The binding key to set for each message.").IsInterpolated().HasDefault(""),
+			docs.FieldString("type", "The type property to set for each message.").IsInterpolated().HasDefault(""),
+			docs.FieldString("content_type", "The content type attribute to set for each message.").IsInterpolated().Advanced().HasDefault("application/octet-stream"),
+			docs.FieldString("content_encoding", "The content encoding attribute to set for each message.").IsInterpolated().Advanced().HasDefault(""),
+			docs.FieldObject("metadata", "Specify criteria for which metadata values are attached to messages as headers.").WithChildren(metadata.ExcludeFilterFields()...).HasDefault(map[string]interface{}{}),
+			docs.FieldString("priority", "Set the priority of each message with a dynamic interpolated expression.", "0", `${! meta("amqp_priority") }`, `${! json("doc.priority") }`).IsInterpolated().Advanced().HasDefault(""),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").HasDefault(64),
+			docs.FieldBool("persistent", "Whether message delivery should be persistent (transient by default).").Advanced().HasDefault(false),
+			docs.FieldBool("mandatory", "Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned.").Advanced().HasDefault(false),
+			docs.FieldBool("immediate", "Whether to set the immediate flag on published messages. When set if there are no ready consumers of a queue then the message is dropped instead of waiting.").Advanced().HasDefault(false),
+			btls.FieldSpec(),
+		),
+		Categories: []string{
+			"Services",
 		},
-		BindingKey:      "",
-		Type:            "",
-		ContentType:     "application/octet-stream",
-		ContentEncoding: "",
-		Metadata:        metadata.NewExcludeFilterConfig(),
-		Priority:        "",
-		Persistent:      false,
-		Mandatory:       false,
-		Immediate:       false,
-		TLS:             btls.NewConfig(),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// AMQP is an output type that serves AMQP messages.
-type AMQP struct {
+type amqp09Writer struct {
 	key             *field.Expression
 	msgType         *field.Expression
 	contentType     *field.Expression
@@ -89,10 +100,9 @@ type AMQP struct {
 	priority        *field.Expression
 	metaFilter      *metadata.ExcludeFilter
 
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 
-	conf    AMQPConfig
+	conf    ooutput.AMQPConfig
 	urls    []string
 	tlsConf *tls.Config
 
@@ -106,11 +116,9 @@ type AMQP struct {
 	connLock sync.RWMutex
 }
 
-// NewAMQPV2 creates a new AMQP writer type.
-func NewAMQPV2(mgr interop.Manager, conf AMQPConfig, log log.Modular, stats metrics.Type) (*AMQP, error) {
-	a := AMQP{
+func newAMQP09Writer(mgr interop.Manager, conf ooutput.AMQPConfig, log log.Modular) (*amqp09Writer, error) {
+	a := amqp09Writer{
 		log:          log,
-		stats:        stats,
 		conf:         conf,
 		deliveryMode: amqp.Transient,
 	}
@@ -156,15 +164,7 @@ func NewAMQPV2(mgr interop.Manager, conf AMQPConfig, log log.Modular, stats metr
 	return &a, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ConnectWithContext establishes a connection to an AMQP server.
-func (a *AMQP) ConnectWithContext(ctx context.Context) error {
-	return a.Connect()
-}
-
-// Connect establishes a connection to an AMQP server.
-func (a *AMQP) Connect() error {
+func (a *amqp09Writer) ConnectWithContext(ctx context.Context) error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
 
@@ -211,7 +211,7 @@ func (a *AMQP) Connect() error {
 }
 
 // disconnect safely closes a connection to an AMQP server.
-func (a *AMQP) disconnect() error {
+func (a *amqp09Writer) disconnect() error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
 
@@ -227,17 +227,7 @@ func (a *AMQP) disconnect() error {
 	return nil
 }
 
-//------------------------------------------------------------------------------
-
-// WriteWithContext will attempt to write a message over AMQP, wait for
-// acknowledgement, and returns an error if applicable.
-func (a *AMQP) WriteWithContext(ctx context.Context, msg *message.Batch) error {
-	return a.Write(msg)
-}
-
-// Write will attempt to write a message over AMQP, wait for acknowledgement,
-// and returns an error if applicable.
-func (a *AMQP) Write(msg *message.Batch) error {
+func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	a.connLock.RLock()
 	conn := a.conn
 	amqpChan := a.amqpChan
@@ -249,7 +239,7 @@ func (a *AMQP) Write(msg *message.Batch) error {
 		return component.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		bindingKey := strings.ReplaceAll(a.key.String(i, msg), "/", ".")
 		msgType := strings.ReplaceAll(a.msgType.String(i, msg), "/", ".")
 		contentType := a.contentType.String(i, msg)
@@ -314,20 +304,16 @@ func (a *AMQP) Write(msg *message.Batch) error {
 	})
 }
 
-// CloseAsync shuts down the AMQP output and stops processing messages.
-func (a *AMQP) CloseAsync() {
+func (a *amqp09Writer) CloseAsync() {
 	_ = a.disconnect()
 }
 
-// WaitForClose blocks until the AMQP output has closed down.
-func (a *AMQP) WaitForClose(timeout time.Duration) error {
+func (a *amqp09Writer) WaitForClose(timeout time.Duration) error {
 	return nil
 }
 
-//------------------------------------------------------------------------------
-
 // reDial connection to amqp with one or more fallback URLs
-func (a *AMQP) reDial(urls []string) (conn *amqp.Connection, err error) {
+func (a *amqp09Writer) reDial(urls []string) (conn *amqp.Connection, err error) {
 	for _, u := range urls {
 		conn, err = a.dial(u)
 		if err != nil {
@@ -342,7 +328,7 @@ func (a *AMQP) reDial(urls []string) (conn *amqp.Connection, err error) {
 }
 
 // dial attempts to connect to amqp URL
-func (a *AMQP) dial(amqpURL string) (conn *amqp.Connection, err error) {
+func (a *amqp09Writer) dial(amqpURL string) (conn *amqp.Connection, err error) {
 	u, err := url.Parse(amqpURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid AMQP URL: %w", err)

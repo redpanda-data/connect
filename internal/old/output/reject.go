@@ -33,8 +33,8 @@ Rejects all messages, treating them as though the output destination failed to p
 The routing of messages after this output depends on the type of input it came from. For inputs that support propagating nacks upstream such as AMQP or NATS the message will be nacked. However, for inputs that are sequential such as files or Kafka the messages will simply be reprocessed from scratch.
 
 If you're still scratching your head as to when this output could be useful check out [the examples below](#examples).`,
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Examples: []docs.AnnotatedExample{
 			{
@@ -57,7 +57,7 @@ output:
 `,
 			},
 		},
-		config: docs.FieldComponent().HasType(docs.FieldTypeString).HasDefault(""),
+		Config: docs.FieldString("", "").HasDefault(""),
 	}
 }
 

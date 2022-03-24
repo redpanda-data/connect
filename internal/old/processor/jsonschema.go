@@ -27,8 +27,8 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("json_schema", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryMapping,
+		Categories: []string{
+			"Mapping",
 		},
 		Summary: `
 Checks messages against a provided JSONSchema definition but does not change the
@@ -88,10 +88,10 @@ If a payload being processed looked like:
 
 Then a log message would appear explaining the fault and the payload would be
 dropped.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("schema", "A schema to apply. Use either this or the `schema_path` field."),
-			docs.FieldCommon("schema_path", "The path of a schema document to apply. Use either this or the `schema` field."),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("schema", "A schema to apply. Use either this or the `schema_path` field."),
+			docs.FieldString("schema_path", "The path of a schema document to apply. Use either this or the `schema` field."),
+		),
 	}
 }
 

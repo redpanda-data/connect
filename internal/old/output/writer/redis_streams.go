@@ -38,7 +38,7 @@ func NewRedisStreamsConfig() RedisStreamsConfig {
 		Stream:       "",
 		BodyKey:      "body",
 		MaxLenApprox: 0,
-		MaxInFlight:  1,
+		MaxInFlight:  64,
 		Metadata:     metadata.NewExcludeFilterConfig(),
 		Batching:     policy.NewConfig(),
 	}

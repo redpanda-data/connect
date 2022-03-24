@@ -27,10 +27,10 @@ It is possible to connect multiple inputs to the same inproc ID, resulting in
 messages dispatching in a round-robin fashion to connected inputs. However, only
 one output can assume an inproc ID, and will replace existing outputs if a
 collision occurs.`,
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
-		config: docs.FieldComponent().HasType(docs.FieldTypeString).HasDefault(""),
+		Config: docs.FieldString("", "").HasDefault(""),
 	}
 }
 

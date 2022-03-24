@@ -25,7 +25,7 @@ func FieldsFromYAML(node *yaml.Node) FieldSpecs {
 func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 	node = unwrapDocumentNode(node)
 
-	field := FieldCommon(name, "")
+	field := newField(name, "")
 
 	switch node.Kind {
 	case yaml.MappingNode:

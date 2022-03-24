@@ -26,8 +26,8 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("jmespath", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryMapping,
+		Categories: []string{
+			"Mapping",
 		},
 		Summary: `
 Executes a [JMESPath query](http://jmespath.org/) on JSON documents and replaces
@@ -69,9 +69,9 @@ pipeline:
 `,
 			},
 		},
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("query", "The JMESPath query to apply to messages."),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("query", "The JMESPath query to apply to messages."),
+		),
 	}
 }
 

@@ -126,7 +126,7 @@ If you're seeing issues writing to or reading from Kafka with this component the
 - I'm seeing logs that report ` + "`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`" + `, but the brokers are definitely reachable.
 
 Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"addresses", "A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.",
 				[]string{"localhost:9092"}, []string{"localhost:9041,localhost:9042"}, []string{"localhost:9041", "localhost:9042"},
@@ -143,30 +143,30 @@ Unfortunately this error message will appear for a wide range of connection prob
 			docs.FieldString("target_version", "The version of the Kafka protocol to use. This limits the capabilities used by the client and should ideally match the version of your brokers."),
 			btls.FieldSpec(),
 			sasl.FieldSpec(),
-			docs.FieldCommon("consumer_group", "An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions."),
+			docs.FieldString("consumer_group", "An identifier for the consumer group of the connection. This field can be explicitly made empty in order to disable stored offsets for the consumed topic partitions."),
 			docs.FieldString("client_id", "An identifier for the client connection.").Advanced(),
-			docs.FieldAdvanced("rack_id", "A rack identifier for this client."),
-			docs.FieldAdvanced("start_from_oldest", "If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset."),
-			docs.FieldCommon(
+			docs.FieldString("rack_id", "A rack identifier for this client.").Advanced(),
+			docs.FieldBool("start_from_oldest", "If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").Advanced(),
+			docs.FieldInt(
 				"checkpoint_limit", "The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
 			).AtVersion("3.33.0"),
-			docs.FieldAdvanced("commit_period", "The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown."),
-			docs.FieldAdvanced("max_processing_period", "A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization."),
+			docs.FieldString("commit_period", "The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").Advanced(),
+			docs.FieldString("max_processing_period", "A maximum estimate for the time taken to process a message, this is used for tuning consumer group synchronization.").Advanced(),
 			span.ExtractTracingSpanMappingDocs,
-			docs.FieldAdvanced("group", "Tuning parameters for consumer group synchronization.").WithChildren(
-				docs.FieldAdvanced("session_timeout", "A period after which a consumer of the group is kicked after no heartbeats."),
-				docs.FieldAdvanced("heartbeat_interval", "A period in which heartbeats should be sent out."),
-				docs.FieldAdvanced("rebalance_timeout", "A period after which rebalancing is abandoned if unresolved."),
-			),
-			docs.FieldAdvanced("fetch_buffer_cap", "The maximum number of unprocessed messages to fetch at a given time."),
+			docs.FieldObject("group", "Tuning parameters for consumer group synchronization.").WithChildren(
+				docs.FieldString("session_timeout", "A period after which a consumer of the group is kicked after no heartbeats.").Advanced(),
+				docs.FieldString("heartbeat_interval", "A period in which heartbeats should be sent out.").Advanced(),
+				docs.FieldString("rebalance_timeout", "A period after which rebalancing is abandoned if unresolved.").Advanced(),
+			).Advanced(),
+			docs.FieldInt("fetch_buffer_cap", "The maximum number of unprocessed messages to fetch at a given time.").Advanced(),
 			func() docs.FieldSpec {
 				b := policy.FieldSpec()
 				b.IsAdvanced = true
 				return b
 			}(),
-		},
-		Categories: []Category{
-			CategoryServices,
+		),
+		Categories: []string{
+			"Services",
 		},
 	}
 }

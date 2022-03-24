@@ -18,15 +18,15 @@ func init() {
 		Summary: `
 Connects to a (tcp/udp/unix) server and sends a continuous stream of data, dividing messages according to the specified codec.`,
 		Description: multipartCodecDoc,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("network", "The network type to connect as.").HasOptions(
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("network", "The network type to connect as.").HasOptions(
 				"unix", "tcp", "udp",
 			),
-			docs.FieldCommon("address", "The address (or path) to connect to.", "/tmp/benthos.sock", "localhost:9000"),
+			docs.FieldString("address", "The address (or path) to connect to.", "/tmp/benthos.sock", "localhost:9000"),
 			codec.WriterDocs,
-		},
-		Categories: []Category{
-			CategoryNetwork,
+		),
+		Categories: []string{
+			"Network",
 		},
 	}
 }

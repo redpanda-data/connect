@@ -1,7 +1,6 @@
 package manager
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -197,11 +196,6 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	deadline, hasDeadline := r.Context().Deadline()
-	if !hasDeadline {
-		deadline = time.Now().Add(m.apiTimeout)
-	}
-
 	wg := sync.WaitGroup{}
 	wg.Add(len(toDelete))
 	wg.Add(len(toUpdate))
@@ -211,9 +205,12 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 	errUpdate := make([]error, len(toUpdate))
 	errCreate := make([]error, len(toCreate))
 
+	// TODO: Replace with context
+	tmpTimeout := time.Second * 5
+
 	for i, id := range toDelete {
 		go func(sid string, j int) {
-			errDelete[j] = m.Delete(sid, time.Until(deadline))
+			errDelete[j] = m.Delete(sid, tmpTimeout)
 			wg.Done()
 		}(id, i)
 	}
@@ -221,7 +218,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 	for id, conf := range toUpdate {
 		newConf := conf
 		go func(sid string, sconf *stream.Config, j int) {
-			errUpdate[j] = m.Update(sid, *sconf, time.Until(deadline))
+			errUpdate[j] = m.Update(sid, *sconf, tmpTimeout)
 			wg.Done()
 		}(id, &newConf, i)
 		i++
@@ -342,10 +339,8 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deadline, hasDeadline := r.Context().Deadline()
-	if !hasDeadline {
-		deadline = time.Now().Add(m.apiTimeout)
-	}
+	// TODO: Replace with context
+	tmpTimeout := time.Second * 5
 
 	var conf stream.Config
 	var lints []string
@@ -402,16 +397,16 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			w.Write(errBytes)
 			return
 		}
-		serverErr = m.Update(id, conf, time.Until(deadline))
+		serverErr = m.Update(id, conf, tmpTimeout)
 	case "DELETE":
-		serverErr = m.Delete(id, time.Until(deadline))
+		serverErr = m.Delete(id, tmpTimeout)
 	case "PATCH":
 		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
 			if conf, requestErr = patchConfig(info.Config()); requestErr != nil {
 				return
 			}
-			serverErr = m.Update(id, conf, time.Until(deadline))
+			serverErr = m.Update(id, conf, tmpTimeout)
 		}
 	default:
 		requestErr = fmt.Errorf("verb not supported: %v", r.Method)
@@ -460,8 +455,7 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, done := context.WithDeadline(r.Context(), time.Now().Add(m.apiTimeout))
-	defer done()
+	ctx := r.Context()
 
 	var storeFn func(*yaml.Node)
 

@@ -31,14 +31,14 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#metadata).`,
-		Categories: []Category{
-			CategoryServices,
+		Categories: []string{
+			"Services",
 		},
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("hosts", "A list of target host addresses to connect to.").Array(),
 			docs.FieldString("user", "A user ID to connect as."),
 			docs.FieldString("directory", "The directory to consume from."),
-		},
+		),
 	}
 }
 

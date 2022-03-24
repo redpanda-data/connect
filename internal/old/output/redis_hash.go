@@ -52,18 +52,18 @@ The order of hash field extraction is as follows:
 
 Where latter stages will overwrite matching field names of a former stage.`,
 		Async: true,
-		FieldSpecs: old.ConfigDocs().Add(
-			docs.FieldCommon(
+		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
+			docs.FieldString(
 				"key", "The key for each message, function interpolations should be used to create a unique key per message.",
 				"${!meta(\"kafka_key\")}", "${!json(\"doc.id\")}", "${!count(\"msgs\")}",
 			).IsInterpolated(),
-			docs.FieldCommon("walk_metadata", "Whether all metadata fields of messages should be walked and added to the list of hash fields to set."),
-			docs.FieldCommon("walk_json_object", "Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set."),
+			docs.FieldBool("walk_metadata", "Whether all metadata fields of messages should be walked and added to the list of hash fields to set."),
+			docs.FieldBool("walk_json_object", "Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set."),
 			docs.FieldString("fields", "A map of key/value pairs to set as hash fields.").IsInterpolated().Map(),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		),
-		Categories: []Category{
-			CategoryServices,
+		Categories: []string{
+			"Services",
 		},
 	}
 }

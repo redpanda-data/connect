@@ -129,7 +129,7 @@ func NewObjectField(name string, fields ...*ConfigField) *ConfigField {
 		children[i] = f.field
 	}
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").WithChildren(children...),
+		field: docs.FieldObject(name, "").WithChildren(children...),
 	}
 }
 

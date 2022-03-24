@@ -14,6 +14,6 @@ func init() {
 		Name:    "none",
 		Type:    docs.TypeMetrics,
 		Summary: `Disable metrics entirely.`,
-		Config:  docs.FieldComponent().HasType(docs.FieldTypeObject),
+		Config:  docs.FieldObject("", ""),
 	})
 }

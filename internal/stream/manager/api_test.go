@@ -129,7 +129,6 @@ func TestTypeAPIDisabled(t *testing.T) {
 	require.NoError(t, err)
 
 	_ = manager.New(rMgr,
-		manager.OptSetAPITimeout(time.Millisecond*100),
 		manager.OptAPIEnabled(true),
 	)
 	assert.Greater(t, len(r.endpoints), 1)
@@ -139,7 +138,6 @@ func TestTypeAPIDisabled(t *testing.T) {
 	require.NoError(t, err)
 
 	_ = manager.New(rMgr,
-		manager.OptSetAPITimeout(time.Millisecond*100),
 		manager.OptAPIEnabled(false),
 	)
 	assert.Len(t, r.endpoints, 1)
@@ -147,9 +145,7 @@ func TestTypeAPIDisabled(t *testing.T) {
 }
 
 func TestTypeAPIBadMethods(t *testing.T) {
-	mgr := manager.New(mock.NewManager(),
-		manager.OptSetAPITimeout(time.Millisecond*100),
-	)
+	mgr := manager.New(mock.NewManager())
 
 	r := router(mgr)
 
@@ -179,9 +175,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := manager.New(res,
-		manager.OptSetAPITimeout(time.Second*10),
-	)
+	mgr := manager.New(res)
 
 	r := router(mgr)
 	conf, err := harmlessConf().Sanitised()
@@ -294,9 +288,7 @@ func TestTypeAPIPatch(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := manager.New(res,
-		manager.OptSetAPITimeout(time.Millisecond*100),
-	)
+	mgr := manager.New(res)
 
 	r := router(mgr)
 	conf := harmlessConf()
@@ -348,9 +340,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := manager.New(res,
-		manager.OptSetAPITimeout(time.Second*10),
-	)
+	mgr := manager.New(res)
 
 	r := router(mgr)
 	conf := harmlessConf()
@@ -427,9 +417,7 @@ func TestTypeAPIList(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := manager.New(res,
-		manager.OptSetAPITimeout(time.Millisecond*100),
-	)
+	mgr := manager.New(res)
 
 	r := router(mgr)
 
@@ -464,9 +452,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := manager.New(res,
-		manager.OptSetAPITimeout(time.Millisecond*100),
-	)
+	mgr := manager.New(res)
 
 	r := router(mgr)
 
@@ -538,9 +524,7 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := manager.New(res,
-		manager.OptSetAPITimeout(time.Millisecond*100),
-	)
+	mgr := manager.New(res)
 
 	r := router(mgr)
 
@@ -572,9 +556,7 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := manager.New(res,
-		manager.OptSetAPITimeout(time.Millisecond*100),
-	)
+	mgr := manager.New(res)
 
 	r := router(mgr)
 
@@ -621,9 +603,7 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := manager.New(res,
-		manager.OptSetAPITimeout(time.Millisecond*100),
-	)
+	mgr := manager.New(res)
 
 	r := router(mgr)
 
@@ -653,9 +633,7 @@ func TestTypeAPILinting(t *testing.T) {
 	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	mgr := manager.New(res,
-		manager.OptSetAPITimeout(time.Millisecond*100),
-	)
+	mgr := manager.New(res)
 
 	r := router(mgr)
 
@@ -755,9 +733,7 @@ func TestResourceAPILinting(t *testing.T) {
 			bmgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 			require.NoError(t, err)
 
-			mgr := manager.New(bmgr,
-				manager.OptSetAPITimeout(time.Millisecond*100),
-			)
+			mgr := manager.New(bmgr)
 
 			r := router(mgr)
 
@@ -794,9 +770,7 @@ func TestTypeAPIGetStats(t *testing.T) {
 	mgr, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	smgr := manager.New(mgr,
-		manager.OptSetAPITimeout(time.Millisecond*100),
-	)
+	smgr := manager.New(mgr)
 
 	r := router(smgr)
 
@@ -833,9 +807,7 @@ func TestTypeAPISetResources(t *testing.T) {
 	tChan := make(chan message.Transaction)
 	bmgr.SetPipe("feed_in", tChan)
 
-	mgr := manager.New(bmgr,
-		manager.OptSetAPITimeout(time.Millisecond*100),
-	)
+	mgr := manager.New(bmgr)
 
 	tmpDir := t.TempDir()
 

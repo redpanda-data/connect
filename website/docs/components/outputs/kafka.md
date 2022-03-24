@@ -40,7 +40,7 @@ output:
     static_headers: {}
     metadata:
       exclude_prefixes: []
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -83,7 +83,7 @@ output:
     metadata:
       exclude_prefixes: []
     inject_tracing_map: ""
-    max_in_flight: 1
+    max_in_flight: 64
     ack_replicas: false
     max_msg_bytes: 1000000
     timeout: 5s
@@ -474,7 +474,7 @@ The maximum number of parallel message batches to have in flight at any given ti
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `ack_replicas`
 

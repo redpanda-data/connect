@@ -28,7 +28,7 @@ func init() {
 		Type:    docs.TypeTracer,
 		Status:  docs.StatusStable,
 		Summary: `Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collector.`,
-		Config: docs.FieldComponent().HasType(docs.FieldTypeObject).WithChildren(
+		Config: docs.FieldObject("", "").WithChildren(
 			docs.FieldString("agent_address", "The address of a Jaeger agent to send tracing events to.", "jaeger-agent:6831").HasDefault(""),
 			docs.FieldString("collector_url", "The URL of a Jaeger collector to send tracing events to. If set, this will override `agent_address`.",
 				"https://jaeger-collector:14268/api/traces").HasDefault("").AtVersion("3.38.0"),

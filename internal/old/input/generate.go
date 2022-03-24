@@ -38,22 +38,22 @@ func init() {
 Generates messages at a given interval using a [Bloblang](/docs/guides/bloblang/about)
 mapping executed without a context. This allows you to generate messages for
 testing your pipeline configs.`,
-		FieldSpecs: docs.FieldSpecs{
+		Config: docs.FieldComponent().WithChildren(
 			docs.FieldBloblang(
 				"mapping", "A [bloblang](/docs/guides/bloblang/about) mapping to use for generating messages.",
 				`root = "hello world"`,
 				`root = {"test":"message","id":uuid_v4()}`,
 			),
-			docs.FieldCommon(
+			docs.FieldString(
 				"interval",
 				"The time interval at which messages should be generated, expressed either as a duration string or as a cron expression. If set to an empty string messages will be generated as fast as downstream services can process them. Cron expressions can specify a timezone by prefixing the expression with `TZ=<location name>`, where the location name corresponds to a file within the IANA Time Zone database.",
 				"5s", "1m", "1h",
 				"@every 1s", "0,30 */2 * * * *", "TZ=Europe/London 30 3-6,20-23 * * *",
 			),
-			docs.FieldCommon("count", "An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down."),
-		},
-		Categories: []Category{
-			CategoryUtility,
+			docs.FieldInt("count", "An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down."),
+		),
+		Categories: []string{
+			"Utility",
 		},
 		Examples: []docs.AnnotatedExample{
 			{

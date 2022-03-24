@@ -21,8 +21,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("split", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryUtility,
+		Categories: []string{
+			"Utility",
 		},
 		Summary: `
 Breaks message batches (synonymous with multiple part messages) into smaller batches. The size of the resulting batches are determined either by a discrete size or, if the field ` + "`byte_size`" + ` is non-zero, then by total size in bytes (which ever limit is reached first).`,
@@ -31,10 +31,10 @@ This processor is for breaking batches down into smaller ones. In order to break
 
 If there is a remainder of messages after splitting a batch the remainder is also sent as a single batch. For example, if your target size was 10, and the processor received a batch of 95 message parts, the result would be 9 batches of 10 messages followed by a batch of 5 messages.`,
 		UsesBatches: true,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("size", "The target number of messages."),
-			docs.FieldCommon("byte_size", "An optional target of total message bytes."),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldInt("size", "The target number of messages."),
+			docs.FieldInt("byte_size", "An optional target of total message bytes."),
+		),
 	}
 }
 

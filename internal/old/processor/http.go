@@ -29,8 +29,8 @@ func init() {
 			}
 			return processor.NewV2BatchedToV1Processor("http", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryIntegration,
+		Categories: []string{
+			"Integration",
 		},
 		Summary: `
 Performs an HTTP request using a message batch as the request body, and replaces
@@ -73,7 +73,7 @@ When all retry attempts for a message are exhausted the processor cancels the
 attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](/docs/configuration/error_handling).`,
-		config: ihttpdocs.ClientFieldSpec(false,
+		Config: ihttpdocs.ClientFieldSpec(false,
 			docs.FieldBool("batch_as_multipart", "Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).").Advanced().HasDefault(false),
 			docs.FieldBool("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent serially.").HasDefault(false)),
 		Examples: []docs.AnnotatedExample{

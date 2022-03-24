@@ -33,7 +33,7 @@ func NewAzureTableStorageConfig() AzureTableStorageConfig {
 		Properties:              map[string]string{},
 		InsertType:              "INSERT",
 		Timeout:                 "5s",
-		MaxInFlight:             1,
+		MaxInFlight:             64,
 		Batching:                policy.NewConfig(),
 	}
 }

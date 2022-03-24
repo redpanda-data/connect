@@ -87,25 +87,22 @@ It's possible to configure Benthos to create the DynamoDB table required for coo
 
 Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/docs/configuration/batching#batch-policy). Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.
 `,
-		FieldSpecs: append(
-			append(docs.FieldSpecs{
-				docs.FieldString("streams", "One or more Kinesis data streams to consume from. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").Array(),
-				docs.FieldCommon(
-					"dynamodb", "Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams.",
-				).WithChildren(dynamoDBCheckpointFields...),
-				docs.FieldCommon(
-					"checkpoint_limit", "The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
-				),
-				docs.FieldCommon("commit_period", "The period of time between each update to the checkpoint table."),
-				docs.FieldAdvanced("rebalance_period", "The period of time between each attempt to rebalance shards across clients."),
-				docs.FieldAdvanced("lease_period", "The period of time after which a client that has failed to update a shard checkpoint is assumed to be inactive."),
-				docs.FieldCommon("start_from_oldest", "Whether to consume from the oldest message when a sequence does not yet exist for the stream."),
-			}, session.FieldSpecs()...),
-			policy.FieldSpec(),
-		),
-		Categories: []Category{
-			CategoryServices,
-			CategoryAWS,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("streams", "One or more Kinesis data streams to consume from. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").Array(),
+			docs.FieldObject(
+				"dynamodb", "Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams.",
+			).WithChildren(dynamoDBCheckpointFields...),
+			docs.FieldInt(
+				"checkpoint_limit", "The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.",
+			),
+			docs.FieldString("commit_period", "The period of time between each update to the checkpoint table."),
+			docs.FieldString("rebalance_period", "The period of time between each attempt to rebalance shards across clients.").Advanced(),
+			docs.FieldString("lease_period", "The period of time after which a client that has failed to update a shard checkpoint is assumed to be inactive.").Advanced(),
+			docs.FieldBool("start_from_oldest", "Whether to consume from the oldest message when a sequence does not yet exist for the stream."),
+		).WithChildren(session.FieldSpecs()...).WithChildren(policy.FieldSpec()),
+		Categories: []string{
+			"Services",
+			"AWS",
 		},
 	}
 }

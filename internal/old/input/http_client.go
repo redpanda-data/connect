@@ -34,9 +34,9 @@ func httpClientSpec() docs.FieldSpec {
 	}
 
 	return ihttpdocs.ClientFieldSpec(false,
-		docs.FieldCommon("payload", "An optional payload to deliver for each request."),
-		docs.FieldAdvanced("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped."),
-		docs.FieldCommon(
+		docs.FieldString("payload", "An optional payload to deliver for each request."),
+		docs.FieldBool("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped.").Advanced(),
+		docs.FieldObject(
 			"stream", "Allows you to set streaming mode, where requests are kept open and messages are processed line-by-line.",
 		).WithChildren(streamSpecs...),
 	)
@@ -58,9 +58,9 @@ If you enable streaming then Benthos will consume the body of the response as a 
 ### Pagination
 
 This input supports interpolation functions in the ` + "`url` and `headers`" + ` fields where data from the previous successfully consumed message (if there was one) can be referenced. This can be used in order to support basic levels of pagination. However, in cases where pagination depends on logic it is recommended that you use an ` + "[`http` processor](/docs/components/processors/http) instead, often combined with a [`generate` input](/docs/components/inputs/generate)" + ` in order to schedule the processor.`,
-		config: httpClientSpec(),
-		Categories: []Category{
-			CategoryNetwork,
+		Config: httpClientSpec(),
+		Categories: []string{
+			"Network",
 		},
 		Examples: []docs.AnnotatedExample{
 			{

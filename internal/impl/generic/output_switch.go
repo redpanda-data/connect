@@ -90,9 +90,9 @@ behavior is false, which will drop the message.`,
 					`this.type == "foo"`,
 					`this.contents.urls.contains("https://benthos.dev/")`,
 				).HasDefault(""),
-				docs.FieldCommon(
+				docs.FieldOutput(
 					"output", "An [output](/docs/components/outputs/about/) for messages that pass the check to be routed to.",
-				).HasDefault(map[string]interface{}{}).HasType(docs.FieldTypeOutput),
+				).HasDefault(map[string]interface{}{}),
 				docs.FieldBool(
 					"continue",
 					"Indicates whether, if this case passes for a message, the next case should also be tested.",

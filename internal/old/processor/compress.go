@@ -30,18 +30,18 @@ func init() {
 			}
 			return processor.NewV2ToV1Processor("compress", p, mgr.Metrics()), nil
 		},
-		Categories: []Category{
-			CategoryParsing,
+		Categories: []string{
+			"Parsing",
 		},
 		Summary: `
 Compresses messages according to the selected algorithm. Supported compression
 algorithms are: gzip, zlib, flate, snappy, lz4.`,
 		Description: `
 The 'level' field might not apply to all algorithms.`,
-		FieldSpecs: docs.FieldSpecs{
-			docs.FieldCommon("algorithm", "The compression algorithm to use.").HasOptions("gzip", "zlib", "flate", "snappy", "lz4"),
-			docs.FieldCommon("level", "The level of compression to use. May not be applicable to all algorithms."),
-		},
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("algorithm", "The compression algorithm to use.").HasOptions("gzip", "zlib", "flate", "snappy", "lz4"),
+			docs.FieldInt("level", "The level of compression to use. May not be applicable to all algorithms."),
+		),
 	}
 }
 

@@ -22,13 +22,13 @@ Connects to a websocket server and continuously receives messages.`,
 It is possible to configure an ` + "`open_message`" + `, which when set to a
 non-empty string will be sent to the websocket server each time a connection is
 first established.`,
-		FieldSpecs: append(docs.FieldSpecs{
-			docs.FieldCommon("url", "The URL to connect to.", "ws://localhost:4195/get/ws").HasType("string"),
-			docs.FieldAdvanced("open_message", "An optional message to send to the server upon connection."),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("url", "The URL to connect to.", "ws://localhost:4195/get/ws"),
+			docs.FieldString("open_message", "An optional message to send to the server upon connection.").Advanced(),
 			btls.FieldSpec(),
-		}, auth.FieldSpecs()...),
-		Categories: []Category{
-			CategoryNetwork,
+		).WithChildren(auth.FieldSpecs()...),
+		Categories: []string{
+			"Network",
 		},
 	}
 }

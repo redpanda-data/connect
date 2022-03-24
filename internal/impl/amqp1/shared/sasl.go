@@ -35,14 +35,14 @@ func NewSASLConfig() SASLConfig {
 
 // SASLFieldSpec returns specs for SASL fields.
 func SASLFieldSpec() docs.FieldSpec {
-	return docs.FieldAdvanced("sasl", "Enables SASL authentication.").WithChildren(
-		docs.FieldCommon("mechanism", "The SASL authentication mechanism to use.").HasAnnotatedOptions(
+	return docs.FieldObject("sasl", "Enables SASL authentication.").WithChildren(
+		docs.FieldString("mechanism", "The SASL authentication mechanism to use.").HasAnnotatedOptions(
 			"none", "No SASL based authentication.",
 			"plain", "Plain text SASL authentication.",
-		),
-		docs.FieldCommon("user", "A SASL plain text username. It is recommended that you use environment variables to populate this field.", "${USER}"),
-		docs.FieldCommon("password", "A SASL plain text password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
-	)
+		).HasDefault("none"),
+		docs.FieldString("user", "A SASL plain text username. It is recommended that you use environment variables to populate this field.", "${USER}").HasDefault(""),
+		docs.FieldString("password", "A SASL plain text password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}").HasDefault(""),
+	).Advanced().HasDefault(map[string]interface{}{})
 }
 
 // ToOptFns renders the sasl.Config options into amqp.ConnOption fns.
