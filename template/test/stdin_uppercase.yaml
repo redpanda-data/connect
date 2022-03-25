@@ -20,9 +20,9 @@ metrics_mapping: |
     let index = $suffix.split(".").1.number().floor()
 
     root = $prefix + if $index == 0 {
-      $suffix.replace("processor.0.", "mapping.")
+      $suffix.replace_all("processor.0.", "mapping.")
     } else {
-      $suffix.re_replace("processor\\.[0-9]+\\.", "processor.%v.".format($index - 1))
+      $suffix.re_replace_all("processor\\.[0-9]+\\.", "processor.%v.".format($index - 1))
     }
   }
 

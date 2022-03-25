@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 // NewTLSField defines a new object type config field that describes TLS
@@ -62,7 +63,8 @@ func NewTLSToggledField(name string) *ConfigField {
 }
 
 // FieldTLSToggled accesses a field from a parsed config that was defined with
-// NewTLSField and returns a *tls.Config, or an error if the configuration was
+// NewTLSFieldToggled and returns a *tls.Config and a boolean flag indicating
+// whether tls is explicitly enabled, or an error if the configuration was
 // invalid.
 func (p *ParsedConfig) FieldTLSToggled(path ...string) (tconf *tls.Config, enabled bool, err error) {
 	v, exists := p.field(path...)

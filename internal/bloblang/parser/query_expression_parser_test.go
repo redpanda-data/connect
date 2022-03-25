@@ -3,10 +3,11 @@ package parser
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestExpressionsParser(t *testing.T) {
@@ -16,12 +17,11 @@ func TestExpressionsParser(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		input      string
-		deprecated bool
-		output     string
-		messages   []easyMsg
-		value      *interface{}
-		index      int
+		input    string
+		output   string
+		messages []easyMsg
+		value    *interface{}
+		index    int
 	}{
 		"match literals": {
 			input: `match "string literal" {
@@ -257,18 +257,18 @@ func TestExpressionsParser(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)
 			}
 
-			e, err := tryParseQuery(test.input, test.deprecated)
+			e, err := tryParseQuery(test.input)
 			require.Nil(t, err)
 
 			res := query.ExecToString(e, query.FunctionContext{

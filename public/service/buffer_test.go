@@ -6,14 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/component/buffer"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/component/buffer"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 type memoryBuffer struct {
@@ -72,10 +71,13 @@ func (m *memoryBuffer) Close(ctx context.Context) error {
 }
 
 func TestStreamMemoryBuffer(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	var incr, total uint8 = 100, 50
 
-	tChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	tChan := make(chan message.Transaction)
+	resChan := make(chan error)
 
 	b := buffer.NewStream("meow", newAirGapBatchBuffer(newMemoryBuffer(int(total))), log.Noop(), metrics.Noop())
 	require.NoError(t, b.Consume(tChan))
@@ -90,7 +92,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 
 		select {
 		// Send to buffer
-		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+		case tChan <- message.NewTransaction(message.QuickBatch(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for unbuffered message %v send", i)
 		}
@@ -98,13 +100,13 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		// Instant response from buffer
 		select {
 		case res := <-resChan:
-			require.NoError(t, res.Error())
+			require.NoError(t, res)
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for unbuffered message %v response", i)
 		}
 
 		// Receive on output
-		var outTr types.Transaction
+		var outTr message.Transaction
 		select {
 		case outTr = <-b.TransactionChan():
 			assert.Equal(t, i, outTr.Payload.Get(0).Get()[0])
@@ -113,11 +115,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		}
 
 		// Response from output
-		select {
-		case outTr.ResponseChan <- response.NewAck():
-		case <-time.After(time.Second):
-			t.Fatalf("Timed out waiting for unbuffered response send back %v", i)
-		}
+		require.NoError(t, outTr.Ack(ctx, nil))
 	}
 
 	for i = 0; i <= total; i++ {
@@ -126,13 +124,13 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		msgBytes[0][0] = i
 
 		select {
-		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+		case tChan <- message.NewTransaction(message.QuickBatch(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v send", i)
 		}
 		select {
 		case res := <-resChan:
-			assert.NoError(t, res.Error())
+			assert.NoError(t, res)
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v response", i)
 		}
@@ -143,7 +141,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	msgBytes[0] = make([]byte, int(incr)+1)
 
 	select {
-	case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+	case tChan <- message.NewTransaction(message.QuickBatch(msgBytes), resChan):
 	case <-time.After(time.Second):
 		t.Fatalf("Timed out waiting for final buffered message send")
 	}
@@ -151,21 +149,21 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	// Response should block until buffer is relieved
 	select {
 	case res := <-resChan:
-		if res.Error() != nil {
-			t.Fatal(res.Error())
+		if res != nil {
+			t.Fatal(res)
 		} else {
 			t.Fatalf("Overflowed response returned before timeout")
 		}
 	case <-time.After(100 * time.Millisecond):
 	}
 
-	var outTr types.Transaction
+	var outTr message.Transaction
 
 	// Extract last message
 	select {
 	case outTr = <-b.TransactionChan():
 		assert.Equal(t, byte(0), outTr.Payload.Get(0).Get()[0])
-		outTr.ResponseChan <- response.NewAck()
+		require.NoError(t, outTr.Ack(ctx, nil))
 	case <-time.After(time.Second):
 		t.Fatalf("Timed out waiting for final buffered message read")
 	}
@@ -173,7 +171,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	// Response from the last attempt should no longer be blocking
 	select {
 	case res := <-resChan:
-		assert.NoError(t, res.Error())
+		assert.NoError(t, res)
 	case <-time.After(100 * time.Millisecond):
 		t.Errorf("Final buffered response blocked")
 	}
@@ -186,12 +184,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v read", i)
 		}
-
-		select {
-		case outTr.ResponseChan <- response.NewAck():
-		case <-time.After(time.Second):
-			t.Fatalf("Timed out waiting for buffered response send back %v", i)
-		}
+		require.NoError(t, outTr.Ack(ctx, nil))
 	}
 
 	// Get final message
@@ -200,12 +193,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("Timed out waiting for buffered message %v read", i)
 	}
-
-	select {
-	case outTr.ResponseChan <- response.NewAck():
-	case <-time.After(time.Second):
-		t.Fatalf("Timed out waiting for buffered response send back %v", i)
-	}
+	require.NoError(t, outTr.Ack(ctx, nil))
 
 	b.CloseAsync()
 	require.NoError(t, b.WaitForClose(time.Second))
@@ -215,10 +203,13 @@ func TestStreamMemoryBuffer(t *testing.T) {
 }
 
 func TestStreamBufferClosing(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	var incr, total uint8 = 100, 5
 
-	tChan := make(chan types.Transaction)
-	resChan := make(chan types.Response)
+	tChan := make(chan message.Transaction)
+	resChan := make(chan error)
 
 	b := buffer.NewStream("meow", newAirGapBatchBuffer(newMemoryBuffer(int(total))), log.Noop(), metrics.Noop())
 	require.NoError(t, b.Consume(tChan))
@@ -232,13 +223,13 @@ func TestStreamBufferClosing(t *testing.T) {
 		msgBytes[0][0] = i
 
 		select {
-		case tChan <- types.NewTransaction(message.New(msgBytes), resChan):
+		case tChan <- message.NewTransaction(message.QuickBatch(msgBytes), resChan):
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v send", i)
 		}
 		select {
 		case res := <-resChan:
-			assert.NoError(t, res.Error())
+			assert.NoError(t, res)
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v response", i)
 		}
@@ -252,7 +243,7 @@ func TestStreamBufferClosing(t *testing.T) {
 		select {
 		case val := <-b.TransactionChan():
 			assert.Equal(t, i, val.Payload.Get(0).Get()[0])
-			val.ResponseChan <- response.NewAck()
+			require.NoError(t, val.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for final buffered message read")
 		}

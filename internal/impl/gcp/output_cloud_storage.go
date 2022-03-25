@@ -8,22 +8,23 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gofrs/uuid"
+
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
 func init() {
-	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
+	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 		g, err := newGCPCloudStorageOutput(nm, c.GCPCloudStorage, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
@@ -35,14 +36,11 @@ func init() {
 		w = output.OnlySinglePayloads(w)
 		return output.NewBatcherFromConfig(c.GCPCloudStorage.Batching, w, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
-		Name:    output.TypeGCPCloudStorage,
-		Type:    docs.TypeOutput,
-		Status:  docs.StatusBeta,
-		Version: "3.43.0",
-		Categories: []string{
-			string(input.CategoryServices),
-			string(input.CategoryGCP),
-		},
+		Name:       output.TypeGCPCloudStorage,
+		Type:       docs.TypeOutput,
+		Status:     docs.StatusBeta,
+		Version:    "3.43.0",
+		Categories: []string{"Services", "GCP"},
 		Summary: `
 Sends message parts as objects to a Google Cloud Storage bucket. Each object is
 uploaded with the path specified with the ` + "`path`" + ` field.`,
@@ -101,15 +99,15 @@ output:
             format: json_array
 `+"```"+``),
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("bucket", "The bucket to upload messages to."),
-			docs.FieldCommon(
+			docs.FieldString("bucket", "The bucket to upload messages to."),
+			docs.FieldString(
 				"path", "The path of each message to upload.",
 				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
 				`${!meta("kafka_key")}.json`,
 				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
 			).IsInterpolated(),
-			docs.FieldCommon("content_type", "The content type to set for each object.").IsInterpolated(),
-			docs.FieldCommon("collision_mode", `Determines how file path collisions should be dealt with.`).
+			docs.FieldString("content_type", "The content type to set for each object.").IsInterpolated(),
+			docs.FieldString("collision_mode", `Determines how file path collisions should be dealt with.`).
 				HasDefault(`overwrite`).
 				HasAnnotatedOptions(
 					"overwrite", "Replace the existing file with the new one.",
@@ -117,10 +115,10 @@ output:
 					"error-if-exists", "Return an error, this is the equivalent of a nack.",
 					"ignore", "Do not modify the original file, the new data will be dropped.",
 				).AtVersion("3.53.0"),
-			docs.FieldAdvanced("content_encoding", "An optional content encoding to set for each object.").IsInterpolated(),
-			docs.FieldAdvanced("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled."),
-			docs.FieldCommon("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			batch.FieldSpec(),
+			docs.FieldString("content_encoding", "An optional content encoding to set for each object.").IsInterpolated().Advanced(),
+			docs.FieldInt("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").Advanced(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPCloudStorageConfig()),
 	})
 }
@@ -188,18 +186,18 @@ func (g *gcpCloudStorageOutput) ConnectWithContext(ctx context.Context) error {
 
 // WriteWithContext attempts to write message contents to a target GCP Cloud
 // Storage bucket as files.
-func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	g.connMut.RLock()
 	client := g.client
 	g.connMut.RUnlock()
 
 	if client == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p types.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		metadata := map[string]string{}
-		p.Metadata().Iter(func(k, v string) error {
+		_ = p.MetaIter(func(k, v string) error {
 			metadata[k] = v
 			return nil
 		})

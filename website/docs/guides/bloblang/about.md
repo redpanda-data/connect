@@ -307,8 +307,8 @@ root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokem
 Methods also support both named and nameless style arguments:
 
 ```coffee
-root.foo_one = this.(bar | baz).trim().replace(old: "dog", new: "cat")
-root.foo_two = this.(bar | baz).trim().replace("dog", "cat")
+root.foo_one = this.(bar | baz).trim().replace_all(old: "dog", new: "cat")
+root.foo_two = this.(bar | baz).trim().replace_all("dog", "cat")
 ```
 
 You can find a full list of methods and their parameters in [the methods page][blobl.methods].
@@ -415,5 +415,5 @@ Why? That's a good question. Bloblang supports non-JSON formats too, so it can't
 [blobl.methods.apply]: /docs/guides/bloblang/methods#apply
 [blobl.methods.catch]: /docs/guides/bloblang/methods#catch
 [blobl.methods.or]: /docs/guides/bloblang/methods#or
-[plugin-api]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public/bloblang
+[plugin-api]: https://pkg.go.dev/github.com/benthosdev/benthos/v4/public/bloblang
 [configuration.unit_testing]: /docs/configuration/unit_testing

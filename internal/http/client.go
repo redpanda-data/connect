@@ -7,7 +7,6 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -16,16 +15,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/metadata"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/http/client"
-	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/metadata"
+	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 // MultipartExpressions represents three dynamic expressions that define a
@@ -53,24 +54,14 @@ type Client struct {
 	metaInsertFilter  *metadata.IncludeFilter
 	metaExtractFilter *metadata.IncludeFilter
 
-	conf          client.Config
+	conf          docs.Config
 	retryThrottle *throttle.Type
 
 	log   log.Modular
 	stats metrics.Type
-	mgr   types.Manager
+	mgr   interop.Manager
 
-	mCount         metrics.StatCounter
-	mErr           metrics.StatCounter
-	mErrReq        metrics.StatCounter
-	mErrReqTimeout metrics.StatCounter
-	mErrRes        metrics.StatCounter
-	mLimited       metrics.StatCounter
-	mLimitFor      metrics.StatCounter
-	mLimitErr      metrics.StatCounter
-	mSucc          metrics.StatCounter
-	mLatency       metrics.StatTimer
-
+	mLatency metrics.StatTimer
 	mCodes   map[int]metrics.StatCounter
 	codesMut sync.RWMutex
 
@@ -79,12 +70,12 @@ type Client struct {
 }
 
 // NewClient creates a new http client that sends and receives Benthos messages.
-func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
+func NewClient(conf docs.Config, opts ...func(*Client)) (*Client, error) {
 	h := Client{
 		conf:      conf,
 		log:       log.Noop(),
 		stats:     metrics.Noop(),
-		mgr:       types.NoopMgr(),
+		mgr:       mock.NewManager(),
 		backoffOn: map[int]struct{}{},
 		dropOn:    map[int]struct{}{},
 		successOn: map[int]struct{}{},
@@ -152,17 +143,17 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 	}
 
 	var err error
-	if h.url, err = interop.NewBloblangField(h.mgr, conf.URL); err != nil {
+	if h.url, err = h.mgr.BloblEnvironment().NewField(conf.URL); err != nil {
 		return nil, fmt.Errorf("failed to parse URL expression: %v", err)
 	}
 
 	for k, v := range conf.Headers {
 		if strings.EqualFold(k, "host") {
-			if h.host, err = interop.NewBloblangField(h.mgr, v); err != nil {
+			if h.host, err = h.mgr.BloblEnvironment().NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse header 'host' expression: %v", err)
 			}
 		} else {
-			if h.headers[k], err = interop.NewBloblangField(h.mgr, v); err != nil {
+			if h.headers[k], err = h.mgr.BloblEnvironment().NewField(v); err != nil {
 				return nil, fmt.Errorf("failed to parse header '%v' expression: %v", k, err)
 			}
 		}
@@ -176,16 +167,7 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 		return nil, fmt.Errorf("failed to construct metadata extract filter: %w", err)
 	}
 
-	h.mCount = h.stats.GetCounter("count")
-	h.mErr = h.stats.GetCounter("error")
-	h.mErrReq = h.stats.GetCounter("error.request")
-	h.mErrReqTimeout = h.stats.GetCounter("request_timeout")
-	h.mErrRes = h.stats.GetCounter("error.response")
-	h.mLimited = h.stats.GetCounter("rate_limit.count")
-	h.mLimitFor = h.stats.GetCounter("rate_limit.total_ms")
-	h.mLimitErr = h.stats.GetCounter("rate_limit.error")
-	h.mLatency = h.stats.GetTimer("latency")
-	h.mSucc = h.stats.GetCounter("success")
+	h.mLatency = h.stats.GetTimer("http_request_latency_ns")
 	h.mCodes = map[int]metrics.StatCounter{}
 
 	var retry, maxBackoff time.Duration
@@ -203,8 +185,8 @@ func NewClient(conf client.Config, opts ...func(*Client)) (*Client, error) {
 	}
 
 	if conf.RateLimit != "" {
-		if err := interop.ProbeRateLimit(context.Background(), h.mgr, conf.RateLimit); err != nil {
-			return nil, err
+		if !h.mgr.ProbeRateLimit(conf.RateLimit) {
+			return nil, fmt.Errorf("rate limit resource '%v' was not found", conf.RateLimit)
 		}
 	}
 
@@ -241,7 +223,7 @@ func OptSetStats(stats metrics.Type) func(*Client) {
 }
 
 // OptSetManager sets the manager to use.
-func OptSetManager(mgr types.Manager) func(*Client) {
+func OptSetManager(mgr interop.Manager) func(*Client) {
 	return func(t *Client) {
 		t.mgr = mgr
 	}
@@ -267,7 +249,11 @@ func (h *Client) incrCode(code int) {
 		return
 	}
 
-	ctr = h.stats.GetCounter(fmt.Sprintf("code.%v", code))
+	tier := code / 100
+	if tier < 0 || tier > 5 {
+		return
+	}
+	ctr = h.stats.GetCounter(fmt.Sprintf("http_request_code_%vxx", tier))
 	ctr.Incr(1)
 
 	h.codesMut.Lock()
@@ -282,18 +268,14 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 	for {
 		var period time.Duration
 		var err error
-		if rerr := interop.AccessRateLimit(ctx, h.mgr, h.conf.RateLimit, func(rl types.RateLimit) {
-			period, err = rl.Access()
+		if rerr := h.mgr.AccessRateLimit(ctx, h.conf.RateLimit, func(rl ratelimit.V1) {
+			period, err = rl.Access(ctx)
 		}); rerr != nil {
 			err = rerr
 		}
 		if err != nil {
 			h.log.Errorf("Rate limit error: %v\n", err)
-			h.mLimitErr.Incr(1)
 			period = time.Second
-		} else if period > 0 {
-			h.mLimited.Incr(1)
-			h.mLimitFor.Incr(period.Nanoseconds() / 1000000)
 		}
 
 		if period > 0 {
@@ -310,7 +292,7 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 
 // CreateRequest forms an *http.Request from a message to be sent as the body,
 // and also a message used to form headers (they can be the same).
-func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request, err error) {
+func (h *Client) CreateRequest(sendMsg, refMsg *message.Batch) (req *http.Request, err error) {
 	var overrideContentType string
 	var body io.Reader
 	if len(h.multipart) > 0 {
@@ -348,7 +330,7 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 			headers := textproto.MIMEHeader{
 				"Content-Type": []string{contentType},
 			}
-			_ = h.metaInsertFilter.Iter(sendMsg.Get(i).Metadata(), func(k, v string) error {
+			_ = h.metaInsertFilter.Iter(sendMsg.Get(i), func(k, v string) error {
 				headers[k] = append(headers[k], v)
 				return nil
 			})
@@ -377,7 +359,7 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 		req.Header.Add(k, v.String(0, refMsg))
 	}
 	if sendMsg != nil && sendMsg.Len() == 1 {
-		_ = h.metaInsertFilter.Iter(sendMsg.Get(0).Metadata(), func(k, v string) error {
+		_ = h.metaInsertFilter.Iter(sendMsg.Get(0), func(k, v string) error {
 			req.Header.Add(k, v)
 			return nil
 		})
@@ -396,8 +378,8 @@ func (h *Client) CreateRequest(sendMsg, refMsg types.Message) (req *http.Request
 }
 
 // ParseResponse attempts to parse an HTTP response into a 2D slice of bytes.
-func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err error) {
-	resMsg = message.New(nil)
+func (h *Client) ParseResponse(res *http.Response) (resMsg *message.Batch, err error) {
+	resMsg = message.QuickBatch(nil)
 
 	if res.Body != nil {
 		defer res.Body.Close()
@@ -428,8 +410,6 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 
 				var bytesRead int64
 				if bytesRead, err = buffer.ReadFrom(p); err != nil {
-					h.mErrRes.Incr(1)
-					h.mErr.Incr(1)
 					h.log.Errorf("Failed to read response: %v\n", err)
 					return
 				}
@@ -437,12 +417,12 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 				index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
 				bufferIndex += bytesRead
 
-				if h.conf.CopyResponseHeaders || h.metaExtractFilter.IsSet() {
-					meta := resMsg.Get(index).Metadata()
+				if h.metaExtractFilter.IsSet() {
+					part := resMsg.Get(index)
 					for k, values := range p.Header {
 						normalisedHeader := strings.ToLower(k)
-						if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaExtractFilter.Match(normalisedHeader)) {
-							meta.Set(normalisedHeader, values[0])
+						if len(values) > 0 && h.metaExtractFilter.Match(normalisedHeader) {
+							part.MetaSet(normalisedHeader, values[0])
 						}
 					}
 				}
@@ -450,8 +430,6 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 		} else {
 			var bytesRead int64
 			if bytesRead, err = buffer.ReadFrom(res.Body); err != nil {
-				h.mErrRes.Incr(1)
-				h.mErr.Incr(1)
 				h.log.Errorf("Failed to read response: %v\n", err)
 				return
 			}
@@ -460,12 +438,12 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 			} else {
 				resMsg.Append(message.NewPart(nil))
 			}
-			if h.conf.CopyResponseHeaders || h.metaExtractFilter.IsSet() {
-				meta := resMsg.Get(0).Metadata()
+			if h.metaExtractFilter.IsSet() {
+				part := resMsg.Get(0)
 				for k, values := range res.Header {
 					normalisedHeader := strings.ToLower(k)
-					if len(values) > 0 && (h.conf.CopyResponseHeaders || h.metaExtractFilter.Match(normalisedHeader)) {
-						meta.Set(normalisedHeader, values[0])
+					if len(values) > 0 && h.metaExtractFilter.Match(normalisedHeader) {
+						part.MetaSet(normalisedHeader, values[0])
 					}
 				}
 			}
@@ -474,8 +452,8 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg types.Message, err er
 		resMsg.Append(message.NewPart(nil))
 	}
 
-	resMsg.Iter(func(i int, p types.Part) error {
-		p.Metadata().Set("http_status_code", strconv.Itoa(res.StatusCode))
+	_ = resMsg.Iter(func(i int, p *message.Part) error {
+		p.MetaSet("http_status_code", strconv.Itoa(res.StatusCode))
 		return nil
 	})
 	return
@@ -511,9 +489,7 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 // SendToResponse attempts to create an HTTP request from a provided message,
 // performs it, and then returns the *http.Response, allowing the raw response
 // to be consumed.
-func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Message) (res *http.Response, err error) {
-	h.mCount.Incr(1)
-
+func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Batch) (res *http.Response, err error) {
 	var spans []*tracing.Span
 	if sendMsg != nil {
 		spans = tracing.CreateChildSpans("http_request", sendMsg)
@@ -524,8 +500,6 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 		}()
 	}
 	logErr := func(e error) {
-		h.mErrRes.Incr(1)
-		h.mErr.Incr(1)
 		for _, s := range spans {
 			s.LogKV(
 				"event", "error",
@@ -546,21 +520,15 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 		}
 	}()
 
-	startedAt := time.Now()
-
 	if !h.waitForAccess(ctx) {
-		return nil, types.ErrTypeClosed
+		return nil, component.ErrTypeClosed
 	}
 
 	rateLimited := false
 	numRetries := h.conf.NumRetries
 
-	res, err = h.client.Do(req.WithContext(ctx))
-	if err != nil {
-		if err, ok := err.(net.Error); ok && err.Timeout() {
-			h.mErrReqTimeout.Incr(1)
-		}
-	} else {
+	startedAt := time.Now()
+	if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
 		h.incrCode(res.StatusCode)
 		if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
 			rateLimited = retryStrat == retryBackoff
@@ -573,6 +541,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 			}
 		}
 	}
+	h.mLatency.Timing(time.Since(startedAt).Nanoseconds())
 
 	i, j := 0, numRetries
 	for i < j && err != nil {
@@ -582,17 +551,19 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 		}
 		if rateLimited {
 			if !h.retryThrottle.ExponentialRetryWithContext(ctx) {
-				return nil, types.ErrTypeClosed
+				return nil, component.ErrTypeClosed
 			}
 		} else {
 			if !h.retryThrottle.RetryWithContext(ctx) {
-				return nil, types.ErrTypeClosed
+				return nil, component.ErrTypeClosed
 			}
 		}
 		if !h.waitForAccess(ctx) {
-			return nil, types.ErrTypeClosed
+			return nil, component.ErrTypeClosed
 		}
 		rateLimited = false
+
+		startedAt = time.Now()
 		if res, err = h.client.Do(req.WithContext(ctx)); err == nil {
 			h.incrCode(res.StatusCode)
 			if resolved, retryStrat := h.checkStatus(res.StatusCode); !resolved {
@@ -605,9 +576,8 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 					res.Body.Close()
 				}
 			}
-		} else if err, ok := err.(net.Error); ok && err.Timeout() {
-			h.mErrReqTimeout.Incr(1)
 		}
+		h.mLatency.Timing(time.Since(startedAt).Nanoseconds())
 		i++
 	}
 	if err != nil {
@@ -615,8 +585,6 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg types.Messa
 		return nil, err
 	}
 
-	h.mLatency.Timing(int64(time.Since(startedAt)))
-	h.mSucc.Incr(1)
 	h.retryThrottle.Reset()
 	return res, nil
 }
@@ -627,7 +595,7 @@ func UnexpectedErr(res *http.Response) error {
 	if err != nil {
 		return err
 	}
-	return types.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status, Body: body}
+	return component.ErrUnexpectedHTTPRes{Code: res.StatusCode, S: res.Status, Body: body}
 }
 
 // Send creates an HTTP request from the client config, a provided message to be
@@ -637,7 +605,7 @@ func UnexpectedErr(res *http.Response) error {
 //
 // If the request is successful then the response is parsed into a message,
 // including headers added as metadata (when configured to do so).
-func (h *Client) Send(ctx context.Context, sendMsg, refMsg types.Message) (types.Message, error) {
+func (h *Client) Send(ctx context.Context, sendMsg, refMsg *message.Batch) (*message.Batch, error) {
 	res, err := h.SendToResponse(ctx, sendMsg, refMsg)
 	if err != nil {
 		return nil, err

@@ -7,13 +7,12 @@ module.exports = {
   url: 'https://www.benthos.dev',
   baseUrl: '/',
   favicon: 'img/favicon.ico',
-  organizationName: 'Jeffail',
+  organizationName: 'benthosdev',
   projectName: 'benthos',
   customFields: {
     components: {
       inputs: components("inputs"),
       processors: components("processors"),
-      conditions: components("conditions"),
       outputs: components("outputs"),
       caches: components("caches"),
       rate_limits: components("rate_limits"),
@@ -45,13 +44,13 @@ module.exports = {
         {to: 'videos', label: 'Videos', position: 'left'},
         {to: 'community', label: 'Community', position: 'right'},
         {
-          href: 'https://github.com/Jeffail/benthos/releases/latest',
+          href: 'https://github.com/benthosdev/benthos/releases/latest',
           position: 'right',
           className: 'header-download-link header-icon-link',
           'aria-label': 'Download',
         },
         {
-          href: 'https://github.com/Jeffail/benthos',
+          href: 'https://github.com/benthosdev/benthos',
           position: 'right',
           className: 'header-github-link header-icon-link',
           'aria-label': 'GitHub repository',
@@ -83,7 +82,7 @@ module.exports = {
             },
             {
               label: 'GitHub',
-              href: 'https://github.com/Jeffail/benthos',
+              href: 'https://github.com/benthosdev/benthos',
             },
           ],
         },
@@ -104,9 +103,11 @@ module.exports = {
       copyright: `Copyright © ${new Date().getFullYear()} Ashley Jeffs.`,
     },
     algolia: {
-      apiKey: '358e5d3135579871ceecd50c6cb7ce9e',
+      appId: 'WBY9Z65YR4',
+      apiKey: 'a6c476911e6ecef76049a55d9798a51b',
       indexName: 'benthos',
-    },
+      contextualSearch: false
+    }
   },
   presets: [
     [
@@ -115,7 +116,7 @@ module.exports = {
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl:
-            'https://github.com/Jeffail/benthos/edit/master/website/',
+            'https://github.com/benthosdev/benthos/edit/master/website/',
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),

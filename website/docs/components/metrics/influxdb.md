@@ -17,7 +17,6 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-
 Send metrics to InfluxDB 1.x using the `/write` endpoint.
 
 Introduced in version 3.36.0.
@@ -30,19 +29,19 @@ Introduced in version 3.36.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 metrics:
   influxdb:
     url: ""
     db: ""
-    path_mapping: ""
+  mapping: ""
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 metrics:
   influxdb:
@@ -67,7 +66,7 @@ metrics:
     tags: {}
     retention_policy: ""
     write_consistency: ""
-    path_mapping: ""
+  mapping: ""
 ```
 
 </TabItem>
@@ -133,7 +132,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -150,7 +149,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -162,9 +161,8 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -239,7 +237,7 @@ A duration string indicating how often to poll and collect runtime metrics. Leav
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 runtime: 1m
@@ -253,7 +251,7 @@ A duration string indicating how often to poll and collect GC metrics. Leave emp
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 debug_gc: 1m
@@ -299,7 +297,7 @@ Global tags added to each metric.
 Type: `object`  
 Default: `{}`  
 
-```yaml
+```yml
 # Examples
 
 tags:
@@ -322,31 +320,5 @@ Default: `""`
 
 Type: `string`  
 Default: `""`  
-
-### `path_mapping`
-
-An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. When metric paths are created, renamed and dropped a trace log is written, enabling TRACE level logging is therefore a good way to diagnose path mappings. BETA FEATURE: Labels can also be created for the metric path by mapping meta fields.
-
-
-Type: `string`  
-Default: `""`  
-
-```yaml
-# Examples
-
-path_mapping: this.replace("input", "source").replace("output", "sink")
-
-path_mapping: |-
-  if ![
-    "benthos.input.received",
-    "benthos.input.latency",
-    "benthos.output.sent"
-  ].contains(this) { deleted() }
-
-path_mapping: |-
-  let matches = this.re_find_all_submatch("resource_processor_([a-zA-Z]+)_(.*)")
-  meta processor = $matches.0.1 | deleted()
-  root = $matches.0.2 | deleted()
-```
 
 

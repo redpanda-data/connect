@@ -25,13 +25,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/xml"
 	"github.com/OneOfOne/xxhash"
 	"github.com/itchyny/timefmt-go"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/rickb777/date/period"
 	"github.com/tilinna/z85"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/impl/xml"
 )
 
 var _ = registerSimpleMethod(
@@ -71,9 +74,9 @@ var _ = registerSimpleMethod(
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			switch t := v.(type) {
 			case string:
-				return strings.Title(t), nil
+				return cases.Title(language.English).String(t), nil
 			case []byte:
-				return bytes.Title(t), nil
+				return cases.Title(language.English).Bytes(t), nil
 			}
 			return nil, NewTypeError(v, ValueString)
 		}, nil
@@ -1013,14 +1016,33 @@ var _ = registerSimpleMethod(
 - If an element contains attributes they are parsed by prefixing a hyphen, `+"`-`"+`, to the attribute label.
 - If the element is a simple element and has attributes, the element value is given the key `+"`#text`"+`.
 - XML comments, directives, and process instructions are ignored.
-- When elements are repeated the resulting JSON value is an array.`,
+- When elements are repeated the resulting JSON value is an array.
+- If cast is true, try to cast values to numbers and booleans instead of returning strings.`,
 		NewExampleSpec("",
 			`root.doc = this.doc.parse_xml()`,
 			`{"doc":"<root><title>This is a title</title><content>This is some content</content></root>"}`,
 			`{"doc":{"root":{"content":"This is some content","title":"This is a title"}}}`,
 		),
-	).Beta(),
-	func(*ParsedParams) (simpleMethod, error) {
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_xml(cast: false)`,
+			`{"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}`,
+			`{"doc":{"root":{"bool":"True","number":{"#text":"123","-id":"99"},"title":"This is a title"}}}`,
+		),
+		NewExampleSpec("",
+			`root.doc = this.doc.parse_xml(cast: true)`,
+			`{"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}`,
+			`{"doc":{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}}`,
+		),
+	).Param(ParamBool("cast", "whether to try to cast values that are numbers and booleans to the right type. default: false").Optional()).Beta(),
+	func(args *ParsedParams) (simpleMethod, error) {
+		castOpt, err := args.FieldOptionalBool("cast")
+		if err != nil {
+			return nil, err
+		}
+		cast := false
+		if castOpt != nil {
+			cast = *castOpt
+		}
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
 			var xmlBytes []byte
 			switch t := v.(type) {
@@ -1031,7 +1053,7 @@ var _ = registerSimpleMethod(
 			default:
 				return nil, NewTypeError(v, ValueString)
 			}
-			xmlObj, err := xml.ToMap(xmlBytes)
+			xmlObj, err := xml.ToMap(xmlBytes, cast)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse value as XML: %w", err)
 			}
@@ -1219,50 +1241,6 @@ var _ = registerSimpleMethod(
 			// See method documentation for details on precision.
 			return d.DurationApprox().Nanoseconds(), nil
 		}), nil
-	},
-)
-
-//------------------------------------------------------------------------------
-
-var _ = registerSimpleMethod(
-	NewDeprecatedMethodSpec(
-		"parse_timestamp_unix", "",
-	).InCategory(
-		MethodCategoryTime,
-		"Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.",
-		NewExampleSpec("",
-			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()`,
-			`{"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}`,
-			`{"doc":{"timestamp":1597405526}}`,
-		),
-		NewExampleSpec(
-			"An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.",
-			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")`,
-			`{"doc":{"timestamp":"2020-Aug-14"}}`,
-			`{"doc":{"timestamp":1597363200}}`,
-		),
-	).Param(ParamString("format", "An optional format to use.").Default(time.RFC3339Nano)),
-	func(args *ParsedParams) (simpleMethod, error) {
-		layout, err := args.FieldString("format")
-		if err != nil {
-			return nil, err
-		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			var str string
-			switch t := v.(type) {
-			case []byte:
-				str = string(t)
-			case string:
-				str = t
-			default:
-				return nil, NewTypeError(v, ValueString)
-			}
-			ut, err := time.Parse(layout, str)
-			if err != nil {
-				return nil, err
-			}
-			return ut.Unix(), nil
-		}, nil
 	},
 )
 
@@ -1606,51 +1584,66 @@ var _ = registerSimpleMethod(
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
+	NewHiddenMethodSpec("replace").
+		Param(ParamString("old", "A string to match against.")).
+		Param(ParamString("new", "A string to replace with.")),
+	replaceAllImpl,
+)
+
+var _ = registerSimpleMethod(
 	NewMethodSpec(
-		"replace", "",
+		"replace_all", "",
 	).InCategory(
 		MethodCategoryStrings,
 		"Replaces all occurrences of the first argument in a target string with the second argument.",
 		NewExampleSpec("",
-			`root.new_value = this.value.replace("foo","dog")`,
+			`root.new_value = this.value.replace_all("foo","dog")`,
 			`{"value":"The foo ate my homework"}`,
 			`{"new_value":"The dog ate my homework"}`,
 		),
 	).
 		Param(ParamString("old", "A string to match against.")).
 		Param(ParamString("new", "A string to replace with.")),
-	func(args *ParsedParams) (simpleMethod, error) {
-		old, err := args.FieldString("old")
-		if err != nil {
-			return nil, err
-		}
-		new, err := args.FieldString("new")
-		if err != nil {
-			return nil, err
-		}
-		oldB, newB := []byte(old), []byte(new)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			switch t := v.(type) {
-			case string:
-				return strings.ReplaceAll(t, old, new), nil
-			case []byte:
-				return bytes.ReplaceAll(t, oldB, newB), nil
-			}
-			return nil, NewTypeError(v, ValueString)
-		}, nil
-	},
+	replaceAllImpl,
 )
+
+func replaceAllImpl(args *ParsedParams) (simpleMethod, error) {
+	oldStr, err := args.FieldString("old")
+	if err != nil {
+		return nil, err
+	}
+	newStr, err := args.FieldString("new")
+	if err != nil {
+		return nil, err
+	}
+	oldB, newB := []byte(oldStr), []byte(newStr)
+	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		switch t := v.(type) {
+		case string:
+			return strings.ReplaceAll(t, oldStr, newStr), nil
+		case []byte:
+			return bytes.ReplaceAll(t, oldB, newB), nil
+		}
+		return nil, NewTypeError(v, ValueString)
+	}, nil
+}
 
 //------------------------------------------------------------------------------
 
 var _ = registerSimpleMethod(
+	NewHiddenMethodSpec("replace_many").
+		Param(ParamArray("values", "An array of values, each even value will be replaced with the following odd value.")),
+	replaceAllManyImpl,
+)
+
+var _ = registerSimpleMethod(
 	NewMethodSpec(
-		"replace_many", "",
+		"replace_all_many", "",
 	).InCategory(
 		MethodCategoryStrings,
-		"For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.",
+		"For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace_all` methods.",
 		NewExampleSpec("",
-			`root.new_value = this.value.replace_many([
+			`root.new_value = this.value.replace_all_many([
   "<b>", "&lt;b&gt;",
   "</b>", "&lt;/b&gt;",
   "<i>", "&lt;i&gt;",
@@ -1660,48 +1653,50 @@ var _ = registerSimpleMethod(
 			`{"new_value":"&lt;i&gt;Hello&lt;/i&gt; &lt;b&gt;World&lt;/b&gt;"}`,
 		),
 	).Param(ParamArray("values", "An array of values, each even value will be replaced with the following odd value.")),
-	func(args *ParsedParams) (simpleMethod, error) {
-		items, err := args.FieldArray("values")
-		if err != nil {
-			return nil, err
-		}
-		if len(items)%2 != 0 {
-			return nil, fmt.Errorf("invalid arg, replacements should be in pairs and must therefore be even: %v", items)
-		}
-
-		var replacePairs [][2]string
-		var replacePairsBytes [][2][]byte
-
-		for i := 0; i < len(items); i += 2 {
-			from, err := IGetString(items[i])
-			if err != nil {
-				return nil, fmt.Errorf("invalid replacement value at index %v: %w", i, err)
-			}
-			to, err := IGetString(items[i+1])
-			if err != nil {
-				return nil, fmt.Errorf("invalid replacement value at index %v: %w", i+1, err)
-			}
-			replacePairs = append(replacePairs, [2]string{from, to})
-			replacePairsBytes = append(replacePairsBytes, [2][]byte{[]byte(from), []byte(to)})
-		}
-
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			switch t := v.(type) {
-			case string:
-				for _, pair := range replacePairs {
-					t = strings.ReplaceAll(t, pair[0], pair[1])
-				}
-				return t, nil
-			case []byte:
-				for _, pair := range replacePairsBytes {
-					t = bytes.ReplaceAll(t, pair[0], pair[1])
-				}
-				return t, nil
-			}
-			return nil, NewTypeError(v, ValueString)
-		}, nil
-	},
+	replaceAllManyImpl,
 )
+
+func replaceAllManyImpl(args *ParsedParams) (simpleMethod, error) {
+	items, err := args.FieldArray("values")
+	if err != nil {
+		return nil, err
+	}
+	if len(items)%2 != 0 {
+		return nil, fmt.Errorf("invalid arg, replacements should be in pairs and must therefore be even: %v", items)
+	}
+
+	var replacePairs [][2]string
+	var replacePairsBytes [][2][]byte
+
+	for i := 0; i < len(items); i += 2 {
+		from, err := IGetString(items[i])
+		if err != nil {
+			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i, err)
+		}
+		to, err := IGetString(items[i+1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid replacement value at index %v: %w", i+1, err)
+		}
+		replacePairs = append(replacePairs, [2]string{from, to})
+		replacePairsBytes = append(replacePairsBytes, [2][]byte{[]byte(from), []byte(to)})
+	}
+
+	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		switch t := v.(type) {
+		case string:
+			for _, pair := range replacePairs {
+				t = strings.ReplaceAll(t, pair[0], pair[1])
+			}
+			return t, nil
+		case []byte:
+			for _, pair := range replacePairsBytes {
+				t = bytes.ReplaceAll(t, pair[0], pair[1])
+			}
+			return t, nil
+		}
+		return nil, NewTypeError(v, ValueString)
+	}, nil
+}
 
 //------------------------------------------------------------------------------
 
@@ -1969,49 +1964,57 @@ var _ = registerSimpleMethod(
 
 //------------------------------------------------------------------------------
 
-// TODO: V4 Rename this to `re_replace_all`
+var _ = registerSimpleMethod(
+	NewHiddenMethodSpec("re_replace").
+		Param(ParamString("pattern", "The pattern to match against.")).
+		Param(ParamString("value", "The value to replace with.")),
+	reReplaceAllImpl,
+)
+
 var _ = registerSimpleMethod(
 	NewMethodSpec(
-		"re_replace", "",
+		"re_replace_all", "",
 	).InCategory(
 		MethodCategoryRegexp,
 		"Replaces all occurrences of the argument regular expression in a string with a value. Inside the value $ signs are interpreted as submatch expansions, e.g. `$1` represents the text of the first submatch.",
 		NewExampleSpec("",
-			`root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")`,
+			`root.new_value = this.value.re_replace_all("ADD ([0-9]+)","+($1)")`,
 			`{"value":"foo ADD 70"}`,
 			`{"new_value":"foo +(70)"}`,
 		),
 	).
 		Param(ParamString("pattern", "The pattern to match against.")).
 		Param(ParamString("value", "The value to replace with.")),
-	func(args *ParsedParams) (simpleMethod, error) {
-		reStr, err := args.FieldString("pattern")
-		if err != nil {
-			return nil, err
-		}
-		re, err := regexp.Compile(reStr)
-		if err != nil {
-			return nil, err
-		}
-		with, err := args.FieldString("value")
-		if err != nil {
-			return nil, err
-		}
-		withBytes := []byte(with)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			var result string
-			switch t := v.(type) {
-			case string:
-				result = re.ReplaceAllString(t, with)
-			case []byte:
-				result = string(re.ReplaceAll(t, withBytes))
-			default:
-				return nil, NewTypeError(v, ValueString)
-			}
-			return result, nil
-		}, nil
-	},
+	reReplaceAllImpl,
 )
+
+func reReplaceAllImpl(args *ParsedParams) (simpleMethod, error) {
+	reStr, err := args.FieldString("pattern")
+	if err != nil {
+		return nil, err
+	}
+	re, err := regexp.Compile(reStr)
+	if err != nil {
+		return nil, err
+	}
+	with, err := args.FieldString("value")
+	if err != nil {
+		return nil, err
+	}
+	withBytes := []byte(with)
+	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		var result string
+		switch t := v.(type) {
+		case string:
+			result = re.ReplaceAllString(t, with)
+		case []byte:
+			result = string(re.ReplaceAll(t, withBytes))
+		default:
+			return nil, NewTypeError(v, ValueString)
+		}
+		return result, nil
+	}, nil
+}
 
 //------------------------------------------------------------------------------
 

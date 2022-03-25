@@ -1,11 +1,12 @@
 package bundle
 
 import (
+	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // AllCaches is a set containing every single cache that has been imported.
@@ -22,7 +23,7 @@ func (e *Environment) CacheAdd(constructor CacheConstructor, spec docs.Component
 }
 
 // CacheInit attempts to initialise a cache from a config.
-func (e *Environment) CacheInit(conf cache.Config, mgr NewManagement) (types.Cache, error) {
+func (e *Environment) CacheInit(conf cache.Config, mgr NewManagement) (cache.V1, error) {
 	return e.caches.Init(conf, mgr)
 }
 
@@ -34,7 +35,7 @@ func (e *Environment) CacheDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // CacheConstructor constructs an cache component.
-type CacheConstructor func(cache.Config, NewManagement) (types.Cache, error)
+type CacheConstructor func(cache.Config, NewManagement) (cache.V1, error)
 
 type cacheSpec struct {
 	constructor CacheConstructor
@@ -49,9 +50,13 @@ type CacheSet struct {
 // Add a new cache to this set by providing a spec (name, documentation, and
 // constructor).
 func (s *CacheSet) Add(constructor CacheConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]cacheSpec{}
 	}
+	spec.Type = docs.TypeCache
 	s.specs[spec.Name] = cacheSpec{
 		constructor: constructor,
 		spec:        spec,
@@ -61,16 +66,14 @@ func (s *CacheSet) Add(constructor CacheConstructor, spec docs.ComponentSpec) er
 }
 
 // Init attempts to initialise an cache from a config.
-func (s *CacheSet) Init(conf cache.Config, mgr NewManagement) (types.Cache, error) {
+func (s *CacheSet) Init(conf cache.Config, mgr NewManagement) (cache.V1, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		// TODO: V4 Remove this
-		if ctor, exists := cache.GetDeprecatedPlugin(conf.Type); exists {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
-		}
-		return nil, types.ErrInvalidCacheType
+		return nil, component.ErrInvalidType("cache", conf.Type)
 	}
-	return spec.constructor(conf, mgr)
+	c, err := spec.constructor(conf, mgr)
+	err = wrapComponentErr(mgr, "cache", err)
+	return c, err
 }
 
 // Docs returns a slice of cache specs, which document each method.

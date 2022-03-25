@@ -28,7 +28,7 @@ Introduced in version 3.36.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -36,16 +36,15 @@ output:
     topic_arn: ""
     message_group_id: ""
     message_deduplication_id: ""
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
-    region: eu-west-1
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -53,11 +52,11 @@ output:
     topic_arn: ""
     message_group_id: ""
     message_deduplication_id: ""
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
     timeout: 5s
-    region: eu-west-1
+    region: ""
     endpoint: ""
     credentials:
       profile: ""
@@ -120,7 +119,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `metadata`
 
@@ -152,7 +151,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

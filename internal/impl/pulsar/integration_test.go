@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/integration"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
 func TestIntegrationPulsar(t *testing.T) {
@@ -19,12 +20,12 @@ func TestIntegrationPulsar(t *testing.T) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	if dline, exists := t.Deadline(); exists {
-		pool.MaxWait = time.Until(dline) / 2
+	pool.MaxWait = time.Minute * 2
+	if dline, ok := t.Deadline(); ok && time.Until(dline) < pool.MaxWait {
+		pool.MaxWait = time.Until(dline)
 	}
 
-	resource, err := pool.Run("apachepulsar/pulsar-standalone", "latest", nil)
+	resource, err := pool.Run("apachepulsar/pulsar-standalone", "2.8.3", nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		assert.NoError(t, pool.Purge(resource))
@@ -76,6 +77,7 @@ input:
 		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
 		integration.StreamTestOptPort(resource.GetPort("6650/tcp")),
+		integration.StreamTestOptLogging("TRACE"),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()

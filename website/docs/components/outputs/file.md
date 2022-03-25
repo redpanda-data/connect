@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Writes messages to files on disk based on a chosen codec.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
@@ -29,7 +29,7 @@ output:
 
 Messages can be written to different files by using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.
 
-## Batches and Mulipart Messages
+## Batches and Multipart Messages
 
 When writing multipart (batched) messages using the `lines` codec the last message ends with double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
@@ -61,7 +61,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.33.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 path: /tmp/data.txt
@@ -88,7 +88,7 @@ Requires version 3.33.0 or newer
 | `delim:x` | Append each message to the output stream followed by a custom delimiter. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines

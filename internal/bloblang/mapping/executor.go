@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 //------------------------------------------------------------------------------
@@ -15,7 +14,7 @@ import (
 // Message is an interface type to be given to a query function, it allows the
 // function to resolve fields and metadata from a message.
 type Message interface {
-	Get(p int) types.Part
+	Get(p int) *message.Part
 	Len() int
 }
 
@@ -124,17 +123,17 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 // A resulting mapped message part is returned, unless the mapping results in a
 // query.Delete value, in which case nil is returned and the part should be
 // discarded.
-func (e *Executor) MapPart(index int, msg Message) (types.Part, error) {
+func (e *Executor) MapPart(index int, msg Message) (*message.Part, error) {
 	return e.mapPart(nil, index, msg)
 }
 
 // MapOnto maps into an existing message part, where mappings are appended to
 // the message rather than being used to construct a new message.
-func (e *Executor) MapOnto(part types.Part, index int, msg Message) (types.Part, error) {
+func (e *Executor) MapOnto(part *message.Part, index int, msg Message) (*message.Part, error) {
 	return e.mapPart(part, index, msg)
 }
 
-func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (types.Part, error) {
+func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message) (*message.Part, error) {
 	var valuePtr *interface{}
 	var parseErr error
 
@@ -153,7 +152,7 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 		return valuePtr
 	}
 
-	var newPart types.Part
+	var newPart *message.Part
 	var newValue interface{} = query.Nothing(nil)
 
 	if appendTo == nil {
@@ -173,7 +172,8 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 			Vars:     vars,
 			Index:    index,
 			MsgBatch: reference,
-			NewMsg:   newPart,
+			NewMeta:  newPart,
+			NewValue: &newValue,
 		}.WithValueFunc(lazyValue))
 		if err != nil {
 			var line int
@@ -191,7 +191,7 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 		}
 		if err = stmt.assignment.Apply(res, AssignmentContext{
 			Vars:  vars,
-			Meta:  newPart.Metadata(),
+			Meta:  newPart,
 			Value: &newValue,
 		}); err != nil {
 			var line int
@@ -215,9 +215,7 @@ func (e *Executor) mapPart(appendTo types.Part, index int, reference Message) (t
 		case []byte:
 			newPart.Set(t)
 		default:
-			if err := newPart.SetJSON(newValue); err != nil {
-				return nil, fmt.Errorf("failed to set result of mapping: %w", err)
-			}
+			newPart.SetJSON(newValue)
 		}
 	}
 	return newPart, nil
@@ -257,6 +255,8 @@ func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
 	}
 
 	var newObj interface{} = query.Nothing(nil)
+	ctx.NewValue = &newObj
+
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(ctx)
 		if err != nil {

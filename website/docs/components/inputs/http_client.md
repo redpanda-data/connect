@@ -26,12 +26,12 @@ Connects to a server and continuously performs requests for a single message.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   http_client:
-    url: http://localhost:4195/get
+    url: ""
     verb: GET
     headers:
       Content-Type: application/octet-stream
@@ -47,12 +47,12 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
   http_client:
-    url: http://localhost:4195/get
+    url: ""
     verb: GET
     headers:
       Content-Type: application/octet-stream
@@ -168,7 +168,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"http://localhost:4195/get"`  
+Default: `""`  
 
 ### `verb`
 
@@ -178,7 +178,7 @@ A verb to connect with
 Type: `string`  
 Default: `"GET"`  
 
-```yaml
+```yml
 # Examples
 
 verb: POST
@@ -197,7 +197,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `object`  
 Default: `{"Content-Type":"application/octet-stream"}`  
 
-```yaml
+```yml
 # Examples
 
 headers:
@@ -219,7 +219,7 @@ Provide a list of explicit metadata key prefixes to match against.
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_prefixes:
@@ -241,7 +241,7 @@ Provide a list of explicit metadata key regular expression (re2) patterns to mat
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_patterns:
@@ -464,7 +464,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -481,7 +481,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -495,7 +495,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -554,7 +554,7 @@ Provide a list of explicit metadata key prefixes to match against.
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_prefixes:
@@ -576,7 +576,7 @@ Provide a list of explicit metadata key regular expression (re2) patterns to mat
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_patterns:
@@ -712,7 +712,7 @@ Requires version 3.42.0 or newer
 | `all-bytes` | Consume the entire file as a single binary message. |
 | `chunker:x` | Consume the file in chunks of a given number of bytes. |
 | `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
-| `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `csv:|` would consume a pipe delimited file. |
+| `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `"csv:\t"` would consume a tab delimited file. |
 | `delim:x` | Consume the file in segments divided by a custom delimiter. |
 | `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
 | `lines` | Consume the file in segments divided by linebreaks. |
@@ -721,7 +721,7 @@ Requires version 3.42.0 or newer
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines

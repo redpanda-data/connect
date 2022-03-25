@@ -14,11 +14,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Stores key/value pairs in a map held in memory. This cache is therefore reset
-every time the service restarts. Each item in the cache has a TTL set from the
-moment it was last edited, after which it will be removed during the next
-compaction.
+Stores key/value pairs in a map held in memory. This cache is therefore reset every time the service restarts. Each item in the cache has a TTL set from the moment it was last edited, after which it will be removed during the next compaction.
 
 
 <Tabs defaultValue="common" values={[
@@ -28,11 +24,11 @@ compaction.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 memory:
-  ttl: 300
+  default_ttl: 5m
   compaction_interval: 60s
   init_values: {}
 ```
@@ -40,64 +36,53 @@ memory:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 memory:
-  ttl: 300
+  default_ttl: 5m
   compaction_interval: 60s
-  shards: 1
   init_values: {}
+  shards: 1
 ```
 
 </TabItem>
 </Tabs>
 
-The compaction interval determines how often the cache is cleared of expired
-items, and this process is only triggered on writes to the cache. Access to the
-cache is blocked during this process.
+The compaction interval determines how often the cache is cleared of expired items, and this process is only triggered on writes to the cache. Access to the cache is blocked during this process.
 
-Item expiry can be disabled entirely by either setting the
-`compaction_interval` to an empty string.
+Item expiry can be disabled entirely by either setting the `compaction_interval` to an empty string.
 
-The field `init_values` can be used to prepopulate the memory cache
-with any number of key/value pairs which are exempt from TTLs:
+The field `init_values` can be used to prepopulate the memory cache with any number of key/value pairs which are exempt from TTLs:
 
 ```yaml
-memory:
-  ttl: 60
-  init_values:
-    foo: bar
+cache_resources:
+  - label: foocache
+    memory:
+      default_ttl: 60s
+      init_values:
+        foo: bar
 ```
 
-These values can be overridden during execution, at which point the configured
-TTL is respected as usual.
+These values can be overridden during execution, at which point the configured TTL is respected as usual.
 
 ## Fields
 
-### `ttl`
+### `default_ttl`
 
-The TTL of each item in seconds. After this period an item will be eligible for removal during the next compaction.
+The default TTL of each item. After this period an item will be eligible for removal during the next compaction.
 
 
-Type: `int`  
-Default: `300`  
+Type: `string`  
+Default: `"5m"`  
 
 ### `compaction_interval`
 
-The period of time to wait before each compaction, at which point expired items are removed.
+The period of time to wait before each compaction, at which point expired items are removed. This field can be set to an empty string in order to disable compactions/expiry entirely.
 
 
 Type: `string`  
 Default: `"60s"`  
-
-### `shards`
-
-A number of logical shards to spread keys across, increasing the shards can have a performance benefit when processing a large number of keys.
-
-
-Type: `int`  
-Default: `1`  
 
 ### `init_values`
 
@@ -107,7 +92,7 @@ A table of key/value pairs that should be present in the cache on initialization
 Type: `object`  
 Default: `{}`  
 
-```yaml
+```yml
 # Examples
 
 init_values:
@@ -115,5 +100,13 @@ init_values:
   Spice Girls: "1994"
   The Human League: "1977"
 ```
+
+### `shards`
+
+A number of logical shards to spread keys across, increasing the shards can have a performance benefit when processing a large number of keys.
+
+
+Type: `int`  
+Default: `1`  
 
 

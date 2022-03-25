@@ -1,10 +1,12 @@
 package bundle
 
 import (
+	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/tracer"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/tracer"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // AllTracers is a set containing every single tracer that has been imported.
@@ -15,7 +17,7 @@ var AllTracers = &TracerSet{
 //------------------------------------------------------------------------------
 
 // TracerConstructor constructs an tracer component.
-type TracerConstructor tracer.ConstructorFunc
+type TracerConstructor func(tracer.Config) (tracer.Type, error)
 
 type tracerSpec struct {
 	constructor TracerConstructor
@@ -30,9 +32,13 @@ type TracerSet struct {
 // Add a new tracer to this set by providing a spec (name, documentation, and
 // constructor).
 func (s *TracerSet) Add(constructor TracerConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]tracerSpec{}
 	}
+	spec.Type = docs.TypeTracer
 	s.specs[spec.Name] = tracerSpec{
 		constructor: constructor,
 		spec:        spec,
@@ -42,12 +48,12 @@ func (s *TracerSet) Add(constructor TracerConstructor, spec docs.ComponentSpec) 
 }
 
 // Init attempts to initialise an tracer from a config.
-func (s *TracerSet) Init(conf tracer.Config, opts ...func(tracer.Type)) (tracer.Type, error) {
+func (s *TracerSet) Init(conf tracer.Config) (tracer.Type, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, tracer.ErrInvalidTracerType
+		return nil, component.ErrInvalidType("tracer", conf.Type)
 	}
-	return spec.constructor(conf, opts...)
+	return spec.constructor(conf)
 }
 
 // Docs returns a slice of tracer specs, which document each method.

@@ -30,7 +30,7 @@ Introduced in version 3.39.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -53,7 +53,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -159,7 +159,7 @@ Default: `"all-bytes"`
 | `all-bytes` | Consume the entire file as a single binary message. |
 | `chunker:x` | Consume the file in chunks of a given number of bytes. |
 | `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
-| `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `csv:|` would consume a pipe delimited file. |
+| `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `"csv:\t"` would consume a tab delimited file. |
 | `delim:x` | Consume the file in segments divided by a custom delimiter. |
 | `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
 | `lines` | Consume the file in segments divided by linebreaks. |
@@ -168,7 +168,7 @@ Default: `"all-bytes"`
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines
@@ -220,7 +220,7 @@ The minimum period of time since a file was last updated before attempting to co
 Type: `string`  
 Default: `"1s"`  
 
-```yaml
+```yml
 # Examples
 
 minimum_age: 10s
@@ -238,7 +238,7 @@ The interval between each attempt to scan the target paths for new files.
 Type: `string`  
 Default: `"1s"`  
 
-```yaml
+```yml
 # Examples
 
 poll_interval: 100ms

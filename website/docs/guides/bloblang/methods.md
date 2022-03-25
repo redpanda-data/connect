@@ -31,8 +31,8 @@ root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokem
 Methods support both named and nameless style arguments:
 
 ```coffee
-root.foo_one = this.(bar | baz).trim().replace(old: "dog", new: "cat")
-root.foo_two = this.(bar | baz).trim().replace("dog", "cat")
+root.foo_one = this.(bar | baz).trim().replace_all(old: "dog", new: "cat")
+root.foo_two = this.(bar | baz).trim().replace_all("dog", "cat")
 ```
 
 ## General
@@ -383,7 +383,7 @@ root.quoted = this.thing.quote()
 # Out: {"quoted":"\"foo\\nbar\""}
 ```
 
-### `replace`
+### `replace_all`
 
 Replaces all occurrences of the first argument in a target string with the second argument.
 
@@ -396,15 +396,15 @@ Replaces all occurrences of the first argument in a target string with the secon
 
 
 ```coffee
-root.new_value = this.value.replace("foo","dog")
+root.new_value = this.value.replace_all("foo","dog")
 
 # In:  {"value":"The foo ate my homework"}
 # Out: {"new_value":"The dog ate my homework"}
 ```
 
-### `replace_many`
+### `replace_all_many`
 
-For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace` methods.
+For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace_all` methods.
 
 #### Parameters
 
@@ -414,7 +414,7 @@ For each pair of strings in an argument array, replaces all occurrences of the f
 
 
 ```coffee
-root.new_value = this.value.replace_many([
+root.new_value = this.value.replace_all_many([
   "<b>", "&lt;b&gt;",
   "</b>", "&lt;/b&gt;",
   "<i>", "&lt;i&gt;",
@@ -705,7 +705,7 @@ root.matches = this.value.re_match("[0-9]")
 # Out: {"matches":false}
 ```
 
-### `re_replace`
+### `re_replace_all`
 
 Replaces all occurrences of the argument regular expression in a string with a value. Inside the value $ signs are interpreted as submatch expansions, e.g. `$1` represents the text of the first submatch.
 
@@ -718,7 +718,7 @@ Replaces all occurrences of the argument regular expression in a string with a v
 
 
 ```coffee
-root.new_value = this.value.re_replace("ADD ([0-9]+)","+($1)")
+root.new_value = this.value.re_replace_all("ADD ([0-9]+)","+($1)")
 
 # In:  {"value":"foo ADD 70"}
 # Out: {"new_value":"foo +(70)"}
@@ -1274,6 +1274,24 @@ root.foo = this.foo.append("and", "this")
 # Out: {"foo":["bar","baz","and","this"]}
 ```
 
+### `assign`
+
+Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the value in the destination object will be overwritten by that of source object. In order to preserve both values on collision use the [`merge`](#merge) method.
+
+#### Parameters
+
+**`with`** &lt;unknown&gt; A value to merge the target value with.  
+
+#### Examples
+
+
+```coffee
+root = this.foo.assign(this.bar)
+
+# In:  {"foo":{"first_name":"fooer","likes":"bars"},"bar":{"second_name":"barer","likes":"foos"}}
+# Out: {"first_name":"fooer","likes":"foos","second_name":"barer"}
+```
+
 ### `collapse`
 
 Collapse an array or object into an object of key/value pairs for each field, where the key is the full path of the structured field in dot path notation. Empty arrays an objects are ignored by default.
@@ -1671,7 +1689,7 @@ root = this.map_each_key(key -> if key.contains("kafka") { "_" + key })
 
 ### `merge`
 
-Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array.
+Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array. In order to simply override destination fields on collision use the [`assign`](#assign) method.
 
 #### Parameters
 
@@ -1996,6 +2014,11 @@ Attempts to parse a string as an XML document and returns a structured result, w
 - If the element is a simple element and has attributes, the element value is given the key `#text`.
 - XML comments, directives, and process instructions are ignored.
 - When elements are repeated the resulting JSON value is an array.
+- If cast is true, try to cast values to numbers and booleans instead of returning strings.
+
+#### Parameters
+
+**`cast`** &lt;(optional) bool&gt; whether to try to cast values that are numbers and booleans to the right type. default: false  
 
 #### Examples
 
@@ -2005,6 +2028,20 @@ root.doc = this.doc.parse_xml()
 
 # In:  {"doc":"<root><title>This is a title</title><content>This is some content</content></root>"}
 # Out: {"doc":{"root":{"content":"This is some content","title":"This is a title"}}}
+```
+
+```coffee
+root.doc = this.doc.parse_xml(cast: false)
+
+# In:  {"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}
+# Out: {"doc":{"root":{"bool":"True","number":{"#text":"123","-id":"99"},"title":"This is a title"}}}
+```
+
+```coffee
+root.doc = this.doc.parse_xml(cast: true)
+
+# In:  {"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}
+# Out: {"doc":{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}}
 ```
 
 ### `parse_yaml`
@@ -2208,35 +2245,6 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 #### Parameters
 
 **`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
-
-## Deprecated
-
-### `parse_timestamp_unix`
-
-Attempts to parse a string as a timestamp, following ISO 8601 format by default, and returns the unix epoch.
-
-#### Parameters
-
-**`format`** &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; An optional format to use.  
-
-#### Examples
-
-
-```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix()
-
-# In:  {"doc":{"timestamp":"2020-08-14T11:45:26.371Z"}}
-# Out: {"doc":{"timestamp":1597405526}}
-```
-
-An optional string argument can be used in order to specify the expected format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
-
-```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp_unix("2006-Jan-02")
-
-# In:  {"doc":{"timestamp":"2020-Aug-14"}}
-# Out: {"doc":{"timestamp":1597363200}}
-```
 
 [field_paths]: /docs/configuration/field_paths
 [methods.encode]: #encode

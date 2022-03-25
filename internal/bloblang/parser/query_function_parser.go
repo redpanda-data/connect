@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 func functionArgsParser(pCtx Context) Func {
@@ -223,8 +223,6 @@ func variableLiteralParser() Func {
 	}
 }
 
-var errNoRoot = errors.New("unable to reference the `root` of your mapped document within a query. This feature will be introduced soon, but in the meantime in order to use a mapped value multiple times use variables (https://www.benthos.dev/docs/guides/bloblang/about#variables). If instead you wish to refer to a field `root` from your input document use `this.root`")
-
 func fieldLiteralRootParser(pCtx Context) Func {
 	fieldPathParser := Expect(
 		JoinStringPayloads(
@@ -252,7 +250,7 @@ func fieldLiteralRootParser(pCtx Context) Func {
 		if path == "this" {
 			fn = query.NewFieldFunction("")
 		} else if path == "root" {
-			return Fail(NewFatalError(input, errNoRoot), input)
+			fn = query.NewRootFieldFunction("")
 		} else {
 			if pCtx.HasNamedContext(path) {
 				fn = query.NewNamedContextFieldFunction(path, "")
@@ -371,31 +369,5 @@ func functionParser(pCtx Context) Func {
 			return Fail(NewFatalError(input, err), input)
 		}
 		return Success(fn, res.Remaining)
-	}
-}
-
-//------------------------------------------------------------------------------
-
-func parseDeprecatedFunction(isDeprecated *bool) func(input []rune) Result {
-	return func(input []rune) Result {
-		var targetFunc, arg string
-
-		for i := 0; i < len(input); i++ {
-			if input[i] == ':' {
-				targetFunc = string(input[:i])
-				arg = string(input[i+1:])
-				break
-			}
-		}
-		if targetFunc == "" {
-			targetFunc = string(input)
-		}
-
-		fn, exists := query.DeprecatedFunction(targetFunc, arg)
-		if !exists {
-			return Fail(NewError(input), input)
-		}
-		(*isDeprecated) = true
-		return Success(fn, nil)
 	}
 }

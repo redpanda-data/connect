@@ -28,7 +28,7 @@ Runs a query against a Cassandra database for each message in order to insert da
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -36,7 +36,8 @@ output:
     addresses: []
     query: ""
     args_mapping: ""
-    max_in_flight: 1
+    timeout: 600ms
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -47,7 +48,7 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -72,7 +73,8 @@ output:
     backoff:
       initial_interval: 1s
       max_interval: 5s
-    max_in_flight: 1
+    timeout: 600ms
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -154,7 +156,7 @@ A list of Cassandra nodes to connect to. Multiple comma separated addresses can 
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 addresses:
@@ -208,7 +210,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -225,7 +227,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -239,7 +241,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -379,13 +381,22 @@ The maximum period to wait between retry attempts.
 Type: `string`  
 Default: `"5s"`  
 
+### `timeout`
+
+The client connection timeout.
+
+
+Type: `string`  
+Default: `"600ms"`  
+Requires version 3.63.0 or newer  
+
 ### `max_in_flight`
 
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `batching`
 
@@ -394,7 +405,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -436,7 +447,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -454,7 +465,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -468,7 +479,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

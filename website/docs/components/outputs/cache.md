@@ -15,7 +15,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Stores each message in a [cache](/docs/components/caches/about).
 
 
@@ -26,20 +25,20 @@ Stores each message in a [cache](/docs/components/caches/about).
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   cache:
     target: ""
     key: ${!count("items")}-${!timestamp_unix_nano()}
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -47,26 +46,15 @@ output:
     target: ""
     key: ${!count("items")}-${!timestamp_unix_nano()}
     ttl: ""
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
 </Tabs>
 
-Caches are configured as [resources](/docs/components/caches/about) and can target any of the following types:
+Caches are configured as [resources](/docs/components/caches/about), where there's a wide variety to choose from.
 
-- [`aws_dynamodb`](/docs/components/caches/aws_dynamodb)
-- [`aws_s3`](/docs/components/caches/aws_s3)
-- [`dynamodb`](/docs/components/caches/dynamodb)
-- [`file`](/docs/components/caches/file)
-- [`memcached`](/docs/components/caches/memcached)
-- [`memory`](/docs/components/caches/memory)
-- [`multilevel`](/docs/components/caches/multilevel)
-- [`redis`](/docs/components/caches/redis)
-- [`ristretto`](/docs/components/caches/ristretto)
-- [`s3`](/docs/components/caches/s3)
-
-The `target` field must point to a configured cache like follows:
+The `target` field must reference a configured cache resource label like follows:
 
 ```yaml
 output:
@@ -79,12 +67,10 @@ cache_resources:
     memcached:
       addresses:
         - localhost:11211
-      ttl: 60
+      default_ttl: 60s
 ```
 
-In order to create a unique `key` value per item you should use
-function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
-When sending batched messages the interpolations are performed per message part.
+In order to create a unique `key` value per item you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Performance
 
@@ -111,7 +97,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"${!count(\"items\")}-${!timestamp_unix_nano()}"`  
 
-```yaml
+```yml
 # Examples
 
 key: ${!count("items")}-${!timestamp_unix_nano()}
@@ -131,7 +117,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.33.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 ttl: 60s
@@ -147,6 +133,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 

@@ -28,30 +28,17 @@ When running Benthos in streams mode [resource components][resources] are shared
 
 ## Metrics
 
-Metrics from all streams are aggregated and exposed via the method specified in [the config][metrics] of the Benthos instance running in `streams` mode, with their metrics prefixed by their respective stream name.
+Metrics from all streams are aggregated and exposed via the method specified in [the config][metrics] of the Benthos instance running in `streams` mode, with their metrics enriched with the tag `stream` containing the stream name.
 
-For example, a Benthos instance running in streams mode with the configured prefix `benthos` running a stream named `foo` would have metrics from `foo` registered with the prefix `benthos.foo`.
+For example, a Benthos instance running in streams mode running a stream named `foo` would have metrics from `foo` registered with the label `stream` with the value of `foo`.
 
-This can cause problems if your streams are short lived and uniquely named as the number of metrics registered will continue to climb indefinitely. In order to avoid this you can use the `path_mapping` field to filter metric names.
+This can cause problems if your streams are short lived and uniquely named as the number of metrics registered will continue to climb indefinitely. In order to avoid this you can use the `mapping` field to filter metric names.
 
 ```yaml
 # Only register metrics for the stream `foo`. Others will be ignored.
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: if !this.has_prefix("foo") { deleted() }
-```
-
-Or use it to rename prefixes in order to reduce the cardinality of names:
-
-```yaml
-# Rename all stream metric prefixes of the form `foo_<uuid_v4>` to just `foo`.
-metrics:
-  statsd:
-    prefix: benthos
-    address: localhost:8125
-    flush_period: 100m
-    path_mapping: this.re_replace("foo_[0-9\\-a-zA-Z]+\\.(.*)","foo.$1")
+  mapping: if meta("stream") != "foo" { deleted() }
+  prometheus: {}
 ```
 
 [static-files]: /docs/guides/streams_mode/using_config_files

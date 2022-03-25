@@ -4,26 +4,13 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/bloblang"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
-
-// MappingFieldSpec is a field spec that describes a Bloblang mapping for
-// renaming metrics.
-func MappingFieldSpec() docs.FieldSpec {
-	examples := []interface{}{
-		`this.replace(".foo.count", ".count")`,
-		`if ![ "count", "error", "latency" ].contains(this) { deleted() }`,
-	}
-	summary := "An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported."
-	return docs.FieldBloblang("metrics_mapping", summary, examples...).HasDefault("")
-}
 
 // Mapping is a compiled Bloblang mapping used to rewrite metrics.
 type Mapping struct {
@@ -32,11 +19,11 @@ type Mapping struct {
 }
 
 // NewMapping parses a Bloblang mapping and returns a metrics mapping.
-func NewMapping(mgr types.Manager, mapping string, logger log.Modular) (*Mapping, error) {
+func NewMapping(mapping string, logger log.Modular) (*Mapping, error) {
 	if mapping == "" {
 		return &Mapping{m: nil, logger: logger}, nil
 	}
-	m, err := interop.NewBloblangMapping(mgr, mapping)
+	m, err := bloblang.GlobalEnvironment().OnlyPure().NewMapping(mapping)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(mapping)))
@@ -52,18 +39,14 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 	}
 
 	part := message.NewPart(nil)
-	if err := part.SetJSON(path); err != nil {
-		m.logger.Errorf("Failed to apply path mapping on '%v': %v\n", path, err)
-		return path, labelNames, labelValues
-	}
+	part.SetJSON(path)
 	for i, v := range labelNames {
-		part.Metadata().Set(v, labelValues[i])
+		part.MetaSet(v, labelValues[i])
 	}
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(part)
 
 	outPart := part.Copy()
-	outMeta := outPart.Metadata()
 
 	var input interface{} = path
 	vars := map[string]interface{}{}
@@ -73,24 +56,25 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		Maps:     m.m.Maps(),
 		Vars:     vars,
 		MsgBatch: msg,
-		NewMsg:   outPart,
+		NewMeta:  outPart,
+		NewValue: &v,
 	}.WithValue(input), mapping.AssignmentContext{
 		Vars:  vars,
-		Meta:  outMeta,
+		Meta:  outPart,
 		Value: &v,
 	}); err != nil {
 		m.logger.Errorf("Failed to apply path mapping on '%v': %v\n", path, err)
 		return path, nil, nil
 	}
 
-	outMeta.Iter(func(k, v string) error {
+	_ = outPart.MetaIter(func(k, v string) error {
 		outLabelNames = append(outLabelNames, k)
 		return nil
 	})
 	if len(outLabelNames) > 0 {
 		sort.Strings(outLabelNames)
 		for _, k := range outLabelNames {
-			v := outMeta.Get(k)
+			v := outPart.MetaGet(k)
 			m.logger.Tracef("Metrics label '%v' created with static value '%v'.\n", k, v)
 			outLabelValues = append(outLabelValues, v)
 		}

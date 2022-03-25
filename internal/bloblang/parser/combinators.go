@@ -157,6 +157,31 @@ func Term(term string) Func {
 	}
 }
 
+// UntilTerm parses any number of characters until an instance of a string is
+// met. The provided term is not included in the result.
+func UntilTerm(term string) Func {
+	termRunes := []rune(term)
+	return func(input []rune) Result {
+		if len(input) < len(termRunes) {
+			return Fail(NewError(input, term), input)
+		}
+		i := 0
+		for ; i <= (len(input) - len(termRunes)); i++ {
+			matched := true
+			for j := 0; j < len(termRunes); j++ {
+				if input[i+j] != termRunes[j] {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				return Success(string(input[:i]), input[i:])
+			}
+		}
+		return Fail(NewError(input, term), input)
+	}
+}
+
 // Number parses any number of numerical characters into either an int64 or, if
 // the number contains float characters, a float64.
 func Number() Func {

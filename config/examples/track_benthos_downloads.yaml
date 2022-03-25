@@ -37,7 +37,7 @@ processor_resources:
           - bloblang: |
               root = this.map_each(release -> release.assets.map_each(asset -> {
                 "source":         "github",
-                "dist":           asset.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
+                "dist":           asset.name.re_replace_all("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
                 "download_count": asset.download_count,
                 "version":        release.tag_name.trim("v"),
               }).filter(asset -> asset.dist != "checksums")).flatten()
@@ -73,12 +73,12 @@ processor_resources:
       value: ${! json("download_count") }
 
 metrics:
+  mapping: |
+    # Only emit our custom metric, and no internal Benthos metrics.
+    root = if ![
+      "BenthosDownloadGauge"
+    ].contains(this) { deleted() }
   aws_cloudwatch:
     namespace: BenthosAnalyticsStaging
     flush_period: 500ms
     region: eu-west-1
-    path_mapping: |
-      # Only emit our custom metric, and no internal Benthos metrics.
-      root = if ![
-        "BenthosDownloadGauge"
-      ].contains(this) { deleted() }

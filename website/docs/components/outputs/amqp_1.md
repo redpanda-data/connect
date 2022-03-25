@@ -18,7 +18,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Sends messages to an AMQP (1.0) server.
 
 
@@ -29,14 +28,14 @@ Sends messages to an AMQP (1.0) server.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   amqp_1:
     url: ""
     target_address: ""
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
 ```
@@ -44,14 +43,14 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   amqp_1:
     url: ""
     target_address: ""
-    max_in_flight: 1
+    max_in_flight: 64
     tls:
       enabled: false
       skip_cert_verify: false
@@ -90,7 +89,7 @@ A URL to connect to.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 url: amqp://localhost:5672/
@@ -106,7 +105,7 @@ The target address to write to.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 target_address: /foo
@@ -122,7 +121,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `tls`
 
@@ -164,7 +163,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -181,7 +180,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -193,9 +192,8 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -245,6 +243,7 @@ Enables SASL authentication.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `sasl.mechanism`
 
@@ -268,7 +267,7 @@ A SASL plain text username. It is recommended that you use environment variables
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 user: ${USER}
@@ -282,7 +281,7 @@ A SASL plain text password. It is recommended that you use environment variables
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 password: ${PASSWORD}
@@ -294,6 +293,7 @@ Specify criteria for which metadata values are attached to messages as headers.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `metadata.exclude_prefixes`
 

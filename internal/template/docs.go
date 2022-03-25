@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"text/template"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 
 	_ "embed"
 )
@@ -22,7 +22,7 @@ func DocsMarkdown() ([]byte, error) {
 
 	var buf bytes.Buffer
 	err := template.Must(template.New("templates").Parse(templateDocsTemplate)).Execute(&buf, templateContext{
-		Fields: docs.FieldCommon("", "").WithChildren(ConfigSpec()...).FlattenChildrenForDocs(),
+		Fields: docs.FieldObject("", "").WithChildren(ConfigSpec()...).FlattenChildrenForDocs(),
 	})
 
 	return buf.Bytes(), err

@@ -4,15 +4,16 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type mockDynamoDB struct {

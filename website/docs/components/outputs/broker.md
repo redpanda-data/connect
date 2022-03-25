@@ -27,7 +27,7 @@ brokering [patterns](#patterns).
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -44,14 +44,13 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   broker:
     copies: 1
     pattern: fan_out
-    max_in_flight: 1
     outputs: []
     batching:
       count: 0
@@ -102,14 +101,6 @@ Type: `string`
 Default: `"fan_out"`  
 Options: `fan_out`, `fan_out_sequential`, `round_robin`, `greedy`.
 
-### `max_in_flight`
-
-The maximum number of parallel message batches to have in flight at any given time. Note that if a child output has a higher `max_in_flight` then the switch output will automatically match it, therefore this value is the minimum `max_in_flight` to set in cases where the child values can't be inferred (such as when using resource outputs as children). Only relevant for `fan_out`, `fan_out_sequential` brokers.
-
-
-Type: `int`  
-Default: `1`  
-
 ### `outputs`
 
 A list of child outputs to broker.
@@ -125,7 +116,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -167,7 +158,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -185,7 +176,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -197,9 +188,8 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

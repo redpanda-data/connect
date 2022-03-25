@@ -3,9 +3,10 @@ package metadata
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestExcludeFilter(t *testing.T) {
@@ -61,12 +62,15 @@ func TestExcludeFilter(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			meta := metadata.New(test.inputMeta)
+			part := message.NewPart(nil)
+			for k, v := range test.inputMeta {
+				part.MetaSet(k, v)
+			}
 			filter, err := test.conf.Filter()
 			require.NoError(t, err)
 
 			outputMeta := map[string]string{}
-			require.NoError(t, filter.Iter(meta, func(k, v string) error {
+			require.NoError(t, filter.Iter(part, func(k, v string) error {
 				outputMeta[k] = v
 				return nil
 			}))

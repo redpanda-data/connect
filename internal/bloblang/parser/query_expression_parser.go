@@ -3,8 +3,9 @@ package parser
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 func matchCaseParser(pCtx Context) Func {

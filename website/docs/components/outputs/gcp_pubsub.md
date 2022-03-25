@@ -16,8 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/metadata)
-from messages are sent as attributes.
+Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/metadata) from messages are sent as attributes.
 
 
 <Tabs defaultValue="common" values={[
@@ -27,14 +26,14 @@ from messages are sent as attributes.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   gcp_pubsub:
     project: ""
     topic: ""
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
 ```
@@ -42,14 +41,14 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   gcp_pubsub:
     project: ""
     topic: ""
-    max_in_flight: 1
+    max_in_flight: 64
     publish_timeout: 60s
     ordering_key: ""
     metadata:
@@ -59,8 +58,28 @@ output:
 </TabItem>
 </Tabs>
 
-For information on how to set up credentials check out
-[this guide](https://cloud.google.com/docs/authentication/production).
+For information on how to set up credentials check out [this guide](https://cloud.google.com/docs/authentication/production).
+
+### Troubleshooting
+
+If you're consistently seeing `Failed to send message to gcp_pubsub: context deadline exceeded` error logs without any further information it is possible that you are encountering https://github.com/benthosdev/benthos/issues/1042, which occurs when metadata values contain characters that are not valid utf-8. This can frequently occur when consuming from Kafka as the key metadata field may be populated with an arbitrary binary value, but this issue is not exclusive to Kafka.
+
+If you are blocked by this issue then a work around is to delete either the specific problematic keys:
+
+```yaml
+pipeline:
+  processors:
+    - bloblang: |
+        meta kafka_key = deleted()
+```
+
+Or delete all keys with:
+
+```yaml
+pipeline:
+  processors:
+    - bloblang: meta = deleted()
+```
 
 ## Performance
 
@@ -93,7 +112,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `publish_timeout`
 
@@ -103,7 +122,7 @@ The maximum length of time to wait before abandoning a publish attempt for a mes
 Type: `string`  
 Default: `"60s"`  
 
-```yaml
+```yml
 # Examples
 
 publish_timeout: 10s

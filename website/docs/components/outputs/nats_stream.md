@@ -26,33 +26,31 @@ Publish to a NATS Stream subject.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   nats_stream:
-    urls:
-      - nats://127.0.0.1:4222
-    cluster_id: test-cluster
-    subject: benthos_messages
-    client_id: benthos_client
-    max_in_flight: 1
+    urls: []
+    cluster_id: ""
+    subject: ""
+    client_id: ""
+    max_in_flight: 64
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   nats_stream:
-    urls:
-      - nats://127.0.0.1:4222
-    cluster_id: test-cluster
-    subject: benthos_messages
-    client_id: benthos_client
-    max_in_flight: 1
+    urls: []
+    cluster_id: ""
+    subject: ""
+    client_id: ""
+    max_in_flight: 64
     tls:
       enabled: false
       skip_cert_verify: false
@@ -109,9 +107,9 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["nats://127.0.0.1:4222"]`  
+Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 urls:
@@ -127,7 +125,7 @@ The cluster ID to publish to.
 
 
 Type: `string`  
-Default: `"test-cluster"`  
+Default: `""`  
 
 ### `subject`
 
@@ -135,7 +133,7 @@ The subject to publish to.
 
 
 Type: `string`  
-Default: `"benthos_messages"`  
+Default: `""`  
 
 ### `client_id`
 
@@ -143,7 +141,7 @@ The client ID to connect with.
 
 
 Type: `string`  
-Default: `"benthos_client"`  
+Default: `""`  
 
 ### `max_in_flight`
 
@@ -151,7 +149,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `tls`
 
@@ -193,7 +191,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -210,7 +208,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -224,7 +222,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -283,7 +281,7 @@ An optional file containing a NKey seed.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 nkey_file: ./seed.nk
@@ -297,7 +295,7 @@ An optional file containing user credentials which consist of an user JWT and co
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 user_credentials_file: ./user.creds

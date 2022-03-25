@@ -17,44 +17,64 @@ import TabItem from '@theme/TabItem';
 
 Emit custom metrics by extracting values from messages.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
-```yaml
-# Common config fields, showing default values
+```yml
+# Config fields, showing default values
 label: ""
 metric:
-  type: counter
+  type: ""
   name: ""
   labels: {}
   value: ""
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yaml
-# All config fields, showing default values
-label: ""
-metric:
-  type: counter
-  name: ""
-  labels: {}
-  value: ""
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 This processor works by evaluating an [interpolated field `value`](/docs/configuration/interpolation#bloblang-queries) for each message and updating a emitted metric according to the [type](#types).
 
 Custom metrics such as these are emitted along with Benthos internal metrics, where you can customize where metrics are sent, which metric names are emitted and rename them as/when appropriate. For more information check out the [metrics docs here](/docs/components/metrics/about).
+
+## Fields
+
+### `type`
+
+The metric [type](#types) to create.
+
+
+Type: `string`  
+Default: `""`  
+Options: `counter`, `counter_by`, `gauge`, `timing`.
+
+### `name`
+
+The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics.
+
+
+Type: `string`  
+Default: `""`  
+
+### `labels`
+
+A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `object`  
+Default: `{}`  
+
+```yml
+# Examples
+
+labels:
+  topic: ${! meta("kafka_topic") }
+  type: ${! json("doc.type") }
+```
+
+### `value`
+
+For some metric types specifies a value to set, increment.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
 
 ## Examples
 
@@ -79,15 +99,14 @@ pipeline:
           type: ${! json("document.type").or("unknown") }
 
 metrics:
+  mapping: |
+    root = if ![
+      "Foos",
+      "input_received",
+      "output_sent"
+    ].contains(this) { deleted() }
   aws_cloudwatch:
     namespace: ProdConsumer
-    region: eu-west-1
-    path_mapping: |
-      root = if ![
-        "Foos",
-        "input.received",
-        "output.sent"
-      ].contains(this) { deleted() }
 ```
 
 </TabItem>
@@ -106,70 +125,12 @@ pipeline:
         value: ${! json("foo.size") }
 
 metrics:
-  prometheus:
-    path_mapping: 'if this != "FooSize" { deleted() }'
+  mapping: 'if this != "FooSize" { deleted() }'
+  prometheus: {}
 ```
 
 </TabItem>
 </Tabs>
-
-## Fields
-
-### `type`
-
-The metric [type](#types) to create.
-
-
-Type: `string`  
-Default: `"counter"`  
-Options: `counter`, `counter_by`, `gauge`, `timing`.
-
-### `name`
-
-The name of the metric to create, this must be unique across all Benthos components otherwise it will overwrite those other metrics.
-
-
-Type: `string`  
-Default: `""`  
-
-### `labels`
-
-A map of label names and values that can be used to enrich metrics. Labels are not supported by some metric destinations, in which case the metrics series are combined.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `object`  
-Default: `{}`  
-
-```yaml
-# Examples
-
-labels:
-  topic: ${! meta("kafka_topic") }
-  type: ${! json("doc.type") }
-```
-
-### `value`
-
-For some metric types specifies a value to set, increment.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `string`  
-Default: `""`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Types
 
@@ -187,10 +148,12 @@ For example, the following configuration will increment the value of the
 `count.custom.field` metric by the contents of `field.some.value`:
 
 ```yaml
-metric:
-  type: counter_by
-  name: CountCustomField
-  value: ${!json("field.some.value")}
+pipeline:
+  processors:
+    - metric:
+        type: counter_by
+        name: CountCustomField
+        value: ${!json("field.some.value")}
 ```
 
 ### `gauge`
@@ -202,13 +165,15 @@ For example, the following configuration will set the value of the
 `gauge.custom.field` metric to the contents of `field.some.value`:
 
 ```yaml
-metric:
-  type: gauge
-  path: GaugeCustomField
-  value: ${!json("field.some.value")}
+pipeline:
+  processors:
+    - metric:
+        type: gauge
+        name: GaugeCustomField
+        value: ${!json("field.some.value")}
 ```
 
 ### `timing`
 
-Equivalent to `gauge` where instead the metric is a timing.
+Equivalent to `gauge` where instead the metric is a timing. It is recommended that timing values are recorded in nanoseconds in order to be consistent with standard Benthos timing metrics, as in some cases these values are automatically converted into other units such as when exporting timings as histograms with Prometheus metrics.
 

@@ -28,7 +28,7 @@ Introduced in version 3.36.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -36,7 +36,7 @@ output:
     url: ""
     message_group_id: ""
     message_deduplication_id: ""
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
     batching:
@@ -44,13 +44,12 @@ output:
       byte_size: 0
       period: ""
       check: ""
-    region: eu-west-1
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -58,7 +57,7 @@ output:
     url: ""
     message_group_id: ""
     message_deduplication_id: ""
-    max_in_flight: 1
+    max_in_flight: 64
     metadata:
       exclude_prefixes: []
     batching:
@@ -67,7 +66,7 @@ output:
       period: ""
       check: ""
       processors: []
-    region: eu-west-1
+    region: ""
     endpoint: ""
     credentials:
       profile: ""
@@ -147,7 +146,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `metadata`
 
@@ -171,7 +170,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -213,7 +212,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -231,7 +230,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -245,7 +244,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:
@@ -266,7 +265,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

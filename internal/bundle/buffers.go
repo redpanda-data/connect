@@ -1,11 +1,12 @@
 package bundle
 
 import (
+	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/buffer"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // AllBuffers is a set containing every single buffer that has been imported.
@@ -22,7 +23,7 @@ func (e *Environment) BufferAdd(constructor BufferConstructor, spec docs.Compone
 }
 
 // BufferInit attempts to initialise a buffer from a config.
-func (e *Environment) BufferInit(conf buffer.Config, mgr NewManagement) (buffer.Type, error) {
+func (e *Environment) BufferInit(conf buffer.Config, mgr NewManagement) (buffer.Streamed, error) {
 	return e.buffers.Init(conf, mgr)
 }
 
@@ -34,7 +35,7 @@ func (e *Environment) BufferDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // BufferConstructor constructs an buffer component.
-type BufferConstructor func(buffer.Config, NewManagement) (buffer.Type, error)
+type BufferConstructor func(buffer.Config, NewManagement) (buffer.Streamed, error)
 
 type bufferSpec struct {
 	constructor BufferConstructor
@@ -49,9 +50,13 @@ type BufferSet struct {
 // Add a new buffer to this set by providing a spec (name, documentation, and
 // constructor).
 func (s *BufferSet) Add(constructor BufferConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]bufferSpec{}
 	}
+	spec.Type = docs.TypeBuffer
 	s.specs[spec.Name] = bufferSpec{
 		constructor: constructor,
 		spec:        spec,
@@ -61,12 +66,14 @@ func (s *BufferSet) Add(constructor BufferConstructor, spec docs.ComponentSpec) 
 }
 
 // Init attempts to initialise an buffer from a config.
-func (s *BufferSet) Init(conf buffer.Config, mgr NewManagement) (buffer.Type, error) {
+func (s *BufferSet) Init(conf buffer.Config, mgr NewManagement) (buffer.Streamed, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		return nil, types.ErrInvalidBufferType
+		return nil, component.ErrInvalidType("buffer", conf.Type)
 	}
-	return spec.constructor(conf, mgr)
+	c, err := spec.constructor(conf, mgr)
+	err = wrapComponentErr(mgr, "buffer", err)
+	return c, err
 }
 
 // Docs returns a slice of buffer specs, which document each method.

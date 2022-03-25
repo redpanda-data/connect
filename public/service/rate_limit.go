@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/component/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 )
 
 // RateLimit is an interface implemented by Benthos rate limits.
@@ -22,36 +21,25 @@ type RateLimit interface {
 
 //------------------------------------------------------------------------------
 
-func newAirGapRateLimit(c RateLimit, stats metrics.Type) types.RateLimit {
-	return ratelimit.NewV2ToV1RateLimit(c, stats)
+func newAirGapRateLimit(c RateLimit, stats metrics.Type) ratelimit.V1 {
+	return ratelimit.MetricsForRateLimit(c, stats)
 }
 
 //------------------------------------------------------------------------------
 
 // Implements RateLimit around a types.RateLimit
 type reverseAirGapRateLimit struct {
-	r types.RateLimit
+	r ratelimit.V1
 }
 
-func newReverseAirGapRateLimit(r types.RateLimit) *reverseAirGapRateLimit {
+func newReverseAirGapRateLimit(r ratelimit.V1) *reverseAirGapRateLimit {
 	return &reverseAirGapRateLimit{r}
 }
 
-func (a *reverseAirGapRateLimit) Access(context.Context) (time.Duration, error) {
-	return a.r.Access()
+func (a *reverseAirGapRateLimit) Access(ctx context.Context) (time.Duration, error) {
+	return a.r.Access(ctx)
 }
 
 func (a *reverseAirGapRateLimit) Close(ctx context.Context) error {
-	a.r.CloseAsync()
-	for {
-		// Gross but will do for now until we replace these with context params.
-		if err := a.r.WaitForClose(time.Millisecond * 100); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-	}
+	return a.r.Close(ctx)
 }

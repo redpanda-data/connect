@@ -32,10 +32,9 @@ output:
     path: '${! meta("kafka_topic") }/${! json("message.id") }.json'
 ```
 
-One way to write our unit tests for this config is to accompany it with a file of the same name and extension but suffixed with `_benthos_test`, which in this case would be `foo_benthos_test.yaml`. We can generate an example definition for this config with `benthos test --generate ./foo.yaml` which gives:
+One way to write our unit tests for this config is to accompany it with a file of the same name and extension but suffixed with `_benthos_test`, which in this case would be `foo_benthos_test.yaml`.
 
 ```yml
-parallel: true
 tests:
   - name: example test
     target_processors: '/pipeline/processors'
@@ -51,15 +50,11 @@ tests:
             example_key: example metadata value
 ```
 
-The field `parallel` instructs as to whether the tests listed in this definition should be executed in parallel. Under `tests` we then have a list of any number of unit tests to execute for the config file.
-
-Each test is run in complete isolation, including any resources defined by the config file. Tests should be allocated a unique `name` that identifies the feature being tested.
+Under `tests` we have a list of any number of unit tests to execute for the config file. Each test is run in complete isolation, including any resources defined by the config file. Tests should be allocated a unique `name` that identifies the feature being tested.
 
 The field `target_processors` is a [JSON Pointer][json-pointer] that identifies the specific processors within the file which should be executed by the test. This allows you to target a specific processor (`/pipeline/processors/0`), or processors within a different section on your config (`/input/broker/inputs/0/processors`) if required.
 
 The field `environment` allows you to define an object of key/value pairs that set environment variables to be evaluated during the parsing of the target config file. These are unique to each test, allowing you to test different environment variable interpolation combinations.
-
-> When tests are run in parallel they will NOT retain their environment variables during execution. In order to retain custom environment variables ensure that `parallel` is set to `false`.
 
 The field `input_batch` lists one or more messages to be fed into the targeted processors as a batch. Each message of the batch may have its raw content defined as well as metadata key/value pairs.
 
@@ -71,7 +66,7 @@ If the number of batches defined does not match the resulting number of batches 
 
 ### Inline Tests
 
-Sometimes it's more convenient to define your tests within the config being tested. This is fine, simply add the `tests` field to the end of the config being tested. When defining inline tests the field `parallel` is not supported.
+Sometimes it's more convenient to define your tests within the config being tested. This is fine, simply add the `tests` field to the end of the config being tested. 
 
 ### Bloblang Tests
 

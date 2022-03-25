@@ -543,6 +543,78 @@ func TestTerm(t *testing.T) {
 	}
 }
 
+func TestUntilTerm(t *testing.T) {
+	tests := map[string]struct {
+		parser    Func
+		input     string
+		result    interface{}
+		remaining string
+		err       *Error
+	}{
+		"empty input": {
+			parser: UntilTerm("abc"),
+			err:    NewError([]rune(""), "abc"),
+		},
+		"smaller than string": {
+			parser:    UntilTerm("abc"),
+			input:     "ab",
+			remaining: "ab",
+			err:       NewError([]rune("ab"), "abc"),
+		},
+		"matches first": {
+			parser:    UntilTerm("abc"),
+			input:     "abcNo",
+			result:    "",
+			remaining: "abcNo",
+		},
+		"matches all": {
+			parser:    UntilTerm("abc"),
+			input:     "abc",
+			remaining: "abc",
+			result:    "",
+		},
+		"matches end": {
+			parser:    UntilTerm("abc"),
+			input:     "hello world abc",
+			remaining: "abc",
+			result:    "hello world ",
+		},
+		"matches before end": {
+			parser:    UntilTerm("abc"),
+			input:     "hello world abc this is ash",
+			remaining: "abc this is ash",
+			result:    "hello world ",
+		},
+		"single char term matches all": {
+			parser:    UntilTerm("a"),
+			input:     "a",
+			remaining: "a",
+			result:    "",
+		},
+		"single char term matches end": {
+			parser:    UntilTerm("a"),
+			input:     "helloa",
+			remaining: "a",
+			result:    "hello",
+		},
+		"single char term matches before end": {
+			parser:    UntilTerm("a"),
+			input:     "helloabar",
+			remaining: "abar",
+			result:    "hello",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			res := test.parser([]rune(test.input))
+			require.Equal(t, test.err, res.Err, "Error")
+			assert.Equal(t, test.result, res.Payload, "Result")
+			assert.Equal(t, test.remaining, string(res.Remaining), "Remaining")
+		})
+	}
+}
+
 func TestSequence(t *testing.T) {
 	parser := Sequence(Term("abc"), Term("def"))
 

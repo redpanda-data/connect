@@ -26,32 +26,29 @@ Connects to Kafka brokers and consumes one or more topics.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   kafka:
-    addresses:
-      - localhost:9092
+    addresses: []
     topics: []
-    target_version: 1.0.0
-    consumer_group: benthos_consumer_group
-    client_id: benthos_kafka_input
-    checkpoint_limit: 1
+    target_version: 2.0.0
+    consumer_group: ""
+    checkpoint_limit: 1024
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
   kafka:
-    addresses:
-      - localhost:9092
+    addresses: []
     topics: []
-    target_version: 1.0.0
+    target_version: 2.0.0
     tls:
       enabled: false
       skip_cert_verify: false
@@ -60,17 +57,17 @@ input:
       root_cas_file: ""
       client_certs: []
     sasl:
-      mechanism: ""
+      mechanism: none
       user: ""
       password: ""
       access_token: ""
       token_cache: ""
       token_key: ""
-    consumer_group: benthos_consumer_group
-    client_id: benthos_kafka_input
+    consumer_group: ""
+    client_id: benthos
     rack_id: ""
     start_from_oldest: true
-    checkpoint_limit: 1
+    checkpoint_limit: 1024
     commit_period: 1s
     max_processing_period: 100ms
     extract_tracing_map: ""
@@ -114,6 +111,10 @@ The field `kafka_lag` is the calculated difference between the high water mark o
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
 
+### Ordering
+
+By default messages of a topic partition can be processed in parallel, up to a limit determined by the field `checkpoint_limit`. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
+
 ### Troubleshooting
 
 If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer [`kafka_franz` input](/docs/components/inputs/kafka_franz).
@@ -130,9 +131,9 @@ A list of broker addresses to connect to. If an item of the list contains commas
 
 
 Type: `array`  
-Default: `["localhost:9092"]`  
+Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 addresses:
@@ -155,7 +156,7 @@ Type: `array`
 Default: `[]`  
 Requires version 3.33.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 topics:
@@ -183,7 +184,7 @@ The version of the Kafka protocol to use. This limits the capabilities used by t
 
 
 Type: `string`  
-Default: `"1.0.0"`  
+Default: `"2.0.0"`  
 
 ### `tls`
 
@@ -225,7 +226,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -242,7 +243,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -256,7 +257,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -313,10 +314,11 @@ The SASL authentication mechanism, if left empty SASL authentication is not used
 
 
 Type: `string`  
-Default: `""`  
+Default: `"none"`  
 
 | Option | Summary |
 |---|---|
+| `none` | Default, no SASL authentication. |
 | `PLAIN` | Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled). |
 | `OAUTHBEARER` | OAuth Bearer based authentication. |
 | `SCRAM-SHA-256` | Authentication using the SCRAM-SHA-256 mechanism. |
@@ -331,7 +333,7 @@ A `PLAIN` username. It is recommended that you use environment variables to popu
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 user: ${USER}
@@ -345,7 +347,7 @@ A `PLAIN` password. It is recommended that you use environment variables to popu
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 password: ${PASSWORD}
@@ -381,7 +383,7 @@ An identifier for the consumer group of the connection. This field can be explic
 
 
 Type: `string`  
-Default: `"benthos_consumer_group"`  
+Default: `""`  
 
 ### `client_id`
 
@@ -389,7 +391,7 @@ An identifier for the client connection.
 
 
 Type: `string`  
-Default: `"benthos_kafka_input"`  
+Default: `"benthos"`  
 
 ### `rack_id`
 
@@ -413,7 +415,7 @@ The maximum number of messages of the same topic and partition that can be proce
 
 
 Type: `int`  
-Default: `1`  
+Default: `1024`  
 Requires version 3.33.0 or newer  
 
 ### `commit_period`
@@ -441,7 +443,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.45.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 extract_tracing_map: root = meta()
@@ -495,7 +497,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -537,7 +539,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -555,7 +557,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -569,7 +571,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

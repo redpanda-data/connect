@@ -4,21 +4,22 @@ import (
 	"errors"
 	"testing"
 
-	ibloblang "github.com/Jeffail/benthos/v3/internal/bloblang"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/public/bloblang"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	ibloblang "github.com/benthosdev/benthos/v4/internal/bloblang"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 func TestMessageCopyAirGap(t *testing.T) {
 	p := message.NewPart([]byte("hello world"))
-	p.Metadata().Set("foo", "bar")
+	p.MetaSet("foo", "bar")
 	g1 := newMessageFromPart(p)
 	g2 := g1.Copy()
 
 	b := p.Get()
-	v := p.Metadata().Get("foo")
+	v := p.MetaGet("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
@@ -38,7 +39,7 @@ func TestMessageCopyAirGap(t *testing.T) {
 	g2.MetaSet("foo", "baz")
 
 	b = p.Get()
-	v = p.Metadata().Get("foo")
+	v = p.MetaGet("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
@@ -58,7 +59,7 @@ func TestMessageCopyAirGap(t *testing.T) {
 	g1.MetaSet("foo", "buz")
 
 	b = p.Get()
-	v = p.Metadata().Get("foo")
+	v = p.MetaGet("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
@@ -77,8 +78,8 @@ func TestMessageCopyAirGap(t *testing.T) {
 
 func TestMessageQuery(t *testing.T) {
 	p := message.NewPart([]byte(`{"foo":"bar"}`))
-	p.Metadata().Set("foo", "bar")
-	p.Metadata().Set("bar", "baz")
+	p.MetaSet("foo", "bar")
+	p.MetaSet("bar", "baz")
 	g1 := newMessageFromPart(p)
 
 	b, err := g1.AsBytes()
@@ -115,8 +116,8 @@ func TestMessageQuery(t *testing.T) {
 
 func TestMessageMutate(t *testing.T) {
 	p := message.NewPart([]byte(`not a json doc`))
-	p.Metadata().Set("foo", "bar")
-	p.Metadata().Set("bar", "baz")
+	p.MetaSet("foo", "bar")
+	p.MetaSet("bar", "baz")
 	g1 := newMessageFromPart(p)
 
 	_, err := g1.AsStructured()
@@ -289,11 +290,11 @@ func BenchmarkMessageMappingNew(b *testing.B) {
 
 func BenchmarkMessageMappingOld(b *testing.B) {
 	part := message.NewPart(nil)
-	require.NoError(b, part.SetJSON(map[string]interface{}{
+	part.SetJSON(map[string]interface{}{
 		"content": "hello world",
-	}))
+	})
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(part)
 
 	blobl, err := ibloblang.GlobalEnvironment().NewMapping("root.new_content = this.content.uppercase()")

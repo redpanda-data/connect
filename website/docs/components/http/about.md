@@ -36,7 +36,7 @@ The following endpoints will be generally available when the HTTP server is enab
 - `/version` provides version info.
 - `/ping` can be used as a liveness probe as it always returns a 200.
 - `/ready` can be used as a readiness probe as it serves a 200 only when both the input and output are connected, otherwise a 503 is returned.
-- `/metrics`, `/stats` both provide metrics when the metrics type is either [`http_server`][metrics.http_server] or [`prometheus`][metrics.prometheus].
+- `/metrics`, `/stats` both provide metrics when the metrics type is either [`json_api`][metrics.json_api] or [`prometheus`][metrics.prometheus].
 - `/endpoints` provides a JSON object containing a list of available endpoints, including those registered by configured components.
 
 ## CORS
@@ -63,5 +63,5 @@ The field `debug_endpoints` when set to `true` prompts Benthos to register a few
 
 [inputs.http_server]: /docs/components/inputs/http_server
 [outputs.http_server]: /docs/components/outputs/http_server
-[metrics.http_server]: /docs/components/metrics/http_server
+[metrics.json_api]: /docs/components/metrics/json_api
 [metrics.prometheus]: /docs/components/metrics/prometheus

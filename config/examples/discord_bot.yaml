@@ -51,7 +51,6 @@ pipeline:
             - bloblang: 'root = ""'
             - try:
               - http:
-                  parallel: true
                   url: https://api.github.com/repos/Jeffail/benthos/releases/latest
                   verb: GET
               - bloblang: 'root = "The latest release of Benthos is %v: %v".format(this.tag_name, this.html_url)'
@@ -61,8 +60,8 @@ pipeline:
 
     - catch:
       - log:
-          fields:
-            error: "${! error() }"
+          fields_mapping: |
+            root.error = error()
           message: "Failed to process message"
       - bloblang: 'root = "Sorry, my circuits are all bent from twerking and I must have malfunctioned."'
 

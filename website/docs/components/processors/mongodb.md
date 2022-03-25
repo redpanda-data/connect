@@ -30,7 +30,7 @@ Introduced in version 3.43.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 mongodb:
@@ -53,7 +53,7 @@ mongodb:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 mongodb:
@@ -72,7 +72,6 @@ mongodb:
   hint_map: ""
   upsert: false
   json_marshal_mode: canonical
-  parts: []
   max_retries: 3
   backoff:
     initial_interval: 1s
@@ -93,7 +92,7 @@ The URL of the target MongoDB DB.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 url: mongodb://localhost:27017
@@ -180,7 +179,7 @@ A bloblang map representing the records in the mongo db. Used to generate the do
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 document_map: |-
@@ -196,7 +195,7 @@ A bloblang map representing the filter for the mongo db command. The filter map 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 filter_map: |-
@@ -212,7 +211,7 @@ A bloblang map representing the hint for the mongo db command. This map is optio
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 hint_map: |-
@@ -243,19 +242,6 @@ Requires version 3.60.0 or newer
 | `canonical` | A string format that emphasizes type preservation at the expense of readability and interoperability. That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases.  |
 | `relaxed` | A string format that emphasizes readability and interoperability at the expense of type preservation.That is, conversion from relaxed format to BSON can lose type information. |
 
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ### `max_retries`
 

@@ -19,34 +19,12 @@ import TabItem from '@theme/TabItem';
 Unarchives messages according to the selected archive [format](#formats) into
 multiple messages within a [batch](/docs/configuration/batching).
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
-```yaml
-# Common config fields, showing default values
+```yml
+# Config fields, showing default values
 label: ""
 unarchive:
-  format: binary
+  format: ""
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yaml
-# All config fields, showing default values
-label: ""
-unarchive:
-  format: binary
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 When a message is unarchived the new messages replace the original message in
 the batch. Messages that are selected but fail to unarchive (invalid format)
@@ -65,21 +43,8 @@ The unarchive [format](#formats) to use.
 
 
 Type: `string`  
-Default: `"binary"`  
+Default: `""`  
 Options: `tar`, `zip`, `binary`, `lines`, `json_documents`, `json_array`, `json_map`, `csv`.
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Formats
 

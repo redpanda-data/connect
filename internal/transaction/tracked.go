@@ -4,19 +4,17 @@ import (
 	"context"
 	"errors"
 
-	"github.com/Jeffail/benthos/v3/internal/batch"
-	imessage "github.com/Jeffail/benthos/v3/internal/message"
-	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/batch"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // Tracked is a transaction type that adds identifying tags to messages such
 // that an error returned resulting from multiple transaction messages can be
 // reduced.
 type Tracked struct {
-	msg     types.Message
-	group   *imessage.SortGroup
-	resChan chan<- types.Response
+	msg   *message.Batch
+	group *message.SortGroup
+	ackFn func(context.Context, error) error
 }
 
 // NewTracked creates a transaction from a message batch and a response channel.
@@ -24,36 +22,31 @@ type Tracked struct {
 // is returned from a downstream component that merged messages from other
 // transactions the tag can be used in order to determine whether the message
 // owned by this transaction succeeded.
-func NewTracked(msg types.Message, resChan chan<- types.Response) *Tracked {
-	group, trackedMsg := imessage.NewSortGroup(msg)
+func NewTracked(msg *message.Batch, ackFn func(context.Context, error) error) *Tracked {
+	group, trackedMsg := message.NewSortGroup(msg)
 	return &Tracked{
-		msg:     trackedMsg,
-		resChan: resChan,
-		group:   group,
+		msg:   trackedMsg,
+		group: group,
+		ackFn: ackFn,
 	}
 }
 
 // Message returns the message owned by this transaction.
-func (t *Tracked) Message() types.Message {
+func (t *Tracked) Message() *message.Batch {
 	return t.msg
 }
 
-// ResponseChan returns the response channel owned by this transaction.
-func (t *Tracked) ResponseChan() chan<- types.Response {
-	return t.resChan
-}
-
-func (t *Tracked) getResFromGroup(walkable batch.WalkableError) types.Response {
+func (t *Tracked) getResFromGroup(walkable batch.WalkableError) error {
 	remainingIndexes := make(map[int]struct{}, t.msg.Len())
 	for i := 0; i < t.msg.Len(); i++ {
 		remainingIndexes[i] = struct{}{}
 	}
 
-	var res types.Response
-	walkable.WalkParts(func(_ int, p types.Part, err error) bool {
+	var res error
+	walkable.WalkParts(func(_ int, p *message.Part, err error) bool {
 		if index := t.group.GetIndex(p); index >= 0 {
 			if err != nil {
-				res = response.NewError(err)
+				res = err
 				return false
 			}
 			delete(remainingIndexes, index)
@@ -68,31 +61,21 @@ func (t *Tracked) getResFromGroup(walkable batch.WalkableError) types.Response {
 	}
 
 	if len(remainingIndexes) > 0 {
-		return response.NewError(errors.Unwrap(walkable))
-	}
-	return response.NewAck()
-}
-
-func (t *Tracked) resFromError(err error) types.Response {
-	var res types.Response = response.NewAck()
-	if err != nil {
-		if walkable, ok := err.(batch.WalkableError); ok {
-			res = t.getResFromGroup(walkable)
-		} else {
-			res = response.NewError(err)
-		}
-	}
-	return res
-}
-
-// Ack provides a response to the upstream service from an error.
-func (t *Tracked) Ack(ctx context.Context, err error) error {
-	select {
-	case t.resChan <- t.resFromError(err):
-	case <-ctx.Done():
-		return context.Canceled
+		return errors.Unwrap(walkable)
 	}
 	return nil
 }
 
-//------------------------------------------------------------------------------
+func (t *Tracked) resFromError(err error) error {
+	if err != nil {
+		if walkable, ok := err.(batch.WalkableError); ok {
+			err = t.getResFromGroup(walkable)
+		}
+	}
+	return err
+}
+
+// Ack provides a response to the upstream service from an error.
+func (t *Tracked) Ack(ctx context.Context, err error) error {
+	return t.ackFn(ctx, t.resFromError(err))
+}

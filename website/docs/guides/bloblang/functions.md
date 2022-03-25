@@ -238,7 +238,7 @@ root.doc = content().string()
 
 ### `error`
 
-If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].
+If an error has occurred during the processing of a message this function returns the reported cause of the error as a string, otherwise `null`. For more information about error handling patterns read [here][error_handling].
 
 #### Examples
 
@@ -287,7 +287,7 @@ root.doc = json()
 
 ### `meta`
 
-Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.
+Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.
 
 #### Parameters
 
@@ -300,13 +300,7 @@ Returns the value of a metadata key from the input message. Since values are ext
 root.topic = meta("kafka_topic")
 ```
 
-If the target key does not exist an error is thrown, allowing you to use coalesce or catch methods to fallback to other queries.
-
-```coffee
-root.topic = meta("nope") | meta("also nope") | "default"
-```
-
-The parameter is optional and if omitted the entire metadata contents are returned as an object.
+The key parameter is optional and if omitted the entire metadata contents are returned as an object.
 
 ```coffee
 root.all_metadata = meta()
@@ -316,7 +310,7 @@ root.all_metadata = meta()
 
 BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
-Returns the value of a metadata key from the new message being created. Changes made to metadata during a mapping will be reflected by this function.
+Returns the value of a metadata key from the new message being created, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.
 
 #### Parameters
 
@@ -329,13 +323,7 @@ Returns the value of a metadata key from the new message being created. Changes 
 root.topic = root_meta("kafka_topic")
 ```
 
-If the target key does not exist an error is thrown, allowing you to use coalesce or catch methods to fallback to other queries.
-
-```coffee
-root.topic = root_meta("nope") | root_meta("also nope") | "default"
-```
-
-The parameter is optional and if omitted the entire metadata contents are returned as an object.
+The key parameter is optional and if omitted the entire metadata contents are returned as an object.
 
 ```coffee
 root.all_metadata = root_meta()
@@ -345,7 +333,7 @@ root.all_metadata = root_meta()
 
 ### `env`
 
-Returns the value of an environment variable, or an empty string if the environment variable does not exist.
+Returns the value of an environment variable, or `null` if the environment variable does not exist.
 
 #### Parameters
 
@@ -355,7 +343,7 @@ Returns the value of an environment variable, or an empty string if the environm
 
 
 ```coffee
-root.thing.key = env("key")
+root.thing.key = env("key").or("default value")
 ```
 
 ### `file`
@@ -424,40 +412,6 @@ Returns the current unix timestamp in nanoseconds.
 
 ```coffee
 root.received_at = timestamp_unix_nano()
-```
-
-## Deprecated
-
-### `timestamp`
-
-Returns the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.
-
-A fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision. This has been deprecated in favour of the new `now` function.
-
-#### Parameters
-
-**`format`** &lt;string, default `"Mon Jan 2 15:04:05 -0700 MST 2006"`&gt; The format to print as.  
-
-#### Examples
-
-
-```coffee
-root.received_at = timestamp("15:04:05")
-```
-
-### `timestamp_utc`
-
-The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone. This has been deprecated in favour of the new `now` function.
-
-#### Parameters
-
-**`format`** &lt;string, default `"Mon Jan 2 15:04:05 -0700 MST 2006"`&gt; The format to print as.  
-
-#### Examples
-
-
-```coffee
-root.received_at = timestamp_utc("15:04:05")
 ```
 
 [error_handling]: /docs/configuration/error_handling

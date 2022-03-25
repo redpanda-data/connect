@@ -30,7 +30,7 @@ Introduced in version 3.61.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -43,7 +43,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -51,7 +51,7 @@ input:
     seed_brokers: []
     topics: []
     consumer_group: ""
-    checkpoint_limit: 100
+    checkpoint_limit: 1024
     tls:
       enabled: false
       skip_cert_verify: false
@@ -70,7 +70,7 @@ Consumes one or more topics by balancing the partitions across any other connect
 This input is new and experimental, and the existing `kafka` input is not going anywhere, but here's some reasons why it might be worth trying this one out:
 
 - You like shiny new stuff
-- You are exeriencing issues with the existing `kafka` input
+- You are experiencing issues with the existing `kafka` input
 - Someone told you to
 
 ### Metadata
@@ -96,7 +96,7 @@ A list of broker addresses to connect to in order to establish connections. If a
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 seed_brokers:
@@ -130,7 +130,7 @@ Determines how many messages of the same partition can be processed in parallel 
 
 
 Type: `int`  
-Default: `100`  
+Default: `1024`  
 
 ### `tls`
 
@@ -172,7 +172,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -189,7 +189,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -202,7 +202,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -253,7 +253,7 @@ Specify one or more methods of SASL authentication. SASL is tried in order; if t
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 sasl:

@@ -26,34 +26,32 @@ Pushes messages to an MQTT broker.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   mqtt:
-    urls:
-      - tcp://localhost:1883
-    topic: benthos_topic
-    client_id: benthos_output
+    urls: []
+    topic: ""
+    client_id: ""
     qos: 1
     connect_timeout: 30s
     write_timeout: 3s
     retained: false
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   mqtt:
-    urls:
-      - tcp://localhost:1883
-    topic: benthos_topic
-    client_id: benthos_output
+    urls: []
+    topic: ""
+    client_id: ""
     dynamic_client_id_suffix: ""
     qos: 1
     connect_timeout: 30s
@@ -76,7 +74,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
@@ -100,9 +98,9 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["tcp://localhost:1883"]`  
+Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 urls:
@@ -115,7 +113,7 @@ The topic to publish messages to.
 
 
 Type: `string`  
-Default: `"benthos_topic"`  
+Default: `""`  
 
 ### `client_id`
 
@@ -123,7 +121,7 @@ An identifier for the client connection.
 
 
 Type: `string`  
-Default: `"benthos_output"`  
+Default: `""`  
 
 ### `dynamic_client_id_suffix`
 
@@ -156,7 +154,7 @@ Type: `string`
 Default: `"30s"`  
 Requires version 3.58.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 connect_timeout: 1s
@@ -173,7 +171,7 @@ Type: `string`
 Default: `"3s"`  
 Requires version 3.58.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 write_timeout: 1s
@@ -312,7 +310,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -329,7 +327,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -343,7 +341,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -393,6 +391,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 

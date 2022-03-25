@@ -4,16 +4,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/output"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 // NewOutputField defines a new output field, it is then possible to extract an
 // OwnedOutput from the resulting parsed config with the method FieldOutput.
 func NewOutputField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeOutput),
+		field: docs.FieldOutput(name, ""),
 	}
 }
 
@@ -48,7 +49,7 @@ func (p *ParsedConfig) FieldOutput(path ...string) (*OwnedOutput, error) {
 // method FieldOutputList.
 func NewOutputListField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").Array().HasType(docs.FieldTypeOutput),
+		field: docs.FieldOutput(name, "").Array(),
 	}
 }
 

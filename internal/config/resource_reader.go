@@ -7,18 +7,17 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
-	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/condition"
-	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 type resourceFileInfo struct {
@@ -27,7 +26,6 @@ type resourceFileInfo struct {
 	// Need to track the resource that came from the previous read as their
 	// absence in an update means they need to be removed.
 	inputs     map[string]*input.Config
-	conditions map[string]*condition.Config
 	processors map[string]*processor.Config
 	outputs    map[string]*output.Config
 	caches     map[string]*cache.Config
@@ -37,7 +35,6 @@ type resourceFileInfo struct {
 func resInfoFromConfig(conf *manager.ResourceConfig) resourceFileInfo {
 	resInfo := resourceFileInfo{
 		inputs:     map[string]*input.Config{},
-		conditions: map[string]*condition.Config{},
 		processors: map[string]*processor.Config{},
 		outputs:    map[string]*output.Config{},
 		caches:     map[string]*cache.Config{},
@@ -46,26 +43,6 @@ func resInfoFromConfig(conf *manager.ResourceConfig) resourceFileInfo {
 
 	// This is an unlikely race condition, see readMain for more info.
 	resInfo.updatedAt = time.Now()
-
-	// Old style
-	for k, v := range conf.Manager.Inputs {
-		resInfo.inputs[k] = &v
-	}
-	for k, v := range conf.Manager.Conditions {
-		resInfo.conditions[k] = &v
-	}
-	for k, v := range conf.Manager.Processors {
-		resInfo.processors[k] = &v
-	}
-	for k, v := range conf.Manager.Outputs {
-		resInfo.outputs[k] = &v
-	}
-	for k, v := range conf.Manager.Caches {
-		resInfo.caches[k] = &v
-	}
-	for k, v := range conf.Manager.RateLimits {
-		resInfo.rateLimits[k] = &v
-	}
 
 	// New style
 	for _, c := range conf.ResourceInputs {
@@ -117,7 +94,7 @@ func readResource(path string, conf *manager.ResourceConfig) (lints []string, er
 	}()
 
 	var confBytes []byte
-	if confBytes, lints, err = config.ReadWithJSONPointersLinted(path, true); err != nil {
+	if confBytes, lints, err = ReadFileEnvSwap(path); err != nil {
 		return
 	}
 
@@ -126,7 +103,10 @@ func readResource(path string, conf *manager.ResourceConfig) (lints []string, er
 		return
 	}
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
-		for _, lint := range manager.Spec().LintYAML(docs.NewLintContext(), &rawNode) {
+		allowTest := append(docs.FieldSpecs{
+			TestsField,
+		}, manager.Spec()...)
+		for _, lint := range allowTest.LintYAML(docs.NewLintContext(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("resource file %v: line %v: %v", path, lint.Line, lint.What))
 		}
 	}
@@ -153,7 +133,7 @@ func (r *Reader) reactResourceUpdate(mgr bundle.NewManagement, strict bool, path
 		return true
 	}
 
-	lintlog := mgr.Logger().NewModule(".linter")
+	lintlog := mgr.Logger()
 	for _, lint := range lints {
 		lintlog.Infoln(lint)
 	}

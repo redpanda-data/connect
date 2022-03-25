@@ -7,44 +7,47 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
-	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 //------------------------------------------------------------------------------
 
 func init() {
-	bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (processor.Type, error) {
-		return NewProcessor(c, nm, nm.Logger(), nm.Metrics())
+	bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
+		v2Proc, err := NewProcessor(c, nm, nm.Logger(), nm.Metrics())
+		if err != nil {
+			return nil, err
+		}
+		return iprocessor.NewV2BatchedToV1Processor("", v2Proc, nm.Metrics()), nil
 	}, docs.ComponentSpec{
-		Name:    processor.TypeMongoDB,
-		Type:    docs.TypeProcessor,
-		Status:  docs.StatusExperimental,
-		Version: "3.43.0",
-		Categories: []string{
-			string(processor.CategoryIntegration),
-		},
-		Summary: `Performs operations against MongoDB for each message, allowing you to store or retrieve data within message payloads.`,
+		Name:       processor.TypeMongoDB,
+		Type:       docs.TypeProcessor,
+		Status:     docs.StatusExperimental,
+		Version:    "3.43.0",
+		Categories: []string{"Integration"},
+		Summary:    `Performs operations against MongoDB for each message, allowing you to store or retrieve data within message payloads.`,
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
 				processorOperationDocs(client.OperationInsertOne),
-				docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
-				docs.FieldCommon(
+				docs.FieldString("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
+				docs.FieldObject(
 					"write_concern",
 					"The write_concern settings for the mongo connection.",
 				).WithChildren(writeConcernDocs()...),
@@ -68,21 +71,20 @@ func init() {
 						"except insert-one. It is used to improve performance of finding the documents in the mongodb.",
 					mapExamples()...,
 				),
-				docs.FieldCommon(
+				docs.FieldBool(
 					"upsert",
 					"The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,"+
 						"the document is updated or replaced accordingly, otherwise it is created.",
-				).HasDefault(false).HasType(docs.FieldTypeBool).AtVersion("3.60.0"),
-				docs.FieldAdvanced(
+				).HasDefault(false).AtVersion("3.60.0"),
+				docs.FieldString(
 					"json_marshal_mode",
 					"The json_marshal_mode setting is optional and controls the format of the output message.",
-				).HasDefault(client.JSONMarshalModeCanonical).HasType(docs.FieldTypeString).HasAnnotatedOptions(
+				).HasDefault(client.JSONMarshalModeCanonical).Advanced().HasAnnotatedOptions(
 					string(client.JSONMarshalModeCanonical), "A string format that emphasizes type preservation at the expense of readability and interoperability. "+
 						"That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases. ",
 					string(client.JSONMarshalModeRelaxed), "A string format that emphasizes readability and interoperability at the expense of type preservation."+
 						"That is, conversion from relaxed format to BSON can lose type information.",
 				).AtVersion("3.60.0"),
-				processor.PartsFieldSpec,
 			).Merge(retries.FieldSpecs())...,
 		).ChildDefaultAndTypesFromStruct(processor.NewMongoDBConfig()),
 	})
@@ -102,26 +104,19 @@ type Processor struct {
 	database                     *mongo.Database
 	writeConcernCollectionOption *options.CollectionOptions
 
-	parts       []int
 	filterMap   *mapping.Executor
 	documentMap *mapping.Executor
 	hintMap     *mapping.Executor
 	operation   client.Operation
 
 	shutSig *shutdown.Signaller
-
-	mCount            metrics.StatCounter
-	mErr              metrics.StatCounter
-	mKeyAlreadyExists metrics.StatCounter
-	mSent             metrics.StatCounter
-	mBatchSent        metrics.StatCounter
 }
 
 // NewProcessor returns a MongoDB processor.
 func NewProcessor(
 	conf processor.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type,
-) (types.Processor, error) {
-	// TODO: Remove this after V4 lands and #972 is fixed
+) (iprocessor.V2Batched, error) {
+	// TODO: V4 Remove this after V4 lands and #972 is fixed
 	operation := client.NewOperation(conf.MongoDB.Operation)
 	if operation == client.OperationInvalid {
 		return nil, fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, update-one or find-one", conf.MongoDB.Operation)
@@ -132,15 +127,9 @@ func NewProcessor(
 		log:   log,
 		stats: stats,
 
-		parts:     conf.MongoDB.Parts,
 		operation: operation,
 
-		shutSig:           shutdown.NewSignaller(),
-		mCount:            stats.GetCounter("count"),
-		mErr:              stats.GetCounter("error"),
-		mKeyAlreadyExists: stats.GetCounter("key_already_exists"),
-		mSent:             stats.GetCounter("sent"),
-		mBatchSent:        stats.GetCounter("batch.sent"),
+		shutSig: shutdown.NewSignaller(),
 	}
 
 	if conf.MongoDB.MongoDB.URL == "" {
@@ -225,7 +214,7 @@ func NewProcessor(
 		return nil, fmt.Errorf("write_concern validation error: %w", err)
 	}
 
-	if m.collection, err = interop.NewBloblangField(mgr, m.conf.MongoDB.Collection); err != nil {
+	if m.collection, err = mgr.BloblEnvironment().NewField(m.conf.MongoDB.Collection); err != nil {
 		return nil, fmt.Errorf("failed to parse collection expression: %v", err)
 	}
 
@@ -235,16 +224,15 @@ func NewProcessor(
 	return m, nil
 }
 
-// ProcessMessage applies the processor to a message, either creating >0
+// ProcessBatch applies the processor to a message batch, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Response) {
-	m.mCount.Incr(1)
-	newMsg := msg.Copy()
+func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch *message.Batch) ([]*message.Batch, error) {
+	newBatch := batch.Copy()
 
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
-	processor.IteratePartsWithSpanV2("mongodb", m.parts, newMsg, func(i int, s *tracing.Span, p types.Part) error {
+	processor.IteratePartsWithSpanV2("mongodb", nil, newBatch, func(i int, s *tracing.Span, p *message.Part) error {
 		var err error
-		var filterVal, documentVal types.Part
+		var filterVal, documentVal *message.Part
 		var upsertVal, filterValWanted, documentValWanted bool
 
 		filterValWanted = isFilterAllowed(m.operation)
@@ -252,13 +240,13 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		upsertVal = m.conf.Upsert
 
 		if filterValWanted {
-			if filterVal, err = m.filterMap.MapPart(i, msg); err != nil {
+			if filterVal, err = m.filterMap.MapPart(i, newBatch); err != nil {
 				return fmt.Errorf("failed to execute filter_map: %v", err)
 			}
 		}
 
 		if (filterVal != nil || !filterValWanted) && documentValWanted {
-			if documentVal, err = m.documentMap.MapPart(i, msg); err != nil {
+			if documentVal, err = m.documentMap.MapPart(i, newBatch); err != nil {
 				return fmt.Errorf("failed to execute document_map: %v", err)
 			}
 		}
@@ -287,7 +275,7 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 
 		findOptions := &options.FindOneOptions{}
 		if m.hintMap != nil {
-			hintVal, err := m.hintMap.MapPart(i, msg)
+			hintVal, err := m.hintMap.MapPart(i, newBatch)
 			if err != nil {
 				return fmt.Errorf("failed to execute hint_map: %v", err)
 			}
@@ -298,7 +286,7 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 		}
 
 		var writeModel mongo.WriteModel
-		collection := m.database.Collection(m.collection.String(i, msg), m.writeConcernCollectionOption)
+		collection := m.database.Collection(m.collection.String(i, newBatch), m.writeConcernCollectionOption)
 
 		switch m.operation {
 		case client.OperationInsertOne:
@@ -360,35 +348,18 @@ func (m *Processor) ProcessMessage(msg types.Message) ([]types.Message, types.Re
 			// We should have at least one write model in the slice
 			if _, err := collection.BulkWrite(context.Background(), writeModels); err != nil {
 				m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
-				for _, n := range m.parts {
-					processor.FlagErr(newMsg.Get(n), err)
-				}
+				_ = newBatch.Iter(func(i int, p *message.Part) error {
+					iprocessor.MarkErr(p, spans[i], err)
+					return nil
+				})
 			}
 		}
 	}
 
-	m.mBatchSent.Incr(1)
-	m.mSent.Incr(int64(newMsg.Len()))
-	msgs := [1]types.Message{newMsg}
-	return msgs[:], nil
+	return []*message.Batch{newBatch}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (m *Processor) CloseAsync() {
-	go func() {
-		m.client.Disconnect(context.Background())
-		m.shutSig.ShutdownComplete()
-	}()
+// Close shuts down the processor and stops processing requests.
+func (m *Processor) Close(ctx context.Context) error {
+	return m.client.Disconnect(ctx)
 }
-
-// WaitForClose blocks until the processor has closed down.
-func (m *Processor) WaitForClose(timeout time.Duration) error {
-	select {
-	case <-time.After(timeout):
-		return types.ErrTimeout
-	case <-m.shutSig.HasClosedChan():
-	}
-	return nil
-}
-
-//------------------------------------------------------------------------------

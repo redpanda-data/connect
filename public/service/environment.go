@@ -3,18 +3,19 @@ package service
 import (
 	"fmt"
 
-	ibloblang "github.com/Jeffail/benthos/v3/internal/bloblang"
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	ibuffer "github.com/Jeffail/benthos/v3/internal/component/buffer"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/public/bloblang"
+	ibloblang "github.com/benthosdev/benthos/v4/internal/bloblang"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/buffer"
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 // Environment is a collection of Benthos component plugins that can be used in
@@ -87,7 +88,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeBuffer
-	return e.internal.BufferAdd(func(conf buffer.Config, nm bundle.NewManagement) (buffer.Type, error) {
+	return e.internal.BufferAdd(func(conf buffer.Config, nm bundle.NewManagement) (buffer.Streamed, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -96,7 +97,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 		if err != nil {
 			return nil, err
 		}
-		return ibuffer.NewStream(conf.Type, newAirGapBatchBuffer(b), nm.Logger(), nm.Metrics()), nil
+		return buffer.NewStream(conf.Type, newAirGapBatchBuffer(b), nm.Logger(), nm.Metrics()), nil
 	}, componentSpec)
 }
 
@@ -118,7 +119,7 @@ func (e *Environment) RegisterCache(name string, spec *ConfigSpec, ctor CacheCon
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeCache
-	return e.internal.CacheAdd(func(conf cache.Config, nm bundle.NewManagement) (types.Cache, error) {
+	return e.internal.CacheAdd(func(conf cache.Config, nm bundle.NewManagement) (cache.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -153,7 +154,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
-	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
+	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -180,7 +181,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
-	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (input.Type, error) {
+	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -213,7 +214,7 @@ func (e *Environment) RegisterOutput(name string, spec *ConfigSpec, ctor OutputC
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeOutput
 	return e.internal.OutputAdd(bundle.OutputConstructorFromSimple(
-		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
+		func(conf output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 			if err != nil {
 				return nil, err
@@ -252,7 +253,7 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeOutput
 	return e.internal.OutputAdd(bundle.OutputConstructorFromSimple(
-		func(conf output.Config, nm bundle.NewManagement) (output.Type, error) {
+		func(conf output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 			if err != nil {
 				return nil, err
@@ -297,7 +298,7 @@ func (e *Environment) RegisterProcessor(name string, spec *ConfigSpec, ctor Proc
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
-	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
+	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -322,7 +323,7 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
-	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.Type, error) {
+	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -353,7 +354,7 @@ func (e *Environment) RegisterRateLimit(name string, spec *ConfigSpec, ctor Rate
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeRateLimit
-	return e.internal.RateLimitAdd(func(conf ratelimit.Config, nm bundle.NewManagement) (types.RateLimit, error) {
+	return e.internal.RateLimitAdd(func(conf ratelimit.Config, nm bundle.NewManagement) (ratelimit.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err

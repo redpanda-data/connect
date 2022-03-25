@@ -61,28 +61,19 @@ This also works the same with [output brokers][output_broker].
 
 ## Grouped Message Processing
 
-One of the more powerful features of Benthos is that all processors are "batch aware", which means processors that operate on single messages can be configured using the `parts` field to only operate on select messages of a batch:
+And some processors such as [`while`][processor.while] are executed once across a whole batch, you can avoid this behaviour with the [`for_each` processor][proc_for_each]:
 
 ```yaml
 pipeline:
   processors:
-    # This processor only acts on the first message of a batch
-    - protobuf:
-        parts: [ 0 ]
-        operator: to_json
-        message: header.Message
-        import_paths: [ /tmp/protos ]
-```
-
-And some processors such as [`sleep`][processor.sleep] are executed once per batch, you can avoid this behaviour with the [`for_each` processor][proc_for_each]:
-
-```yaml
-pipeline:
-  processors:
-    # Sleep for one second for each message of a batch
     - for_each:
-      - sleep:
-          duration: 1s
+      - while:
+          at_least_once: true
+          max_loops: 0
+          check: errored()
+          processors:
+            - catch: [] # Wipe any previous error
+            - resource: foo # Attempt this processor until success
 ```
 
 There's a vast number of processors that specialise in operations across batches such as [grouping][proc_group_by] and [archiving][proc_archive]. For example, the following processors group a batch of messages according to a metadata field and compresses them into separate `.tar.gz` archives:
@@ -150,9 +141,8 @@ pipeline:
 
 ## Batch Policy
 
-When an input component has a config field `batching` that means it supports a batch policy. This is a mechanism that allows you to configure exactly how your batching should work.
+When an input or output component has a config field `batching` that means it supports a batch policy. This is a mechanism that allows you to configure exactly how your batching should work on messages before they are routed to the input or output it's associated with. Batches are considered complete and will be flushed downstream when either of the following conditions are met:
 
-Batches are considered complete and will be flushed downstream when either of the following conditions are met:
 
 - The `byte_size` field is non-zero and the total size of the batch in bytes matches or exceeds it (disregarding metadata.)
 - The `count` field is non-zero and the total number of messages in the batch matches or exceeds it.
@@ -174,6 +164,14 @@ output:
       period: 100ms
 ```
 
+:::caution
+A batch policy has the capability to _create_ batches, but not to break them down.
+:::
+
+If your configured pipeline is processing messages that are batched _before_ they reach the batch policy then they may circumvent the conditions you've specified here, resulting in sizes you aren't expecting.
+
+If you are affected by this limitation then consider breaking the batches down with a [`split` processor][split] before they reach the batch policy.
+
 ### Post-Batch Processing
 
 A batch policy also has a field `processors` which allows you to define an optional list of [processors][processors] to apply to each batch before it is flushed. This is a good place to aggregate or archive the batch into a compatible format for an output:
@@ -194,7 +192,7 @@ The above config will batch up messages and then merge them into a line delimite
 During shutdown any remaining messages waiting for a batch to complete will be flushed down the pipeline.
 
 [processors]: /docs/components/processors/about
-[processor.sleep]: /docs/components/processors/sleep
+[processor.while]: /docs/components/processors/while
 [split]: /docs/components/processors/split
 [archive]: /docs/components/processors/archive
 [unarchive]: /docs/components/processors/unarchive

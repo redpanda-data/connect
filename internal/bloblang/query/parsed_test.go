@@ -6,13 +6,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	"github.com/benthosdev/benthos/v4/internal/bloblang"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/message"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestFunctionExamples(t *testing.T) {
@@ -40,7 +41,7 @@ func TestFunctionExamples(t *testing.T) {
 				require.NoError(t, err)
 
 				for j, io := range e.Results {
-					msg := message.New([][]byte{[]byte(io[0])})
+					msg := message.QuickBatch([][]byte{[]byte(io[0])})
 					p, err := m.MapPart(0, msg)
 					exp := io[1]
 					if strings.HasPrefix(exp, "Error(") {
@@ -88,7 +89,7 @@ func TestMethodExamples(t *testing.T) {
 				require.NoError(t, err)
 
 				for j, io := range e.Results {
-					msg := message.New([][]byte{[]byte(io[0])})
+					msg := message.QuickBatch([][]byte{[]byte(io[0])})
 					p, err := m.MapPart(0, msg)
 					exp := io[1]
 					if strings.HasPrefix(exp, "Error(") {
@@ -109,7 +110,7 @@ func TestMethodExamples(t *testing.T) {
 					require.NoError(t, err)
 
 					for j, io := range e.Results {
-						msg := message.New([][]byte{[]byte(io[0])})
+						msg := message.QuickBatch([][]byte{[]byte(io[0])})
 						p, err := m.MapPart(0, msg)
 						exp := io[1]
 						if strings.HasPrefix(exp, "Error(") {
@@ -164,7 +165,7 @@ func TestMappings(t *testing.T) {
 			require.NoError(t, err)
 
 			for i, io := range test.inputOutputs {
-				msg := message.New([][]byte{[]byte(io[0])})
+				msg := message.QuickBatch([][]byte{[]byte(io[0])})
 				p, err := m.MapPart(0, msg)
 				exp := io[1]
 				if strings.HasPrefix(exp, "Error(") {

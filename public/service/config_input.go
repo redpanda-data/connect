@@ -4,16 +4,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/input"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 // NewInputField defines a new input field, it is then possible to extract an
 // OwnedInput from the resulting parsed config with the method FieldInput.
 func NewInputField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeInput),
+		field: docs.FieldInput(name, ""),
 	}
 }
 
@@ -36,7 +37,7 @@ func (p *ParsedConfig) FieldInput(path ...string) (*OwnedInput, error) {
 		return nil, err
 	}
 
-	iproc, err := p.mgr.NewInput(conf, false)
+	iproc, err := p.mgr.NewInput(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +49,7 @@ func (p *ParsedConfig) FieldInput(path ...string) (*OwnedInput, error) {
 // method FieldInputList.
 func NewInputListField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").Array().HasType(docs.FieldTypeInput),
+		field: docs.FieldInput(name, "").Array(),
 	}
 }
 
@@ -82,7 +83,7 @@ func (p *ParsedConfig) FieldInputList(path ...string) ([]*OwnedInput, error) {
 
 	ins := make([]*OwnedInput, len(configs))
 	for i, c := range configs {
-		iproc, err := p.mgr.NewInput(c, false)
+		iproc, err := p.mgr.NewInput(c)
 		if err != nil {
 			return nil, fmt.Errorf("input %v: %w", i, err)
 		}

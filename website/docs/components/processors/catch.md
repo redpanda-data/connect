@@ -19,7 +19,7 @@ import TabItem from '@theme/TabItem';
 Applies a list of child processors _only_ when a previous processing step has
 failed.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 catch: []
@@ -33,12 +33,12 @@ the catch.
 For example, with the following config:
 
 ```yaml
-- foo:
-    foofield1: meow
-- catch:
-  - bar:
-      barfield1: woof
-  - baz: {}
+pipeline:
+  processors:
+    - resource: foo
+    - catch:
+      - resource: bar
+      - resource: baz
 ```
 
 If the processor `foo` fails for a particular message, that message

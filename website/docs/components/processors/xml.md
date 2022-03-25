@@ -22,34 +22,13 @@ This component is mostly stable but breaking changes could still be made outside
 Parses messages as an XML document, performs a mutation on the data, and then
 overwrites the previous contents with the new value.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
-```yaml
-# Common config fields, showing default values
+```yml
+# Config fields, showing default values
 label: ""
 xml:
-  operator: to_json
+  operator: ""
+  cast: false
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yaml
-# All config fields, showing default values
-label: ""
-xml:
-  operator: to_json
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 ## Operators
 
@@ -96,6 +75,25 @@ The resulting JSON structure would look like this:
 }
 ```
 
+With cast set to true, the resulting JSON structure would look like this:
+
+```json
+{
+  "root":{
+    "title":"This is a title",
+    "description":{
+      "#text":"This is a description",
+      "-tone":"boring"
+    },
+    "elements":[
+      {"#text":"foo1","-id":1},
+      {"#text":"foo2","-id":2},
+      "foo3"
+    ]
+  }
+}
+```
+
 ## Fields
 
 ### `operator`
@@ -104,20 +102,15 @@ An XML [operation](#operators) to apply to messages.
 
 
 Type: `string`  
-Default: `"to_json"`  
+Default: `""`  
 Options: `to_json`.
 
-### `parts`
+### `cast`
 
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
+Whether to try to cast values that are numbers and booleans to the right type. Default: all values are strings.
 
 
-Type: `array`  
-Default: `[]`  
+Type: `bool`  
+Default: `false`  
 
 

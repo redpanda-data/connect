@@ -12,9 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/service"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestStreamBuilderDefault(t *testing.T) {
@@ -38,7 +41,7 @@ func TestStreamBuilderDefault(t *testing.T) {
 		`logger:
     level: INFO`,
 		`metrics:
-    http_server:`,
+    prometheus:`,
 	}
 
 	for _, str := range exp {
@@ -47,11 +50,7 @@ func TestStreamBuilderDefault(t *testing.T) {
 }
 
 func TestStreamBuilderProducerFunc(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "stream_builder_producer_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	outFilePath := filepath.Join(tmpDir, "out.txt")
 
@@ -102,11 +101,7 @@ file:
 }
 
 func TestStreamBuilderBatchProducerFunc(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "stream_builder_batch_producer_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	outFilePath := filepath.Join(tmpDir, "out.txt")
 
@@ -208,11 +203,7 @@ logger:
 }
 
 func TestStreamBuilderConsumerFunc(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "stream_builder_consumer_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	inFilePath := filepath.Join(tmpDir, "in.txt")
 	require.NoError(t, os.WriteFile(inFilePath, []byte(`HELLO WORLD 1
@@ -245,7 +236,7 @@ file:
 	require.Error(t, b.AddConsumerFunc(handler))
 
 	// Don't allow output overrides now.
-	err = b.SetYAML(`output: {}`)
+	err := b.SetYAML(`output: {}`)
 	require.Error(t, err)
 
 	strm, err := b.Build()
@@ -263,11 +254,7 @@ file:
 }
 
 func TestStreamBuilderBatchConsumerFunc(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "stream_builder_batch_consumer_test")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	inFilePath := filepath.Join(tmpDir, "in.txt")
 	require.NoError(t, os.WriteFile(inFilePath, []byte(`HELLO WORLD 1
@@ -310,7 +297,7 @@ file:
 	require.Error(t, b.AddBatchConsumerFunc(handler))
 
 	// Don't allow output overrides now.
-	err = b.SetYAML(`output: {}`)
+	err := b.SetYAML(`output: {}`)
 	require.Error(t, err)
 
 	strm, err := b.Build()
@@ -363,8 +350,7 @@ type: local`))
     label: ""
     kafka:`,
 		`buffer:
-    memory:
-        limit`,
+    memory: {}`,
 		`pipeline:
     threads: 10
     processors:`,
@@ -474,7 +460,6 @@ func TestStreamBuilderSetYAMLBrokers(t *testing.T) {
     broker:
         copies: 1
         pattern: fan_out
-        max_in_flight: 1
         outputs:`,
 		`            - label: ""
               nats:`,

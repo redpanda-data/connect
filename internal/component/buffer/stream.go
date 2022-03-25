@@ -6,14 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/internal/tracing"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/throttle"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 // AckFunc is a function used to acknowledge receipt of a message batch from a
@@ -28,13 +27,13 @@ type ReaderWriter interface {
 	// the message is preserved until the returned AckFunc is called. Some
 	// temporal buffer implementations such as windowers will ignore the ack
 	// func.
-	Read(context.Context) (types.Message, AckFunc, error)
+	Read(context.Context) (*message.Batch, AckFunc, error)
 
 	// Write a new message batch to the stack.
-	Write(context.Context, types.Message, AckFunc) error
+	Write(context.Context, *message.Batch, AckFunc) error
 
 	// EndOfInput indicates to the buffer that the input has ended and that once
-	// the buffer is depleted it should return types.ErrTypeClosed from Read in
+	// the buffer is depleted it should return component.ErrTypeClosed from Read in
 	// order to gracefully shut down the pipeline.
 	//
 	// EndOfInput should be idempotent as it may be called more than once.
@@ -59,21 +58,21 @@ type Stream struct {
 	errThrottle *throttle.Type
 	shutSig     *shutdown.Signaller
 
-	messagesIn  <-chan types.Transaction
-	messagesOut chan types.Transaction
+	messagesIn  <-chan message.Transaction
+	messagesOut chan message.Transaction
 
 	closedWG sync.WaitGroup
 }
 
 // NewStream creates a new Producer/Consumer around a buffer.
-func NewStream(typeStr string, buffer ReaderWriter, log log.Modular, stats metrics.Type) buffer.Type {
+func NewStream(typeStr string, buffer ReaderWriter, log log.Modular, stats metrics.Type) Streamed {
 	m := Stream{
 		typeStr:     typeStr,
 		stats:       stats,
 		log:         log,
 		buffer:      buffer,
 		shutSig:     shutdown.NewSignaller(),
-		messagesOut: make(chan types.Transaction),
+		messagesOut: make(chan message.Transaction),
 	}
 	m.errThrottle = throttle.New(throttle.OptCloseChan(m.shutSig.CloseAtLeisureChan()))
 	return &m
@@ -92,10 +91,8 @@ func (m *Stream) inputLoop() {
 	}()
 
 	var (
-		mWriteCount    = m.stats.GetCounter("write.count")
-		mWriteErr      = m.stats.GetCounter("write.error")
-		mReceived      = m.stats.GetCounter("received")
-		mReceivedBatch = m.stats.GetCounter("batch.received")
+		mReceivedCount      = m.stats.GetCounter("buffer_received")
+		mReceivedBatchCount = m.stats.GetCounter("buffer_batch_received")
 	)
 
 	closeAtLeisureCtx, doneLeisure := m.shutSig.CloseAtLeisureCtx(context.Background())
@@ -105,15 +102,13 @@ func (m *Stream) inputLoop() {
 	defer doneNow()
 
 	for {
-		var tr types.Transaction
+		var tr message.Transaction
 		var open bool
 		select {
 		case tr, open = <-m.messagesIn:
 			if !open {
 				return
 			}
-			mReceived.Incr(int64(tr.Payload.Len()))
-			mReceivedBatch.Incr(1)
 		case <-m.shutSig.CloseAtLeisureChan():
 			return
 		}
@@ -122,23 +117,18 @@ func (m *Stream) inputLoop() {
 		var ackOnce sync.Once
 		ackFunc := func(ctx context.Context, ackErr error) (err error) {
 			ackOnce.Do(func() {
-				select {
-				case tr.ResponseChan <- response.NewError(ackErr):
-				case <-ctx.Done():
-					err = ctx.Err()
-				case <-m.shutSig.CloseNowChan():
-					err = types.ErrTypeClosed
-				}
+				err = tr.Ack(ctx, ackErr)
 				ackGroup.Done()
 			})
 			return
 		}
 
+		batchLen := tr.Payload.Len()
 		err := m.buffer.Write(closeAtLeisureCtx, tracing.WithSiblingSpans(m.typeStr, tr.Payload), ackFunc)
 		if err == nil {
-			mWriteCount.Incr(1)
+			mReceivedCount.Incr(int64(batchLen))
+			mReceivedBatchCount.Incr(1)
 		} else {
-			mWriteErr.Incr(1)
 			_ = ackFunc(closeNowCtx, err)
 		}
 	}
@@ -156,11 +146,9 @@ func (m *Stream) outputLoop() {
 	}()
 
 	var (
-		mReadCount = m.stats.GetCounter("read.count")
-		mReadErr   = m.stats.GetCounter("read.error")
-		mSent      = m.stats.GetCounter("sent")
-		mSentBatch = m.stats.GetCounter("batch.sent")
-		mAckErr    = m.stats.GetCounter("ack.error")
+		mSent      = m.stats.GetCounter("buffer_sent")
+		mSentBatch = m.stats.GetCounter("buffer_batch_sent")
+		mLatency   = m.stats.GetTimer("buffer_latency_ns")
 	)
 
 	closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
@@ -169,8 +157,7 @@ func (m *Stream) outputLoop() {
 	for {
 		msg, ackFunc, err := m.buffer.Read(closeNowCtx)
 		if err != nil {
-			if err != types.ErrTypeClosed && !errors.Is(err, context.Canceled) {
-				mReadErr.Incr(1)
+			if err != component.ErrTypeClosed && !errors.Is(err, context.Canceled) {
 				m.log.Errorf("Failed to read buffer: %v\n", err)
 				if !m.errThrottle.Retry() {
 					return
@@ -185,17 +172,19 @@ func (m *Stream) outputLoop() {
 		// It's possible that the buffer wiped our previous root span.
 		tracing.InitSpans(m.typeStr, msg)
 
-		mReadCount.Incr(1)
-		m.errThrottle.Reset()
+		batchLen := msg.Len()
 
-		resChan := make(chan types.Response, 1)
+		m.errThrottle.Reset()
+		resChan := make(chan error, 1)
 		select {
-		case m.messagesOut <- types.NewTransaction(msg, resChan):
+		case m.messagesOut <- message.NewTransaction(msg, resChan):
 		case <-m.shutSig.CloseNowChan():
 			return
 		}
 
-		mSent.Incr(int64(msg.Len()))
+		startedAt := time.Now()
+
+		mSent.Incr(int64(batchLen))
 		mSentBatch.Incr(1)
 		ackGroup.Add(1)
 
@@ -206,10 +195,10 @@ func (m *Stream) outputLoop() {
 				if !open {
 					return
 				}
+				mLatency.Timing(time.Since(startedAt).Nanoseconds())
 				tracing.FinishSpans(msg)
-				if ackErr := ackFunc(closeNowCtx, res.Error()); ackErr != nil {
-					mAckErr.Incr(1)
-					if ackErr != types.ErrTypeClosed {
+				if ackErr := ackFunc(closeNowCtx, res); ackErr != nil {
+					if ackErr != component.ErrTypeClosed {
 						m.log.Errorf("Failed to ack buffer message: %v\n", ackErr)
 					}
 				}
@@ -221,9 +210,9 @@ func (m *Stream) outputLoop() {
 }
 
 // Consume assigns a messages channel for the output to read.
-func (m *Stream) Consume(msgs <-chan types.Transaction) error {
+func (m *Stream) Consume(msgs <-chan message.Transaction) error {
 	if m.messagesIn != nil {
-		return types.ErrAlreadyStarted
+		return component.ErrAlreadyStarted
 	}
 	m.messagesIn = msgs
 
@@ -239,7 +228,7 @@ func (m *Stream) Consume(msgs <-chan types.Transaction) error {
 
 // TransactionChan returns the channel used for consuming messages from this
 // buffer.
-func (m *Stream) TransactionChan() <-chan types.Transaction {
+func (m *Stream) TransactionChan() <-chan message.Transaction {
 	return m.messagesOut
 }
 
@@ -259,7 +248,7 @@ func (m *Stream) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-m.shutSig.HasClosedChan():
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

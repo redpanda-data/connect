@@ -2,12 +2,11 @@ package docs
 
 import (
 	"bytes"
-	"fmt"
 	"strings"
 	"text/template"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 // LintBloblangMapping is function for linting a config field expected to be a
@@ -15,7 +14,7 @@ import (
 func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 	str, ok := v.(string)
 	if !ok {
-		return []Lint{NewLintError(line, fmt.Sprintf("expected string value, got %T", v))}
+		return nil
 	}
 	if str == "" {
 		return nil
@@ -38,16 +37,13 @@ func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 func LintBloblangField(ctx LintContext, line, col int, v interface{}) []Lint {
 	str, ok := v.(string)
 	if !ok {
-		return []Lint{NewLintWarning(line, fmt.Sprintf("expected string value, got %T", v))}
+		return nil
 	}
 	if str == "" {
 		return nil
 	}
-	e, err := ctx.BloblangEnv.NewField(str)
+	_, err := ctx.BloblangEnv.NewField(str)
 	if err == nil {
-		if ctx.RejectDeprecated && e.ContainsDeprecated {
-			return []Lint{NewLintError(line, `interpolation string contains deprecated syntax, use the new bloblang syntax instead, e.g. ${!meta("foo")} instead of ${!metadata:foo}`)}
-		}
 		return nil
 	}
 	if mErr, ok := err.(*parser.Error); ok {
@@ -289,8 +285,8 @@ root.has_good_taste = ["pikachu","mewtwo","magmar"].contains(this.user.fav_pokem
 Methods support both named and nameless style arguments:
 
 ` + "```coffee" + `
-root.foo_one = this.(bar | baz).trim().replace(old: "dog", new: "cat")
-root.foo_two = this.(bar | baz).trim().replace("dog", "cat")
+root.foo_one = this.(bar | baz).trim().replace_all(old: "dog", new: "cat")
+root.foo_two = this.(bar | baz).trim().replace_all("dog", "cat")
 ` + "```" + `
 
 {{if gt (len .General) 0 -}}

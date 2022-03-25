@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/Jeffail/benthos/v3/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 // This example demonstrates how to create Bloblang methods and functions and

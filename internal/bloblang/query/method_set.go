@@ -29,9 +29,6 @@ func (m *MethodSet) Add(spec MethodSpec, ctor MethodCtor) error {
 	if !nameRegexp.MatchString(spec.Name) {
 		return fmt.Errorf("method name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
 	}
-	if _, exists := m.constructors[spec.Name]; exists {
-		return fmt.Errorf("conflicting method name: %v", spec.Name)
-	}
 	if err := spec.Params.validate(); err != nil {
 		return err
 	}

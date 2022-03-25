@@ -7,14 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/gabs/v2"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
 )
 
 // ConfigField describes a field within a component configuration, to be added
@@ -128,7 +129,7 @@ func NewObjectField(name string, fields ...*ConfigField) *ConfigField {
 		children[i] = f.field
 	}
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").WithChildren(children...),
+		field: docs.FieldObject(name, "").WithChildren(children...),
 	}
 }
 
@@ -160,6 +161,13 @@ func (c *ConfigField) Description(d string) *ConfigField {
 // appear in simplified documentation examples.
 func (c *ConfigField) Advanced() *ConfigField {
 	c.field = c.field.Advanced()
+	return c
+}
+
+// Deprecated marks a config field as being deprecated, and therefore it will not
+// appear in documentation examples.
+func (c *ConfigField) Deprecated() *ConfigField {
+	c.field = c.field.Deprecated()
 	return c
 }
 
@@ -313,6 +321,13 @@ func (c *ConfigSpec) Stable() *ConfigSpec {
 // considered experimental by default.
 func (c *ConfigSpec) Beta() *ConfigSpec {
 	c.component.Status = docs.StatusBeta
+	return c
+}
+
+// Deprecated sets a documentation label on the component indicating that it is
+// now deprecated. Plugins are considered experimental by default.
+func (c *ConfigSpec) Deprecated() *ConfigSpec {
+	c.component.Status = docs.StatusDeprecated
 	return c
 }
 

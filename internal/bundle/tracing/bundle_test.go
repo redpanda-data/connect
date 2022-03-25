@@ -1,27 +1,27 @@
 package tracing_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/bundle/tracing"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestBundleInputTracing(t *testing.T) {
@@ -36,24 +36,22 @@ func TestBundleInputTracing(t *testing.T) {
 
 	mgr, err := manager.NewV2(
 		manager.NewResourceConfig(),
-		types.NoopMgr(),
+		mock.NewManager(),
 		log.Noop(),
 		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
 
-	in, err := mgr.NewInput(inConfig, false)
+	in, err := mgr.NewInput(inConfig)
 	require.NoError(t, err)
 
+	ctx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
 	for i := 0; i < 10; i++ {
 		select {
 		case tran := <-in.TransactionChan():
-			select {
-			case tran.ResponseChan <- response.NewAck():
-			case <-time.After(time.Second):
-				t.Fatal("timed out")
-			}
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			t.Fatal("timed out")
 		}
@@ -87,7 +85,7 @@ func TestBundleOutputTracing(t *testing.T) {
 
 	mgr, err := manager.NewV2(
 		manager.NewResourceConfig(),
-		types.NoopMgr(),
+		mock.NewManager(),
 		log.Noop(),
 		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
@@ -97,12 +95,12 @@ func TestBundleOutputTracing(t *testing.T) {
 	out, err := mgr.NewOutput(outConfig)
 	require.NoError(t, err)
 
-	tranChan := make(chan types.Transaction)
+	tranChan := make(chan message.Transaction)
 	require.NoError(t, out.Consume(tranChan))
 
 	for i := 0; i < 10; i++ {
-		resChan := make(chan types.Response)
-		tran := types.NewTransaction(message.New([][]byte{[]byte(strconv.Itoa(i))}), resChan)
+		resChan := make(chan error)
+		tran := message.NewTransaction(message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}), resChan)
 		select {
 		case tranChan <- tran:
 			select {
@@ -148,7 +146,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 
 	mgr, err := manager.NewV2(
 		manager.NewResourceConfig(),
-		types.NoopMgr(),
+		mock.NewManager(),
 		log.Noop(),
 		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
@@ -158,12 +156,12 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 	out, err := mgr.NewOutput(outConfig)
 	require.NoError(t, err)
 
-	tranChan := make(chan types.Transaction)
+	tranChan := make(chan message.Transaction)
 	require.NoError(t, out.Consume(tranChan))
 
 	for i := 0; i < 10; i++ {
-		resChan := make(chan types.Response)
-		tran := types.NewTransaction(message.New([][]byte{[]byte("hello world " + strconv.Itoa(i))}), resChan)
+		resChan := make(chan error)
+		tran := message.NewTransaction(message.QuickBatch([][]byte{[]byte("hello world " + strconv.Itoa(i))}), resChan)
 		select {
 		case tranChan <- tran:
 			select {
@@ -195,9 +193,9 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 	}
 
 	procEvents := summary.ProcessorEvents()
-	require.Contains(t, procEvents, "foo.processor.0")
+	require.Contains(t, procEvents, "root.processors.0")
 
-	processorEvents := procEvents["foo.processor.0"]
+	processorEvents := procEvents["root.processors.0"]
 	require.Len(t, processorEvents, 20)
 
 	for i := 0; i < len(processorEvents); i += 2 {
@@ -225,7 +223,7 @@ root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 
 	mgr, err := manager.NewV2(
 		manager.NewResourceConfig(),
-		types.NoopMgr(),
+		mock.NewManager(),
 		log.Noop(),
 		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
@@ -236,7 +234,7 @@ root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		batch, res := proc.ProcessMessage(message.New([][]byte{[]byte(strconv.Itoa(i))}))
+		batch, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}))
 		require.Nil(t, res)
 		require.Len(t, batch, 1)
 		assert.Equal(t, 1, batch[0].Len())

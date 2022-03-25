@@ -29,23 +29,23 @@ result.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 redis:
-  url: tcp://localhost:6379
-  operator: scard
+  url: ""
+  operator: ""
   key: ""
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 redis:
-  url: tcp://localhost:6379
+  url: ""
   kind: simple
   master: ""
   tls:
@@ -55,11 +55,10 @@ redis:
     root_cas: ""
     root_cas_file: ""
     client_certs: []
-  operator: scard
+  operator: ""
   key: ""
   retries: 3
   retry_period: 500ms
-  parts: []
 ```
 
 </TabItem>
@@ -163,9 +162,9 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 
 
 Type: `string`  
-Default: `"tcp://localhost:6379"`  
+Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 url: :6397
@@ -189,7 +188,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 Type: `string`  
 Default: `"simple"`  
 
-```yaml
+```yml
 # Examples
 
 kind: simple
@@ -207,7 +206,7 @@ Name of the redis master when `kind` is `failover`
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 master: mymaster
@@ -257,7 +256,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -274,7 +273,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -286,9 +285,8 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -338,7 +336,7 @@ The [operator](#operators) to apply.
 
 
 Type: `string`  
-Default: `"scard"`  
+Default: `""`  
 Options: `scard`, `sadd`, `incrby`, `keys`.
 
 ### `key`
@@ -365,18 +363,5 @@ The time to wait before consecutive retry attempts.
 
 Type: `string`  
 Default: `"500ms"`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 

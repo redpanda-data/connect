@@ -27,17 +27,15 @@ it is created with a dynamic mapping.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   elasticsearch:
-    urls:
-      - http://localhost:9200
-    index: benthos_index
+    urls: []
+    index: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
-    type: doc
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -48,18 +46,16 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   elasticsearch:
-    urls:
-      - http://localhost:9200
-    index: benthos_index
+    urls: []
+    index: ""
     action: index
     pipeline: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
-    type: doc
     routing: ""
     sniff: true
     healthcheck: true
@@ -71,7 +67,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    max_in_flight: 1
+    max_in_flight: 64
     max_retries: 0
     backoff:
       initial_interval: 1s
@@ -89,7 +85,7 @@ output:
       processors: []
     aws:
       enabled: false
-      region: eu-west-1
+      region: ""
       endpoint: ""
       credentials:
         profile: ""
@@ -132,9 +128,9 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["http://localhost:9200"]`  
+Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 urls:
@@ -148,7 +144,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos_index"`  
+Default: `""`  
 
 ### `action`
 
@@ -177,14 +173,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"${!count(\"elastic_ids\")}-${!timestamp_unix()}"`  
-
-### `type`
-
-The document type.
-
-
-Type: `string`  
-Default: `"doc"`  
 
 ### `routing`
 
@@ -259,7 +247,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -276,7 +264,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -290,7 +278,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -340,7 +328,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `max_retries`
 
@@ -419,7 +407,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -461,7 +449,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -479,7 +467,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -493,7 +481,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:
@@ -529,7 +517,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `aws.endpoint`
 

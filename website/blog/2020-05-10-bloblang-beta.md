@@ -15,7 +15,7 @@ keywords: [
 tags: [ "Bloblang" ]
 ---
 
-As of this weekend (and [Benthos v3.13](https://github.com/Jeffail/benthos/releases/tag/v3.13.0)) you can now use a [`bloblang` processor](/docs/components/processors/bloblang) and complementary [condition](/docs/components/conditions/bloblang). These components are in a beta phase, which means that based on feedback the mapping language might change in minor ways in upcoming minor releases.
+As of this weekend (and [Benthos v3.13](https://github.com/Jeffail/benthos/releases/tag/v3.13.0)) you can now use a [`bloblang` processor](/docs/components/processors/bloblang) and complementary condition. These components are in a beta phase, which means that based on feedback the mapping language might change in minor ways in upcoming minor releases.
 
 <!--truncate-->
 
@@ -79,7 +79,6 @@ pipeline:
 My ultimate intention is to completely eradicate the need for a `json`, `metadata` and `text` processor, as well as a range of others. However, I'll need as much help as possible to get the language right, so please consider testing and feeding back on [Github][gh.issues], the [Gitter channel][gitter], or event @ me [on Twitter][twitter] for the good of blobkind.
 
 [processor.bloblang]: /docs/components/processors/bloblang
-[condition.bloblang]: /docs/components/conditions/bloblang
 [post.sneak_peek]: /blog/2020/04/18/sneak-peek-at-bloblang
 [gh.issues]: https://github.com/Jeffail/benthos/issues/439/
 [gitter]: https://gitter.im/jeffail-benthos/community

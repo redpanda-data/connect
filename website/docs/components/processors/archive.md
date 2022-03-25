@@ -19,12 +19,12 @@ import TabItem from '@theme/TabItem';
 Archives all the messages of a batch into a single message according to the
 selected archive [format](#formats).
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 archive:
-  format: binary
-  path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+  format: ""
+  path: ""
 ```
 
 Some archive formats (such as tar, zip) treat each archive item (message part)
@@ -48,7 +48,7 @@ The archiving [format](#formats) to apply.
 
 
 Type: `string`  
-Default: `"binary"`  
+Default: `""`  
 Options: `tar`, `zip`, `binary`, `lines`, `json_array`, `concatenate`.
 
 ### `path`
@@ -58,9 +58,9 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`  
+Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 path: ${!count("files")}-${!timestamp_unix_nano()}.txt
@@ -113,8 +113,10 @@ unique IDs (with the extension `.json`), our config might look like
 this:
 
 ```yaml
-archive:
-  format: tar
-  path: ${!json("doc.id")}.json
+pipeline:
+  processors:
+    - archive:
+        format: tar
+        path: ${!json("doc.id")}.json
 ```
 

@@ -27,11 +27,11 @@ the original message parts with the body of the response.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 http:
-  url: http://localhost:4195/post
+  url: ""
   verb: POST
   headers:
     Content-Type: application/octet-stream
@@ -43,11 +43,11 @@ http:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 http:
-  url: http://localhost:4195/post
+  url: ""
   verb: POST
   headers:
     Content-Type: application/octet-stream
@@ -96,16 +96,12 @@ http:
   drop_on: []
   successful_on: []
   proxy_url: ""
+  batch_as_multipart: false
   parallel: false
 ```
 
 </TabItem>
 </Tabs>
-
-If a processed message batch contains more than one message they will be sent in
-a single request as a [multipart message](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
-Alternatively, message batches can be sent in parallel by setting the field
-`parallel` to `true`.
 
 The `rate_limit` field can be used to specify a rate limit
 [resource](/docs/components/rate_limits/about) to cap the rate of requests
@@ -180,7 +176,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"http://localhost:4195/post"`  
+Default: `""`  
 
 ### `verb`
 
@@ -190,7 +186,7 @@ A verb to connect with
 Type: `string`  
 Default: `"POST"`  
 
-```yaml
+```yml
 # Examples
 
 verb: POST
@@ -209,7 +205,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `object`  
 Default: `{"Content-Type":"application/octet-stream"}`  
 
-```yaml
+```yml
 # Examples
 
 headers:
@@ -231,7 +227,7 @@ Provide a list of explicit metadata key prefixes to match against.
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_prefixes:
@@ -253,7 +249,7 @@ Provide a list of explicit metadata key regular expression (re2) patterns to mat
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_patterns:
@@ -476,7 +472,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -493,7 +489,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -507,7 +503,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -566,7 +562,7 @@ Provide a list of explicit metadata key prefixes to match against.
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_prefixes:
@@ -588,7 +584,7 @@ Provide a list of explicit metadata key regular expression (re2) patterns to mat
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_patterns:
@@ -670,9 +666,17 @@ An optional HTTP proxy URL.
 Type: `string`  
 Default: `""`  
 
+### `batch_as_multipart`
+
+Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).
+
+
+Type: `bool`  
+Default: `false`  
+
 ### `parallel`
 
-When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent within a single request.
+When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent serially.
 
 
 Type: `bool`  

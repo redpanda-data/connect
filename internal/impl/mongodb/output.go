@@ -8,45 +8,44 @@ import (
 	"sync"
 	"time"
 
-	ibatch "github.com/Jeffail/benthos/v3/internal/batch"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	ioutput "github.com/Jeffail/benthos/v3/internal/component/output"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
-	"github.com/Jeffail/benthos/v3/internal/interop"
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message/batch"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/output/writer"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/retries"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
+
+	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
+	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
-	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (output.Type, error) {
+	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 		return NewOutput(c.MongoDB, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
-		Name:    output.TypeMongoDB,
-		Type:    docs.TypeOutput,
-		Status:  docs.StatusExperimental,
-		Version: "3.43.0",
-		Categories: []string{
-			string(output.CategoryServices),
-		},
+		Name:        output.TypeMongoDB,
+		Type:        docs.TypeOutput,
+		Status:      docs.StatusExperimental,
+		Version:     "3.43.0",
+		Categories:  []string{"Services"},
 		Summary:     `Inserts items into a MongoDB collection.`,
 		Description: ioutput.Description(true, true, ""),
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
 				outputOperationDocs(client.OperationUpdateOne),
-				docs.FieldCommon("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
-				docs.FieldCommon(
+				docs.FieldString("collection", "The name of the target collection in the MongoDB DB.").IsInterpolated(),
+				docs.FieldObject(
 					"write_concern",
 					"The write concern settings for the mongo connection.",
 				).WithChildren(writeConcernDocs()...),
@@ -70,15 +69,15 @@ func init() {
 						"except insert-one. It is used to improve performance of finding the documents in the mongodb.",
 					mapExamples()...,
 				),
-				docs.FieldCommon(
+				docs.FieldBool(
 					"upsert",
 					"The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches,"+
 						"the document is updated or replaced accordingly, otherwise it is created.",
-				).HasDefault(false).HasType(docs.FieldTypeBool).AtVersion("3.60.0"),
-				docs.FieldCommon(
+				).HasDefault(false).AtVersion("3.60.0"),
+				docs.FieldInt(
 					"max_in_flight",
 					"The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-				batch.FieldSpec(),
+				policy.FieldSpec(),
 			).Merge(retries.FieldSpecs())...,
 		).ChildDefaultAndTypesFromStruct(output.NewMongoDBConfig()),
 	})
@@ -87,12 +86,12 @@ func init() {
 //------------------------------------------------------------------------------
 
 // NewOutput creates a new MongoDB output type.
-func NewOutput(conf output.MongoDBConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Type, error) {
+func NewOutput(conf output.MongoDBConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (ioutput.Streamed, error) {
 	m, err := NewWriter(mgr, conf, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	var w output.Type
+	var w ioutput.Streamed
 	if w, err = output.NewAsyncWriter(output.TypeMongoDB, conf.MaxInFlight, m, log, stats); err != nil {
 		return w, err
 	}
@@ -172,7 +171,7 @@ func NewWriter(
 	if db.wcTimeout, err = time.ParseDuration(conf.WriteConcern.WTimeout); err != nil {
 		return nil, fmt.Errorf("failed to parse write concern wtimeout string: %v", err)
 	}
-	if db.collection, err = interop.NewBloblangField(mgr, conf.MongoConfig.Collection); err != nil {
+	if db.collection, err = mgr.BloblEnvironment().NewField(conf.MongoConfig.Collection); err != nil {
 		return nil, fmt.Errorf("failed to parse collection expression: %v", err)
 	}
 
@@ -252,19 +251,19 @@ func (m *Writer) ConnectWithContext(ctx context.Context) error {
 }
 
 // WriteWithContext attempts to perform the designated operation to the mongo DB collection.
-func (m *Writer) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (m *Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	m.mu.Lock()
 	collection := m.collection
 	m.mu.Unlock()
 
 	if collection == nil {
-		return types.ErrNotConnected
+		return component.ErrNotConnected
 	}
 
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
-	err := writer.IterateBatchedSend(msg, func(i int, _ types.Part) error {
+	err := writer.IterateBatchedSend(msg, func(i int, _ *message.Part) error {
 		var err error
-		var filterVal, documentVal types.Part
+		var filterVal, documentVal *message.Part
 		var upsertVal, filterValWanted, documentValWanted bool
 
 		filterValWanted = isFilterAllowed(m.operation)
@@ -400,7 +399,7 @@ func (m *Writer) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-m.shutSig.HasClosedChan():
 	case <-time.After(timeout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }

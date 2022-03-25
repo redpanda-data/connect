@@ -1,10 +1,8 @@
 package parser
 
 import (
-	"errors"
-
-	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 //------------------------------------------------------------------------------
@@ -19,58 +17,45 @@ func intoStaticResolver(p Func) Func {
 	}
 }
 
-func aFunction(pCtx Context, isDeprecated *bool) Func {
+func aFunction(pCtx Context) Func {
 	return func(input []rune) Result {
-		if len(input) < 3 || input[0] != '$' || input[1] != '{' || input[2] != '!' {
-			return Fail(NewError(input, "${!"), input)
+		res := Sequence(
+			Term("${!"),
+			Optional(SpacesAndTabs()),
+			MustBe(queryParser(pCtx)),
+			Optional(SpacesAndTabs()),
+			MustBe(Expect(Char('}'), "end of expression")),
+		)(input)
+
+		if res.Err != nil {
+			return res
 		}
-		i := 3
-		for ; i < len(input); i++ {
-			if input[i] == '}' {
-				res := ParseDeprecatedQuery(pCtx, isDeprecated)(input[3:i])
-				if res.Err == nil {
-					if len(res.Remaining) > 0 {
-						pos := len(input[3:i]) - len(res.Remaining)
-						return Fail(NewFatalError(input[3+pos:], errors.New("required"), "end of expression"), input)
-					}
-					res.Remaining = input[i+1:]
-					res.Payload = field.NewQueryResolver(res.Payload.(query.Function))
-				} else {
-					pos := len(input[3:i]) - len(res.Err.Input)
-					if !res.Err.IsFatal() {
-						res.Err.Err = errors.New("required")
-					}
-					res.Err.Input = input[3+pos:]
-					res.Remaining = input
-				}
-				return res
-			}
-		}
-		return Success(field.StaticResolver(string(input)), nil)
+		res.Payload = field.NewQueryResolver(res.Payload.([]interface{})[2].(query.Function))
+		return res
 	}
 }
 
 func escapedBlock(input []rune) Result {
-	if len(input) < 4 || input[0] != '$' || input[1] != '{' || input[2] != '{' || input[3] != '!' {
-		return Fail(NewError(input, "${{!"), input)
+	res := Sequence(
+		Term("${{!"),
+		MustBe(Expect(UntilTerm("}}"), "end of escaped expression")),
+		Term("}}"),
+	)(input)
+	if res.Err != nil {
+		return res
 	}
-	i := 4
-	for ; i < len(input)-1; i++ {
-		if input[i] == '}' && input[i+1] == '}' {
-			return Success(field.StaticResolver("${!"+string(input[4:i])+"}"), input[i+2:])
-		}
-	}
-	return Success(field.StaticResolver(string(input)), nil)
+	res.Payload = field.StaticResolver("${!" + res.Payload.([]interface{})[1].(string) + "}")
+	return res
 }
 
 //------------------------------------------------------------------------------
 
-func parseFieldResolvers(pCtx Context, expr string, isDeprecated *bool) ([]field.Resolver, *Error) {
+func parseFieldResolvers(pCtx Context, expr string) ([]field.Resolver, *Error) {
 	var resolvers []field.Resolver
 
 	p := OneOf(
 		escapedBlock,
-		aFunction(pCtx, isDeprecated),
+		aFunction(pCtx),
 		intoStaticResolver(Char('$')),
 		intoStaticResolver(NotChar('$')),
 	)
@@ -90,13 +75,11 @@ func parseFieldResolvers(pCtx Context, expr string, isDeprecated *bool) ([]field
 
 // ParseField attempts to parse a field expression.
 func ParseField(pCtx Context, expr string) (*field.Expression, *Error) {
-	var isDep bool
-	resolvers, err := parseFieldResolvers(pCtx, expr, &isDep)
+	resolvers, err := parseFieldResolvers(pCtx, expr)
 	if err != nil {
 		return nil, err
 	}
 	e := field.NewExpression(resolvers...)
-	e.ContainsDeprecated = isDep
 	return e, nil
 }
 

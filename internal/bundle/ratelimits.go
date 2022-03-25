@@ -1,11 +1,12 @@
 package bundle
 
 import (
+	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // AllRateLimits is a set containing every single ratelimit that has been imported.
@@ -22,7 +23,7 @@ func (e *Environment) RateLimitAdd(constructor RateLimitConstructor, spec docs.C
 }
 
 // RateLimitInit attempts to initialise a ratelimit from a config.
-func (e *Environment) RateLimitInit(conf ratelimit.Config, mgr NewManagement) (types.RateLimit, error) {
+func (e *Environment) RateLimitInit(conf ratelimit.Config, mgr NewManagement) (ratelimit.V1, error) {
 	return e.rateLimits.Init(conf, mgr)
 }
 
@@ -34,7 +35,7 @@ func (e *Environment) RateLimitDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // RateLimitConstructor constructs an ratelimit component.
-type RateLimitConstructor func(ratelimit.Config, NewManagement) (types.RateLimit, error)
+type RateLimitConstructor func(ratelimit.Config, NewManagement) (ratelimit.V1, error)
 
 type rateLimitSpec struct {
 	constructor RateLimitConstructor
@@ -49,9 +50,13 @@ type RateLimitSet struct {
 // Add a new ratelimit to this set by providing a spec (name, documentation, and
 // constructor).
 func (s *RateLimitSet) Add(constructor RateLimitConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]rateLimitSpec{}
 	}
+	spec.Type = docs.TypeRateLimit
 	s.specs[spec.Name] = rateLimitSpec{
 		constructor: constructor,
 		spec:        spec,
@@ -61,16 +66,14 @@ func (s *RateLimitSet) Add(constructor RateLimitConstructor, spec docs.Component
 }
 
 // Init attempts to initialise an ratelimit from a config.
-func (s *RateLimitSet) Init(conf ratelimit.Config, mgr NewManagement) (types.RateLimit, error) {
+func (s *RateLimitSet) Init(conf ratelimit.Config, mgr NewManagement) (ratelimit.V1, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		// TODO: V4 Remove this
-		if ctor, exists := ratelimit.GetDeprecatedPlugin(conf.Type); exists {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
-		}
-		return nil, types.ErrInvalidRateLimitType
+		return nil, component.ErrInvalidType("rate_limit", conf.Type)
 	}
-	return spec.constructor(conf, mgr)
+	c, err := spec.constructor(conf, mgr)
+	err = wrapComponentErr(mgr, "rate_limit", err)
+	return c, err
 }
 
 // Docs returns a slice of ratelimit specs, which document each method.

@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/Masterminds/squirrel"
+
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func sqlSelectProcessorConfig() *service.ConfigSpec {
+// SelectProcessorConfig returns a config spec for an sql_select processor.
+func SelectProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Integration").
@@ -72,9 +74,9 @@ pipeline:
 
 func init() {
 	err := service.RegisterBatchProcessor(
-		"sql_select", sqlSelectProcessorConfig(),
+		"sql_select", SelectProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return newSQLSelectProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLSelectProcessorFromConfig(conf, mgr.Logger())
 		})
 
 	if err != nil {
@@ -96,7 +98,9 @@ type sqlSelectProcessor struct {
 	shutSig *shutdown.Signaller
 }
 
-func newSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlSelectProcessor, error) {
+// NewSQLSelectProcessorFromConfig returns an internal sql_select processor.
+// nolint:revive // Not bothered as this is internal anyway
+func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlSelectProcessor, error) {
 	s := &sqlSelectProcessor{
 		logger:  logger,
 		shutSig: shutdown.NewSignaller(),
@@ -181,18 +185,21 @@ func (s *sqlSelectProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		if s.argsMapping != nil {
 			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
 			if err != nil {
+				s.logger.Debugf("Arguments mapping failed: %v", err)
 				msg.SetError(err)
 				continue
 			}
 
 			iargs, err := resMsg.AsStructured()
 			if err != nil {
+				s.logger.Debugf("Mapping returned non-structured result: %v", err)
 				msg.SetError(fmt.Errorf("mapping returned non-structured result: %w", err))
 				continue
 			}
 
 			var ok bool
 			if args, ok = iargs.([]interface{}); !ok {
+				s.logger.Debugf("Mapping returned non-array result: %T", iargs)
 				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 				continue
 			}
@@ -205,11 +212,13 @@ func (s *sqlSelectProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 
 		rows, err := queryBuilder.RunWith(s.db).QueryContext(ctx)
 		if err != nil {
+			s.logger.Debugf("Failed to run query: %v", err)
 			msg.SetError(err)
 			continue
 		}
 
 		if jArray, err := sqlRowsToArray(rows); err != nil {
+			s.logger.Debugf("Failed to convert rows: %v", err)
 			msg.SetError(err)
 		} else {
 			msg.SetStructured(jArray)

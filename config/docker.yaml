@@ -1,0 +1,17 @@
+# This is the default configuration file shipped with docker builds. It's
+# extremely unlikely that a user would want to run Benthos without a custom
+# configuration, so the purpose of this file is mostly to be a placeholder.
+http:
+  enabled: true
+
+input:
+  stdin: {}
+
+output:
+  stdout: {}
+
+metrics:
+  prometheus: {}
+
+logger:
+  format: json

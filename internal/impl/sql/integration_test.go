@@ -1,4 +1,4 @@
-package sql
+package sql_test
 
 import (
 	"context"
@@ -6,16 +6,21 @@ import (
 	"flag"
 	"fmt"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	isql "github.com/benthosdev/benthos/v4/internal/impl/sql"
+	"github.com/benthosdev/benthos/v4/public/service"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 type testFn func(t *testing.T, driver, dsn, table string)
@@ -40,20 +45,113 @@ where: foo = ?
 args_mapping: 'root = [ this.id ]'
 `, driver, dsn, table)
 
-			spec := sqlInsertProcessorConfig()
 			env := service.NewEnvironment()
 
-			insertConfig, err := spec.ParseYAML(insertConf, env)
+			insertConfig, err := isql.InsertProcessorConfig().ParseYAML(insertConf, env)
 			require.NoError(t, err)
 
-			selectConfig, err := spec.ParseYAML(queryConf, env)
+			selectConfig, err := isql.SelectProcessorConfig().ParseYAML(queryConf, env)
 			require.NoError(t, err)
 
-			insertProc, err := newSQLInsertProcessorFromConfig(insertConfig, nil)
+			insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, nil)
 			require.NoError(t, err)
 			t.Cleanup(func() { insertProc.Close(context.Background()) })
 
-			selectProc, err := newSQLSelectProcessorFromConfig(selectConfig, nil)
+			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, nil)
+			require.NoError(t, err)
+			t.Cleanup(func() { selectProc.Close(context.Background()) })
+
+			fn(t, insertProc, selectProc)
+		})
+	}
+}
+
+func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
+	return func(t *testing.T, driver, dsn, table string) {
+		t.Run(name, func(t *testing.T) {
+			valuesStr := `(?, ?, ?)`
+			if driver == "postgres" {
+				valuesStr = `($1, $2, $3)`
+			}
+			insertConf := fmt.Sprintf(`
+driver: %v
+dsn: %v
+query: insert into %v ( foo, bar, baz ) values `+valuesStr+`
+args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
+exec_only: true
+`, driver, dsn, table)
+
+			placeholderStr := "?"
+			if driver == "postgres" {
+				placeholderStr = "$1"
+			}
+			queryConf := fmt.Sprintf(`
+driver: %v
+dsn: %v
+query: select foo, bar, baz from %v where foo = `+placeholderStr+`
+args_mapping: 'root = [ this.id ]'
+`, driver, dsn, table)
+
+			env := service.NewEnvironment()
+
+			insertConfig, err := isql.RawProcessorConfig().ParseYAML(insertConf, env)
+			require.NoError(t, err)
+
+			selectConfig, err := isql.RawProcessorConfig().ParseYAML(queryConf, env)
+			require.NoError(t, err)
+
+			insertProc, err := isql.NewSQLRawProcessorFromConfig(insertConfig, nil)
+			require.NoError(t, err)
+			t.Cleanup(func() { insertProc.Close(context.Background()) })
+
+			selectProc, err := isql.NewSQLRawProcessorFromConfig(selectConfig, nil)
+			require.NoError(t, err)
+			t.Cleanup(func() { selectProc.Close(context.Background()) })
+
+			fn(t, insertProc, selectProc)
+		})
+	}
+}
+
+func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
+	return func(t *testing.T, driver, dsn, table string) {
+		t.Run(name, func(t *testing.T) {
+			valuesStr := `(?, ?, ?)`
+			if driver == "postgres" {
+				valuesStr = `($1, $2, $3)`
+			}
+			insertConf := fmt.Sprintf(`
+driver: %v
+data_source_name: %v
+query: insert into %v ( foo, bar, baz ) values `+valuesStr+`
+args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
+`, driver, dsn, table)
+
+			placeholderStr := "?"
+			if driver == "postgres" {
+				placeholderStr = "$1"
+			}
+			queryConf := fmt.Sprintf(`
+driver: %v
+data_source_name: %v
+query: select foo, bar, baz from %v where foo = `+placeholderStr+`
+args_mapping: 'root = [ this.id ]'
+result_codec: json_array
+`, driver, dsn, table)
+
+			env := service.NewEnvironment()
+
+			insertConfig, err := isql.DeprecatedProcessorConfig().ParseYAML(insertConf, env)
+			require.NoError(t, err)
+
+			selectConfig, err := isql.DeprecatedProcessorConfig().ParseYAML(queryConf, env)
+			require.NoError(t, err)
+
+			insertProc, err := isql.NewSQLDeprecatedProcessorFromConfig(insertConfig, nil)
+			require.NoError(t, err)
+			t.Cleanup(func() { insertProc.Close(context.Background()) })
+
+			selectProc, err := isql.NewSQLDeprecatedProcessorFromConfig(selectConfig, nil)
 			require.NoError(t, err)
 			t.Cleanup(func() { selectProc.Close(context.Background()) })
 
@@ -158,6 +256,82 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 	wg.Wait()
 })
 
+var testRawProcessorsBasic = testRawProcessors("raw", func(t *testing.T, insertProc, selectProc service.BatchProcessor) {
+	var insertBatch service.MessageBatch
+	for i := 0; i < 10; i++ {
+		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
+  "foo": "doc-%v",
+  "bar": %v,
+  "baz": "and this"
+}`, i, i))))
+	}
+
+	resBatches, err := insertProc.ProcessBatch(context.Background(), insertBatch)
+	require.NoError(t, err)
+	require.Len(t, resBatches, 1)
+	require.Len(t, resBatches[0], len(insertBatch))
+	for _, v := range resBatches[0] {
+		require.NoError(t, v.GetError())
+	}
+
+	var queryBatch service.MessageBatch
+	for i := 0; i < 10; i++ {
+		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%v"}`, i))))
+	}
+
+	resBatches, err = selectProc.ProcessBatch(context.Background(), queryBatch)
+	require.NoError(t, err)
+	require.Len(t, resBatches, 1)
+	require.Len(t, resBatches[0], len(queryBatch))
+	for i, v := range resBatches[0] {
+		require.NoError(t, v.GetError())
+
+		exp := fmt.Sprintf(`[{"bar":%v,"baz":"and this","foo":"doc-%v"}]`, i, i)
+		actBytes, err := v.AsBytes()
+		require.NoError(t, err)
+
+		assert.Equal(t, exp, string(actBytes))
+	}
+})
+
+var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", func(t *testing.T, insertProc, selectProc service.BatchProcessor) {
+	var insertBatch service.MessageBatch
+	for i := 0; i < 10; i++ {
+		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
+  "foo": "doc-%v",
+  "bar": %v,
+  "baz": "and this"
+}`, i, i))))
+	}
+
+	resBatches, err := insertProc.ProcessBatch(context.Background(), insertBatch)
+	require.NoError(t, err)
+	require.Len(t, resBatches, 1)
+	require.Len(t, resBatches[0], len(insertBatch))
+	for _, v := range resBatches[0] {
+		require.NoError(t, v.GetError())
+	}
+
+	var queryBatch service.MessageBatch
+	for i := 0; i < 10; i++ {
+		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%v"}`, i))))
+	}
+
+	resBatches, err = selectProc.ProcessBatch(context.Background(), queryBatch)
+	require.NoError(t, err)
+	require.Len(t, resBatches, 1)
+	require.Len(t, resBatches[0], len(queryBatch))
+	for i, v := range resBatches[0] {
+		require.NoError(t, v.GetError())
+
+		exp := fmt.Sprintf(`[{"bar":%v,"baz":"and this","foo":"doc-%v"}]`, i, i)
+		actBytes, err := v.AsBytes()
+		require.NoError(t, err)
+
+		assert.Equal(t, exp, string(actBytes))
+	}
+})
+
 func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string) {
 	t.Run("batch_input_output", func(t *testing.T) {
 		confReplacer := strings.NewReplacer(
@@ -246,11 +420,106 @@ processors:
 	})
 }
 
+func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
+	t.Run("raw_input_output", func(t *testing.T) {
+		confReplacer := strings.NewReplacer(
+			"$driver", driver,
+			"$dsn", dsn,
+			"$table", table,
+		)
+
+		valuesStr := `(?, ?, ?)`
+		if driver == "postgres" {
+			valuesStr = `($1, $2, $3)`
+		}
+
+		outputConf := confReplacer.Replace(`
+sql_raw:
+  driver: $driver
+  dsn: $dsn
+  query: insert into $table (foo, bar, baz) values ` + valuesStr + `
+  args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
+`)
+
+		inputConf := confReplacer.Replace(`
+sql_select:
+  driver: $driver
+  dsn: $dsn
+  table: $table
+  columns: [ "*" ]
+  suffix: ' ORDER BY bar ASC'
+processors:
+  # For some reason MySQL driver doesn't resolve to integer by default.
+  - bloblang: |
+      root = this
+      root.bar = this.bar.number()
+`)
+
+		streamInBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamInBuilder.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, streamInBuilder.AddOutputYAML(outputConf))
+
+		inFn, err := streamInBuilder.AddBatchProducerFunc()
+		require.NoError(t, err)
+
+		streamIn, err := streamInBuilder.Build()
+		require.NoError(t, err)
+
+		go func() {
+			assert.NoError(t, streamIn.Run(context.Background()))
+		}()
+
+		streamOutBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, streamOutBuilder.AddInputYAML(inputConf))
+
+		var outBatches []string
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			outBatches = append(outBatches, string(msgBytes))
+			return nil
+		}))
+
+		streamOut, err := streamOutBuilder.Build()
+		require.NoError(t, err)
+
+		var insertBatch service.MessageBatch
+		for i := 0; i < 10; i++ {
+			insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
+	"foo": "doc-%v",
+	"bar": %v,
+	"baz": "and this"
+}`, i, i))))
+		}
+		require.NoError(t, inFn(context.Background(), insertBatch))
+		require.NoError(t, streamIn.StopWithin(time.Second))
+
+		require.NoError(t, streamOut.Run(context.Background()))
+
+		assert.Equal(t, []string{
+			"{\"bar\":0,\"baz\":\"and this\",\"foo\":\"doc-0\"}",
+			"{\"bar\":1,\"baz\":\"and this\",\"foo\":\"doc-1\"}",
+			"{\"bar\":2,\"baz\":\"and this\",\"foo\":\"doc-2\"}",
+			"{\"bar\":3,\"baz\":\"and this\",\"foo\":\"doc-3\"}",
+			"{\"bar\":4,\"baz\":\"and this\",\"foo\":\"doc-4\"}",
+			"{\"bar\":5,\"baz\":\"and this\",\"foo\":\"doc-5\"}",
+			"{\"bar\":6,\"baz\":\"and this\",\"foo\":\"doc-6\"}",
+			"{\"bar\":7,\"baz\":\"and this\",\"foo\":\"doc-7\"}",
+			"{\"bar\":8,\"baz\":\"and this\",\"foo\":\"doc-8\"}",
+			"{\"bar\":9,\"baz\":\"and this\",\"foo\":\"doc-9\"}",
+		}, outBatches)
+	})
+}
+
 func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) error) {
 	for _, fn := range []testFn{
 		testBatchProcessorBasic,
 		testBatchProcessorParallel,
 		testBatchInputOutputBatch,
+		testBatchInputOutputRaw,
+		testRawProcessorsBasic,
+		testDeprecatedProcessorsBasic,
 	} {
 		tableName, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 40)
 		require.NoError(t, err)
@@ -272,6 +541,10 @@ func TestIntegration(t *testing.T) {
 }
 
 func clickhouseIntegration(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("skipping test on macos")
+	}
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -386,6 +659,10 @@ func postgresIntegration(t *testing.T) {
 }
 
 func mySQLIntegration(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("skipping test on macos")
+	}
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -446,6 +723,10 @@ func mySQLIntegration(t *testing.T) {
 }
 
 func msSQLIntegration(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("skipping test on macos")
+	}
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

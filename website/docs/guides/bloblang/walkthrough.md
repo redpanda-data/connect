@@ -96,17 +96,17 @@ As you can see the syntax for a method is similar to many languages, simply add 
 }
 ```
 
-Since the result of any Bloblang query is a value you can use methods on anything, including other methods. For example, we could expand our mapping of `message` to also replace `WORLD` with `EARTH` using the [`replace` method][blobl.methods.replace]:
+Since the result of any Bloblang query is a value you can use methods on anything, including other methods. For example, we could expand our mapping of `message` to also replace `WORLD` with `EARTH` using the [`replace_all` method][blobl.methods.replace_all]:
 
 ```coffee
-root.foo.bar = this.message.uppercase().replace("WORLD", "EARTH")
+root.foo.bar = this.message.uppercase().replace_all("WORLD", "EARTH")
 root.foo."buz me".baz = "I like mapping"
 ```
 
 As you can see this method required some arguments. Methods support both nameless (like above) and named arguments, which are often literal values but can also be queries themselves. For example try out the following mapping using both named style and a dynamic argument:
 
 ```coffee
-root.foo.bar = this.message.uppercase().replace(old: "WORLD", new: this.message.capitalize())
+root.foo.bar = this.message.uppercase().replace_all(old: "WORLD", new: this.message.capitalize())
 root.foo."buz me".baz = "I like mapping"
 ```
 
@@ -115,7 +115,7 @@ Woah, I think that's the plot to Inception, let's move onto functions. Functions
 Since we're completionists let's add one to our mapping:
 
 ```coffee
-root.foo.bar = this.message.uppercase().replace("WORLD", "EARTH")
+root.foo.bar = this.message.uppercase().replace_all("WORLD", "EARTH")
 root.foo."buz me".baz = "I like mapping"
 root.foo.id = uuid_v4()
 ```
@@ -719,7 +719,7 @@ That's it for this walkthrough, if you're hungry for more then I suggest you re-
 [guides.getting_started]: /docs/guides/getting_started
 [blobl.methods]: /docs/guides/bloblang/methods
 [blobl.methods.uppercase]: /docs/guides/bloblang/methods#uppercase
-[blobl.methods.replace]: /docs/guides/bloblang/methods#replace
+[blobl.methods.replace_all]: /docs/guides/bloblang/methods#replace_all
 [blobl.methods.catch]: /docs/guides/bloblang/methods#catch
 [blobl.methods.without]: /docs/guides/bloblang/methods#without
 [blobl.methods.type]: /docs/guides/bloblang/methods#type

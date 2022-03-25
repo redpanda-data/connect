@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Reads messages from a child input until a consumed message passes a [Bloblang query](/docs/guides/bloblang/about/), at which point the input closes.
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   label: ""
@@ -54,7 +54,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "foo"

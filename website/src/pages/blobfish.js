@@ -24,6 +24,8 @@ const emojis = [
   "blobemo.png",
   "blobnerd.png",
   "cowblob.png",
+  "blobbug.png",
+  "blobpirate.png",
   "blobbounce.gif",
   "blobtrance.gif",
 ];
@@ -69,12 +71,14 @@ Variations of the mascot such as the <a href="/img/Blobpirate.svg">dapper captai
                 <p>Use these with great care.</p>
               </div>
             </div>
-            <div className={classnames("margin-bottom--lg", styles.emojiContainer)}>
-              {emojis.map((emoji, idx) => (
-                <a key={idx} href={`/img/emojis/${emoji}`}>
-                  <img className={styles.emoji} src={`/img/emojis/${emoji}`}/>
-                </a>
-              ))}
+            <div className="row">
+              <div className={classnames("margin-bottom--lg", "col", "col--8", "col--offset-2", styles.emojiContainer)}>
+                {emojis.map((emoji, idx) => (
+                  <a key={idx} href={`/img/emojis/${emoji}`}>
+                    <img className={styles.emoji} src={`/img/emojis/${emoji}`}/>
+                  </a>
+                ))}
+              </div>
             </div>
           </div>
         </section>

@@ -12,11 +12,7 @@ import (
 )
 
 func TestConfigOutput(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "plugin_config_output")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	testFile := filepath.Join(tmpDir, "foo.txt")
 
@@ -48,11 +44,7 @@ a:
 }
 
 func TestConfigOutputList(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "plugin_config_output")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	firstFile := filepath.Join(tmpDir, "foo.txt")
 	secondFile := filepath.Join(tmpDir, "bar.txt")

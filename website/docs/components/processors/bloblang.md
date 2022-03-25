@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 bloblang: ""

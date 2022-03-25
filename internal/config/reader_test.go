@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
 func newDummyReader(confFilePath string) *Reader {
@@ -29,12 +30,7 @@ output:
   aws_s3: {}
 `)
 
-	confDir, err := os.MkdirTemp("", "test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(confDir)
-	})
+	confDir := t.TempDir()
 
 	// Create an empty config file in the config folder
 	confFilePath := filepath.Join(confDir, "main.yaml")
@@ -77,12 +73,7 @@ output:
   aws_s3: {}
 `)
 
-	rootDir, err := os.MkdirTemp("", "test")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(rootDir)
-	})
+	rootDir := t.TempDir()
 
 	// Create a config folder
 	confDir := filepath.Join(rootDir, "config")

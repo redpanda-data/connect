@@ -3,9 +3,10 @@ package service
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/metadata"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/metadata"
 )
 
 // NewMetadataFilterField creates a config field spec for describing which
@@ -13,7 +14,7 @@ import (
 // regular expression based methods. This field is often used for making
 // metadata written to output destinations explicit.
 func NewMetadataFilterField(name string) *ConfigField {
-	field := docs.FieldCommon(name, "").WithChildren(metadata.IncludeFilterDocs()...)
+	field := docs.FieldObject(name, "").WithChildren(metadata.IncludeFilterDocs()...)
 	return &ConfigField{field: field}
 }
 

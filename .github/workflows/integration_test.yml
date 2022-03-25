@@ -6,8 +6,10 @@ on:
 
 jobs:
   integration-test:
-    if: ${{ github.repository == 'jeffail/benthos' || github.event_name != 'schedule' }}
+    if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 0
     steps:
 
     - name: Install Go

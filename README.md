@@ -1,7 +1,6 @@
 ![Benthos](icon.png "Benthos")
 
-[![godoc for Jeffail/benthos][godoc-badge]][godoc-url]
-[![goreportcard for Jeffail/benthos][goreport-badge]][goreport-url]
+[![godoc for benthosdev/benthos][godoc-badge]][godoc-url]
 [![Build Status][actions-badge]][actions-url]
 [![Discord invite][discord-badge]][discord-url]
 [![Docs site][website-badge]][website-url]
@@ -40,7 +39,7 @@ Yep, we got 'em. Benthos implements transaction based resiliency with back press
 
 Apache Pulsar, AWS (DynamoDB, Kinesis, S3, SQS, SNS), Azure (Blob storage, Queue storage, Table storage), Cassandra, Elasticsearch, File, GCP (Pub/Sub, Cloud storage), HDFS, HTTP (server and client, including websockets), Kafka, Memcached, MQTT, Nanomsg, NATS, NATS JetStream, NATS Streaming, NSQ, AMQP 0.91 (RabbitMQ), AMQP 1, Redis (streams, list, pubsub, hashes), MongoDB, SQL (MySQL, PostgreSQL, Clickhouse, MSSQL), Stdin/Stdout, TCP & UDP, sockets and ZMQ4.
 
-Connectors are being added constantly, if something you want is missing then [open an issue](https://github.com/Jeffail/benthos/issues/new).
+Connectors are being added constantly, if something you want is missing then [open an issue](https://github.com/benthosdev/benthos/issues/new).
 
 ## Documentation
 
@@ -117,7 +116,7 @@ Benthos provides lots of tools for making configuration discovery, debugging and
 Build with Go (1.16 or later):
 
 ```shell
-git clone git@github.com:Jeffail/benthos
+git clone git@github.com:benthosdev/benthos
 cd benthos
 make
 ```
@@ -185,16 +184,14 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [config-doc]: https://www.benthos.dev/docs/configuration/about
 [serverless]: https://www.benthos.dev/docs/guides/serverless/about
 [cookbooks]: https://www.benthos.dev/cookbooks
-[releases]: https://github.com/Jeffail/benthos/releases
+[releases]: https://github.com/benthosdev/benthos/releases
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
 [getting-started]: https://www.benthos.dev/docs/guides/getting_started
 
-[godoc-badge]: https://pkg.go.dev/badge/github.com/Jeffail/benthos/v3/public
-[godoc-url]: https://pkg.go.dev/github.com/Jeffail/benthos/v3/public
-[goreport-badge]: https://goreportcard.com/badge/github.com/Jeffail/benthos
-[goreport-url]: https://goreportcard.com/report/Jeffail/benthos
-[actions-badge]: https://github.com/Jeffail/benthos/actions/workflows/test.yml/badge.svg
-[actions-url]: https://github.com/Jeffail/benthos/actions/workflows/test.yml
+[godoc-badge]: https://pkg.go.dev/badge/github.com/benthosdev/benthos/v3/public
+[godoc-url]: https://pkg.go.dev/github.com/benthosdev/benthos/v4/public
+[actions-badge]: https://github.com/benthosdev/benthos/actions/workflows/test.yml/badge.svg
+[actions-url]: https://github.com/benthosdev/benthos/actions/workflows/test.yml
 [discord-badge]: https://img.shields.io/badge/Discord-Come%20and%20chill-blue
 [discord-url]: https://discord.com/invite/6VaWjzP
 [website-badge]: https://img.shields.io/badge/Docs-Learn%20more-ffc7c7

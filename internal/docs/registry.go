@@ -32,6 +32,8 @@ func RegisterDocs(spec ComponentSpec) {
 		globalProvider.rateLimitMap[spec.Name] = spec
 	case TypeTracer:
 		globalProvider.tracerMap[spec.Name] = spec
+	default:
+		panic("no spec type provided for component: " + spec.Name)
 	}
 	globalProvider.componentLock.Unlock()
 }
@@ -39,7 +41,6 @@ func RegisterDocs(spec ComponentSpec) {
 // GetDocs attempts to locate a documentation spec for a component identified by
 // a unique name and type combination.
 func GetDocs(prov Provider, name string, ctype Type) (ComponentSpec, bool) {
-	refreshOldPlugins()
 	if prov == nil {
 		prov = globalProvider
 	}

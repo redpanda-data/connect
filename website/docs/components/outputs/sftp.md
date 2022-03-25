@@ -22,7 +22,7 @@ Writes files to a server over SFTP.
 
 Introduced in version 3.39.0.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
@@ -35,12 +35,12 @@ output:
       password: ""
       private_key_file: ""
       private_key_pass: ""
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
-## Batches and Mulipart Messages
+## Batches and Multipart Messages
 
 When writing multipart (batched) messages using the `lines` codec the last message ends with double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
@@ -100,7 +100,7 @@ Default: `"all-bytes"`
 | `delim:x` | Append each message to the output stream followed by a custom delimiter. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines
@@ -155,6 +155,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 

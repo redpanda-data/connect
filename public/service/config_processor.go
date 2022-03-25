@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/processor"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 // NewProcessorField defines a new processor field, it is then possible to
@@ -14,7 +15,7 @@ import (
 // FieldProcessor.
 func NewProcessorField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").HasType(docs.FieldTypeProcessor),
+		field: docs.FieldProcessor(name, ""),
 	}
 }
 
@@ -49,7 +50,7 @@ func (p *ParsedConfig) FieldProcessor(path ...string) (*OwnedProcessor, error) {
 // method FieldProcessorList.
 func NewProcessorListField(name string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldCommon(name, "").Array().HasType(docs.FieldTypeProcessor),
+		field: docs.FieldProcessor(name, "").Array(),
 	}
 }
 

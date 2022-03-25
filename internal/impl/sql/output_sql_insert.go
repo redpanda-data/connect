@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/Masterminds/squirrel"
+
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func sqlInsertOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Categories("Integration").
+		Categories("Services").
 		Summary("Inserts a row into an SQL database for each message.").
 		Description(``).
 		Field(driverField).
@@ -37,7 +38,8 @@ func sqlInsertOutputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the insert query.").
 			Optional().
-			Advanced()).
+			Advanced().
+			Example("ON CONFLICT (name) DO NOTHING")).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of inserts to run in parallel.").
 			Default(64)).

@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	ifilepath "github.com/Jeffail/benthos/v3/internal/filepath"
-	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/stream"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
 // InferStreamID attempts to infer a stream identifier from a file path and
@@ -45,7 +45,7 @@ func ReadStreamFile(path string) (conf stream.Config, lints []string, err error)
 	conf = stream.NewConfig()
 
 	var confBytes []byte
-	if confBytes, lints, err = config.ReadWithJSONPointersLinted(path, true); err != nil {
+	if confBytes, lints, err = ReadFileEnvSwap(path); err != nil {
 		return
 	}
 
@@ -55,7 +55,7 @@ func ReadStreamFile(path string) (conf stream.Config, lints []string, err error)
 	}
 
 	confSpec := stream.Spec()
-	confSpec = append(confSpec, config.TestsField)
+	confSpec = append(confSpec, TestsField)
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
 		for _, lint := range confSpec.LintYAML(docs.NewLintContext(), &rawNode) {
@@ -161,7 +161,7 @@ func (r *Reader) reactStreamUpdate(mgr bundle.NewManagement, strict bool, path s
 		return true
 	}
 
-	lintlog := mgr.Logger().NewModule(".linter")
+	lintlog := mgr.Logger()
 	for _, lint := range lints {
 		lintlog.Infoln(lint)
 	}

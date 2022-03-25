@@ -9,15 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/segmentio/ksuid"
+
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 type fieldFunction struct {
 	namedContext string
+	fromRoot     bool
 	path         []string
 }
 
@@ -32,7 +34,9 @@ func (f *fieldFunction) expand(path ...string) *fieldFunction {
 
 func (f *fieldFunction) Annotation() string {
 	path := f.namedContext
-	if path == "" {
+	if f.fromRoot {
+		path = "root"
+	} else if path == "" {
 		path = "this"
 	}
 	if len(f.path) > 0 {
@@ -43,7 +47,12 @@ func (f *fieldFunction) Annotation() string {
 
 func (f *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
 	var target interface{}
-	if f.namedContext == "" {
+	if f.fromRoot {
+		if ctx.NewValue == nil {
+			return nil, errors.New("unable to reference `root` from this context")
+		}
+		target = *ctx.NewValue
+	} else if f.namedContext == "" {
 		v := ctx.Value()
 		if v == nil {
 			return nil, &ErrRecoverable{
@@ -66,7 +75,9 @@ func (f *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
 
 func (f *fieldFunction) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetPath) {
 	var basePaths []TargetPath
-	if f.namedContext == "" {
+	if f.fromRoot {
+		basePaths = []TargetPath{NewTargetPath(TargetRoot)}
+	} else if f.namedContext == "" {
 		if basePaths = ctx.MainContext(); len(basePaths) == 0 {
 			basePaths = []TargetPath{NewTargetPath(TargetValue)}
 		}
@@ -93,7 +104,7 @@ func NewNamedContextFieldFunction(namedContext, pathStr string) Function {
 	if len(pathStr) > 0 {
 		path = gabs.DotPathToSlice(pathStr)
 	}
-	return &fieldFunction{namedContext, path}
+	return &fieldFunction{namedContext, false, path}
 }
 
 // NewFieldFunction creates a query function that returns a field from the
@@ -105,6 +116,19 @@ func NewFieldFunction(pathStr string) Function {
 	}
 	return &fieldFunction{
 		path: path,
+	}
+}
+
+// NewRootFieldFunction creates a query function that returns a field from the
+// root context.
+func NewRootFieldFunction(pathStr string) Function {
+	var path []string
+	if len(pathStr) > 0 {
+		path = gabs.DotPathToSlice(pathStr)
+	}
+	return &fieldFunction{
+		fromRoot: true,
+		path:     path,
 	}
 }
 
@@ -216,6 +240,9 @@ root.id = count("bloblang_function_example")`,
 	countFunction,
 )
 
+var counters = map[string]int64{}
+var countersMux = &sync.Mutex{}
+
 func countFunction(args *ParsedParams) (Function, error) {
 	name, err := args.FieldString("name")
 	if err != nil {
@@ -268,9 +295,9 @@ root.bar = deleted()`,
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryEnvironment, "env",
-		"Returns the value of an environment variable, or an empty string if the environment variable does not exist.",
+		"Returns the value of an environment variable, or `null` if the environment variable does not exist.",
 		NewExampleSpec("",
-			`root.thing.key = env("key")`,
+			`root.thing.key = env("key").or("default value")`,
 		),
 	).
 		MarkImpure().
@@ -283,8 +310,13 @@ func envFunction(args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	key := os.Getenv(name)
-	return NewLiteralFunction("env "+key, key), nil
+
+	var value interface{}
+	if valueStr, exists := os.LookupEnv(name); exists {
+		value = valueStr
+	}
+
+	return NewLiteralFunction("env "+name, value), nil
 }
 
 //------------------------------------------------------------------------------
@@ -292,13 +324,17 @@ func envFunction(args *ParsedParams) (Function, error) {
 var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "error",
-		"If an error has occurred during the processing of a message this function returns the reported cause of the error. For more information about error handling patterns read [here][error_handling].",
+		"If an error has occurred during the processing of a message this function returns the reported cause of the error as a string, otherwise `null`. For more information about error handling patterns read [here][error_handling].",
 		NewExampleSpec("",
 			`root.doc.error = error()`,
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		return ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey), nil
+		v := ctx.MsgBatch.Get(ctx.Index).MetaGet(message.FailFlagKey)
+		if v == "" {
+			return nil, nil
+		}
+		return v, nil
 	},
 )
 
@@ -311,7 +347,7 @@ var _ = registerSimpleFunction(
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		return len(ctx.MsgBatch.Get(ctx.Index).Metadata().Get(types.FailFlagKey)) > 0, nil
+		return len(ctx.MsgBatch.Get(ctx.Index).MetaGet(message.FailFlagKey)) > 0, nil
 	},
 )
 
@@ -376,8 +412,15 @@ func rangeFunction(args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	if step < 0 && stop > start {
-		return nil, fmt.Errorf("with negative step arg stop (%v) must be <= to start (%v)", stop, start)
+	if step == 0 {
+		return nil, errors.New("step must be greater than or less than 0")
+	}
+	if step < 0 {
+		if stop > start {
+			return nil, fmt.Errorf("with negative step arg stop (%v) must be <= start (%v)", stop, start)
+		}
+	} else if start >= stop {
+		return nil, fmt.Errorf("with positive step arg start (%v) must be < stop (%v)", start, stop)
 	}
 	r := make([]interface{}, (stop-start)/step)
 	for i := 0; i < len(r); i++ {
@@ -467,16 +510,13 @@ func jsonFunction(args *ParsedParams) (Function, error) {
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "meta",
-		"Returns the value of a metadata key from the input message. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.",
+		"Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map. In order to query metadata mutations made within a mapping use the [`root_meta` function](#root_meta). This function supports extracting metadata from other messages of a batch with the `from` method.",
 		NewExampleSpec("",
 			`root.topic = meta("kafka_topic")`,
-		),
-		NewExampleSpec(
-			"If the target key does not exist an error is thrown, allowing you to use coalesce or catch methods to fallback to other queries.",
 			`root.topic = meta("nope") | meta("also nope") | "default"`,
 		),
 		NewExampleSpec(
-			"The parameter is optional and if omitted the entire metadata contents are returned as an object.",
+			"The key parameter is optional and if omitted the entire metadata contents are returned as an object.",
 			`root.all_metadata = meta()`,
 		),
 	).Param(ParamString("key", "An optional key of a metadata value to obtain.").Default("")),
@@ -487,12 +527,9 @@ var _ = registerFunction(
 		}
 		if len(key) > 0 {
 			return ClosureFunction("meta field "+key, func(ctx FunctionContext) (interface{}, error) {
-				v := ctx.MsgBatch.Get(ctx.Index).Metadata().Get(key)
+				v := ctx.MsgBatch.Get(ctx.Index).MetaGet(key)
 				if v == "" {
-					return nil, &ErrRecoverable{
-						Recovered: "",
-						Err:       fmt.Errorf("metadata value '%v' not found", key),
-					}
+					return nil, nil
 				}
 				return v, nil
 			}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
@@ -505,7 +542,7 @@ var _ = registerFunction(
 		}
 		return ClosureFunction("meta object", func(ctx FunctionContext) (interface{}, error) {
 			kvs := map[string]interface{}{}
-			ctx.MsgBatch.Get(ctx.Index).Metadata().Iter(func(k, v string) error {
+			_ = ctx.MsgBatch.Get(ctx.Index).MetaIter(func(k, v string) error {
 				if len(v) > 0 {
 					kvs[k] = v
 				}
@@ -527,16 +564,13 @@ var _ = registerFunction(
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "root_meta",
-		"Returns the value of a metadata key from the new message being created. Changes made to metadata during a mapping will be reflected by this function.",
+		"Returns the value of a metadata key from the new message being created, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.",
 		NewExampleSpec("",
 			`root.topic = root_meta("kafka_topic")`,
-		),
-		NewExampleSpec(
-			"If the target key does not exist an error is thrown, allowing you to use coalesce or catch methods to fallback to other queries.",
 			`root.topic = root_meta("nope") | root_meta("also nope") | "default"`,
 		),
 		NewExampleSpec(
-			"The parameter is optional and if omitted the entire metadata contents are returned as an object.",
+			"The key parameter is optional and if omitted the entire metadata contents are returned as an object.",
 			`root.all_metadata = root_meta()`,
 		),
 	).Beta().Param(ParamString("key", "An optional key of a metadata value to obtain.").Default("")),
@@ -547,12 +581,12 @@ var _ = registerFunction(
 		}
 		if len(key) > 0 {
 			return ClosureFunction("root_meta field "+key, func(ctx FunctionContext) (interface{}, error) {
-				if ctx.NewMsg == nil {
+				if ctx.NewMeta == nil {
 					return nil, errors.New("root metadata cannot be queried in this context")
 				}
-				v := ctx.NewMsg.Metadata().Get(key)
+				v := ctx.NewMeta.MetaGet(key)
 				if v == "" {
-					return nil, fmt.Errorf("metadata value '%v' not found", key)
+					return nil, nil
 				}
 				return v, nil
 			}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
@@ -564,11 +598,11 @@ var _ = registerFunction(
 			}), nil
 		}
 		return ClosureFunction("root_meta object", func(ctx FunctionContext) (interface{}, error) {
-			if ctx.NewMsg == nil {
+			if ctx.NewMeta == nil {
 				return nil, errors.New("root metadata cannot be queried in this context")
 			}
 			kvs := map[string]interface{}{}
-			ctx.NewMsg.Metadata().Iter(func(k, v string) error {
+			_ = ctx.NewMeta.MetaIter(func(k, v string) error {
 				if len(v) > 0 {
 					kvs[k] = v
 				}
@@ -664,44 +698,6 @@ var _ = registerFunction(
 	func(args *ParsedParams) (Function, error) {
 		return ClosureFunction("function now", func(_ FunctionContext) (interface{}, error) {
 			return time.Now().Format(time.RFC3339Nano), nil
-		}, nil), nil
-	},
-)
-
-var _ = registerFunction(
-	NewDeprecatedFunctionSpec(
-		"timestamp",
-		"Returns the current time in a custom format specified by the argument. The format is defined by showing how the reference time, defined to be `Mon Jan 2 15:04:05 -0700 MST 2006` would be displayed if it were the value.\n\nA fractional second is represented by adding a period and zeros to the end of the seconds section of layout string, as in `15:04:05.000` to format a time stamp with millisecond precision. This has been deprecated in favour of the new `now` function.",
-		NewExampleSpec("",
-			`root.received_at = timestamp("15:04:05")`,
-		),
-	).Param(ParamString("format", "The format to print as.").Default("Mon Jan 2 15:04:05 -0700 MST 2006")),
-	func(args *ParsedParams) (Function, error) {
-		format, err := args.FieldString("format")
-		if err != nil {
-			return nil, err
-		}
-		return ClosureFunction("function timestamp", func(_ FunctionContext) (interface{}, error) {
-			return time.Now().Format(format), nil
-		}, nil), nil
-	},
-)
-
-var _ = registerFunction(
-	NewDeprecatedFunctionSpec(
-		"timestamp_utc",
-		"The equivalent of `timestamp` except the time is printed as UTC instead of the local timezone. This has been deprecated in favour of the new `now` function.",
-		NewExampleSpec("",
-			`root.received_at = timestamp_utc("15:04:05")`,
-		),
-	).Param(ParamString("format", "The format to print as.").Default("Mon Jan 2 15:04:05 -0700 MST 2006")),
-	func(args *ParsedParams) (Function, error) {
-		format, err := args.FieldString("format")
-		if err != nil {
-			return nil, err
-		}
-		return ClosureFunction("function timestamp_utc", func(_ FunctionContext) (interface{}, error) {
-			return time.Now().In(time.UTC).Format(format), nil
 		}, nil), nil
 	},
 )
@@ -838,7 +834,6 @@ var _ = registerFunction(
 		name, err := args.FieldString("name")
 		if err != nil {
 			return nil, err
-
 		}
 		return NewVarFunction(name), nil
 	},
@@ -848,18 +843,12 @@ var _ = registerFunction(
 func NewVarFunction(name string) Function {
 	return ClosureFunction("variable "+name, func(ctx FunctionContext) (interface{}, error) {
 		if ctx.Vars == nil {
-			return nil, &ErrRecoverable{
-				Recovered: nil,
-				Err:       errors.New("variables were undefined"),
-			}
+			return nil, errors.New("variables were undefined")
 		}
 		if res, ok := ctx.Vars[name]; ok {
 			return res, nil
 		}
-		return nil, &ErrRecoverable{
-			Recovered: nil,
-			Err:       fmt.Errorf("variable '%v' undefined", name),
-		}
+		return nil, fmt.Errorf("variable '%v' undefined", name)
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) {
 		paths := []TargetPath{
 			NewTargetPath(TargetVariable, name),

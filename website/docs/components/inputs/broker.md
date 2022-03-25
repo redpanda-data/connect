@@ -26,7 +26,7 @@ Allows you to combine multiple inputs into a single stream of data, where each i
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -42,7 +42,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -69,24 +69,25 @@ input:
   broker:
     copies: 1
     inputs:
-    - amqp:
-        url: amqp://guest:guest@localhost:5672/
-        consumer_tag: benthos-consumer
-        queue: benthos-queue
+      - amqp_0_9:
+          urls:
+            - amqp://guest:guest@localhost:5672/
+          consumer_tag: benthos-consumer
+          queue: benthos-queue
 
-      # Optional list of input specific processing steps
-      processors:
-        - bloblang: |
-            root.message = this
-            root.meta.link_count = this.links.length()
-            root.user.age = this.user.age.number()
+        # Optional list of input specific processing steps
+        processors:
+          - bloblang: |
+              root.message = this
+              root.meta.link_count = this.links.length()
+              root.user.age = this.user.age.number()
 
-    - kafka:
-        addresses:
-          - localhost:9092
-        client_id: benthos_kafka_input
-        consumer_group: benthos_consumer_group
-        topics: [ benthos_stream:0 ]
+      - kafka:
+          addresses:
+            - localhost:9092
+          client_id: benthos_kafka_input
+          consumer_group: benthos_consumer_group
+          topics: [ benthos_stream:0 ]
 ```
 
 If the number of copies is greater than zero the list will be copied that number
@@ -133,7 +134,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -175,7 +176,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -193,7 +194,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -205,9 +206,8 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

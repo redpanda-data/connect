@@ -27,26 +27,25 @@ PSUBSCRIBE commands.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   redis_pubsub:
-    url: tcp://localhost:6379
-    channels:
-      - benthos_chan
+    url: ""
+    channels: []
     use_patterns: false
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
   redis_pubsub:
-    url: tcp://localhost:6379
+    url: ""
     kind: simple
     master: ""
     tls:
@@ -56,8 +55,7 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    channels:
-      - benthos_chan
+    channels: []
     use_patterns: false
 ```
 
@@ -83,9 +81,9 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 
 
 Type: `string`  
-Default: `"tcp://localhost:6379"`  
+Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 url: :6397
@@ -109,7 +107,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 Type: `string`  
 Default: `"simple"`  
 
-```yaml
+```yml
 # Examples
 
 kind: simple
@@ -127,7 +125,7 @@ Name of the redis master when `kind` is `failover`
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 master: mymaster
@@ -177,7 +175,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -194,7 +192,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -208,7 +206,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -258,7 +256,7 @@ A list of channels to consume from.
 
 
 Type: `array`  
-Default: `["benthos_chan"]`  
+Default: `[]`  
 
 ### `use_patterns`
 

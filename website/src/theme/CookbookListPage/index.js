@@ -102,7 +102,7 @@ function CookbookListPage(props) {
             </div>}
           {itemsFiltered.length == 0 &&
             <div className="col">
-              <p>Whoops, looks like your search hasn't got any results. If the cookbook you want doesn't exist please <a href="https://github.com/Jeffail/benthos/issues/new">ask for it</a>.</p>
+              <p>Whoops, looks like your search hasn't got any results. If the cookbook you want doesn't exist please <a href="https://github.com/benthosdev/benthos/issues/new">ask for it</a>.</p>
             </div>}
         </div>
       </div>

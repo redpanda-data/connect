@@ -9,6 +9,7 @@ type TargetType int
 const (
 	TargetMetadata TargetType = iota
 	TargetValue
+	TargetRoot
 	TargetVariable
 )
 

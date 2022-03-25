@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 // NewInterpolatedStringField defines a new config field that describes a
@@ -12,7 +12,7 @@ import (
 // possible to extract an *InterpolatedString from the resulting parsed config
 // with the method FieldInterpolatedString.
 func NewInterpolatedStringField(name string) *ConfigField {
-	tf := docs.FieldCommon(name, "").HasType(docs.FieldTypeString).IsInterpolated()
+	tf := docs.FieldString(name, "").IsInterpolated()
 	return &ConfigField{field: tf}
 }
 

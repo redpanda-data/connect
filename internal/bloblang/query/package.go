@@ -6,7 +6,7 @@ package query
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // ErrRecoverable represents a function execution error that can optionally be
@@ -45,8 +45,16 @@ func (e badMethodErr) Error() string {
 // MessageBatch is an interface type to be given to a query function, it allows
 // the function to resolve fields and metadata from a Benthos message batch.
 type MessageBatch interface {
-	Get(p int) types.Part
+	Get(p int) *message.Part
 	Len() int
+}
+
+// MetaMsg provides access to the metadata of a message.
+type MetaMsg interface {
+	MetaSet(key, value string)
+	MetaGet(key string) string
+	MetaDelete(key string)
+	MetaIter(f func(k, v string) error) error
 }
 
 // FunctionContext provides access to a range of query targets for functions to
@@ -59,7 +67,8 @@ type FunctionContext struct {
 	Legacy   bool
 
 	// Reference new message being mapped
-	NewMsg types.Part
+	NewMeta  MetaMsg
+	NewValue *interface{}
 
 	valueFn    func() *interface{}
 	value      *interface{}

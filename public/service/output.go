@@ -6,10 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // Output is an interface implemented by Benthos outputs that support single
@@ -88,10 +89,10 @@ func (a *airGapWriter) ConnectWithContext(ctx context.Context) error {
 	return a.w.Connect(ctx)
 }
 
-func (a *airGapWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (a *airGapWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	err := a.w.Write(ctx, newMessageFromPart(msg.Get(0)))
 	if err != nil && errors.Is(err, ErrNotConnected) {
-		err = types.ErrNotConnected
+		err = component.ErrNotConnected
 	}
 	return err
 }
@@ -108,7 +109,7 @@ func (a *airGapWriter) WaitForClose(tout time.Duration) error {
 	select {
 	case <-a.sig.HasClosedChan():
 	case <-time.After(tout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }
@@ -130,15 +131,15 @@ func (a *airGapBatchWriter) ConnectWithContext(ctx context.Context) error {
 	return a.w.Connect(ctx)
 }
 
-func (a *airGapBatchWriter) WriteWithContext(ctx context.Context, msg types.Message) error {
+func (a *airGapBatchWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	parts := make([]*Message, msg.Len())
-	_ = msg.Iter(func(i int, part types.Part) error {
+	_ = msg.Iter(func(i int, part *message.Part) error {
 		parts[i] = newMessageFromPart(part)
 		return nil
 	})
 	err := a.w.WriteBatch(ctx, parts)
 	if err != nil && errors.Is(err, ErrNotConnected) {
-		err = types.ErrNotConnected
+		err = component.ErrNotConnected
 	}
 	return err
 }
@@ -155,7 +156,7 @@ func (a *airGapBatchWriter) WaitForClose(tout time.Duration) error {
 	select {
 	case <-a.sig.HasClosedChan():
 	case <-time.After(tout):
-		return types.ErrTimeout
+		return component.ErrTimeout
 	}
 	return nil
 }
@@ -167,13 +168,13 @@ func (a *airGapBatchWriter) WaitForClose(tout time.Duration) error {
 // of this type should only be concerned with writing messages and eventually
 // calling Close to terminate the output.
 type OwnedOutput struct {
-	o         types.Output
+	o         ioutput.Streamed
 	closeOnce sync.Once
-	t         chan types.Transaction
+	t         chan message.Transaction
 }
 
-func newOwnedOutput(o types.Output) (*OwnedOutput, error) {
-	tChan := make(chan types.Transaction)
+func newOwnedOutput(o ioutput.Streamed) (*OwnedOutput, error) {
+	tChan := make(chan message.Transaction)
 	if err := o.Consume(tChan); err != nil {
 		return nil, err
 	}
@@ -186,19 +187,19 @@ func newOwnedOutput(o types.Output) (*OwnedOutput, error) {
 // Write a message to the output, or return an error either if delivery is not
 // possible or the context is cancelled.
 func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
-	payload := message.New(nil)
+	payload := message.QuickBatch(nil)
 	payload.Append(m.part)
 
-	resChan := make(chan types.Response, 1)
+	resChan := make(chan error, 1)
 	select {
-	case o.t <- types.NewTransaction(payload, resChan):
+	case o.t <- message.NewTransaction(payload, resChan):
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 
 	select {
 	case res := <-resChan:
-		return res.Error()
+		return res
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -207,21 +208,21 @@ func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
 // WriteBatch attempts to write a message batch to the output, and returns an
 // error either if delivery is not possible or the context is cancelled.
 func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
-	payload := message.New(nil)
+	payload := message.QuickBatch(nil)
 	for _, m := range b {
 		payload.Append(m.part)
 	}
 
-	resChan := make(chan types.Response, 1)
+	resChan := make(chan error, 1)
 	select {
-	case o.t <- types.NewTransaction(payload, resChan):
+	case o.t <- message.NewTransaction(payload, resChan):
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 
 	select {
 	case res := <-resChan:
-		return res.Error()
+		return res
 	case <-ctx.Done():
 		return ctx.Err()
 	}

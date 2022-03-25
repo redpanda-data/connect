@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/xitongsys/parquet-go-source/buffer"
 	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/writer"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func parquetProcessorConfig() *service.ConfigSpec {

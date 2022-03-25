@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 
 Rejects all messages, treating them as though the output destination failed to publish them.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""

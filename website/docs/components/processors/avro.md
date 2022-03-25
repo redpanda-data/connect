@@ -21,40 +21,15 @@ This component is mostly stable but breaking changes could still be made outside
 
 Performs Avro based operations on messages based on a schema.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
-```yaml
-# Common config fields, showing default values
+```yml
+# Config fields, showing default values
 label: ""
 avro:
-  operator: to_json
+  operator: ""
   encoding: textual
   schema: ""
   schema_path: ""
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yaml
-# All config fields, showing default values
-label: ""
-avro:
-  operator: to_json
-  encoding: textual
-  schema: ""
-  schema_path: ""
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 WARNING: If you are consuming or generating messages using a schema registry service then it is likely this processor will fail as those services require messages to be prefixed with the identifier of the schema version being used. Instead, try the [`schema_registry_encode`](/docs/components/processors/schema_registry_encode) and [`schema_registry_decode`](/docs/components/processors/schema_registry_decode) processors.
 
@@ -79,7 +54,7 @@ The [operator](#operators) to execute
 
 
 Type: `string`  
-Default: `"to_json"`  
+Default: `""`  
 Options: `to_json`, `from_json`.
 
 ### `encoding`
@@ -107,25 +82,12 @@ The path of a schema document to apply. Use either this or the `schema` field.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 schema_path: file://path/to/spec.avsc
 
 schema_path: http://localhost:8081/path/to/spec/versions/1
 ```
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 

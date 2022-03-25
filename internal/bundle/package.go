@@ -9,53 +9,55 @@ package bundle
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/component/buffer"
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
+
+var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
+var nameRegexp = regexp.MustCompile(nameRegexpRaw)
 
 // NewManagement defines the latest API for a Benthos manager, which will become
 // the only API (internally) in Benthos V4.
 type NewManagement interface {
-	types.Manager
+	interop.Manager
 
-	ForStream(id string) types.Manager
-	ForComponent(id string) types.Manager
-	ForChildComponent(id string) types.Manager
-	Label() string
+	NewBuffer(conf buffer.Config) (buffer.Streamed, error)
+	NewCache(conf cache.Config) (cache.V1, error)
+	NewInput(conf input.Config, pipelines ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error)
+	NewProcessor(conf processor.Config) (iprocessor.V1, error)
+	NewOutput(conf output.Config, pipelines ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error)
+	NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error)
 
-	Metrics() metrics.Type
-	Logger() log.Modular
-	Environment() *Environment
-	BloblEnvironment() *bloblang.Environment
-
-	NewBuffer(conf buffer.Config) (buffer.Type, error)
-	NewCache(conf cache.Config) (types.Cache, error)
-	NewInput(conf input.Config, hasBatchProc bool, pipelines ...types.PipelineConstructorFunc) (types.Input, error)
-	NewProcessor(conf processor.Config) (types.Processor, error)
-	NewOutput(conf output.Config, pipelines ...types.PipelineConstructorFunc) (types.Output, error)
-	NewRateLimit(conf ratelimit.Config) (types.RateLimit, error)
-
-	AccessCache(ctx context.Context, name string, fn func(types.Cache)) error
 	StoreCache(ctx context.Context, name string, conf cache.Config) error
-
-	AccessInput(ctx context.Context, name string, fn func(types.Input)) error
 	StoreInput(ctx context.Context, name string, conf input.Config) error
-
-	AccessProcessor(ctx context.Context, name string, fn func(types.Processor)) error
 	StoreProcessor(ctx context.Context, name string, conf processor.Config) error
-
-	AccessOutput(ctx context.Context, name string, fn func(types.OutputWriter)) error
 	StoreOutput(ctx context.Context, name string, conf output.Config) error
-
-	AccessRateLimit(ctx context.Context, name string, fn func(types.RateLimit)) error
 	StoreRateLimit(ctx context.Context, name string, conf ratelimit.Config) error
+}
+
+func wrapComponentErr(mgr NewManagement, typeStr string, err error) error {
+	if err == nil {
+		return nil
+	}
+	annotation := "<no label>"
+	if mgr.Label() != "" {
+		annotation = "'" + mgr.Label() + "'"
+	}
+	if p := mgr.Path(); len(p) > 0 {
+		annotation += "path root."
+		annotation += query.SliceToDotPath(mgr.Path()...)
+	}
+	return fmt.Errorf("failed to init %v %v: %w", typeStr, annotation, err)
 }

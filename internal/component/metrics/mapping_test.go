@@ -4,10 +4,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 func TestPathMapping(t *testing.T) {
@@ -94,7 +94,7 @@ func TestPathMapping(t *testing.T) {
 		},
 		{
 			name:    "replace foo with bar",
-			mapping: `this.replace("foo","bar")`,
+			mapping: `this.replace_all("foo","bar")`,
 			cases: []testCase{
 				{input: "foo", output: "bar"},
 				{input: "hello foo world", output: "hello bar world"},
@@ -121,7 +121,7 @@ func TestPathMapping(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			m, err := NewMapping(types.NoopMgr(), test.mapping, log.Noop())
+			m, err := NewMapping(test.mapping, log.Noop())
 			require.NoError(t, err)
 			for i, def := range test.cases {
 				out, labels, values := m.mapPath(def.input, def.inLabels, def.inValues)

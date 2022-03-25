@@ -27,7 +27,7 @@ performing them in parallel where possible.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 workflow:
@@ -39,7 +39,7 @@ workflow:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 workflow:
@@ -58,7 +58,7 @@ workflow:
 
 Most of the time the best way to compose processors is also the simplest, just configure them in series. This is because processors are often CPU bound, low-latency, and you can gain vertical scaling by increasing the number of processor pipeline threads, allowing Benthos to process [multiple messages in parallel][configuration.pipelines].
 
-However, some processors such as [`http`][processors.http], [`lambda`][processors.lambda] or [`cache`][processors.cache] interact with external services and therefore spend most of their time waiting for a response. These processors tend to be high-latency and low CPU activity, which causes messages to process slowly.
+However, some processors such as [`http`][processors.http], [`aws_lambda`][processors.aws_lambda] or [`cache`][processors.cache] interact with external services and therefore spend most of their time waiting for a response. These processors tend to be high-latency and low CPU activity, which causes messages to process slowly.
 
 When a processing pipeline contains multiple network processors that aren't dependent on each other we can benefit from performing these processors in parallel for each individual message, reducing the overall message processing latency.
 
@@ -235,7 +235,7 @@ An explicit declaration of branch ordered tiers, which describes the order in wh
 Type: `two-dimensional array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 order:
@@ -274,7 +274,7 @@ A [Bloblang mapping](/docs/guides/bloblang/about) that describes how to create a
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 request_map: |-
@@ -307,7 +307,7 @@ A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulti
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 result_map: |-
@@ -378,7 +378,7 @@ However, if structured metadata is disabled by setting the field `meta_path` to 
 [dag_wiki]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
 [processors.switch]: /docs/components/processors/switch
 [processors.http]: /docs/components/processors/http
-[processors.lambda]: /docs/components/processors/lambda
+[processors.aws_lambda]: /docs/components/processors/aws_lambda
 [processors.cache]: /docs/components/processors/cache
 [processors.branch]: /docs/components/processors/branch
 [guides.bloblang]: /docs/guides/bloblang/about

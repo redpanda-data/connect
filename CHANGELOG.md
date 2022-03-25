@@ -5,14 +5,98 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.0.0 - TBD
+
+This is a major version release, for more information and guidance on how to migrate please refer to [https://benthos.dev/docs/guides/migration/v4](https://www.benthos.dev/docs/guides/migration/v4).
+
+### Added
+
+- In Bloblang it is now possible to reference the `root` of the document being created within a mapping query.
+- The `nats_jetstream` input now supports pull consumers.
+- Field `max_number_of_messages` added to the `aws_sqs` input.
+
+### Fixed
+
+- The `sftp` output no longer opens files in both read and write mode.
+
+### Changed
+
+- All components, features and configuration fields that were marked as deprecated have been removed.
+- The `pulsar` input and output are no longer included in the default Benthos builds.
+- The field `pipeline.threads` field now defaults to `-1`, which automatically matches the host machine CPU count.
+- Old style interpolation functions (`${!json:foo,1}`) are removed in favour of the newer Bloblang syntax (`${! json("foo") }`).
+- The Bloblang functions `meta`, `root_meta`, `error` and `env` now return `null` when the target value does not exist.
+- Docker images no longer come with a default config that contains generated environment variables, use `-s` flag arguments instead.
+- All cache components have had their retry/backoff fields modified for consistency.
+- All cache components that support a general default TTL now have a field `default_ttl` with a duration string, replacing the previous field.
+- The `http` processor and `http_client` output now execute message batch requests as individual requests by default. This behaviour can be disabled by explicitly setting `batch_as_multipart` to `true`.
+- The `switch` output field `retry_until_success` now defaults to `false`.
+- All AWS components now have a default `region` field that is empty, allowing environment variables or profile values to be used by default.
+- Serverless distributions of Benthos (AWS lambda, etc) have had the default output config changed to reject messages when the processing fails, this should make it easier to handle errors from invocation.
+- The standard metrics emitted by Benthos have been largely simplified and improved, for more information [check out the metrics page](/docs/components/metrics/about).
+- The default metrics type is now `prometheus`.
+- The `http_server` metrics type has been renamed to `json_api`.
+- The `stdout` metrics type has been renamed to `logger`.
+- The `logger` configuration section has been simplified, with `logfmt` being the new default format.
+- The `logger` field `add_timestamp` is now `false` by default.
+- Field `parts` has been removed from all processors.
+- The `dedupe` processor now acts upon individual messages by default, and the `hash` field has been removed.
+- The `log` processor now executes for each individual message of a batch.
+- The `sleep` processor now executes for each individual message of a batch.
+- Go API: Module name has changed to `github.com/benthosdev/benthos/v4`.
+- Go API: All packages within the `lib` directory have been removed in favour of the newer [APIs within `public`](https://pkg.go.dev/github.com/benthosdev/benthos/v4/public).
+- Go API: Distributed tracing is now via the Open Telemetry client library.
+
+## 3.65.0 - 2022-03-07
+
+### Added
+
+- New `sql_raw` processor and output.
+
+### Fixed
+
+- Corrected a case where nested `parallel` processors that result in emptied batches (all messages filtered) would propagate an unack rather than an acknowledgement.
+
+### Changed
+
+- The `sql` processor and output are no longer marked as deprecated and will therefore not be removed in V4. This change was made in order to provide more time to migrate to the new `sql_raw` processor and output.
+
+## 3.64.0 - 2022-02-23
+
+### Added
+
+- Field `nack_reject_patterns` added to the `amqp_0_9` input.
+- New experimental `mongodb` input.
+- Field `cast` added to the `xml` processor and `parse_xml` bloblang method.
+- New experimental `gcp_bigquery_select` processor.
+- New `assign` bloblang method.
+- The `protobuf` processor now supports `Any` fields in protobuf definitions.
+- The `azure_queue_storage` input field `queue_name` now supports interpolation functions.
+
+### Fixed
+
+- Fixed an issue where manually clearing errors within a `catch` processor would result in subsequent processors in the block being skipped.
+- The `cassandra` output should now automatically match `float` columns.
+- Fixed an issue where the `elasticsearch` output would collapse batched messages of matching ID rather than send as individual items.
+- Running streams mode with `--no-api` no longer removes the `/ready` endpoint.
+
+### Changed
+
+- The `throttle` processor has now been marked as deprecated.
+
+## 3.63.0 - 2022-02-08
+
 ### Added
 
 - Field `cors` added to the `http_server` input and output, for supporting CORS requests when custom servers are used.
 - Field `server_side_encryption` added to the `aws_s3` output.
-- Field `use_histogram_timing` added to the `prometheus` metrics exporter.
+- Field `use_histogram_timing` and `histogram_buckets` added to the `prometheus` metrics exporter.
 - New duration string and back off field types added to plugin config builders.
 - Experimental field `multipart` added to the `http_client` output.
 - Codec `regex` added to inputs.
+- Field `timeout` added to the `cassandra` output.
+- New experimental `gcp_bigquery_select` input.
+- Field `ack_wait` added to the `nats_jetstream` input.
 
 ### Changed
 
@@ -21,6 +105,12 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `generate` input now supports zeroed duration strings (`0s`, etc) for unbounded document creation.
+- The `aws_dynamodb_partiql` processor no longer ignores the `endpoint` field.
+- Corrected duplicate detection for custom cache implementations.
+- Fixed panic caused by invalid bounds in the `range` function.
+- Resource config files imported now allow (and ignore) a `tests` field.
+- Fixed an issue where the `aws_kinesis` input would fail to back off during unyielding read attempts.
+- Fixed a linting error with `zmq4` input/output `urls` fields that was incorrectly expecting a string.
 
 ## 3.62.0 - 2022-01-21
 

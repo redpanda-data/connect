@@ -154,15 +154,13 @@ pipeline:
             - bloblang: 'root = ""'
             - try:
               - http:
-                  parallel: true
-                  url: https://api.github.com/repos/Jeffail/benthos/releases/latest
+                  url: https://api.github.com/repos/benthosdev/benthos/releases/latest
                   verb: GET
               - bloblang: 'root = "The latest release of Benthos is %v: %v".format(this.tag_name, this.html_url)'
 
     - catch:
       - log:
-          fields:
-            error: "${! error() }"
+          fields_mapping: 'root.error = error()'
           message: "Failed to process message"
       - bloblang: 'root = "Sorry, my circuits are all bent from twerking and I must have malfunctioned."'
 ```
@@ -191,7 +189,7 @@ If you want to play with Blob Bot then [join our Discord][discord-link]. There a
 [processors.switch]: /docs/components/processors/switch
 [processors.http]: /docs/components/processors/http
 [bloblang]: /docs/guides/bloblang/about
-[full-config]: https://github.com/Jeffail/benthos/blob/master/config/examples/discord_bot.yaml
+[full-config]: https://github.com/benthosdev/benthos/blob/master/config/examples/discord_bot.yaml
 [error-handling]: /docs/configuration/error_handling
 [templates]: /docs/configuration/templating
-[templates.discord]: https://github.com/Jeffail/benthos/blob/master/template/outputs/discord.yaml
+[templates.discord]: https://github.com/benthosdev/benthos/blob/master/template/outputs/discord.yaml

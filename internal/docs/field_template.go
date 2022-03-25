@@ -3,7 +3,6 @@ package docs
 import (
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/lib/util/config"
 	"github.com/Jeffail/gabs/v2"
 )
 
@@ -88,7 +87,7 @@ func (f FieldSpec) FlattenChildrenForDocs() []FieldSpecCtx {
 			if len(v.Examples) > 0 {
 				newV.ExamplesMarshalled = make([]string, len(v.Examples))
 				for i, e := range v.Examples {
-					exampleBytes, err := config.MarshalYAML(map[string]interface{}{
+					exampleBytes, err := marshalYAML(map[string]interface{}{
 						v.Name: e,
 					})
 					if err == nil {

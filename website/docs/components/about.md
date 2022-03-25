@@ -47,20 +47,17 @@ http:
   debug_endpoints: false
 
 logger:
-  prefix: benthos
+  format: json
   level: WARN
-  json_format: true
 
 metrics:
   statsd:
-    prefix: foo
     address: localhost:8125
     flush_period: 100ms
 
 tracer:
   jaeger:
     agent_address: localhost:6831
-    service_name: benthos
 ```
 
 ## Resource Components
@@ -92,7 +89,6 @@ cache_resources:
   - label: baz_cache
     memcached:
       addresses: [ localhost:11211 ]
-      ttl: 60
 ```
 
 It's also possible to configure inputs, outputs and processors as resources which allows them to be reused throughout a configuration with the [`resource` input][inputs.resource], [`resource` output][outputs.resource] and [`resource` processor][processors.resource] respectively.

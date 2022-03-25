@@ -3,7 +3,7 @@ package bloblang
 import (
 	"encoding/json"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 // ParamDefinition describes a single parameter for a function or method.

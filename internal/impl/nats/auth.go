@@ -1,8 +1,8 @@
 package nats
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/impl/nats/auth"
-	"github.com/Jeffail/benthos/v3/public/service"
+	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // AuthFromParsedConfig attempts to extract an auth config from a ParsedConfig.

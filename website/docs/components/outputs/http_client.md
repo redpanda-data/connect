@@ -26,18 +26,18 @@ Sends messages to an HTTP server.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   http_client:
-    url: http://localhost:4195/post
+    url: ""
     verb: POST
     headers:
       Content-Type: application/octet-stream
     rate_limit: ""
     timeout: 5s
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -48,12 +48,12 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   http_client:
-    url: http://localhost:4195/post
+    url: ""
     verb: POST
     headers:
       Content-Type: application/octet-stream
@@ -102,9 +102,9 @@ output:
     drop_on: []
     successful_on: []
     proxy_url: ""
-    batch_as_multipart: true
+    batch_as_multipart: false
     propagate_response: false
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -155,7 +155,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"http://localhost:4195/post"`  
+Default: `""`  
 
 ### `verb`
 
@@ -165,7 +165,7 @@ A verb to connect with
 Type: `string`  
 Default: `"POST"`  
 
-```yaml
+```yml
 # Examples
 
 verb: POST
@@ -184,7 +184,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `object`  
 Default: `{"Content-Type":"application/octet-stream"}`  
 
-```yaml
+```yml
 # Examples
 
 headers:
@@ -206,7 +206,7 @@ Provide a list of explicit metadata key prefixes to match against.
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_prefixes:
@@ -228,7 +228,7 @@ Provide a list of explicit metadata key regular expression (re2) patterns to mat
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_patterns:
@@ -451,7 +451,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -468,7 +468,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -482,7 +482,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -541,7 +541,7 @@ Provide a list of explicit metadata key prefixes to match against.
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_prefixes:
@@ -563,7 +563,7 @@ Provide a list of explicit metadata key regular expression (re2) patterns to mat
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 include_patterns:
@@ -651,7 +651,7 @@ Send message batches as a single request using [RFC1341](https://www.w3.org/Prot
 
 
 Type: `bool`  
-Default: `true`  
+Default: `false`  
 
 ### `propagate_response`
 
@@ -667,7 +667,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `batching`
 
@@ -676,7 +676,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -718,7 +718,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -736,7 +736,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -750,7 +750,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:
@@ -783,7 +783,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 content_type: application/bin
@@ -798,7 +798,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 content_disposition: form-data; name="bin"; filename='${! meta("AttachmentName") }
@@ -813,7 +813,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 body: ${! json("data.part1") }

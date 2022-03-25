@@ -9,10 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/service"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
 func TestSystemWindowBufferConfigs(t *testing.T) {

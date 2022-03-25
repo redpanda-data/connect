@@ -19,14 +19,13 @@ import TabItem from '@theme/TabItem';
 A special broker type where the inputs are identified by unique labels and can
 be created, changed and removed during runtime via a REST HTTP interface.
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   label: ""
   dynamic:
     inputs: {}
     prefix: ""
-    timeout: 5s
 ```
 
 To GET a JSON map of input identifiers with their current uptimes use the
@@ -54,13 +53,5 @@ A path prefix for HTTP endpoints that are registered.
 
 Type: `string`  
 Default: `""`  
-
-### `timeout`
-
-The server side timeout of HTTP requests.
-
-
-Type: `string`  
-Default: `"5s"`  
 
 

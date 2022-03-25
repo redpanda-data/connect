@@ -19,7 +19,7 @@ import TabItem from '@theme/TabItem';
 Returns the final message payload back to the input origin of the message, where
 it is dealt with according to that specific input type.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
@@ -43,13 +43,12 @@ output:
   broker:
     pattern: fan_out
     outputs:
-    - kafka:
-        addresses: [ TODO:9092 ]
-        topic: foo_topic
-    - sync_response: {}
-      processors:
-      - text:
-          operator: to_upper
+      - kafka:
+          addresses: [ TODO:9092 ]
+          topic: foo_topic
+      - sync_response: {}
+        processors:
+          - bloblang: 'root = content().uppercase()'
 ```
 
 Using the above example and posting the message 'hello world' to the endpoint

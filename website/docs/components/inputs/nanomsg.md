@@ -26,13 +26,12 @@ Consumes messages via Nanomsg sockets (scalability protocols).
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   nanomsg:
-    urls:
-      - tcp://*:5555
+    urls: []
     bind: true
     socket_type: PULL
     sub_filters: []
@@ -41,13 +40,12 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
   nanomsg:
-    urls:
-      - tcp://*:5555
+    urls: []
     bind: true
     socket_type: PULL
     sub_filters: []
@@ -67,7 +65,7 @@ A list of URLs to connect to (or as). If an item of the list contains commas it 
 
 
 Type: `array`  
-Default: `["tcp://*:5555"]`  
+Default: `[]`  
 
 ### `bind`
 

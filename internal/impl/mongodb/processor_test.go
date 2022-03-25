@@ -7,20 +7,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/impl/mongodb"
-	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/nsf/jsondiff"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/impl/mongodb"
+	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func TestProcessorIntegration(t *testing.T) {
@@ -114,14 +116,13 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 			J:        false,
 			WTimeout: "100s",
 		},
-		Parts:       nil,
 		Operation:   "insert-one",
 		DocumentMap: "root.a = this.foo\nroot.b = this.bar",
 	}
 
 	conf.MongoDB = mongoConfig
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
@@ -132,7 +133,7 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 		[]byte(`{"foo":"foo2","bar":"bar2"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.New(parts))
+	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -186,7 +187,6 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 			J:        false,
 			WTimeout: "100s",
 		},
-		Parts:     nil,
 		Operation: "delete-one",
 		FilterMap: "root.a = this.foo\nroot.b = this.bar",
 	}
@@ -199,7 +199,7 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_delete", "b": "bar_delete"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	conf.MongoDB = mongoConfig
@@ -210,7 +210,7 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_delete","bar":"bar_delete"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.New(parts))
+	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -246,7 +246,6 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 			J:        false,
 			WTimeout: "100s",
 		},
-		Parts:     nil,
 		Operation: "delete-many",
 		FilterMap: "root.a = this.foo\nroot.b = this.bar",
 	}
@@ -261,7 +260,7 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many", "c": "c2"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	conf.MongoDB = mongoConfig
@@ -272,7 +271,7 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_delete_many","bar":"bar_delete_many"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.New(parts))
+	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -307,7 +306,6 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 			J:        false,
 			WTimeout: "100s",
 		},
-		Parts:       nil,
 		Operation:   "replace-one",
 		DocumentMap: "root.a = this.foo\nroot.b = this.bar",
 		FilterMap:   "root.a = this.foo",
@@ -321,7 +319,7 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_replace", "b": "bar_old", "c": "c1"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	conf.MongoDB = mongoConfig
@@ -332,7 +330,7 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_replace","bar":"bar_new"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.New(parts))
+	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -372,7 +370,6 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 			J:        false,
 			WTimeout: "100s",
 		},
-		Parts:       nil,
 		Operation:   "update-one",
 		DocumentMap: `root = {"$set": {"a": this.foo, "b": this.bar}}`,
 		FilterMap:   "root.a = this.foo",
@@ -386,7 +383,7 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_update", "b": "bar_update_old", "c": "c1"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	conf.MongoDB = mongoConfig
@@ -397,7 +394,7 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 		[]byte(`{"foo":"foo_update","bar":"bar_update_new"}`),
 	}
 
-	resMsgs, response := m.ProcessMessage(message.New(parts))
+	resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, len(parts)), message.QuickBatch(parts))
 	require.Nil(t, response)
 	require.Len(t, resMsgs, 1)
 
@@ -437,7 +434,6 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 		J:        false,
 		WTimeout: "100s",
 	}
-	conf.MongoDB.Parts = nil
 	conf.MongoDB.Operation = "find-one"
 	conf.MongoDB.FilterMap = "root.a = this.a"
 
@@ -449,7 +445,7 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo", "b": "bar", "c": "baz", "answer_to_everything": 42})
 	assert.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	for _, tt := range []struct {
@@ -493,11 +489,11 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 
 		m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
 		require.NoError(t, err)
-		resMsgs, response := m.ProcessMessage(message.New([][]byte{[]byte(tt.message)}))
+		resMsgs, response := m.ProcessBatch(context.Background(), make([]*tracing.Span, 1), message.QuickBatch([][]byte{[]byte(tt.message)}))
 		require.Nil(t, response)
 		require.Len(t, resMsgs, 1)
 		if tt.expectedErr != nil {
-			require.Equal(t, mongo.ErrNoDocuments.Error(), resMsgs[0].Get(0).Metadata().Get(types.FailFlagKey))
+			require.Equal(t, mongo.ErrNoDocuments.Error(), resMsgs[0].Get(0).MetaGet(message.FailFlagKey))
 			continue
 		}
 

@@ -26,15 +26,13 @@ The kafka output type writes a batch of messages to Kafka brokers and waits for 
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   kafka:
-    addresses:
-      - localhost:9092
-    topic: benthos_stream
-    client_id: benthos_kafka_output
+    addresses: []
+    topic: ""
     target_version: 1.0.0
     key: ""
     partitioner: fnv1a_hash
@@ -42,7 +40,7 @@ output:
     static_headers: {}
     metadata:
       exclude_prefixes: []
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -53,13 +51,12 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   kafka:
-    addresses:
-      - localhost:9092
+    addresses: []
     tls:
       enabled: false
       skip_cert_verify: false
@@ -68,14 +65,14 @@ output:
       root_cas_file: ""
       client_certs: []
     sasl:
-      mechanism: ""
+      mechanism: none
       user: ""
       password: ""
       access_token: ""
       token_cache: ""
       token_key: ""
-    topic: benthos_stream
-    client_id: benthos_kafka_output
+    topic: ""
+    client_id: benthos
     target_version: 1.0.0
     rack_id: ""
     key: ""
@@ -86,7 +83,7 @@ output:
     metadata:
       exclude_prefixes: []
     inject_tracing_map: ""
-    max_in_flight: 1
+    max_in_flight: 64
     ack_replicas: false
     max_msg_bytes: 1000000
     timeout: 5s
@@ -147,9 +144,9 @@ A list of broker addresses to connect to. If an item of the list contains commas
 
 
 Type: `array`  
-Default: `["localhost:9092"]`  
+Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 addresses:
@@ -203,7 +200,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -220,7 +217,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -234,7 +231,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -291,10 +288,11 @@ The SASL authentication mechanism, if left empty SASL authentication is not used
 
 
 Type: `string`  
-Default: `""`  
+Default: `"none"`  
 
 | Option | Summary |
 |---|---|
+| `none` | Default, no SASL authentication. |
 | `PLAIN` | Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled). |
 | `OAUTHBEARER` | OAuth Bearer based authentication. |
 | `SCRAM-SHA-256` | Authentication using the SCRAM-SHA-256 mechanism. |
@@ -309,7 +307,7 @@ A `PLAIN` username. It is recommended that you use environment variables to popu
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 user: ${USER}
@@ -323,7 +321,7 @@ A `PLAIN` password. It is recommended that you use environment variables to popu
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 password: ${PASSWORD}
@@ -360,7 +358,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos_stream"`  
+Default: `""`  
 
 ### `client_id`
 
@@ -368,7 +366,7 @@ An identifier for the client connection.
 
 
 Type: `string`  
-Default: `"benthos_kafka_output"`  
+Default: `"benthos"`  
 
 ### `target_version`
 
@@ -430,7 +428,7 @@ An optional map of static headers that should be added to messages in addition t
 Type: `object`  
 Default: `{}`  
 
-```yaml
+```yml
 # Examples
 
 static_headers:
@@ -462,7 +460,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.45.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 inject_tracing_map: meta = meta().merge(this)
@@ -476,7 +474,7 @@ The maximum number of parallel message batches to have in flight at any given ti
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `ack_replicas`
 
@@ -517,7 +515,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -559,7 +557,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -577,7 +575,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -591,7 +589,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

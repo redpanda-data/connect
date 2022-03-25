@@ -97,9 +97,8 @@ pipeline:
     - bloblang: root = deleted()
 
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: if this != "downloads" { deleted() }
+  mapping: if this != "downloads" { deleted() }
+  prometheus: {}
 ```
 
 With the above config we have selected the [`prometheus` metrics type][metrics.prometheus], which allows us to use [Prometheus][prometheus] to scrape metrics from Benthos by polling its HTTP API at the url `http://localhost:4195/stats`.
@@ -192,9 +191,8 @@ pipeline:
     - bloblang: root = deleted()
 
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: if this != "downloads" { deleted() }
+  mapping: if this != "downloads" { deleted() }
+  prometheus: {}
 ```
 
 </TabItem>
@@ -246,13 +244,13 @@ input:
 pipeline:
   processors:
     - http:
-        url: https://api.github.com/repos/Jeffail/benthos/releases
+        url: https://api.github.com/repos/benthosdev/benthos/releases
         verb: GET
 
     - bloblang: |
         root = this.map_each(release -> release.assets.map_each(asset -> {
           "source":         "github",
-          "dist":           asset.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
+          "dist":           asset.name.re_replace_all("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
           "download_count": asset.download_count,
           "version":        release.tag_name.trim("v"),
         }).filter(asset -> asset.dist != "checksums")).flatten()
@@ -271,9 +269,8 @@ pipeline:
     - bloblang: root = deleted()
 
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: if this != "downloads" { deleted() }
+  mapping: if this != "downloads" { deleted() }
+  prometheus: {}
 ```
 
 Finally, let's combine all the custom metrics into one pipeline.
@@ -321,12 +318,12 @@ processor_resources:
       processors:
         - try:
           - http:
-              url: https://api.github.com/repos/Jeffail/benthos/releases
+              url: https://api.github.com/repos/benthosdev/benthos/releases
               verb: GET
           - bloblang: |
               root = this.map_each(release -> release.assets.map_each(asset -> {
                 "source":         "github",
-                "dist":           asset.name.re_replace("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
+                "dist":           asset.name.re_replace_all("^benthos-?((lambda_)|_)[0-9\\.]+(-rc[0-9]+)?_([^\\.]+).*", "$2$4"),
                 "download_count": asset.download_count,
                 "version":        release.tag_name.trim("v"),
               }).filter(asset -> asset.dist != "checksums")).flatten()
@@ -361,9 +358,8 @@ processor_resources:
       value: ${! json("download_count") }
 
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: if this != "downloads" { deleted() }
+  mapping: if this != "downloads" { deleted() }
+  prometheus: {}
 ```
 
 [serverless.lambda]: /docs/guides/serverless/lambda
@@ -378,5 +374,5 @@ metrics:
 [processors.metric]: /docs/components/processors/metric
 [rate_limits]: /docs/components/rate_limits/about
 [metrics.prometheus]: /docs/components/metrics/prometheus
-[metrics.prometheus.path_mapping]: /docs/components/metrics/prometheus#path_mapping
+[metrics.about.mapping]: /docs/components/metrics/about#metric-mapping
 [prometheus]: https://prometheus.io/

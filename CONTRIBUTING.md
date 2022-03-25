@@ -45,7 +45,7 @@ If your change has an impact on documentation then make sure it is generated wit
 
 ### Adding New Components
 
-The APIs for adding new components (inputs, outputs, processors, caches, etc) has recently been simplified. If you are planning to create a new component you should use the latest implementations within `./internal/impl` as inspiration rather than those found under `./lib`.
+The APIs for adding new components (inputs, outputs, processors, caches, etc) has recently been simplified. If you are planning to create a new component you should use the latest implementations within `./internal/impl` as inspiration.
 
 ### Plugins
 

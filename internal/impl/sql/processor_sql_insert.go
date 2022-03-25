@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/Masterminds/squirrel"
+
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func sqlInsertProcessorConfig() *service.ConfigSpec {
+// InsertProcessorConfig returns a config spec for an sql_insert processor.
+func InsertProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Integration").
@@ -38,7 +40,8 @@ If the insert fails to execute then the message will still remain unchanged and 
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the insert query.").
 			Optional().
-			Advanced()).
+			Advanced().
+			Example("ON CONFLICT (name) DO NOTHING")).
 		Version("3.59.0").
 		Example("Table Insert (MySQL)",
 			`
@@ -63,9 +66,9 @@ pipeline:
 
 func init() {
 	err := service.RegisterBatchProcessor(
-		"sql_insert", sqlInsertProcessorConfig(),
+		"sql_insert", InsertProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return newSQLInsertProcessorFromConfig(conf, mgr.Logger())
+			return NewSQLInsertProcessorFromConfig(conf, mgr.Logger())
 		})
 
 	if err != nil {
@@ -87,7 +90,9 @@ type sqlInsertProcessor struct {
 	shutSig *shutdown.Signaller
 }
 
-func newSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlInsertProcessor, error) {
+// NewSQLInsertProcessorFromConfig returns an internal sql_insert processor.
+// nolint:revive // Not bothered as this is internal anyway
+func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlInsertProcessor, error) {
 	s := &sqlInsertProcessor{
 		logger:  logger,
 		shutSig: shutdown.NewSignaller(),
@@ -189,18 +194,21 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		var args []interface{}
 		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
 		if err != nil {
+			s.logger.Debugf("Arguments mapping failed: %v", err)
 			msg.SetError(err)
 			continue
 		}
 
 		iargs, err := resMsg.AsStructured()
 		if err != nil {
+			s.logger.Debugf("Mapping returned non-structured result: %v", err)
 			msg.SetError(fmt.Errorf("mapping returned non-structured result: %w", err))
 			continue
 		}
 
 		var ok bool
 		if args, ok = iargs.([]interface{}); !ok {
+			s.logger.Debugf("Mapping returned non-array result: %T", iargs)
 			msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 			continue
 		}
@@ -219,6 +227,7 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		err = tx.Commit()
 	}
 	if err != nil {
+		s.logger.Debugf("Failed to run query: %v", err)
 		return nil, err
 	}
 	return []service.MessageBatch{batch}, nil

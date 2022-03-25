@@ -25,26 +25,26 @@ Creates a server that receives a stream of messages over a tcp, udp or unix sock
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   socket_server:
-    network: unix
-    address: /tmp/benthos.sock
+    network: ""
+    address: ""
     codec: lines
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
   socket_server:
-    network: unix
-    address: /tmp/benthos.sock
+    network: ""
+    address: ""
     codec: lines
     max_buffer: 1000000
 ```
@@ -62,7 +62,7 @@ A network type to accept (unix|tcp|udp).
 
 
 Type: `string`  
-Default: `"unix"`  
+Default: `""`  
 Options: `unix`, `tcp`, `udp`.
 
 ### `address`
@@ -71,9 +71,9 @@ The address to listen from.
 
 
 Type: `string`  
-Default: `"/tmp/benthos.sock"`  
+Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 address: /tmp/benthos.sock
@@ -96,7 +96,7 @@ Requires version 3.42.0 or newer
 | `all-bytes` | Consume the entire file as a single binary message. |
 | `chunker:x` | Consume the file in chunks of a given number of bytes. |
 | `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
-| `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `csv:|` would consume a pipe delimited file. |
+| `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `"csv:\t"` would consume a tab delimited file. |
 | `delim:x` | Consume the file in segments divided by a custom delimiter. |
 | `gzip` | Decompress a gzip file, this codec should precede another codec, e.g. `gzip/all-bytes`, `gzip/tar`, `gzip/csv`, etc. |
 | `lines` | Consume the file in segments divided by linebreaks. |
@@ -105,7 +105,7 @@ Requires version 3.42.0 or newer
 | `tar` | Parse the file as a tar archive, and consume each file of the archive as a message. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines

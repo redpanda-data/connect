@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 type fnProcessor struct {
@@ -52,7 +53,7 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -69,7 +70,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("not a structured doc")})
+	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -94,7 +95,7 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -146,7 +147,7 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -163,7 +164,7 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("not a structured doc")})
+	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
@@ -188,7 +189,7 @@ func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 		},
 	}, metrics.Noop())
 
-	msg := message.New([][]byte{[]byte("unchanged")})
+	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 2)

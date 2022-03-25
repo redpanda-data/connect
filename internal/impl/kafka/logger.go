@@ -1,8 +1,9 @@
 package kafka
 
 import (
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/twmb/franz-go/pkg/kgo"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type kgoLogger struct {

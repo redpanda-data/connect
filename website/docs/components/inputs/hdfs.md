@@ -19,14 +19,13 @@ import TabItem from '@theme/TabItem';
 Reads files from a HDFS directory, where each discrete file will be consumed as
 a single message payload.
 
-```yaml
+```yml
 # Config fields, showing default values
 input:
   label: ""
   hdfs:
-    hosts:
-      - localhost:9000
-    user: benthos_hdfs
+    hosts: []
+    user: ""
     directory: ""
 ```
 
@@ -50,7 +49,7 @@ A list of target host addresses to connect to.
 
 
 Type: `array`  
-Default: `["localhost:9000"]`  
+Default: `[]`  
 
 ### `user`
 
@@ -58,7 +57,7 @@ A user ID to connect as.
 
 
 Type: `string`  
-Default: `"benthos_hdfs"`  
+Default: `""`  
 
 ### `directory`
 

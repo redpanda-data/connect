@@ -26,33 +26,29 @@ Subscribe to an NSQ instance topic and channel.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   nsq:
-    nsqd_tcp_addresses:
-      - localhost:4150
-    lookupd_http_addresses:
-      - localhost:4161
-    topic: benthos_messages
-    channel: benthos_stream
-    user_agent: benthos_consumer
+    nsqd_tcp_addresses: []
+    lookupd_http_addresses: []
+    topic: ""
+    channel: ""
+    user_agent: ""
     max_in_flight: 100
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
   nsq:
-    nsqd_tcp_addresses:
-      - localhost:4150
-    lookupd_http_addresses:
-      - localhost:4161
+    nsqd_tcp_addresses: []
+    lookupd_http_addresses: []
     tls:
       enabled: false
       skip_cert_verify: false
@@ -60,9 +56,9 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    topic: benthos_messages
-    channel: benthos_stream
-    user_agent: benthos_consumer
+    topic: ""
+    channel: ""
+    user_agent: ""
     max_in_flight: 100
 ```
 
@@ -77,7 +73,7 @@ A list of nsqd addresses to connect to.
 
 
 Type: `array`  
-Default: `["localhost:4150"]`  
+Default: `[]`  
 
 ### `lookupd_http_addresses`
 
@@ -85,7 +81,7 @@ A list of nsqlookupd addresses to connect to.
 
 
 Type: `array`  
-Default: `["localhost:4161"]`  
+Default: `[]`  
 
 ### `tls`
 
@@ -127,7 +123,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -144,7 +140,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -158,7 +154,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -208,7 +204,7 @@ The topic to consume from.
 
 
 Type: `string`  
-Default: `"benthos_messages"`  
+Default: `""`  
 
 ### `channel`
 
@@ -216,7 +212,7 @@ The channel to consume from.
 
 
 Type: `string`  
-Default: `"benthos_stream"`  
+Default: `""`  
 
 ### `user_agent`
 
@@ -224,7 +220,7 @@ A user agent to assume when connecting.
 
 
 Type: `string`  
-Default: `"benthos_consumer"`  
+Default: `""`  
 
 ### `max_in_flight`
 

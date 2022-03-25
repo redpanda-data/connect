@@ -18,17 +18,17 @@ import TabItem from '@theme/TabItem';
 
 Connects to a (tcp/udp/unix) server and sends a continuous stream of data, dividing messages according to the specified codec.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
   socket:
-    network: unix
-    address: /tmp/benthos.sock
+    network: ""
+    address: ""
     codec: lines
 ```
 
-## Batches and Mulipart Messages
+## Batches and Multipart Messages
 
 When writing multipart (batched) messages using the `lines` codec the last message ends with double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
 
@@ -56,7 +56,7 @@ The network type to connect as.
 
 
 Type: `string`  
-Default: `"unix"`  
+Default: `""`  
 Options: `unix`, `tcp`, `udp`.
 
 ### `address`
@@ -65,9 +65,9 @@ The address (or path) to connect to.
 
 
 Type: `string`  
-Default: `"/tmp/benthos.sock"`  
+Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 address: /tmp/benthos.sock
@@ -91,7 +91,7 @@ Default: `"lines"`
 | `delim:x` | Append each message to the output stream followed by a custom delimiter. |
 
 
-```yaml
+```yml
 # Examples
 
 codec: lines

@@ -27,33 +27,34 @@ message brokers, including RabbitMQ.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   amqp_0_9:
     urls: []
-    queue: benthos-queue
-    consumer_tag: benthos-consumer
+    queue: ""
+    consumer_tag: ""
     prefetch_count: 10
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
   amqp_0_9:
     urls: []
-    queue: benthos-queue
+    queue: ""
     queue_declare:
       enabled: false
       durable: true
     bindings_declare: []
-    consumer_tag: benthos-consumer
+    consumer_tag: ""
     auto_ack: false
+    nack_reject_patterns: []
     prefetch_count: 10
     prefetch_size: 0
     tls:
@@ -110,7 +111,7 @@ Type: `array`
 Default: `[]`  
 Requires version 3.58.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 urls:
@@ -130,7 +131,7 @@ An AMQP queue to consume from.
 
 
 Type: `string`  
-Default: `"benthos-queue"`  
+Default: `""`  
 
 ### `queue_declare`
 
@@ -139,6 +140,7 @@ then the declaration passively verifies that they match the target fields.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `queue_declare.enabled`
 
@@ -164,7 +166,7 @@ Allows you to passively declare bindings for the target queue.
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 bindings_declare:
@@ -194,7 +196,7 @@ A consumer tag.
 
 
 Type: `string`  
-Default: `"benthos-consumer"`  
+Default: `""`  
 
 ### `auto_ack`
 
@@ -203,6 +205,22 @@ Acknowledge messages automatically as they are consumed rather than waiting for 
 
 Type: `bool`  
 Default: `false`  
+
+### `nack_reject_patterns`
+
+A list of regular expression patterns whereby if a message that has failed to be delivered by Benthos has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.
+
+
+Type: `array`  
+Default: `[]`  
+Requires version 3.64.0 or newer  
+
+```yml
+# Examples
+
+nack_reject_patterns:
+  - ^reject me please:.+$
+```
 
 ### `prefetch_count`
 
@@ -260,7 +278,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -277,7 +295,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -289,9 +307,8 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:

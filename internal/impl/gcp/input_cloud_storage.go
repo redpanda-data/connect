@@ -11,38 +11,37 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/codec"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/input/reader"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"google.golang.org/api/iterator"
+
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/codec"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func init() {
-	bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (input.Type, error) {
+	bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
 		r, err := newGCPCloudStorageInput(c.GCPCloudStorage, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
 		return input.NewAsyncReader(
 			input.TypeGCPCloudStorage, true,
-			reader.NewAsyncBundleUnacks(reader.NewAsyncPreserver(r)),
+			reader.NewAsyncPreserver(r),
 			nm.Logger(), nm.Metrics(),
 		)
 	}), docs.ComponentSpec{
-		Name:    input.TypeGCPCloudStorage,
-		Type:    docs.TypeInput,
-		Status:  docs.StatusBeta,
-		Version: "3.43.0",
-		Categories: []string{
-			string(input.CategoryServices),
-			string(input.CategoryGCP),
-		},
+		Name:       input.TypeGCPCloudStorage,
+		Type:       docs.TypeInput,
+		Status:     docs.StatusBeta,
+		Version:    "3.43.0",
+		Categories: []string{"Services", "GCP"},
 		Summary: `
 Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`,
 		Description: `
@@ -71,10 +70,10 @@ You can access these metadata fields using [function interpolation](/docs/config
 By default Benthos will use a shared credentials file when connecting to GCP
 services. You can find out more [in this document](/docs/guides/cloud/gcp).`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldCommon("bucket", "The name of the bucket from which to download objects."),
-			docs.FieldCommon("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
+			docs.FieldString("bucket", "The name of the bucket from which to download objects."),
+			docs.FieldString("prefix", "An optional path prefix, if set only objects with the prefix are consumed."),
 			codec.ReaderDocs,
-			docs.FieldAdvanced("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed."),
+			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewGCPCloudStorageConfig()),
 	})
 }
@@ -281,21 +280,19 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 	return object, nil
 }
 
-func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []types.Part) types.Message {
-	msg := message.New(nil)
+func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*message.Part) *message.Batch {
+	msg := message.QuickBatch(nil)
 	msg.Append(parts...)
-	msg.Iter(func(_ int, part types.Part) error {
-		meta := part.Metadata()
-
-		meta.Set("gcs_key", p.target.key)
-		meta.Set("gcs_bucket", p.obj.Bucket)
-		meta.Set("gcs_last_modified", p.obj.Updated.Format(time.RFC3339))
-		meta.Set("gcs_last_modified_unix", strconv.FormatInt(p.obj.Updated.Unix(), 10))
-		meta.Set("gcs_content_type", p.obj.ContentType)
-		meta.Set("gcs_content_encoding", p.obj.ContentEncoding)
+	_ = msg.Iter(func(_ int, part *message.Part) error {
+		part.MetaSet("gcs_key", p.target.key)
+		part.MetaSet("gcs_bucket", p.obj.Bucket)
+		part.MetaSet("gcs_last_modified", p.obj.Updated.Format(time.RFC3339))
+		part.MetaSet("gcs_last_modified_unix", strconv.FormatInt(p.obj.Updated.Unix(), 10))
+		part.MetaSet("gcs_content_type", p.obj.ContentType)
+		part.MetaSet("gcs_content_encoding", p.obj.ContentEncoding)
 
 		for k, v := range p.obj.Metadata {
-			meta.Set(k, v)
+			part.MetaSet(k, v)
 		}
 		return nil
 	})
@@ -305,17 +302,17 @@ func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []types.
 
 // ReadWithContext attempts to read a new message from the target Google Cloud
 // Storage bucket.
-func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg types.Message, ackFn reader.AsyncAckFn, err error) {
+func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn reader.AsyncAckFn, err error) {
 	g.objectMut.Lock()
 	defer g.objectMut.Unlock()
 
 	defer func() {
 		if errors.Is(err, io.EOF) {
-			err = types.ErrTypeClosed
+			err = component.ErrTypeClosed
 		} else if errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
 			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
-			err = types.ErrTimeout
+			err = component.ErrTimeout
 		}
 	}()
 
@@ -324,7 +321,7 @@ func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg types.M
 		return
 	}
 
-	var parts []types.Part
+	var parts []*message.Part
 	var scnAckFn codec.ReaderAckFn
 
 	for {
@@ -347,8 +344,8 @@ func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg types.M
 		}
 	}
 
-	return gcpCloudStorageMsgFromParts(object, parts), func(rctx context.Context, res types.Response) error {
-		return scnAckFn(rctx, res.Error())
+	return gcpCloudStorageMsgFromParts(object, parts), func(rctx context.Context, res error) error {
+		return scnAckFn(rctx, res)
 	}, nil
 }
 

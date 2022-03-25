@@ -30,21 +30,18 @@ Introduced in version 3.48.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 aws_dynamodb_partiql:
   query: ""
   args_mapping: ""
-  region: ""
-  credentials:
-    profile: ""
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 aws_dynamodb_partiql:

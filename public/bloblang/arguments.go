@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 // ArgSpec provides an API for validating and extracting function or method

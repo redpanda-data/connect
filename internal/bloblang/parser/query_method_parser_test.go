@@ -3,10 +3,11 @@ package parser
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestMethodParser(t *testing.T) {
@@ -155,7 +156,7 @@ func TestMethodParser(t *testing.T) {
 		},
 		"meta from all": {
 			input:  `meta("foo").from_all()`,
-			output: `["bar","","baz"]`,
+			output: `["bar",null,"baz"]`,
 			messages: []easyMsg{
 				{meta: map[string]string{"foo": "bar"}},
 				{},
@@ -453,18 +454,18 @@ func TestMethodParser(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)
 			}
 
-			e, perr := tryParseQuery(test.input, false)
+			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
 			res := query.ExecToString(e, query.FunctionContext{
 				Index:    test.index,
@@ -499,18 +500,18 @@ func TestMethodErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)
 			}
 
-			e, perr := tryParseQuery(test.input, false)
+			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
 
 			_, err := e.Exec(query.FunctionContext{
@@ -600,18 +601,18 @@ func TestMethodMaps(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)
 			}
 
-			e, perr := tryParseQuery(test.input, false)
+			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
 
 			res, err := e.Exec(query.FunctionContext{

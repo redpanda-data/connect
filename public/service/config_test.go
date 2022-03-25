@@ -3,10 +3,11 @@ package service
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 func TestConfigFromStructYAML(t *testing.T) {
@@ -453,7 +454,7 @@ func TestConfigInterpolatedString(t *testing.T) {
 
 	parsedConfig, err := spec.ParseYAML(`
 a: foo ${! content() } bar
-b: this is ${! json } an invalid interp string
+b: this is ${! json( } an invalid interp string
 `, nil)
 	require.NoError(t, err)
 

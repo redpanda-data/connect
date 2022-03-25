@@ -3,49 +3,16 @@ package template
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/template"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
+
+	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/template"
 )
 
 var red = color.New(color.FgRed).SprintFunc()
 var yellow = color.New(color.FgYellow).SprintFunc()
-
-func resolveLintPath(path string) []string {
-	recurse := false
-	if path == "./..." || path == "..." {
-		recurse = true
-		path = "."
-	}
-	if strings.HasSuffix(path, "/...") {
-		recurse = true
-		path = strings.TrimSuffix(path, "/...")
-	}
-	if recurse {
-		var targets []string
-		if err := filepath.Walk(path, func(path string, info os.FileInfo, werr error) error {
-			if werr != nil {
-				return werr
-			}
-			if info.IsDir() {
-				return nil
-			}
-			if strings.HasSuffix(path, ".yaml") ||
-				strings.HasSuffix(path, ".yml") {
-				targets = append(targets, path)
-			}
-			return nil
-		}); err != nil {
-			fmt.Fprintf(os.Stderr, "Filesystem walk error: %v\n", err)
-			os.Exit(1)
-		}
-		return targets
-	}
-	return []string{path}
-}
 
 type pathLint struct {
 	source string
@@ -103,11 +70,11 @@ Exits with a status code 1 if any linting errors are detected:
 If a path ends with '...' then Benthos will walk the target and lint any
 files with the .yaml or .yml extension.`[1:],
 		Action: func(c *cli.Context) error {
-			var targets []string
-			for _, p := range c.Args().Slice() {
-				targets = append(targets, resolveLintPath(p)...)
+			targets, err := ifilepath.GlobsAndSuperPaths(c.Args().Slice(), "yaml", "yml")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Lint paths error: %v\n", err)
+				os.Exit(1)
 			}
-
 			var pathLints []pathLint
 			for _, target := range targets {
 				if target == "" {

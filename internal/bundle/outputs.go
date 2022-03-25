@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 // AllOutputs is a set containing every single output that has been imported.
@@ -26,8 +28,8 @@ func (e *Environment) OutputAdd(constructor OutputConstructor, spec docs.Compone
 func (e *Environment) OutputInit(
 	conf output.Config,
 	mgr NewManagement,
-	pipelines ...types.PipelineConstructorFunc,
-) (types.Output, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (ioutput.Streamed, error) {
 	return e.outputs.Init(conf, mgr, pipelines...)
 }
 
@@ -40,13 +42,13 @@ func (e *Environment) OutputDocs() []docs.ComponentSpec {
 
 // OutputConstructorFromSimple provides a way to define an output constructor
 // without manually initializing processors of the config.
-func OutputConstructorFromSimple(fn func(output.Config, NewManagement) (output.Type, error)) OutputConstructor {
-	return func(c output.Config, nm NewManagement, pcf ...types.PipelineConstructorFunc) (output.Type, error) {
+func OutputConstructorFromSimple(fn func(output.Config, NewManagement) (ioutput.Streamed, error)) OutputConstructor {
+	return func(c output.Config, nm NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
 		o, err := fn(c, nm)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create output '%v': %w", c.Type, err)
+			return nil, err
 		}
-		pcf = output.AppendProcessorsFromConfig(c, nm, nm.Logger(), nm.Metrics(), pcf...)
+		pcf = output.AppendProcessorsFromConfig(c, nm, pcf...)
 		return output.WrapWithPipelines(o, pcf...)
 	}
 }
@@ -54,7 +56,7 @@ func OutputConstructorFromSimple(fn func(output.Config, NewManagement) (output.T
 //------------------------------------------------------------------------------
 
 // OutputConstructor constructs an output component.
-type OutputConstructor func(output.Config, NewManagement, ...types.PipelineConstructorFunc) (output.Type, error)
+type OutputConstructor func(output.Config, NewManagement, ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error)
 
 type outputSpec struct {
 	constructor OutputConstructor
@@ -69,9 +71,13 @@ type OutputSet struct {
 // Add a new output to this set by providing a spec (name, documentation, and
 // constructor).
 func (s *OutputSet) Add(constructor OutputConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]outputSpec{}
 	}
+	spec.Type = docs.TypeOutput
 	s.specs[spec.Name] = outputSpec{
 		constructor: constructor,
 		spec:        spec,
@@ -84,17 +90,15 @@ func (s *OutputSet) Add(constructor OutputConstructor, spec docs.ComponentSpec) 
 func (s *OutputSet) Init(
 	conf output.Config,
 	mgr NewManagement,
-	pipelines ...types.PipelineConstructorFunc,
-) (types.Output, error) {
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (ioutput.Streamed, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		// TODO: V4 Remove this
-		if ctor, exists := output.GetDeprecatedPlugin(conf.Type); exists {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics(), pipelines...)
-		}
-		return nil, types.ErrInvalidOutputType
+		return nil, component.ErrInvalidType("output", conf.Type)
 	}
-	return spec.constructor(conf, mgr, pipelines...)
+	c, err := spec.constructor(conf, mgr, pipelines...)
+	err = wrapComponentErr(mgr, "output", err)
+	return c, err
 }
 
 // Docs returns a slice of output specs, which document each method.

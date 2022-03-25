@@ -1,9 +1,9 @@
 package plugins
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // Register adds any native Bloblang methods and functions to the global sets
@@ -45,7 +45,7 @@ func Register() error {
 				return exec.Exec(query.FunctionContext{
 					Vars:     map[string]interface{}{},
 					Maps:     exec.Maps(),
-					MsgBatch: message.New(nil),
+					MsgBatch: message.QuickBatch(nil),
 				}.WithValue(v))
 			}, target.QueryTargets), nil
 		},

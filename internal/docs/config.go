@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/interop/plugins"
 	"github.com/Jeffail/gabs/v2"
 )
 
@@ -64,15 +63,18 @@ var labelField = FieldString(
 func reservedFieldsByType(t Type) map[string]FieldSpec {
 	m := map[string]FieldSpec{
 		"type":   FieldString("type", ""),
-		"plugin": FieldCommon("plugin", "").HasType(FieldTypeObject),
+		"plugin": FieldObject("plugin", ""),
 	}
 	if t == TypeInput || t == TypeOutput {
-		m["processors"] = FieldCommon("processors", "").Array().HasType(FieldTypeProcessor).OmitWhen(func(field, _ interface{}) (string, bool) {
+		m["processors"] = FieldProcessor("processors", "").Array().OmitWhen(func(field, _ interface{}) (string, bool) {
 			if arr, ok := field.([]interface{}); ok && len(arr) == 0 {
 				return "field processors is empty and can be removed", true
 			}
 			return "", false
 		})
+	}
+	if t == TypeMetrics {
+		m["mapping"] = MetricsMappingFieldSpec("mapping")
 	}
 	if _, isLabelType := map[Type]struct{}{
 		TypeInput:     {},
@@ -86,21 +88,47 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 	return m
 }
 
-// TODO: V4 remove this as it's not needed.
-func refreshOldPlugins() {
-	plugins.FlushNameTypes(func(nt [2]string) {
-		RegisterDocs(ComponentSpec{
-			Name:   nt[0],
-			Type:   Type(nt[1]),
-			Plugin: true,
-			Status: StatusExperimental,
-		})
-	})
+func defaultTypeByType(docProvider Provider, t Type) string {
+	if docProvider == nil {
+		docProvider = globalProvider
+	}
+	switch t {
+	case TypeBuffer:
+		return "none"
+	case TypeInput:
+		return "stdin"
+	case TypeMetrics:
+		// If prometheus isn't imported then fall back to none
+		if _, exists := docProvider.GetDocs("prometheus", TypeMetrics); exists {
+			return "prometheus"
+		}
+		return "none"
+	case TypeOutput:
+		return "stdout"
+	case TypeTracer:
+		return "none"
+	// No defaults for the following
+	case TypeCache:
+		return ""
+	case TypeProcessor:
+		return ""
+	case TypeRateLimit:
+		return ""
+	}
+	return ""
+}
+
+// DefaultTypeOf returns the standard default implementation of a given
+// component type, which is the implementation used in a stream when no config
+// for the component is present. Only some component types have a default, for
+// those that do not an empty string is returned.
+func DefaultTypeOf(t Type) string {
+	return defaultTypeByType(nil, t)
 }
 
 // GetInferenceCandidate checks a generic config structure for a component and
 // returns either the inferred type name or an error if one cannot be inferred.
-func GetInferenceCandidate(docProvider Provider, t Type, defaultType string, raw interface{}) (string, ComponentSpec, error) {
+func GetInferenceCandidate(docProvider Provider, t Type, raw interface{}) (string, ComponentSpec, error) {
 	m, ok := raw.(map[string]interface{})
 	if !ok {
 		return "", ComponentSpec{}, fmt.Errorf("invalid config value %T, expected object", raw)
@@ -119,10 +147,10 @@ func GetInferenceCandidate(docProvider Provider, t Type, defaultType string, raw
 		keys = append(keys, k)
 	}
 
-	return getInferenceCandidateFromList(docProvider, t, defaultType, keys)
+	return getInferenceCandidateFromList(docProvider, t, keys)
 }
 
-func getInferenceCandidateFromList(docProvider Provider, t Type, defaultType string, l []string) (string, ComponentSpec, error) {
+func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (string, ComponentSpec, error) {
 	ignore := reservedFieldsByType(t)
 
 	var candidates []string
@@ -146,82 +174,21 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, defaultType str
 		}
 	}
 
-	if len(candidates) == 0 && len(defaultType) > 0 {
-		// A totally empty component config results in the default.
-		// TODO: V4 Disable this
+	if len(candidates) == 0 {
+		defaultType := defaultTypeByType(docProvider, t)
 		if spec, exists := GetDocs(docProvider, defaultType, t); exists {
 			return defaultType, spec, nil
+		}
+		if inferred == "" {
+			return "", ComponentSpec{}, fmt.Errorf("an explicit %v type must be specified", string(t))
 		}
 	}
 
 	if inferred == "" {
 		sort.Strings(candidates)
-		return "", ComponentSpec{}, fmt.Errorf("unable to infer %v type, candidates were: %v", string(t), candidates)
+		return "", ComponentSpec{}, fmt.Errorf("unable to infer %v type from candidates: %v", string(t), candidates)
 	}
 	return inferred, inferredSpec, nil
-}
-
-// TODO: V4 Remove this.
-func sanitiseConditionConfig(raw interface{}, removeDeprecated bool) error {
-	// This is a nasty hack until Benthos v4.
-	m, ok := raw.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("expected object configuration type, found: %T", raw)
-	}
-	typeStr, ok := m["type"]
-	if !ok {
-		return nil
-	}
-	for k := range m {
-		if k == typeStr || k == "type" || k == "plugin" {
-			continue
-		}
-		delete(m, k)
-	}
-	return nil
-}
-
-// SanitiseComponentConfig reduces a raw component configuration into only the
-// fields for the component name configured.
-//
-// TODO: V4 Remove this
-func SanitiseComponentConfig(componentType Type, raw interface{}, filter FieldFilter) error {
-	if componentType == "condition" {
-		return sanitiseConditionConfig(raw, false)
-	}
-
-	name, spec, err := GetInferenceCandidate(globalProvider, componentType, "", raw)
-	if err != nil {
-		return err
-	}
-
-	m, ok := raw.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("expected object configuration type, found: %T", raw)
-	}
-
-	if componentConfRaw, exists := m[name]; exists {
-		spec.Config.sanitise(componentConfRaw, filter)
-	}
-
-	reservedFields := reservedFieldsByType(componentType)
-	for k, v := range m {
-		if k == name {
-			continue
-		}
-		spec, exists := reservedFields[k]
-		if !exists {
-			delete(m, k)
-		}
-		if _, omit := spec.shouldOmit(v, m); omit {
-			delete(m, k)
-		}
-	}
-
-	for name, fieldSpec := range reservedFields {
-		fieldSpec.sanitise(m[name], filter)
-	}
-	return nil
 }
 
 // SanitiseConfig contains fields describing the desired behaviour of the config

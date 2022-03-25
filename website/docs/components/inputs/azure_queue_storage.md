@@ -31,7 +31,7 @@ Introduced in version 3.42.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
@@ -46,7 +46,7 @@ input:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -113,11 +113,20 @@ Default: `""`
 
 ### `queue_name`
 
-The name of the target Storage queue.
+The name of the source storage queue.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 Default: `""`  
+
+```yml
+# Examples
+
+queue_name: foo_queue
+
+queue_name: ${! env("MESSAGE_TYPE").lowercase() }
+```
 
 ### `dequeue_visibility_timeout`
 

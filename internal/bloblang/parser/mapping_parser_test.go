@@ -6,17 +6,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestMappingErrors(t *testing.T) {
-	dir, err := os.MkdirTemp("", "benthos_mapping_errors")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	badMapFile := filepath.Join(dir, "bad_map.blobl")
 	noMapsFile := filepath.Join(dir, "no_maps.blobl")
@@ -171,11 +168,7 @@ foo = bar.apply("foo")`, goodMapFile),
 }
 
 func TestMappings(t *testing.T) {
-	dir, err := os.MkdirTemp("", "benthos_mapping")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	goodMapFile := filepath.Join(dir, "foo_map.blobl")
 	require.NoError(t, os.WriteFile(goodMapFile, []byte(`map foo {
@@ -478,11 +471,11 @@ root = this.apply("foo")`, goodMapFile),
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, p := range test.input {
 				part := message.NewPart([]byte(p.Content))
 				for k, v := range p.Meta {
-					part.Metadata().Set(k, v)
+					part.MetaSet(k, v)
 				}
 				msg.Append(part)
 			}
@@ -500,7 +493,7 @@ root = this.apply("foo")`, goodMapFile),
 				Content: string(resPart.Get()),
 				Meta:    map[string]string{},
 			}
-			resPart.Metadata().Iter(func(k, v string) error {
+			_ = resPart.MetaIter(func(k, v string) error {
 				newPart.Meta[k] = v
 				return nil
 			})

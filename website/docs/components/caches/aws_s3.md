@@ -14,9 +14,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Stores each item in an S3 bucket as a file, where an item ID is the path of the
-item within the bucket.
+Stores each item in an S3 bucket as a file, where an item ID is the path of the item within the bucket.
 
 Introduced in version 3.36.0.
 
@@ -28,28 +26,29 @@ Introduced in version 3.36.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 aws_s3:
   bucket: ""
   content_type: application/octet-stream
-  region: eu-west-1
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 aws_s3:
   bucket: ""
   content_type: application/octet-stream
   force_path_style_urls: false
-  timeout: 5s
-  retries: 3
-  region: eu-west-1
+  retries:
+    initial_interval: 1s
+    max_interval: 5s
+    max_elapsed_time: 30s
+  region: ""
   endpoint: ""
   credentials:
     profile: ""
@@ -63,15 +62,7 @@ aws_s3:
 </TabItem>
 </Tabs>
 
-It is not possible to atomically upload S3 objects exclusively when the target
-does not already exist, therefore this cache is not suitable for deduplication.
-
-### Credentials
-
-By default Benthos will use a shared credentials file when connecting to AWS
-services. It's also possible to set them explicitly at the component level,
-allowing you to transfer data across accounts. You can find out more
-[in this document](/docs/guides/cloud/aws).
+It is not possible to atomically upload S3 objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.
 
 ## Fields
 
@@ -81,7 +72,6 @@ The S3 bucket to store items in.
 
 
 Type: `string`  
-Default: `""`  
 
 ### `content_type`
 
@@ -99,21 +89,60 @@ Forces the client API to use path style URLs, which helps when connecting to cus
 Type: `bool`  
 Default: `false`  
 
-### `timeout`
+### `retries`
 
-The maximum period to wait on requests before abandoning it.
+Determine time intervals and cut offs for retry attempts.
+
+
+Type: `object`  
+
+### `retries.initial_interval`
+
+The initial period to wait between retry attempts.
+
+
+Type: `string`  
+Default: `"1s"`  
+
+```yml
+# Examples
+
+initial_interval: 50ms
+
+initial_interval: 1s
+```
+
+### `retries.max_interval`
+
+The maximum period to wait between retry attempts
 
 
 Type: `string`  
 Default: `"5s"`  
 
-### `retries`
+```yml
+# Examples
 
-The maximum number of retry attempts to make before abandoning a request.
+max_interval: 5s
+
+max_interval: 1m
+```
+
+### `retries.max_elapsed_time`
+
+The maximum overall period of time to spend on retry attempts before the request is aborted.
 
 
-Type: `int`  
-Default: `3`  
+Type: `string`  
+Default: `"30s"`  
+
+```yml
+# Examples
+
+max_elapsed_time: 1m
+
+max_elapsed_time: 1h
+```
 
 ### `region`
 
@@ -121,7 +150,7 @@ The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

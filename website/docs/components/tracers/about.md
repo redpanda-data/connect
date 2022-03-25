@@ -16,9 +16,8 @@ A tracer config section looks like this:
 tracer:
   jaeger:
     agent_address: localhost:6831
-    sampler_param: 1
     sampler_type: const
-    service_name: benthos
+    sampler_param: 1
 ```
 
 WARNING: Although the configuration spec of this component is stable the format of spans, tags and logs created by Benthos is subject to change as it is tuned for improvement.

@@ -20,36 +20,13 @@ Executes an AWK program on messages. This processor is very powerful as it
 offers a range of [custom functions](#awk-functions) for querying and mutating
 message contents and metadata.
 
-
-<Tabs defaultValue="common" values={[
-  { label: 'Common', value: 'common', },
-  { label: 'Advanced', value: 'advanced', },
-]}>
-
-<TabItem value="common">
-
-```yaml
-# Common config fields, showing default values
+```yml
+# Config fields, showing default values
 label: ""
 awk:
-  codec: text
-  program: BEGIN { x = 0 } { print $0, x; x++ }
+  codec: ""
+  program: ""
 ```
-
-</TabItem>
-<TabItem value="advanced">
-
-```yaml
-# All config fields, showing default values
-label: ""
-awk:
-  codec: text
-  program: BEGIN { x = 0 } { print $0, x; x++ }
-  parts: []
-```
-
-</TabItem>
-</Tabs>
 
 Works by feeding message contents as the program input based on a chosen
 [codec](#codecs) and replaces the contents of each message with the result. If
@@ -74,7 +51,7 @@ A [codec](#codecs) defines how messages should be inserted into the AWK program 
 
 
 Type: `string`  
-Default: `"text"`  
+Default: `""`  
 Options: `none`, `text`, `json`.
 
 ### `program`
@@ -83,20 +60,7 @@ An AWK program to execute
 
 
 Type: `string`  
-Default: `"BEGIN { x = 0 } { print $0, x; x++ }"`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
+Default: `""`  
 
 ## Examples
 

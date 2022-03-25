@@ -8,12 +8,12 @@ import (
 	"io"
 	"strings"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // WriterDocs is a static field documentation for output codecs.
-var WriterDocs = docs.FieldCommon(
+var WriterDocs = docs.FieldString(
 	"codec", "The way in which the bytes of messages should be written out into the output data stream. It's possible to write lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter.", "lines", "delim:\t", "delim:foobar",
 ).HasAnnotatedOptions(
 	"all-bytes", "Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted.",
@@ -26,7 +26,7 @@ var WriterDocs = docs.FieldCommon(
 
 // Writer is a codec type that reads message parts from a source.
 type Writer interface {
-	Write(context.Context, types.Part) error
+	Write(context.Context, *message.Part) error
 	Close(context.Context) error
 
 	// TODO V4: Remove this, we only have it in place in order to satisfy the
@@ -82,7 +82,7 @@ type allBytesWriter struct {
 	o io.WriteCloser
 }
 
-func (a *allBytesWriter) Write(ctx context.Context, msg types.Part) error {
+func (a *allBytesWriter) Write(ctx context.Context, msg *message.Part) error {
 	_, err := a.o.Write(msg.Get())
 	return err
 }
@@ -109,7 +109,7 @@ func newLinesWriter(w io.WriteCloser) (Writer, error) {
 	return &linesWriter{w: w}, nil
 }
 
-func (l *linesWriter) Write(ctx context.Context, p types.Part) error {
+func (l *linesWriter) Write(ctx context.Context, p *message.Part) error {
 	partBytes := p.Get()
 	if _, err := l.w.Write(partBytes); err != nil {
 		return err
@@ -146,7 +146,7 @@ func newCustomDelimWriter(w io.WriteCloser, delim string) (Writer, error) {
 	return &customDelimWriter{w: w, delim: delimBytes}, nil
 }
 
-func (d *customDelimWriter) Write(ctx context.Context, p types.Part) error {
+func (d *customDelimWriter) Write(ctx context.Context, p *message.Part) error {
 	partBytes := p.Get()
 	if _, err := d.w.Write(partBytes); err != nil {
 		return err

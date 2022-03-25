@@ -15,10 +15,7 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Stores consumed messages in memory and acknowledges them at the input level.
-During shutdown Benthos will make a best attempt at flushing all remaining
-messages before exiting cleanly.
+Stores consumed messages in memory and acknowledges them at the input level. During shutdown Benthos will make a best attempt at flushing all remaining messages before exiting cleanly.
 
 
 <Tabs defaultValue="common" values={[
@@ -28,7 +25,7 @@ messages before exiting cleanly.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 buffer:
   memory:
@@ -44,7 +41,7 @@ buffer:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 buffer:
   memory:
@@ -61,24 +58,17 @@ buffer:
 </TabItem>
 </Tabs>
 
-This buffer is appropriate when consuming messages from inputs that do not
-gracefully handle back pressure and where delivery guarantees aren't critical.
+This buffer is appropriate when consuming messages from inputs that do not gracefully handle back pressure and where delivery guarantees aren't critical.
 
-This buffer has a configurable limit, where consumption will be stopped with
-back pressure upstream if the total size of messages in the buffer reaches this
-amount. Since this calculation is only an estimate, and the real size of
-messages in RAM is always higher, it is recommended to set the limit
-significantly below the amount of RAM available.
+This buffer has a configurable limit, where consumption will be stopped with back pressure upstream if the total size of messages in the buffer reaches this amount. Since this calculation is only an estimate, and the real size of messages in RAM is always higher, it is recommended to set the limit significantly below the amount of RAM available.
 
 ## Delivery Guarantees
 
-This buffer intentionally weakens the delivery guarantees of the pipeline and
-therefore should never be used in places where data loss is unacceptable.
+This buffer intentionally weakens the delivery guarantees of the pipeline and therefore should never be used in places where data loss is unacceptable.
 
 ## Batching
 
-It is possible to batch up messages sent from this buffer using a
-[batch policy](/docs/configuration/batching#batch-policy).
+It is possible to batch up messages sent from this buffer using a [batch policy](/docs/configuration/batching#batch-policy).
 
 ## Fields
 
@@ -129,7 +119,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -147,7 +137,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -159,9 +149,8 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

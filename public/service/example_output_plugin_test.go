@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/public/service"
+	"github.com/benthosdev/benthos/v4/public/service"
 
 	// Import all standard Benthos components
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 type BlueOutput struct{}

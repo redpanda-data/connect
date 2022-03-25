@@ -6,9 +6,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestFunctions(t *testing.T) {
@@ -90,9 +91,9 @@ func TestFunctions(t *testing.T) {
 			},
 		},
 		"check meta function error": {
-			input: mustFunc("meta", "foo"),
-			vars:  map[string]interface{}{},
-			err:   `metadata value 'foo' not found`,
+			input:  mustFunc("meta", "foo"),
+			vars:   map[string]interface{}{},
+			output: nil,
 		},
 		"check metadata function object": {
 			input:  mustFunc("meta", "foo"),
@@ -112,6 +113,34 @@ func TestFunctions(t *testing.T) {
 				}},
 			},
 		},
+		"check range start > end": {
+			input: mustFunc("range", mustFunc("var", "start"), 0, 1),
+			vars: map[string]interface{}{
+				"start": 10,
+			},
+			err: `with positive step arg start (10) must be < stop (0)`,
+		},
+		"check range start >= end": {
+			input: mustFunc("range", mustFunc("var", "start"), 10, 1),
+			vars: map[string]interface{}{
+				"start": 10,
+			},
+			err: `with positive step arg start (10) must be < stop (10)`,
+		},
+		"check range zero step": {
+			input: mustFunc("range", mustFunc("var", "start"), 100, 0),
+			vars: map[string]interface{}{
+				"start": 10,
+			},
+			err: `step must be greater than or less than 0`,
+		},
+		"check range start < end neg step": {
+			input: mustFunc("range", mustFunc("var", "start"), 100, -1),
+			vars: map[string]interface{}{
+				"start": 10,
+			},
+			err: `with negative step arg stop (100) must be <= start (10)`,
+		},
 	}
 
 	for name, test := range tests {
@@ -119,12 +148,12 @@ func TestFunctions(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)
@@ -136,7 +165,7 @@ func TestFunctions(t *testing.T) {
 					Maps:     map[string]Function{},
 					Index:    test.index,
 					MsgBatch: msg,
-					NewMsg:   msg.Get(test.index),
+					NewMeta:  msg.Get(test.index),
 				})
 				if len(test.err) > 0 {
 					require.EqualError(t, err, test.err)

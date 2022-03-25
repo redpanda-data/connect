@@ -14,8 +14,8 @@ builds:
       - CGO_ENABLED=0
     ldflags: >
       -s -w
-      -X github.com/Jeffail/benthos/v3/lib/service.Version={{.Version}}
-      -X github.com/Jeffail/benthos/v3/lib/service.DateBuilt={{.Date}}
+      -X github.com/benthosdev/benthos/v4/internal/cli.Version={{.Version}}
+      -X github.com/benthosdev/benthos/v4/internal/cli.DateBuilt={{.Date}}
   - id: benthos-lambda
     main: cmd/serverless/benthos-lambda/main.go
     binary: benthos-lambda
@@ -49,7 +49,7 @@ archives:
 dist: target/dist
 release:
   github:
-    owner: Jeffail
+    owner: benthosdev
     name: benthos
   prerelease: auto
   disable: false

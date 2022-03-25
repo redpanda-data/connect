@@ -3,9 +3,10 @@ package metadata
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/lib/message/metadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestMetadataFilter(t *testing.T) {
@@ -106,13 +107,16 @@ func TestMetadataFilter(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			meta := metadata.New(test.inputMeta)
+			part := message.NewPart(nil)
+			for k, v := range test.inputMeta {
+				part.MetaSet(k, v)
+			}
 
 			filter, err := test.conf.CreateFilter()
 			require.NoError(t, err)
 
 			outputMeta := map[string]string{}
-			require.NoError(t, meta.Iter(func(k, v string) error {
+			require.NoError(t, part.MetaIter(func(k, v string) error {
 				if filter.Match(k) {
 					outputMeta[k] = v
 					return nil

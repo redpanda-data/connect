@@ -18,17 +18,16 @@ import TabItem from '@theme/TabItem';
 
 Send messages over a Nanomsg socket.
 
-```yaml
+```yml
 # Config fields, showing default values
 output:
   label: ""
   nanomsg:
-    urls:
-      - tcp://localhost:5556
+    urls: []
     bind: false
     socket_type: PUSH
     poll_timeout: 5s
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 Currently only PUSH and PUB sockets are supported.
@@ -47,9 +46,9 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["tcp://localhost:5556"]`  
+Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 urls:
@@ -87,6 +86,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 

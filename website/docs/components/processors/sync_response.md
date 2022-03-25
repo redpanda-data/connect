@@ -19,7 +19,7 @@ import TabItem from '@theme/TabItem';
 Adds the payload in its current state as a synchronous response to the input
 source, where it is dealt with according to that specific input type.
 
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 sync_response: {}

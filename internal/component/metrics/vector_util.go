@@ -1,16 +1,15 @@
 package metrics
 
-import "github.com/Jeffail/benthos/v3/lib/metrics"
-
 type fCounterVec struct {
-	f func([]string) metrics.StatCounter
+	f func(...string) StatCounter
 }
 
-func (f *fCounterVec) With(labels ...string) metrics.StatCounter {
-	return f.f(labels)
+func (f *fCounterVec) With(labels ...string) StatCounter {
+	return f.f(labels...)
 }
 
-func fakeCounterVec(f func([]string) metrics.StatCounter) metrics.StatCounterVec {
+// FakeCounterVec returns a counter vec implementation that ignores labels.
+func FakeCounterVec(f func(...string) StatCounter) StatCounterVec {
 	return &fCounterVec{
 		f: f,
 	}
@@ -19,14 +18,15 @@ func fakeCounterVec(f func([]string) metrics.StatCounter) metrics.StatCounterVec
 //------------------------------------------------------------------------------
 
 type fTimerVec struct {
-	f func([]string) metrics.StatTimer
+	f func(...string) StatTimer
 }
 
-func (f *fTimerVec) With(labels ...string) metrics.StatTimer {
-	return f.f(labels)
+func (f *fTimerVec) With(labels ...string) StatTimer {
+	return f.f(labels...)
 }
 
-func fakeTimerVec(f func([]string) metrics.StatTimer) metrics.StatTimerVec {
+// FakeTimerVec returns a timer vec implementation that ignores labels.
+func FakeTimerVec(f func(...string) StatTimer) StatTimerVec {
 	return &fTimerVec{
 		f: f,
 	}
@@ -35,14 +35,15 @@ func fakeTimerVec(f func([]string) metrics.StatTimer) metrics.StatTimerVec {
 //------------------------------------------------------------------------------
 
 type fGaugeVec struct {
-	f func([]string) metrics.StatGauge
+	f func(...string) StatGauge
 }
 
-func (f *fGaugeVec) With(labels ...string) metrics.StatGauge {
-	return f.f(labels)
+func (f *fGaugeVec) With(labels ...string) StatGauge {
+	return f.f(labels...)
 }
 
-func fakeGaugeVec(f func([]string) metrics.StatGauge) metrics.StatGaugeVec {
+// FakeGaugeVec returns a gauge vec implementation that ignores labels.
+func FakeGaugeVec(f func(...string) StatGauge) StatGaugeVec {
 	return &fGaugeVec{
 		f: f,
 	}

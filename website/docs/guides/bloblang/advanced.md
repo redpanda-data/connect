@@ -128,7 +128,7 @@ A common and simple use case is to simply flatten documents and write out the co
 ```coffee
 map escape_csv {
   root = if this.re_match("[\"\n,]+") {
-    "\"" + this.replace("\"", "\"\"") + "\""
+    "\"" + this.replace_all("\"", "\"\"") + "\""
   } else {
     this
   }

@@ -14,15 +14,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
 
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
@@ -32,7 +34,7 @@ import (
 
 // CheckSkip marks a test to be skipped unless the integration test has been
 // specifically requested using the -run flag.
-func CheckSkip(t *testing.T) {
+func CheckSkip(t testing.TB) {
 	if m := flag.Lookup("test.run").Value.String(); m == "" || regexp.MustCompile(strings.Split(m, "/")[0]).FindString(t.Name()) == "" {
 		t.Skip("Skipping as execution was not requested explicitly using go test -run ^TestIntegration$")
 	}
@@ -109,8 +111,8 @@ type streamTestEnvironment struct {
 	timeout time.Duration
 	ctx     context.Context
 	log     log.Modular
-	stats   metrics.Type
-	mgr     types.Manager
+	stats   *metrics.Namespaced
+	mgr     interop.Manager
 
 	allowDuplicateMessages bool
 
@@ -207,7 +209,11 @@ func StreamTestOptLogging(level string) StreamTestOptFunc {
 	return func(env *streamTestEnvironment) {
 		logConf := log.NewConfig()
 		logConf.LogLevel = level
-		env.log = log.New(os.Stdout, logConf)
+		var err error
+		env.log, err = log.NewV2(os.Stdout, logConf)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -423,9 +429,9 @@ func namedBench(name string, test streamBenchDefinitionFn) StreamBenchDefinition
 
 func initConnectors(
 	t testing.TB,
-	trans <-chan types.Transaction,
+	trans <-chan message.Transaction,
 	env *streamTestEnvironment,
-) (types.Input, types.Output) {
+) (input iinput.Streamed, output ioutput.Streamed) {
 	t.Helper()
 
 	out := initOutput(t, trans, env)
@@ -433,7 +439,7 @@ func initConnectors(
 	return in, out
 }
 
-func initInput(t testing.TB, env *streamTestEnvironment) types.Input {
+func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -443,7 +449,7 @@ func initInput(t testing.TB, env *streamTestEnvironment) types.Input {
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.Lint(confBytes, s)
+	lints, err := config.LintBytes(docs.NewLintContext(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -462,7 +468,7 @@ func initInput(t testing.TB, env *streamTestEnvironment) types.Input {
 	return input
 }
 
-func initOutput(t testing.TB, trans <-chan types.Transaction, env *streamTestEnvironment) types.Output {
+func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestEnvironment) ioutput.Streamed {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -472,7 +478,7 @@ func initOutput(t testing.TB, trans <-chan types.Transaction, env *streamTestEnv
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.Lint(confBytes, s)
+	lints, err := config.LintBytes(docs.NewLintContext(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
@@ -494,7 +500,7 @@ func initOutput(t testing.TB, trans <-chan types.Transaction, env *streamTestEnv
 	return output
 }
 
-func closeConnectors(t testing.TB, input types.Input, output types.Output) {
+func closeConnectors(t testing.TB, input iinput.Streamed, output ioutput.Streamed) {
 	if output != nil {
 		output.CloseAsync()
 		require.NoError(t, output.WaitForClose(time.Second*10))
@@ -508,7 +514,7 @@ func closeConnectors(t testing.TB, input types.Input, output types.Output) {
 func sendMessage(
 	ctx context.Context,
 	t testing.TB,
-	tranChan chan types.Transaction,
+	tranChan chan message.Transaction,
 	content string,
 	metadata ...string,
 ) error {
@@ -516,22 +522,22 @@ func sendMessage(
 
 	p := message.NewPart([]byte(content))
 	for i := 0; i < len(metadata); i += 2 {
-		p.Metadata().Set(metadata[i], metadata[i+1])
+		p.MetaSet(metadata[i], metadata[i+1])
 	}
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	msg.Append(p)
 
-	resChan := make(chan types.Response)
+	resChan := make(chan error)
 
 	select {
-	case tranChan <- types.NewTransaction(msg, resChan):
+	case tranChan <- message.NewTransaction(msg, resChan):
 	case <-ctx.Done():
 		t.Fatal("timed out on send")
 	}
 
 	select {
 	case res := <-resChan:
-		return res.Error()
+		return res
 	case <-ctx.Done():
 	}
 	t.Fatal("timed out on response")
@@ -541,27 +547,27 @@ func sendMessage(
 func sendBatch(
 	ctx context.Context,
 	t testing.TB,
-	tranChan chan types.Transaction,
+	tranChan chan message.Transaction,
 	content []string,
 ) error {
 	t.Helper()
 
-	msg := message.New(nil)
+	msg := message.QuickBatch(nil)
 	for _, payload := range content {
 		msg.Append(message.NewPart([]byte(payload)))
 	}
 
-	resChan := make(chan types.Response)
+	resChan := make(chan error)
 
 	select {
-	case tranChan <- types.NewTransaction(msg, resChan):
+	case tranChan <- message.NewTransaction(msg, resChan):
 	case <-ctx.Done():
 		t.Fatal("timed out on send")
 	}
 
 	select {
 	case res := <-resChan:
-		return res.Error()
+		return res
 	case <-ctx.Done():
 	}
 
@@ -572,34 +578,21 @@ func sendBatch(
 func receiveMessage(
 	ctx context.Context,
 	t testing.TB,
-	tranChan <-chan types.Transaction,
+	tranChan <-chan message.Transaction,
 	err error,
-) types.Part {
+) *message.Part {
 	t.Helper()
 
-	b, resChan := receiveMessageNoRes(ctx, t, tranChan)
-	sendResponse(ctx, t, resChan, err)
+	b, ackFn := receiveMessageNoRes(ctx, t, tranChan)
+	require.NoError(t, ackFn(ctx, err))
 	return b
 }
 
-func sendResponse(ctx context.Context, t testing.TB, resChan chan<- types.Response, err error) {
-	var res types.Response = response.NewAck()
-	if err != nil {
-		res = response.NewError(err)
-	}
-
-	select {
-	case resChan <- res:
-	case <-ctx.Done():
-		t.Fatal("timed out on response")
-	}
-}
-
 // nolint:gocritic // Ignore unnamedResult false positive
-func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan types.Transaction) (types.Part, chan<- types.Response) {
+func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, func(context.Context, error) error) {
 	t.Helper()
 
-	var tran types.Transaction
+	var tran message.Transaction
 	var open bool
 	select {
 	case tran, open = <-tranChan:
@@ -610,26 +603,26 @@ func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan type
 	require.True(t, open)
 	require.Equal(t, tran.Payload.Len(), 1)
 
-	return tran.Payload.Get(0), tran.ResponseChan
+	return tran.Payload.Get(0), tran.Ack
 }
 
-func messageMatch(t testing.TB, p types.Part, content string, metadata ...string) {
+func messageMatch(t testing.TB, p *message.Part, content string, metadata ...string) {
 	t.Helper()
 
 	assert.Equal(t, content, string(p.Get()))
 
 	allMetadata := map[string]string{}
-	p.Metadata().Iter(func(k, v string) error {
+	_ = p.MetaIter(func(k, v string) error {
 		allMetadata[k] = v
 		return nil
 	})
 
 	for i := 0; i < len(metadata); i += 2 {
-		assert.Equal(t, metadata[i+1], p.Metadata().Get(metadata[i]), fmt.Sprintf("metadata: %v", allMetadata))
+		assert.Equal(t, metadata[i+1], p.MetaGet(metadata[i]), fmt.Sprintf("metadata: %v", allMetadata))
 	}
 }
 
-func messageInSet(t testing.TB, pop, allowDupes bool, p types.Part, set map[string][]string) {
+func messageInSet(t testing.TB, pop, allowDupes bool, p *message.Part, set map[string][]string) {
 	t.Helper()
 
 	metadata, exists := set[string(p.Get())]
@@ -639,7 +632,7 @@ func messageInSet(t testing.TB, pop, allowDupes bool, p types.Part, set map[stri
 	require.True(t, exists, "in set: %v, set: %v", string(p.Get()), set)
 
 	for i := 0; i < len(metadata); i += 2 {
-		assert.Equal(t, metadata[i+1], p.Metadata().Get(metadata[i]))
+		assert.Equal(t, metadata[i+1], p.MetaGet(metadata[i]))
 	}
 
 	if pop {

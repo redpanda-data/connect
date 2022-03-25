@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/vmihailenco/msgpack/v5"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func processorConfig() *service.ConfigSpec {

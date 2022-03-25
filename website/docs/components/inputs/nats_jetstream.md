@@ -30,33 +30,36 @@ Introduced in version 3.46.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   nats_jetstream:
-    urls:
-      - nats://127.0.0.1:4222
+    urls: []
     queue: ""
     subject: ""
     durable: ""
+    stream: ""
+    bind: false
     deliver: all
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
   nats_jetstream:
-    urls:
-      - nats://127.0.0.1:4222
+    urls: []
     queue: ""
     subject: ""
     durable: ""
+    stream: ""
+    bind: false
     deliver: all
+    ack_wait: 30s
     max_ack_pending: 1024
     tls:
       enabled: false
@@ -120,7 +123,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 urls:
@@ -139,12 +142,12 @@ Type: `string`
 
 ### `subject`
 
-A subject to consume from. Supports wildcards for consuming multiple subjects.
+A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.
 
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 subject: foo.bar.baz
@@ -163,6 +166,20 @@ Preserve the state of your consumer under a durable name.
 
 Type: `string`  
 
+### `stream`
+
+A stream to consume from. Either a subject or stream must be specified.
+
+
+Type: `string`  
+
+### `bind`
+
+Indicates that the subscription should use an existing consumer.
+
+
+Type: `bool`  
+
 ### `deliver`
 
 Determines which messages to deliver when consuming without a durable subscriber.
@@ -176,6 +193,22 @@ Default: `"all"`
 | `all` | Deliver all available messages. |
 | `last` | Deliver starting with the last published messages. |
 
+
+### `ack_wait`
+
+The maximum amount of time NATS server should wait for an ack from consumer.
+
+
+Type: `string`  
+Default: `"30s"`  
+
+```yml
+# Examples
+
+ack_wait: 100ms
+
+ack_wait: 5m
+```
 
 ### `max_ack_pending`
 
@@ -225,7 +258,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -242,7 +275,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -255,7 +288,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -313,7 +346,7 @@ An optional file containing a NKey seed.
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 nkey_file: ./seed.nk
@@ -326,7 +359,7 @@ An optional file containing user credentials which consist of an user JWT and co
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 user_credentials_file: ./user.creds

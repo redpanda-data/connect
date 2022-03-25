@@ -4,20 +4,21 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestCachePluginWithConfig(t *testing.T) {
@@ -59,11 +60,12 @@ test_cache_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, cacheConfStr, string(cacheConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewCache(cacheConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -98,11 +100,12 @@ test_cache_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, cacheConfStr, string(cacheConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewCache(cacheConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -145,11 +148,12 @@ test_input_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	_, err = mgr.NewInput(inConf, false)
-	assert.EqualError(t, err, "failed to create input 'test_input_plugin_with_config': this is a test error")
+	_, err = mgr.NewInput(inConf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -184,11 +188,12 @@ test_input_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	_, err = mgr.NewInput(inConf, false)
-	assert.EqualError(t, err, "failed to create input 'test_input_plugin_without_config': this is a test error")
+	_, err = mgr.NewInput(inConf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -231,11 +236,12 @@ test_output_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
-	assert.EqualError(t, err, "failed to create output 'test_output_plugin_with_config': this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -270,11 +276,12 @@ test_output_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
-	assert.EqualError(t, err, "failed to create output 'test_output_plugin_without_config': this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -320,11 +327,12 @@ test_batch_output_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
-	assert.EqualError(t, err, "failed to create output 'test_batch_output_plugin_with_config': this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, 21, initConf.Count)
@@ -360,11 +368,12 @@ test_batch_output_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
-	assert.EqualError(t, err, "failed to create output 'test_batch_output_plugin_without_config': this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -407,11 +416,12 @@ test_processor_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -446,11 +456,12 @@ test_processor_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -493,11 +504,12 @@ test_batch_processor_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -532,11 +544,12 @@ test_batch_processor_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -579,11 +592,12 @@ test_rate_limit_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewRateLimit(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	require.NotNil(t, initConf)
 	assert.Equal(t, 20, initConf.A)
 	assert.Equal(t, "foo", initLabel)
@@ -618,10 +632,11 @@ test_rate_limit_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewConfig(), types.NoopMgr(), log.Noop(), metrics.Noop())
+	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.NewRateLimit(inConf)
-	assert.EqualError(t, err, "this is a test error")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "this is a test error")
 	assert.Equal(t, "foo", initLabel)
 }

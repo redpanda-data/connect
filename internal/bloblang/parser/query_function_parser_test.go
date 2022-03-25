@@ -3,15 +3,14 @@ package parser
 import (
 	"os"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestFunctionQueries(t *testing.T) {
@@ -23,12 +22,11 @@ func TestFunctionQueries(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		input      string
-		deprecated bool
-		output     string
-		messages   []easyMsg
-		value      *interface{}
-		index      int
+		input    string
+		output   string
+		messages []easyMsg
+		value    *interface{}
+		index    int
 	}{
 		"without method": {
 			input: `this.without("bar","baz")`,
@@ -224,7 +222,7 @@ bar""")`,
 		},
 		"metadata 2": {
 			input:  `meta("bar")`,
-			output: "",
+			output: "null",
 			messages: []easyMsg{
 				{
 					meta: map[string]string{
@@ -278,7 +276,7 @@ bar""")`,
 		},
 		"metadata 6": {
 			input:  `meta("foo")`,
-			output: ``,
+			output: `null`,
 			index:  1,
 			messages: []easyMsg{
 				{
@@ -323,16 +321,16 @@ bar""")`,
 			output: `test error`,
 			messages: []easyMsg{
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					message.FailFlagKey: "test error",
 				}},
 			},
 		},
 		"error function 2": {
 			input:  `error().from(1)`,
-			output: ``,
+			output: `null`,
 			messages: []easyMsg{
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					message.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -342,7 +340,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					message.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -353,7 +351,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					message.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -362,7 +360,7 @@ bar""")`,
 			output: `true`,
 			messages: []easyMsg{
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					message.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -373,7 +371,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					message.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -384,7 +382,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					message.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -393,7 +391,7 @@ bar""")`,
 			output: `false`,
 			messages: []easyMsg{
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					message.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -403,7 +401,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					message.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -414,7 +412,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{meta: map[string]string{
-					types.FailFlagKey: "test error",
+					message.FailFlagKey: "test error",
 				}},
 			},
 		},
@@ -684,18 +682,18 @@ bar""")`,
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)
 			}
 
-			e, perr := tryParseQuery(test.input, test.deprecated)
+			e, perr := tryParseQuery(test.input)
 			require.Nil(t, perr)
 
 			res := query.ExecToString(e, query.FunctionContext{
@@ -726,11 +724,11 @@ func TestCountersFunction(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		e, perr := tryParseQuery(test[0], false)
+		e, perr := tryParseQuery(test[0])
 		require.Nil(t, perr)
 
 		res := query.ExecToString(e, query.FunctionContext{
-			MsgBatch: message.New(nil),
+			MsgBatch: message.QuickBatch(nil),
 		})
 		assert.Equal(t, test[1], res)
 	}
@@ -740,11 +738,11 @@ func TestUUIDV4Function(t *testing.T) {
 	results := map[string]struct{}{}
 
 	for i := 0; i < 100; i++ {
-		e, perr := tryParseQuery("uuid_v4()", false)
+		e, perr := tryParseQuery("uuid_v4()")
 		require.Nil(t, perr)
 
 		res := query.ExecToString(e, query.FunctionContext{
-			MsgBatch: message.New(nil),
+			MsgBatch: message.QuickBatch(nil),
 		})
 		if _, exists := results[res]; exists {
 			t.Errorf("Duplicate UUID generated: %v", res)
@@ -756,10 +754,10 @@ func TestUUIDV4Function(t *testing.T) {
 func TestTimestamps(t *testing.T) {
 	now := time.Now()
 
-	e, perr := tryParseQuery("timestamp_unix_nano()", false)
+	e, perr := tryParseQuery("timestamp_unix_nano()")
 	require.Nil(t, perr)
 
-	tStamp := query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
+	tStamp := query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
 
 	nanoseconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -772,12 +770,12 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = tryParseQuery("timestamp_unix()", false)
+	e, perr = tryParseQuery("timestamp_unix()")
 	if !assert.Nil(t, perr) {
 		require.NoError(t, perr.Err)
 	}
 
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
+	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
 
 	seconds, err := strconv.ParseInt(tStamp, 10, 64)
 	if err != nil {
@@ -790,12 +788,12 @@ func TestTimestamps(t *testing.T) {
 	}
 
 	now = time.Now()
-	e, perr = tryParseQuery("timestamp_unix()", false)
+	e, perr = tryParseQuery("timestamp_unix()")
 	if !assert.Nil(t, perr) {
 		require.NoError(t, perr.Err)
 	}
 
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
+	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.QuickBatch(nil)})
 
 	var secondsF float64
 	secondsF, err = strconv.ParseFloat(tStamp, 64)
@@ -806,38 +804,5 @@ func TestTimestamps(t *testing.T) {
 
 	if tThen.Sub(now).Seconds() > 5.0 {
 		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
-	}
-
-	now = time.Now()
-	e, perr = tryParseQuery("timestamp()", false)
-	require.Nil(t, perr)
-
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
-
-	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if tThen.Sub(now).Seconds() > 5.0 {
-		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
-	}
-
-	now = time.Now()
-	e, perr = tryParseQuery("timestamp_utc()", false)
-	require.Nil(t, perr)
-
-	tStamp = query.ExecToString(e, query.FunctionContext{MsgBatch: message.New(nil)})
-
-	tThen, err = time.Parse("Mon Jan 2 15:04:05 -0700 MST 2006", tStamp)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if tThen.Sub(now).Seconds() > 5.0 {
-		t.Errorf("Timestamps too far out of sync: %v and %v", tThen, now)
-	}
-	if !strings.Contains(tStamp, "UTC") {
-		t.Errorf("Non-UTC timezone detected: %v", tStamp)
 	}
 }

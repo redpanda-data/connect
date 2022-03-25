@@ -3,7 +3,7 @@ package docs
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
+	"github.com/benthosdev/benthos/v4/internal/bloblang"
 )
 
 // FieldType represents a field type.
@@ -23,7 +23,6 @@ var (
 	FieldTypeInput     FieldType = "input"
 	FieldTypeBuffer    FieldType = "buffer"
 	FieldTypeCache     FieldType = "cache"
-	FieldTypeCondition FieldType = "condition"
 	FieldTypeProcessor FieldType = "processor"
 	FieldTypeRateLimit FieldType = "rate_limit"
 	FieldTypeOutput    FieldType = "output"
@@ -40,9 +39,6 @@ func (t FieldType) IsCoreComponent() (Type, bool) {
 		return TypeBuffer, true
 	case FieldTypeCache:
 		return TypeCache, true
-	case FieldTypeCondition:
-		// TODO: V4 Remove this
-		return "condition", true
 	case FieldTypeProcessor:
 		return TypeProcessor, true
 	case FieldTypeRateLimit:
@@ -165,6 +161,15 @@ func (f FieldSpec) Advanced() FieldSpec {
 	return f
 }
 
+// Deprecated marks this field as being deprecated.
+func (f FieldSpec) Deprecated() FieldSpec {
+	f.IsDeprecated = true
+	for i, v := range f.Children {
+		f.Children[i] = v.Deprecated()
+	}
+	return f
+}
+
 // Array determines that this field is an array of the field type.
 func (f FieldSpec) Array() FieldSpec {
 	f.Kind = KindArray
@@ -268,7 +273,7 @@ func (f FieldSpec) LintOptions() FieldSpec {
 	f.customLintFn = func(ctx LintContext, line, col int, value interface{}) []Lint {
 		str, ok := value.(string)
 		if !ok {
-			return []Lint{NewLintWarning(line, fmt.Sprintf("expected string value, got %T", value))}
+			return nil
 		}
 		if len(f.Options) > 0 {
 			for _, optStr := range f.Options {
@@ -310,63 +315,89 @@ func (f FieldSpec) GetLintFunc() LintFunc {
 	return nil
 }
 
-func (f FieldSpec) shouldOmit(field, parent interface{}) (string, bool) {
-	if f.omitWhenFn == nil {
-		return "", false
-	}
-	return f.omitWhenFn(field, parent)
+// FieldAnything returns a field spec for any typed field.
+func FieldAnything(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeUnknown)
 }
 
 // FieldObject returns a field spec for an object typed field.
 func FieldObject(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeObject)
+	return newField(name, description, examples...).HasType(FieldTypeObject)
 }
 
 // FieldString returns a field spec for a common string typed field.
 func FieldString(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeString)
+	return newField(name, description, examples...).HasType(FieldTypeString)
 }
 
 // FieldInterpolatedString returns a field spec for a string typed field
 // supporting dynamic interpolated functions.
 func FieldInterpolatedString(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeString).IsInterpolated()
+	return newField(name, description, examples...).HasType(FieldTypeString).IsInterpolated()
 }
 
 // FieldBloblang returns a field spec for a string typed field containing a
 // Bloblang mapping.
 func FieldBloblang(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeString).IsBloblang()
+	return newField(name, description, examples...).HasType(FieldTypeString).IsBloblang()
 }
 
 // FieldInt returns a field spec for a common int typed field.
 func FieldInt(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeInt)
+	return newField(name, description, examples...).HasType(FieldTypeInt)
 }
 
 // FieldFloat returns a field spec for a common float typed field.
 func FieldFloat(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeFloat)
+	return newField(name, description, examples...).HasType(FieldTypeFloat)
 }
 
 // FieldBool returns a field spec for a common bool typed field.
 func FieldBool(name, description string, examples ...interface{}) FieldSpec {
-	return FieldCommon(name, description, examples...).HasType(FieldTypeBool)
+	return newField(name, description, examples...).HasType(FieldTypeBool)
 }
 
-// FieldAdvanced returns a field spec for an advanced field.
-func FieldAdvanced(name, description string, examples ...interface{}) FieldSpec {
-	return FieldSpec{
-		Name:        name,
-		Description: description,
-		Kind:        KindScalar,
-		IsAdvanced:  true,
-		Examples:    examples,
-	}
+// FieldInput returns a field spec for an input typed field.
+func FieldInput(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeInput)
 }
 
-// FieldCommon returns a field spec for a common field.
-func FieldCommon(name, description string, examples ...interface{}) FieldSpec {
+// FieldProcessor returns a field spec for a processor typed field.
+func FieldProcessor(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeProcessor)
+}
+
+// FieldOutput returns a field spec for an output typed field.
+func FieldOutput(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeOutput)
+}
+
+// FieldBuffer returns a field spec for a buffer typed field.
+func FieldBuffer(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeBuffer)
+}
+
+// FieldCache returns a field spec for a cache typed field.
+func FieldCache(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeCache)
+}
+
+// FieldRateLimit returns a field spec for a rate limit typed field.
+func FieldRateLimit(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeRateLimit)
+}
+
+// FieldMetrics returns a field spec for a metrics typed field.
+func FieldMetrics(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeMetrics)
+}
+
+// FieldTracer returns a field spec for a tracer typed field.
+func FieldTracer(name, description string, examples ...interface{}) FieldSpec {
+	return newField(name, description, examples...).HasType(FieldTypeTracer)
+}
+
+func newField(name, description string, examples ...interface{}) FieldSpec {
 	return FieldSpec{
 		Name:        name,
 		Description: description,
@@ -379,58 +410,6 @@ func FieldCommon(name, description string, examples ...interface{}) FieldSpec {
 func FieldComponent() FieldSpec {
 	return FieldSpec{
 		Kind: KindScalar,
-	}
-}
-
-// FieldDeprecated returns a field spec for a deprecated field.
-func FieldDeprecated(name string, description ...string) FieldSpec {
-	desc := "DEPRECATED: Do not use."
-	if len(description) > 0 {
-		desc = "DEPRECATED: " + description[0]
-	}
-	return FieldSpec{
-		Name:         name,
-		Description:  desc,
-		Kind:         KindScalar,
-		IsDeprecated: true,
-	}
-}
-
-func (f FieldSpec) sanitise(s interface{}, filter FieldFilter) {
-	if coreType, isCore := f.Type.IsCoreComponent(); isCore {
-		switch f.Kind {
-		case KindArray:
-			if arr, ok := s.([]interface{}); ok {
-				for _, ele := range arr {
-					_ = SanitiseComponentConfig(coreType, ele, filter)
-				}
-			}
-		case KindMap:
-			if obj, ok := s.(map[string]interface{}); ok {
-				for _, v := range obj {
-					_ = SanitiseComponentConfig(coreType, v, filter)
-				}
-			}
-		default:
-			_ = SanitiseComponentConfig(coreType, s, filter)
-		}
-	} else if len(f.Children) > 0 {
-		switch f.Kind {
-		case KindArray:
-			if arr, ok := s.([]interface{}); ok {
-				for _, ele := range arr {
-					f.Children.sanitise(ele, filter)
-				}
-			}
-		case KindMap:
-			if obj, ok := s.(map[string]interface{}); ok {
-				for _, v := range obj {
-					f.Children.sanitise(v, filter)
-				}
-			}
-		default:
-			f.Children.sanitise(s, filter)
-		}
 	}
 }
 
@@ -468,25 +447,6 @@ func ShouldDropDeprecated(b bool) FieldFilter {
 	}
 	return func(spec FieldSpec) bool {
 		return !spec.IsDeprecated
-	}
-}
-
-func (f FieldSpecs) sanitise(s interface{}, filter FieldFilter) {
-	m, ok := s.(map[string]interface{})
-	if !ok {
-		return
-	}
-	for _, spec := range f {
-		if filter.shouldDrop(spec) {
-			delete(m, spec.Name)
-			continue
-		}
-		v := m[spec.Name]
-		if _, omit := spec.shouldOmit(v, m); omit {
-			delete(m, spec.Name)
-		} else {
-			spec.sanitise(v, filter)
-		}
 	}
 }
 

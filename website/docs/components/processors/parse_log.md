@@ -27,28 +27,27 @@ easier and often much faster than [`grok`](/docs/components/processors/grok).
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 parse_log:
-  format: syslog_rfc5424
-  codec: json
+  format: ""
+  codec: ""
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 parse_log:
-  format: syslog_rfc5424
-  codec: json
+  format: ""
+  codec: ""
   best_effort: true
   allow_rfc3339: true
   default_year: current
   default_timezone: UTC
-  parts: []
 ```
 
 </TabItem>
@@ -62,7 +61,7 @@ A common log [format](#formats) to parse.
 
 
 Type: `string`  
-Default: `"syslog_rfc5424"`  
+Default: `""`  
 Options: `syslog_rfc5424`, `syslog_rfc3164`.
 
 ### `codec`
@@ -71,7 +70,7 @@ Specifies the structured format to parse a log into.
 
 
 Type: `string`  
-Default: `"json"`  
+Default: `""`  
 Options: `json`.
 
 ### `best_effort`
@@ -105,19 +104,6 @@ Sets the strategy to decide the timezone for rfc3164 timestamps. Applicable to f
 
 Type: `string`  
 Default: `"UTC"`  
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Codecs
 

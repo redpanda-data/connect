@@ -14,9 +14,7 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Stores key/value pairs in a map held in the memory-bound
-[Ristretto cache](https://github.com/dgraph-io/ristretto).
+Stores key/value pairs in a map held in the memory-bound [Ristretto cache](https://github.com/dgraph-io/ristretto).
 
 
 <Tabs defaultValue="common" values={[
@@ -26,23 +24,26 @@ Stores key/value pairs in a map held in the memory-bound
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 ristretto:
-  ttl: ""
+  default_ttl: ""
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 ristretto:
-  ttl: ""
-  retries: 0
-  retry_period: 50ms
+  default_ttl: ""
+  get_retries:
+    enabled: false
+    initial_interval: 1s
+    max_interval: 5s
+    max_elapsed_time: 30s
 ```
 
 </TabItem>
@@ -50,44 +51,85 @@ ristretto:
 
 This cache is more efficient and appropriate for high-volume use cases than the standard memory cache. However, the add command is non-atomic, and therefore this cache is not suitable for deduplication.
 
-This cache type supports setting the TTL individually per key by using the
-dynamic `ttl` field of a cache processor or output in order to
-override the general TTL configured at the cache resource level.
-
 ## Fields
 
-### `ttl`
+### `default_ttl`
 
-The TTL of each item as a duration string. After this period an item will be eligible for removal during the next compaction.
+A default TTL to set for items, calculated from the moment the item is cached. Set to an empty string or zero duration to disable TTLs.
 
 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
-ttl: 60s
+default_ttl: 5m
 
-ttl: 5m
-
-ttl: 36h
+default_ttl: 60s
 ```
 
-### `retries`
+### `get_retries`
 
-The maximum number of retry attempts to make before abandoning a request.
+Determines how and whether get attempts should be retried if the key is not found. Ristretto is a concurrent cache that does not immediately reflect writes, and so it can sometimes be useful to enable retries at the cost of speed in cases where the key is expected to exist.
 
 
-Type: `int`  
-Default: `0`  
+Type: `object`  
 
-### `retry_period`
+### `get_retries.enabled`
 
-The duration to wait between retry attempts.
+Whether retries should be enabled.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `get_retries.initial_interval`
+
+The initial period to wait between retry attempts.
 
 
 Type: `string`  
-Default: `"50ms"`  
+Default: `"1s"`  
+
+```yml
+# Examples
+
+initial_interval: 50ms
+
+initial_interval: 1s
+```
+
+### `get_retries.max_interval`
+
+The maximum period to wait between retry attempts
+
+
+Type: `string`  
+Default: `"5s"`  
+
+```yml
+# Examples
+
+max_interval: 5s
+
+max_interval: 1m
+```
+
+### `get_retries.max_elapsed_time`
+
+The maximum overall period of time to spend on retry attempts before the request is aborted.
+
+
+Type: `string`  
+Default: `"30s"`  
+
+```yml
+# Examples
+
+max_elapsed_time: 1m
+
+max_elapsed_time: 1h
+```
 
 

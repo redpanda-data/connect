@@ -99,7 +99,7 @@ pipeline:
 
 </Tabs>
 
-You can see more examples of templates, including some that are included as part of the standard Benthos distribution, at [https://github.com/Jeffail/benthos/tree/master/template](https://github.com/Jeffail/benthos/tree/master/template).
+You can see more examples of templates, including some that are included as part of the standard Benthos distribution, at [https://github.com/benthosdev/benthos/tree/master/template](https://github.com/benthosdev/benthos/tree/master/template).
 
 ## Fields
 
@@ -222,7 +222,7 @@ Type: `string`
 
 ### `metrics_mapping`
 
-An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported.
+An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. For more information check out the [metrics documentation](/docs/components/metrics/about#metric-mapping). When metric paths are created, renamed and dropped a trace log is written, enabling TRACE level logging is therefore a good way to diagnose path mappings.
 
 
 Type: `string`  
@@ -231,9 +231,14 @@ Default: `""`
 ```yml
 # Examples
 
-metrics_mapping: this.replace(".foo.count", ".count")
+metrics_mapping: this.replace("input", "source").replace("output", "sink")
 
-metrics_mapping: if ![ "count", "error", "latency" ].contains(this) { deleted() }
+metrics_mapping: |-
+  root = if ![
+    "input_received",
+    "input_latency",
+    "output_sent"
+  ].contains(this) { deleted() }
 ```
 
 ### `tests`

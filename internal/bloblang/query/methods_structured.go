@@ -874,7 +874,7 @@ var _ = registerSimpleMethod(
 
 var _ = registerMethod(
 	NewMethodSpec(
-		"merge", "Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array.",
+		"merge", "Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array. In order to simply override destination fields on collision use the [`assign`](#assign) method.",
 	).InCategory(
 		MethodCategoryObjectAndArray, "",
 		NewExampleSpec(``,
@@ -918,6 +918,60 @@ func mergeMethod(target Function, args *ParsedParams) (Function, error) {
 		}
 		return root.Data(), nil
 	}, target.QueryTargets), nil
+}
+
+//------------------------------------------------------------------------------
+
+var _ = registerMethod(
+	NewMethodSpec(
+		"assign", "Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the value in the destination object will be overwritten by that of source object. In order to preserve both values on collision use the [`merge`](#merge) method.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec(``,
+			`root = this.foo.assign(this.bar)`,
+			`{"foo":{"first_name":"fooer","likes":"bars"},"bar":{"second_name":"barer","likes":"foos"}}`,
+			`{"first_name":"fooer","likes":"foos","second_name":"barer"}`,
+		),
+	).Param(ParamAny("with", "A value to merge the target value with.")),
+	assignMethod,
+)
+
+func assignMethod(target Function, args *ParsedParams) (Function, error) {
+	assignFromSource, err := args.Field("with")
+	if err != nil {
+		return nil, err
+	}
+	return ClosureFunction("method assign", func(ctx FunctionContext) (interface{}, error) {
+		assignInto, err := target.Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		assignFrom := IClone(assignFromSource)
+		if root, isArray := assignInto.([]interface{}); isArray {
+			if rhs, isAlsoArray := assignFrom.([]interface{}); isAlsoArray {
+				return append(root, rhs...), nil
+			}
+			return append(root, assignFrom), nil
+		}
+
+		if _, isObject := assignInto.(map[string]interface{}); !isObject {
+			return nil, NewTypeErrorFrom(target.Annotation(), assignInto, ValueObject, ValueArray)
+		}
+
+		root := gabs.New()
+		if err = root.MergeFn(gabs.Wrap(assignInto), assigner); err == nil {
+			err = root.MergeFn(gabs.Wrap(assignFrom), assigner)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return root.Data(), nil
+	}, target.QueryTargets), nil
+}
+
+func assigner(destination, source interface{}) interface{} {
+	return source
 }
 
 //------------------------------------------------------------------------------

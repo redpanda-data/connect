@@ -25,30 +25,31 @@ Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 metrics:
-  prometheus:
-    prefix: benthos
-    path_mapping: ""
+  prometheus: {}
+  mapping: ""
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 metrics:
   prometheus:
-    prefix: benthos
-    path_mapping: ""
     use_histogram_timing: false
+    histogram_buckets: []
+    add_process_metrics: false
+    add_go_metrics: false
     push_url: ""
     push_interval: ""
     push_job_name: benthos_push
     push_basic_auth:
       username: ""
       password: ""
+  mapping: ""
 ```
 
 </TabItem>
@@ -58,48 +59,39 @@ Metrics paths will differ from [the standard list](/docs/components/metrics/abou
 
 ## Fields
 
-### `prefix`
-
-A string prefix to add to all metrics.
-
-
-Type: `string`  
-Default: `"benthos"`  
-
-### `path_mapping`
-
-An optional [Bloblang mapping](/docs/guides/bloblang/about) that allows you to rename or prevent certain metrics paths from being exported. When metric paths are created, renamed and dropped a trace log is written, enabling TRACE level logging is therefore a good way to diagnose path mappings. BETA FEATURE: Labels can also be created for the metric path by mapping meta fields.
-
-
-Type: `string`  
-Default: `""`  
-
-```yaml
-# Examples
-
-path_mapping: this.replace("input", "source").replace("output", "sink")
-
-path_mapping: |-
-  if ![
-    "benthos_input_received",
-    "benthos_input_latency",
-    "benthos_output_sent"
-  ].contains(this) { deleted() }
-
-path_mapping: |-
-  let matches = this.re_find_all_submatch("resource_processor_([a-zA-Z]+)_(.*)")
-  meta processor = $matches.0.1 | deleted()
-  root = $matches.0.2 | deleted()
-```
-
 ### `use_histogram_timing`
 
-Whether to export timing metrics as a histogram, if `false` a summary is used instead. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.
+Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.
 
 
 Type: `bool`  
 Default: `false`  
 Requires version 3.63.0 or newer  
+
+### `histogram_buckets`
+
+Timing metrics histogram buckets (in seconds). If left empty defaults to DefBuckets (https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#pkg-variables)
+
+
+Type: `array`  
+Default: `[]`  
+Requires version 3.63.0 or newer  
+
+### `add_process_metrics`
+
+Whether to export process metrics such as CPU and memory usage in addition to Benthos metrics.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `add_go_metrics`
+
+Whether to export Go runtime metrics such as GC pauses in addition to Benthos metrics.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `push_url`
 

@@ -4,17 +4,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 type tracedProcessor struct {
 	e       *events
 	errCtr  *uint64
-	wrapped types.Processor
+	wrapped iprocessor.V1
 }
 
-func traceProcessor(e *events, errCtr *uint64, p types.Processor) types.Processor {
+func traceProcessor(e *events, errCtr *uint64, p iprocessor.V1) iprocessor.V1 {
 	t := &tracedProcessor{
 		e:       e,
 		errCtr:  errCtr,
@@ -23,9 +24,9 @@ func traceProcessor(e *events, errCtr *uint64, p types.Processor) types.Processo
 	return t
 }
 
-func (t *tracedProcessor) ProcessMessage(m types.Message) ([]types.Message, types.Response) {
+func (t *tracedProcessor) ProcessMessage(m *message.Batch) ([]*message.Batch, error) {
 	prevErrs := make([]string, m.Len())
-	_ = m.Iter(func(i int, part types.Part) error {
+	_ = m.Iter(func(i int, part *message.Part) error {
 		t.e.Add(EventConsume, string(part.Get()))
 		prevErrs[i] = processor.GetFail(part)
 		return nil
@@ -33,7 +34,7 @@ func (t *tracedProcessor) ProcessMessage(m types.Message) ([]types.Message, type
 
 	outMsgs, res := t.wrapped.ProcessMessage(m)
 	for _, outMsg := range outMsgs {
-		_ = outMsg.Iter(func(i int, part types.Part) error {
+		_ = outMsg.Iter(func(i int, part *message.Part) error {
 			t.e.Add(EventProduce, string(part.Get()))
 			failStr := processor.GetFail(part)
 			if failStr == "" {

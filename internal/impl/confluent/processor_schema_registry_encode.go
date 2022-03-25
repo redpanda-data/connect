@@ -15,9 +15,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/linkedin/goavro/v2"
+
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func schemaRegistryEncoderConfig() *service.ConfigSpec {

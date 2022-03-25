@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/parser"
-	"github.com/Jeffail/benthos/v3/internal/component/metrics"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/fatih/color"
 	"github.com/nsf/jsondiff"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 // FieldConfig describes a configuration field used in the template.
@@ -50,7 +50,7 @@ type Config struct {
 
 // FieldSpec creates a documentation field spec from a template field config.
 func (c FieldConfig) FieldSpec() (docs.FieldSpec, error) {
-	f := docs.FieldCommon(c.Name, c.Description)
+	f := docs.FieldAnything(c.Name, c.Description)
 	f.IsAdvanced = c.Advanced
 	if c.Default != nil {
 		f = f.HasDefault(*c.Default)
@@ -116,7 +116,7 @@ func (c Config) compile() (*compiled, error) {
 	}
 	var metricsMapping *metrics.Mapping
 	if c.MetricsMapping != "" {
-		if metricsMapping, err = metrics.NewMapping(types.NoopMgr(), c.MetricsMapping, log.Noop()); err != nil {
+		if metricsMapping, err = metrics.NewMapping(c.MetricsMapping, log.Noop()); err != nil {
 			return nil, fmt.Errorf("parse metrics mapping: %w", err)
 		}
 	}
@@ -217,7 +217,7 @@ func FieldConfigSpec() docs.FieldSpecs {
 		docs.FieldString("kind", "The kind of the field.").HasOptions(
 			"scalar", "map", "list",
 		).HasDefault("scalar").LintOptions(),
-		docs.FieldCommon("default", "An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect.").HasType(docs.FieldTypeUnknown).Optional(),
+		docs.FieldAnything("default", "An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect.").Optional(),
 		docs.FieldBool("advanced", "Whether this field is considered advanced.").HasDefault(false),
 	}
 }
@@ -243,17 +243,17 @@ func ConfigSpec() docs.FieldSpecs {
 		).Array().HasDefault([]string{}),
 		docs.FieldString("summary", "A short summary of the component.").HasDefault(""),
 		docs.FieldString("description", "A longer form description of the component and how to use it.").HasDefault(""),
-		docs.FieldCommon("fields", "The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.").Array().WithChildren(FieldConfigSpec()...),
+		docs.FieldObject("fields", "The configuration fields of the template, fields specified here will be parsed from a Benthos config and will be accessible from the template mapping.").Array().WithChildren(FieldConfigSpec()...),
 		docs.FieldBloblang(
 			"mapping", "A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of the template into a valid Benthos configuration for the target component type.",
 		),
-		metrics.MappingFieldSpec(),
-		docs.FieldCommon(
+		docs.MetricsMappingFieldSpec("metrics_mapping"),
+		docs.FieldObject(
 			"tests", "Optional unit test definitions for the template that verify certain configurations produce valid configs. These tests are executed with the command `benthos template lint`.",
 		).Array().WithChildren(
 			docs.FieldString("name", "A name to identify the test."),
-			docs.FieldCommon("config", "A configuration to run this test with, the config resulting from applying the template with this config will be linted.").HasType(docs.FieldTypeObject),
-			docs.FieldCommon("expected", "An optional configuration describing the expected result of applying the template, when specified the result will be diffed and any mismatching fields will be reported as a test error.").HasType(docs.FieldTypeObject).Optional(),
+			docs.FieldObject("config", "A configuration to run this test with, the config resulting from applying the template with this config will be linted."),
+			docs.FieldObject("expected", "An optional configuration describing the expected result of applying the template, when specified the result will be diffed and any mismatching fields will be reported as a test error.").Optional(),
 		).HasDefault([]interface{}{}),
 	}
 }

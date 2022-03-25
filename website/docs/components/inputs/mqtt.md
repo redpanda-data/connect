@@ -26,32 +26,28 @@ Subscribe to topics on MQTT brokers.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   mqtt:
-    urls:
-      - tcp://localhost:1883
-    topics:
-      - benthos_topic
-    client_id: benthos_input
+    urls: []
+    topics: []
+    client_id: ""
     connect_timeout: 30s
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
   mqtt:
-    urls:
-      - tcp://localhost:1883
-    topics:
-      - benthos_topic
-    client_id: benthos_input
+    urls: []
+    topics: []
+    client_id: ""
     dynamic_client_id_suffix: ""
     qos: 1
     clean_session: true
@@ -100,7 +96,7 @@ A list of URLs to connect to. If an item of the list contains commas it will be 
 
 
 Type: `array`  
-Default: `["tcp://localhost:1883"]`  
+Default: `[]`  
 
 ### `topics`
 
@@ -108,7 +104,7 @@ A list of topics to consume from.
 
 
 Type: `array`  
-Default: `["benthos_topic"]`  
+Default: `[]`  
 
 ### `client_id`
 
@@ -116,7 +112,7 @@ An identifier for the client connection.
 
 
 Type: `string`  
-Default: `"benthos_input"`  
+Default: `""`  
 
 ### `dynamic_client_id_suffix`
 
@@ -205,7 +201,7 @@ Type: `string`
 Default: `"30s"`  
 Requires version 3.58.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 connect_timeout: 1s
@@ -278,7 +274,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -295,7 +291,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -309,7 +305,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:

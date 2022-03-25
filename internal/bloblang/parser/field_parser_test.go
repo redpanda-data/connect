@@ -3,10 +3,11 @@ package parser
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/field"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestFieldStaticExpressionOptimization(t *testing.T) {
@@ -20,17 +21,13 @@ func TestFieldStaticExpressionOptimization(t *testing.T) {
 
 	for k, v := range tests {
 		t.Run(k, func(t *testing.T) {
-			var isDep bool
-			rs, err := parseFieldResolvers(GlobalContext(), k, &isDep)
+			rs, err := parseFieldResolvers(GlobalContext(), k)
 			require.Nil(t, err)
 
 			e := field.NewExpression(rs...)
-			assert.Equal(t, v, e.String(0, message.New(nil)))
-			assert.Equal(t, v, e.StringLegacy(0, message.New(nil)))
-			assert.Equal(t, v, string(e.Bytes(0, message.New(nil))))
-			assert.Equal(t, v, string(e.BytesEscaped(0, message.New(nil))))
-			assert.Equal(t, v, string(e.BytesLegacy(0, message.New(nil))))
-			assert.Equal(t, v, string(e.BytesEscapedLegacy(0, message.New(nil))))
+			assert.Equal(t, v, e.String(0, message.QuickBatch(nil)))
+			assert.Equal(t, v, string(e.Bytes(0, message.QuickBatch(nil))))
+			assert.Equal(t, v, string(e.BytesEscaped(0, message.QuickBatch(nil))))
 		})
 	}
 }
@@ -42,7 +39,7 @@ func TestFieldExpressionParserErrors(t *testing.T) {
 	}{
 		"bad function": {
 			input: `static string ${!not a function} hello world`,
-			err:   `char 21: required: expected function arguments`,
+			err:   `char 22: required: expected end of expression`,
 		},
 		"bad function 2": {
 			input: `static string ${!not_a_function()} hello world`,
@@ -54,7 +51,7 @@ func TestFieldExpressionParserErrors(t *testing.T) {
 		},
 		"bad args 2": {
 			input: `foo ${!json("foo} bar`,
-			err:   `char 17: required: expected end quote`,
+			err:   `char 22: required: expected end quote`,
 		},
 		"bad args 3": {
 			input: `foo ${!json(} bar`,
@@ -64,9 +61,9 @@ func TestFieldExpressionParserErrors(t *testing.T) {
 			input: `foo ${!json(0,} bar`,
 			err:   `char 15: required: expected function argument`,
 		},
-		"bad args 5": {
-			input: `foo ${!json} bar`,
-			err:   `char 12: required: expected function arguments`,
+		"unfinished escape": {
+			input: `a string that ends ${{!with unfinished escapes`,
+			err:   `char 24: required: expected end of escaped expression`,
 		},
 	}
 
@@ -98,14 +95,6 @@ func TestFieldExpressions(t *testing.T) {
 			input:  `static string hello world`,
 			output: `static string hello world`,
 		},
-		"unsuspicious string": {
-			input:  `${{! not a thing`,
-			output: `${{! not a thing`,
-		},
-		"unsuspicious string 2": {
-			input:  `${! not a thing`,
-			output: `${! not a thing`,
-		},
 		"dollar on its own": {
 			input:  `hello $ world`,
 			output: `hello $ world`,
@@ -133,23 +122,6 @@ func TestFieldExpressions(t *testing.T) {
 		"escaped string 4": {
 			input:  `${{!this is escaped}}`,
 			output: `${!this is escaped}`,
-		},
-		"echo function": {
-			input:  `${!echo:this}`,
-			output: `this`,
-		},
-		"echo function 2": {
-			input:  `foo ${!echo:} bar`,
-			output: `foo  bar`,
-		},
-		"echo function 3": {
-			input:  `${!echo} bar`,
-			output: ` bar`,
-		},
-		"echo function 4": {
-			input:   `${!echo:"this"}`,
-			output:  `\"this\"`,
-			escaped: true,
 		},
 		"json function": {
 			input:  `${!json()}`,
@@ -224,12 +196,12 @@ func TestFieldExpressions(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)

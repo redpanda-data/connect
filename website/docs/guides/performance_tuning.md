@@ -59,38 +59,6 @@ Most outputs have a field `max_in_flight` that allows you to specify how many me
 
 Most outputs will send data quicker when messages are batched, this is often done automatically in the background. However, for a few outputs your batches need to be configured. Read the [batching documentation][batching] for more guidance on how to tune message batches within Benthos.
 
-#### Increase the number of parallel output sinks
-
-If your output sink supports multiple parallel writers then it can greatly increase your throughput to have multiple connections configured.
-
-Increasing the number of parallel output sinks is similar to doing the same for input sources and is done using a [broker][broker-output]. The output broker type supports a few different routing patterns depending on your intention. In this case we want to maximize throughput so our best choice is a `greedy` pattern. For example, if you started with:
-
-```yaml
-output:
-  kafka:
-    addresses:
-      - localhost:9092
-    topic: benthos_stream
-```
-
-You could change to:
-
-```yaml
-output:
-  broker:
-    pattern: greedy
-    copies: 4
-    outputs:
-      - kafka:
-          addresses:
-            - localhost:9092
-          topic: benthos_stream
-```
-
-Which would create the exact same output writer as before with four copies in total. Try increasing the number of copies to see how that affects the throughput. If your multiple output writers would require different configurations (client ids, for example) then set copies to `1` and write each consumer as a separate object in the `outputs` array.
-
-Read the [broker documentation][broker-output] for more tips on simplifying broker configs.
-
 #### Level out input spikes with a buffer
 
 There are many reasons why an input source might have spikes or inconsistent throughput rates. It is possible that your output is capable of keeping up with

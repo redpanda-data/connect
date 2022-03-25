@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 // AllInputs is a set containing every single input that has been imported.
@@ -24,12 +26,11 @@ func (e *Environment) InputAdd(constructor InputConstructor, spec docs.Component
 
 // InputInit attempts to initialise an input from a config.
 func (e *Environment) InputInit(
-	hasBatchProc bool,
 	conf input.Config,
 	mgr NewManagement,
-	pipelines ...types.PipelineConstructorFunc,
-) (types.Input, error) {
-	return e.inputs.Init(hasBatchProc, conf, mgr, pipelines...)
+	pipelines ...iprocessor.PipelineConstructorFunc,
+) (iinput.Streamed, error) {
+	return e.inputs.Init(conf, mgr, pipelines...)
 }
 
 // InputDocs returns a slice of input specs, which document each method.
@@ -41,13 +42,13 @@ func (e *Environment) InputDocs() []docs.ComponentSpec {
 
 // InputConstructorFromSimple provides a way to define an input constructor
 // without manually initializing processors of the config.
-func InputConstructorFromSimple(fn func(input.Config, NewManagement) (input.Type, error)) InputConstructor {
-	return func(b bool, c input.Config, nm NewManagement, pcf ...types.PipelineConstructorFunc) (input.Type, error) {
+func InputConstructorFromSimple(fn func(input.Config, NewManagement) (iinput.Streamed, error)) InputConstructor {
+	return func(c input.Config, nm NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 		i, err := fn(c, nm)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create input '%v': %w", c.Type, err)
+			return nil, err
 		}
-		pcf = input.AppendProcessorsFromConfig(c, nm, nm.Logger(), nm.Metrics(), pcf...)
+		pcf = input.AppendProcessorsFromConfig(c, nm, pcf...)
 		return input.WrapWithPipelines(i, pcf...)
 	}
 }
@@ -55,7 +56,7 @@ func InputConstructorFromSimple(fn func(input.Config, NewManagement) (input.Type
 //------------------------------------------------------------------------------
 
 // InputConstructor constructs an input component.
-type InputConstructor func(bool, input.Config, NewManagement, ...types.PipelineConstructorFunc) (input.Type, error)
+type InputConstructor func(input.Config, NewManagement, ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error)
 
 type inputSpec struct {
 	constructor InputConstructor
@@ -69,9 +70,13 @@ type InputSet struct {
 
 // Add a new input to this set by providing a constructor and documentation.
 func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]inputSpec{}
 	}
+	spec.Type = docs.TypeInput
 	s.specs[spec.Name] = inputSpec{
 		constructor: constructor,
 		spec:        spec,
@@ -81,21 +86,14 @@ func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) er
 }
 
 // Init attempts to initialise an input from a config.
-func (s *InputSet) Init(
-	hasBatchProc bool,
-	conf input.Config,
-	mgr NewManagement,
-	pipelines ...types.PipelineConstructorFunc,
-) (types.Input, error) {
+func (s *InputSet) Init(conf input.Config, mgr NewManagement, pipelines ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		// TODO: V4 Remove this
-		if ctor, exists := input.GetDeprecatedPlugin(conf.Type); exists {
-			return ctor(hasBatchProc, conf, mgr, mgr.Logger(), mgr.Metrics(), pipelines...)
-		}
-		return nil, types.ErrInvalidInputType
+		return nil, component.ErrInvalidType("input", conf.Type)
 	}
-	return spec.constructor(hasBatchProc, conf, mgr, pipelines...)
+	c, err := spec.constructor(conf, mgr, pipelines...)
+	err = wrapComponentErr(mgr, "input", err)
+	return c, err
 }
 
 // Docs returns a slice of input specs, which document each method.

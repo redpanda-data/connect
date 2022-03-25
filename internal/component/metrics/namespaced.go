@@ -1,40 +1,37 @@
 package metrics
 
 import (
+	"net/http"
 	"sort"
-
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
 )
 
-// Namespaced wraps a child metrics exporter and exposes a metrics.Type API that
-// adds namespacing labels and name prefixes to new metrics.
+// Namespaced wraps a child metrics exporter and exposes a Type API that
+// adds namespacing labels and name prefixes to new
 type Namespaced struct {
-	prefix   string
 	labels   map[string]string
 	mappings []*Mapping
-	child    metrics.Type
+	child    Type
 }
 
 // NewNamespaced wraps a metrics exporter and adds prefixes and custom labels.
-func NewNamespaced(child metrics.Type) *Namespaced {
+func NewNamespaced(child Type) *Namespaced {
 	return &Namespaced{
 		child: child,
 	}
 }
 
-// WithStats returns a namespaced metrics exporter with a different stats
-// implementation.
-func (n *Namespaced) WithStats(s metrics.Type) *Namespaced {
-	newNs := *n
-	newNs.child = s
-	return &newNs
+// Noop returns a namespaced metrics aggregator with a noop child.
+func Noop() *Namespaced {
+	return &Namespaced{
+		child: DudType{},
+	}
 }
 
-// WithPrefix returns a namespaced metrics exporter with a new prefix.
-func (n *Namespaced) WithPrefix(str string) *Namespaced {
+// WithStats returns a namespaced metrics exporter with a different stats
+// implementation.
+func (n *Namespaced) WithStats(s Type) *Namespaced {
 	newNs := *n
-	newNs.prefix = str
+	newNs.child = s
 	return &newNs
 }
 
@@ -65,25 +62,22 @@ func (n *Namespaced) WithMapping(m *Mapping) *Namespaced {
 	return &newNs
 }
 
-// Unwrap to the underlying metrics type.
-func (n *Namespaced) Unwrap() metrics.Type {
-	u, ok := n.child.(interface {
-		Unwrap() metrics.Type
-	})
-	if ok {
-		return u.Unwrap()
-	}
+//------------------------------------------------------------------------------
+
+// Child returns the underlying metrics type.
+func (n *Namespaced) Child() Type {
 	return n.child
+}
+
+// HandlerFunc returns the http handler of the child.
+func (n *Namespaced) HandlerFunc() http.HandlerFunc {
+	return n.child.HandlerFunc()
 }
 
 //------------------------------------------------------------------------------
 
 func (n *Namespaced) getPathAndLabels(path string) (newPath string, labelKeys, labelValues []string) {
 	newPath = path
-	// TODO: V4 Don't do this
-	if n.prefix != "" {
-		newPath = n.prefix + "." + path
-	}
 	if n.labels != nil && len(n.labels) > 0 {
 		labelKeys = make([]string, 0, len(n.labels))
 		for k := range n.labels {
@@ -105,10 +99,10 @@ func (n *Namespaced) getPathAndLabels(path string) (newPath string, labelKeys, l
 
 type counterVecWithStatic struct {
 	staticValues []string
-	child        metrics.StatCounterVec
+	child        StatCounterVec
 }
 
-func (c *counterVecWithStatic) With(values ...string) metrics.StatCounter {
+func (c *counterVecWithStatic) With(values ...string) StatCounter {
 	newValues := make([]string, 0, len(c.staticValues)+len(values))
 	newValues = append(newValues, c.staticValues...)
 	newValues = append(newValues, values...)
@@ -117,10 +111,10 @@ func (c *counterVecWithStatic) With(values ...string) metrics.StatCounter {
 
 type timerVecWithStatic struct {
 	staticValues []string
-	child        metrics.StatTimerVec
+	child        StatTimerVec
 }
 
-func (c *timerVecWithStatic) With(values ...string) metrics.StatTimer {
+func (c *timerVecWithStatic) With(values ...string) StatTimer {
 	newValues := make([]string, 0, len(c.staticValues)+len(values))
 	newValues = append(newValues, c.staticValues...)
 	newValues = append(newValues, values...)
@@ -129,10 +123,10 @@ func (c *timerVecWithStatic) With(values ...string) metrics.StatTimer {
 
 type gaugeVecWithStatic struct {
 	staticValues []string
-	child        metrics.StatGaugeVec
+	child        StatGaugeVec
 }
 
-func (c *gaugeVecWithStatic) With(values ...string) metrics.StatGauge {
+func (c *gaugeVecWithStatic) With(values ...string) StatGauge {
 	newValues := make([]string, 0, len(c.staticValues)+len(values))
 	newValues = append(newValues, c.staticValues...)
 	newValues = append(newValues, values...)
@@ -142,13 +136,13 @@ func (c *gaugeVecWithStatic) With(values ...string) metrics.StatGauge {
 //------------------------------------------------------------------------------
 
 // GetCounter returns an editable counter stat for a given path.
-func (n *Namespaced) GetCounter(path string) metrics.StatCounter {
+func (n *Namespaced) GetCounter(path string) StatCounter {
 	path, labelKeys, labelValues := n.getPathAndLabels(path)
 	if path == "" {
-		return metrics.DudStat{}
+		return DudStat{}
 	}
 	if len(labelKeys) > 0 {
-		return n.child.GetCounterVec(path, labelKeys).With(labelValues...)
+		return n.child.GetCounterVec(path, labelKeys...).With(labelValues...)
 	}
 	return n.child.GetCounter(path)
 }
@@ -156,11 +150,11 @@ func (n *Namespaced) GetCounter(path string) metrics.StatCounter {
 // GetCounterVec returns an editable counter stat for a given path with labels,
 // these labels must be consistent with any other metrics registered on the same
 // path.
-func (n *Namespaced) GetCounterVec(path string, labelNames []string) metrics.StatCounterVec {
+func (n *Namespaced) GetCounterVec(path string, labelNames ...string) StatCounterVec {
 	path, staticKeys, staticValues := n.getPathAndLabels(path)
 	if path == "" {
-		return fakeCounterVec(func([]string) metrics.StatCounter {
-			return metrics.DudStat{}
+		return FakeCounterVec(func(...string) StatCounter {
+			return DudStat{}
 		})
 	}
 	if len(staticKeys) > 0 {
@@ -169,20 +163,20 @@ func (n *Namespaced) GetCounterVec(path string, labelNames []string) metrics.Sta
 		newNames = append(newNames, labelNames...)
 		return &counterVecWithStatic{
 			staticValues: staticValues,
-			child:        n.child.GetCounterVec(path, newNames),
+			child:        n.child.GetCounterVec(path, newNames...),
 		}
 	}
-	return n.child.GetCounterVec(path, labelNames)
+	return n.child.GetCounterVec(path, labelNames...)
 }
 
 // GetTimer returns an editable timer stat for a given path.
-func (n *Namespaced) GetTimer(path string) metrics.StatTimer {
+func (n *Namespaced) GetTimer(path string) StatTimer {
 	path, labelKeys, labelValues := n.getPathAndLabels(path)
 	if path == "" {
-		return metrics.DudStat{}
+		return DudStat{}
 	}
 	if len(labelKeys) > 0 {
-		return n.child.GetTimerVec(path, labelKeys).With(labelValues...)
+		return n.child.GetTimerVec(path, labelKeys...).With(labelValues...)
 	}
 	return n.child.GetTimer(path)
 }
@@ -190,11 +184,11 @@ func (n *Namespaced) GetTimer(path string) metrics.StatTimer {
 // GetTimerVec returns an editable timer stat for a given path with labels,
 // these labels must be consistent with any other metrics registered on the same
 // path.
-func (n *Namespaced) GetTimerVec(path string, labelNames []string) metrics.StatTimerVec {
+func (n *Namespaced) GetTimerVec(path string, labelNames ...string) StatTimerVec {
 	path, staticKeys, staticValues := n.getPathAndLabels(path)
 	if path == "" {
-		return fakeTimerVec(func([]string) metrics.StatTimer {
-			return metrics.DudStat{}
+		return FakeTimerVec(func(...string) StatTimer {
+			return DudStat{}
 		})
 	}
 	if len(staticKeys) > 0 {
@@ -203,20 +197,20 @@ func (n *Namespaced) GetTimerVec(path string, labelNames []string) metrics.StatT
 		newNames = append(newNames, labelNames...)
 		return &timerVecWithStatic{
 			staticValues: staticValues,
-			child:        n.child.GetTimerVec(path, newNames),
+			child:        n.child.GetTimerVec(path, newNames...),
 		}
 	}
-	return n.child.GetTimerVec(path, labelNames)
+	return n.child.GetTimerVec(path, labelNames...)
 }
 
 // GetGauge returns an editable gauge stat for a given path.
-func (n *Namespaced) GetGauge(path string) metrics.StatGauge {
+func (n *Namespaced) GetGauge(path string) StatGauge {
 	path, labelKeys, labelValues := n.getPathAndLabels(path)
 	if path == "" {
-		return metrics.DudStat{}
+		return DudStat{}
 	}
 	if len(labelKeys) > 0 {
-		return n.child.GetGaugeVec(path, labelKeys).With(labelValues...)
+		return n.child.GetGaugeVec(path, labelKeys...).With(labelValues...)
 	}
 	return n.child.GetGauge(path)
 }
@@ -224,11 +218,11 @@ func (n *Namespaced) GetGauge(path string) metrics.StatGauge {
 // GetGaugeVec returns an editable gauge stat for a given path with labels,
 // these labels must be consistent with any other metrics registered on the same
 // path.
-func (n *Namespaced) GetGaugeVec(path string, labelNames []string) metrics.StatGaugeVec {
+func (n *Namespaced) GetGaugeVec(path string, labelNames ...string) StatGaugeVec {
 	path, staticKeys, staticValues := n.getPathAndLabels(path)
 	if path == "" {
-		return fakeGaugeVec(func([]string) metrics.StatGauge {
-			return metrics.DudStat{}
+		return FakeGaugeVec(func(...string) StatGauge {
+			return DudStat{}
 		})
 	}
 	if len(staticKeys) > 0 {
@@ -237,15 +231,10 @@ func (n *Namespaced) GetGaugeVec(path string, labelNames []string) metrics.StatG
 		newNames = append(newNames, labelNames...)
 		return &gaugeVecWithStatic{
 			staticValues: staticValues,
-			child:        n.child.GetGaugeVec(path, newNames),
+			child:        n.child.GetGaugeVec(path, newNames...),
 		}
 	}
-	return n.child.GetGaugeVec(path, labelNames)
-}
-
-// SetLogger sets the logging mechanism of the metrics type.
-func (n *Namespaced) SetLogger(log log.Modular) {
-	n.child.SetLogger(log)
+	return n.child.GetGaugeVec(path, labelNames...)
 }
 
 // Close stops aggregating stats and cleans up resources.

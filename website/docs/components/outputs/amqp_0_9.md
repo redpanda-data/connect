@@ -27,42 +27,42 @@ various message brokers, including RabbitMQ.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   amqp_0_9:
     urls: []
-    exchange: benthos-exchange
-    key: benthos-key
+    exchange: ""
+    key: ""
     type: ""
     metadata:
       exclude_prefixes: []
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   amqp_0_9:
     urls: []
-    exchange: benthos-exchange
+    exchange: ""
     exchange_declare:
       enabled: false
       type: direct
       durable: true
-    key: benthos-key
+    key: ""
     type: ""
     content_type: application/octet-stream
     content_encoding: ""
     metadata:
       exclude_prefixes: []
     priority: ""
-    max_in_flight: 1
+    max_in_flight: 64
     persistent: false
     mandatory: false
     immediate: false
@@ -107,7 +107,7 @@ Type: `array`
 Default: `[]`  
 Requires version 3.58.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 urls:
@@ -127,7 +127,7 @@ An AMQP exchange to publish to.
 
 
 Type: `string`  
-Default: `"benthos-exchange"`  
+Default: `""`  
 
 ### `exchange_declare`
 
@@ -135,6 +135,7 @@ Optionally declare the target exchange (passive).
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `exchange_declare.enabled`
 
@@ -168,7 +169,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos-key"`  
+Default: `""`  
 
 ### `type`
 
@@ -203,6 +204,7 @@ Specify criteria for which metadata values are attached to messages as headers.
 
 
 Type: `object`  
+Default: `{}`  
 
 ### `metadata.exclude_prefixes`
 
@@ -221,7 +223,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 priority: "0"
@@ -237,7 +239,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `persistent`
 
@@ -303,7 +305,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -320,7 +322,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -332,9 +334,8 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:

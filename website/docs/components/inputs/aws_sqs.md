@@ -26,19 +26,18 @@ Consume messages from an AWS SQS URL.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 input:
   label: ""
   aws_sqs:
     url: ""
-    region: eu-west-1
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 input:
   label: ""
@@ -46,7 +45,8 @@ input:
     url: ""
     delete_message: true
     reset_visibility: true
-    region: eu-west-1
+    max_number_of_messages: 10
+    region: ""
     endpoint: ""
     credentials:
       profile: ""
@@ -108,13 +108,21 @@ Type: `bool`
 Default: `true`  
 Requires version 3.58.0 or newer  
 
+### `max_number_of_messages`
+
+The maximum number of messages to return on one poll. Valid values: 1 to 10.
+
+
+Type: `int`  
+Default: `10`  
+
 ### `region`
 
 The AWS region to target.
 
 
 Type: `string`  
-Default: `"eu-west-1"`  
+Default: `""`  
 
 ### `endpoint`
 

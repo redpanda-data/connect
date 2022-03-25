@@ -1,21 +1,24 @@
 package aws
 
 import (
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func sessionFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField("region").
 			Description("The AWS region to target.").
-			Default(""),
+			Default("").
+			Advanced(),
 		service.NewStringField("endpoint").
 			Description("Allows you to specify a custom endpoint for the AWS API.").
-			Default("").Advanced(),
+			Default("").
+			Advanced(),
 		service.NewObjectField("credentials",
 			service.NewStringField("profile").
 				Description("A profile from `~/.aws/credentials` to use.").
@@ -35,6 +38,7 @@ func sessionFields() []*service.ConfigField {
 			service.NewStringField("role_external_id").
 				Description("An external ID to provide when assuming a role.").
 				Default("").Advanced()).
+			Advanced().
 			Description("Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws)."),
 	}
 }
@@ -46,7 +50,7 @@ func getSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*s
 		awsConf = awsConf.WithRegion(region)
 	}
 	if endpoint, _ := parsedConf.FieldString("endpoint"); endpoint != "" {
-		awsConf = awsConf.WithRegion(endpoint)
+		awsConf = awsConf.WithEndpoint(endpoint)
 	}
 	if profile, _ := parsedConf.FieldString("credentials", "profile"); profile != "" {
 		awsConf = awsConf.WithCredentials(credentials.NewSharedCredentials(

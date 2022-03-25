@@ -1,11 +1,13 @@
 package bundle
 
 import (
+	"fmt"
 	"sort"
 
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 // AllProcessors is a set containing every single processor that has been
@@ -23,7 +25,7 @@ func (e *Environment) ProcessorAdd(constructor ProcessorConstructor, spec docs.C
 }
 
 // ProcessorInit attempts to initialise a processor from a config.
-func (e *Environment) ProcessorInit(conf processor.Config, mgr NewManagement) (types.Processor, error) {
+func (e *Environment) ProcessorInit(conf processor.Config, mgr NewManagement) (iprocessor.V1, error) {
 	return e.processors.Init(conf, mgr)
 }
 
@@ -35,7 +37,7 @@ func (e *Environment) ProcessorDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // ProcessorConstructor constructs an processor component.
-type ProcessorConstructor func(processor.Config, NewManagement) (processor.Type, error)
+type ProcessorConstructor func(processor.Config, NewManagement) (iprocessor.V1, error)
 
 type processorSpec struct {
 	constructor ProcessorConstructor
@@ -51,9 +53,13 @@ type ProcessorSet struct {
 // Add a new processor to this set by providing a spec (name, documentation, and
 // constructor).
 func (s *ProcessorSet) Add(constructor ProcessorConstructor, spec docs.ComponentSpec) error {
+	if !nameRegexp.MatchString(spec.Name) {
+		return fmt.Errorf("component name '%v' does not match the required regular expression /%v/", spec.Name, nameRegexpRaw)
+	}
 	if s.specs == nil {
 		s.specs = map[string]processorSpec{}
 	}
+	spec.Type = docs.TypeProcessor
 	s.specs[spec.Name] = processorSpec{
 		constructor: constructor,
 		spec:        spec,
@@ -63,16 +69,14 @@ func (s *ProcessorSet) Add(constructor ProcessorConstructor, spec docs.Component
 }
 
 // Init attempts to initialise an processor from a config.
-func (s *ProcessorSet) Init(conf processor.Config, mgr NewManagement) (types.Processor, error) {
+func (s *ProcessorSet) Init(conf processor.Config, mgr NewManagement) (iprocessor.V1, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
-		// TODO: V4 Remove this
-		if ctor, exists := processor.GetDeprecatedPlugin(conf.Type); exists {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
-		}
-		return nil, types.ErrInvalidProcessorType
+		return nil, component.ErrInvalidType("processor", conf.Type)
 	}
-	return spec.constructor(conf, mgr)
+	c, err := spec.constructor(conf, mgr)
+	err = wrapComponentErr(mgr, "processor", err)
+	return c, err
 }
 
 // Docs returns a slice of processor specs, which document each method.

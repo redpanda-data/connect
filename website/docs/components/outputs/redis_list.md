@@ -27,14 +27,14 @@ already exist) using the RPUSH command.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   redis_list:
-    url: tcp://localhost:6379
-    key: benthos_list
-    max_in_flight: 1
+    url: ""
+    key: ""
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -45,12 +45,12 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   redis_list:
-    url: tcp://localhost:6379
+    url: ""
     kind: simple
     master: ""
     tls:
@@ -60,8 +60,8 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    key: benthos_list
-    max_in_flight: 1
+    key: ""
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -95,9 +95,9 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 
 
 Type: `string`  
-Default: `"tcp://localhost:6379"`  
+Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 url: :6397
@@ -121,7 +121,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 Type: `string`  
 Default: `"simple"`  
 
-```yaml
+```yml
 # Examples
 
 kind: simple
@@ -139,7 +139,7 @@ Name of the redis master when `kind` is `failover`
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 master: mymaster
@@ -189,7 +189,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -206,7 +206,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -220,7 +220,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -271,9 +271,9 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos_list"`  
+Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 key: benthos_list
@@ -291,7 +291,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `batching`
 
@@ -300,7 +300,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -342,7 +342,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -360,7 +360,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -374,7 +374,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

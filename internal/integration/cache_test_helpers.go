@@ -8,15 +8,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 // CacheTestConfigVars exposes some variables injected into template configs for
@@ -48,7 +51,7 @@ type cacheTestEnvironment struct {
 	timeout time.Duration
 	ctx     context.Context
 	log     log.Modular
-	stats   metrics.Type
+	stats   *metrics.Namespaced
 }
 
 func newCacheTestEnvironment(t *testing.T, confTemplate string) cacheTestEnvironment {
@@ -98,7 +101,11 @@ func CacheTestOptLogging(level string) CacheTestOptFunc {
 	return func(env *cacheTestEnvironment) {
 		logConf := log.NewConfig()
 		logConf.LogLevel = level
-		env.log = log.New(os.Stdout, logConf)
+		var err error
+		env.log, err = log.NewV2(os.Stdout, logConf)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -177,7 +184,7 @@ func namedCacheTest(name string, test cacheTestDefinitionFn) CacheTestDefinition
 
 //------------------------------------------------------------------------------
 
-func initCache(t *testing.T, env *cacheTestEnvironment) types.Cache {
+func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 	t.Helper()
 
 	confBytes := []byte(env.RenderConfig())
@@ -187,20 +194,20 @@ func initCache(t *testing.T, env *cacheTestEnvironment) types.Cache {
 	dec.KnownFields(true)
 	require.NoError(t, dec.Decode(&s))
 
-	lints, err := config.Lint(confBytes, s)
+	lints, err := config.LintBytes(docs.NewLintContext(), confBytes)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	manager, err := manager.NewV2(s.ResourceConfig, types.NoopMgr(), env.log, env.stats)
+	manager, err := manager.NewV2(s.ResourceConfig, mock.NewManager(), env.log, env.stats)
 	require.NoError(t, err)
 
-	cache, err := manager.GetCache("testcache")
-	require.NoError(t, err)
-
-	return cache
+	var c cache.V1
+	require.NoError(t, manager.AccessCache(env.ctx, "testcache", func(v cache.V1) {
+		c = v
+	}))
+	return c
 }
 
-func closeCache(t *testing.T, cache types.Cache) {
-	cache.CloseAsync()
-	require.NoError(t, cache.WaitForClose(time.Second*10))
+func closeCache(t *testing.T, cache cache.V1) {
+	require.NoError(t, cache.Close(context.Background()))
 }

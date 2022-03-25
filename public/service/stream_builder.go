@@ -8,28 +8,26 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/Jeffail/benthos/v3/internal/bundle"
-	"github.com/Jeffail/benthos/v3/internal/bundle/tracing"
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/lib/api"
-	"github.com/Jeffail/benthos/v3/lib/buffer"
-	"github.com/Jeffail/benthos/v3/lib/cache"
-	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/message"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/output"
-	"github.com/Jeffail/benthos/v3/lib/processor"
-	"github.com/Jeffail/benthos/v3/lib/ratelimit"
-	"github.com/Jeffail/benthos/v3/lib/response"
-	"github.com/Jeffail/benthos/v3/lib/stream"
-	"github.com/Jeffail/benthos/v3/lib/types"
-	"github.com/Jeffail/benthos/v3/lib/util/text"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	"gopkg.in/yaml.v3"
+
+	"github.com/benthosdev/benthos/v4/internal/api"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
+	"github.com/benthosdev/benthos/v4/internal/component/buffer"
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
 // StreamBuilder provides methods for building a Benthos stream configuration.
@@ -53,7 +51,7 @@ type StreamBuilder struct {
 	metrics    metrics.Config
 	logger     log.Config
 
-	producerChan chan types.Transaction
+	producerChan chan message.Transaction
 	producerID   string
 	consumerFunc MessageBatchHandlerFunc
 	consumerID   string
@@ -157,7 +155,7 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 		return nil, fmt.Errorf("failed to generate a producer uuid: %w", err)
 	}
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	s.producerChan = tChan
 	s.producerID = uuid.String()
 
@@ -167,17 +165,17 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 	s.inputs = append(s.inputs, conf)
 
 	return func(ctx context.Context, m *Message) error {
-		tmpMsg := message.New(nil)
+		tmpMsg := message.QuickBatch(nil)
 		tmpMsg.Append(m.part)
-		resChan := make(chan types.Response)
+		resChan := make(chan error)
 		select {
-		case tChan <- types.NewTransaction(tmpMsg, resChan):
+		case tChan <- message.NewTransaction(tmpMsg, resChan):
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 		select {
 		case res := <-resChan:
-			return res.Error()
+			return res
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -206,7 +204,7 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 		return nil, fmt.Errorf("failed to generate a producer uuid: %w", err)
 	}
 
-	tChan := make(chan types.Transaction)
+	tChan := make(chan message.Transaction)
 	s.producerChan = tChan
 	s.producerID = uuid.String()
 
@@ -216,19 +214,19 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 	s.inputs = append(s.inputs, conf)
 
 	return func(ctx context.Context, b MessageBatch) error {
-		tmpMsg := message.New(nil)
+		tmpMsg := message.QuickBatch(nil)
 		for _, m := range b {
 			tmpMsg.Append(m.part)
 		}
-		resChan := make(chan types.Response)
+		resChan := make(chan error)
 		select {
-		case tChan <- types.NewTransaction(tmpMsg, resChan):
+		case tChan <- message.NewTransaction(tmpMsg, resChan):
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 		select {
 		case res := <-resChan:
-			return res.Error()
+			return res
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -659,18 +657,12 @@ func (s *StreamBuilder) runConsumerFunc(mgr *manager.Type) error {
 				return
 			}
 			batch := make(MessageBatch, tran.Payload.Len())
-			_ = tran.Payload.Iter(func(i int, part types.Part) error {
+			_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 				batch[i] = newMessageFromPart(part)
 				return nil
 			})
 			err := s.consumerFunc(context.Background(), batch)
-			var res types.Response
-			if err != nil {
-				res = response.NewError(err)
-			} else {
-				res = response.NewAck()
-			}
-			tran.ResponseChan <- res
+			_ = tran.Ack(context.Background(), err)
 		}
 	}()
 	return nil
@@ -708,7 +700,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		}
 	}
 
-	stats, err := metrics.New(s.metrics, metrics.OptSetLogger(logger))
+	stats, err := bundle.AllMetrics.Init(s.metrics, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -726,17 +718,9 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		if apiMut, err = api.New("", "", s.http, sanitNode, logger, stats); err != nil {
 			return nil, fmt.Errorf("unable to create stream HTTP server due to: %w. Tip: you can disable the server with `http.enabled` set to `false`, or override the configured server with SetHTTPMux", err)
 		}
-	}
-
-	if wHandlerFunc, ok := stats.(metrics.WithHandlerFunc); ok {
-		apiMut.RegisterEndpoint(
-			"/stats", "Returns service metrics.",
-			wHandlerFunc.HandlerFunc(),
-		)
-		apiMut.RegisterEndpoint(
-			"/metrics", "Returns service metrics.",
-			wHandlerFunc.HandlerFunc(),
-		)
+	} else if hler := stats.HandlerFunc(); hler != nil {
+		apiMut.RegisterEndpoint("/stats", "Exposes service-wide metrics in the format configured.", hler)
+		apiMut.RegisterEndpoint("/metrics", "Exposes service-wide metrics in the format configured.", hler)
 	}
 
 	mgr, err := manager.NewV2(
@@ -806,7 +790,7 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 //------------------------------------------------------------------------------
 
 func getYAMLNode(b []byte) (*yaml.Node, error) {
-	b = text.ReplaceEnvVariables(b)
+	b = config.ReplaceEnvVariables(b)
 	var nconf yaml.Node
 	if err := yaml.Unmarshal(b, &nconf); err != nil {
 		return nil, err

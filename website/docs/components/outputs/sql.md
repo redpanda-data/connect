@@ -18,10 +18,9 @@ import TabItem from '@theme/TabItem';
 :::warning DEPRECATED
 This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
 :::
+Executes an arbitrary SQL query for each message.
 
-Runs an SQL prepared query against a target database for each message.
-
-Introduced in version 3.33.0.
+Introduced in version 3.65.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -31,16 +30,16 @@ Introduced in version 3.33.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   sql:
-    driver: mysql
+    driver: ""
     data_source_name: ""
     query: ""
     args_mapping: ""
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -51,16 +50,16 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   sql:
-    driver: mysql
+    driver: ""
     data_source_name: ""
     query: ""
     args_mapping: ""
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -74,75 +73,7 @@ output:
 
 ## Alternatives
 
-Use the [`sql_insert`](/docs/components/outputs/sql_insert) output instead.
-
-## Drivers
-
-The following is a list of supported drivers and their respective DSN formats:
-
-| Driver | Data Source Name Format |
-|---|---|
-| `clickhouse` | [`tcp://[netloc][:port][?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn)
-| `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |
-| `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |
-| `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |
-
-Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
-
-## Performance
-
-This output benefits from sending multiple messages in flight in parallel for
-improved performance. You can tune the max number of in flight messages with the
-field `max_in_flight`.
-
-This output benefits from sending messages as a batch for improved performance.
-Batches can be formed at both the input and output level. You can find out more
-[in this doc](/docs/configuration/batching).
-
-## Examples
-
-<Tabs defaultValue="Table Insert (MySQL)" values={[
-{ label: 'Table Insert (MySQL)', value: 'Table Insert (MySQL)', },
-{ label: 'Table Insert (PostgreSQL)', value: 'Table Insert (PostgreSQL)', },
-]}>
-
-<TabItem value="Table Insert (MySQL)">
-
-
-The following example inserts rows into the table footable with the columns foo,
-bar and baz populated with values extracted from messages:
-
-```yaml
-output:
-  sql:
-    driver: mysql
-    data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
-    query: "INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);"
-    args_mapping: '[ this.document.foo, this.document.bar, meta("kafka_topic") ]'
-    batching:
-      count: 500
-```
-
-</TabItem>
-<TabItem value="Table Insert (PostgreSQL)">
-
-
-The following example inserts rows into the table footable with the columns foo,
-bar and baz populated with values extracted from messages:
-
-```yaml
-output:
-  sql:
-    driver: postgres
-    data_source_name: postgres://foouser:foopassword@localhost:5432/foodb?sslmode=disable
-    query: "INSERT INTO footable (foo, bar, baz) VALUES ($1, $2, $3);"
-    args_mapping: '[ this.document.foo, this.document.bar, meta("kafka_topic") ]'
-    batching:
-      count: 500
-```
-
-</TabItem>
-</Tabs>
+For basic inserts use the [`sql_insert`](/docs/components/outputs/sql) output. For more complex queries use the [`sql_raw`](/docs/components/outputs/sql_raw) output.
 
 ## Fields
 
@@ -152,36 +83,23 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Default: `"mysql"`  
 Options: `mysql`, `postgres`, `clickhouse`, `mssql`.
 
 ### `data_source_name`
 
-A Data Source Name to identify the target database.
+Sorry! This field is missing documentation.
 
 
 Type: `string`  
-Default: `""`  
-
-```yaml
-# Examples
-
-data_source_name: tcp://host1:9000?username=user&password=qwerty&database=clicks&read_timeout=10&write_timeout=20&alt_hosts=host2:9000,host3:9000
-
-data_source_name: foouser:foopassword@tcp(localhost:3306)/foodb
-
-data_source_name: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
-```
 
 ### `query`
 
-The query to run against the database.
+The query to execute.
 
 
 Type: `string`  
-Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
@@ -189,28 +107,26 @@ query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 
 ### `args_mapping`
 
-A [Bloblang mapping](/docs/guides/bloblang/about) that produces the arguments for the query. The mapping must return an array containing the number of arguments in the query.
+An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
 
 
 Type: `string`  
-Default: `""`  
-Requires version 3.47.0 or newer  
 
-```yaml
+```yml
 # Examples
 
-args_mapping: '[ this.foo, this.bar.not_empty().catch(null), meta("baz") ]'
+args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ]
 
-args_mapping: root = [ uuid_v4() ].merge(this.document.args)
+args_mapping: root = [ meta("user.id") ]
 ```
 
 ### `max_in_flight`
 
-The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of inserts to run in parallel.
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `batching`
 
@@ -219,7 +135,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -261,7 +177,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -279,7 +195,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -291,9 +207,8 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 
 
 Type: `array`  
-Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

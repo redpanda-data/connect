@@ -3,7 +3,7 @@ package parser
 import (
 	"fmt"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 //------------------------------------------------------------------------------

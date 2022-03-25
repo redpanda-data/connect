@@ -4,37 +4,38 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 type tracedOutput struct {
 	e       *events
 	ctr     *uint64
-	wrapped types.Output
-	tChan   chan types.Transaction
+	wrapped output.Streamed
+	tChan   chan message.Transaction
 	shutSig *shutdown.Signaller
 }
 
-func traceOutput(e *events, ctr *uint64, i types.Output) types.Output {
+func traceOutput(e *events, ctr *uint64, i output.Streamed) output.Streamed {
 	t := &tracedOutput{
 		e:       e,
 		ctr:     ctr,
 		wrapped: i,
-		tChan:   make(chan types.Transaction),
+		tChan:   make(chan message.Transaction),
 		shutSig: shutdown.NewSignaller(),
 	}
 	return t
 }
 
-func (t *tracedOutput) loop(inChan <-chan types.Transaction) {
+func (t *tracedOutput) loop(inChan <-chan message.Transaction) {
 	defer close(t.tChan)
 	for {
 		tran, open := <-inChan
 		if !open {
 			return
 		}
-		_ = tran.Payload.Iter(func(i int, part types.Part) error {
+		_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 			_ = atomic.AddUint64(t.ctr, 1)
 			t.e.Add(EventConsume, string(part.Get()))
 			return nil
@@ -48,7 +49,7 @@ func (t *tracedOutput) loop(inChan <-chan types.Transaction) {
 	}
 }
 
-func (t *tracedOutput) Consume(inChan <-chan types.Transaction) error {
+func (t *tracedOutput) Consume(inChan <-chan message.Transaction) error {
 	go t.loop(inChan)
 	return t.wrapped.Consume(t.tChan)
 }

@@ -6,23 +6,29 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/public/service"
+	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	"github.com/benthosdev/benthos/v4/public/service"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestTracing(t *testing.T) {
+	u, err := uuid.NewV4()
+	require.NoError(t, err)
+
 	config := `
 input:
   generate:
     count: 5
     interval: 1us
     mapping: |
-      root.id = count("counting the number of messages in my tracing test")
+      root.id = count("` + u.String() + `")
 
 pipeline:
+  threads: 1
   processors:
     - bloblang: |
         root.count = if this.id % 2 == 0 { throw("nah %v".format(this.id)) } else { this.id }
@@ -47,7 +53,7 @@ logger:
 	assert.Equal(t, 2, int(trace.TotalProcessorErrors()))
 
 	assert.Equal(t, map[string][]service.TracingEvent{
-		"input": {
+		"root.input": {
 			{Type: service.TracingEventProduce, Content: `{"id":1}`},
 			{Type: service.TracingEventProduce, Content: `{"id":2}`},
 			{Type: service.TracingEventProduce, Content: `{"id":3}`},
@@ -57,7 +63,7 @@ logger:
 	}, trace.InputEvents())
 
 	assert.Equal(t, map[string][]service.TracingEvent{
-		"pipeline.processor.0": {
+		"root.pipeline.processors.0": {
 			{Type: service.TracingEventConsume, Content: `{"id":1}`},
 			{Type: service.TracingEventProduce, Content: `{"count":1}`},
 			{Type: service.TracingEventConsume, Content: `{"id":2}`},
@@ -74,7 +80,7 @@ logger:
 	}, trace.ProcessorEvents())
 
 	assert.Equal(t, map[string][]service.TracingEvent{
-		"output": {
+		"root.output": {
 			{Type: service.TracingEventConsume, Content: `{"count":1}`},
 			{Type: service.TracingEventConsume, Content: `{"id":2}`},
 			{Type: service.TracingEventConsume, Content: `{"count":3}`},
@@ -94,6 +100,7 @@ input:
       root.id = uuid_v4()
 
 pipeline:
+  threads: 1
   processors:
     - bloblang: 'root = this'
 
@@ -150,6 +157,7 @@ input:
       root.id = uuid_v4()
 
 pipeline:
+  threads: 1
   processors:
     - bloblang: 'root = this'
 

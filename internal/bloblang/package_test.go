@@ -4,11 +4,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/mapping"
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestMappings(t *testing.T) {
@@ -80,6 +81,64 @@ func TestMappings(t *testing.T) {
 				mapping.NewTargetPath(mapping.TargetValue, "baz", "buz", "0", "bev"),
 			},
 		},
+		"root copies to root": {
+			mapping: `
+root = this
+root.first = root
+root.second = root
+`,
+			input: map[string]interface{}{
+				"foo": "bar",
+			},
+			output: map[string]interface{}{
+				"foo": "bar",
+				"first": map[string]interface{}{
+					"foo": "bar",
+				},
+				"second": map[string]interface{}{
+					"foo": "bar",
+					"first": map[string]interface{}{
+						"foo": "bar",
+					},
+				},
+			},
+			assignmentTargets: []mapping.TargetPath{
+				mapping.NewTargetPath(mapping.TargetValue),
+				mapping.NewTargetPath(mapping.TargetValue, "first"),
+				mapping.NewTargetPath(mapping.TargetValue, "second"),
+			},
+			queryTargets: []query.TargetPath{
+				query.NewTargetPath(query.TargetValue),
+				query.NewTargetPath(query.TargetRoot),
+				query.NewTargetPath(query.TargetRoot),
+			},
+		},
+		"root edit from map": {
+			mapping: `
+map foo {
+	root.from_map = "hello world"
+	root = root.from_map
+}
+root = this
+root.meow = this.apply("foo") 
+`,
+			input: map[string]interface{}{
+				"foo": "bar",
+			},
+			output: map[string]interface{}{
+				"foo":  "bar",
+				"meow": "hello world",
+			},
+			assignmentTargets: []mapping.TargetPath{
+				mapping.NewTargetPath(mapping.TargetValue),
+				mapping.NewTargetPath(mapping.TargetValue, "meow"),
+			},
+			queryTargets: []query.TargetPath{
+				query.NewTargetPath(query.TargetValue),
+				query.NewTargetPath(query.TargetValue),
+				query.NewTargetPath(query.TargetRoot, "from_map"),
+			},
+		},
 	}
 
 	for name, test := range tests {
@@ -91,12 +150,13 @@ func TestMappings(t *testing.T) {
 			assert.Equal(t, test.assignmentTargets, m.AssignmentTargets())
 
 			_, targets := m.QueryTargets(query.TargetsContext{
-				Maps: map[string]query.Function{},
+				Maps: m.Maps(),
 			})
 			assert.Equal(t, test.queryTargets, targets)
 
 			res, err := m.Exec(query.FunctionContext{
-				MsgBatch: message.New(nil),
+				MsgBatch: message.QuickBatch(nil),
+				Maps:     m.Maps(),
 				Vars:     map[string]interface{}{},
 			}.WithValue(test.input))
 			require.NoError(t, err)
@@ -143,9 +203,9 @@ func TestMappingParallelExecution(t *testing.T) {
 
 					for j := 0; j < 100; j++ {
 						part := message.NewPart(nil)
-						require.NoError(t, part.SetJSON(test.input))
+						part.SetJSON(test.input)
 
-						msg := message.New(nil)
+						msg := message.QuickBatch(nil)
 						msg.Append(part)
 
 						p, err := m.MapPart(0, msg)

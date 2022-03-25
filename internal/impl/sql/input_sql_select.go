@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/public/bloblang"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/Masterminds/squirrel"
+
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func sqlSelectInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
-		Categories("Integration").
+		Categories("Services").
 		Summary("Executes a select query and creates a message for each row received.").
 		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
 		Field(driverField).

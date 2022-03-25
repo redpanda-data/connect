@@ -3,10 +3,11 @@ package parser
 import (
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestArithmeticParser(t *testing.T) {
@@ -303,18 +304,18 @@ func TestArithmeticParser(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, m := range test.messages {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.Metadata().Set(k, v)
+						part.MetaSet(k, v)
 					}
 				}
 				msg.Append(part)
 			}
 
-			e, err := tryParseQuery(test.input, false)
+			e, err := tryParseQuery(test.input)
 			require.Nil(t, err)
 
 			res := query.ExecToString(e, query.FunctionContext{
@@ -370,8 +371,8 @@ func TestArithmeticLiteralsParser(t *testing.T) {
 	}
 
 	for k, v := range tests {
-		msg := message.New(nil)
-		e, err := tryParseQuery(k, false)
+		msg := message.QuickBatch(nil)
+		e, err := tryParseQuery(k)
 		require.Nil(t, err)
 
 		res := query.ExecToString(e, query.FunctionContext{

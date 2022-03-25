@@ -33,7 +33,7 @@ Introduced in version 3.36.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -44,13 +44,13 @@ output:
     storage_connection_string: ""
     container: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -63,7 +63,7 @@ output:
     container: ""
     path: ${!count("files")}-${!timestamp_unix_nano()}.txt
     blob_type: BLOCK
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
@@ -134,7 +134,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 container: messages-${!timestamp("2006")}
@@ -149,7 +149,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`  
 
-```yaml
+```yml
 # Examples
 
 path: ${!count("files")}-${!timestamp_unix_nano()}.json
@@ -175,6 +175,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 

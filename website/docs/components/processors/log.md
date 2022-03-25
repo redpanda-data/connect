@@ -15,60 +15,22 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+Prints a log event for each message. Messages always remain unchanged. The log message can be set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries) which allows you to log the contents and metadata of messages.
 
-Prints a log event each time it processes a batch. Messages always remain
-unchanged. The log message can be set using function interpolations described
-[here](/docs/configuration/interpolation#bloblang-queries) which allows you to log the
-contents and metadata of messages.
-
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 log:
   level: INFO
-  fields: {}
   fields_mapping: ""
   message: ""
 ```
 
-In order to print a log message per message of a batch place it within a
-[`for_each`](/docs/components/processors/for_each) processor.
-
-For example, if we wished to create a debug log event for each message in a
-pipeline in order to expose the JSON field `foo.bar` as well as the
-metadata field `kafka_partition` we can achieve that with the
-following config:
-
-```yaml
-pipeline:
-  processors:
-    - for_each:
-      - log:
-          level: DEBUG
-          message: 'field: ${! json("foo.bar") }, part: ${! meta("kafka_partition") }'
-```
-
-The `level` field determines the log level of the printed events and
-can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.
+The `level` field determines the log level of the printed events and can be any of the following values: TRACE, DEBUG, INFO, WARN, ERROR.
 
 ### Structured Fields
 
-It's also possible add custom fields to logs when the format is set to a structured form such as `json` or `logfmt`. The config field `fields` allows you to provide a map of key/value string pairs, where the values support [interpolation functions](/docs/configuration/interpolation#bloblang-queries) allowing you to extract message contents and metadata like this:
-
-```yaml
-pipeline:
-  processors:
-    - log:
-        level: DEBUG
-        message: hello world
-        fields:
-          reason: cus I wana
-          id: ${! json("id") }
-          age: ${! json("user.age") }
-          kafka_topic: ${! meta("kafka_topic") }
-```
-
-However, these values will always be output as string types. In cases where you want to add other types such as integers or booleans you can use the field `fields_mapping` to define a [Bloblang mapping](/docs/guides/bloblang/about) that outputs a map of key/values like this:
+It's also possible add custom fields to logs when the format is set to a structured form such as `json` or `logfmt` with the config field [`fields_mapping`](#fields_mapping):
 
 ```yaml
 pipeline:
@@ -95,15 +57,6 @@ Type: `string`
 Default: `"INFO"`  
 Options: `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`, `ALL`.
 
-### `fields`
-
-A map of fields to print along with the log message.
-This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
-
-
-Type: `object`  
-Default: `{}`  
-
 ### `fields_mapping`
 
 An optional [Bloblang mapping](/docs/guides/bloblang/about) that can be used to specify extra fields to add to the log. If log fields are also added with the `fields` field then those values will override matching keys from this mapping.
@@ -113,7 +66,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.40.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 fields_mapping: |-

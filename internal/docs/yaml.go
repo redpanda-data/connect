@@ -25,7 +25,7 @@ func FieldsFromYAML(node *yaml.Node) FieldSpecs {
 func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 	node = unwrapDocumentNode(node)
 
-	field := FieldCommon(name, "")
+	field := newField(name, "")
 
 	switch node.Kind {
 	case yaml.MappingNode:
@@ -103,7 +103,7 @@ func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 // GetInferenceCandidateFromYAML checks a yaml node config structure for a
 // component and returns either the inferred type name or an error if one cannot
 // be inferred.
-func GetInferenceCandidateFromYAML(docProv Provider, t Type, defaultType string, node *yaml.Node) (string, ComponentSpec, error) {
+func GetInferenceCandidateFromYAML(docProv Provider, t Type, node *yaml.Node) (string, ComponentSpec, error) {
 	if docProv == nil {
 		docProv = globalProvider
 	}
@@ -127,7 +127,7 @@ func GetInferenceCandidateFromYAML(docProv Provider, t Type, defaultType string,
 		keys = append(keys, node.Content[i].Value)
 	}
 
-	return getInferenceCandidateFromList(docProv, t, defaultType, keys)
+	return getInferenceCandidateFromList(docProv, t, keys)
 }
 
 // GetPluginConfigYAML extracts a plugin configuration node from a component
@@ -185,44 +185,11 @@ func (f FieldSpec) shouldOmitYAML(parentFields FieldSpecs, fieldNode, parentNode
 	return f.omitWhenFn(field, parent)
 }
 
-// TODO: V4 Remove this.
-func sanitiseConditionConfigYAML(node *yaml.Node) error {
-	// This is a nasty hack until Benthos v4.
-	newNodes := []*yaml.Node{}
-
-	var name string
-	for i := 0; i < len(node.Content)-1; i += 2 {
-		if node.Content[i].Value == "type" {
-			name = node.Content[i+1].Value
-			newNodes = append(newNodes, node.Content[i], node.Content[i+1])
-			break
-		}
-	}
-
-	if name == "" {
-		return nil
-	}
-
-	for i := 0; i < len(node.Content)-1; i += 2 {
-		if node.Content[i].Value == name {
-			newNodes = append(newNodes, node.Content[i], node.Content[i+1])
-			break
-		}
-	}
-
-	node.Content = newNodes
-	return nil
-}
-
 // SanitiseYAML takes a yaml.Node and a config spec and sorts the fields of the
 // node according to the spec. Also optionally removes the `type` field from
 // this and all nested components.
 func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	node = unwrapDocumentNode(node)
-
-	if cType == "condition" {
-		return sanitiseConditionConfigYAML(node)
-	}
 
 	newNodes := []*yaml.Node{}
 
@@ -238,7 +205,9 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 	}
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "type" {
-			name = node.Content[i+1].Value
+			if name = node.Content[i+1].Value; name == "" {
+				continue
+			}
 			if !conf.RemoveTypeField {
 				newNodes = append(newNodes, node.Content[i], node.Content[i+1])
 			}
@@ -252,7 +221,7 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 			return nil
 		}
 		var err error
-		if name, _, err = getInferenceCandidateFromList(conf, cType, "", keys); err != nil {
+		if name, _, err = getInferenceCandidateFromList(conf, cType, keys); err != nil {
 			return err
 		}
 	}
@@ -485,7 +454,7 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 			return nil
 		}
 		var err error
-		if name, _, err = getInferenceCandidateFromList(ctx.DocsProvider, cType, "", keys); err != nil {
+		if name, _, err = getInferenceCandidateFromList(ctx.DocsProvider, cType, keys); err != nil {
 			lints = append(lints, NewLintWarning(node.Line, "unable to infer component type"))
 			return lints
 		}
@@ -552,6 +521,11 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		lints = append(lints, NewLintError(node.Line, fmt.Sprintf("field %v is deprecated", f.Name)))
 	}
 
+	// Execute custom linters, if the kind is non-scalar this means we execute
+	// the linter from the perspective of both the scalar and higher level types
+	// and it's up to the linting implementation to distinguish between them.
+	lints = append(lints, customLintFromYAML(ctx, f, node)...)
+
 	// Check basic kind matches, and execute custom linters
 	switch f.Kind {
 	case Kind2DArray:
@@ -582,9 +556,6 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		}
 		return lints
 	}
-
-	// Execute custom linters
-	lints = append(lints, customLintFromYAML(ctx, f, node)...)
 
 	// If we're a core type then execute component specific linting
 	if coreType, isCore := f.Type.IsCoreComponent(); isCore {

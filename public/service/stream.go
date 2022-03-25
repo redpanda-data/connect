@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/manager"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/stream"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
 // Stream executes a full Benthos stream and provides methods for performing
@@ -45,13 +45,10 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 	if s.strm != nil {
 		err = errors.New("stream has already been run")
 	} else {
-		s.strm, err = stream.New(s.conf,
+		s.strm, err = stream.New(s.conf, s.mgr,
 			stream.OptOnClose(func() {
 				s.shutSig.ShutdownComplete()
-			}),
-			stream.OptSetManager(s.mgr),
-			stream.OptSetLogger(s.logger),
-			stream.OptSetStats(s.stats))
+			}))
 	}
 	s.strmMut.Unlock()
 	if err != nil {

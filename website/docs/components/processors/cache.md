@@ -26,12 +26,12 @@ Performs operations against a [cache resource](/docs/components/caches/about) fo
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 cache:
   resource: ""
-  operator: set
+  operator: ""
   key: ""
   value: ""
 ```
@@ -39,16 +39,15 @@ cache:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 cache:
   resource: ""
-  operator: set
+  operator: ""
   key: ""
   value: ""
   ttl: ""
-  parts: []
 ```
 
 </TabItem>
@@ -60,6 +59,7 @@ This processor will interpolate functions within the `key` and `value` fields in
 
 <Tabs defaultValue="Deduplication" values={[
 { label: 'Deduplication', value: 'Deduplication', },
+{ label: 'Deduplication Batch-Wide', value: 'Deduplication Batch-Wide', },
 { label: 'Hydration', value: 'Hydration', },
 ]}>
 
@@ -85,6 +85,33 @@ cache_resources:
   - label: foocache
     redis:
       url: tcp://TODO:6379
+```
+
+</TabItem>
+<TabItem value="Deduplication Batch-Wide">
+
+
+Sometimes it's necessary to deduplicate a batch of messages (AKA a window) by a single identifying value. This can be done by introducing a [`branch` processor](/docs/components/processors/branch), which executes the cache only once on behalf of the batch, in this case with a value make from a field extracted from the first and last messages of the batch:
+
+```yaml
+pipeline:
+  processors:
+    # Try and add one message to a cache that identifies the whole batch
+    - branch:
+        request_map: |
+          root = if batch_index() == 0 {
+            json("id").from(0) + json("meta.tail_id").from(-1)
+          } else { deleted() }
+        processors:
+          - cache:
+              operator: add
+              key: ${! content() }
+              value: t
+    # Delete all messages if we failed
+    - bloblang: |
+        root = if errored().from(0) {
+          deleted()
+        }
 ```
 
 </TabItem>
@@ -134,7 +161,7 @@ The [operation](#operators) to perform with the cache.
 
 
 Type: `string`  
-Default: `"set"`  
+Default: `""`  
 Options: `set`, `add`, `get`, `delete`.
 
 ### `key`
@@ -157,7 +184,7 @@ Default: `""`
 
 ### `ttl`
 
-The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, and those that do not will fall back to their generally configured TTL setting.
+The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, those that do will have a configuration field `default_ttl`, and those that do not will fall back to their generally configured TTL setting.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
@@ -165,7 +192,7 @@ Type: `string`
 Default: `""`  
 Requires version 3.33.0 or newer  
 
-```yaml
+```yml
 # Examples
 
 ttl: 60s
@@ -174,19 +201,6 @@ ttl: 5m
 
 ttl: 36h
 ```
-
-### `parts`
-
-An optional array of message indexes of a batch that the processor should apply to.
-If left empty all messages are processed. This field is only applicable when
-batching messages [at the input level](/docs/configuration/batching).
-
-Indexes can be negative, and if so the part will be selected from the end
-counting backwards starting from -1.
-
-
-Type: `array`  
-Default: `[]`  
 
 ## Operators
 

@@ -1,26 +1,21 @@
 package config_test
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
-	iconfig "github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/input"
-	"github.com/Jeffail/benthos/v3/lib/log"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	"github.com/benthosdev/benthos/v4/internal/config"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestSetOverridesOnNothing(t *testing.T) {
 	conf := config.New()
-	rdr := iconfig.NewReader("", nil, iconfig.OptAddOverrides(
+	rdr := config.NewReader("", nil, config.OptAddOverrides(
 		"input.type=kafka",
 		"input.kafka.addresses=foobarbaz.com",
 		"output.type=amqp_0_9",
@@ -65,7 +60,7 @@ func TestSetOverrideErrors(t *testing.T) {
 
 	for _, test := range tests {
 		conf := config.New()
-		rdr := iconfig.NewReader("", nil, iconfig.OptAddOverrides(test.input))
+		rdr := config.NewReader("", nil, config.OptAddOverrides(test.input))
 
 		_, err := rdr.Read(&conf)
 		assert.Contains(t, err.Error(), test.err)
@@ -73,12 +68,7 @@ func TestSetOverrideErrors(t *testing.T) {
 }
 
 func TestSetOverridesOfFile(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_set_overrides_of_file")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	fullPath := filepath.Join(dir, "main.yaml")
 	require.NoError(t, os.WriteFile(fullPath, []byte(`
@@ -89,7 +79,7 @@ input:
 `), 0o644))
 
 	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, nil, iconfig.OptAddOverrides(
+	rdr := config.NewReader(fullPath, nil, config.OptAddOverrides(
 		"input.kafka.addresses.0=nope1.com",
 		"input.kafka.addresses.1=nope2.com",
 		"input.kafka.topics=justthis",
@@ -112,12 +102,7 @@ input:
 }
 
 func TestResources(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	fullPath := filepath.Join(dir, "main.yaml")
 	require.NoError(t, os.WriteFile(fullPath, []byte(`
@@ -132,7 +117,10 @@ input:
 cache_resources:
   - label: foo
     memory:
-      ttl: 12
+      default_ttl: 12s
+
+tests:
+  - name: huh
 `), 0o644))
 
 	resourceTwoPath := filepath.Join(dir, "res2.yaml")
@@ -140,11 +128,17 @@ cache_resources:
 cache_resources:
   - label: bar
     memory:
-      ttl: 13
+      default_ttl: 13s
+`), 0o644))
+
+	resourceThreePath := filepath.Join(dir, "res3.yaml")
+	require.NoError(t, os.WriteFile(resourceThreePath, []byte(`
+tests:
+  - name: whut
 `), 0o644))
 
 	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
+	rdr := config.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath, resourceThreePath})
 
 	lints, err := rdr.Read(&conf)
 	require.NoError(t, err)
@@ -158,20 +152,13 @@ cache_resources:
 
 	assert.Equal(t, "foo", conf.ResourceCaches[0].Label)
 	assert.Equal(t, "memory", conf.ResourceCaches[0].Type)
-	assert.Equal(t, 12, conf.ResourceCaches[0].Memory.TTL)
 
 	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
 	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
-	assert.Equal(t, 13, conf.ResourceCaches[1].Memory.TTL)
 }
 
 func TestLints(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	fullPath := filepath.Join(dir, "main.yaml")
 	require.NoError(t, os.WriteFile(fullPath, []byte(`
@@ -188,7 +175,7 @@ cache_resources:
   - label: foo
     memory:
       meow2: or this
-      ttl: 12
+      default_ttl: 12s
 `), 0o644))
 
 	resourceTwoPath := filepath.Join(dir, "res2.yaml")
@@ -197,11 +184,11 @@ cache_resources:
   - label: bar
     memory:
       meow3: or also this
-      ttl: 13
+      default_ttl: 13s
 `), 0o644))
 
 	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
+	rdr := config.NewReader(fullPath, []string{resourceOnePath, resourceTwoPath})
 
 	lints, err := rdr.Read(&conf)
 	require.NoError(t, err)
@@ -218,41 +205,7 @@ cache_resources:
 
 	assert.Equal(t, "foo", conf.ResourceCaches[0].Label)
 	assert.Equal(t, "memory", conf.ResourceCaches[0].Type)
-	assert.Equal(t, 12, conf.ResourceCaches[0].Memory.TTL)
 
 	assert.Equal(t, "bar", conf.ResourceCaches[1].Label)
 	assert.Equal(t, "memory", conf.ResourceCaches[1].Type)
-	assert.Equal(t, 13, conf.ResourceCaches[1].Memory.TTL)
-}
-
-func TestLintsOfOldPlugins(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
-
-	fullPath := filepath.Join(dir, "main.yaml")
-	require.NoError(t, os.WriteFile(fullPath, []byte(`
-input:
-  type: custom_plugin_for_config_old_plugins_test
-  plugin:
-    addresses: [ foobar.com, barbaz.com ]
-    topics: [ meow1, meow2 ]
-`), 0o644))
-
-	input.RegisterPlugin("custom_plugin_for_config_old_plugins_test", func() interface{} {
-		v := struct{}{}
-		return &v
-	}, func(config interface{}, manager types.Manager, logger log.Modular, metrics metrics.Type) (types.Input, error) {
-		return nil, errors.New("nope")
-	})
-
-	conf := config.New()
-	rdr := iconfig.NewReader(fullPath, nil)
-
-	lints, err := rdr.Read(&conf)
-	require.NoError(t, err)
-	require.Len(t, lints, 0)
 }

@@ -31,7 +31,7 @@ Introduced in version 3.36.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -43,7 +43,7 @@ output:
     partition_key: ""
     row_key: ""
     properties: {}
-    max_in_flight: 1
+    max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
@@ -54,7 +54,7 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
@@ -67,7 +67,7 @@ output:
     row_key: ""
     properties: {}
     insert_type: INSERT
-    max_in_flight: 1
+    max_in_flight: 64
     timeout: 5s
     batching:
       count: 0
@@ -104,7 +104,7 @@ The JSON message:
 ```
 
 Will store in the table the following properties:
-```yaml
+```yml
 foo: '55'
 bar: '{ "baz": "a", "bez": "b" }'
 diz: '["a", "b"]'
@@ -112,7 +112,7 @@ diz: '["a", "b"]'
 
 It's also possible to use function interpolations to get or transform the properties values, e.g.:
 
-```yaml
+```yml
 properties:
   device: '${! json("device") }'
   timestamp: '${! json("timestamp") }'
@@ -163,7 +163,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 table_name: ${!meta("kafka_topic")}
@@ -178,7 +178,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 partition_key: ${!json("date")}
@@ -193,7 +193,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 row_key: ${!json("device")}-${!uuid_v4()}
@@ -224,7 +224,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 ### `timeout`
 
@@ -241,7 +241,7 @@ Allows you to configure a [batching policy](/docs/configuration/batching).
 
 Type: `object`  
 
-```yaml
+```yml
 # Examples
 
 batching:
@@ -283,7 +283,7 @@ A period in which an incomplete batch should be flushed regardless of its size.
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 period: 1s
@@ -301,7 +301,7 @@ A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean va
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 check: this.type == "end_of_transaction"
@@ -315,7 +315,7 @@ A list of [processors](/docs/components/processors/about) to apply to a batch as
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 processors:

@@ -26,28 +26,28 @@ Publish to an NSQ topic.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
   nsq:
-    nsqd_tcp_address: localhost:4150
-    topic: benthos_messages
-    user_agent: benthos_producer
-    max_in_flight: 1
+    nsqd_tcp_address: ""
+    topic: ""
+    user_agent: ""
+    max_in_flight: 64
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""
   nsq:
-    nsqd_tcp_address: localhost:4150
-    topic: benthos_messages
-    user_agent: benthos_producer
+    nsqd_tcp_address: ""
+    topic: ""
+    user_agent: ""
     tls:
       enabled: false
       skip_cert_verify: false
@@ -55,7 +55,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    max_in_flight: 1
+    max_in_flight: 64
 ```
 
 </TabItem>
@@ -79,7 +79,7 @@ The address of the target NSQD server.
 
 
 Type: `string`  
-Default: `"localhost:4150"`  
+Default: `""`  
 
 ### `topic`
 
@@ -88,7 +88,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"benthos_messages"`  
+Default: `""`  
 
 ### `user_agent`
 
@@ -96,7 +96,7 @@ A user agent string to connect with.
 
 
 Type: `string`  
-Default: `"benthos_producer"`  
+Default: `""`  
 
 ### `tls`
 
@@ -138,7 +138,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -155,7 +155,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -169,7 +169,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 Type: `array`  
 Default: `[]`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:
@@ -219,6 +219,6 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 
 Type: `int`  
-Default: `1`  
+Default: `64`  
 
 

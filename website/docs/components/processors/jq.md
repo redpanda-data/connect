@@ -26,21 +26,21 @@ Transforms and filters messages using jq queries.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 jq:
-  query: .
+  query: ""
 ```
 
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 jq:
-  query: .
+  query: ""
   raw: false
   output_raw: false
 ```
@@ -84,7 +84,7 @@ The jq query to filter and transform messages with.
 
 
 Type: `string`  
-Default: `"."`  
+Default: `""`  
 
 ### `raw`
 

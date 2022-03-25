@@ -5,10 +5,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/component/cache"
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/lib/metrics"
-	"github.com/Jeffail/benthos/v3/lib/types"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 )
 
 // Errors returned by cache types.
@@ -40,23 +39,40 @@ type Cache interface {
 	Closer
 }
 
+// CacheItem represents an individual cache item.
+type CacheItem struct {
+	Key   string
+	Value []byte
+	TTL   *time.Duration
+}
+
+// batchedCache represents a cache where the underlying implementation is able
+// to benefit from batched set requests. This interface is optional for caches
+// and when implemented will automatically be utilised where possible.
+type batchedCache interface {
+	// SetMulti attempts to set multiple cache items in as few requests as
+	// possible.
+	SetMulti(ctx context.Context, keyValues ...CacheItem) error
+}
+
 //------------------------------------------------------------------------------
 
 // Implements types.Cache
 type airGapCache struct {
-	c Cache
-
-	sig *shutdown.Signaller
+	c  Cache
+	cm batchedCache
 }
 
-func newAirGapCache(c Cache, stats metrics.Type) types.Cache {
-	return cache.NewV2ToV1Cache(&airGapCache{c, shutdown.NewSignaller()}, stats)
+func newAirGapCache(c Cache, stats metrics.Type) cache.V1 {
+	ag := &airGapCache{c, nil}
+	ag.cm, _ = c.(batchedCache)
+	return cache.MetricsForCache(ag, stats)
 }
 
 func (a *airGapCache) Get(ctx context.Context, key string) ([]byte, error) {
 	b, err := a.c.Get(ctx, key)
-	if errors.Is(err, types.ErrKeyNotFound) {
-		err = ErrKeyNotFound
+	if errors.Is(err, ErrKeyNotFound) {
+		err = component.ErrKeyNotFound
 	}
 	return b, err
 }
@@ -65,10 +81,30 @@ func (a *airGapCache) Set(ctx context.Context, key string, value []byte, ttl *ti
 	return a.c.Set(ctx, key, value, ttl)
 }
 
+func (a *airGapCache) SetMulti(ctx context.Context, keyValues map[string]cache.TTLItem) error {
+	if a.cm != nil {
+		items := make([]CacheItem, 0, len(keyValues))
+		for k, v := range keyValues {
+			items = append(items, CacheItem{
+				Key:   k,
+				Value: v.Value,
+				TTL:   v.TTL,
+			})
+		}
+		return a.cm.SetMulti(ctx, items...)
+	}
+	for k, v := range keyValues {
+		if err := a.c.Set(ctx, k, v.Value, v.TTL); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (a *airGapCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
 	err := a.c.Add(ctx, key, value, ttl)
-	if errors.Is(err, types.ErrKeyAlreadyExists) {
-		err = ErrKeyAlreadyExists
+	if errors.Is(err, ErrKeyAlreadyExists) {
+		err = component.ErrKeyAlreadyExists
 	}
 	return err
 }
@@ -85,46 +121,36 @@ func (a *airGapCache) Close(ctx context.Context) error {
 
 // Implements Cache around a types.Cache
 type reverseAirGapCache struct {
-	c types.Cache
+	c cache.V1
 }
 
-func newReverseAirGapCache(c types.Cache) *reverseAirGapCache {
+func newReverseAirGapCache(c cache.V1) *reverseAirGapCache {
 	return &reverseAirGapCache{c}
 }
 
 func (r *reverseAirGapCache) Get(ctx context.Context, key string) ([]byte, error) {
-	return r.c.Get(key)
+	b, err := r.c.Get(ctx, key)
+	if errors.Is(err, component.ErrKeyNotFound) {
+		err = ErrKeyNotFound
+	}
+	return b, err
 }
 
 func (r *reverseAirGapCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	if cttl, ok := r.c.(types.CacheWithTTL); ok {
-		return cttl.SetWithTTL(key, value, ttl)
-	}
-	return r.c.Set(key, value)
+	return r.c.Set(ctx, key, value, ttl)
 }
 
-func (r *reverseAirGapCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	if cttl, ok := r.c.(types.CacheWithTTL); ok {
-		return cttl.AddWithTTL(key, value, ttl)
+func (r *reverseAirGapCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) (err error) {
+	if err = r.c.Add(ctx, key, value, ttl); errors.Is(err, component.ErrKeyAlreadyExists) {
+		err = ErrKeyAlreadyExists
 	}
-	return r.c.Add(key, value)
+	return
 }
 
 func (r *reverseAirGapCache) Delete(ctx context.Context, key string) error {
-	return r.c.Delete(key)
+	return r.c.Delete(ctx, key)
 }
 
 func (r *reverseAirGapCache) Close(ctx context.Context) error {
-	r.c.CloseAsync()
-	for {
-		// Gross but will do for now until we replace these with context params.
-		if err := r.c.WaitForClose(time.Millisecond * 100); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-	}
+	return r.c.Close(ctx)
 }

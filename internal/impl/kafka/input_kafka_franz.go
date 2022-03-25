@@ -10,12 +10,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/benthos/v3/internal/checkpoint"
-	"github.com/Jeffail/benthos/v3/internal/shutdown"
-	"github.com/Jeffail/benthos/v3/public/service"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"github.com/twmb/franz-go/pkg/sasl"
+
+	"github.com/benthosdev/benthos/v4/internal/checkpoint"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func franzKafkaInputConfig() *service.ConfigSpec {
@@ -30,7 +31,7 @@ Consumes one or more topics by balancing the partitions across any other connect
 This input is new and experimental, and the existing ` + "`kafka`" + ` input is not going anywhere, but here's some reasons why it might be worth trying this one out:
 
 - You like shiny new stuff
-- You are exeriencing issues with the existing ` + "`kafka`" + ` input
+- You are experiencing issues with the existing ` + "`kafka`" + ` input
 - Someone told you to
 
 ### Metadata
@@ -57,7 +58,7 @@ This input adds the following metadata fields to each message:
 			Description("A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically commited and resumed under this name.")).
 		Field(service.NewIntField("checkpoint_limit").
 			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
-			Default(100).
+			Default(1024).
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
 		Field(saslField)

@@ -14,10 +14,9 @@ status: stable
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Do not send tracing events anywhere.
 
-```yaml
+```yml
 # Config fields, showing default values
 tracer:
   none: {}

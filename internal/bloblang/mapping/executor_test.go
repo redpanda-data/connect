@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Jeffail/benthos/v3/internal/bloblang/query"
-	"github.com/Jeffail/benthos/v3/lib/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestAssignments(t *testing.T) {
@@ -104,8 +105,8 @@ func TestAssignments(t *testing.T) {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), initFunc("meta", "foo")),
 			),
-			input: []part{{Content: `{}`}},
-			err:   errors.New("failed assignment (line 0): metadata value 'foo' not found"),
+			input:  []part{{Content: `{}`}},
+			output: &part{Content: `{"foo":null}`},
 		},
 		"meta assignment": {
 			mapping: NewExecutor("", nil, nil,
@@ -235,14 +236,14 @@ func TestAssignments(t *testing.T) {
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, p := range test.input {
 				part := message.NewPart([]byte(p.Content))
 				if p.Content == "" {
 					part = message.NewPart(nil)
 				}
 				for k, v := range p.Meta {
-					part.Metadata().Set(k, v)
+					part.MetaSet(k, v)
 				}
 				msg.Append(part)
 			}
@@ -264,7 +265,7 @@ func TestAssignments(t *testing.T) {
 					Content: string(resPart.Get()),
 					Meta:    map[string]string{},
 				}
-				resPart.Metadata().Iter(func(k, v string) error {
+				_ = resPart.MetaIter(func(k, v string) error {
 					newPart.Meta[k] = v
 					return nil
 				})
@@ -433,7 +434,7 @@ func TestExec(t *testing.T) {
 		test := test
 		t.Run(name, func(t *testing.T) {
 			res, err := test.mapping.Exec(query.FunctionContext{
-				MsgBatch: message.New(nil),
+				MsgBatch: message.QuickBatch(nil),
 			}.WithValue(test.input))
 			if len(test.err) > 0 {
 				require.EqualError(t, err, test.err)
@@ -441,11 +442,11 @@ func TestExec(t *testing.T) {
 				assert.Equal(t, test.output, res)
 			}
 			resString := test.mapping.ToString(query.FunctionContext{
-				MsgBatch: message.New(nil),
+				MsgBatch: message.QuickBatch(nil),
 			}.WithValue(test.input))
 			assert.Equal(t, test.outputString, resString)
 			resBytes := test.mapping.ToBytes(query.FunctionContext{
-				MsgBatch: message.New(nil),
+				MsgBatch: message.QuickBatch(nil),
 			}.WithValue(test.input))
 			assert.Equal(t, test.outputString, string(resBytes))
 		})
@@ -506,18 +507,18 @@ func TestQueries(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("foo"), initFunc("meta", "foo")),
 			),
 			input: []part{{Content: `{}`}},
-			err:   errors.New("failed assignment (line 0): metadata value 'foo' not found"),
+			err:   errors.New("expected bool value, got object from mapping"),
 		},
 	}
 
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			msg := message.New(nil)
+			msg := message.QuickBatch(nil)
 			for _, p := range test.input {
 				part := message.NewPart([]byte(p.Content))
 				for k, v := range p.Meta {
-					part.Metadata().Set(k, v)
+					part.MetaSet(k, v)
 				}
 				msg.Append(part)
 			}

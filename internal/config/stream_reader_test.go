@@ -5,22 +5,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	iconfig "github.com/Jeffail/benthos/v3/internal/config"
-	"github.com/Jeffail/benthos/v3/lib/config"
-	"github.com/Jeffail/benthos/v3/lib/stream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/Jeffail/benthos/v3/public/components/all"
+	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/stream"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestStreamsLints(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_stream_resources")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	streamOnePath := filepath.Join(dir, "first.yaml")
 	require.NoError(t, os.WriteFile(streamOnePath, []byte(`
@@ -43,7 +38,7 @@ cache_resources:
       ttl: 13
 `), 0o644))
 
-	rdr := iconfig.NewReader("", nil, iconfig.OptSetStreamPaths(streamOnePath, streamTwoPath))
+	rdr := config.NewReader("", nil, config.OptSetStreamPaths(streamOnePath, streamTwoPath))
 
 	conf := config.New()
 	lints, err := rdr.Read(&conf)
@@ -66,12 +61,7 @@ cache_resources:
 }
 
 func TestStreamsDirectoryWalk(t *testing.T) {
-	dir, err := os.MkdirTemp("", "test_stream_walk")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
+	dir := t.TempDir()
 
 	streamOnePath := filepath.Join(dir, "first.yaml")
 	require.NoError(t, os.WriteFile(streamOnePath, []byte(`
@@ -96,7 +86,7 @@ pipeline:
     - bloblang: 'root = "third"'
 `), 0o644))
 
-	rdr := iconfig.NewReader("", nil, iconfig.OptSetStreamPaths(streamOnePath, filepath.Join(dir, "nested")))
+	rdr := config.NewReader("", nil, config.OptSetStreamPaths(streamOnePath, filepath.Join(dir, "nested")))
 
 	conf := config.New()
 	lints, err := rdr.Read(&conf)

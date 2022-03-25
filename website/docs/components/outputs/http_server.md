@@ -26,7 +26,7 @@ Sets up an HTTP server that will send messages over HTTP(S) GET requests. HTTP 2
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 output:
   label: ""
@@ -42,7 +42,7 @@ output:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 output:
   label: ""

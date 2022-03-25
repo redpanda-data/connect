@@ -1,0 +1,74 @@
+package output
+
+import (
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/session"
+	"github.com/benthosdev/benthos/v4/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/metadata"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
+	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
+)
+
+//------------------------------------------------------------------------------
+
+func init() {
+	Constructors[TypeAWSSQS] = TypeSpec{
+		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+			return newAmazonSQS(TypeAWSSQS, conf.AWSSQS, mgr, log, stats)
+		}),
+		Version: "3.36.0",
+		Summary: `
+Sends messages to an SQS queue.`,
+		Description: `
+Metadata values are sent along with the payload as attributes with the data type
+String. If the number of metadata values in a message exceeds the message
+attribute limit (10) then the top ten keys ordered alphabetically will be
+selected.
+
+The fields ` + "`message_group_id` and `message_deduplication_id`" + ` can be
+set dynamically using
+[function interpolations](/docs/configuration/interpolation#bloblang-queries), which are
+resolved individually for each message of a batch.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](/docs/guides/cloud/aws).`,
+		Async:   true,
+		Batches: true,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("url", "The URL of the target SQS queue."),
+			docs.FieldString("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
+			docs.FieldString("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(metadata.ExcludeFilterFields()...),
+			policy.FieldSpec(),
+		).WithChildren(session.FieldSpecs()...).WithChildren(retries.FieldSpecs()...),
+		Categories: []string{
+			"Services",
+			"AWS",
+		},
+	}
+}
+
+//------------------------------------------------------------------------------
+
+func newAmazonSQS(name string, conf writer.AmazonSQSConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+	s, err := writer.NewAmazonSQSV2(conf, mgr, log, stats)
+	if err != nil {
+		return nil, err
+	}
+	w, err := NewAsyncWriter(name, conf.MaxInFlight, s, log, stats)
+	if err != nil {
+		return w, err
+	}
+	return NewBatcherFromConfig(conf.Batching, w, mgr, log, stats)
+}
+
+//------------------------------------------------------------------------------

@@ -15,17 +15,13 @@ categories: ["Composition"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+Splits a batch of messages into N batches, where each resulting batch contains a group of messages determined by a [function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated per message.
 
-Splits a batch of messages into N batches, where each resulting batch contains a
-group of messages determined by a
-[function interpolated string](/docs/configuration/interpolation#bloblang-queries) evaluated
-per message.
-
-```yaml
+```yml
 # Config fields, showing default values
 label: ""
 group_by_value:
-  value: ${! meta("example") }
+  value: ""
 ```
 
 This allows you to group messages using arbitrary fields within their content or
@@ -44,9 +40,9 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `"${! meta(\"example\") }"`  
+Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 value: ${! meta("kafka_key") }
@@ -63,14 +59,14 @@ could achieve that with the following:
 ```yaml
 pipeline:
   processors:
-  - group_by_value:
-      value: ${! meta("kafka_key") }
-  - archive:
-      format: tar
-  - compress:
-      algorithm: gzip
+    - group_by_value:
+        value: ${! meta("kafka_key") }
+    - archive:
+        format: tar
+    - compress:
+        algorithm: gzip
 output:
-  s3:
+  aws_s3:
     bucket: TODO
     path: docs/${! meta("kafka_key") }/${! count("files") }-${! timestamp_unix_nano() }.tar.gz
 ```

@@ -1,8 +1,9 @@
 package mongodb
 
 import (
-	"github.com/Jeffail/benthos/v3/internal/docs"
-	"github.com/Jeffail/benthos/v3/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func processorOperationDocs(defaultOperation client.Operation) docs.FieldSpec {
@@ -11,7 +12,7 @@ func processorOperationDocs(defaultOperation client.Operation) docs.FieldSpec {
 }
 
 func outputOperationDocs(defaultOperation client.Operation) docs.FieldSpec {
-	return docs.FieldCommon(
+	return docs.FieldString(
 		"operation",
 		"The mongodb operation to perform.",
 	).HasOptions(
@@ -25,9 +26,9 @@ func outputOperationDocs(defaultOperation client.Operation) docs.FieldSpec {
 
 func writeConcernDocs() docs.FieldSpecs {
 	return docs.FieldSpecs{
-		docs.FieldCommon("w", "W requests acknowledgement that write operations propagate to the specified number of mongodb instances."),
-		docs.FieldCommon("j", "J requests acknowledgement from MongoDB that write operations are written to the journal."),
-		docs.FieldCommon("w_timeout", "The write concern timeout."),
+		docs.FieldString("w", "W requests acknowledgement that write operations propagate to the specified number of mongodb instances."),
+		docs.FieldBool("j", "J requests acknowledgement from MongoDB that write operations are written to the journal."),
+		docs.FieldString("w_timeout", "The write concern timeout."),
 	}
 }
 
@@ -35,3 +36,12 @@ func mapExamples() []interface{} {
 	examples := []interface{}{"root.a = this.foo\nroot.b = this.bar"}
 	return examples
 }
+
+var urlField = service.NewStringField("url").
+	Description("The URL of the target MongoDB DB.").
+	Example("mongodb://localhost:27017")
+
+var queryField = service.NewBloblangField("query").Description("Bloblang expression describing MongoDB query.").Example(`
+      root.from = {"$lte": timestamp_unix()}
+      root.to = {"$gte": timestamp_unix()}
+`)

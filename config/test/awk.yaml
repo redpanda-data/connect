@@ -1,6 +1,7 @@
 pipeline:
   processors:
     - awk:
+        codec: text
         program: |
           {
             json_set_int("result", json_get("result") + metadata_get("foo") + metadata_get("bar"));

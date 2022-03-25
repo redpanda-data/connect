@@ -30,7 +30,7 @@ Introduced in version 3.58.0.
 
 <TabItem value="common">
 
-```yaml
+```yml
 # Common config fields, showing default values
 label: ""
 schema_registry_encode:
@@ -42,7 +42,7 @@ schema_registry_encode:
 </TabItem>
 <TabItem value="advanced">
 
-```yaml
+```yml
 # All config fields, showing default values
 label: ""
 schema_registry_encode:
@@ -99,7 +99,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 
-```yaml
+```yml
 # Examples
 
 subject: foo
@@ -115,7 +115,7 @@ The period after which a schema is refreshed for each subject, this is done by p
 Type: `string`  
 Default: `"10m"`  
 
-```yaml
+```yml
 # Examples
 
 refresh_period: 60s
@@ -164,7 +164,7 @@ An optional root certificate authority to use. This is a string, representing a 
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas: |-
@@ -181,7 +181,7 @@ An optional path of a root certificate authority file to use. This is a file, of
 Type: `string`  
 Default: `""`  
 
-```yaml
+```yml
 # Examples
 
 root_cas_file: ./root_cas.pem
@@ -194,7 +194,7 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 Type: `array`  
 
-```yaml
+```yml
 # Examples
 
 client_certs:

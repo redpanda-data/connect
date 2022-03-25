@@ -104,6 +104,27 @@ func IGetNumber(v interface{}) (float64, error) {
 	return 0, NewTypeError(v, ValueNumber)
 }
 
+// IGetFloat32 takes a boxed value and attempts to extract a number (float32)
+// from it.
+func IGetFloat32(v interface{}) (float32, error) {
+	switch t := v.(type) {
+	case int:
+		return float32(t), nil
+	case int64:
+		return float32(t), nil
+	case uint64:
+		return float32(t), nil
+	case float32:
+		return t, nil
+	case float64:
+		return float32(t), nil
+	case json.Number:
+		v, e := t.Float64()
+		return float32(v), e
+	}
+	return 0, NewTypeError(v, ValueNumber)
+}
+
 // IGetInt takes a boxed value and attempts to extract an integer (int64) from
 // it.
 func IGetInt(v interface{}) (int64, error) {
