@@ -18,6 +18,7 @@ This is a major version release, for more information and guidance on how to mig
 ### Fixed
 
 - The `sftp` output no longer opens files in both read and write mode.
+- The `aws_sqs` input with `reset_visibility` set to `false` will no longer reset timeouts on pending messages during gracefully shutdown.
 
 ### Changed
 
