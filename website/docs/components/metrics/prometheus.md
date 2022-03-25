@@ -143,7 +143,7 @@ Default: `""`
 
 ### `file_output_path`
 
-Optional file path to a metrics file that should be written.
+An optional file path to write all prometheus metrics on service shutdown.
 
 
 Type: `string`  
