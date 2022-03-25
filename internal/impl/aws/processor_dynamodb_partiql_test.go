@@ -16,12 +16,12 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-type mockDynamoDB struct {
+type mockProcDynamoDB struct {
 	dynamodbiface.DynamoDBAPI
 	pbatchFn func(context.Context, *dynamodb.BatchExecuteStatementInput) (*dynamodb.BatchExecuteStatementOutput, error)
 }
 
-func (m *mockDynamoDB) BatchExecuteStatementWithContext(ctx context.Context, input *dynamodb.BatchExecuteStatementInput, _ ...request.Option) (*dynamodb.BatchExecuteStatementOutput, error) {
+func (m *mockProcDynamoDB) BatchExecuteStatementWithContext(ctx context.Context, input *dynamodb.BatchExecuteStatementInput, _ ...request.Option) (*dynamodb.BatchExecuteStatementOutput, error) {
 	return m.pbatchFn(ctx, input)
 }
 
@@ -47,7 +47,7 @@ root."-".S = json("content")
 	require.NoError(t, err)
 
 	var request []*dynamodb.BatchStatementRequest
-	client := &mockDynamoDB{
+	client := &mockProcDynamoDB{
 		pbatchFn: func(_ context.Context, input *dynamodb.BatchExecuteStatementInput) (*dynamodb.BatchExecuteStatementOutput, error) {
 			request = input.Statements
 			return &dynamodb.BatchExecuteStatementOutput{}, nil
@@ -94,7 +94,7 @@ root."-".S = json("id")
 	require.NoError(t, err)
 
 	var request []*dynamodb.BatchStatementRequest
-	client := &mockDynamoDB{
+	client := &mockProcDynamoDB{
 		pbatchFn: func(_ context.Context, input *dynamodb.BatchExecuteStatementInput) (*dynamodb.BatchExecuteStatementOutput, error) {
 			request = input.Statements
 			return &dynamodb.BatchExecuteStatementOutput{
@@ -167,7 +167,7 @@ root."-".S = json("content")
 	require.NoError(t, err)
 
 	var requests [][]*dynamodb.BatchStatementRequest
-	client := &mockDynamoDB{
+	client := &mockProcDynamoDB{
 		pbatchFn: func(_ context.Context, input *dynamodb.BatchExecuteStatementInput) (output *dynamodb.BatchExecuteStatementOutput, err error) {
 			if len(requests) == 0 {
 				output = &dynamodb.BatchExecuteStatementOutput{

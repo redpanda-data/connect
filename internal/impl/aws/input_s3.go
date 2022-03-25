@@ -1,4 +1,4 @@
-package input
+package aws
 
 import (
 	"context"
@@ -18,34 +18,34 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func init() {
-	Constructors[TypeAWSS3] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-			var r reader.Async
-			var err error
-			if r, err = newAmazonS3(conf.AWSS3, log, stats); err != nil {
-				return nil, err
-			}
-			// If we're not pulling events directly from an SQS queue then
-			// there's no concept of propagating nacks upstream, therefore wrap
-			// our reader within a preserver in order to retry indefinitely.
-			if conf.AWSS3.SQS.URL == "" {
-				r = reader.NewAsyncPreserver(r)
-			}
-			return NewAsyncReader(TypeAWSS3, false, r, log, stats)
-		}),
+	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(conf oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+		var rdr reader.Async
+		var err error
+		if rdr, err = newAmazonS3Reader(conf.AWSS3, nm); err != nil {
+			return nil, err
+		}
+		// If we're not pulling events directly from an SQS queue then
+		// there's no concept of propagating nacks upstream, therefore wrap
+		// our reader within a preserver in order to retry indefinitely.
+		if conf.AWSS3.SQS.URL == "" {
+			rdr = reader.NewAsyncPreserver(rdr)
+		}
+		return oinput.NewAsyncReader("aws_s3", false, rdr, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:   "aws_s3",
 		Status: docs.StatusStable,
 		Summary: `
 Downloads objects within an Amazon S3 bucket, optionally filtered by a prefix, either by walking the items in the bucket or by streaming upload notifications in realtime.`,
@@ -103,63 +103,18 @@ You can access these metadata fields using [function interpolation](/docs/config
 				).Advanced(),
 				docs.FieldInt("max_messages", "The maximum number of SQS messages to consume from each request.").Advanced(),
 			),
-		),
+		).ChildDefaultAndTypesFromStruct(oinput.NewAWSS3Config()),
 		Categories: []string{
 			"Services",
 			"AWS",
 		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
 //------------------------------------------------------------------------------
-
-// AWSS3SQSConfig contains configuration for hooking up the S3 input with an SQS queue.
-type AWSS3SQSConfig struct {
-	URL          string `json:"url" yaml:"url"`
-	Endpoint     string `json:"endpoint" yaml:"endpoint"`
-	EnvelopePath string `json:"envelope_path" yaml:"envelope_path"`
-	KeyPath      string `json:"key_path" yaml:"key_path"`
-	BucketPath   string `json:"bucket_path" yaml:"bucket_path"`
-	DelayPeriod  string `json:"delay_period" yaml:"delay_period"`
-	MaxMessages  int64  `json:"max_messages" yaml:"max_messages"`
-}
-
-// NewAWSS3SQSConfig creates a new AWSS3SQSConfig with default values.
-func NewAWSS3SQSConfig() AWSS3SQSConfig {
-	return AWSS3SQSConfig{
-		URL:          "",
-		Endpoint:     "",
-		EnvelopePath: "",
-		KeyPath:      "Records.*.s3.object.key",
-		BucketPath:   "Records.*.s3.bucket.name",
-		DelayPeriod:  "",
-		MaxMessages:  10,
-	}
-}
-
-// AWSS3Config contains configuration values for the aws_s3 input type.
-type AWSS3Config struct {
-	sess.Config        `json:",inline" yaml:",inline"`
-	Bucket             string         `json:"bucket" yaml:"bucket"`
-	Codec              string         `json:"codec" yaml:"codec"`
-	Prefix             string         `json:"prefix" yaml:"prefix"`
-	ForcePathStyleURLs bool           `json:"force_path_style_urls" yaml:"force_path_style_urls"`
-	DeleteObjects      bool           `json:"delete_objects" yaml:"delete_objects"`
-	SQS                AWSS3SQSConfig `json:"sqs" yaml:"sqs"`
-}
-
-// NewAWSS3Config creates a new AWSS3Config with default values.
-func NewAWSS3Config() AWSS3Config {
-	return AWSS3Config{
-		Config:             sess.NewConfig(),
-		Bucket:             "",
-		Prefix:             "",
-		Codec:              "all-bytes",
-		ForcePathStyleURLs: false,
-		DeleteObjects:      false,
-		SQS:                NewAWSS3SQSConfig(),
-	}
-}
 
 //------------------------------------------------------------------------------
 
@@ -215,13 +170,13 @@ func deleteS3ObjectAckFn(
 type staticTargetReader struct {
 	pending    []*s3ObjectTarget
 	s3         *s3.S3
-	conf       AWSS3Config
+	conf       oinput.AWSS3Config
 	startAfter *string
 }
 
 func newStaticTargetReader(
 	ctx context.Context,
-	conf AWSS3Config,
+	conf oinput.AWSS3Config,
 	log log.Modular,
 	s3Client *s3.S3,
 ) (*staticTargetReader, error) {
@@ -288,7 +243,7 @@ func (s staticTargetReader) Close(context.Context) error {
 //------------------------------------------------------------------------------
 
 type sqsTargetReader struct {
-	conf AWSS3Config
+	conf oinput.AWSS3Config
 	log  log.Modular
 	sqs  *sqs.SQS
 	s3   *s3.S3
@@ -299,7 +254,7 @@ type sqsTargetReader struct {
 }
 
 func newSQSTargetReader(
-	conf AWSS3Config,
+	conf oinput.AWSS3Config,
 	log log.Modular,
 	s3 *s3.S3,
 	sqs *sqs.SQS,
@@ -545,8 +500,8 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg *sqs.Message) e
 
 // AmazonS3 is a benthos reader.Type implementation that reads messages from an
 // Amazon S3 bucket.
-type awsS3 struct {
-	conf AWSS3Config
+type awsS3Reader struct {
+	conf oinput.AWSS3Config
 
 	objectScannerCtor codec.ReaderConstructor
 	keyReader         s3ObjectTargetReader
@@ -560,8 +515,7 @@ type awsS3 struct {
 	objectMut sync.Mutex
 	object    *s3PendingObject
 
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 }
 
 type s3PendingObject struct {
@@ -572,21 +526,16 @@ type s3PendingObject struct {
 }
 
 // NewAmazonS3 creates a new Amazon S3 bucket reader.Type.
-func newAmazonS3(
-	conf AWSS3Config,
-	log log.Modular,
-	stats metrics.Type,
-) (*awsS3, error) {
+func newAmazonS3Reader(conf oinput.AWSS3Config, nm bundle.NewManagement) (*awsS3Reader, error) {
 	if conf.Bucket == "" && conf.SQS.URL == "" {
 		return nil, errors.New("either a bucket or an sqs.url must be specified")
 	}
 	if conf.Prefix != "" && conf.SQS.URL != "" {
 		return nil, errors.New("cannot specify both a prefix and sqs.url")
 	}
-	s := &awsS3{
-		conf:  conf,
-		log:   log,
-		stats: stats,
+	s := &awsS3Reader{
+		conf: conf,
+		log:  nm.Logger(),
 	}
 	var err error
 	if s.objectScannerCtor, err = codec.GetReader(conf.Codec, codec.NewReaderConfig()); err != nil {
@@ -600,7 +549,7 @@ func newAmazonS3(
 	return s, nil
 }
 
-func (a *awsS3) getTargetReader(ctx context.Context) (s3ObjectTargetReader, error) {
+func (a *awsS3Reader) getTargetReader(ctx context.Context) (s3ObjectTargetReader, error) {
 	if a.sqs != nil {
 		return newSQSTargetReader(a.conf, a.log, a.s3, a.sqs), nil
 	}
@@ -609,7 +558,7 @@ func (a *awsS3) getTargetReader(ctx context.Context) (s3ObjectTargetReader, erro
 
 // ConnectWithContext attempts to establish a connection to the target S3 bucket
 // and any relevant queues used to traverse the objects (SQS, etc).
-func (a *awsS3) ConnectWithContext(ctx context.Context) error {
+func (a *awsS3Reader) ConnectWithContext(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -672,7 +621,7 @@ func s3MsgFromParts(p *s3PendingObject, parts []*message.Part) *message.Batch {
 	return msg
 }
 
-func (a *awsS3) getObjectTarget(ctx context.Context) (*s3PendingObject, error) {
+func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, error) {
 	if a.object != nil {
 		return a.object, nil
 	}
@@ -716,7 +665,7 @@ func (a *awsS3) getObjectTarget(ctx context.Context) (*s3PendingObject, error) {
 }
 
 // ReadWithContext attempts to read a new message from the target S3 bucket.
-func (a *awsS3) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn reader.AsyncAckFn, err error) {
+func (a *awsS3Reader) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn reader.AsyncAckFn, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 	if a.session == nil {
@@ -767,7 +716,7 @@ func (a *awsS3) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn 
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *awsS3) CloseAsync() {
+func (a *awsS3Reader) CloseAsync() {
 	go func() {
 		a.objectMut.Lock()
 		if a.object != nil {
@@ -780,8 +729,6 @@ func (a *awsS3) CloseAsync() {
 
 // WaitForClose will block until either the reader is closed or a specified
 // timeout occurs.
-func (a *awsS3) WaitForClose(time.Duration) error {
+func (a *awsS3Reader) WaitForClose(time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

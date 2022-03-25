@@ -173,12 +173,12 @@ type Config struct {
 	Type               string                         `json:"type" yaml:"type"`
 	AMQP09             AMQPConfig                     `json:"amqp_0_9" yaml:"amqp_0_9"`
 	AMQP1              AMQP1Config                    `json:"amqp_1" yaml:"amqp_1"`
-	AWSDynamoDB        writer.DynamoDBConfig          `json:"aws_dynamodb" yaml:"aws_dynamodb"`
-	AWSKinesis         writer.KinesisConfig           `json:"aws_kinesis" yaml:"aws_kinesis"`
-	AWSKinesisFirehose writer.KinesisFirehoseConfig   `json:"aws_kinesis_firehose" yaml:"aws_kinesis_firehose"`
-	AWSS3              writer.AmazonS3Config          `json:"aws_s3" yaml:"aws_s3"`
-	AWSSNS             writer.SNSConfig               `json:"aws_sns" yaml:"aws_sns"`
-	AWSSQS             writer.AmazonSQSConfig         `json:"aws_sqs" yaml:"aws_sqs"`
+	AWSDynamoDB        DynamoDBConfig                 `json:"aws_dynamodb" yaml:"aws_dynamodb"`
+	AWSKinesis         KinesisConfig                  `json:"aws_kinesis" yaml:"aws_kinesis"`
+	AWSKinesisFirehose KinesisFirehoseConfig          `json:"aws_kinesis_firehose" yaml:"aws_kinesis_firehose"`
+	AWSS3              AmazonS3Config                 `json:"aws_s3" yaml:"aws_s3"`
+	AWSSNS             SNSConfig                      `json:"aws_sns" yaml:"aws_sns"`
+	AWSSQS             AmazonSQSConfig                `json:"aws_sqs" yaml:"aws_sqs"`
 	AzureBlobStorage   writer.AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
 	AzureQueueStorage  writer.AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
 	AzureTableStorage  writer.AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
@@ -231,12 +231,12 @@ func NewConfig() Config {
 		Type:               "stdout",
 		AMQP09:             NewAMQPConfig(),
 		AMQP1:              NewAMQP1Config(),
-		AWSDynamoDB:        writer.NewDynamoDBConfig(),
-		AWSKinesis:         writer.NewKinesisConfig(),
-		AWSKinesisFirehose: writer.NewKinesisFirehoseConfig(),
-		AWSS3:              writer.NewAmazonS3Config(),
-		AWSSNS:             writer.NewSNSConfig(),
-		AWSSQS:             writer.NewAmazonSQSConfig(),
+		AWSDynamoDB:        NewDynamoDBConfig(),
+		AWSKinesis:         NewKinesisConfig(),
+		AWSKinesisFirehose: NewKinesisFirehoseConfig(),
+		AWSS3:              NewAmazonS3Config(),
+		AWSSNS:             NewSNSConfig(),
+		AWSSQS:             NewAmazonSQSConfig(),
 		AzureBlobStorage:   writer.NewAzureBlobStorageConfig(),
 		AzureQueueStorage:  writer.NewAzureQueueStorageConfig(),
 		AzureTableStorage:  writer.NewAzureTableStorageConfig(),

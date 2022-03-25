@@ -1,4 +1,4 @@
-package input
+package aws
 
 import (
 	"context"
@@ -12,30 +12,28 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/cenkalti/backoff/v4"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeAWSSQS] = TypeSpec{
+	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(conf oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+		r, err := newAWSSQSReader(conf.AWSSQS, nm.Logger())
+		if err != nil {
+			return nil, err
+		}
+		return oinput.NewAsyncReader("aws_sqs", false, r, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:   "aws_sqs",
 		Status: docs.StatusStable,
-		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-			r, err := newAWSSQS(conf.AWSSQS, log, stats)
-			if err != nil {
-				return nil, err
-			}
-			return NewAsyncReader(TypeAWSSQS, false, r, log, stats)
-		}),
 		Summary: `
 Consume messages from an AWS SQS URL.`,
 		Description: `
@@ -64,40 +62,21 @@ You can access these metadata fields using
 			docs.FieldBool("delete_message", "Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.").Advanced(),
 			docs.FieldBool("reset_visibility", "Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.").AtVersion("3.58.0").Advanced(),
 			docs.FieldInt("max_number_of_messages", "The maximum number of messages to return on one poll. Valid values: 1 to 10.").Advanced(),
-		).WithChildren(sess.FieldSpecs()...),
+		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(oinput.NewAWSSQSConfig()),
 		Categories: []string{
 			"Services",
 			"AWS",
 		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// AWSSQSConfig contains configuration values for the input type.
-type AWSSQSConfig struct {
-	sess.Config         `json:",inline" yaml:",inline"`
-	URL                 string `json:"url" yaml:"url"`
-	DeleteMessage       bool   `json:"delete_message" yaml:"delete_message"`
-	ResetVisibility     bool   `json:"reset_visibility" yaml:"reset_visibility"`
-	MaxNumberOfMessages int    `json:"max_number_of_messages" yaml:"max_number_of_messages"`
-}
-
-// NewAWSSQSConfig creates a new Config with default values.
-func NewAWSSQSConfig() AWSSQSConfig {
-	return AWSSQSConfig{
-		Config:              sess.NewConfig(),
-		URL:                 "",
-		DeleteMessage:       true,
-		ResetVisibility:     true,
-		MaxNumberOfMessages: 10,
-	}
-}
-
-//------------------------------------------------------------------------------
-
-type awsSQS struct {
-	conf AWSSQSConfig
+type awsSQSReader struct {
+	conf oinput.AWSSQSConfig
 
 	session *session.Session
 	sqs     *sqs.SQS
@@ -107,15 +86,13 @@ type awsSQS struct {
 	nackMessagesChan chan sqsMessageHandle
 	closeSignal      *shutdown.Signaller
 
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 }
 
-func newAWSSQS(conf AWSSQSConfig, log log.Modular, stats metrics.Type) (*awsSQS, error) {
-	return &awsSQS{
+func newAWSSQSReader(conf oinput.AWSSQSConfig, log log.Modular) (*awsSQSReader, error) {
+	return &awsSQSReader{
 		conf:             conf,
 		log:              log,
-		stats:            stats,
 		messagesChan:     make(chan *sqs.Message),
 		ackMessagesChan:  make(chan sqsMessageHandle),
 		nackMessagesChan: make(chan sqsMessageHandle),
@@ -125,7 +102,7 @@ func newAWSSQS(conf AWSSQSConfig, log log.Modular, stats metrics.Type) (*awsSQS,
 
 // ConnectWithContext attempts to establish a connection to the target SQS
 // queue.
-func (a *awsSQS) ConnectWithContext(ctx context.Context) error {
+func (a *awsSQSReader) ConnectWithContext(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -151,7 +128,7 @@ func (a *awsSQS) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (a *awsSQS) ackLoop(wg *sync.WaitGroup) {
+func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	var pendingAcks []sqsMessageHandle
@@ -213,7 +190,7 @@ ackLoop:
 	flushNacks()
 }
 
-func (a *awsSQS) readLoop(wg *sync.WaitGroup) {
+func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	var pendingMsgs []*sqs.Message
@@ -287,7 +264,7 @@ type sqsMessageHandle struct {
 	id, receiptHandle string
 }
 
-func (a *awsSQS) deleteMessages(ctx context.Context, msgs ...sqsMessageHandle) error {
+func (a *awsSQSReader) deleteMessages(ctx context.Context, msgs ...sqsMessageHandle) error {
 	for len(msgs) > 0 {
 		input := sqs.DeleteMessageBatchInput{
 			QueueUrl: aws.String(a.conf.URL),
@@ -316,7 +293,7 @@ func (a *awsSQS) deleteMessages(ctx context.Context, msgs ...sqsMessageHandle) e
 	return nil
 }
 
-func (a *awsSQS) resetMessages(ctx context.Context, msgs ...sqsMessageHandle) error {
+func (a *awsSQSReader) resetMessages(ctx context.Context, msgs ...sqsMessageHandle) error {
 	for len(msgs) > 0 {
 		input := sqs.ChangeMessageVisibilityBatchInput{
 			QueueUrl: aws.String(a.conf.URL),
@@ -360,7 +337,7 @@ func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
 }
 
 // ReadWithContext attempts to read a new message from the target SQS.
-func (a *awsSQS) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (a *awsSQSReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	if a.session == nil {
 		return nil, nil, component.ErrNotConnected
 	}
@@ -428,13 +405,13 @@ func (a *awsSQS) ReadWithContext(ctx context.Context) (*message.Batch, reader.As
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *awsSQS) CloseAsync() {
+func (a *awsSQSReader) CloseAsync() {
 	a.closeSignal.CloseAtLeisure()
 }
 
 // WaitForClose will block until either the reader is closed or a specified
 // timeout occurs.
-func (a *awsSQS) WaitForClose(tout time.Duration) error {
+func (a *awsSQSReader) WaitForClose(tout time.Duration) error {
 	go func() {
 		closeNowAt := tout - time.Second
 		if closeNowAt < time.Second {

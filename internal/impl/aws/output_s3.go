@@ -1,4 +1,4 @@
-package writer
+package aws
 
 import (
 	"bytes"
@@ -15,74 +15,156 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
-//------------------------------------------------------------------------------
+func init() {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		sthree, err := newAmazonS3Writer(c.AWSS3, nm)
+		if err != nil {
+			return nil, err
+		}
+		w, err := ooutput.NewAsyncWriter("aws_s3", c.AWSS3.MaxInFlight, sthree, nm.Logger(), nm.Metrics())
+		if err != nil {
+			return nil, err
+		}
+		return ooutput.NewBatcherFromConfig(c.AWSS3.Batching, w, nm, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:    "aws_s3",
+		Version: "3.36.0",
+		Summary: `
+Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded
+with the path specified with the ` + "`path`" + ` field.`,
+		Description: output.Description(true, false, `
+In order to have a different path for each object you should use function
+interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
+calculated per message of a batch.
 
-// AmazonS3Config contains configuration fields for the AmazonS3 output type.
-type AmazonS3Config struct {
-	sess.Config             `json:",inline" yaml:",inline"`
-	Bucket                  string                       `json:"bucket" yaml:"bucket"`
-	ForcePathStyleURLs      bool                         `json:"force_path_style_urls" yaml:"force_path_style_urls"`
-	Path                    string                       `json:"path" yaml:"path"`
-	Tags                    map[string]string            `json:"tags" yaml:"tags"`
-	ContentType             string                       `json:"content_type" yaml:"content_type"`
-	ContentEncoding         string                       `json:"content_encoding" yaml:"content_encoding"`
-	CacheControl            string                       `json:"cache_control" yaml:"cache_control"`
-	ContentDisposition      string                       `json:"content_disposition" yaml:"content_disposition"`
-	ContentLanguage         string                       `json:"content_language" yaml:"content_language"`
-	WebsiteRedirectLocation string                       `json:"website_redirect_location" yaml:"website_redirect_location"`
-	Metadata                metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
-	StorageClass            string                       `json:"storage_class" yaml:"storage_class"`
-	Timeout                 string                       `json:"timeout" yaml:"timeout"`
-	KMSKeyID                string                       `json:"kms_key_id" yaml:"kms_key_id"`
-	ServerSideEncryption    string                       `json:"server_side_encryption" yaml:"server_side_encryption"`
-	MaxInFlight             int                          `json:"max_in_flight" yaml:"max_in_flight"`
-	Batching                policy.Config                `json:"batching" yaml:"batching"`
-}
+### Metadata
 
-// NewAmazonS3Config creates a new Config with default values.
-func NewAmazonS3Config() AmazonS3Config {
-	return AmazonS3Config{
-		Config:                  sess.NewConfig(),
-		Bucket:                  "",
-		ForcePathStyleURLs:      false,
-		Path:                    `${!count("files")}-${!timestamp_unix_nano()}.txt`,
-		Tags:                    map[string]string{},
-		ContentType:             "application/octet-stream",
-		ContentEncoding:         "",
-		CacheControl:            "",
-		ContentDisposition:      "",
-		ContentLanguage:         "",
-		WebsiteRedirectLocation: "",
-		Metadata:                metadata.NewExcludeFilterConfig(),
-		StorageClass:            "STANDARD",
-		Timeout:                 "5s",
-		KMSKeyID:                "",
-		ServerSideEncryption:    "",
-		MaxInFlight:             64,
-		Batching:                policy.NewConfig(),
+Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the [metadata docs](/docs/configuration/metadata).
+
+### Tags
+
+The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support
+[interpolation functions](/docs/configuration/interpolation#bloblang-queries):
+
+`+"```yaml"+`
+output:
+  aws_s3:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    tags:
+      Key1: Value1
+      Timestamp: ${!meta("Timestamp")}
+`+"```"+`
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](/docs/guides/cloud/aws).
+
+### Batching
+
+It's common to want to upload messages to S3 as batched archives, the easiest
+way to do this is to batch your messages at the output level and join the batch
+of messages with an
+`+"[`archive`](/docs/components/processors/archive)"+` and/or
+`+"[`compress`](/docs/components/processors/compress)"+` processor.
+
+For example, if we wished to upload messages as a .tar.gz archive of documents
+we could achieve that with the following config:
+
+`+"```yaml"+`
+output:
+  aws_s3:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    batching:
+      count: 100
+      period: 10s
+      processors:
+        - archive:
+            format: tar
+        - compress:
+            algorithm: gzip
+`+"```"+`
+
+Alternatively, if we wished to upload JSON documents as a single large document
+containing an array of objects we can do that with:
+
+`+"```yaml"+`
+output:
+  aws_s3:
+    bucket: TODO
+    path: ${!count("files")}-${!timestamp_unix_nano()}.json
+    batching:
+      count: 100
+      processors:
+        - archive:
+            format: json_array
+`+"```"+``),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("bucket", "The bucket to upload messages to."),
+			docs.FieldString(
+				"path", "The path of each message to upload.",
+				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
+				`${!meta("kafka_key")}.json`,
+				`${!json("doc.namespace")}/${!json("doc.id")}.json`,
+			).IsInterpolated(),
+			docs.FieldString(
+				"tags", "Key/value pairs to store with the object as tags.",
+				map[string]string{
+					"Key1":      "Value1",
+					"Timestamp": `${!meta("Timestamp")}`,
+				},
+			).IsInterpolated().Map(),
+			docs.FieldString("content_type", "The content type to set for each object.").IsInterpolated(),
+			docs.FieldString("content_encoding", "An optional content encoding to set for each object.").IsInterpolated().Advanced(),
+			docs.FieldString("cache_control", "The cache control to set for each object.").Advanced().IsInterpolated(),
+			docs.FieldString("content_disposition", "The content disposition to set for each object.").Advanced().IsInterpolated(),
+			docs.FieldString("content_language", "The content language to set for each object.").Advanced().IsInterpolated(),
+			docs.FieldString("website_redirect_location", "The website redirect location to set for each object.").Advanced().IsInterpolated(),
+			docs.FieldObject("metadata", "Specify criteria for which metadata values are attached to objects as headers.").WithChildren(metadata.ExcludeFilterFields()...),
+			docs.FieldString("storage_class", "The storage class to set for each object.").HasOptions(
+				"STANDARD", "REDUCED_REDUNDANCY", "GLACIER", "STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "DEEP_ARCHIVE",
+			).IsInterpolated().Advanced(),
+			docs.FieldString("kms_key_id", "An optional server side encryption key.").Advanced(),
+			docs.FieldString("server_side_encryption", "An optional server side encryption algorithm.").AtVersion("3.63.0").Advanced(),
+			docs.FieldBool("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints.").Advanced(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
+			policy.FieldSpec(),
+		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewAmazonS3Config()),
+		Categories: []string{
+			"Services",
+			"AWS",
+		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
-
-//------------------------------------------------------------------------------
 
 type s3TagPair struct {
 	key   string
 	value *field.Expression
 }
 
-// AmazonS3 is a benthos writer.Type implementation that writes messages to an
-// Amazon S3 bucket.
-type AmazonS3 struct {
-	conf AmazonS3Config
+type amazonS3Writer struct {
+	conf ooutput.AmazonS3Config
 
 	path                    *field.Expression
 	tags                    []s3TagPair
@@ -99,17 +181,10 @@ type AmazonS3 struct {
 	uploader *s3manager.Uploader
 	timeout  time.Duration
 
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 }
 
-// NewAmazonS3V2 creates a new Amazon S3 bucket writer.Type.
-func NewAmazonS3V2(
-	conf AmazonS3Config,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-) (*AmazonS3, error) {
+func newAmazonS3Writer(conf ooutput.AmazonS3Config, mgr interop.Manager) (*amazonS3Writer, error) {
 	var timeout time.Duration
 	if tout := conf.Timeout; len(tout) > 0 {
 		var err error
@@ -117,10 +192,9 @@ func NewAmazonS3V2(
 			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
 		}
 	}
-	a := &AmazonS3{
+	a := &amazonS3Writer{
 		conf:    conf,
-		log:     log,
-		stats:   stats,
+		log:     mgr.Logger(),
 		timeout: timeout,
 	}
 	var err error
@@ -171,14 +245,7 @@ func NewAmazonS3V2(
 	return a, nil
 }
 
-// ConnectWithContext attempts to establish a connection to the target S3
-// bucket.
-func (a *AmazonS3) ConnectWithContext(ctx context.Context) error {
-	return a.Connect()
-}
-
-// Connect attempts to establish a connection to the target S3 bucket.
-func (a *AmazonS3) Connect() error {
+func (a *amazonS3Writer) ConnectWithContext(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -197,14 +264,7 @@ func (a *AmazonS3) Connect() error {
 	return nil
 }
 
-// Write attempts to write message contents to a target S3 bucket as files.
-func (a *AmazonS3) Write(msg *message.Batch) error {
-	return a.WriteWithContext(context.Background(), msg)
-}
-
-// WriteWithContext attempts to write message contents to a target S3 bucket as
-// files.
-func (a *AmazonS3) WriteWithContext(wctx context.Context, msg *message.Batch) error {
+func (a *amazonS3Writer) WriteWithContext(wctx context.Context, msg *message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}
@@ -214,7 +274,7 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg *message.Batch) er
 	)
 	defer cancel()
 
-	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		metadata := map[string]*string{}
 		a.metaFilter.Iter(p, func(k, v string) error {
 			metadata[k] = aws.String(v)
@@ -284,14 +344,9 @@ func (a *AmazonS3) WriteWithContext(wctx context.Context, msg *message.Batch) er
 	})
 }
 
-// CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *AmazonS3) CloseAsync() {
+func (a *amazonS3Writer) CloseAsync() {
 }
 
-// WaitForClose will block until either the reader is closed or a specified
-// timeout occurs.
-func (a *AmazonS3) WaitForClose(time.Duration) error {
+func (a *amazonS3Writer) WaitForClose(time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

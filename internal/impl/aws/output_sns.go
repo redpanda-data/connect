@@ -1,4 +1,4 @@
-package writer
+package aws
 
 import (
 	"context"
@@ -13,50 +13,66 @@ import (
 	"github.com/aws/aws-sdk-go/service/sns"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
-//------------------------------------------------------------------------------
+func init() {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		return newSNSWriterFromConf(c.AWSSNS, nm)
+	}), docs.ComponentSpec{
+		Name:    "aws_sns",
+		Version: "3.36.0",
+		Summary: `
+Sends messages to an AWS SNS topic.`,
+		Description: output.Description(true, false, `
+### Credentials
 
-// SNSConfig contains configuration fields for the output SNS type.
-type SNSConfig struct {
-	TopicArn               string                       `json:"topic_arn" yaml:"topic_arn"`
-	MessageGroupID         string                       `json:"message_group_id" yaml:"message_group_id"`
-	MessageDeduplicationID string                       `json:"message_deduplication_id" yaml:"message_deduplication_id"`
-	Metadata               metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
-	sessionConfig          `json:",inline" yaml:",inline"`
-	Timeout                string `json:"timeout" yaml:"timeout"`
-	MaxInFlight            int    `json:"max_in_flight" yaml:"max_in_flight"`
-}
-
-// NewSNSConfig creates a new Config with default values.
-func NewSNSConfig() SNSConfig {
-	return SNSConfig{
-		sessionConfig: sessionConfig{
-			Config: sess.NewConfig(),
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](/docs/guides/cloud/aws).`),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("topic_arn", "The topic to publish to."),
+			docs.FieldString("message_group_id", "An optional group ID to set for messages.").IsInterpolated().AtVersion("3.60.0"),
+			docs.FieldString("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated().AtVersion("3.60.0"),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(metadata.ExcludeFilterFields()...).AtVersion("3.60.0"),
+			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
+		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewSNSConfig()),
+		Categories: []string{
+			"Services",
+			"AWS",
 		},
-		TopicArn:               "",
-		MessageGroupID:         "",
-		MessageDeduplicationID: "",
-		Metadata:               metadata.NewExcludeFilterConfig(),
-		Timeout:                "5s",
-		MaxInFlight:            64,
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
+func newSNSWriterFromConf(conf ooutput.SNSConfig, mgr interop.Manager) (output.Streamed, error) {
+	s, err := newSNSWriter(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+	a, err := ooutput.NewAsyncWriter("aws_sns", conf.MaxInFlight, s, mgr.Logger(), mgr.Metrics())
+	if err != nil {
+		return nil, err
+	}
+	return ooutput.OnlySinglePayloads(a), nil
+}
 
-// SNS is a benthos writer.Type implementation that writes messages to an
-// Amazon SNS queue.
-type SNS struct {
-	conf SNSConfig
+type snsWriter struct {
+	conf ooutput.SNSConfig
 
 	groupID    *field.Expression
 	dedupeID   *field.Expression
@@ -67,21 +83,13 @@ type SNS struct {
 
 	tout time.Duration
 
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 }
 
-// NewSNS creates a new Amazon SNS writer.Type.
-func NewSNS(conf SNSConfig, log log.Modular, stats metrics.Type) (*SNS, error) {
-	return NewSNSV2(conf, mock.NewManager(), log, stats)
-}
-
-// NewSNSV2 creates a new AWS SNS writer.
-func NewSNSV2(conf SNSConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*SNS, error) {
-	s := &SNS{
-		conf:  conf,
-		log:   log,
-		stats: stats,
+func newSNSWriter(conf ooutput.SNSConfig, mgr interop.Manager) (*snsWriter, error) {
+	s := &snsWriter{
+		conf: conf,
+		log:  mgr.Logger(),
 	}
 
 	var err error
@@ -106,13 +114,7 @@ func NewSNSV2(conf SNSConfig, mgr interop.Manager, log log.Modular, stats metric
 	return s, nil
 }
 
-// ConnectWithContext attempts to establish a connection to the target SNS queue.
-func (a *SNS) ConnectWithContext(ctx context.Context) error {
-	return a.Connect()
-}
-
-// Connect attempts to establish a connection to the target SNS queue.
-func (a *SNS) Connect() error {
+func (a *snsWriter) ConnectWithContext(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -141,7 +143,7 @@ func isValidSNSAttribute(k, v string) bool {
 	return len(snsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
-func (a *SNS) getSNSAttributes(msg *message.Batch, i int) snsAttributes {
+func (a *snsWriter) getSNSAttributes(msg *message.Batch, i int) snsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
 	a.metaFilter.Iter(p, func(k, v string) error {
@@ -180,13 +182,7 @@ func (a *SNS) getSNSAttributes(msg *message.Batch, i int) snsAttributes {
 	}
 }
 
-// Write attempts to write message contents to a target SNS.
-func (a *SNS) Write(msg *message.Batch) error {
-	return a.WriteWithContext(context.Background(), msg)
-}
-
-// WriteWithContext attempts to write message contents to a target SNS.
-func (a *SNS) WriteWithContext(wctx context.Context, msg *message.Batch) error {
+func (a *snsWriter) WriteWithContext(wctx context.Context, msg *message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}
@@ -194,7 +190,7 @@ func (a *SNS) WriteWithContext(wctx context.Context, msg *message.Batch) error {
 	ctx, cancel := context.WithTimeout(wctx, a.tout)
 	defer cancel()
 
-	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		attrs := a.getSNSAttributes(msg, i)
 		message := &sns.PublishInput{
 			TopicArn:               aws.String(a.conf.TopicArn),
@@ -208,14 +204,9 @@ func (a *SNS) WriteWithContext(wctx context.Context, msg *message.Batch) error {
 	})
 }
 
-// CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *SNS) CloseAsync() {
+func (a *snsWriter) CloseAsync() {
 }
 
-// WaitForClose will block until either the reader is closed or a specified
-// timeout occurs.
-func (a *SNS) WaitForClose(time.Duration) error {
+func (a *snsWriter) WaitForClose(time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

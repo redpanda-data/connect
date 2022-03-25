@@ -1,4 +1,4 @@
-package writer
+package aws
 
 import (
 	"context"
@@ -17,63 +17,80 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
-
-//------------------------------------------------------------------------------
 
 const (
 	sqsMaxRecordsCount = 10
 )
 
-//------------------------------------------------------------------------------
+func init() {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		return newSQSWriterFromConfig(c.AWSSQS, nm)
+	}), docs.ComponentSpec{
+		Name:    "aws_sqs",
+		Version: "3.36.0",
+		Summary: `
+Sends messages to an SQS queue.`,
+		Description: output.Description(true, true, `
+Metadata values are sent along with the payload as attributes with the data type
+String. If the number of metadata values in a message exceeds the message
+attribute limit (10) then the top ten keys ordered alphabetically will be
+selected.
 
-// AmazonSQSConfig contains configuration fields for the output AmazonSQS type.
-type AmazonSQSConfig struct {
-	sessionConfig          `json:",inline" yaml:",inline"`
-	URL                    string                       `json:"url" yaml:"url"`
-	MessageGroupID         string                       `json:"message_group_id" yaml:"message_group_id"`
-	MessageDeduplicationID string                       `json:"message_deduplication_id" yaml:"message_deduplication_id"`
-	Metadata               metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
-	MaxInFlight            int                          `json:"max_in_flight" yaml:"max_in_flight"`
-	retries.Config         `json:",inline" yaml:",inline"`
-	Batching               policy.Config `json:"batching" yaml:"batching"`
-}
+The fields `+"`message_group_id` and `message_deduplication_id`"+` can be
+set dynamically using
+[function interpolations](/docs/configuration/interpolation#bloblang-queries), which are
+resolved individually for each message of a batch.
 
-// NewAmazonSQSConfig creates a new Config with default values.
-func NewAmazonSQSConfig() AmazonSQSConfig {
-	rConf := retries.NewConfig()
-	rConf.Backoff.InitialInterval = "1s"
-	rConf.Backoff.MaxInterval = "5s"
-	rConf.Backoff.MaxElapsedTime = "30s"
+### Credentials
 
-	return AmazonSQSConfig{
-		sessionConfig: sessionConfig{
-			Config: sess.NewConfig(),
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](/docs/guides/cloud/aws).`),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("url", "The URL of the target SQS queue."),
+			docs.FieldString("message_group_id", "An optional group ID to set for messages.").IsInterpolated(),
+			docs.FieldString("message_deduplication_id", "An optional deduplication ID to set for messages.").IsInterpolated(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(metadata.ExcludeFilterFields()...),
+			policy.FieldSpec(),
+		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewAmazonSQSConfig()),
+		Categories: []string{
+			"Services",
+			"AWS",
 		},
-		URL:                    "",
-		MessageGroupID:         "",
-		MessageDeduplicationID: "",
-		Metadata:               metadata.NewExcludeFilterConfig(),
-		MaxInFlight:            64,
-		Config:                 rConf,
-		Batching:               policy.NewConfig(),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
+func newSQSWriterFromConfig(conf ooutput.AmazonSQSConfig, mgr interop.Manager) (output.Streamed, error) {
+	s, err := newSQSWriter(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+	w, err := ooutput.NewAsyncWriter("aws_sqs", conf.MaxInFlight, s, mgr.Logger(), mgr.Metrics())
+	if err != nil {
+		return w, err
+	}
+	return ooutput.NewBatcherFromConfig(conf.Batching, w, mgr, mgr.Logger(), mgr.Metrics())
+}
 
-// AmazonSQS is a benthos writer.Type implementation that writes messages to an
-// Amazon SQS queue.
-type AmazonSQS struct {
-	conf AmazonSQSConfig
+type sqsWriter struct {
+	conf ooutput.AmazonSQSConfig
 	sqs  sqsiface.SQSAPI
 
 	backoffCtor func() backoff.BackOff
@@ -85,21 +102,13 @@ type AmazonSQS struct {
 	closer    sync.Once
 	closeChan chan struct{}
 
-	log   log.Modular
-	stats metrics.Type
+	log log.Modular
 }
 
-// NewAmazonSQSV2 creates a new Amazon SQS writer.Type.
-func NewAmazonSQSV2(
-	conf AmazonSQSConfig,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-) (*AmazonSQS, error) {
-	s := &AmazonSQS{
+func newSQSWriter(conf ooutput.AmazonSQSConfig, mgr interop.Manager) (*sqsWriter, error) {
+	s := &sqsWriter{
 		conf:      conf,
-		log:       log,
-		stats:     stats,
+		log:       mgr.Logger(),
 		closeChan: make(chan struct{}),
 	}
 
@@ -124,14 +133,7 @@ func NewAmazonSQSV2(
 	return s, nil
 }
 
-// ConnectWithContext attempts to establish a connection to the target SQS
-// queue.
-func (a *AmazonSQS) ConnectWithContext(ctx context.Context) error {
-	return a.Connect()
-}
-
-// Connect attempts to establish a connection to the target SQS queue.
-func (a *AmazonSQS) Connect() error {
+func (a *sqsWriter) ConnectWithContext(ctx context.Context) error {
 	if a.sqs != nil {
 		return nil
 	}
@@ -159,7 +161,7 @@ func isValidSQSAttribute(k, v string) bool {
 	return len(sqsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
-func (a *AmazonSQS) getSQSAttributes(msg *message.Batch, i int) sqsAttributes {
+func (a *sqsWriter) getSQSAttributes(msg *message.Batch, i int) sqsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
 	a.metaFilter.Iter(p, func(k, v string) error {
@@ -202,13 +204,7 @@ func (a *AmazonSQS) getSQSAttributes(msg *message.Batch, i int) sqsAttributes {
 	}
 }
 
-// Write attempts to write message contents to a target SQS.
-func (a *AmazonSQS) Write(msg *message.Batch) error {
-	return a.WriteWithContext(context.Background(), msg)
-}
-
-// WriteWithContext attempts to write message contents to a target SQS.
-func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *sqsWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if a.sqs == nil {
 		return component.ErrNotConnected
 	}
@@ -314,17 +310,12 @@ func (a *AmazonSQS) WriteWithContext(ctx context.Context, msg *message.Batch) er
 	return err
 }
 
-// CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *AmazonSQS) CloseAsync() {
+func (a *sqsWriter) CloseAsync() {
 	a.closer.Do(func() {
 		close(a.closeChan)
 	})
 }
 
-// WaitForClose will block until either the reader is closed or a specified
-// timeout occurs.
-func (a *AmazonSQS) WaitForClose(time.Duration) error {
+func (a *sqsWriter) WaitForClose(time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

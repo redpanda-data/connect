@@ -1,7 +1,8 @@
-package writer
+package aws
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"regexp"
@@ -20,6 +21,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func TestKinesisIntegration(t *testing.T) {
@@ -59,7 +61,7 @@ func TestKinesisIntegration(t *testing.T) {
 	}
 
 	endpoint := fmt.Sprintf("http://localhost:%d", port)
-	config := KinesisConfig{
+	config := ooutput.KinesisConfig{
 		Stream:       "foo",
 		PartitionKey: "${!json(\"id\")}",
 	}
@@ -92,14 +94,14 @@ func TestKinesisIntegration(t *testing.T) {
 	})
 }
 
-func testKinesisConnect(t *testing.T, c KinesisConfig, client *kinesis.Kinesis) {
+func testKinesisConnect(t *testing.T, c ooutput.KinesisConfig, client *kinesis.Kinesis) {
 	log := log.Noop()
-	r, err := NewKinesisV2(c, mock.NewManager(), log)
+	r, err := newKinesisWriter(c, mock.NewManager(), log)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := r.Connect(); err != nil {
+	if err := r.ConnectWithContext(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
@@ -120,7 +122,7 @@ func testKinesisConnect(t *testing.T, c KinesisConfig, client *kinesis.Kinesis) 
 		msg.Append(message.NewPart(record))
 	}
 
-	if err := r.Write(msg); err != nil {
+	if err := r.WriteWithContext(context.Background(), msg); err != nil {
 		t.Fatal(err)
 	}
 

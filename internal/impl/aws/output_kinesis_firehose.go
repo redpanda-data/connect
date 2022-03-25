@@ -1,4 +1,4 @@
-package writer
+package aws
 
 import (
 	"context"
@@ -12,48 +12,57 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
-//------------------------------------------------------------------------------
+func init() {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		kin, err := newKinesisFirehoseWriter(c.AWSKinesisFirehose, nm.Logger())
+		if err != nil {
+			return nil, err
+		}
+		w, err := ooutput.NewAsyncWriter("aws_kinesis_firehose", c.AWSKinesisFirehose.MaxInFlight, kin, nm.Logger(), nm.Metrics())
+		if err != nil {
+			return w, err
+		}
+		return ooutput.NewBatcherFromConfig(c.AWSKinesisFirehose.Batching, w, nm, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:    "aws_kinesis_firehose",
+		Version: "3.36.0",
+		Summary: `
+Sends messages to a Kinesis Firehose delivery stream.`,
+		Description: output.Description(true, true, `
+### Credentials
 
-// KinesisFirehoseConfig contains configuration fields for the KinesisFirehose output type.
-type KinesisFirehoseConfig struct {
-	sessionConfig  `json:",inline" yaml:",inline"`
-	Stream         string `json:"stream" yaml:"stream"`
-	MaxInFlight    int    `json:"max_in_flight" yaml:"max_in_flight"`
-	retries.Config `json:",inline" yaml:",inline"`
-	Batching       policy.Config `json:"batching" yaml:"batching"`
-}
-
-// NewKinesisFirehoseConfig creates a new Config with default values.
-func NewKinesisFirehoseConfig() KinesisFirehoseConfig {
-	rConf := retries.NewConfig()
-	rConf.Backoff.InitialInterval = "1s"
-	rConf.Backoff.MaxInterval = "5s"
-	rConf.Backoff.MaxElapsedTime = "30s"
-
-	return KinesisFirehoseConfig{
-		sessionConfig: sessionConfig{
-			Config: sess.NewConfig(),
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](/docs/guides/cloud/aws).`),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("stream", "The stream to publish messages to."),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			policy.FieldSpec(),
+		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewKinesisFirehoseConfig()),
+		Categories: []string{
+			"Services",
+			"AWS",
 		},
-		Stream:      "",
-		MaxInFlight: 64,
-		Config:      rConf,
-		Batching:    policy.NewConfig(),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// KinesisFirehose is a benthos writer.Type implementation that writes messages
-// to an Amazon Kinesis Firehose destination.
-type KinesisFirehose struct {
-	conf KinesisFirehoseConfig
+type kinesisFirehoseWriter struct {
+	conf ooutput.KinesisFirehoseConfig
 
 	session  *session.Session
 	firehose firehoseiface.FirehoseAPI
@@ -64,12 +73,8 @@ type KinesisFirehose struct {
 	log log.Modular
 }
 
-// NewKinesisFirehose creates a new Amazon Kinesis Firehose writer.Type.
-func NewKinesisFirehose(
-	conf KinesisFirehoseConfig,
-	log log.Modular,
-) (*KinesisFirehose, error) {
-	k := KinesisFirehose{
+func newKinesisFirehoseWriter(conf ooutput.KinesisFirehoseConfig, log log.Modular) (*kinesisFirehoseWriter, error) {
+	k := kinesisFirehoseWriter{
 		conf:       conf,
 		log:        log,
 		streamName: aws.String(conf.Stream),
@@ -82,14 +87,12 @@ func NewKinesisFirehose(
 	return &k, nil
 }
 
-//------------------------------------------------------------------------------
-
 // toRecords converts an individual benthos message into a slice of Kinesis Firehose
 // batch put entries by promoting each message part into a single part message
 // and passing each new message through the partition and hash key interpolation
 // process, allowing the user to define the partition and hash key per message
 // part.
-func (a *KinesisFirehose) toRecords(msg *message.Batch) ([]*firehose.Record, error) {
+func (a *kinesisFirehoseWriter) toRecords(msg *message.Batch) ([]*firehose.Record, error) {
 	entries := make([]*firehose.Record, msg.Len())
 
 	err := msg.Iter(func(i int, p *message.Part) error {
@@ -113,13 +116,13 @@ func (a *KinesisFirehose) toRecords(msg *message.Batch) ([]*firehose.Record, err
 
 // ConnectWithContext creates a new Kinesis Firehose client and ensures that the
 // target Kinesis Firehose delivery stream.
-func (a *KinesisFirehose) ConnectWithContext(ctx context.Context) error {
+func (a *kinesisFirehoseWriter) ConnectWithContext(ctx context.Context) error {
 	return a.Connect()
 }
 
 // Connect creates a new Kinesis Firehose client and ensures that the target
 // Kinesis Firehose delivery stream.
-func (a *KinesisFirehose) Connect() error {
+func (a *kinesisFirehoseWriter) Connect() error {
 	if a.session != nil {
 		return nil
 	}
@@ -145,14 +148,14 @@ func (a *KinesisFirehose) Connect() error {
 // Write attempts to write message contents to a target Kinesis Firehose delivery
 // stream in batches of 500. If throttling is detected, failed messages are retried
 // according to the configurable backoff settings.
-func (a *KinesisFirehose) Write(msg *message.Batch) error {
+func (a *kinesisFirehoseWriter) Write(msg *message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target Kinesis
 // Firehose delivery stream in batches of 500. If throttling is detected, failed
 // messages are retried according to the configurable backoff settings.
-func (a *KinesisFirehose) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *kinesisFirehoseWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}
@@ -230,13 +233,11 @@ func (a *KinesisFirehose) WriteWithContext(ctx context.Context, msg *message.Bat
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *KinesisFirehose) CloseAsync() {
+func (a *kinesisFirehoseWriter) CloseAsync() {
 }
 
 // WaitForClose will block until either the reader is closed or a specified
 // timeout occurs.
-func (a *KinesisFirehose) WaitForClose(time.Duration) error {
+func (a *kinesisFirehoseWriter) WaitForClose(time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

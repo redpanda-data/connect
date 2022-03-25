@@ -1,4 +1,4 @@
-package writer
+package aws
 
 import (
 	"context"
@@ -12,10 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func TestSQSHeaderCheck(t *testing.T) {
@@ -128,8 +127,8 @@ type inEntries []inMsg
 func TestSQSRetries(t *testing.T) {
 	tCtx := context.Background()
 
-	conf := NewAmazonSQSConfig()
-	w, err := NewAmazonSQSV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	conf := ooutput.NewAmazonSQSConfig()
+	w, err := newSQSWriter(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	var in []inEntries
@@ -190,8 +189,8 @@ func TestSQSRetries(t *testing.T) {
 func TestSQSSendLimit(t *testing.T) {
 	tCtx := context.Background()
 
-	conf := NewAmazonSQSConfig()
-	w, err := NewAmazonSQSV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	conf := ooutput.NewAmazonSQSConfig()
+	w, err := newSQSWriter(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	var in []inEntries

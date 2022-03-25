@@ -1,4 +1,4 @@
-package writer
+package aws
 
 import (
 	"context"
@@ -16,64 +16,119 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/google/go-cmp/cmp"
 
-	batchInternal "github.com/benthosdev/benthos/v4/internal/batch"
+	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
-//------------------------------------------------------------------------------
+func init() {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		dyn, err := newDynamoDBWriter(c.AWSDynamoDB, nm, nm.Logger())
+		if err != nil {
+			return nil, err
+		}
+		w, err := ooutput.NewAsyncWriter("aws_dynamodb", c.AWSDynamoDB.MaxInFlight, dyn, nm.Logger(), nm.Metrics())
+		if err != nil {
+			return nil, err
+		}
+		return ooutput.NewBatcherFromConfig(c.AWSDynamoDB.Batching, w, nm, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:    "aws_dynamodb",
+		Version: "3.36.0",
+		Summary: `
+Inserts items into a DynamoDB table.`,
+		Description: output.Description(true, true, `
+The field `+"`string_columns`"+` is a map of column names to string values,
+where the values are
+[function interpolated](/docs/configuration/interpolation#bloblang-queries) per message of a
+batch. This allows you to populate string columns of an item by extracting
+fields within the document payload or metadata like follows:
 
-// DynamoDBConfig contains config fields for the DynamoDB output type.
-type DynamoDBConfig struct {
-	sessionConfig  `json:",inline" yaml:",inline"`
-	Table          string            `json:"table" yaml:"table"`
-	StringColumns  map[string]string `json:"string_columns" yaml:"string_columns"`
-	JSONMapColumns map[string]string `json:"json_map_columns" yaml:"json_map_columns"`
-	TTL            string            `json:"ttl" yaml:"ttl"`
-	TTLKey         string            `json:"ttl_key" yaml:"ttl_key"`
-	MaxInFlight    int               `json:"max_in_flight" yaml:"max_in_flight"`
-	retries.Config `json:",inline" yaml:",inline"`
-	Batching       policy.Config `json:"batching" yaml:"batching"`
-}
+`+"```yml"+`
+string_columns:
+  id: ${!json("id")}
+  title: ${!json("body.title")}
+  topic: ${!meta("kafka_topic")}
+  full_content: ${!content()}
+`+"```"+`
 
-// NewDynamoDBConfig creates a DynamoDBConfig populated with default values.
-func NewDynamoDBConfig() DynamoDBConfig {
-	rConf := retries.NewConfig()
-	rConf.MaxRetries = 3
-	rConf.Backoff.InitialInterval = "1s"
-	rConf.Backoff.MaxInterval = "5s"
-	rConf.Backoff.MaxElapsedTime = "30s"
-	return DynamoDBConfig{
-		sessionConfig: sessionConfig{
-			Config: session.NewConfig(),
+The field `+"`json_map_columns`"+` is a map of column names to json paths,
+where the [dot path](/docs/configuration/field_paths) is extracted from each document and
+converted into a map value. Both an empty path and the path `+"`.`"+` are
+interpreted as the root of the document. This allows you to populate map columns
+of an item like follows:
+
+`+"```yml"+`
+json_map_columns:
+  user: path.to.user
+  whole_document: .
+`+"```"+`
+
+A column name can be empty:
+
+`+"```yml"+`
+json_map_columns:
+  "": .
+`+"```"+`
+
+In which case the top level document fields will be written at the root of the
+item, potentially overwriting previously defined column values. If a path is not
+found within a document the column will not be populated.
+
+### Credentials
+
+By default Benthos will use a shared credentials file when connecting to AWS
+services. It's also possible to set them explicitly at the component level,
+allowing you to transfer data across accounts. You can find out more
+[in this document](/docs/guides/cloud/aws).`),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("table", "The table to store messages in."),
+			docs.FieldString("string_columns", "A map of column keys to string values to store.",
+				map[string]string{
+					"id":           "${!json(\"id\")}",
+					"title":        "${!json(\"body.title\")}",
+					"topic":        "${!meta(\"kafka_topic\")}",
+					"full_content": "${!content()}",
+				},
+			).IsInterpolated().Map(),
+			docs.FieldString("json_map_columns", "A map of column keys to [field paths](/docs/configuration/field_paths) pointing to value data within messages.",
+				map[string]string{
+					"user":           "path.to.user",
+					"whole_document": ".",
+				},
+				map[string]string{
+					"": ".",
+				},
+			).Map(),
+			docs.FieldString("ttl", "An optional TTL to set for items, calculated from the moment the message is sent.").Advanced(),
+			docs.FieldString("ttl_key", "The column key to place the TTL value within.").Advanced(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			policy.FieldSpec(),
+		).WithChildren(session.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewDynamoDBConfig()),
+		Categories: []string{
+			"Services",
+			"AWS",
 		},
-		Table:          "",
-		StringColumns:  map[string]string{},
-		JSONMapColumns: map[string]string{},
-		TTL:            "",
-		TTLKey:         "",
-		MaxInFlight:    64,
-		Config:         rConf,
-		Batching:       policy.NewConfig(),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// DynamoDB is a benthos writer.Type implementation that writes messages to an
-// Amazon SQS queue.
-type DynamoDB struct {
+type dynamoDBWriter struct {
 	client dynamodbiface.DynamoDBAPI
-	conf   DynamoDBConfig
+	conf   ooutput.DynamoDBConfig
 	log    log.Modular
-	stats  metrics.Type
 
 	backoffCtor func() backoff.BackOff
 	boffPool    sync.Pool
@@ -84,17 +139,14 @@ type DynamoDB struct {
 	jsonMapColumns map[string]string
 }
 
-// NewDynamoDBV2 creates a new Amazon SQS writer.Type.
-func NewDynamoDBV2(
-	conf DynamoDBConfig,
+func newDynamoDBWriter(
+	conf ooutput.DynamoDBConfig,
 	mgr interop.Manager,
 	log log.Modular,
-	stats metrics.Type,
-) (*DynamoDB, error) {
-	db := &DynamoDB{
+) (*dynamoDBWriter, error) {
+	db := &dynamoDBWriter{
 		conf:           conf,
 		log:            log,
-		stats:          stats,
 		table:          aws.String(conf.Table),
 		strColumns:     map[string]*field.Expression{},
 		jsonMapColumns: map[string]string{},
@@ -132,14 +184,7 @@ func NewDynamoDBV2(
 	return db, nil
 }
 
-// Connect attempts to establish a connection to the target SQS queue.
-func (d *DynamoDB) Connect() error {
-	return d.ConnectWithContext(context.Background())
-}
-
-// ConnectWithContext attempts to establish a connection to the target DynamoDB
-// table.
-func (d *DynamoDB) ConnectWithContext(ctx context.Context) error {
+func (d *dynamoDBWriter) ConnectWithContext(ctx context.Context) error {
 	if d.client != nil {
 		return nil
 	}
@@ -224,14 +269,7 @@ func jsonToMap(path string, root interface{}) (*dynamodb.AttributeValue, error) 
 	return walkJSON(gObj.Data()), nil
 }
 
-// Write attempts to write message contents to a target DynamoDB table.
-func (d *DynamoDB) Write(msg *message.Batch) error {
-	return d.WriteWithContext(context.Background(), msg)
-}
-
-// WriteWithContext attempts to write message contents to a target DynamoDB
-// table.
-func (d *DynamoDB) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (d *dynamoDBWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	if d.client == nil {
 		return component.ErrNotConnected
 	}
@@ -293,7 +331,7 @@ func (d *DynamoDB) WriteWithContext(ctx context.Context, msg *message.Batch) err
 		// None of the messages were successful, attempt to send individually
 	individualRequestsLoop:
 		for err != nil {
-			batchErr := batchInternal.NewError(msg, err)
+			batchErr := batch.NewError(msg, err)
 			for i, req := range writeReqs {
 				if req == nil {
 					continue
@@ -359,7 +397,7 @@ unprocessedLoop:
 
 		// Sad, we have unprocessed messages, we need to map the requests back
 		// to the origin message index. The DynamoDB API doesn't make this easy.
-		batchErr := batchInternal.NewError(msg, err)
+		batchErr := batch.NewError(msg, err)
 
 	requestsLoop:
 		for _, req := range unproc {
@@ -380,14 +418,9 @@ unprocessedLoop:
 	return err
 }
 
-// CloseAsync begins cleaning up resources used by this writer asynchronously.
-func (d *DynamoDB) CloseAsync() {
+func (d *dynamoDBWriter) CloseAsync() {
 }
 
-// WaitForClose will block until either the writer is closed or a specified
-// timeout occurs.
-func (d *DynamoDB) WaitForClose(time.Duration) error {
+func (d *dynamoDBWriter) WaitForClose(time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------
