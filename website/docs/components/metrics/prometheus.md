@@ -49,6 +49,7 @@ metrics:
     push_basic_auth:
       username: ""
       password: ""
+    file_output_path: ""
   mapping: ""
 ```
 
@@ -135,6 +136,14 @@ Default: `""`
 ### `push_basic_auth.password`
 
 The Basic Authentication password.
+
+
+Type: `string`  
+Default: `""`  
+
+### `file_output_path`
+
+Optional file path to a metrics file that should be written.
 
 
 Type: `string`  

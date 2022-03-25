@@ -53,6 +53,7 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 				docs.FieldString("username", "The Basic Authentication username.").HasDefault(""),
 				docs.FieldString("password", "The Basic Authentication password.").HasDefault(""),
 			).Advanced(),
+			docs.FieldString("file_output_path", "Optional file path to a metrics file that should be written.\n").Advanced().HasDefault(""),
 		),
 	})
 }
@@ -146,6 +147,8 @@ type prometheusMetrics struct {
 	closedChan chan struct{}
 	running    int32
 
+	fileOutputPath string
+
 	useHistogramTiming bool
 	histogramBuckets   []float64
 
@@ -215,6 +218,10 @@ func newPrometheus(config metrics.Config, log log.Modular) (metrics.Type, error)
 				}
 			}()
 		}
+	}
+
+	if len(promConf.FileOutputPath) > 0 {
+		p.fileOutputPath = promConf.FileOutputPath
 	}
 
 	return p, nil
@@ -352,7 +359,14 @@ func (p *prometheusMetrics) Close() error {
 		close(p.closedChan)
 	}
 	if p.pusher != nil {
-		return p.pusher.Push()
+		err := p.pusher.Push()
+		if err != nil {
+			return err
+		}
 	}
+	if p.fileOutputPath != "" {
+		return prometheus.WriteToTextfile(p.fileOutputPath, p.reg)
+	}
+
 	return nil
 }

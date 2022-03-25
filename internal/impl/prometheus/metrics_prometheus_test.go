@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -151,8 +152,47 @@ func TestPrometheusHistMetrics(t *testing.T) {
 	nm, err := newPrometheus(conf, log.Noop())
 	require.NoError(t, err)
 
-	handler := nm.HandlerFunc()
+	applyTestMetrics(nm)
 
+	tmr := nm.GetTimer("timerone")
+	tmr.Timing(13)
+	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
+	tmrTwo.With("value4", "value5").Timing(14)
+
+	handler := nm.HandlerFunc()
+	body := getPage(t, handler)
+
+	assertContainsTestMetrics(t, body)
+	assert.Contains(t, body, "\ntimerone_sum 1.3e-08")
+	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 1.4e-08")
+}
+
+func TestPrometheusWithFileOutputPath(t *testing.T) {
+	config := metrics.NewConfig()
+	config.Prometheus.FileOutputPath = os.TempDir() + "/benthos_metrics.prom"
+
+	defer os.Remove(config.Prometheus.FileOutputPath)
+
+	p, err := newPrometheus(config, log.Noop())
+	applyTestMetrics(p)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, p)
+	assert.Nil(t, p.(*prometheusMetrics).pusher)
+	assert.Equal(t, config.Prometheus.FileOutputPath, p.(*prometheusMetrics).fileOutputPath)
+
+	err = p.Close()
+	assert.NoError(t, err)
+
+	assert.FileExists(t, config.Prometheus.FileOutputPath)
+	file, err := os.ReadFile(config.Prometheus.FileOutputPath)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, file)
+
+	assertContainsTestMetrics(t, string(file))
+}
+
+func applyTestMetrics(nm metrics.Type) {
 	ctr := nm.GetCounter("counterone")
 	ctr.Incr(10)
 	ctr.Incr(11)
@@ -160,26 +200,18 @@ func TestPrometheusHistMetrics(t *testing.T) {
 	gge := nm.GetGauge("gaugeone")
 	gge.Set(12)
 
-	tmr := nm.GetTimer("timerone")
-	tmr.Timing(13)
-
 	ctrTwo := nm.GetCounterVec("countertwo", "label1")
 	ctrTwo.With("value1").Incr(10)
 	ctrTwo.With("value2").Incr(11)
 
 	ggeTwo := nm.GetGaugeVec("gaugetwo", "label2")
 	ggeTwo.With("value3").Set(12)
+}
 
-	tmrTwo := nm.GetTimerVec("timertwo", "label3", "label4")
-	tmrTwo.With("value4", "value5").Timing(14)
-
-	body := getPage(t, handler)
-
+func assertContainsTestMetrics(t *testing.T, body string) {
 	assert.Contains(t, body, "\ncounterone 21")
 	assert.Contains(t, body, "\ngaugeone 12")
-	assert.Contains(t, body, "\ntimerone_sum 1.3e-08")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value1\"} 10")
 	assert.Contains(t, body, "\ncountertwo{label1=\"value2\"} 11")
 	assert.Contains(t, body, "\ngaugetwo{label2=\"value3\"} 12")
-	assert.Contains(t, body, "\ntimertwo_sum{label3=\"value4\",label4=\"value5\"} 1.4e-08")
 }
