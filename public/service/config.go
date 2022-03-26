@@ -44,7 +44,7 @@ func NewDurationField(name string) *ConfigField {
 // of a discrete list of values.
 func NewStringEnumField(name string, options ...string) *ConfigField {
 	return &ConfigField{
-		field: docs.FieldString(name, "").HasOptions(options...).LintOptions(),
+		field: docs.FieldString(name, "").HasOptions(options...),
 	}
 }
 
@@ -64,7 +64,7 @@ func NewStringAnnotatedEnumField(name string, options map[string]string) *Config
 	}
 
 	return &ConfigField{
-		field: docs.FieldString(name, "").HasAnnotatedOptions(flatOptions...).LintOptions(),
+		field: docs.FieldString(name, "").HasAnnotatedOptions(flatOptions...),
 	}
 }
 

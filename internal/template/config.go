@@ -213,10 +213,10 @@ func FieldConfigSpec() docs.FieldSpecs {
 		docs.FieldString("description", "A description of the field.").HasDefault(""),
 		docs.FieldString("type", "The scalar type of the field.").HasOptions(
 			"string", "int", "float", "bool",
-		).LintOptions(),
+		),
 		docs.FieldString("kind", "The kind of the field.").HasOptions(
 			"scalar", "map", "list",
-		).HasDefault("scalar").LintOptions(),
+		).HasDefault("scalar"),
 		docs.FieldAnything("default", "An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect.").Optional(),
 		docs.FieldBool("advanced", "Whether this field is considered advanced.").HasDefault(false),
 	}
@@ -230,14 +230,14 @@ func ConfigSpec() docs.FieldSpecs {
 			"type", "The type of the component this template will create.",
 		).HasOptions(
 			"cache", "input", "output", "processor", "rate_limit",
-		).LintOptions(),
+		),
 		docs.FieldString(
 			"status", "The stability of the template describing the likelihood that the configuration spec of the template, or it's behaviour, will change.",
 		).HasAnnotatedOptions(
 			"stable", "This template is stable and will therefore not change in a breaking way outside of major version releases.",
 			"beta", "This template is beta and will therefore not change in a breaking way unless a major problem is found.",
 			"experimental", "This template is experimental and therefore subject to breaking changes outside of major version releases.",
-		).HasDefault("stable").LintOptions(),
+		).HasDefault("stable"),
 		docs.FieldString(
 			"categories", "An optional list of tags, which are used for arbitrarily grouping components in documentation.",
 		).Array().HasDefault([]string{}),

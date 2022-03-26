@@ -221,7 +221,7 @@ func (f FieldSpec) HasAnnotatedOptions(options ...string) FieldSpec {
 			options[i], options[i+1],
 		})
 	}
-	return f
+	return f.lintOptions()
 }
 
 // HasOptions returns a new FieldSpec that specifies a specific list of options.
@@ -230,7 +230,7 @@ func (f FieldSpec) HasOptions(options ...string) FieldSpec {
 		panic("cannot combine annotated and non-annotated options for a field")
 	}
 	f.Options = options
-	return f
+	return f.lintOptions()
 }
 
 // WithChildren returns a new FieldSpec that has child fields.
@@ -263,13 +263,11 @@ func (f FieldSpec) Linter(fn LintFunc) FieldSpec {
 	return f
 }
 
-// LintOptions enforces that a field value matches one of the provided options
+// lintOptions enforces that a field value matches one of the provided options
 // and returns a linting error if that is not the case. This is currently opt-in
 // because some fields express options that are only a subset due to deprecated
 // functionality.
-//
-// TODO: V4 Switch this to opt-out.
-func (f FieldSpec) LintOptions() FieldSpec {
+func (f FieldSpec) lintOptions() FieldSpec {
 	f.customLintFn = func(ctx LintContext, line, col int, value interface{}) []Lint {
 		str, ok := value.(string)
 		if !ok {

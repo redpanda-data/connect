@@ -43,7 +43,7 @@ func FieldSpec() docs.FieldSpec {
 			sarama.SASLTypeOAuth, "OAuth Bearer based authentication.",
 			sarama.SASLTypeSCRAMSHA256, "Authentication using the SCRAM-SHA-256 mechanism.",
 			sarama.SASLTypeSCRAMSHA512, "Authentication using the SCRAM-SHA-512 mechanism.",
-		).LintOptions(),
+		),
 		docs.FieldString("user", "A `"+sarama.SASLTypePlaintext+"` username. It is recommended that you use environment variables to populate this field.", "${USER}"),
 		docs.FieldString("password", "A `"+sarama.SASLTypePlaintext+"` password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}"),
 		docs.FieldString("access_token", "A static `"+sarama.SASLTypeOAuth+"` access token"),
