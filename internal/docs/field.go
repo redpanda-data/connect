@@ -72,8 +72,6 @@ type FieldSpec struct {
 	Name string `json:"name"`
 
 	// Type of the field.
-	//
-	// TODO: Make this mandatory
 	Type FieldType `json:"type"`
 
 	// Kind of the field.
@@ -122,7 +120,6 @@ type FieldSpec struct {
 
 	omitWhenFn   func(field, parent interface{}) (why string, shouldOmit bool)
 	customLintFn LintFunc
-	skipLint     bool
 }
 
 // IsInterpolated indicates that the field supports interpolation functions.
@@ -288,13 +285,6 @@ func (f FieldSpec) lintOptions() FieldSpec {
 		}
 		return []Lint{NewLintError(line, fmt.Sprintf("value %v is not a valid option for this field", str))}
 	}
-	return f
-}
-
-// Unlinted returns a field spec that will not be lint checked during a config
-// parse.
-func (f FieldSpec) Unlinted() FieldSpec {
-	f.skipLint = true
 	return f
 }
 

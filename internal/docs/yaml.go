@@ -509,10 +509,6 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 // LintYAML returns a list of linting errors found by checking a field
 // definition against a yaml node.
 func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
-	if f.skipLint {
-		return nil
-	}
-
 	node = unwrapDocumentNode(node)
 
 	var lints []Lint
