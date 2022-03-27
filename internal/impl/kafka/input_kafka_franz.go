@@ -44,6 +44,7 @@ This input adds the following metadata fields to each message:
 - kafka_partition
 - kafka_offset
 - kafka_timestamp_unix
+- regex_pattern
 - All record headers
 ` + "```" + `
 `).
@@ -52,6 +53,9 @@ This input adds the following metadata fields to each message:
 			Example([]string{"localhost:9092"}).
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"})).
+		Field(service.NewIntField("regex_pattern").
+			Description("An indicator that makes franz use regex pattern in topics.").
+			Default(false)).
 		Field(service.NewStringListField("topics").
 			Description("A list of topics to consume from, partitions are automatically shared across consumers sharing the consumer group.")).
 		Field(service.NewStringField("consumer_group").
@@ -93,6 +97,7 @@ type franzKafkaReader struct {
 	tlsConf         *tls.Config
 	saslConfs       []sasl.Mechanism
 	checkpointLimit int
+	regex_pattern   bool
 
 	msgChan atomic.Value
 	log     *service.Logger
@@ -128,6 +133,10 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 	}
 	for _, t := range topicList {
 		f.topics = append(f.topics, strings.Split(t, ",")...)
+	}
+
+	if f.regex_pattern, err = conf.FieldBool("regex_pattern"); err != nil {
+		return nil, err
 	}
 
 	if f.consumerGroup, err = conf.FieldString("consumer_group"); err != nil {
@@ -293,8 +302,13 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		kgo.AutoCommitMarks(),
 		kgo.WithLogger(&kgoLogger{f.log}),
 	}
+
 	if f.tlsConf != nil {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
+	}
+
+	if f.regex_pattern {
+		clientOpts = append(clientOpts, kgo.ConsumeRegex())
 	}
 
 	cl, err := kgo.NewClient(clientOpts...)
