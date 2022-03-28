@@ -589,7 +589,7 @@ func TestYAMLComponentLinting(t *testing.T) {
 			Name: fmt.Sprintf("testlintfoo%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().WithChildren(
-				docs.FieldString("foo1", "").Linter(func(ctx docs.LintContext, line, col int, v interface{}) []docs.Lint {
+				docs.FieldString("foo1", "").LinterFunc(func(ctx docs.LintContext, line, col int, v interface{}) []docs.Lint {
 					if v == "lint me please" {
 						return []docs.Lint{
 							docs.NewLintError(line, "this is a custom lint"),

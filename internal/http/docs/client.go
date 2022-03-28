@@ -44,7 +44,7 @@ func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.Field
 	httpSpecs = append(httpSpecs, extraChildren...)
 
 	return docs.FieldComponent().WithChildren(httpSpecs...).
-		Linter((func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
+		LinterFunc((func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
 			if _, ok := value.(map[string]interface{}); !ok {
 				return nil
 			}

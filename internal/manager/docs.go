@@ -25,22 +25,22 @@ func Spec() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldInput(
 			"input_resources", "A list of input resources, each must have a unique label.",
-		).Array().Linter(lintResource),
+		).Array().LinterFunc(lintResource),
 
 		docs.FieldProcessor(
 			"processor_resources", "A list of processor resources, each must have a unique label.",
-		).Array().Linter(lintResource),
+		).Array().LinterFunc(lintResource),
 
 		docs.FieldOutput(
 			"output_resources", "A list of output resources, each must have a unique label.",
-		).Array().Linter(lintResource),
+		).Array().LinterFunc(lintResource),
 
 		docs.FieldCache(
 			"cache_resources", "A list of cache resources, each must have a unique label.",
-		).Array().Linter(lintResource),
+		).Array().LinterFunc(lintResource),
 
 		docs.FieldRateLimit(
 			"rate_limit_resources", "A list of rate limit resources, each must have a unique label.",
-		).Array().Linter(lintResource),
+		).Array().LinterFunc(lintResource),
 	}
 }

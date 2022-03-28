@@ -98,7 +98,7 @@ behavior is false, which will drop the message.`,
 					"Indicates whether, if this case passes for a message, the next case should also be tested.",
 				).HasDefault(false).Advanced(),
 			).HasDefault([]interface{}{}),
-		).Linter(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
+		).LinterFunc(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
 			if _, ok := value.(map[string]interface{}); !ok {
 				return nil
 			}

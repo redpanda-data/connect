@@ -47,7 +47,7 @@ pipeline:
 ` + "```" + `
 `,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("level", "The log level to use.").HasOptions("FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL").Linter(nil),
+			docs.FieldString("level", "The log level to use.").HasOptions("FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE", "ALL").LinterFunc(nil),
 			docs.FieldString("fields", "A map of fields to print along with the log message.").IsInterpolated().Map().Deprecated(),
 			docs.FieldString(
 				"fields_mapping", "An optional [Bloblang mapping](/docs/guides/bloblang/about) that can be used to specify extra fields to add to the log. If log fields are also added with the `fields` field then those values will override matching keys from this mapping.",

@@ -401,7 +401,7 @@ func lintYAMLFromOmit(parentSpec FieldSpecs, lintTargetSpec FieldSpec, parent, n
 }
 
 func customLintFromYAML(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint {
-	lintFn := spec.GetLintFunc()
+	lintFn := spec.getLintFunc()
 	if lintFn == nil {
 		return nil
 	}

@@ -40,7 +40,7 @@ var labelField = FieldString(
 		return "label field should be omitted when pointing to a resource", true
 	}
 	return "", false
-}).AtVersion("3.44.0").Linter(func(ctx LintContext, line, col int, v interface{}) []Lint {
+}).AtVersion("3.44.0").LinterFunc(func(ctx LintContext, line, col int, v interface{}) []Lint {
 	l, _ := v.(string)
 	if l == "" {
 		return nil

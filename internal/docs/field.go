@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // FieldType represents a field type.
@@ -118,6 +120,10 @@ type FieldSpec struct {
 	// Version is an explicit version when this field was introduced.
 	Version string `json:"version,omitempty"`
 
+	// Linter is a bloblang mapping that should be used in order to lint
+	// a field.
+	Linter string `json:"linter,omitempty"`
+
 	omitWhenFn   func(field, parent interface{}) (why string, shouldOmit bool)
 	customLintFn LintFunc
 }
@@ -125,14 +131,12 @@ type FieldSpec struct {
 // IsInterpolated indicates that the field supports interpolation functions.
 func (f FieldSpec) IsInterpolated() FieldSpec {
 	f.Interpolated = true
-	f.customLintFn = LintBloblangField
 	return f
 }
 
 // IsBloblang indicates that the field is a Bloblang mapping.
 func (f FieldSpec) IsBloblang() FieldSpec {
 	f.Bloblang = true
-	f.customLintFn = LintBloblangMapping
 	return f
 }
 
@@ -252,11 +256,73 @@ func (f FieldSpec) OmitWhen(fn func(field, parent interface{}) (why string, shou
 	return f
 }
 
-// Linter adds a linting function to a field. When linting is performed on a
+// LinterFunc adds a linting function to a field. When linting is performed on a
 // config the provided function will be called with a boxed variant of the field
 // value, allowing it to perform linting on that value.
-func (f FieldSpec) Linter(fn LintFunc) FieldSpec {
+//
+// It is important to note that for fields defined as a non-scalar (array,
+// array of arrays, map, etc) the linting rule will be executed on the highest
+// level (array) and also the individual scalar values. If your field is a high
+// level type then make sure your linting rule checks the type of the value
+// provided in order to limit when the linting is performed.
+//
+// Note that a linting rule defined this way will only be effective in the
+// binary that defines it as the function cannot be serialized into a portable
+// schema.
+func (f FieldSpec) LinterFunc(fn LintFunc) FieldSpec {
 	f.customLintFn = fn
+	return f
+}
+
+// LinterBlobl adds a linting function to a field. When linting is performed on
+// a config the provided bloblang mapping will be called with a boxed variant of
+// the field value, allowing it to perform linting on that value, where an array
+// of lints (strings) should be returned.
+//
+// It is important to note that for fields defined as a non-scalar (array,
+// array of arrays, map, etc) the linting rule will be executed on the highest
+// level (array) and also the individual scalar values. If your field is a high
+// level type then make sure your linting rule checks the type of the value
+// provided in order to limit when the linting is performed.
+//
+// Note that a linting rule defined this way will only be effective in the
+// binary that defines it as the function cannot be serialized into a portable
+// schema.
+func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
+	env := bloblang.NewEnvironment().OnlyPure()
+
+	m, err := env.NewMapping(blobl)
+	if err != nil {
+		f.customLintFn = func(ctx LintContext, line, col int, value interface{}) (lints []Lint) {
+			return []Lint{NewLintError(line, fmt.Sprintf("Field lint mapping itself failed to parse: %v", err))}
+		}
+		return f
+	}
+
+	f.Linter = blobl
+	f.customLintFn = func(ctx LintContext, line, col int, value interface{}) (lints []Lint) {
+		res, err := m.Exec(query.FunctionContext{
+			Vars:     map[string]interface{}{},
+			Maps:     map[string]query.Function{},
+			MsgBatch: message.QuickBatch(nil),
+		}.WithValue(value))
+		if err != nil {
+			return []Lint{NewLintError(line, err.Error())}
+		}
+		switch t := res.(type) {
+		case []interface{}:
+			for _, e := range t {
+				if what, _ := e.(string); len(what) > 0 {
+					lints = append(lints, NewLintError(line, what))
+				}
+			}
+		case string:
+			if len(t) > 0 {
+				lints = append(lints, NewLintError(line, t))
+			}
+		}
+		return
+	}
 	return f
 }
 
@@ -288,19 +354,34 @@ func (f FieldSpec) lintOptions() FieldSpec {
 	return f
 }
 
-// GetLintFunc returns a lint func for the field if one is applicable, otherwise
-// nil is returned.
-func (f FieldSpec) GetLintFunc() LintFunc {
-	if f.customLintFn != nil {
-		return f.customLintFn
+func (f FieldSpec) getLintFunc() LintFunc {
+	fn := f.customLintFn
+	if fn == nil && len(f.Linter) > 0 {
+		fn = f.LinterBlobl(f.Linter).customLintFn
 	}
 	if f.Interpolated {
-		return LintBloblangField
+		if fn != nil {
+			fn = func(ctx LintContext, line, col int, value interface{}) []Lint {
+				lints := f.customLintFn(ctx, line, col, value)
+				moreLints := LintBloblangField(ctx, line, col, value)
+				return append(lints, moreLints...)
+			}
+		} else {
+			fn = LintBloblangField
+		}
 	}
 	if f.Bloblang {
-		return LintBloblangMapping
+		if fn != nil {
+			fn = func(ctx LintContext, line, col int, value interface{}) []Lint {
+				lints := f.customLintFn(ctx, line, col, value)
+				moreLints := LintBloblangMapping(ctx, line, col, value)
+				return append(lints, moreLints...)
+			}
+		} else {
+			fn = LintBloblangMapping
+		}
 	}
-	return nil
+	return fn
 }
 
 // FieldAnything returns a field spec for any typed field.
