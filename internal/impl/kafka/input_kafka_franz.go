@@ -97,7 +97,7 @@ type franzKafkaReader struct {
 	tlsConf         *tls.Config
 	saslConfs       []sasl.Mechanism
 	checkpointLimit int
-	regex_pattern   bool
+	regexPattern    bool
 
 	msgChan atomic.Value
 	log     *service.Logger
@@ -135,7 +135,7 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 		f.topics = append(f.topics, strings.Split(t, ",")...)
 	}
 
-	if f.regex_pattern, err = conf.FieldBool("regex_pattern"); err != nil {
+	if f.regexPattern, err = conf.FieldBool("regex_pattern"); err != nil {
 		return nil, err
 	}
 
@@ -307,7 +307,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
 	}
 
-	if f.regex_pattern {
+	if f.regexPattern {
 		clientOpts = append(clientOpts, kgo.ConsumeRegex())
 	}
 
