@@ -2,7 +2,7 @@ package gcp
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -65,7 +65,7 @@ func (c *gcpCloudStorageCache) Get(ctx context.Context, key string) ([]byte, err
 
 	defer reader.Close()
 
-	data, err := ioutil.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}
