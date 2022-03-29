@@ -12,8 +12,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
-//------------------------------------------------------------------------------
-
 // InputPart defines an input part for a test case.
 type InputPart struct {
 	Content  string            `yaml:"content"`
@@ -63,8 +61,6 @@ func (i *InputPart) UnmarshalYAML(value *yaml.Node) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------
 
 // Case contains a definition of a single Benthos config test case.
 type Case struct {
@@ -129,17 +125,8 @@ func (c CaseFailure) String() string {
 // ProcProvider returns compiled processors extracted from a Benthos config
 // using a JSON Pointer.
 type ProcProvider interface {
-	Provide(jsonPtr string, environment map[string]string) ([]iprocessor.V1, error)
+	Provide(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]iprocessor.V1, error)
 	ProvideBloblang(path string) ([]iprocessor.V1, error)
-}
-
-type mockedProcProvider interface {
-	ProvideMocked(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]iprocessor.V1, error)
-}
-
-// Execute attempts to execute a test case against a Benthos configuration.
-func (c *Case) Execute(provider ProcProvider) (failures []CaseFailure, err error) {
-	return c.executeFrom("", provider)
 }
 
 func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFailure, err error) {
@@ -148,12 +135,10 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 		if procSet, err = provider.ProvideBloblang(c.TargetMapping); err != nil {
 			return nil, fmt.Errorf("failed to initialise Bloblang mapping '%v': %v", c.TargetMapping, err)
 		}
-	} else if mockedProcProv, ok := provider.(mockedProcProvider); ok {
-		if procSet, err = mockedProcProv.ProvideMocked(c.TargetProcessors, c.Environment, c.Mocks); err != nil {
+	} else {
+		if procSet, err = provider.Provide(c.TargetProcessors, c.Environment, c.Mocks); err != nil {
 			return nil, fmt.Errorf("failed to initialise processors '%v': %v", c.TargetProcessors, err)
 		}
-	} else if procSet, err = provider.Provide(c.TargetProcessors, c.Environment); err != nil {
-		return nil, fmt.Errorf("failed to initialise processors '%v': %v", c.TargetProcessors, err)
 	}
 
 	reportFailure := func(reason string) {
@@ -203,7 +188,7 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 				reportFailure(fmt.Sprintf("unexpected message from batch %v: %s", i, part.Get()))
 				return nil
 			}
-			condErrs := expectedBatch[i2].checkAllFrom(dir, part)
+			condErrs := expectedBatch[i2].CheckAll(dir, part)
 			for _, condErr := range condErrs {
 				reportFailure(fmt.Sprintf("batch %v message %v: %v", i, i2, condErr))
 			}
@@ -215,5 +200,3 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 	}
 	return
 }
-
-//------------------------------------------------------------------------------

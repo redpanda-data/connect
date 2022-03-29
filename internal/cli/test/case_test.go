@@ -21,14 +21,7 @@ import (
 
 type mockProvider map[string][]iprocessor.V1
 
-func (m mockProvider) Provide(ptr string, env map[string]string) ([]iprocessor.V1, error) {
-	if procs, ok := m[ptr]; ok {
-		return procs, nil
-	}
-	return nil, errors.New("processors not found")
-}
-
-func (m mockProvider) ProvideMocked(ptr string, env map[string]string, mocks map[string]yaml.Node) ([]iprocessor.V1, error) {
+func (m mockProvider) Provide(ptr string, env map[string]string, mocks map[string]yaml.Node) ([]iprocessor.V1, error) {
 	if procs, ok := m[ptr]; ok {
 		return procs, nil
 	}
@@ -198,7 +191,7 @@ output_batches:
 			if err = yaml.Unmarshal([]byte(test.conf), &c); err != nil {
 				tt.Fatal(err)
 			}
-			fails, err := c.Execute(provider)
+			fails, err := c.executeFrom("", provider)
 			if err != nil {
 				tt.Fatal(err)
 			}

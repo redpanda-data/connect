@@ -21,8 +21,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
-//------------------------------------------------------------------------------
-
 type cachedConfig struct {
 	mgr   manager.ResourceConfig
 	procs []processor.Config
@@ -51,8 +49,6 @@ func NewProcessorsProvider(targetPath string, opts ...func(*ProcessorsProvider))
 	return p
 }
 
-//------------------------------------------------------------------------------
-
 // OptAddResourcesPaths adds paths to files where resources should be parsed.
 func OptAddResourcesPaths(paths []string) func(*ProcessorsProvider) {
 	return func(p *ProcessorsProvider) {
@@ -69,18 +65,11 @@ func OptProcessorsProviderSetLogger(logger log.Modular) func(*ProcessorsProvider
 
 //------------------------------------------------------------------------------
 
-// Provide attempts to extract an array of processors from a Benthos config. If
-// the JSON Pointer targets a single processor config it will be constructed and
-// returned as an array of one element.
-func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]string) ([]iprocessor.V1, error) {
-	return p.ProvideMocked(jsonPtr, environment, nil)
-}
-
-// ProvideMocked attempts to extract an array of processors from a Benthos
-// config. Supports injected mocked components in the parsed config. If the JSON
-// Pointer targets a single processor config it will be constructed and returned
-// as an array of one element.
-func (p *ProcessorsProvider) ProvideMocked(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]iprocessor.V1, error) {
+// Provide attempts to extract an array of processors from a Benthos config.
+// Supports injected mocked components in the parsed config. If the JSON Pointer
+// targets a single processor config it will be constructed and returned as an
+// array of one element.
+func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]iprocessor.V1, error) {
 	confs, err := p.getConfs(jsonPtr, environment, mocks)
 	if err != nil {
 		return nil, err
@@ -261,8 +250,8 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		delete(remainingMocks, k)
 	}
 
+	labelsToPaths := map[string][]string{}
 	if len(remainingMocks) > 0 {
-		labelsToPaths := map[string][]string{}
 		confSpec.YAMLLabelsToPaths(nil, root, labelsToPaths, nil)
 		for k, v := range remainingMocks {
 			mockPathSlice, exists := labelsToPaths[k]
@@ -276,10 +265,20 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		}
 	}
 
-	pathSlice, err := gabs.JSONPointerToSlice(procPath)
-	if err != nil {
-		return confs, fmt.Errorf("failed to parse case processors path '%v': %w", procPath, err)
+	var pathSlice []string
+	if strings.HasPrefix(procPath, "/") {
+		if pathSlice, err = gabs.JSONPointerToSlice(procPath); err != nil {
+			return confs, fmt.Errorf("failed to parse case processors path '%v': %w", procPath, err)
+		}
+	} else {
+		if len(labelsToPaths) == 0 {
+			confSpec.YAMLLabelsToPaths(nil, root, labelsToPaths, nil)
+		}
+		if pathSlice, exists = labelsToPaths[procPath]; !exists {
+			return confs, fmt.Errorf("target for label '%v' failed as the label was not found in the test target file, it is not currently possible to target resources imported separate to the test file", procPath)
+		}
 	}
+
 	if root, err = docs.GetYAMLPath(root, pathSlice...); err != nil {
 		return confs, fmt.Errorf("failed to resolve case processors from '%v': %v", targetPath, err)
 	}
@@ -299,5 +298,3 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 	p.cachedConfigs[cacheKey] = confs
 	return confs, nil
 }
-
-//------------------------------------------------------------------------------

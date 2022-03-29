@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/stream"
@@ -55,7 +56,7 @@ func ReadStreamFile(path string) (conf stream.Config, lints []string, err error)
 	}
 
 	confSpec := stream.Spec()
-	confSpec = append(confSpec, TestsField)
+	confSpec = append(confSpec, tdocs.ConfigSpec())
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
 		for _, lint := range confSpec.LintYAML(docs.NewLintContext(), &rawNode) {

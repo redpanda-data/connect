@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/benthosdev/benthos/v4/internal/cli/test"
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 func TestGetBothPaths(t *testing.T) {
@@ -243,15 +244,15 @@ tests:
 	}
 	defer os.RemoveAll(testDir)
 
-	if !test.Run(filepath.Join(testDir, "foo.yaml"), "_benthos_test", false) {
+	if !test.RunAll([]string{filepath.Join(testDir, "foo.yaml")}, "_benthos_test", false, log.Noop(), nil) {
 		t.Error("Unexpected result")
 	}
 
-	if test.Run(filepath.Join(testDir, "foo.yaml"), "_benthos_test", true) {
+	if test.RunAll([]string{filepath.Join(testDir, "foo.yaml")}, "_benthos_test", true, log.Noop(), nil) {
 		t.Error("Unexpected result")
 	}
 
-	if test.Run(testDir, "_benthos_test", true) {
+	if test.RunAll([]string{testDir}, "_benthos_test", true, log.Noop(), nil) {
 		t.Error("Unexpected result")
 	}
 }

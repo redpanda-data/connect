@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/benthosdev/benthos/v4/internal/api"
+	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -45,17 +46,13 @@ var observabilityFields = docs.FieldSpecs{
 	docs.FieldString("shutdown_timeout", "The maximum period of time to wait for a clean shutdown. If this time is exceeded Benthos will forcefully close.").HasDefault("20s"),
 }
 
-// TestsField describes the optional test definitions field at the root of a
-// benthos config.
-var TestsField = docs.FieldAnything("tests", "Optional unit tests for the config, to be run with the `benthos test` subcommand.").Array().HasDefault([]interface{}{})
-
 // Spec returns a docs.FieldSpec for an entire Benthos configuration.
 func Spec() docs.FieldSpecs {
 	fields := docs.FieldSpecs{httpField}
 	fields = append(fields, stream.Spec()...)
 	fields = append(fields, manager.Spec()...)
 	fields = append(fields, observabilityFields...)
-	fields = append(fields, TestsField)
+	fields = append(fields, tdocs.ConfigSpec())
 	return fields
 }
 
@@ -64,6 +61,6 @@ func SpecWithoutStream() docs.FieldSpecs {
 	fields := docs.FieldSpecs{httpField}
 	fields = append(fields, manager.Spec()...)
 	fields = append(fields, observabilityFields...)
-	fields = append(fields, TestsField)
+	fields = append(fields, tdocs.ConfigSpec())
 	return fields
 }

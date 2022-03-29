@@ -208,6 +208,9 @@ func getFieldByYAMLTag(t reflect.Type, tag string) (reflect.Type, bool) {
 }
 
 func getFieldsByYAMLTag(t reflect.Type) map[string]reflect.Type {
+	if t.String() == "interface {}" {
+		return nil
+	}
 	tagToField := map[string]reflect.Type{}
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
@@ -255,6 +258,10 @@ func walkTypeWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, v refl
 	} else if len(spec.Children) > 0 {
 		fieldByYAMLTag := getFieldsByYAMLTag(v)
 		for _, child := range spec.Children {
+			if prefix == "root" && child.Name == "tests" {
+				delete(fieldByYAMLTag, child.Name)
+				continue
+			}
 			field, ok := fieldByYAMLTag[child.Name]
 			if assert.True(t, ok, "%v: field documented but not found in config", prefix+"."+child.Name) {
 				walkTypeWithConfig(t, prefix+"."+child.Name, child, field)

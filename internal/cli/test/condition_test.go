@@ -59,8 +59,8 @@ tests:
 
 	require.NoError(t, yaml.Unmarshal([]byte(conf), &tests))
 
-	assert.Empty(t, tests.Tests.CheckAll(message.NewPart([]byte("foo bar"))))
-	assert.NotEmpty(t, tests.Tests.CheckAll(message.NewPart([]byte("bar baz"))))
+	assert.Empty(t, tests.Tests.CheckAll("", message.NewPart([]byte("foo bar"))))
+	assert.NotEmpty(t, tests.Tests.CheckAll("", message.NewPart([]byte("bar baz"))))
 }
 
 func TestBloblangConditionSad(t *testing.T) {
@@ -113,13 +113,13 @@ func TestConditionCheckAll(t *testing.T) {
 
 	part := message.NewPart([]byte("foo bar"))
 	part.MetaSet("foo", "bar")
-	errs := conds.CheckAll(part)
+	errs := conds.CheckAll("", part)
 	if errs != nil {
 		t.Errorf("Unexpected errors: %v", errs)
 	}
 
 	part = message.NewPart([]byte("nope"))
-	errs = conds.CheckAll(part)
+	errs = conds.CheckAll("", part)
 	if exp, act := 2, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
 	}
@@ -132,7 +132,7 @@ func TestConditionCheckAll(t *testing.T) {
 
 	part = message.NewPart([]byte("foo bar"))
 	part.MetaSet("foo", "wrong")
-	errs = conds.CheckAll(part)
+	errs = conds.CheckAll("", part)
 	if exp, act := 1, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
 	}
@@ -142,7 +142,7 @@ func TestConditionCheckAll(t *testing.T) {
 
 	part = message.NewPart([]byte("wrong"))
 	part.MetaSet("foo", "bar")
-	errs = conds.CheckAll(part)
+	errs = conds.CheckAll("", part)
 	if exp, act := 1, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
 	}

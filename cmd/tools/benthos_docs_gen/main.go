@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -68,6 +69,9 @@ func main() {
 
 	// Bloblang stuff
 	doBloblang(docsDir)
+
+	// Unit test docs
+	doTestDocs(docsDir)
 
 	// Template docs
 	doTemplates(docsDir)
@@ -150,6 +154,15 @@ func doBloblang(dir string) {
 	}
 
 	create("bloblang methods", filepath.Join(dir, "..", "guides", "bloblang", "methods.md"), mdSpec)
+}
+
+func doTestDocs(dir string) {
+	mdSpec, err := tdocs.DocsMarkdown()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to generate docs for unit tests: %v", err))
+	}
+
+	create("test docs", filepath.Join(dir, "..", "configuration", "unit_testing.md"), mdSpec)
 }
 
 func doTemplates(dir string) {

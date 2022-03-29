@@ -54,16 +54,16 @@ pipeline:
 	}
 	defer os.RemoveAll(testDir)
 
-	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "doesnotexist.yaml")).Provide("/pipeline/processors", nil); err == nil {
+	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "doesnotexist.yaml")).Provide("/pipeline/processors", nil, nil); err == nil {
 		t.Error("Expected error from bad filepath")
 	}
-	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml")).Provide("/pipeline/processors", nil); err == nil {
+	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml")).Provide("/pipeline/processors", nil, nil); err == nil {
 		t.Error("Expected error from bad config file")
 	}
-	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "config2.yaml")).Provide("/not/a/valid/path", nil); err == nil {
+	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "config2.yaml")).Provide("/not/a/valid/path", nil, nil); err == nil {
 		t.Error("Expected error from bad processors path")
 	}
-	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "config3.yaml")).Provide("/pipeline/processors", nil); err == nil {
+	if _, err = test.NewProcessorsProvider(filepath.Join(testDir, "config3.yaml")).Provide("/pipeline/processors", nil, nil); err == nil {
 		t.Error("Expected error from bad processor type")
 	}
 }
@@ -97,7 +97,7 @@ pipeline:
 	defer os.RemoveAll(testDir)
 
 	provider := test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
-	procs, err := provider.Provide("/pipeline/processors", nil)
+	procs, err := provider.Provide("/pipeline/processors", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ pipeline:
 
 	if procs, err = provider.Provide("/pipeline/processors", map[string]string{
 		"BAR_VAR": "newvalue",
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if exp, act := 4, len(procs); exp != act {
@@ -121,6 +121,33 @@ pipeline:
 	msgs, res = processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")}))
 	require.NoError(t, res)
 	if exp, act := "NEWVALUE", string(msgs[0].Get(0).Get()); exp != act {
+		t.Errorf("Unexpected result: %v != %v", act, exp)
+	}
+}
+
+func TestProcessorsProviderLabel(t *testing.T) {
+	files := map[string]string{
+		"config1.yaml": `
+pipeline:
+  processors:
+  - bloblang: 'meta foo = env("BAR_VAR").not_empty().catch("defaultvalue")'
+  - label: fooproc
+    bloblang: 'root = content().uppercase()'`,
+	}
+
+	testDir, err := initTestFiles(t, files)
+	require.NoError(t, err)
+	defer os.RemoveAll(testDir)
+
+	provider := test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
+	procs, err := provider.Provide("fooproc", nil, nil)
+	require.NoError(t, err)
+
+	assert.Len(t, procs, 1)
+
+	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")}))
+	require.NoError(t, res)
+	if exp, act := "HELLO WORLD", string(msgs[0].Get(0).Get()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 }
@@ -157,7 +184,7 @@ pipeline:
 `), &mocks))
 
 	provider := test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
-	procs, err := provider.ProvideMocked("/pipeline/processors", nil, mocks)
+	procs, err := provider.Provide("/pipeline/processors", nil, mocks)
 	require.NoError(t, err)
 
 	require.Len(t, procs, 4)
@@ -204,7 +231,7 @@ pipeline:
 `), &mocks))
 
 	provider := test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
-	procs, err := provider.ProvideMocked("/pipeline/processors", nil, mocks)
+	procs, err := provider.Provide("/pipeline/processors", nil, mocks)
 	require.NoError(t, err)
 
 	require.Len(t, procs, 4)
@@ -251,7 +278,7 @@ pipeline:
 `), &mocks))
 
 	provider := test.NewProcessorsProvider(filepath.Join(testDir, "config1.yaml"))
-	procs, err := provider.ProvideMocked("/pipeline/processors", nil, mocks)
+	procs, err := provider.Provide("/pipeline/processors", nil, mocks)
 	require.NoError(t, err)
 
 	require.Len(t, procs, 4)
@@ -312,7 +339,7 @@ pipeline:
 			filepath.Join(testDir, "resources2.yaml"),
 		}),
 	)
-	procs, err := provider.Provide("/pipeline/processors", nil)
+	procs, err := provider.Provide("/pipeline/processors", nil, nil)
 	require.NoError(t, err)
 	assert.Len(t, procs, 3)
 }
@@ -360,6 +387,6 @@ pipeline:
 			filepath.Join(testDir, "resources2.yaml"),
 		}),
 	)
-	_, err = provider.Provide("/pipeline/processors", nil)
+	_, err = provider.Provide("/pipeline/processors", nil, nil)
 	require.EqualError(t, err, "failed to initialise resources: cache resource label 'barcache' collides with a previously defined resource")
 }

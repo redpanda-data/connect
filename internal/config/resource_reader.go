@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -104,7 +105,7 @@ func readResource(path string, conf *manager.ResourceConfig) (lints []string, er
 	}
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
 		allowTest := append(docs.FieldSpecs{
-			TestsField,
+			tdocs.ConfigSpec(),
 		}, manager.Spec()...)
 		for _, lint := range allowTest.LintYAML(docs.NewLintContext(), &rawNode) {
 			lints = append(lints, fmt.Sprintf("resource file %v: line %v: %v", path, lint.Line, lint.What))

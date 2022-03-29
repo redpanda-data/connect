@@ -18,14 +18,10 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-//------------------------------------------------------------------------------
-
 // Condition is a test case against a message part.
 type Condition interface {
 	Check(part *message.Part) error
 }
-
-//------------------------------------------------------------------------------
 
 // ConditionsMap contains a map of conditions to condition string types.
 type ConditionsMap map[string]Condition
@@ -94,11 +90,7 @@ func (c *ConditionsMap) UnmarshalYAML(value *yaml.Node) error {
 
 // CheckAll checks all conditions against a message part. Conditions are
 // executed in alphabetical order.
-func (c ConditionsMap) CheckAll(part *message.Part) (errs []error) {
-	return c.checkAllFrom("", part)
-}
-
-func (c ConditionsMap) checkAllFrom(dir string, part *message.Part) (errs []error) {
+func (c ConditionsMap) CheckAll(dir string, part *message.Part) (errs []error) {
 	condTypes := []string{}
 	for k := range c {
 		condTypes = append(condTypes, k)

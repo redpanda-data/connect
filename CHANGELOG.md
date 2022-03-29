@@ -15,6 +15,7 @@ This is a major version release, for more information and guidance on how to mig
 - The `nats_jetstream` input now supports pull consumers.
 - Field `max_number_of_messages` added to the `aws_sqs` input.
 - Field `file_output_path` added to the `prometheus` metrics type.
+- Unit test definitions can now specify a `label` as a `target_processors` value.
 
 ### Fixed
 

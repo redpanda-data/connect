@@ -8,6 +8,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/benthosdev/benthos/v4/internal/cli/test"
+	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 func TestDefinitionFail(t *testing.T) {
@@ -26,7 +27,6 @@ pipeline:
 	defer os.RemoveAll(testDir)
 
 	def := test.Definition{
-		Parallel: false,
 		Cases: []test.Case{
 			(test.Case{
 				Name:             "foo test 1",
@@ -66,7 +66,7 @@ pipeline:
 		},
 	}
 
-	failures, err := def.Execute(filepath.Join(testDir, "config1.yaml"))
+	failures, err := def.Execute(filepath.Join(testDir, "config1.yaml"), nil, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,6 @@ pipeline:
 	defer os.RemoveAll(testDir)
 
 	def := test.Definition{
-		Parallel: true,
 		Cases: []test.Case{
 			(test.Case{
 				Name:             "foo test 1",
@@ -149,7 +148,7 @@ pipeline:
 		},
 	}
 
-	failures, err := def.Execute(filepath.Join(testDir, "config1.yaml"))
+	failures, err := def.Execute(filepath.Join(testDir, "config1.yaml"), nil, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

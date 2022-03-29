@@ -51,10 +51,10 @@ https://benthos.dev/docs/configuration/unit_testing`[1:],
 					fmt.Printf("Failed to init logger: %v\n", err)
 					os.Exit(1)
 				}
-				if runAll(c.Args().Slice(), testSuffix, true, logger, resourcesPaths) {
+				if RunAll(c.Args().Slice(), testSuffix, true, logger, resourcesPaths) {
 					os.Exit(0)
 				}
-			} else if runAll(c.Args().Slice(), testSuffix, true, log.Noop(), resourcesPaths) {
+			} else if RunAll(c.Args().Slice(), testSuffix, true, log.Noop(), resourcesPaths) {
 				os.Exit(0)
 			}
 			os.Exit(1)
