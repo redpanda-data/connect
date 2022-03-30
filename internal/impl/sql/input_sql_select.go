@@ -243,7 +243,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 	}()
 
 	db.SetConnMaxIdleTime(s.connMaxIdleTime)
-	db.SetConnMaxLifetime(s.connMaxIdleTime)
+	db.SetConnMaxLifetime(s.connMaxLifetime)
 	db.SetMaxIdleConns(s.maxIdleConns)
 	db.SetMaxOpenConns(s.maxOpenConns)
 
