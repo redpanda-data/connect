@@ -57,6 +57,10 @@ output:
     query: ""
     args_mapping: ""
     max_in_flight: 64
+    conn_max_idle_time: ""
+    conn_max_lifetime: ""
+    conn_max_idle: 0
+    conn_max_open: 0
     batching:
       count: 0
       byte_size: 0
@@ -172,6 +176,34 @@ The maximum number of inserts to run in parallel.
 
 Type: `int`  
 Default: `64`  
+
+### `conn_max_idle_time`
+
+An optional maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. If value <= 0, connections are not closed due to a connection's idle time.
+
+
+Type: `string`  
+
+### `conn_max_lifetime`
+
+An optional maximum amount of time a connection may be reused. Expired connections may be closed lazily before reuse. If value <= 0, connections are not closed due to a connection's age.
+
+
+Type: `string`  
+
+### `conn_max_idle`
+
+An optional maximum number of connections in the idle connection pool. If conn_max_open is greater than 0 but less than the new conn_max_idle, then the new conn_max_idle will be reduced to match the conn_max_open limit. If value <= 0, no idle connections are retained. The default max idle connections is currently 2. This may change in a future release.
+
+
+Type: `int`  
+
+### `conn_max_open`
+
+An optional maximum number of open connections to the database. If conn_max_idle is greater than 0 and the new conn_max_open is less than conn_max_idle, then conn_max_idle will be reduced to match the new conn_max_open limit. If value <= 0, then there is no limit on the number of open connections. The default is 0 (unlimited).
+
+
+Type: `int`  
 
 ### `batching`
 

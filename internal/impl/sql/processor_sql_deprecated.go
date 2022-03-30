@@ -90,5 +90,9 @@ func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 		}
 	}
 
-	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping)
+	connSettings, err := connSettingsFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
+	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
 }

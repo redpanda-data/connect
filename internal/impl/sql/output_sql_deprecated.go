@@ -79,5 +79,9 @@ func newSQLDeprecatedOutputFromConfig(conf *service.ParsedConfig, logger *servic
 		"clickhouse": {},
 	}[driverStr]
 
-	return newSQLRawOutput(logger, driverStr, dsnStr, useTxStmt, queryStatic, argsMapping), nil
+	connSettings, err := connSettingsFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
+	return newSQLRawOutput(logger, driverStr, dsnStr, useTxStmt, queryStatic, argsMapping, connSettings), nil
 }

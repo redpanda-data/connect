@@ -15,7 +15,7 @@ import (
 
 // InsertProcessorConfig returns a config spec for an sql_insert processor.
 func InsertProcessorConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
+	spec := service.NewConfigSpec().
 		Stable().
 		Categories("Integration").
 		Summary("Inserts rows into an SQL database for each message, and leaves the message unchanged.").
@@ -41,8 +41,13 @@ If the insert fails to execute then the message will still remain unchanged and 
 			Description("An optional suffix to append to the insert query.").
 			Optional().
 			Advanced().
-			Example("ON CONFLICT (name) DO NOTHING")).
-		Version("3.59.0").
+			Example("ON CONFLICT (name) DO NOTHING"))
+
+	for _, f := range connFields() {
+		spec = spec.Field(f)
+	}
+
+	spec = spec.Version("3.59.0").
 		Example("Table Insert (MySQL)",
 			`
 Here we insert rows into a database by populating the columns id, name and topic with values extracted from messages and metadata:`,
@@ -62,6 +67,7 @@ pipeline:
           ]
 `,
 		)
+	return spec
 }
 
 func init() {
@@ -150,9 +156,16 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
+	connSettings, err := connSettingsFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
+
 	if s.db, err = sql.Open(driverStr, dsnStr); err != nil {
 		return nil, err
 	}
+
+	connSettings.apply(s.db)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()

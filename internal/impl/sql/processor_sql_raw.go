@@ -13,7 +13,7 @@ import (
 
 // RawProcessorConfig returns a config spec for an sql_raw processor.
 func RawProcessorConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
+	spec := service.NewConfigSpec().
 		Stable().
 		Categories("Integration").
 		Summary("Runs an arbitrary SQL query against a database and (optionally) returns the result as an array of objects, one for each row returned.").
@@ -35,8 +35,13 @@ If the query fails to execute then the message will remain unchanged and the err
 			Optional()).
 		Field(service.NewBoolField("exec_only").
 			Description("Whether the query result should be discarded. When set to `true` the message contents will remain unchanged, which is useful in cases where you are executing inserts, updates, etc.").
-			Default(false)).
-		Version("3.65.0").
+			Default(false))
+
+	for _, f := range connFields() {
+		spec = spec.Field(f)
+	}
+
+	spec = spec.Version("3.65.0").
 		Example(
 			"Table Insert (MySQL)",
 			"The following example inserts rows into the table footable with the columns foo, bar and baz populated with values extracted from messages.",
@@ -67,6 +72,7 @@ pipeline:
         result_map: 'root.foo_rows = this'
 `,
 		)
+	return spec
 }
 
 func init() {
@@ -136,7 +142,11 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, logger *service.Lo
 		}
 	}
 
-	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping)
+	connSettings, err := connSettingsFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
+	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
 }
 
 func newSQLRawProcessor(
@@ -146,6 +156,7 @@ func newSQLRawProcessor(
 	queryDyn *service.InterpolatedString,
 	onlyExec bool,
 	argsMapping *bloblang.Executor,
+	connSettings connSettings,
 ) (*sqlRawProcessor, error) {
 	s := &sqlRawProcessor{
 		logger:      logger,
@@ -160,6 +171,7 @@ func newSQLRawProcessor(
 	if s.db, err = sql.Open(driverStr, dsnStr); err != nil {
 		return nil, err
 	}
+	connSettings.apply(s.db)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()

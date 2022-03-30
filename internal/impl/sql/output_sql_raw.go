@@ -12,7 +12,7 @@ import (
 )
 
 func sqlRawOutputConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
+	spec := service.NewConfigSpec().
 		Stable().
 		Categories("Services").
 		Summary("Executes an arbitrary SQL query for each message.").
@@ -29,8 +29,13 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 			Optional()).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of inserts to run in parallel.").
-			Default(64)).
-		Field(service.NewBatchPolicyField("batching")).
+			Default(64))
+
+	for _, f := range connFields() {
+		spec = spec.Field(f)
+	}
+
+	spec = spec.Field(service.NewBatchPolicyField("batching")).
 		Version("3.65.0").
 		Example("Table Insert (MySQL)",
 			`
@@ -49,6 +54,7 @@ output:
       ]
 `,
 		)
+	return spec
 }
 
 func init() {
@@ -83,6 +89,8 @@ type sqlRawOutput struct {
 	useTxStmt   bool
 	argsMapping *bloblang.Executor
 
+	connSettings connSettings
+
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
 }
@@ -114,7 +122,11 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, logger *service.Logge
 		"clickhouse": {},
 	}[driverStr]
 
-	return newSQLRawOutput(logger, driverStr, dsnStr, useTxStmt, queryStatic, argsMapping), nil
+	connSettings, err := connSettingsFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
+	return newSQLRawOutput(logger, driverStr, dsnStr, useTxStmt, queryStatic, argsMapping, connSettings), nil
 }
 
 func newSQLRawOutput(
@@ -123,15 +135,17 @@ func newSQLRawOutput(
 	useTxStmt bool,
 	queryStatic string,
 	argsMapping *bloblang.Executor,
+	connSettings connSettings,
 ) *sqlRawOutput {
 	return &sqlRawOutput{
-		logger:      logger,
-		shutSig:     shutdown.NewSignaller(),
-		driver:      driverStr,
-		dsn:         dsnStr,
-		useTxStmt:   useTxStmt,
-		queryStatic: queryStatic,
-		argsMapping: argsMapping,
+		logger:       logger,
+		shutSig:      shutdown.NewSignaller(),
+		driver:       driverStr,
+		dsn:          dsnStr,
+		useTxStmt:    useTxStmt,
+		queryStatic:  queryStatic,
+		argsMapping:  argsMapping,
+		connSettings: connSettings,
 	}
 }
 
@@ -147,6 +161,8 @@ func (s *sqlRawOutput) Connect(ctx context.Context) error {
 	if s.db, err = sql.Open(s.driver, s.dsn); err != nil {
 		return err
 	}
+
+	s.connSettings.apply(s.db)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()

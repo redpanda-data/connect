@@ -15,7 +15,7 @@ import (
 
 // SelectProcessorConfig returns a config spec for an sql_select processor.
 func SelectProcessorConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
+	spec := service.NewConfigSpec().
 		Stable().
 		Categories("Integration").
 		Summary("Runs an SQL select query against a database and returns the result as an array of objects, one for each row returned, containing a key for each column queried and its value.").
@@ -47,8 +47,13 @@ If the query fails to execute then the message will remain unchanged and the err
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the select query.").
 			Optional().
-			Advanced()).
-		Version("3.59.0").
+			Advanced())
+
+	for _, f := range connFields() {
+		spec = spec.Field(f)
+	}
+
+	spec = spec.Version("3.59.0").
 		Example("Table Query (PostgreSQL)",
 			`
 Here we query a database for columns of footable that share a `+"`user_id`"+`
@@ -70,6 +75,7 @@ pipeline:
         result_map: 'root.foo_rows = this'
 `,
 		)
+	return spec
 }
 
 func init() {
@@ -159,9 +165,15 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
+	connSettings, err := connSettingsFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
+
 	if s.db, err = sql.Open(driverStr, dsnStr); err != nil {
 		return nil, err
 	}
+	connSettings.apply(s.db)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()

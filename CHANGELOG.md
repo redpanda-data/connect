@@ -16,6 +16,7 @@ This is a major version release, for more information and guidance on how to mig
 - Field `max_number_of_messages` added to the `aws_sqs` input.
 - Field `file_output_path` added to the `prometheus` metrics type.
 - Unit test definitions can now specify a `label` as a `target_processors` value.
+- New connection settings for all sql components.
 
 ### Fixed
 

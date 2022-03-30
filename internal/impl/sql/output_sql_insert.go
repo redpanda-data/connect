@@ -14,7 +14,7 @@ import (
 )
 
 func sqlInsertOutputConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
+	spec := service.NewConfigSpec().
 		Stable().
 		Categories("Services").
 		Summary("Inserts a row into an SQL database for each message.").
@@ -42,8 +42,13 @@ func sqlInsertOutputConfig() *service.ConfigSpec {
 			Example("ON CONFLICT (name) DO NOTHING")).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of inserts to run in parallel.").
-			Default(64)).
-		Field(service.NewBatchPolicyField("batching")).
+			Default(64))
+
+	for _, f := range connFields() {
+		spec = spec.Field(f)
+	}
+
+	spec = spec.Field(service.NewBatchPolicyField("batching")).
 		Version("3.59.0").
 		Example("Table Insert (MySQL)",
 			`
@@ -63,6 +68,7 @@ output:
       ]
 `,
 		)
+	return spec
 }
 
 func init() {
@@ -95,6 +101,8 @@ type sqlInsertOutput struct {
 
 	useTxStmt   bool
 	argsMapping *bloblang.Executor
+
+	connSettings connSettings
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
@@ -158,6 +166,9 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, logger *service.Lo
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
+	if s.connSettings, err = connSettingsFromParsed(conf); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -173,6 +184,8 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 	if s.db, err = sql.Open(s.driver, s.dsn); err != nil {
 		return err
 	}
+
+	s.connSettings.apply(s.db)
 
 	go func() {
 		<-s.shutSig.CloseNowChan()
