@@ -82,7 +82,6 @@ mapping: |
   }
 
   root.processors."-".cache = {
-    "parts": [ -1 ],
     "resource": this.cache,
     "operator": "set",
     "key": this.cache_key,
@@ -149,8 +148,6 @@ tests:
             format: json_array
 
         - cache:
-            # Only bother caching the latest message ID (last of the batch).
-            parts: [ -1 ]
             resource: foocache
             operator: set
             key: last_message_id

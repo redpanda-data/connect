@@ -60,7 +60,7 @@ tests:
 
 Under `tests` we have a list of any number of unit tests to execute for the config file. Each test is run in complete isolation, including any resources defined by the config file. Tests should be allocated a unique `name` that identifies the feature being tested.
 
-The field `target_processors` is a [JSON Pointer][json-pointer] that identifies the specific processors within the file which should be executed by the test. This allows you to target a specific processor (`/pipeline/processors/0`), or processors within a different section on your config (`/input/broker/inputs/0/processors`) if required.
+The field `target_processors` is either the label of a processor to test, or a [JSON Pointer][json-pointer] that identifies the position of a processor, or list of processors, within the file which should be executed by the test. For example a value of `foo` would target a processor with the label `foo`, and a value of `/input/processors` would target all processors within the input section of the config.
 
 The field `environment` allows you to define an object of key/value pairs that set environment variables to be evaluated during the parsing of the target config file. These are unique to each test, allowing you to test different environment variable interpolation combinations.
 
