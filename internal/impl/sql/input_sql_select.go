@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Masterminds/squirrel"
 
@@ -43,6 +44,31 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 			Advanced()).
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the select query.").
+			Optional().
+			Advanced()).
+		Field(service.NewDurationField("conn_max_idle_time").
+			Description(`An optional maximum amount of time a connection may be idle.
+Expired connections may be closed lazily before reuse.
+If value <= 0, connections are not closed due to a connection's idle time.`).
+			Optional().
+			Advanced()).
+		Field(service.NewDurationField("conn_max_lifetime").
+			Description(`An optiona maximum amount of time a connection may be reused.
+Expired connections may be closed lazily before reuse.
+If value <= 0, connections are not closed due to a connection's age.`).
+			Optional().
+			Advanced()).
+		Field(service.NewIntField("max_idle_cons").
+			Description(`An optional maximum number of connections in the idle connection pool.
+If MaxOpenConns is greater than 0 but less than the new MaxIdleConns, then the new MaxIdleConns will be reduced to match the MaxOpenConns limit.
+If value <= 0, no idle connections are retained.
+The default max idle connections is currently 2. This may change in a future release.`).
+			Optional().
+			Advanced()).
+		Field(service.NewIntField("max_open_conns").
+			Description(`An optional maximum number of open connections to the database.
+If MaxIdleConns is greater than 0 and the new MaxOpenConns is less than MaxIdleConns, then MaxIdleConns will be reduced to match the new MaxOpenConns limit.
+If value <= 0, then there is no limit on the number of open connections. The default is 0 (unlimited).`).
 			Optional().
 			Advanced()).
 		Version("3.59.0").
@@ -93,6 +119,11 @@ type sqlSelectInput struct {
 
 	where       string
 	argsMapping *bloblang.Executor
+
+	connMaxLifetime time.Duration
+	connMaxIdleTime time.Duration
+	maxIdleConns    int
+	maxOpenConns    int
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
@@ -157,6 +188,40 @@ func newSQLSelectInputFromConfig(conf *service.ParsedConfig, logger *service.Log
 		s.builder = s.builder.Suffix(suffixStr)
 	}
 
+	if conf.Contains("conn_max_lifetime") {
+		connMaxLifetime, err := conf.FieldDuration()
+		if err != nil {
+			return nil, err
+		}
+		s.connMaxLifetime = connMaxLifetime
+	}
+
+	if conf.Contains("conn_max_idle_time") {
+		connMaxIdleTime, err := conf.FieldDuration("conn_max_idle_time")
+		if err != nil {
+			return nil, err
+		}
+		s.connMaxIdleTime = connMaxIdleTime
+	}
+
+	if conf.Contains("max_idle_conns") {
+		maxIdleCons, err := conf.FieldInt("max_idle_conns")
+		if err != nil {
+			return nil, err
+		}
+		s.maxIdleConns = maxIdleCons
+	} else {
+		s.maxIdleConns = 2 // default value for the library
+	}
+
+	if conf.Contains("max_open_conns") {
+		maxOpenConns, err := conf.FieldInt("max_open_conns")
+		if err != nil {
+			return nil, err
+		}
+		s.maxOpenConns = maxOpenConns
+	}
+
 	return s, nil
 }
 
@@ -177,6 +242,11 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 			_ = db.Close()
 		}
 	}()
+
+	db.SetConnMaxIdleTime(s.connMaxIdleTime)
+	db.SetConnMaxLifetime(s.connMaxLifetime)
+	db.SetMaxIdleConns(s.maxIdleConns)
+	db.SetMaxOpenConns(s.maxOpenConns)
 
 	var args []interface{}
 	if s.argsMapping != nil {
