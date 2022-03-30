@@ -153,20 +153,6 @@ docker run --rm \
 	benthos -c /config.yaml
 ```
 
-### ZMQ4 Support
-
-Benthos supports ZMQ4 for both data input and output. To add this you need to install libzmq4 and use the compile time flag when building Benthos:
-
-```shell
-make TAGS=ZMQ4
-```
-
-Or to build a docker image using CGO, which includes ZMQ:
-
-```shell
-make docker-cgo
-```
-
 ## Contributing
 
 Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come and chat (links are on the [community page][community]), and watch your back.
@@ -188,11 +174,11 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 [plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
 [getting-started]: https://www.benthos.dev/docs/guides/getting_started
 
-[godoc-badge]: https://pkg.go.dev/badge/github.com/benthosdev/benthos/v3/public
+[godoc-badge]: https://pkg.go.dev/badge/github.com/benthosdev/benthos/v4/public
 [godoc-url]: https://pkg.go.dev/github.com/benthosdev/benthos/v4/public
 [actions-badge]: https://github.com/benthosdev/benthos/actions/workflows/test.yml/badge.svg
 [actions-url]: https://github.com/benthosdev/benthos/actions/workflows/test.yml
-[discord-badge]: https://img.shields.io/badge/Discord-Come%20and%20chill-blue
+[discord-badge]: https://img.shields.io/discord/746368194196799589
 [discord-url]: https://discord.com/invite/6VaWjzP
 [website-badge]: https://img.shields.io/badge/Docs-Learn%20more-ffc7c7
 [website-url]: https://www.benthos.dev
