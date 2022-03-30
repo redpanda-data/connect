@@ -201,6 +201,23 @@ func (c *ConfigField) Version(v string) *ConfigField {
 	return c
 }
 
+// LintRule adds a custom linting rule to the field in the form of a bloblang
+// mapping. The mapping is provided the value of the field within a config as
+// the context `this`, and if the mapping assigns to `root` an array of one or
+// more strings these strings will be exposed to a config author as linting
+// errors.
+//
+// For example, if we wanted to add a linting rule for a string field that
+// ensures the value contains only lowercase values we might add the following
+// linting rule:
+//
+// `root = if this.lowercase() != this { [ "field must be lowercase" ] }`
+//
+func (c *ConfigField) LintRule(blobl string) *ConfigField {
+	c.field = c.field.LinterBlobl(blobl)
+	return c
+}
+
 //------------------------------------------------------------------------------
 
 // ConfigSpec describes the configuration specification for a plugin
