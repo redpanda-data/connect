@@ -43,6 +43,7 @@ module.exports = {
         {to: 'blog', label: 'Blog', position: 'left'},
         {to: 'videos', label: 'Videos', position: 'left'},
         {to: 'community', label: 'Community', position: 'right'},
+        {to: 'https://v3.benthos.dev', label: 'Version 3 Docs', position: 'right'},
         {
           href: 'https://github.com/benthosdev/benthos/releases/latest',
           position: 'right',
@@ -116,7 +117,7 @@ module.exports = {
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl:
-            'https://github.com/benthosdev/benthos/edit/master/website/',
+            'https://github.com/benthosdev/benthos/edit/main/website/',
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),

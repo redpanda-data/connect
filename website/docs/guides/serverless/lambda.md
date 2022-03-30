@@ -187,9 +187,9 @@ zip benthos-lambda.zip benthos-lambda
 ```
 
 [releases]: https://github.com/benthosdev/benthos/releases
-[sam-template]: https://github.com/benthosdev/benthos/tree/master/resources/serverless/lambda/benthos-lambda-sam.yaml
-[tf-example]: https://github.com/benthosdev/benthos/tree/master/resources/serverless/lambda/benthos-lambda.tf
-[sam-template-al2]: https://github.com/benthosdev/benthos/tree/master/resources/serverless/lambda/benthos-lambda-al2-sam.yaml
-[tf-example-al2]: https://github.com/benthosdev/benthos/tree/master/resources/serverless/lambda/benthos-lambda-al2.tf
+[sam-template]: https://github.com/benthosdev/benthos/tree/main/resources/serverless/lambda/benthos-lambda-sam.yaml
+[tf-example]: https://github.com/benthosdev/benthos/tree/main/resources/serverless/lambda/benthos-lambda.tf
+[sam-template-al2]: https://github.com/benthosdev/benthos/tree/main/resources/serverless/lambda/benthos-lambda-al2-sam.yaml
+[tf-example-al2]: https://github.com/benthosdev/benthos/tree/main/resources/serverless/lambda/benthos-lambda-al2.tf
 [output-broker]: /docs/components/outputs/broker
 [output.reject]: /docs/components/outputs/reject

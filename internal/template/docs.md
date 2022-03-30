@@ -99,7 +99,7 @@ pipeline:
 
 </Tabs>
 
-You can see more examples of templates, including some that are included as part of the standard Benthos distribution, at [https://github.com/benthosdev/benthos/tree/master/template](https://github.com/benthosdev/benthos/tree/master/template).
+You can see more examples of templates, including some that are included as part of the standard Benthos distribution, at [https://github.com/benthosdev/benthos/tree/main/template](https://github.com/benthosdev/benthos/tree/main/template).
 
 ## Fields
 
