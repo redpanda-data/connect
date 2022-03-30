@@ -188,7 +188,7 @@ func newSQLSelectInputFromConfig(conf *service.ParsedConfig, logger *service.Log
 	}
 
 	if conf.Contains("conn_max_lifetime") {
-		connMaxLifetime, err := conf.FieldDuration()
+		connMaxLifetime, err := conf.FieldDuration("conn_max_lifetime")
 		if err != nil {
 			return nil, err
 		}
@@ -243,7 +243,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 	}()
 
 	db.SetConnMaxIdleTime(s.connMaxIdleTime)
-	db.SetConnMaxLifetime(s.connMaxIdleTime)
+	db.SetConnMaxLifetime(s.connMaxLifetime)
 	db.SetMaxIdleConns(s.maxIdleConns)
 	db.SetMaxOpenConns(s.maxOpenConns)
 
