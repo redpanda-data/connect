@@ -200,15 +200,17 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 
 		msg := message.QuickBatch(nil)
 		for _, part := range parts {
-			if len(part.Get()) > 0 {
-				part.MetaSet("path", currentPath)
-
-				modTimeUnix, modTime := f.getModTime(currentPath)
-				part.MetaSet("mod_time_unix", modTimeUnix)
-				part.MetaSet("mod_time", modTime)
-
-				msg.Append(part)
+			if len(part.Get()) == 0 {
+				continue
 			}
+
+			part.MetaSet("path", currentPath)
+
+			modTimeUnix, modTime := f.getModTime(currentPath)
+			part.MetaSet("mod_time_unix", modTimeUnix)
+			part.MetaSet("mod_time", modTime)
+
+			msg.Append(part)
 		}
 		if msg.Len() == 0 {
 			_ = codecAckFn(ctx, nil)
