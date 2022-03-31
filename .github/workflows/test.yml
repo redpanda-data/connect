@@ -11,7 +11,7 @@ jobs:
     if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
     strategy:
       matrix:
-        go-version: [1.16.x, 1.17.x]
+        go-version: [1.17.x, 1.18.x]
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 0
@@ -49,7 +49,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17.x
+        go-version: 1.18.x
 
     - name: Checkout code
       uses: actions/checkout@v2
