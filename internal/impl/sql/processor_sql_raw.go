@@ -96,6 +96,7 @@ type sqlRawProcessor struct {
 	queryStatic string
 	queryDyn    *service.InterpolatedString
 	onlyExec    bool
+	useTxStmt   bool
 
 	argsMapping *bloblang.Executor
 
@@ -142,11 +143,15 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, logger *service.Lo
 		}
 	}
 
+	_, useTxStmt := map[string]struct{}{
+		"clickhouse": {},
+	}[driverStr]
+
 	connSettings, err := connSettingsFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
+	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, useTxStmt, argsMapping, connSettings)
 }
 
 func newSQLRawProcessor(
@@ -155,6 +160,7 @@ func newSQLRawProcessor(
 	queryStatic string,
 	queryDyn *service.InterpolatedString,
 	onlyExec bool,
+	useTxStmt bool,
 	argsMapping *bloblang.Executor,
 	connSettings connSettings,
 ) (*sqlRawProcessor, error) {
@@ -164,6 +170,7 @@ func newSQLRawProcessor(
 		queryStatic: queryStatic,
 		queryDyn:    queryDyn,
 		onlyExec:    onlyExec,
+		useTxStmt:   useTxStmt,
 		argsMapping: argsMapping,
 	}
 
@@ -221,10 +228,28 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 		}
 
 		if s.onlyExec {
-			if _, err := s.db.ExecContext(ctx, queryStr, args...); err != nil {
-				s.logger.Debugf("Failed to run query: %v", err)
-				msg.SetError(err)
-				continue
+			// TODO: Batch-wide transaction
+			if s.useTxStmt {
+				tx, err := s.db.Begin()
+				if err == nil {
+					_, err = tx.Exec(queryStr, args...)
+				}
+				if err == nil {
+					err = tx.Commit()
+				} else {
+					_ = tx.Rollback()
+				}
+				if err != nil {
+					s.logger.Debugf("Failed to run query: %v", err)
+					msg.SetError(err)
+					continue
+				}
+			} else {
+				if _, err := s.db.ExecContext(ctx, queryStr, args...); err != nil {
+					s.logger.Debugf("Failed to run query: %v", err)
+					msg.SetError(err)
+					continue
+				}
 			}
 		} else {
 			rows, err := s.db.QueryContext(ctx, queryStr, args...)

@@ -90,9 +90,13 @@ func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 		}
 	}
 
+	_, useTxStmt := map[string]struct{}{
+		"clickhouse": {},
+	}[driverStr]
+
 	connSettings, err := connSettingsFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
+	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, useTxStmt, argsMapping, connSettings)
 }

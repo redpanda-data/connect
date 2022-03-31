@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
 )
 
 func TestIntegrationGCPPubSub(t *testing.T) {

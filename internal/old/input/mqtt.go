@@ -39,8 +39,8 @@ You can access these metadata fields using
 			docs.FieldString("client_id", "An identifier for the client connection."),
 			docs.FieldString("dynamic_client_id_suffix", "Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.").Optional().Advanced().HasAnnotatedOptions(
 				"nanoid", "append a nanoid of length 21 characters",
-			),
-			docs.FieldInt("qos", "The level of delivery guarantee to enforce.").HasOptions("0", "1", "2").Advanced(),
+			).LinterFunc(nil),
+			docs.FieldInt("qos", "The level of delivery guarantee to enforce.").HasOptions("0", "1", "2").Advanced().LinterFunc(nil),
 			docs.FieldBool("clean_session", "Set whether the connection is non-persistent.").Advanced(),
 			mqttconf.WillFieldSpec(),
 			docs.FieldString("connect_timeout", "The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.", "1s", "500ms").HasDefault("30s").AtVersion("3.58.0"),
