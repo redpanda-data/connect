@@ -19,13 +19,14 @@ import (
 	"strings"
 	"time"
 
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/gofrs/uuid"
 	"github.com/golang-jwt/jwt"
 	"github.com/snowflakedb/gosnowflake"
 	"github.com/youmark/pkcs8"
 	"golang.org/x/crypto/ssh"
+
+	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 const (

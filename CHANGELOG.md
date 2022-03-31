@@ -17,6 +17,8 @@ This is a major version release, for more information and guidance on how to mig
 - Field `file_output_path` added to the `prometheus` metrics type.
 - Unit test definitions can now specify a `label` as a `target_processors` value.
 - New connection settings for all sql components.
+- New experimental `snowflake_put` output.
+- New experimental `gcp_cloud_storage` cache.
 
 ### Fixed
 
