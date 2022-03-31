@@ -13,7 +13,7 @@ func connFields() []*service.ConfigField {
 			Description(`An optional maximum amount of time a connection may be idle. Expired connections may be closed lazily before reuse. If value <= 0, connections are not closed due to a connection's idle time.`).
 			Optional().
 			Advanced(),
-		service.NewDurationField("conn_max_lifetime").
+		service.NewDurationField("conn_max_life_time").
 			Description(`An optional maximum amount of time a connection may be reused. Expired connections may be closed lazily before reuse. If value <= 0, connections are not closed due to a connection's age.`).
 			Optional().
 			Advanced(),
@@ -43,8 +43,8 @@ func (c connSettings) apply(db *sql.DB) {
 }
 
 func connSettingsFromParsed(conf *service.ParsedConfig) (c connSettings, err error) {
-	if conf.Contains("conn_max_lifetime") {
-		if c.connMaxLifetime, err = conf.FieldDuration(); err != nil {
+	if conf.Contains("conn_max_life_time") {
+		if c.connMaxLifetime, err = conf.FieldDuration("conn_max_life_time"); err != nil {
 			return
 		}
 	}

@@ -62,7 +62,7 @@ output:
     suffix: ""
     max_in_flight: 64
     conn_max_idle_time: ""
-    conn_max_lifetime: ""
+    conn_max_life_time: ""
     conn_max_idle: 0
     conn_max_open: 0
     batching:
@@ -225,7 +225,7 @@ An optional maximum amount of time a connection may be idle. Expired connections
 
 Type: `string`  
 
-### `conn_max_lifetime`
+### `conn_max_life_time`
 
 An optional maximum amount of time a connection may be reused. Expired connections may be closed lazily before reuse. If value <= 0, connections are not closed due to a connection's age.
 
