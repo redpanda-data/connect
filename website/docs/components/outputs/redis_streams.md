@@ -410,14 +410,15 @@ Default: `[]`
 
 processors:
   - archive:
+      format: concatenate
+
+processors:
+  - archive:
       format: lines
 
 processors:
   - archive:
       format: json_array
-
-processors:
-  - merge_json: {}
 ```
 
 

@@ -22,13 +22,15 @@ require (
 	github.com/Masterminds/squirrel v1.5.2
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/Shopify/sarama v1.30.1
-	github.com/apache/arrow/go/arrow v0.0.0-20211112161151-bc219186db40 // indirect
 	github.com/apache/pulsar-client-go v0.7.0
 	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20220210221528-5daa17b02bff // indirect
 	github.com/apache/thrift v0.15.0 // indirect
 	github.com/armon/go-metrics v0.3.4 // indirect
 	github.com/aws/aws-lambda-go v1.28.0
 	github.com/aws/aws-sdk-go v1.42.31
+	github.com/aws/aws-sdk-go-v2 v1.15.0 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.0 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.9.1 // indirect
 	github.com/benhoyt/goawk v1.13.1-0.20220123120908-f9c293546b6d
 	github.com/bradfitz/gomemcache v0.0.0-20220106215444-fb4bf637b56d
 	github.com/cenkalti/backoff/v4 v4.1.2
@@ -56,6 +58,7 @@ require (
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
+	github.com/google/flatbuffers v2.0.5+incompatible // indirect
 	github.com/google/go-cmp v0.5.7
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
@@ -68,11 +71,12 @@ require (
 	github.com/itchyny/timefmt-go v0.1.3
 	github.com/jhump/protoreflect v1.10.1
 	github.com/jmespath/go-jmespath v0.4.0
-	github.com/klauspost/compress v1.14.2 // indirect
+	github.com/klauspost/compress v1.15.1 // indirect
 	github.com/lib/pq v1.10.4
 	github.com/linkedin/goavro/v2 v2.11.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/mattn/go-colorable v0.1.12 // indirect
+	github.com/mattn/go-ieproxy v0.0.3 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.17
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/mitchellh/mapstructure v1.4.3
@@ -87,7 +91,7 @@ require (
 	github.com/ory/dockertest/v3 v3.8.1
 	github.com/oschwald/geoip2-golang v1.5.0
 	github.com/pebbe/zmq4 v1.2.7
-	github.com/pierrec/lz4/v4 v4.1.12
+	github.com/pierrec/lz4/v4 v4.1.14
 	github.com/pkg/sftp v1.13.4
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.32.1
@@ -99,6 +103,7 @@ require (
 	github.com/segmentio/ksuid v1.0.4
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smira/go-statsd v1.3.2
+	github.com/snowflakedb/gosnowflake v1.6.6
 	github.com/stretchr/testify v1.7.0
 	github.com/tilinna/z85 v1.0.0
 	github.com/twmb/franz-go v1.3.1
@@ -111,7 +116,7 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	github.com/xitongsys/parquet-go v1.6.2
 	github.com/xitongsys/parquet-go-source v0.0.0-20211228015320-b4f792c43cd0
-	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a // indirect
+	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
 	go.mongodb.org/mongo-driver v1.8.2
 	go.nanomsg.org/mangos/v3 v3.3.0
 	go.opentelemetry.io/otel v1.4.1

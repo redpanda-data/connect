@@ -426,6 +426,25 @@ func (c *ConfigSpec) EncodeJSON(v []byte) error {
 	return json.Unmarshal(v, &c.component)
 }
 
+// LintRule adds a custom linting rule to the ConfigSpec in the form of a
+// bloblang mapping. The mapping is provided the value of the fields within
+// the ConfigSpec as the context `this`, and if the mapping assigns to `root` an
+// array of one or more strings these strings will be exposed to a config author
+// as linting errors.
+//
+// For example, if we wanted to add a linting rule for several ConfigSpec fields
+// that ensures some fields are mutually exclusive and some require others we
+// might use the following:
+//
+// `root = match {
+//   this.exists("meow") && this.exists("woof") => [ "both `+"`meow`"+` and `+"`woof`"+` can't be set simultaneously" ],
+//   this.exists("reticulation") && (!this.exists("splines") || this.splines == "") => [ "`+"`splines`"+` is required when setting `+"`reticulation`"+`" ],
+// }`
+func (c *ConfigSpec) LintRule(blobl string) *ConfigSpec {
+	c.component.Config = c.component.Config.LinterBlobl(blobl)
+	return c
+}
+
 //------------------------------------------------------------------------------
 
 // ConfigView is a struct returned by a Benthos service environment when walking
