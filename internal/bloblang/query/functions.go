@@ -55,9 +55,15 @@ func (f *fieldFunction) Exec(ctx FunctionContext) (interface{}, error) {
 	} else if f.namedContext == "" {
 		v := ctx.Value()
 		if v == nil {
+			var fieldName string
+			if len(f.path) > 0 {
+				fieldName = SliceToDotPath(f.path...)
+			}
 			return nil, &ErrRecoverable{
 				Recovered: nil,
-				Err:       ErrNoContext,
+				Err: ErrNoContext{
+					FieldName: fieldName,
+				},
 			}
 		}
 		target = *v

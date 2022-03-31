@@ -220,7 +220,7 @@ func TestAssignments(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", query.Delete(nil))),
 			),
 			input: []part{{Content: `{@#$ not valid json`}},
-			err:   errors.New("failed assignment (line 0): unable to reference message as structured (with 'this'): parse as json: invalid character '@' looking for beginning of object key string"),
+			err:   errors.New("failed assignment (line 0): unable to reference message as structured (with 'this.bar'): parse as json: invalid character '@' looking for beginning of object key string"),
 		},
 		"json parse empty message": {
 			mapping: NewExecutor("", nil, nil,
@@ -229,7 +229,7 @@ func TestAssignments(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("zed"), query.NewLiteralFunction("", query.Delete(nil))),
 			),
 			input: []part{{Content: ``}},
-			err:   errors.New("failed assignment (line 0): unable to reference message as structured (with 'this'): message is empty"),
+			err:   errors.New("failed assignment (line 0): unable to reference message as structured (with 'this.bar'): message is empty"),
 		},
 	}
 

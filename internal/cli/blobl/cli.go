@@ -165,8 +165,13 @@ func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutpu
 		Value: &result,
 	})
 	if err != nil {
-		if parseErr != nil && errors.Is(err, query.ErrNoContext) {
-			err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
+		var ctxErr query.ErrNoContext
+		if parseErr != nil && errors.As(err, &ctxErr) {
+			if ctxErr.FieldName != "" {
+				err = fmt.Errorf("unable to reference message as structured (with 'this.%v'): %w", ctxErr.FieldName, parseErr)
+			} else {
+				err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
+			}
 		}
 		return "", err
 	}

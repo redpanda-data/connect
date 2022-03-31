@@ -138,7 +138,7 @@ func (n *NamedContextFunction) Annotation() string {
 func (n *NamedContextFunction) Exec(ctx FunctionContext) (interface{}, error) {
 	v, nextCtx := ctx.PopValue()
 	if v == nil {
-		return nil, fmt.Errorf("failed to capture context %v: %w", n.name, ErrNoContext)
+		return nil, fmt.Errorf("failed to capture context %v: %w", n.name, ErrNoContext{})
 	}
 	if n.name != "_" {
 		nextCtx = nextCtx.WithNamedValue(n.name, *v)

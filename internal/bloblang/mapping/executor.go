@@ -180,8 +180,13 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 			if len(e.input) > 0 && len(stmt.input) > 0 {
 				line, _ = LineAndColOf(e.input, stmt.input)
 			}
-			if parseErr != nil && errors.Is(err, query.ErrNoContext) {
-				err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
+			var ctxErr query.ErrNoContext
+			if parseErr != nil && errors.As(err, &ctxErr) {
+				if ctxErr.FieldName != "" {
+					err = fmt.Errorf("unable to reference message as structured (with 'this.%v'): %w", ctxErr.FieldName, parseErr)
+				} else {
+					err = fmt.Errorf("unable to reference message as structured (with 'this'): %w", parseErr)
+				}
 			}
 			return nil, fmt.Errorf("failed assignment (line %v): %w", line, err)
 		}

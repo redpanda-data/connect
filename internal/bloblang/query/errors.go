@@ -6,10 +6,19 @@ import (
 	"fmt"
 )
 
-// Common query errors.
-var (
-	ErrNoContext = errors.New("context was undefined")
-)
+// ErrNoContext is a common query error where a query attempts to reference a
+// structured field when there is no context.
+type ErrNoContext struct {
+	FieldName string
+}
+
+// Error returns an attempt at a useful error message.
+func (e ErrNoContext) Error() string {
+	if e.FieldName != "" {
+		return fmt.Sprintf("context was undefined, unable to reference `%v`", e.FieldName)
+	}
+	return "context was undefined"
+}
 
 //------------------------------------------------------------------------------
 
