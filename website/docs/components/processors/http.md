@@ -60,7 +60,6 @@ http:
     consumer_secret: ""
     access_token: ""
     access_token_secret: ""
-    request_url: ""
   oauth2:
     enabled: false
     client_key: ""
@@ -301,14 +300,6 @@ Default: `""`
 ### `oauth.access_token_secret`
 
 A secret provided in order to establish ownership of a given access token.
-
-
-Type: `string`  
-Default: `""`  
-
-### `oauth.request_url`
-
-The URL of the OAuth provider.
 
 
 Type: `string`  

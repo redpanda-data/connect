@@ -56,7 +56,6 @@ output:
       consumer_secret: ""
       access_token: ""
       access_token_secret: ""
-      request_url: ""
     basic_auth:
       enabled: false
       username: ""
@@ -238,14 +237,6 @@ Default: `""`
 ### `oauth.access_token_secret`
 
 A secret provided in order to establish ownership of a given access token.
-
-
-Type: `string`  
-Default: `""`  
-
-### `oauth.request_url`
-
-The URL of the OAuth provider.
 
 
 Type: `string`  

@@ -36,10 +36,6 @@ func oAuthFieldSpec() docs.FieldSpec {
 		docs.FieldString(
 			"access_token_secret", "A secret provided in order to establish ownership of a given access token.",
 		).HasDefault(""),
-
-		docs.FieldString(
-			"request_url", "The URL of the OAuth provider.",
-		).HasDefault(""),
 	)
 }
 

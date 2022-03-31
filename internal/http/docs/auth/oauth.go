@@ -21,7 +21,6 @@ type OAuthConfig struct {
 	ConsumerSecret    string `json:"consumer_secret" yaml:"consumer_secret"`
 	AccessToken       string `json:"access_token" yaml:"access_token"`
 	AccessTokenSecret string `json:"access_token_secret" yaml:"access_token_secret"`
-	RequestURL        string `json:"request_url" yaml:"request_url"`
 }
 
 // NewOAuthConfig returns a new OAuthConfig with default values.
@@ -32,7 +31,6 @@ func NewOAuthConfig() OAuthConfig {
 		ConsumerSecret:    "",
 		AccessToken:       "",
 		AccessTokenSecret: "",
-		RequestURL:        "",
 	}
 }
 
