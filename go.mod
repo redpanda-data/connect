@@ -76,7 +76,6 @@ require (
 	github.com/linkedin/goavro/v2 v2.11.0
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/mattn/go-colorable v0.1.12 // indirect
-	github.com/mattn/go-ieproxy v0.0.3 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.17
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/mitchellh/mapstructure v1.4.3
