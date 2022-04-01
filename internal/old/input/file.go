@@ -198,6 +198,8 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 			return nil, nil, err
 		}
 
+		modTimeUnix, modTime := f.getModTime(currentPath)
+
 		msg := message.QuickBatch(nil)
 		for _, part := range parts {
 			if len(part.Get()) == 0 {
@@ -205,8 +207,6 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 			}
 
 			part.MetaSet("path", currentPath)
-
-			modTimeUnix, modTime := f.getModTime(currentPath)
 			part.MetaSet("mod_time_unix", modTimeUnix)
 			part.MetaSet("mod_time", modTime)
 
