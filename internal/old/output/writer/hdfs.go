@@ -124,11 +124,8 @@ func (h *HDFS) Write(msg *message.Batch) error {
 	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		path := h.path.String(i, msg)
 		directory := h.directory.String(i, msg)
-
-		//filePath := filepath.Join(h.conf.Directory, path)
 		filePath := filepath.Join(directory, path)
 
-		//err := h.client.MkdirAll(h.conf.Directory, os.ModeDir|0o644)
 		err := h.client.MkdirAll(directory, os.ModeDir|0o644)
 		if err != nil {
 			return err
