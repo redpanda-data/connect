@@ -75,11 +75,11 @@ func NewHDFSV2(
 		return nil, fmt.Errorf("failed to parse directory expression: %v", err)
 	}
 	return &HDFS{
-		conf:  conf,
+		conf:      conf,
 		directory: directory,
-		path:  path,
-		log:   log,
-		stats: stats,
+		path:      path,
+		log:       log,
+		stats:     stats,
 	}, nil
 }
 
