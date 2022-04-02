@@ -28,10 +28,6 @@ var WriterDocs = docs.FieldString(
 type Writer interface {
 	Write(context.Context, *message.Part) error
 	Close(context.Context) error
-
-	// TODO V4: Remove this, we only have it in place in order to satisfy the
-	// relatively dodgy empty line at end of batch behaviour.
-	EndBatch() error
 }
 
 // WriterConfig contains custom configuration specific to a codec describing how
@@ -87,10 +83,6 @@ func (a *allBytesWriter) Write(ctx context.Context, msg *message.Part) error {
 	return err
 }
 
-func (a *allBytesWriter) EndBatch() error {
-	return nil
-}
-
 func (a *allBytesWriter) Close(ctx context.Context) error {
 	return a.o.Close()
 }
@@ -119,11 +111,6 @@ func (l *linesWriter) Write(ctx context.Context, p *message.Part) error {
 		return err
 	}
 	return nil
-}
-
-func (l *linesWriter) EndBatch() error {
-	_, err := l.w.Write([]byte("\n"))
-	return err
 }
 
 func (l *linesWriter) Close(ctx context.Context) error {
@@ -156,11 +143,6 @@ func (d *customDelimWriter) Write(ctx context.Context, p *message.Part) error {
 		return err
 	}
 	return nil
-}
-
-func (d *customDelimWriter) EndBatch() error {
-	_, err := d.w.Write(d.delim)
-	return err
 }
 
 func (d *customDelimWriter) Close(ctx context.Context) error {

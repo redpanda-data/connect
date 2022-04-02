@@ -38,7 +38,7 @@ func TestIntegrationSFTP(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 
 	creds := shared.Credentials{
 		Username: sftpUsername,

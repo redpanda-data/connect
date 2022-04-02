@@ -208,7 +208,7 @@ func (g *grokProc) Process(ctx context.Context, msg *message.Part) ([]*message.P
 
 	gObj := gabs.New()
 	for k, v := range values {
-		gObj.SetP(v, k)
+		_, _ = gObj.SetP(v, k)
 	}
 
 	newMsg := msg.Copy()

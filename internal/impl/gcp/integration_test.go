@@ -51,7 +51,7 @@ func TestIntegrationGCP(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 
 	os.Setenv("STORAGE_EMULATOR_HOST", "localhost:"+resource.GetPort("4443/tcp"))
 	t.Cleanup(func() {

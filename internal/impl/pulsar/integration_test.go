@@ -31,7 +31,7 @@ func TestIntegrationPulsar(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		client, err := pulsar.NewClient(pulsar.ClientOptions{
 			URL:    fmt.Sprintf("pulsar://localhost:%v/", resource.GetPort("6650/tcp")),

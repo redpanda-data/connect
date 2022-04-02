@@ -118,7 +118,7 @@ var _ = registerSimpleMethod(
 			schemeFn = func(b []byte) (string, error) {
 				var buf bytes.Buffer
 				e := base64.NewEncoder(base64.StdEncoding, &buf)
-				e.Write(b)
+				_, _ = e.Write(b)
 				e.Close()
 				return buf.String(), nil
 			}
@@ -126,7 +126,7 @@ var _ = registerSimpleMethod(
 			schemeFn = func(b []byte) (string, error) {
 				var buf bytes.Buffer
 				e := base64.NewEncoder(base64.URLEncoding, &buf)
-				e.Write(b)
+				_, _ = e.Write(b)
 				e.Close()
 				return buf.String(), nil
 			}
@@ -787,7 +787,7 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 		case "xxhash64":
 			hashFn = func(b []byte) ([]byte, error) {
 				h := xxhash.New64()
-				h.Write(b)
+				_, _ = h.Write(b)
 				return []byte(strconv.FormatUint(h.Sum64(), 10)), nil
 			}
 		default:

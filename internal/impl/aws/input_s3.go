@@ -473,7 +473,7 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 		} else {
 			dudMessageHandles = nil
 		}
-		s.sqs.ChangeMessageVisibilityBatch(&input)
+		_, _ = s.sqs.ChangeMessageVisibilityBatch(&input)
 	}
 
 	return pendingObjects, nil

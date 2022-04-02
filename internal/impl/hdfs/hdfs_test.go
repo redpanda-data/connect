@@ -44,7 +44,7 @@ func TestIntegrationHDFS(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		testFile := "/cluster_ready" + time.Now().Format("20060102150405")
 		client, err := hdfs.NewClient(hdfs.ClientOptions{
@@ -66,7 +66,7 @@ func TestIntegrationHDFS(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		client.Remove(testFile)
+		_ = client.Remove(testFile)
 		return nil
 	}))
 

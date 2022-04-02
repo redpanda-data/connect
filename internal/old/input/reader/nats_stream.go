@@ -129,7 +129,7 @@ func (n *NATSStream) disconnect() {
 
 	if n.natsSub != nil {
 		if n.conf.UnsubOnClose {
-			n.natsSub.Unsubscribe()
+			_ = n.natsSub.Unsubscribe()
 		}
 		n.natsConn.Close()
 		n.stanConn.Close()

@@ -34,7 +34,7 @@ func TestIntegrationRedis(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		conf := writer.NewRedisStreamsConfig()
 		conf.URL = fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
@@ -240,7 +240,7 @@ func BenchmarkIntegrationRedis(b *testing.B) {
 		assert.NoError(b, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(b, pool.Retry(func() error {
 		conf := writer.NewRedisStreamsConfig()
 		conf.URL = fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))

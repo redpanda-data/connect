@@ -188,7 +188,7 @@ func (d *Dynamic) HandleList(w http.ResponseWriter, r *http.Request) {
 
 	var resBytes []byte
 	if resBytes, httpErr = json.Marshal(uptimes); httpErr == nil {
-		w.Write(resBytes)
+		_, _ = w.Write(resBytes)
 	}
 }
 
@@ -202,7 +202,7 @@ func (d *Dynamic) handleGETInput(w http.ResponseWriter, r *http.Request) error {
 		http.Error(w, fmt.Sprintf("Dynamic component '%v' is not active", id), http.StatusNotFound)
 		return nil
 	}
-	w.Write(conf)
+	_, _ = w.Write(conf)
 	return nil
 }
 

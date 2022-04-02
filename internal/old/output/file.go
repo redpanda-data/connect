@@ -26,10 +26,7 @@ func init() {
 		constructor: fromSimpleConstructor(NewFile),
 		Summary: `
 Writes messages to files on disk based on a chosen codec.`,
-		Description: `
-Messages can be written to different files by using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.
-
-` + multipartCodecDoc,
+		Description: `Messages can be written to different files by using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"path", "The file to write to, if the file does not yet exist it will be created.",
@@ -174,14 +171,6 @@ func (w *fileWriter) WriteWithContext(ctx context.Context, msg *message.Batch) e
 	})
 	if err != nil {
 		return err
-	}
-
-	if msg.Len() > 1 {
-		w.handleMut.Lock()
-		if w.handle != nil {
-			w.handle.EndBatch()
-		}
-		w.handleMut.Unlock()
 	}
 	return nil
 }

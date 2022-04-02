@@ -115,13 +115,13 @@ func TestBloblangCustomObject(t *testing.T) {
 	part := message.NewPart(nil)
 
 	gObj := gabs.New()
-	gObj.ArrayOfSize(3, "foos")
+	_, _ = gObj.ArrayOfSize(3, "foos")
 
 	gObjEle := gabs.New()
-	gObjEle.Set("FROM NEW OBJECT", "foo")
+	_, _ = gObjEle.Set("FROM NEW OBJECT", "foo")
 
-	gObj.S("foos").SetIndex(gObjEle.Data(), 0)
-	gObj.S("foos").SetIndex(5, 1)
+	_, _ = gObj.S("foos").SetIndex(gObjEle.Data(), 0)
+	_, _ = gObj.S("foos").SetIndex(5, 1)
 
 	part.SetJSON(gObj.Data())
 	msg.Append(part)

@@ -57,7 +57,7 @@ func TestSocketBasic(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
 			t.Error(cerr)
 		}
@@ -147,7 +147,7 @@ func TestSocketReconnect(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, cerr := conn.Write([]byte("foo\n"))
 		if cerr != nil {
 			t.Error(cerr)
@@ -244,7 +244,7 @@ func TestSocketMultipart(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
 			t.Error(cerr)
 		}
@@ -330,7 +330,7 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		if _, cerr := conn.Write([]byte("foo@")); cerr != nil {
 			t.Error(cerr)
 		}
@@ -416,7 +416,7 @@ func TestSocketMultipartShutdown(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
 			t.Error(cerr)
 		}
@@ -501,7 +501,7 @@ func TestTCPSocketBasic(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
 			t.Error(cerr)
 		}
@@ -591,7 +591,7 @@ func TestTCPSocketReconnect(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, cerr := conn.Write([]byte("foo\n"))
 		if cerr != nil {
 			t.Error(cerr)
@@ -688,7 +688,7 @@ func TestTCPSocketMultipart(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
 			t.Error(cerr)
 		}
@@ -774,7 +774,7 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		if _, cerr := conn.Write([]byte("foo@")); cerr != nil {
 			t.Error(cerr)
 		}
@@ -860,7 +860,7 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		if _, cerr := conn.Write([]byte("foo\n")); cerr != nil {
 			t.Error(cerr)
 		}
@@ -943,7 +943,7 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 60))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 60))
 		for i := 0; i < b.N; i++ {
 			_, cerr := fmt.Fprintf(conn, "hello world this is message %v\n", i)
 			assert.NoError(b, cerr)
@@ -1013,7 +1013,7 @@ func BenchmarkTCPSocketNoCutOff(b *testing.B) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 60))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 60))
 		for i := 0; i < b.N; i++ {
 			_, cerr := fmt.Fprintf(conn, "hello world this is message %v\n", i)
 			assert.NoError(b, cerr)

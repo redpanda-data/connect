@@ -36,7 +36,7 @@ a:
 	assert.Equal(t, "5s", bConf.Period)
 	require.Len(t, bConf.procs, 1)
 	assert.Equal(t, "bloblang", bConf.procs[0].Type)
-	assert.Equal(t, "root = content().uppercase()", string(bConf.procs[0].Bloblang))
+	assert.Equal(t, "root = content().uppercase()", bConf.procs[0].Bloblang)
 }
 
 func TestBatcherPeriod(t *testing.T) {

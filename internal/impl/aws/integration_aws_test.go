@@ -123,7 +123,7 @@ func TestIntegrationAWS(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 
 	servicePort := resource.GetPort("4566/tcp")
 

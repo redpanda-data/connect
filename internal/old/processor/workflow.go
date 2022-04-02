@@ -580,7 +580,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 			if previous != nil {
 				current["previous"] = previous
 			}
-			gObj.Set(current, w.metaPath...)
+			_, _ = gObj.Set(current, w.metaPath...)
 
 			p.SetJSON(gObj.Data())
 			return nil

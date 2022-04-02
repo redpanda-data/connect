@@ -30,7 +30,7 @@ func TestIntegrationMQTT(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		inConf := mqtt.NewClientOptions().SetClientID("UNIT_TEST")
 		inConf = inConf.AddBroker(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("1883/tcp")))

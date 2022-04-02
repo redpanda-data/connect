@@ -44,7 +44,7 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 	}
 
 	t.Logf("Creating table: %v\n", table)
-	client.CreateTable(&dynamodb.CreateTableInput{
+	_, _ = client.CreateTable(&dynamodb.CreateTableInput{
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
 			{
 				AttributeName: aws.String(hashKey),
@@ -88,7 +88,7 @@ func TestIntegrationDynamoDBCache(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		return createTable(context.Background(), t, resource.GetPort("8000/tcp"), "poketable")
 	}))

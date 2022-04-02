@@ -31,7 +31,7 @@ import (
 )
 
 func init() {
-	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 		return NewOutput(c.MongoDB, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:        output.TypeMongoDB,
@@ -81,6 +81,9 @@ func init() {
 			).Merge(retries.FieldSpecs())...,
 		).ChildDefaultAndTypesFromStruct(output.NewMongoDBConfig()),
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------

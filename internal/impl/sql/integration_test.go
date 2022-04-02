@@ -541,10 +541,6 @@ func TestIntegration(t *testing.T) {
 }
 
 func clickhouseIntegration(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("skipping test on macos")
-	}
-
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -554,7 +550,7 @@ func clickhouseIntegration(t *testing.T) {
 	pool.MaxWait = 30 * time.Second
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "yandex/clickhouse-server",
+		Repository:   "clickhouse/clickhouse-server",
 		ExposedPorts: []string{"9000/tcp"},
 	})
 	require.NoError(t, err)

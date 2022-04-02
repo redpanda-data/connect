@@ -496,7 +496,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", http.DetectContentType(payload))
 			}
 			w.WriteHeader(statusCode)
-			w.Write(payload)
+			_, _ = w.Write(payload)
 		} else if plen > 1 {
 			customContentType, customContentTypeExists := h.responseHeaders["content-type"]
 
@@ -533,7 +533,7 @@ func (h *HTTPServer) postHandler(w http.ResponseWriter, r *http.Request) {
 				w.Header().Del("Content-Type")
 				w.Header().Add("Content-Type", writer.FormDataContentType())
 				w.WriteHeader(statusCode)
-				buf.WriteTo(w)
+				_, _ = buf.WriteTo(w)
 			} else {
 				h.log.Errorf("Failed to return sync response: %v\n", merr)
 				w.WriteHeader(http.StatusBadGateway)

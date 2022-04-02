@@ -33,7 +33,7 @@ func TestIntegrationNatsJetstream(t *testing.T) {
 	})
 
 	var natsConn *nats.Conn
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		natsConn, err = nats.Connect(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp")))
 		return err
@@ -103,7 +103,7 @@ func TestIntegrationNatsPullConsumer(t *testing.T) {
 	})
 
 	var natsConn *nats.Conn
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		natsConn, err = nats.Connect(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp")))
 		return err

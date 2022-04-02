@@ -28,7 +28,7 @@ func TestIntegrationMemcachedCache(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		client := memcache.New(fmt.Sprintf("localhost:%v", resource.GetPort("11211/tcp")))
 		cErr := client.Set(&memcache.Item{

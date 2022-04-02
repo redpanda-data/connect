@@ -36,6 +36,7 @@ This is a major version release, for more information and guidance on how to mig
 - All cache components have had their retry/backoff fields modified for consistency.
 - All cache components that support a general default TTL now have a field `default_ttl` with a duration string, replacing the previous field.
 - The `http` processor and `http_client` output now execute message batch requests as individual requests by default. This behaviour can be disabled by explicitly setting `batch_as_multipart` to `true`.
+- Outputs that traditionally wrote empty newlines at the end of batches with >1 message when using the `lines` codec (`socket`, `stdout`, `file`, `sftp`) no longer do this by default.
 - The `switch` output field `retry_until_success` now defaults to `false`.
 - All AWS components now have a default `region` field that is empty, allowing environment variables or profile values to be used by default.
 - Serverless distributions of Benthos (AWS lambda, etc) have had the default output config changed to reject messages when the processing fails, this should make it easier to handle errors from invocation.

@@ -169,7 +169,7 @@ func runServer(c *cli.Context) error {
 				http.Error(w, err.Error(), http.StatusBadGateway)
 				return
 			}
-			w.Write(resBytes)
+			_, _ = w.Write(resBytes)
 		}()
 
 		exec, err := bloblang.GlobalEnvironment().NewMapping(req.Mapping)

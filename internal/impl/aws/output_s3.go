@@ -276,7 +276,7 @@ func (a *amazonS3Writer) WriteWithContext(wctx context.Context, msg *message.Bat
 
 	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		metadata := map[string]*string{}
-		a.metaFilter.Iter(p, func(k, v string) error {
+		_ = a.metaFilter.Iter(p, func(k, v string) error {
 			metadata[k] = aws.String(v)
 			return nil
 		})

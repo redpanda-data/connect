@@ -54,8 +54,8 @@ func TestSocketBasic(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		buf.ReadFrom(conn)
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second * 5))
+		_, _ = buf.ReadFrom(conn)
 		wg.Done()
 	}()
 
@@ -119,8 +119,8 @@ func TestSocketMultipart(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		buf.ReadFrom(conn)
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second * 5))
+		_, _ = buf.ReadFrom(conn)
 		wg.Done()
 	}()
 
@@ -133,7 +133,7 @@ func TestSocketMultipart(t *testing.T) {
 	wtr.CloseAsync()
 	wg.Wait()
 
-	exp := "foo\nbar\nbaz\n\nqux\n"
+	exp := "foo\nbar\nbaz\nqux\n"
 	if act := buf.String(); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -183,8 +183,8 @@ func TestUDPSocketBasic(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		buf.ReadFrom(&wrapPacketConn{r: conn})
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second * 5))
+		_, _ = buf.ReadFrom(&wrapPacketConn{r: conn})
 		wg.Done()
 	}()
 
@@ -241,8 +241,8 @@ func TestUDPSocketMultipart(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		buf.ReadFrom(&wrapPacketConn{r: conn})
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second * 5))
+		_, _ = buf.ReadFrom(&wrapPacketConn{r: conn})
 		wg.Done()
 	}()
 
@@ -255,7 +255,7 @@ func TestUDPSocketMultipart(t *testing.T) {
 	wtr.CloseAsync()
 	wg.Wait()
 
-	exp := "foo\nbar\nbaz\n\nqux\n"
+	exp := "foo\nbar\nbaz\nqux\n"
 	if act := buf.String(); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -303,8 +303,8 @@ func TestTCPSocketBasic(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		buf.ReadFrom(conn)
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second * 5))
+		_, _ = buf.ReadFrom(conn)
 		wg.Done()
 	}()
 
@@ -368,8 +368,8 @@ func TestTCPSocketMultipart(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		buf.ReadFrom(conn)
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second * 5))
+		_, _ = buf.ReadFrom(conn)
 		wg.Done()
 	}()
 
@@ -382,7 +382,7 @@ func TestTCPSocketMultipart(t *testing.T) {
 	wtr.CloseAsync()
 	wg.Wait()
 
-	exp := "foo\nbar\nbaz\n\nqux\n"
+	exp := "foo\nbar\nbaz\nqux\n"
 	if act := buf.String(); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
@@ -431,8 +431,8 @@ func TestSocketCustomDelimeter(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		buf.ReadFrom(conn)
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second * 5))
+		_, _ = buf.ReadFrom(conn)
 		wg.Done()
 	}()
 

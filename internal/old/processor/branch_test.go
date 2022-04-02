@@ -274,7 +274,7 @@ func TestBranchBasic(t *testing.T) {
 
 			procConf := NewConfig()
 			procConf.Type = TypeBloblang
-			procConf.Bloblang = BloblangConfig(test.processorMap)
+			procConf.Bloblang = test.processorMap
 
 			conf := NewConfig()
 			conf.Type = TypeBranch

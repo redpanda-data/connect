@@ -127,23 +127,13 @@ pipeline:
 
 //------------------------------------------------------------------------------
 
-// BloblangConfig contains configuration fields for the Bloblang processor.
-type BloblangConfig string
-
-// NewBloblangConfig returns a BloblangConfig with default values.
-func NewBloblangConfig() BloblangConfig {
-	return ""
-}
-
-//------------------------------------------------------------------------------
-
 type bloblangProc struct {
 	exec *mapping.Executor
 	log  log.Modular
 }
 
-func newBloblang(conf BloblangConfig, mgr interop.Manager) (processor.V2Batched, error) {
-	exec, err := mgr.BloblEnvironment().NewMapping(string(conf))
+func newBloblang(conf string, mgr interop.Manager) (processor.V2Batched, error) {
+	exec, err := mgr.BloblEnvironment().NewMapping(conf)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(conf)))

@@ -124,8 +124,8 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 			return
 		}
 		w.Header().Add("fooheader", "foovalue")
-		w.Write([]byte("echo: "))
-		w.Write(b)
+		_, _ = w.Write([]byte("echo: "))
+		_, _ = w.Write(b)
 	}))
 	defer ts.Close()
 
@@ -171,8 +171,8 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 			return
 		}
 		w.Header().Add("fooheader", "foovalue")
-		w.Write([]byte("echo: "))
-		w.Write(b)
+		_, _ = w.Write([]byte("echo: "))
+		_, _ = w.Write(b)
 	}))
 	defer ts.Close()
 

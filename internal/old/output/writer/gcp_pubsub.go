@@ -164,7 +164,7 @@ func (c *GCPPubSub) WriteWithContext(ctx context.Context, msg *message.Batch) er
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		topic := topics[i]
 		attr := map[string]string{}
-		c.metaFilter.Iter(part, func(k, v string) error {
+		_ = c.metaFilter.Iter(part, func(k, v string) error {
 			attr[k] = v
 			return nil
 		})

@@ -694,7 +694,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 		if err != nil {
 			return 0, err
 		}
-		gPart.SetP(v, path)
+		_, _ = gPart.SetP(v, path)
 		part.SetJSON(gPart.Data())
 		return 0, nil
 	}
@@ -715,7 +715,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 		if err != nil {
 			return 0, err
 		}
-		gPart.ArrayAppendP(v, path)
+		_ = gPart.ArrayAppendP(v, path)
 		part.SetJSON(gPart.Data())
 		return 0, nil
 	}
@@ -736,7 +736,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 		if err != nil {
 			return 0, err
 		}
-		gObj.DeleteP(path)
+		_ = gObj.DeleteP(path)
 		part.SetJSON(gObj.Data())
 		return 0, nil
 	}

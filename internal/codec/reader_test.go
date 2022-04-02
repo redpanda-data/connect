@@ -375,7 +375,7 @@ func TestAutoReader(t *testing.T) {
 func TestCSVGzipReader(t *testing.T) {
 	var gzipBuf bytes.Buffer
 	zw := gzip.NewWriter(&gzipBuf)
-	zw.Write([]byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3"))
+	_, _ = zw.Write([]byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3"))
 	zw.Close()
 
 	testReaderSuite(
@@ -389,7 +389,7 @@ func TestCSVGzipReader(t *testing.T) {
 func TestCSVGzipReaderOld(t *testing.T) {
 	var gzipBuf bytes.Buffer
 	zw := gzip.NewWriter(&gzipBuf)
-	zw.Write([]byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3"))
+	_, _ = zw.Write([]byte("col1,col2,col3\nfoo1,bar1,baz1\nfoo2,bar2,baz2\nfoo3,bar3,baz3"))
 	zw.Close()
 
 	testReaderSuite(

@@ -40,14 +40,11 @@ func init() {
 			}
 			return OnlySinglePayloads(a), nil
 		}),
-		Status:  docs.StatusExperimental,
-		Version: "3.39.0",
-		Summary: `Writes files to a server over SFTP.`,
-		Description: `
-In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
-
-` + multipartCodecDoc,
-		Async: true,
+		Status:      docs.StatusExperimental,
+		Version:     "3.39.0",
+		Summary:     `Writes files to a server over SFTP.`,
+		Description: `In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`,
+		Async:       true,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString(
 				"address",

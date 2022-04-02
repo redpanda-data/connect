@@ -30,7 +30,7 @@ func TestHandlerAsync(t *testing.T) {
 		}
 		results = append(results, resBytes)
 
-		w.Write([]byte("success"))
+		_, _ = w.Write([]byte("success"))
 	}))
 	defer ts.Close()
 
@@ -163,7 +163,7 @@ func TestHandlerCombined(t *testing.T) {
 		}
 		results = append(results, resBytes)
 
-		w.Write([]byte("success"))
+		_, _ = w.Write([]byte("success"))
 	}))
 	defer ts.Close()
 

@@ -30,7 +30,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
+	err := bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
 		v2Proc, err := NewProcessor(c, nm, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
@@ -88,6 +88,9 @@ func init() {
 			).Merge(retries.FieldSpecs())...,
 		).ChildDefaultAndTypesFromStruct(processor.NewMongoDBConfig()),
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------

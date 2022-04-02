@@ -122,7 +122,7 @@ func (s *Socket) WriteWithContext(ctx context.Context, msg *message.Batch) error
 		return component.ErrNotConnected
 	}
 
-	err := msg.Iter(func(i int, part *message.Part) error {
+	return msg.Iter(func(i int, part *message.Part) error {
 		serr := w.Write(ctx, part)
 		if serr != nil || s.codecConf.CloseAfter {
 			s.writerMut.Lock()
@@ -132,15 +132,6 @@ func (s *Socket) WriteWithContext(ctx context.Context, msg *message.Batch) error
 		}
 		return serr
 	})
-	if err == nil && msg.Len() > 1 {
-		if err = w.EndBatch(); err != nil {
-			s.writerMut.Lock()
-			s.writer.Close(ctx)
-			s.writer = nil
-			s.writerMut.Unlock()
-		}
-	}
-	return err
 }
 
 // CloseAsync shuts down the socket output and stops processing messages.

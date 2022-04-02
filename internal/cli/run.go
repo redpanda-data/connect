@@ -224,7 +224,7 @@ Either run Benthos as a stream processor or choose a command:
 			}
 			if c.Args().Len() > 0 {
 				fmt.Fprintf(os.Stderr, "Unrecognised command: %v\n", c.Args().First())
-				cli.ShowAppHelp(c)
+				_ = cli.ShowAppHelp(c)
 				os.Exit(1)
 			}
 			os.Exit(cmdService(
@@ -330,11 +330,11 @@ https://benthos.dev/docs/guides/streams_mode/about`[1:],
 
 	app.OnUsageError = func(context *cli.Context, err error, isSubcommand bool) error {
 		fmt.Printf("Usage error: %v\n", err)
-		cli.ShowAppHelp(context)
+		_ = cli.ShowAppHelp(context)
 		return err
 	}
 
-	app.Run(os.Args)
+	_ = app.Run(os.Args)
 }
 
 //------------------------------------------------------------------------------

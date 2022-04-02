@@ -132,7 +132,7 @@ func TestHTTPClientBadContentType(t *testing.T) {
 func TestHTTPClientDropOn(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"foo":"bar"}`))
+		_, _ = w.Write([]byte(`{"foo":"bar"}`))
 	}))
 	defer ts.Close()
 
@@ -153,7 +153,7 @@ func TestHTTPClientSuccessfulOn(t *testing.T) {
 	var reqs int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"foo":"bar"}`))
+		_, _ = w.Write([]byte(`{"foo":"bar"}`))
 		atomic.AddInt32(&reqs, 1)
 	}))
 	defer ts.Close()
@@ -293,7 +293,7 @@ func TestHTTPClientReceive(t *testing.T) {
 		j++
 		w.Header().Set("foo-bar", "baz-0")
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(testStr + "PART-A"))
+		_, _ = w.Write([]byte(testStr + "PART-A"))
 	}))
 	defer ts.Close()
 
@@ -445,7 +445,7 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 
 		w.Header().Add("Content-Type", writer.FormDataContentType())
 		w.WriteHeader(http.StatusCreated)
-		w.Write(body.Bytes())
+		_, _ = w.Write(body.Bytes())
 	}))
 	defer ts.Close()
 

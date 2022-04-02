@@ -21,7 +21,7 @@ func TestParallelBasic(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		wg.Done()
 		wg.Wait()
-		w.Write([]byte("foobar"))
+		_, _ = w.Write([]byte("foobar"))
 	}))
 	defer ts.Close()
 
@@ -67,7 +67,7 @@ func TestParallelError(t *testing.T) {
 			http.Error(w, "test error", http.StatusForbidden)
 			return
 		}
-		w.Write([]byte("foobar"))
+		_, _ = w.Write([]byte("foobar"))
 	}))
 	defer ts.Close()
 
@@ -121,7 +121,7 @@ func TestParallelCapped(t *testing.T) {
 			t.Errorf("Beyond parallelism cap: %v", req)
 		}
 		<-time.After(time.Millisecond * 10)
-		w.Write([]byte("foobar"))
+		_, _ = w.Write([]byte("foobar"))
 		atomic.AddInt64(&reqs, -1)
 	}))
 	defer ts.Close()

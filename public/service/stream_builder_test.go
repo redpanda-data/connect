@@ -157,7 +157,7 @@ file:
 	outBytes, err := os.ReadFile(outFilePath)
 	require.NoError(t, err)
 
-	assert.Equal(t, "HELLO WORLD 1\nHELLO WORLD 2\n\nHELLO WORLD 3\nHELLO WORLD 4\n\nHELLO WORLD 5\nHELLO WORLD 6\n\n", string(outBytes))
+	assert.Equal(t, "HELLO WORLD 1\nHELLO WORLD 2\nHELLO WORLD 3\nHELLO WORLD 4\nHELLO WORLD 5\nHELLO WORLD 6\n", string(outBytes))
 }
 
 func TestStreamBuilderEnvVarInterpolation(t *testing.T) {
@@ -217,6 +217,59 @@ file:
   codec: lines
   paths: [ %v ]`, inFilePath)))
 	require.NoError(t, b.AddProcessorYAML(`bloblang: 'root = content().lowercase()'`))
+
+	outMsgs := map[string]struct{}{}
+	var outMut sync.Mutex
+	handler := func(_ context.Context, m *service.Message) error {
+		outMut.Lock()
+		defer outMut.Unlock()
+
+		b, err := m.AsBytes()
+		assert.NoError(t, err)
+
+		outMsgs[string(b)] = struct{}{}
+		return nil
+	}
+	require.NoError(t, b.AddConsumerFunc(handler))
+
+	// Fails on second call.
+	require.Error(t, b.AddConsumerFunc(handler))
+
+	// Don't allow output overrides now.
+	err := b.SetYAML(`output: {}`)
+	require.Error(t, err)
+
+	strm, err := b.Build()
+	require.NoError(t, err)
+
+	require.NoError(t, strm.Run(context.Background()))
+
+	outMut.Lock()
+	assert.Equal(t, map[string]struct{}{
+		"hello world 1": {},
+		"hello world 2": {},
+		"hello world 3": {},
+	}, outMsgs)
+	outMut.Unlock()
+}
+
+func TestStreamBuilderConsumerFuncInlineProcs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	inFilePath := filepath.Join(tmpDir, "in.txt")
+	require.NoError(t, os.WriteFile(inFilePath, []byte(`HELLO WORLD 1
+HELLO WORLD 2
+HELLO WORLD 3`), 0o755))
+
+	b := service.NewStreamBuilder()
+	require.NoError(t, b.SetLoggerYAML("level: NONE"))
+	require.NoError(t, b.AddInputYAML(fmt.Sprintf(`
+file:
+  codec: lines
+  paths: [ %v ]
+processors:
+  - bloblang: 'root = content().lowercase()'
+`, inFilePath)))
 
 	outMsgs := map[string]struct{}{}
 	var outMut sync.Mutex

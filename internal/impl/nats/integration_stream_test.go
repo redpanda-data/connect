@@ -30,7 +30,7 @@ func TestIntegrationNatsStream(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		natsConn, err := stan.Connect(
 			"test-cluster", "benthos_test_client",

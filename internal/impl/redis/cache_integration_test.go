@@ -31,7 +31,7 @@ func TestIntegrationRedisCache(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		url := fmt.Sprintf("tcp://localhost:%v/1", resource.GetPort("6379/tcp"))
 		pConf, cErr := redisCacheConfig().ParseYAML(fmt.Sprintf(`url: %v`, url), nil)
@@ -186,7 +186,7 @@ func TestIntegrationRedisFailoverCache(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		pool.RemoveNetwork(net)
+		_ = pool.RemoveNetwork(net)
 	})
 
 	master, err := pool.RunWithOptions(&dockertest.RunOptions{

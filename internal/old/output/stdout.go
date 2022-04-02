@@ -18,33 +18,11 @@ import (
 
 //------------------------------------------------------------------------------
 
-var multipartCodecDoc = (`
-## Batches and Multipart Messages
-
-When writing multipart (batched) messages using the ` + "`lines`" + ` codec the last message ends with double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
-
-` + "```" + `
-foo\n
-bar\n
-baz\n
-` + "```" + `
-
-Whereas a multipart message [ "foo", "bar", "baz" ] would be written as:
-
-` + "```" + `
-foo\n
-bar\n
-baz\n\n
-` + "```" + `
-
-This enables consumers of this output feed to reconstruct the original batches. However, if you wish to avoid this behaviour then add a ` + "[`split` processor](/docs/components/processors/split)" + ` before messages reach this output.`)[1:]
-
 func init() {
 	Constructors[TypeSTDOUT] = TypeSpec{
 		constructor: fromSimpleConstructor(NewSTDOUT),
 		Summary: `
 Prints messages to stdout as a continuous stream of data, dividing messages according to the specified codec.`,
-		Description: multipartCodecDoc,
 		Config: docs.FieldComponent().WithChildren(
 			codec.WriterDocs.AtVersion("3.46.0"),
 		),
@@ -113,18 +91,9 @@ func (w *stdoutWriter) ConnectWithContext(ctx context.Context) error {
 }
 
 func (w *stdoutWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
-	err := writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		return w.handle.Write(ctx, p)
 	})
-	if err != nil {
-		return err
-	}
-	if msg.Len() > 1 {
-		if w.handle != nil {
-			w.handle.EndBatch()
-		}
-	}
-	return nil
 }
 
 func (w *stdoutWriter) CloseAsync() {

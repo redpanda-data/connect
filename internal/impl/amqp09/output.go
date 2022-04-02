@@ -258,7 +258,7 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 		}
 
 		headers := amqp.Table{}
-		a.metaFilter.Iter(p, func(k, v string) error {
+		_ = a.metaFilter.Iter(p, func(k, v string) error {
 			headers[strings.ReplaceAll(k, "_", "-")] = v
 			return nil
 		})

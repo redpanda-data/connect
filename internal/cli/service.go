@@ -358,7 +358,7 @@ func cmdService(
 				"Service failed to close cleanly within allocated time." +
 					" Exiting forcefully and dumping stack trace to stderr.",
 			)
-			pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 			os.Exit(1)
 		}()
 
@@ -377,7 +377,7 @@ func cmdService(
 				"Service failed to close cleanly within allocated time: %v."+
 					" Exiting forcefully and dumping stack trace to stderr.\n", err,
 			)
-			pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 			os.Exit(1)
 		}
 	}()

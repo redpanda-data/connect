@@ -131,7 +131,7 @@ type Config struct {
 	Archive      ArchiveConfig      `json:"archive" yaml:"archive"`
 	Avro         AvroConfig         `json:"avro" yaml:"avro"`
 	AWK          AWKConfig          `json:"awk" yaml:"awk"`
-	Bloblang     BloblangConfig     `json:"bloblang" yaml:"bloblang"`
+	Bloblang     string             `json:"bloblang" yaml:"bloblang"`
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
 	Branch       BranchConfig       `json:"branch" yaml:"branch"`
 	Cache        CacheConfig        `json:"cache" yaml:"cache"`
@@ -183,7 +183,7 @@ func NewConfig() Config {
 		Archive:      NewArchiveConfig(),
 		Avro:         NewAvroConfig(),
 		AWK:          NewAWKConfig(),
-		Bloblang:     NewBloblangConfig(),
+		Bloblang:     "",
 		BoundsCheck:  NewBoundsCheckConfig(),
 		Branch:       NewBranchConfig(),
 		Cache:        NewCacheConfig(),

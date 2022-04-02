@@ -292,7 +292,7 @@ func TestSnowflakeOutput(t *testing.T) {
 
 			snowpipeTestServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(test.snowflakeHTTPResponseCode)
-				w.Write([]byte(`{"ResponseCode": "` + test.snowflakeResponseCode + `"}`))
+				_, _ = w.Write([]byte(`{"ResponseCode": "` + test.snowflakeResponseCode + `"}`))
 			}))
 			t.Cleanup(snowpipeTestServer.Close)
 

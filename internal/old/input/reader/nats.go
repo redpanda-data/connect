@@ -133,7 +133,7 @@ func (n *NATS) disconnect() {
 	defer n.cMut.Unlock()
 
 	if n.natsSub != nil {
-		n.natsSub.Unsubscribe()
+		_ = n.natsSub.Unsubscribe()
 		n.natsSub = nil
 	}
 	if n.natsConn != nil {

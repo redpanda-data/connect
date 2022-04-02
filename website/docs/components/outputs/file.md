@@ -29,26 +29,6 @@ output:
 
 Messages can be written to different files by using [interpolation functions](/docs/configuration/interpolation#bloblang-queries) in the path field. However, only one file is ever open at a given time, and therefore when the path changes the previously open file is closed.
 
-## Batches and Multipart Messages
-
-When writing multipart (batched) messages using the `lines` codec the last message ends with double delimiters. E.g. the messages "foo", "bar" and "baz" would be written as:
-
-```
-foo\n
-bar\n
-baz\n
-```
-
-Whereas a multipart message [ "foo", "bar", "baz" ] would be written as:
-
-```
-foo\n
-bar\n
-baz\n\n
-```
-
-This enables consumers of this output feed to reconstruct the original batches. However, if you wish to avoid this behaviour then add a [`split` processor](/docs/components/processors/split) before messages reach this output.
-
 ## Fields
 
 ### `path`

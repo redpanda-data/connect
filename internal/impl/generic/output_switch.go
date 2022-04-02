@@ -36,7 +36,7 @@ var (
 )
 
 func init() {
-	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newSwitchOutput(c.Switch, nm)
 	}), docs.ComponentSpec{
 		Name: "switch",
@@ -180,6 +180,9 @@ output:
 			},
 		},
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 type switchOutput struct {

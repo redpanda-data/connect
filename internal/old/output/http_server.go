@@ -263,10 +263,10 @@ func (h *HTTPServer) getHandler(w http.ResponseWriter, r *http.Request) {
 
 		writer.Close()
 		w.Header().Add("Content-Type", writer.FormDataContentType())
-		w.Write(body.Bytes())
+		_, _ = w.Write(body.Bytes())
 	} else {
 		w.Header().Add("Content-Type", "application/octet-stream")
-		w.Write(ts.Payload.Get(0).Get())
+		_, _ = w.Write(ts.Payload.Get(0).Get())
 	}
 
 	h.mGetBatchSent.Incr(1)
@@ -319,7 +319,7 @@ func (h *HTTPServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		w.Write([]byte("\n"))
+		_, _ = w.Write([]byte("\n"))
 		flusher.Flush()
 		h.mStreamSent.Incr(int64(batch.MessageCollapsedCount(ts.Payload)))
 		h.mStreamBatchSent.Incr(1)
@@ -428,7 +428,7 @@ func (h *HTTPServer) CloseAsync() {
 	h.shutSig.CloseAtLeisure()
 	h.closeServerOnce.Do(func() {
 		if h.server != nil {
-			h.server.Shutdown(context.Background())
+			_ = h.server.Shutdown(context.Background())
 		}
 		h.shutSig.ShutdownComplete()
 	})

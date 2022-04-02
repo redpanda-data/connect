@@ -61,8 +61,8 @@ func TestJQMutation(t *testing.T) {
 	require.NoError(t, err)
 
 	ogObj := gabs.New()
-	ogObj.Set("is this", "foo", "original", "content")
-	ogObj.Set("remove this", "bar")
+	_, _ = ogObj.Set("is this", "foo", "original", "content")
+	_, _ = ogObj.Set("remove this", "bar")
 	ogExp := ogObj.String()
 
 	msgIn := message.QuickBatch(make([][]byte, 1))

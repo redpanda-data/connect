@@ -86,7 +86,7 @@ func TestIntegrationKafka(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		return createKafkaTopic("localhost:"+kafkaPortStr, "testingconnection", 1)
 	}))
@@ -207,7 +207,7 @@ func TestIntegrationKafkaSasl(t *testing.T) {
 
 	adminCreated := false
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		if !adminCreated {
 			var stdErr bytes.Buffer

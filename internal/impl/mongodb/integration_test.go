@@ -48,7 +48,7 @@ func TestIntegrationMongoDB(t *testing.T) {
 
 	var mongoClient *mongo.Client
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		url := "mongodb://localhost:" + resource.GetPort("27017/tcp")
 		conf := client.NewConfig()

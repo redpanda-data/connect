@@ -178,7 +178,7 @@ func TestGCPBigQueryOutputConvertToIsoError(t *testing.T) {
 func TestGCPBigQueryOutputCreateTableLoaderOk(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(`{"id" : "dataset_meow"}`))
+			_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
 		}),
 	)
 	defer server.Close()
@@ -240,7 +240,7 @@ func TestGCPBigQueryOutputDatasetDoNotExists(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("{}"))
+			_, _ = w.Write([]byte("{}"))
 		}),
 	)
 	defer server.Close()
@@ -266,7 +266,7 @@ func TestGCPBigQueryOutputDatasetDoNotExistsUnknownError(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("{}"))
+			_, _ = w.Write([]byte("{}"))
 		}),
 	)
 	defer server.Close()
@@ -292,13 +292,13 @@ func TestGCPBigQueryOutputTableDoNotExists(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/projects/project_meow/datasets/dataset_meow" {
-				w.Write([]byte(`{"id" : "dataset_meow"}`))
+				_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
 
 				return
 			}
 
 			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("{}"))
+			_, _ = w.Write([]byte("{}"))
 		}),
 	)
 	defer server.Close()
@@ -325,13 +325,13 @@ func TestGCPBigQueryOutputTableDoNotExistsUnknownError(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/projects/project_meow/datasets/dataset_meow" {
-				w.Write([]byte(`{"id" : "dataset_meow"}`))
+				_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
 
 				return
 			}
 
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("{}"))
+			_, _ = w.Write([]byte("{}"))
 		}),
 	)
 	defer server.Close()
@@ -357,7 +357,7 @@ create_disposition: CREATE_NEVER
 func TestGCPBigQueryOutputConnectOk(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(`{"id" : "dataset_meow"}`))
+			_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
 		}),
 	)
 	defer server.Close()
@@ -383,13 +383,13 @@ func TestGCPBigQueryOutputConnectWithoutTableOk(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/projects/project_meow/datasets/dataset_meow" {
-				w.Write([]byte(`{"id" : "dataset_meow"}`))
+				_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
 
 				return
 			}
 
 			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("{}"))
+			_, _ = w.Write([]byte("{}"))
 		}),
 	)
 	defer server.Close()
@@ -420,7 +420,7 @@ func TestGCPBigQueryOutputWriteOk(t *testing.T) {
 
 			// checking dataset existence
 			if r.URL.Path == "/projects/project_meow/datasets/dataset_meow" {
-				w.Write([]byte(`{"id" : "dataset_meow"}`))
+				_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
 				return
 			}
 
@@ -433,18 +433,18 @@ func TestGCPBigQueryOutputWriteOk(t *testing.T) {
 					return
 				}
 
-				w.Write([]byte(`{"jobReference" : {"jobId" : "1"}}`))
+				_, _ = w.Write([]byte(`{"jobReference" : {"jobId" : "1"}}`))
 				return
 			}
 
 			// job status called with job.Wait()
 			if r.URL.Path == "/projects/project_meow/jobs/1" {
-				w.Write([]byte(`{"status":{"state":"DONE"}}`))
+				_, _ = w.Write([]byte(`{"status":{"state":"DONE"}}`))
 				return
 			}
 
 			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("{}"))
+			_, _ = w.Write([]byte("{}"))
 		}),
 	)
 	defer server.Close()
@@ -483,12 +483,12 @@ func TestGCPBigQueryOutputWriteError(t *testing.T) {
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// checking dataset existence
 			if r.URL.Path == "/projects/project_meow/datasets/dataset_meow" {
-				w.Write([]byte(`{"id" : "dataset_meow"}`))
+				_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
 				return
 			}
 
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("{}"))
+			_, _ = w.Write([]byte("{}"))
 		}),
 	)
 	defer server.Close()

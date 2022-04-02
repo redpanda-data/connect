@@ -23,7 +23,7 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newRedisProc(conf.Redis, mgr)
 		if err != nil {
 			return nil, err
@@ -129,6 +129,9 @@ pipeline:
 			},
 		},
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 //------------------------------------------------------------------------------

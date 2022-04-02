@@ -146,7 +146,7 @@ func isValidSNSAttribute(k, v string) bool {
 func (a *snsWriter) getSNSAttributes(msg *message.Batch, i int) snsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
-	a.metaFilter.Iter(p, func(k, v string) error {
+	_ = a.metaFilter.Iter(p, func(k, v string) error {
 		if isValidSNSAttribute(k, v) {
 			keys = append(keys, k)
 		} else {

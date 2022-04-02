@@ -43,7 +43,7 @@ func TestHTTPClientGET(t *testing.T) {
 			t.Errorf("Wrong method: %v != %v", act, exp)
 		}
 		atomic.AddUint32(&reqCount, 1)
-		w.Write([]byte(inputs[index%len(inputs)]))
+		_, _ = w.Write([]byte(inputs[index%len(inputs)]))
 		index++
 	}))
 	defer ts.Close()
@@ -286,7 +286,7 @@ func TestHTTPClientPOST(t *testing.T) {
 		}
 
 		atomic.AddUint32(&reqCount, 1)
-		w.Write([]byte(inputs[index%len(inputs)]))
+		_, _ = w.Write([]byte(inputs[index%len(inputs)]))
 		index++
 	}))
 	defer ts.Close()
@@ -366,7 +366,7 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 
 		writer.Close()
 		w.Header().Add("Content-Type", writer.FormDataContentType())
-		w.Write(body.Bytes())
+		_, _ = w.Write(body.Bytes())
 	}))
 	defer ts.Close()
 
@@ -471,7 +471,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 
 		writer.Close()
 		w.Header().Add("Content-Type", writer.FormDataContentType())
-		w.Write(body.Bytes())
+		_, _ = w.Write(body.Bytes())
 	}))
 	defer tserve.Close()
 
@@ -568,7 +568,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 		body.WriteString("A msg that we won't read\nsecond part\n\n")
 
 		w.Header().Add("Content-Type", "application/octet-stream")
-		w.Write(body.Bytes())
+		_, _ = w.Write(body.Bytes())
 	}))
 	defer tserve.Close()
 
@@ -637,7 +637,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 		}
 
 		w.Header().Add("Content-Type", "application/octet-stream")
-		w.Write(body.Bytes())
+		_, _ = w.Write(body.Bytes())
 	}))
 	defer tserve.Close()
 
@@ -701,7 +701,7 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 		}
 
 		w.Header().Add("Content-Type", "application/octet-stream")
-		w.Write(body.Bytes())
+		_, _ = w.Write(body.Bytes())
 	}))
 	defer tserve.Close()
 
@@ -770,7 +770,7 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 		}
 
 		w.Header().Add("Content-Type", "application/octet-stream")
-		w.Write(body.Bytes())
+		_, _ = w.Write(body.Bytes())
 	}))
 	defer tserve.Close()
 
@@ -847,7 +847,7 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 		}
 
 		w.Header().Add("Content-Type", header)
-		w.Write(body.Bytes())
+		_, _ = w.Write(body.Bytes())
 	}))
 	defer tserve.Close()
 

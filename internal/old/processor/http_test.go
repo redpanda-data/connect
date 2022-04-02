@@ -75,7 +75,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		i++
 		w.Header().Add("foobar", "baz")
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte("foobar"))
+		_, _ = w.Write([]byte("foobar"))
 	}))
 	defer ts.Close()
 
@@ -238,7 +238,7 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 		i++
 		w.Header().Add("foobar", "baz")
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte("foobar"))
+		_, _ = w.Write([]byte("foobar"))
 	}))
 	defer ts.Close()
 
@@ -277,7 +277,7 @@ func TestHTTPClientSerial(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte("foobar " + string(bodyBytes)))
+		_, _ = w.Write([]byte("foobar " + string(bodyBytes)))
 	}))
 	defer ts.Close()
 
@@ -316,7 +316,7 @@ func TestHTTPClientParallel(t *testing.T) {
 		wg.Done()
 		wg.Wait()
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte("foobar"))
+		_, _ = w.Write([]byte("foobar"))
 	}))
 	defer ts.Close()
 
@@ -366,7 +366,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 			http.Error(w, "test error", http.StatusForbidden)
 			return
 		}
-		w.Write([]byte("foobar"))
+		_, _ = w.Write([]byte("foobar"))
 	}))
 	defer ts.Close()
 

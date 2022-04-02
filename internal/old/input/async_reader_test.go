@@ -437,7 +437,7 @@ func TestAsyncReaderCloseDuringReconnect(t *testing.T) {
 	close(readerImpl.readChan)
 
 	if err = r.WaitForClose(time.Second); err != nil {
-		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 		t.Error(err)
 	}
 }
@@ -498,7 +498,7 @@ func TestAsyncReaderHappyPath(t *testing.T) {
 	close(readerImpl.connChan)
 
 	if err = r.WaitForClose(time.Second); err != nil {
-		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 		t.Fatal(err)
 	}
 
@@ -632,7 +632,7 @@ func TestAsyncReaderSadPath(t *testing.T) {
 	close(readerImpl.connChan)
 
 	if err = r.WaitForClose(time.Second); err != nil {
-		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 		t.Fatal(err)
 	}
 
@@ -719,7 +719,7 @@ func TestAsyncReaderParallel(t *testing.T) {
 	close(readerImpl.connChan)
 
 	if err = r.WaitForClose(time.Second); err != nil {
-		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 		t.Fatal(err)
 	}
 
@@ -764,7 +764,7 @@ func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
 	b.Cleanup(func() {
 		r.CloseAsync()
 		if err = r.WaitForClose(time.Second); err != nil {
-			pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+			_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 			b.Fatal(err)
 		}
 	})

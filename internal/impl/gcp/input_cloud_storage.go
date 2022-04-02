@@ -26,7 +26,7 @@ import (
 )
 
 func init() {
-	bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
+	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
 		r, err := newGCPCloudStorageInput(c.GCPCloudStorage, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
@@ -76,6 +76,9 @@ services. You can find out more [in this document](/docs/guides/cloud/gcp).`,
 			docs.FieldBool("delete_objects", "Whether to delete downloaded objects from the bucket once they are processed.").Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewGCPCloudStorageConfig()),
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 const (

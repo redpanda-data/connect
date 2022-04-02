@@ -191,7 +191,7 @@ func (a *amqp1Writer) WriteWithContext(ctx context.Context, msg *message.Batch) 
 
 	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		m := amqp.NewMessage(p.Get())
-		a.metaFilter.Iter(p, func(k, v string) error {
+		_ = a.metaFilter.Iter(p, func(k, v string) error {
 			if m.Annotations == nil {
 				m.Annotations = amqp.Annotations{}
 			}

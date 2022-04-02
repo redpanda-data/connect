@@ -345,7 +345,7 @@ Exploding objects results in an object where the keys match the target object, a
 				result := make([]interface{}, len(t))
 				for i, ele := range t {
 					gExploded := gabs.Wrap(IClone(v))
-					gExploded.Set(ele, path...)
+					_, _ = gExploded.Set(ele, path...)
 					result[i] = gExploded.Data()
 				}
 				return result, nil
@@ -353,7 +353,7 @@ Exploding objects results in an object where the keys match the target object, a
 				result := make(map[string]interface{}, len(t))
 				for key, ele := range t {
 					gExploded := gabs.Wrap(IClone(v))
-					gExploded.Set(ele, path...)
+					_, _ = gExploded.Set(ele, path...)
 					result[key] = gExploded.Data()
 				}
 				return result, nil

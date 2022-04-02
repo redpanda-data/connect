@@ -66,7 +66,7 @@ func TestIntegrationAWSKinesis(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 
 	require.NoError(t, pool.Retry(func() error {
 		return createKinesisShards(context.Background(), resource.GetPort("4566/tcp"), "testtable", 2)

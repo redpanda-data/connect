@@ -103,7 +103,7 @@ pipeline:
 	require.Contains(t, streamConfs, "inner_second")
 	require.Contains(t, streamConfs, "inner_third")
 
-	assert.Equal(t, `root = "first"`, string(streamConfs["first"].Pipeline.Processors[0].Bloblang))
-	assert.Equal(t, `root = "second"`, string(streamConfs["inner_second"].Pipeline.Processors[0].Bloblang))
-	assert.Equal(t, `root = "third"`, string(streamConfs["inner_third"].Pipeline.Processors[0].Bloblang))
+	assert.Equal(t, `root = "first"`, streamConfs["first"].Pipeline.Processors[0].Bloblang)
+	assert.Equal(t, `root = "second"`, streamConfs["inner_second"].Pipeline.Processors[0].Bloblang)
+	assert.Equal(t, `root = "third"`, streamConfs["inner_third"].Pipeline.Processors[0].Bloblang)
 }

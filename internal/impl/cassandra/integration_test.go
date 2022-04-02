@@ -44,7 +44,7 @@ func TestIntegrationCassandra(t *testing.T) {
 		}
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		if session == nil {
 			conn := gocql.NewCluster(fmt.Sprintf("localhost:%v", resource.GetPort("9042/tcp")))
@@ -54,7 +54,7 @@ func TestIntegrationCassandra(t *testing.T) {
 				return rerr
 			}
 		}
-		session.Query(
+		_ = session.Query(
 			"CREATE KEYSPACE testspace WITH replication = {'class':'SimpleStrategy','replication_factor':1};",
 		).Exec()
 		return session.Query(

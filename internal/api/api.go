@@ -118,13 +118,13 @@ func New(
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 
 	handlePing := func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("pong"))
+		_, _ = w.Write([]byte("pong"))
 	}
 
 	handleStackTrace := func(w http.ResponseWriter, r *http.Request) {
 		stackSlice := make([]byte, 1024*100)
 		s := runtime.Stack(stackSlice, true)
-		w.Write(stackSlice[:s])
+		_, _ = w.Write(stackSlice[:s])
 	}
 
 	handlePrintJSONConfig := func(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +143,7 @@ func New(
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
-		w.Write(resBytes)
+		_, _ = w.Write(resBytes)
 	}
 
 	handlePrintYAMLConfig := func(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +152,7 @@ func New(
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
-		w.Write(resBytes)
+		_, _ = w.Write(resBytes)
 	}
 
 	handleVersion := func(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +167,7 @@ func New(
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
 		} else {
-			w.Write(resBytes)
+			_, _ = w.Write(resBytes)
 		}
 	}
 

@@ -79,7 +79,7 @@ func TestJMESPathMutation(t *testing.T) {
 	}
 
 	ogObj := gabs.New()
-	ogObj.Set("is this", "foo", "original", "content")
+	_, _ = ogObj.Set("is this", "foo", "original", "content")
 	ogExp := ogObj.String()
 
 	msgIn := message.QuickBatch(make([][]byte, 1))

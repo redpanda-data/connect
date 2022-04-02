@@ -127,7 +127,7 @@ func (r *RedisStreams) Write(msg *message.Batch) error {
 
 	partToMap := func(p *message.Part) map[string]interface{} {
 		values := map[string]interface{}{}
-		r.metaFilter.Iter(p, func(k, v string) error {
+		_ = r.metaFilter.Iter(p, func(k, v string) error {
 			values[k] = v
 			return nil
 		})

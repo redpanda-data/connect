@@ -179,7 +179,7 @@ func (m *memoryCache) getShard(key string) *shard {
 		return m.shards[0]
 	}
 	h := xxhash.New64()
-	h.WriteString(key)
+	_, _ = h.WriteString(key)
 	return m.shards[h.Sum64()%uint64(len(m.shards))]
 }
 

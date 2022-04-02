@@ -68,7 +68,7 @@ func (h *jsonAPIMetrics) HandlerFunc() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(jBytes)
+		_, _ = w.Write(jBytes)
 	}
 }
 

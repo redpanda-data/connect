@@ -60,7 +60,7 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		outConf := writer.NewKafkaConfig()
 		outConf.TargetVersion = "2.1.0"
@@ -360,7 +360,7 @@ func TestIntegrationSaramaOld(t *testing.T) {
 	t.Cleanup(func() {
 		require.NoError(t, pool.Purge(zkResource))
 	})
-	zkResource.Expire(900)
+	_ = zkResource.Expire(900)
 	zkAddr := fmt.Sprintf("%v:2181", zkResource.Container.NetworkSettings.IPAddress)
 
 	kafkaPort, err := integration.GetFreePort()
@@ -390,7 +390,7 @@ func TestIntegrationSaramaOld(t *testing.T) {
 	t.Cleanup(func() {
 		require.NoError(t, pool.Purge(kafkaResource))
 	})
-	kafkaResource.Expire(900)
+	_ = kafkaResource.Expire(900)
 
 	address := fmt.Sprintf("%v:%v", hostIP, kafkaPortStr)
 

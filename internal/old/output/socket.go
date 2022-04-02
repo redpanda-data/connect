@@ -17,7 +17,6 @@ func init() {
 		constructor: fromSimpleConstructor(NewSocket),
 		Summary: `
 Connects to a (tcp/udp/unix) server and sends a continuous stream of data, dividing messages according to the specified codec.`,
-		Description: multipartCodecDoc,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("network", "The network type to connect as.").HasOptions(
 				"unix", "tcp", "udp",

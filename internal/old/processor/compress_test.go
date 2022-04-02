@@ -51,7 +51,7 @@ func TestCompressGZIP(t *testing.T) {
 		var buf bytes.Buffer
 
 		zw := gzip.NewWriter(&buf)
-		zw.Write(input[i])
+		_, _ = zw.Write(input[i])
 		zw.Close()
 
 		exp = append(exp, buf.Bytes())
@@ -148,7 +148,7 @@ func TestCompressFlate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		zw.Write(input[i])
+		_, _ = zw.Write(input[i])
 		zw.Close()
 
 		exp = append(exp, buf.Bytes())

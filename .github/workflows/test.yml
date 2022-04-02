@@ -10,9 +10,11 @@ jobs:
   cross-build:
     if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
     strategy:
+      fail-fast: false
       matrix:
         go-version: [1.17.x, 1.18.x]
-    runs-on: ubuntu-latest
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     env:
       CGO_ENABLED: 0
     steps:

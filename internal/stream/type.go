@@ -50,15 +50,15 @@ func New(conf Config, mgr bundle.NewManagement, opts ...func(*Type)) (*Type, err
 		if !t.inputLayer.Connected() {
 			connected = false
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte("input not connected\n"))
+			_, _ = w.Write([]byte("input not connected\n"))
 		}
 		if !t.outputLayer.Connected() {
 			connected = false
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte("output not connected\n"))
+			_, _ = w.Write([]byte("output not connected\n"))
 		}
 		if connected {
-			w.Write([]byte("OK"))
+			_, _ = w.Write([]byte("OK"))
 		}
 	}
 	t.manager.RegisterEndpoint(
@@ -314,7 +314,7 @@ func (t *Type) Stop(timeout time.Duration) error {
 		t.manager.Logger().Errorln("Failed to stop stream gracefully within target time.")
 
 		dumpBuf := bytes.NewBuffer(nil)
-		pprof.Lookup("goroutine").WriteTo(dumpBuf, 1)
+		_ = pprof.Lookup("goroutine").WriteTo(dumpBuf, 1)
 
 		t.manager.Logger().Debugln(dumpBuf.String())
 	} else {

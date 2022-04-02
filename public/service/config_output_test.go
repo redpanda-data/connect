@@ -40,7 +40,7 @@ a:
 
 	resultBytes, err := os.ReadFile(testFile)
 	require.NoError(t, err)
-	assert.Equal(t, "first line\nsecond line\nthird line\n\n", string(resultBytes))
+	assert.Equal(t, "first line\nsecond line\nthird line\n", string(resultBytes))
 }
 
 func TestConfigOutputList(t *testing.T) {

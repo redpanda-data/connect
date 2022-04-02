@@ -235,7 +235,7 @@ func (p *pulsarReader) Read(ctx context.Context) (*service.Message, service.AckF
 			err = component.ErrTimeout
 		} else {
 			p.log.Errorf("Lost connection due to: %v\n", err)
-			p.disconnect(ctx)
+			_ = p.disconnect(ctx)
 			err = component.ErrNotConnected
 		}
 		return nil, nil, err

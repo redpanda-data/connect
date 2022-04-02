@@ -209,7 +209,7 @@ func TestFileCaseInputs(t *testing.T) {
 	procConf := processor.NewConfig()
 
 	procConf.Type = processor.TypeBloblang
-	procConf.Bloblang = processor.BloblangConfig(`root = "hello world " + content().string()`)
+	procConf.Bloblang = `root = "hello world " + content().string()`
 	proc, err := processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
@@ -268,7 +268,7 @@ func TestFileCaseConditions(t *testing.T) {
 	procConf := processor.NewConfig()
 
 	procConf.Type = processor.TypeBloblang
-	procConf.Bloblang = processor.BloblangConfig(`root = content().uppercase()`)
+	procConf.Bloblang = `root = content().uppercase()`
 	proc, err := processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 

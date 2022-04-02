@@ -164,7 +164,7 @@ func isValidSQSAttribute(k, v string) bool {
 func (a *sqsWriter) getSQSAttributes(msg *message.Batch, i int) sqsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
-	a.metaFilter.Iter(p, func(k, v string) error {
+	_ = a.metaFilter.Iter(p, func(k, v string) error {
 		if isValidSQSAttribute(k, v) {
 			keys = append(keys, k)
 		} else {

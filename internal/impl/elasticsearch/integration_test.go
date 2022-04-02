@@ -77,7 +77,7 @@ func TestIntegrationElasticsearch(t *testing.T) {
 		t.Fatalf("Could not connect to docker resource: %s", err)
 	}
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 
 	template := `
 output:
@@ -157,7 +157,7 @@ func BenchmarkIntegrationElasticsearch(b *testing.B) {
 		b.Fatalf("Could not connect to docker resource: %s", err)
 	}
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 
 	template := `
 output:

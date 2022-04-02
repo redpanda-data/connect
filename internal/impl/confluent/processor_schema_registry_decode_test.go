@@ -77,7 +77,7 @@ func runSchemaRegistryServer(t *testing.T, fn func(path string) ([]byte, error))
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
-		w.Write(b)
+		_, _ = w.Write(b)
 	}))
 	t.Cleanup(ts.Close)
 

@@ -24,7 +24,7 @@ import (
 )
 
 func init() {
-	bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
 		g, err := newGCPCloudStorageOutput(nm, c.GCPCloudStorage, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
@@ -121,6 +121,9 @@ output:
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPCloudStorageConfig()),
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 // gcpCloudStorageOutput is a benthos writer.Type implementation that writes

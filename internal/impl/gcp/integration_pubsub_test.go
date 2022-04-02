@@ -48,7 +48,7 @@ func TestIntegrationGCPPubSub(t *testing.T) {
 	require.NoError(t, os.Setenv("PUBSUB_EMULATOR_HOST", fmt.Sprintf("localhost:%v", resource.GetPort("8432/tcp"))))
 	require.NotEqual(t, "localhost:", os.Getenv("PUBSUB_EMULATOR_HOST"))
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

@@ -88,7 +88,7 @@ func TestIntegrationAzure(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 
 	blobServicePort := resource.GetPort("10000/tcp")
 	origDefaultClientTransport := http.DefaultClient.Transport

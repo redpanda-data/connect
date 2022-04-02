@@ -43,7 +43,7 @@ func TestSocketServerBasic(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
 
@@ -109,7 +109,7 @@ func TestSocketServerRetries(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
 
@@ -179,7 +179,7 @@ func TestSocketServerWriteClosed(t *testing.T) {
 	conn, err := net.Dial("unix", conf.SocketServer.Address)
 	require.NoError(t, err)
 
-	conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+	_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 	rdr.CloseAsync()
 	assert.NoError(t, rdr.WaitForClose(time.Second*3))
@@ -219,7 +219,7 @@ func TestSocketServerRecon(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
 
@@ -292,7 +292,7 @@ func TestSocketServerMpart(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
 
@@ -358,7 +358,7 @@ func TestSocketServerMpartCDelim(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, cerr := conn.Write([]byte("foo@"))
 		require.NoError(t, cerr)
 
@@ -424,7 +424,7 @@ func TestSocketServerMpartSdown(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
@@ -490,7 +490,7 @@ func TestSocketUDPServerBasic(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
@@ -558,7 +558,7 @@ func TestSocketUDPServerRetries(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
@@ -630,7 +630,7 @@ func TestUDPServerWriteToClosed(t *testing.T) {
 	conn, err := net.Dial("udp", addr.String())
 	require.NoError(t, err)
 
-	conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+	_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 	rdr.CloseAsync()
 	assert.NoError(t, rdr.WaitForClose(time.Second*3))
@@ -668,7 +668,7 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
 
@@ -741,7 +741,7 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		_, cerr := conn.Write([]byte("foo@"))
 		require.NoError(t, cerr)
@@ -817,7 +817,7 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
@@ -893,7 +893,7 @@ func TestTCPSocketServerBasic(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
@@ -961,7 +961,7 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
@@ -1035,7 +1035,7 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)
@@ -1102,7 +1102,7 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		_, cerr := conn.Write([]byte("foo@"))
 		require.NoError(t, cerr)
@@ -1169,7 +1169,7 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		_, cerr := conn.Write([]byte("foo\n"))
 		require.NoError(t, cerr)

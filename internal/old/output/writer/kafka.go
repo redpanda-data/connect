@@ -236,7 +236,7 @@ func strToPartitioner(str string) (sarama.PartitionerConstructor, error) {
 func (k *Kafka) buildSystemHeaders(part *message.Part) []sarama.RecordHeader {
 	if k.version.IsAtLeast(sarama.V0_11_0_0) {
 		out := []sarama.RecordHeader{}
-		k.metaFilter.Iter(part, func(k, v string) error {
+		_ = k.metaFilter.Iter(part, func(k, v string) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
 				Value: []byte(v),

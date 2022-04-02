@@ -59,7 +59,7 @@ func TestIntegrationS3Cache(t *testing.T) {
 
 	servicePort := resource.GetPort("4566/tcp")
 
-	resource.Expire(900)
+	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		return createBucket(context.Background(), servicePort, "probe-bucket")
 	}))

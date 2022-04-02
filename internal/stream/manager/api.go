@@ -134,7 +134,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 		var resBytes []byte
 		if resBytes, serverErr = json.Marshal(infos); serverErr == nil {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write(resBytes)
+			_, _ = w.Write(resBytes)
 		}
 		return
 	case "POST":
@@ -169,7 +169,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 				LintErrs: lints,
 			})
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write(errBytes)
+			_, _ = w.Write(errBytes)
 			return
 		}
 	}
@@ -356,7 +356,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 				LintErrs: lints,
 			})
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write(errBytes)
+			_, _ = w.Write(errBytes)
 			return
 		}
 		serverErr = m.Create(id, conf)
@@ -381,7 +381,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			}
 
 			w.Header().Set("Content-Type", "application/json")
-			w.Write(bodyBytes)
+			_, _ = w.Write(bodyBytes)
 		}
 	case "PUT":
 		if conf, lints, requestErr = readConfig(); requestErr != nil {
@@ -394,7 +394,7 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 				LintErrs: lints,
 			})
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write(errBytes)
+			_, _ = w.Write(errBytes)
 			return
 		}
 		serverErr = m.Update(id, conf, tmpTimeout)
@@ -535,7 +535,7 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 			LintErrs: lints,
 		})
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write(errBytes)
+		_, _ = w.Write(errBytes)
 		return
 	}
 
@@ -596,7 +596,7 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 			}
 
 			w.Header().Set("Content-Type", "application/json")
-			w.Write(jBytes)
+			_, _ = w.Write(jBytes)
 		}
 	default:
 		requestErr = fmt.Errorf("verb not supported: %v", r.Method)
@@ -622,7 +622,7 @@ func (m *Type) HandleStreamReady(w http.ResponseWriter, r *http.Request) {
 	m.lock.Unlock()
 
 	if len(notReady) == 0 {
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 		return
 	}
 
