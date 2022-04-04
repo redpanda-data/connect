@@ -70,7 +70,7 @@ func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc
 	return func(t *testing.T, driver, dsn, table string) {
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
-			if driver == "postgres" {
+			if driver == "postgres" || driver == "clickhouse" {
 				valuesStr = `($1, $2, $3)`
 			}
 			insertConf := fmt.Sprintf(`
@@ -82,7 +82,7 @@ exec_only: true
 `, driver, dsn, table)
 
 			placeholderStr := "?"
-			if driver == "postgres" {
+			if driver == "postgres" || driver == "clickhouse" {
 				placeholderStr = "$1"
 			}
 			queryConf := fmt.Sprintf(`
@@ -117,7 +117,7 @@ func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, 
 	return func(t *testing.T, driver, dsn, table string) {
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
-			if driver == "postgres" {
+			if driver == "postgres" || driver == "clickhouse" {
 				valuesStr = `($1, $2, $3)`
 			}
 			insertConf := fmt.Sprintf(`
@@ -128,7 +128,7 @@ args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `, driver, dsn, table)
 
 			placeholderStr := "?"
-			if driver == "postgres" {
+			if driver == "postgres" || driver == "clickhouse" {
 				placeholderStr = "$1"
 			}
 			queryConf := fmt.Sprintf(`
@@ -429,7 +429,7 @@ func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
 		)
 
 		valuesStr := `(?, ?, ?)`
-		if driver == "postgres" {
+		if driver == "postgres" || driver == "clickhouse" {
 			valuesStr = `($1, $2, $3)`
 		}
 
@@ -535,12 +535,67 @@ func TestIntegration(t *testing.T) {
 	}
 
 	t.Run("clickhouse", clickhouseIntegration)
+	t.Run("clickhouse_old", clickhouseOldIntegration)
 	t.Run("postgres", postgresIntegration)
 	t.Run("mysql", mySQLIntegration)
 	t.Run("mssql", msSQLIntegration)
 }
 
 func clickhouseIntegration(t *testing.T) {
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	if err != nil {
+		t.Skipf("Could not connect to docker: %s", err)
+	}
+	pool.MaxWait = 30 * time.Second
+
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository:   "clickhouse/clickhouse-server",
+		ExposedPorts: []string{"9000/tcp"},
+	})
+	require.NoError(t, err)
+
+	var db *sql.DB
+	t.Cleanup(func() {
+		if err = pool.Purge(resource); err != nil {
+			t.Logf("Failed to clean up docker resource: %v", err)
+		}
+		if db != nil {
+			db.Close()
+		}
+	})
+
+	createTable := func(name string) error {
+		_, err := db.Exec(fmt.Sprintf(`create table %v (
+  foo String,
+  bar Int64,
+  baz String
+) engine=Memory;`, name))
+		return err
+	}
+
+	dsn := fmt.Sprintf("clickhouse://localhost:%v/", resource.GetPort("9000/tcp"))
+	require.NoError(t, pool.Retry(func() error {
+		db, err = sql.Open("clickhouse", dsn)
+		if err != nil {
+			return err
+		}
+		if err = db.Ping(); err != nil {
+			db.Close()
+			db = nil
+			return err
+		}
+		if err := createTable("footable"); err != nil {
+			return err
+		}
+		return nil
+	}))
+
+	testSuite(t, "clickhouse", dsn, createTable)
+}
+
+func clickhouseOldIntegration(t *testing.T) {
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

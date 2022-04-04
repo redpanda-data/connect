@@ -136,7 +136,7 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service
 	}
 
 	s.builder = squirrel.Insert(tableStr).Columns(columns...)
-	if driverStr == "postgres" {
+	if driverStr == "postgres" || driverStr == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
 	}
 
@@ -161,7 +161,7 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service
 		return nil, err
 	}
 
-	if s.db, err = sql.Open(driverStr, dsnStr); err != nil {
+	if s.db, err = sqlOpenWithReworks(logger, driverStr, dsnStr); err != nil {
 		return nil, err
 	}
 

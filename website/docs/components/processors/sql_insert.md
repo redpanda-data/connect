@@ -109,17 +109,16 @@ A Data Source Name to identify the target database.
 
 #### Drivers
 
-The following is a list of supported drivers and their respective DSN formats:
+The following is a list of supported drivers, their placeholder style, and their respective DSN formats:
 
 | Driver | Data Source Name Format |
 |---|---|
-| `clickhouse` | [`tcp://[netloc][:port][?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn)
+| `clickhouse` | [`clickhouse://[username[:password]@][netloc][:port]/dbname[?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn) |
 | `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |
 | `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |
 | `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |
 
-Please note that the `postgres` driver enforces SSL by default, you
-can override this with the parameter `sslmode=disable` if required.
+Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
 
 
 Type: `string`  
@@ -127,7 +126,7 @@ Type: `string`
 ```yml
 # Examples
 
-dsn: tcp://host1:9000?username=user&password=qwerty&database=clicks&read_timeout=10&write_timeout=20&alt_hosts=host2:9000,host3:9000
+dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60
 
 dsn: foouser:foopassword@tcp(localhost:3306)/foodb
 

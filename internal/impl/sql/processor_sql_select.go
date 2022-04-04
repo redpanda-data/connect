@@ -31,7 +31,7 @@ If the query fails to execute then the message will remain unchanged and the err
 			Example([]string{"*"}).
 			Example([]string{"foo", "bar", "baz"})).
 		Field(service.NewStringField("where").
-			Description("An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks, and will automatically be converted to dollar syntax when the postgres driver is used.").
+			Description("An optional where clause to add. Placeholder arguments are populated with the `args_mapping` field. Placeholders should always be question marks, and will automatically be converted to dollar syntax when the postgres or clickhouse drivers are used.").
 			Example("meow = ? and woof = ?").
 			Example("user_id = ?").
 			Optional()).
@@ -145,7 +145,7 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service
 	}
 
 	s.builder = squirrel.Select(columns...).From(tableStr)
-	if driverStr == "postgres" {
+	if driverStr == "postgres" || driverStr == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
 	}
 
@@ -170,7 +170,7 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service
 		return nil, err
 	}
 
-	if s.db, err = sql.Open(driverStr, dsnStr); err != nil {
+	if s.db, err = sqlOpenWithReworks(logger, driverStr, dsnStr); err != nil {
 		return nil, err
 	}
 	connSettings.apply(s.db)

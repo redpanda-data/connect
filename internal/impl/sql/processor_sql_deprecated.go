@@ -19,8 +19,7 @@ If the query fails to execute then the message will remain unchanged and the err
 For basic inserts or select queries use use either the ` + "[`sql_insert`](/docs/components/processors/sql_insert)" + ` or the ` + "[`sql_select`](/docs/components/processors/sql_select)" + ` processor. For more complex queries use the ` + "[`sql_raw`](/docs/components/processors/sql_raw)" + ` processor.`).
 		Field(driverField).
 		Field(service.NewStringField("data_source_name")).
-		Field(service.NewStringField("query").
-			Description("The query to execute.").
+		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBoolField("unsafe_dynamic_query").
 			Description("Whether to enable [interpolation functions](/docs/configuration/interpolation/#bloblang-queries) in the query. Great care should be made to ensure your queries are defended against injection attacks.").
@@ -90,13 +89,9 @@ func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 		}
 	}
 
-	_, useTxStmt := map[string]struct{}{
-		"clickhouse": {},
-	}[driverStr]
-
 	connSettings, err := connSettingsFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, useTxStmt, argsMapping, connSettings)
+	return newSQLRawProcessor(logger, driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
 }

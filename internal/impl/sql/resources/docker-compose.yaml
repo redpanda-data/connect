@@ -1,0 +1,9 @@
+version: '3.3'
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server
+    volumes:
+      - ./clickhouse_init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - 9000:9000

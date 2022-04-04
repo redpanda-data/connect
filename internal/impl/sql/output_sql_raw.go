@@ -19,8 +19,7 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 		Description(``).
 		Field(driverField).
 		Field(dsnField).
-		Field(service.NewStringField("query").
-			Description("The query to execute.").
+		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
@@ -86,7 +85,6 @@ type sqlRawOutput struct {
 
 	queryStatic string
 
-	useTxStmt   bool
 	argsMapping *bloblang.Executor
 
 	connSettings connSettings
@@ -118,21 +116,16 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, logger *service.Logge
 		}
 	}
 
-	_, useTxStmt := map[string]struct{}{
-		"clickhouse": {},
-	}[driverStr]
-
 	connSettings, err := connSettingsFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawOutput(logger, driverStr, dsnStr, useTxStmt, queryStatic, argsMapping, connSettings), nil
+	return newSQLRawOutput(logger, driverStr, dsnStr, queryStatic, argsMapping, connSettings), nil
 }
 
 func newSQLRawOutput(
 	logger *service.Logger,
 	driverStr, dsnStr string,
-	useTxStmt bool,
 	queryStatic string,
 	argsMapping *bloblang.Executor,
 	connSettings connSettings,
@@ -142,7 +135,6 @@ func newSQLRawOutput(
 		shutSig:      shutdown.NewSignaller(),
 		driver:       driverStr,
 		dsn:          dsnStr,
-		useTxStmt:    useTxStmt,
 		queryStatic:  queryStatic,
 		argsMapping:  argsMapping,
 		connSettings: connSettings,
@@ -158,7 +150,7 @@ func (s *sqlRawOutput) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if s.db, err = sql.Open(s.driver, s.dsn); err != nil {
+	if s.db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
 		return err
 	}
 
@@ -180,19 +172,6 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 	s.dbMut.RLock()
 	defer s.dbMut.RUnlock()
 
-	var tx *sql.Tx
-	var stmt *sql.Stmt
-	if s.useTxStmt {
-		var err error
-		if tx, err = s.db.Begin(); err != nil {
-			return err
-		}
-		if stmt, err = tx.Prepare(s.queryStatic); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-	}
-
 	for i := range batch {
 		var args []interface{}
 		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
@@ -210,20 +189,11 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 			return fmt.Errorf("mapping returned non-array result: %T", iargs)
 		}
 
-		if tx == nil {
-			if _, err = s.db.ExecContext(ctx, s.queryStatic, args...); err != nil {
-				return err
-			}
-		} else if _, err = stmt.Exec(args...); err != nil {
+		if _, err = s.db.ExecContext(ctx, s.queryStatic, args...); err != nil {
 			return err
 		}
 	}
-
-	var err error
-	if tx != nil {
-		err = tx.Commit()
-	}
-	return err
+	return nil
 }
 
 func (s *sqlRawOutput) Close(ctx context.Context) error {

@@ -16,8 +16,7 @@ func sqlDeprecatedOutputConfig() *service.ConfigSpec {
 For basic inserts use the ` + "[`sql_insert`](/docs/components/outputs/sql)" + ` output. For more complex queries use the ` + "[`sql_raw`](/docs/components/outputs/sql_raw)" + ` output.`).
 		Field(driverField).
 		Field(service.NewStringField("data_source_name")).
-		Field(service.NewStringField("query").
-			Description("The query to execute.").
+		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
@@ -75,13 +74,9 @@ func newSQLDeprecatedOutputFromConfig(conf *service.ParsedConfig, logger *servic
 		}
 	}
 
-	_, useTxStmt := map[string]struct{}{
-		"clickhouse": {},
-	}[driverStr]
-
 	connSettings, err := connSettingsFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawOutput(logger, driverStr, dsnStr, useTxStmt, queryStatic, argsMapping, connSettings), nil
+	return newSQLRawOutput(logger, driverStr, dsnStr, queryStatic, argsMapping, connSettings), nil
 }

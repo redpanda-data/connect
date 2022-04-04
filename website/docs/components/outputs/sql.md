@@ -94,7 +94,14 @@ Type: `string`
 
 ### `query`
 
-The query to execute.
+The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on). The style to use is outlined in this table:
+
+| Driver | Placeholder Style |
+|---|---|
+| `clickhouse` | Dollar sign |
+| `mysql` | Question mark |
+| `postgres` | Dollar sign |
+| `mssql` | Question mark |
 
 
 Type: `string`  

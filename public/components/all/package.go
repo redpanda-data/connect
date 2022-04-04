@@ -32,7 +32,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/template"
 
 	// Import all (supported) sql drivers
-	_ "github.com/ClickHouse/clickhouse-go"
+	_ "github.com/ClickHouse/clickhouse-go/v2"
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"

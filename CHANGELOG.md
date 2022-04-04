@@ -32,6 +32,7 @@ This is a major version release, for more information and guidance on how to mig
 - The field `pipeline.threads` field now defaults to `-1`, which automatically matches the host machine CPU count.
 - Old style interpolation functions (`${!json:foo,1}`) are removed in favour of the newer Bloblang syntax (`${! json("foo") }`).
 - The Bloblang functions `meta`, `root_meta`, `error` and `env` now return `null` when the target value does not exist.
+- The `clickhouse` SQL driver Data Source Name format parameters have been changed due to a client library update. This also means placeholders in `sql_raw` components should use dollar syntax.
 - Docker images no longer come with a default config that contains generated environment variables, use `-s` flag arguments instead.
 - All cache components have had their retry/backoff fields modified for consistency.
 - All cache components that support a general default TTL now have a field `default_ttl` with a duration string, replacing the previous field.
