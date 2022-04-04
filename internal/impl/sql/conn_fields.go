@@ -107,7 +107,7 @@ func connSettingsFromParsed(conf *service.ParsedConfig) (c connSettings, err err
 }
 
 func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, error) {
-	if driver == "clickhouse" && strings.HasPrefix("tcp", dsn) {
+	if driver == "clickhouse" && strings.HasPrefix(dsn, "tcp") {
 		u, err := url.Parse(dsn)
 		if err != nil {
 			return nil, err
@@ -115,10 +115,9 @@ func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, er
 
 		u.Scheme = "clickhouse"
 
-		u.Path = u.Query().Get("database")
-		u.Query().Del("database")
-
-		if username, password := u.Query().Get("username"), u.Query().Get("password"); username != "" {
+		uq := u.Query()
+		u.Path = uq.Get("database")
+		if username, password := uq.Get("username"), uq.Get("password"); username != "" {
 			if password != "" {
 				u.User = url.User(username)
 			} else {
@@ -126,7 +125,13 @@ func sqlOpenWithReworks(logger *service.Logger, driver, dsn string) (*sql.DB, er
 			}
 		}
 
+		uq.Del("database")
+		uq.Del("username")
+		uq.Del("password")
+
+		u.RawQuery = uq.Encode()
 		newDSN := u.String()
+
 		logger.Warnf("Detected old-style Clickhouse Data Source Name: '%v', replacing with new style: '%v'", dsn, newDSN)
 		dsn = newDSN
 	}
