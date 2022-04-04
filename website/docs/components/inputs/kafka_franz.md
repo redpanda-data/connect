@@ -36,9 +36,9 @@ input:
   label: ""
   kafka_franz:
     seed_brokers: []
+    regex_pattern: false
     topics: []
     consumer_group: ""
-    regex_pattern: 0
 ```
 
 </TabItem>
@@ -50,10 +50,10 @@ input:
   label: ""
   kafka_franz:
     seed_brokers: []
+    regex_pattern: false
     topics: []
     consumer_group: ""
     checkpoint_limit: 1024
-    regex_pattern: 0
     tls:
       enabled: false
       skip_cert_verify: false
@@ -112,6 +112,14 @@ seed_brokers:
 seed_brokers:
   - foo:9092,bar:9092
 ```
+
+### `regex_pattern`
+
+An indicator that makes franz use regex pattern in topics.
+
+
+Type: `int`  
+Default: `false`  
 
 ### `topics`
 
