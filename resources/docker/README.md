@@ -1,21 +1,22 @@
 Benthos Docker
 ==============
 
-This is a multi stage Dockerfile that builds Benthos and then copies it to a
-scratch image. The image comes with a config that allows you to configure simple
-bridges using [environment variables](../../config/env/README.md) like this:
+This directory contains two Dockerfile definitions, one is a pure Go image based on [`busybox`][docker.busybox] (`Dockerfile`), the other (`Dockerfile.cgo`) is a CGO enabled build based on [`debian`][docker.debian].
 
-``` sh
-docker run \
-	-e "INPUT_TYPE=kafka_balanced" \
-	-e "INPUT_KAFKA_ADDRESSES=foo:6379" \
-	-e "OUTPUT_TYPE=nats" \
-	-e "OUTPUT_NATS_URLS=nats://bar:4222,nats://baz:4222" \
-	benthos
+The image has a [default config][default.config] but it's not particularly useful, so you'll either want to use the `-s` cli flag to define config values or copy a config into the path `/benthos.yaml` as a volume.
+
+```shell
+# Using a config file
+docker run --rm -v /path/to/your/config.yaml:/benthos.yaml jeffail/benthos
+
+# Using a series of -s flags
+docker run --rm -p 4195:4195 jeffail/benthos \
+  -s "input.type=http_server" \
+  -s "output.type=kafka" \
+  -s "output.kafka.addresses=kafka-server:9092" \
+  -s "output.kafka.topic=benthos_topic"
 ```
 
-Alternatively, you can run the image using a custom config file:
-
-``` sh
-docker run --rm -v /path/to/your/config.yaml:/benthos.yaml benthos
-```
+[docker.busybox]: https://hub.docker.com/_/busybox/
+[docker.debian]: https://hub.docker.com/_/debian
+[default.config]: ../config/docker.yaml

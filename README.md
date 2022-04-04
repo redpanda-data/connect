@@ -131,11 +131,17 @@ curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/insta
 
 And then run it with `make lint`.
 
-### Plugins
+## Plugins
 
 It's pretty easy to write your own custom plugins for Benthos in Go, for information check out [the API docs][godoc-url], and for inspiration there's an [example repo][plugin-repo] demonstrating a variety of plugin implementations.
 
-### Docker Builds
+## CGO Builds
+
+By default when cgo is enabled all plugins that require linking to external libraries are compiled, this includes components such as the `zmq4` input and output.
+
+If you attempt a build and these dependencies are not present you'll see error messages such as `ld: library not found for -lzmq`. If you wish to build without these dependencies then set `CGO_ENABLED=0` and you'll create a pure Go build instead.
+
+## Docker Builds
 
 There's a multi-stage `Dockerfile` for creating a Benthos docker image which results in a minimal image from scratch. You can build it with:
 
