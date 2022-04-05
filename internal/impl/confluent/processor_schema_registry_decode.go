@@ -87,7 +87,7 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryDecoder(urlStr, tlsConf, false, logger)
+	return newSchemaRegistryDecoder(urlStr, tlsConf, true, logger)
 }
 
 func newSchemaRegistryDecoder(urlStr string, tlsConf *tls.Config, avroRawJSON bool, logger *service.Logger) (*schemaRegistryDecoder, error) {
