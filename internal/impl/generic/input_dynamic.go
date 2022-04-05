@@ -75,9 +75,9 @@ func newDynamicInput(conf oinput.Config, mgr bundle.NewManagement, pipelines ...
 			var confBytes []byte
 			var node yaml.Node
 			if err := node.Encode(uConf); err == nil {
-				if err := docs.FieldInput("input", "").SanitiseYAML(&node, docs.SanitiseConfig{
-					RemoveTypeField: true,
-				}); err == nil {
+				sanitConf := docs.NewSanitiseConfig()
+				sanitConf.RemoveTypeField = true
+				if err := docs.FieldInput("input", "").SanitiseYAML(&node, sanitConf); err == nil {
 					confBytes, _ = yaml.Marshal(node)
 				}
 			}

@@ -21,6 +21,13 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+func testSanitConf() docs.SanitiseConfig {
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	sanitConf.RemoveDeprecated = true
+	return sanitConf
+}
+
 func TestCachePluginWithConfig(t *testing.T) {
 	type testConfig struct {
 		A int `yaml:"a"`
@@ -51,10 +58,7 @@ test_cache_plugin_with_config:
 	var cacheNode yaml.Node
 	require.NoError(t, cacheNode.Encode(cacheConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeCache, &cacheNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeCache, &cacheNode, testSanitConf()))
 
 	cacheConfOutBytes, err := yaml.Marshal(cacheNode)
 	require.NoError(t, err)
@@ -91,10 +95,7 @@ test_cache_plugin_without_config: null
 	var cacheNode yaml.Node
 	require.NoError(t, cacheNode.Encode(cacheConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeCache, &cacheNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeCache, &cacheNode, testSanitConf()))
 
 	cacheConfOutBytes, err := yaml.Marshal(cacheNode)
 	require.NoError(t, err)
@@ -139,10 +140,7 @@ test_input_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeInput, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeInput, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -179,10 +177,7 @@ test_input_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeInput, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeInput, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -227,10 +222,7 @@ test_output_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -267,10 +259,7 @@ test_output_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -318,10 +307,7 @@ test_batch_output_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -359,10 +345,7 @@ test_batch_output_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeOutput, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -407,10 +390,7 @@ test_processor_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -447,10 +427,7 @@ test_processor_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -495,10 +472,7 @@ test_batch_processor_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -535,10 +509,7 @@ test_batch_processor_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeProcessor, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -583,10 +554,7 @@ test_rate_limit_plugin_with_config:
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeRateLimit, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeRateLimit, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)
@@ -623,10 +591,7 @@ test_rate_limit_plugin_without_config: null
 	var outNode yaml.Node
 	require.NoError(t, outNode.Encode(inConf))
 
-	require.NoError(t, docs.SanitiseYAML(docs.TypeRateLimit, &outNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: true,
-	}))
+	require.NoError(t, docs.SanitiseYAML(docs.TypeRateLimit, &outNode, testSanitConf()))
 
 	outConfOutBytes, err := yaml.Marshal(outNode)
 	require.NoError(t, err)

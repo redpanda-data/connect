@@ -77,9 +77,9 @@ func newDynamicOutput(conf ooutput.Config, mgr bundle.NewManagement) (output.Str
 			var confBytes []byte
 			var node yaml.Node
 			if err := node.Encode(uConf); err == nil {
-				if err := docs.FieldOutput("output", "").SanitiseYAML(&node, docs.SanitiseConfig{
-					RemoveTypeField: true,
-				}); err == nil {
+				sanitConf := docs.NewSanitiseConfig()
+				sanitConf.RemoveTypeField = true
+				if err := docs.FieldOutput("output", "").SanitiseYAML(&node, sanitConf); err == nil {
 					confBytes, _ = yaml.Marshal(node)
 				}
 			}

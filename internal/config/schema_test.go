@@ -318,9 +318,10 @@ func getGenericConf(t *testing.T, cType docs.Type, c interface{}) map[string]int
 
 	var newNode yaml.Node
 	require.NoError(t, newNode.Encode(c))
-	require.NoError(t, docs.SanitiseYAML(cType, &newNode, docs.SanitiseConfig{
-		RemoveTypeField: true,
-	}))
+
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	require.NoError(t, docs.SanitiseYAML(cType, &newNode, sanitConf))
 
 	var gen map[string]interface{}
 	require.NoError(t, newNode.Decode(&gen))

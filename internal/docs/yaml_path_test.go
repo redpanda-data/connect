@@ -8,9 +8,18 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
+
+var configSpec = docs.FieldSpecs{
+	docs.FieldInput("input", ""),
+	docs.FieldBuffer("buffer", ""),
+	docs.FieldObject("pipeline", "").WithChildren(
+		docs.FieldProcessor("processors", "").Array(),
+	),
+	docs.FieldOutput("output", ""),
+	docs.FieldCache("cache_resources", "").Array(),
+}
 
 func TestSetYAMLPath(t *testing.T) {
 	mockProv := docs.NewMappedDocsProvider()
@@ -57,6 +66,14 @@ func TestSetYAMLPath(t *testing.T) {
 		Type: docs.TypeProcessor,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("order", "").ArrayOfArrays(),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "switch",
+		Type: docs.TypeProcessor,
+		Config: docs.FieldComponent().Array().WithChildren(
+			docs.FieldString("check", ""),
+			docs.FieldProcessor("processors", "").Array(),
 		),
 	})
 
@@ -287,19 +304,132 @@ pipeline:
         order: [["baz"]]
 `,
 		},
+		{
+			name: "delete field",
+			input: `
+input:
+  kafka:
+    addresses: [ "foo", "bar" ]
+    topics: [ "baz" ]
+`,
+			path: "/input/kafka/addresses",
+			output: `
+input:
+  kafka:
+    topics: [ "baz" ]
+`,
+		},
+		{
+			name: "delete element",
+			input: `
+input:
+  kafka:
+    addresses: [ "foo", "bar" ]
+    topics: [ "baz" ]
+`,
+			path: "/input/kafka/addresses/1",
+			output: `
+input:
+  kafka:
+    addresses: [ "foo" ]
+    topics: [ "baz" ]
+`,
+		},
+		{
+			name: "delete input",
+			input: `
+input:
+  kafka:
+    addresses: [ "foo", "bar" ]
+    topics: [ "baz" ]
+`,
+			path: "/input/kafka",
+			output: `
+input: {}
+`,
+		},
+		{
+			name: "set switch case check",
+			input: `
+pipeline:
+  processors:
+  - switch:
+      - check: 'root = "foobar"'
+        processors:
+          - compress:
+              algorithm: meow1
+      - check: 'root = "foobar2"'
+        processors:
+          - compress:
+              algorithm: meow2
+          - compress:
+              algorithm: meow3
+`,
+			path:  "/pipeline/processors/0/switch/0/check",
+			value: "foobar3",
+			output: `
+pipeline:
+  processors:
+  - switch:
+      - check: 'foobar3'
+        processors:
+          - compress:
+              algorithm: meow1
+      - check: 'root = "foobar2"'
+        processors:
+          - compress:
+              algorithm: meow2
+          - compress:
+              algorithm: meow3
+`,
+		},
+		{
+			name: "set switch case processors",
+			input: `
+pipeline:
+  processors:
+  - switch:
+      - check: 'root = "foobar"'
+        processors:
+          - compress:
+              algorithm: meow1
+`,
+			path: "/pipeline/processors/0/switch/0/processors",
+			value: `
+- compress:
+    algorithm: meow2
+- compress:
+    algorithm: meow3
+`,
+			output: `
+pipeline:
+  processors:
+  - switch:
+      - check: 'root = "foobar"'
+        processors:
+          - compress:
+              algorithm: meow2
+          - compress:
+              algorithm: meow3
+`,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var input, value yaml.Node
+			input, value := &yaml.Node{}, &yaml.Node{}
 
-			require.NoError(t, yaml.Unmarshal([]byte(test.input), &input))
-			require.NoError(t, yaml.Unmarshal([]byte(test.value), &value))
+			require.NoError(t, yaml.Unmarshal([]byte(test.input), input))
+			if test.value != "" {
+				require.NoError(t, yaml.Unmarshal([]byte(test.value), value))
+			} else {
+				value = nil
+			}
 
 			path, err := gabs.JSONPointerToSlice(test.path)
 			require.NoError(t, err)
 
-			err = config.Spec().SetYAMLPath(mockProv, &input, &value, path...)
+			err = configSpec.SetYAMLPath(mockProv, input, value, path...)
 			if len(test.errContains) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
@@ -310,6 +440,125 @@ pipeline:
 				require.NoError(t, input.Decode(&iinput))
 				require.NoError(t, yaml.Unmarshal([]byte(test.output), &ioutput))
 				assert.Equal(t, ioutput, iinput)
+			}
+		})
+	}
+}
+
+func TestGetPathDocs(t *testing.T) {
+	mockProv := docs.NewMappedDocsProvider()
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "kafka",
+		Type: docs.TypeInput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("addresses", "").Array(),
+			docs.FieldString("topics", "").Array(),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "dynamic",
+		Type: docs.TypeInput,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldInput("inputs", "").Map(),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name: "workflow",
+		Type: docs.TypeProcessor,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("order", "").ArrayOfArrays(),
+		),
+	})
+	mockProv.RegisterDocs(docs.ComponentSpec{
+		Name:   "try",
+		Type:   docs.TypeProcessor,
+		Config: docs.FieldComponent().Array().HasType(docs.FieldTypeProcessor),
+	})
+
+	tests := []struct {
+		name        string
+		path        string
+		resName     string
+		resType     string
+		resKind     string
+		resChildren int
+		errContains string
+	}{
+		{
+			name:    "root input",
+			path:    "/input",
+			resName: "input",
+			resType: "input",
+			resKind: "scalar",
+		},
+		{
+			name:        "kafka input",
+			path:        "/input/kafka",
+			resName:     "",
+			resType:     "object",
+			resKind:     "scalar",
+			resChildren: 2,
+		},
+		{
+			name:    "kafka input addresses",
+			path:    "/input/kafka/addresses",
+			resName: "addresses",
+			resType: "string",
+			resKind: "array",
+		},
+		{
+			name:    "dynamic input inputs",
+			path:    "/input/dynamic/inputs",
+			resName: "inputs",
+			resType: "input",
+			resKind: "map",
+		},
+		{
+			name:    "dynamic input named child",
+			path:    "/input/dynamic/inputs/foo",
+			resName: "inputs",
+			resType: "input",
+			resKind: "scalar",
+		},
+		{
+			name:    "workflow 2D array outter",
+			path:    "/pipeline/processors/0/workflow/order",
+			resName: "order",
+			resType: "string",
+			resKind: "2darray",
+		},
+		{
+			name:    "workflow 2D array inner",
+			path:    "/pipeline/processors/0/workflow/order/1",
+			resName: "order",
+			resType: "string",
+			resKind: "array",
+		},
+		{
+			name:    "workflow 2D array element",
+			path:    "/pipeline/processors/0/workflow/order/1/3",
+			resName: "order",
+			resType: "string",
+			resKind: "scalar",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path, err := gabs.JSONPointerToSlice(test.path)
+			require.NoError(t, err)
+
+			docs, err := configSpec.GetDocsForPath(mockProv, path...)
+			if len(test.errContains) > 0 {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+
+				assert.Equal(t, test.resName, docs.Name)
+				assert.Equal(t, test.resType, string(docs.Type))
+				assert.Equal(t, test.resKind, string(docs.Kind))
+				assert.Equal(t, test.resChildren, len(docs.Children))
 			}
 		})
 	}
@@ -581,7 +830,7 @@ pipeline:
 
 			paths := map[string][]string{}
 
-			config.Spec().YAMLLabelsToPaths(mockProv, &input, paths, nil)
+			configSpec.YAMLLabelsToPaths(mockProv, &input, paths, nil)
 			assert.Equal(t, test.output, paths)
 		})
 	}

@@ -244,7 +244,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		if err != nil {
 			return confs, fmt.Errorf("failed to parse mock path '%v': %w", k, err)
 		}
-		if err = confSpec.SetYAMLPath(nil, root, &v, mockPathSlice...); err != nil {
+		if err = confSpec.SetYAMLPath(docs.DeprecatedProvider, root, &v, mockPathSlice...); err != nil {
 			return confs, fmt.Errorf("failed to set mock '%v': %w", k, err)
 		}
 		delete(remainingMocks, k)
@@ -252,13 +252,13 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 
 	labelsToPaths := map[string][]string{}
 	if len(remainingMocks) > 0 {
-		confSpec.YAMLLabelsToPaths(nil, root, labelsToPaths, nil)
+		confSpec.YAMLLabelsToPaths(docs.DeprecatedProvider, root, labelsToPaths, nil)
 		for k, v := range remainingMocks {
 			mockPathSlice, exists := labelsToPaths[k]
 			if !exists {
 				return confs, fmt.Errorf("mock for label '%v' could not be applied as the label was not found in the test target file, it is not currently possible to mock resources imported separate to the test file", k)
 			}
-			if err = confSpec.SetYAMLPath(nil, root, &v, mockPathSlice...); err != nil {
+			if err = confSpec.SetYAMLPath(docs.DeprecatedProvider, root, &v, mockPathSlice...); err != nil {
 				return confs, fmt.Errorf("failed to set mock '%v': %w", k, err)
 			}
 			delete(remainingMocks, k)
@@ -272,7 +272,7 @@ func (p *ProcessorsProvider) getConfs(jsonPtr string, environment map[string]str
 		}
 	} else {
 		if len(labelsToPaths) == 0 {
-			confSpec.YAMLLabelsToPaths(nil, root, labelsToPaths, nil)
+			confSpec.YAMLLabelsToPaths(docs.DeprecatedProvider, root, labelsToPaths, nil)
 		}
 		if pathSlice, exists = labelsToPaths[procPath]; !exists {
 			return confs, fmt.Errorf("target for label '%v' failed as the label was not found in the test target file, it is not currently possible to target resources imported separate to the test file", procPath)

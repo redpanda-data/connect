@@ -104,10 +104,6 @@ func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 // component and returns either the inferred type name or an error if one cannot
 // be inferred.
 func GetInferenceCandidateFromYAML(docProv Provider, t Type, node *yaml.Node) (string, ComponentSpec, error) {
-	if docProv == nil {
-		docProv = globalProvider
-	}
-
 	node = unwrapDocumentNode(node)
 
 	if node.Kind != yaml.MappingNode {
@@ -118,7 +114,7 @@ func GetInferenceCandidateFromYAML(docProv Provider, t Type, node *yaml.Node) (s
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == "type" {
 			tStr := node.Content[i+1].Value
-			spec, exists := GetDocs(docProv, tStr, t)
+			spec, exists := docProv.GetDocs(tStr, t)
 			if !exists {
 				return "", ComponentSpec{}, fmt.Errorf("%v type '%v' was not recognised", string(t), tStr)
 			}
@@ -221,12 +217,12 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 			return nil
 		}
 		var err error
-		if name, _, err = getInferenceCandidateFromList(conf, cType, keys); err != nil {
+		if name, _, err = getInferenceCandidateFromList(conf.DocsProvider, cType, keys); err != nil {
 			return err
 		}
 	}
 
-	cSpec, exists := GetDocs(conf, name, cType)
+	cSpec, exists := conf.DocsProvider.GetDocs(name, cType)
 	if !exists {
 		return fmt.Errorf("failed to obtain docs for %v type %v", cType, name)
 	}
@@ -266,7 +262,7 @@ func SanitiseYAML(cType Type, node *yaml.Node, conf SanitiseConfig) error {
 		newNodes = append(newNodes, &keyNode, bodyNode)
 	}
 
-	reservedFields := reservedFieldsByType(cType)
+	reservedFields := ReservedFieldsByType(cType)
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == name || node.Content[i].Value == "type" || node.Content[i].Value == "label" {
 			continue
@@ -460,7 +456,7 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		}
 	}
 
-	cSpec, exists := GetDocs(ctx.DocsProvider, name, cType)
+	cSpec, exists := ctx.DocsProvider.GetDocs(name, cType)
 	if !exists {
 		lints = append(lints, NewLintWarning(node.Line, fmt.Sprintf("failed to obtain docs for %v type %v", cType, name)))
 		return lints
@@ -479,7 +475,7 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		}
 	}
 
-	reservedFields := reservedFieldsByType(cType)
+	reservedFields := ReservedFieldsByType(cType)
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		if node.Content[i].Value == name || node.Content[i].Value == "type" {
 			continue

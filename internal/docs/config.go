@@ -60,7 +60,8 @@ var labelField = FieldString(
 	return nil
 })
 
-func reservedFieldsByType(t Type) map[string]FieldSpec {
+// ReservedFieldsByType returns a map of fields for a specific type.
+func ReservedFieldsByType(t Type) map[string]FieldSpec {
 	m := map[string]FieldSpec{
 		"type":   FieldString("type", ""),
 		"plugin": FieldObject("plugin", ""),
@@ -89,9 +90,6 @@ func reservedFieldsByType(t Type) map[string]FieldSpec {
 }
 
 func defaultTypeByType(docProvider Provider, t Type) string {
-	if docProvider == nil {
-		docProvider = globalProvider
-	}
 	switch t {
 	case TypeBuffer:
 		return "none"
@@ -123,7 +121,7 @@ func defaultTypeByType(docProvider Provider, t Type) string {
 // for the component is present. Only some component types have a default, for
 // those that do not an empty string is returned.
 func DefaultTypeOf(t Type) string {
-	return defaultTypeByType(nil, t)
+	return defaultTypeByType(DeprecatedProvider, t)
 }
 
 // GetInferenceCandidate checks a generic config structure for a component and
@@ -135,7 +133,7 @@ func GetInferenceCandidate(docProvider Provider, t Type, raw interface{}) (strin
 	}
 
 	if tStr, ok := m["type"].(string); ok {
-		spec, exists := GetDocs(docProvider, tStr, t)
+		spec, exists := docProvider.GetDocs(tStr, t)
 		if !exists {
 			return "", ComponentSpec{}, fmt.Errorf("%v type '%v' was not recognised", string(t), tStr)
 		}
@@ -151,7 +149,7 @@ func GetInferenceCandidate(docProvider Provider, t Type, raw interface{}) (strin
 }
 
 func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (string, ComponentSpec, error) {
-	ignore := reservedFieldsByType(t)
+	ignore := ReservedFieldsByType(t)
 
 	var candidates []string
 	var inferred string
@@ -161,7 +159,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (st
 			continue
 		}
 		candidates = append(candidates, k)
-		if spec, exists := GetDocs(docProvider, k, t); exists {
+		if spec, exists := docProvider.GetDocs(k, t); exists {
 			if len(inferred) > 0 {
 				candidates = []string{inferred, k}
 				sort.Strings(candidates)
@@ -176,7 +174,7 @@ func getInferenceCandidateFromList(docProvider Provider, t Type, l []string) (st
 
 	if len(candidates) == 0 {
 		defaultType := defaultTypeByType(docProvider, t)
-		if spec, exists := GetDocs(docProvider, defaultType, t); exists {
+		if spec, exists := docProvider.GetDocs(defaultType, t); exists {
 			return defaultType, spec, nil
 		}
 		if inferred == "" {
@@ -201,8 +199,9 @@ type SanitiseConfig struct {
 	DocsProvider     Provider
 }
 
-// GetDocs attempts to obtain documentation for a component implementation from
-// a docs provider in the config, or if omitted uses the global provider.
-func (c SanitiseConfig) GetDocs(name string, ctype Type) (ComponentSpec, bool) {
-	return GetDocs(c.DocsProvider, name, ctype)
+// NewSanitiseConfig creates a new sanitise config.
+func NewSanitiseConfig() SanitiseConfig {
+	return SanitiseConfig{
+		DocsProvider: DeprecatedProvider,
+	}
 }

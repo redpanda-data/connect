@@ -502,11 +502,12 @@ func (s *StreamBuilder) SetFields(pathValues ...interface{}) error {
 		return err
 	}
 
-	if err := config.Spec().SanitiseYAML(&rootNode, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: false,
-		DocsProvider:     s.env.internal,
-	}); err != nil {
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	sanitConf.RemoveDeprecated = false
+	sanitConf.DocsProvider = s.env.internal
+
+	if err := config.Spec().SanitiseYAML(&rootNode, sanitConf); err != nil {
 		return err
 	}
 
@@ -625,11 +626,12 @@ func (s *StreamBuilder) AsYAML() (string, error) {
 		return "", err
 	}
 
-	if err := config.Spec().SanitiseYAML(&node, docs.SanitiseConfig{
-		RemoveTypeField:  true,
-		RemoveDeprecated: false,
-		DocsProvider:     s.env.internal,
-	}); err != nil {
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	sanitConf.RemoveDeprecated = false
+	sanitConf.DocsProvider = s.env.internal
+
+	if err := config.Spec().SanitiseYAML(&node, sanitConf); err != nil {
 		return "", err
 	}
 
@@ -710,10 +712,10 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		var sanitNode yaml.Node
 		err := sanitNode.Encode(conf)
 		if err == nil {
-			_ = config.Spec().SanitiseYAML(&sanitNode, docs.SanitiseConfig{
-				RemoveTypeField: true,
-				DocsProvider:    env,
-			})
+			sanitConf := docs.NewSanitiseConfig()
+			sanitConf.RemoveTypeField = true
+			sanitConf.DocsProvider = env
+			_ = config.Spec().SanitiseYAML(&sanitNode, sanitConf)
 		}
 		if apiMut, err = api.New("", "", s.http, sanitNode, logger, stats); err != nil {
 			return nil, fmt.Errorf("unable to create stream HTTP server due to: %w. Tip: you can disable the server with `http.enabled` set to `false`, or override the configured server with SetHTTPMux", err)

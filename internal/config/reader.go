@@ -306,7 +306,7 @@ func applyOverrides(specs docs.FieldSpecs, root *yaml.Node, overrides ...string)
 			Kind:  yaml.ScalarNode,
 			Value: value,
 		}
-		if err := specs.SetYAMLPath(nil, root, &valNode, gabs.DotPathToSlice(path)...); err != nil {
+		if err := specs.SetYAMLPath(docs.DeprecatedProvider, root, &valNode, gabs.DotPathToSlice(path)...); err != nil {
 			return fmt.Errorf("failed to set config field override: %w", err)
 		}
 	}

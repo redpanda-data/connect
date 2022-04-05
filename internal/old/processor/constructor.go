@@ -243,7 +243,7 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	var spec docs.ComponentSpec
-	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(nil, docs.TypeProcessor, value); err != nil {
+	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(docs.DeprecatedProvider, docs.TypeProcessor, value); err != nil {
 		return fmt.Errorf("line %v: %w", value.Line, err)
 	}
 

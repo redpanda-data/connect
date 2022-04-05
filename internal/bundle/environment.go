@@ -72,7 +72,7 @@ func (e *Environment) GetDocs(name string, ctype docs.Type) (docs.ComponentSpec,
 	case docs.TypeRateLimit:
 		spec, ok = e.rateLimits.DocsFor(name)
 	default:
-		return docs.GetDocs(nil, name, ctype)
+		return docs.DeprecatedProvider.GetDocs(name, ctype)
 	}
 
 	return spec, ok

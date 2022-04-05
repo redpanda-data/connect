@@ -292,9 +292,9 @@ func cmdService(
 	var sanitNode yaml.Node
 	err = sanitNode.Encode(conf)
 	if err == nil {
-		err = config.Spec().SanitiseYAML(&sanitNode, docs.SanitiseConfig{
-			RemoveTypeField: true,
-		})
+		sanitConf := docs.NewSanitiseConfig()
+		sanitConf.RemoveTypeField = true
+		err = config.Spec().SanitiseYAML(&sanitNode, sanitConf)
 	}
 	if err != nil {
 		logger.Warnf("Failed to generate sanitised config: %v\n", err)

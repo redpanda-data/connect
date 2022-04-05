@@ -247,11 +247,11 @@ func createOrderedConfig(t Type, rawExample interface{}, filter FieldFilter) (*y
 		return nil, err
 	}
 
-	if err := SanitiseYAML(t, &newNode, SanitiseConfig{
-		RemoveTypeField: true,
-		Filter:          filter,
-		ForExample:      true,
-	}); err != nil {
+	sanitConf := NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	sanitConf.Filter = filter
+	sanitConf.ForExample = true
+	if err := SanitiseYAML(t, &newNode, sanitConf); err != nil {
 		return nil, err
 	}
 

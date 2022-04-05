@@ -40,9 +40,9 @@ func (c Config) Sanitised() (interface{}, error) {
 		return nil, err
 	}
 
-	if err := Spec().SanitiseYAML(&node, docs.SanitiseConfig{
-		RemoveTypeField: true,
-	}); err != nil {
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	if err := Spec().SanitiseYAML(&node, sanitConf); err != nil {
 		return nil, err
 	}
 

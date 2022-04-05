@@ -45,7 +45,7 @@ func (s *MetricsSet) Add(constructor MetricConstructor, spec docs.ComponentSpec)
 		constructor: constructor,
 		spec:        spec,
 	}
-	docs.RegisterDocs(spec)
+	docs.DeprecatedProvider.RegisterDocs(spec)
 	return nil
 }
 

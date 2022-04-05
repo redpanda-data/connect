@@ -16,9 +16,10 @@ func TestBatchPolicySanit(t *testing.T) {
 
 	var node yaml.Node
 	require.NoError(t, node.Encode(conf))
-	require.NoError(t, policy.FieldSpec().SanitiseYAML(&node, docs.SanitiseConfig{
-		RemoveTypeField: true,
-	}))
+
+	sanitConf := docs.NewSanitiseConfig()
+	sanitConf.RemoveTypeField = true
+	require.NoError(t, policy.FieldSpec().SanitiseYAML(&node, sanitConf))
 
 	expSanit := `count: 0
 byte_size: 0

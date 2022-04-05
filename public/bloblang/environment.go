@@ -34,7 +34,7 @@ func GlobalEnvironment() *Environment {
 // could be used in certain situations without removing those functions globally
 // for all mappings.
 func NewEnvironment() *Environment {
-	return GlobalEnvironment().WithoutFunctions().WithoutMethods()
+	return GlobalEnvironment().Clone()
 }
 
 // NewEmptyEnvironment creates a fresh Bloblang environment starting completely
@@ -43,6 +43,12 @@ func NewEmptyEnvironment() *Environment {
 	return &Environment{
 		env: bloblang.NewEmptyEnvironment(),
 	}
+}
+
+// Clone an environment in order to register functions and methods without
+// modifying the existing environment.
+func (e *Environment) Clone() *Environment {
+	return e.WithoutFunctions().WithoutMethods()
 }
 
 // Parse a Bloblang mapping using the Environment to determine the features
@@ -207,6 +213,31 @@ func (e *Environment) WithCustomImporter(fn func(name string) ([]byte, error)) *
 func (e *Environment) WithMaxMapRecursion(n int) *Environment {
 	return &Environment{
 		env: e.env.WithMaxMapRecursion(n),
+	}
+}
+
+// OnlyPure removes any methods and functions that have been registered but are
+// marked as impure. Impure in this context means the method/function is able to
+// mutate global state or access machine state (read environment variables,
+// files, etc). Note that methods/functions that access the machine clock are
+// not marked as pure, so timestamp functions will still work.
+func (e *Environment) OnlyPure() *Environment {
+	return &Environment{
+		env: e.env.OnlyPure(),
+	}
+}
+
+// Deactivated returns a version of the environment where constructors are
+// disabled for all functions and methods, allowing mappings to be parsed and
+// validated but not executed.
+//
+// The underlying register of functions and methods is shared with the target
+// environment, and therefore functions/methods registered to this set will also
+// be added to the still activated environment. Use Clone in order to avoid
+// this.
+func (e *Environment) Deactivated() *Environment {
+	return &Environment{
+		env: e.env.Deactivated(),
 	}
 }
 

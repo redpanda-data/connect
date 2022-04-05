@@ -260,9 +260,9 @@ variables have been resolved:
 					var node yaml.Node
 					err := node.Encode(conf)
 					if err == nil {
-						err = config.Spec().SanitiseYAML(&node, docs.SanitiseConfig{
-							RemoveTypeField: true,
-						})
+						sanitConf := docs.NewSanitiseConfig()
+						sanitConf.RemoveTypeField = true
+						err = config.Spec().SanitiseYAML(&node, sanitConf)
 					}
 					if err == nil {
 						var configYAML []byte

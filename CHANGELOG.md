@@ -48,6 +48,7 @@ This is a major version release, for more information and guidance on how to mig
 - The `logger` configuration section has been simplified, with `logfmt` being the new default format.
 - The `logger` field `add_timestamp` is now `false` by default.
 - Field `parts` has been removed from all processors.
+- Field `max_in_flight` has been removed from a range of output brokers as it no longer required.
 - The `dedupe` processor now acts upon individual messages by default, and the `hash` field has been removed.
 - The `log` processor now executes for each individual message of a batch.
 - The `sleep` processor now executes for each individual message of a batch.

@@ -152,12 +152,13 @@ If the expression is omitted a default config is created.`[1:],
 			var node yaml.Node
 			err := node.Encode(iconf)
 			if err == nil {
-				err = config.Spec().SanitiseYAML(&node, docs.SanitiseConfig{
-					RemoveTypeField:  true,
-					RemoveDeprecated: true,
-					ForExample:       true,
-					Filter:           filter,
-				})
+				sanitConf := docs.NewSanitiseConfig()
+				sanitConf.RemoveTypeField = true
+				sanitConf.RemoveDeprecated = true
+				sanitConf.ForExample = true
+				sanitConf.Filter = filter
+
+				err = config.Spec().SanitiseYAML(&node, sanitConf)
 			}
 			if err == nil {
 				var configYAML []byte

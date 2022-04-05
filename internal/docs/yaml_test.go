@@ -584,8 +584,10 @@ bud: []
 }
 
 func TestYAMLComponentLinting(t *testing.T) {
+	prov := docs.NewMappedDocsProvider()
+
 	for _, t := range docs.Types() {
-		docs.RegisterDocs(docs.ComponentSpec{
+		prov.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testlintfoo%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().WithChildren(
@@ -615,7 +617,7 @@ func TestYAMLComponentLinting(t *testing.T) {
 				).Optional().Advanced(),
 			),
 		})
-		docs.RegisterDocs(docs.ComponentSpec{
+		prov.RegisterDocs(docs.ComponentSpec{
 			Name:   fmt.Sprintf("testlintbar%v", string(t)),
 			Type:   t,
 			Status: docs.StatusDeprecated,
@@ -919,6 +921,7 @@ testlintfooinput:
 		t.Run(test.name, func(t *testing.T) {
 			lintCtx := docs.NewLintContext()
 			lintCtx.RejectDeprecated = test.rejectDeprecated
+			lintCtx.DocsProvider = prov
 
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
@@ -1015,8 +1018,10 @@ func TestYAMLLinting(t *testing.T) {
 }
 
 func TestYAMLSanitation(t *testing.T) {
+	prov := docs.NewMappedDocsProvider()
+
 	for _, t := range docs.Types() {
-		docs.RegisterDocs(docs.ComponentSpec{
+		prov.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testyamlsanitfoo%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().WithChildren(
@@ -1028,7 +1033,7 @@ func TestYAMLSanitation(t *testing.T) {
 				docs.FieldString("foo6", "").Deprecated(),
 			),
 		})
-		docs.RegisterDocs(docs.ComponentSpec{
+		prov.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testyamlsanitbar%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().Array().WithChildren(
@@ -1037,7 +1042,7 @@ func TestYAMLSanitation(t *testing.T) {
 				docs.FieldProcessor("bar3", ""),
 			),
 		})
-		docs.RegisterDocs(docs.ComponentSpec{
+		prov.RegisterDocs(docs.ComponentSpec{
 			Name: fmt.Sprintf("testyamlsanitbaz%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().Map().WithChildren(
@@ -1220,11 +1225,14 @@ processors:
 		t.Run(test.name, func(t *testing.T) {
 			var node yaml.Node
 			require.NoError(t, yaml.Unmarshal([]byte(test.inputConf), &node))
-			err := docs.SanitiseYAML(test.inputType, &node, docs.SanitiseConfig{
-				RemoveTypeField:  true,
-				Filter:           test.inputFilter,
-				RemoveDeprecated: false,
-			})
+
+			sanitConf := docs.NewSanitiseConfig()
+			sanitConf.DocsProvider = prov
+			sanitConf.RemoveTypeField = true
+			sanitConf.Filter = test.inputFilter
+			sanitConf.RemoveDeprecated = false
+
+			err := docs.SanitiseYAML(test.inputType, &node, sanitConf)
 			if len(test.err) > 0 {
 				assert.EqualError(t, err, test.err)
 			} else {

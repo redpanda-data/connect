@@ -61,7 +61,7 @@ func (s *CacheSet) Add(constructor CacheConstructor, spec docs.ComponentSpec) er
 		constructor: constructor,
 		spec:        spec,
 	}
-	docs.RegisterDocs(spec)
+	docs.DeprecatedProvider.RegisterDocs(spec)
 	return nil
 }
 

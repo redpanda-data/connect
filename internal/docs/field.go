@@ -543,7 +543,7 @@ type LintContext struct {
 func NewLintContext() LintContext {
 	return LintContext{
 		LabelsToLine:     map[string]int{},
-		DocsProvider:     globalProvider,
+		DocsProvider:     DeprecatedProvider,
 		BloblangEnv:      bloblang.GlobalEnvironment().Deactivated(),
 		RejectDeprecated: false,
 	}

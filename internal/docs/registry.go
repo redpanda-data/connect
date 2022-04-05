@@ -10,42 +10,10 @@ type Provider interface {
 	GetDocs(name string, ctype Type) (ComponentSpec, bool)
 }
 
-var globalProvider = NewMappedDocsProvider()
-
-// RegisterDocs stores the documentation spec for a component.
-func RegisterDocs(spec ComponentSpec) {
-	globalProvider.componentLock.Lock()
-	switch spec.Type {
-	case TypeBuffer:
-		globalProvider.bufferMap[spec.Name] = spec
-	case TypeCache:
-		globalProvider.cacheMap[spec.Name] = spec
-	case TypeInput:
-		globalProvider.inputMap[spec.Name] = spec
-	case TypeMetrics:
-		globalProvider.metricsMap[spec.Name] = spec
-	case TypeOutput:
-		globalProvider.outputMap[spec.Name] = spec
-	case TypeProcessor:
-		globalProvider.processorMap[spec.Name] = spec
-	case TypeRateLimit:
-		globalProvider.rateLimitMap[spec.Name] = spec
-	case TypeTracer:
-		globalProvider.tracerMap[spec.Name] = spec
-	default:
-		panic("no spec type provided for component: " + spec.Name)
-	}
-	globalProvider.componentLock.Unlock()
-}
-
-// GetDocs attempts to locate a documentation spec for a component identified by
-// a unique name and type combination.
-func GetDocs(prov Provider, name string, ctype Type) (ComponentSpec, bool) {
-	if prov == nil {
-		prov = globalProvider
-	}
-	return prov.GetDocs(name, ctype)
-}
+// DeprecatedProvider is a globally declared docs provider that enables the old
+// config parse style to work with dynamic plugins. Eventually we can eliminate
+// all the UnmarshalYAML methods on config structs and remove this as well.
+var DeprecatedProvider = NewMappedDocsProvider()
 
 //------------------------------------------------------------------------------
 
@@ -75,6 +43,47 @@ func NewMappedDocsProvider() *MappedDocsProvider {
 		rateLimitMap: map[string]ComponentSpec{},
 		tracerMap:    map[string]ComponentSpec{},
 	}
+}
+
+// Clone returns a copied version of the provider that can be modified
+// independently.
+func (m *MappedDocsProvider) Clone() *MappedDocsProvider {
+	newM := &MappedDocsProvider{
+		bufferMap:    map[string]ComponentSpec{},
+		cacheMap:     map[string]ComponentSpec{},
+		inputMap:     map[string]ComponentSpec{},
+		metricsMap:   map[string]ComponentSpec{},
+		outputMap:    map[string]ComponentSpec{},
+		processorMap: map[string]ComponentSpec{},
+		rateLimitMap: map[string]ComponentSpec{},
+		tracerMap:    map[string]ComponentSpec{},
+	}
+
+	for k, v := range m.bufferMap {
+		newM.bufferMap[k] = v
+	}
+	for k, v := range m.cacheMap {
+		newM.cacheMap[k] = v
+	}
+	for k, v := range m.inputMap {
+		newM.inputMap[k] = v
+	}
+	for k, v := range m.metricsMap {
+		newM.metricsMap[k] = v
+	}
+	for k, v := range m.outputMap {
+		newM.outputMap[k] = v
+	}
+	for k, v := range m.processorMap {
+		newM.processorMap[k] = v
+	}
+	for k, v := range m.rateLimitMap {
+		newM.rateLimitMap[k] = v
+	}
+	for k, v := range m.tracerMap {
+		newM.tracerMap[k] = v
+	}
+	return newM
 }
 
 // RegisterDocs adds the documentation of a component implementation.

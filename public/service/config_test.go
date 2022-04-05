@@ -113,10 +113,10 @@ c:
 			var sanitNode yaml.Node
 			require.NoError(t, sanitNode.Encode(pConf.AsStruct()))
 
-			require.NoError(t, spec.component.Config.Children.SanitiseYAML(&sanitNode, docs.SanitiseConfig{
-				RemoveTypeField:  true,
-				RemoveDeprecated: true,
-			}))
+			sanitConf := docs.NewSanitiseConfig()
+			sanitConf.RemoveTypeField = true
+			sanitConf.RemoveDeprecated = true
+			require.NoError(t, spec.component.Config.Children.SanitiseYAML(&sanitNode, sanitConf))
 
 			sanitConfOutBytes, err := yaml.Marshal(sanitNode)
 			require.NoError(t, err)
@@ -214,10 +214,11 @@ c:
 			var sanitNode yaml.Node
 			require.NoError(t, sanitNode.Encode(pConf.generic))
 
-			require.NoError(t, spec.component.Config.Children.SanitiseYAML(&sanitNode, docs.SanitiseConfig{
-				RemoveTypeField:  true,
-				RemoveDeprecated: true,
-			}))
+			sanitConf := docs.NewSanitiseConfig()
+			sanitConf.RemoveTypeField = true
+			sanitConf.RemoveDeprecated = true
+
+			require.NoError(t, spec.component.Config.Children.SanitiseYAML(&sanitNode, sanitConf))
 
 			sanitConfOutBytes, err := yaml.Marshal(sanitNode)
 			require.NoError(t, err)
