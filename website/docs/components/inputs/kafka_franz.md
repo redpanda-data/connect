@@ -36,8 +36,8 @@ input:
   label: ""
   kafka_franz:
     seed_brokers: []
-    regex_pattern: false
     topics: []
+    regexp_topics: false
     consumer_group: ""
 ```
 
@@ -50,8 +50,8 @@ input:
   label: ""
   kafka_franz:
     seed_brokers: []
-    regex_pattern: false
     topics: []
+    regexp_topics: false
     consumer_group: ""
     checkpoint_limit: 1024
     tls:
@@ -85,7 +85,6 @@ This input adds the following metadata fields to each message:
 - kafka_partition
 - kafka_offset
 - kafka_timestamp_unix
-- regex_pattern
 - All record headers
 ```
 
@@ -113,20 +112,20 @@ seed_brokers:
   - foo:9092,bar:9092
 ```
 
-### `regex_pattern`
-
-An indicator that makes franz use regex pattern in topics.
-
-
-Type: `int`  
-Default: `false`  
-
 ### `topics`
 
 A list of topics to consume from, partitions are automatically shared across consumers sharing the consumer group.
 
 
 Type: `array`  
+
+### `regexp_topics`
+
+Whether listed topics should be interpretted as regular expression patterns for matching multiple topics.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `consumer_group`
 

@@ -19,6 +19,7 @@ This is a major version release, for more information and guidance on how to mig
 - New connection settings for all sql components.
 - New experimental `snowflake_put` output.
 - New experimental `gcp_cloud_storage` cache.
+- Field `regexp_topics` added to the `kafka_franz` input.
 
 ### Fixed
 

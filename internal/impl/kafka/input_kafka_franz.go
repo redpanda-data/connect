@@ -44,7 +44,6 @@ This input adds the following metadata fields to each message:
 - kafka_partition
 - kafka_offset
 - kafka_timestamp_unix
-- regex_pattern
 - All record headers
 ` + "```" + `
 `).
@@ -53,11 +52,11 @@ This input adds the following metadata fields to each message:
 			Example([]string{"localhost:9092"}).
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"})).
-		Field(service.NewIntField("regex_pattern").
-			Description("An indicator that makes franz use regex pattern in topics.").
-			Default(false)).
 		Field(service.NewStringListField("topics").
 			Description("A list of topics to consume from, partitions are automatically shared across consumers sharing the consumer group.")).
+		Field(service.NewBoolField("regexp_topics").
+			Description("Whether listed topics should be interpretted as regular expression patterns for matching multiple topics.").
+			Default(false)).
 		Field(service.NewStringField("consumer_group").
 			Description("A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically commited and resumed under this name.")).
 		Field(service.NewIntField("checkpoint_limit").
@@ -135,7 +134,7 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 		f.topics = append(f.topics, strings.Split(t, ",")...)
 	}
 
-	if f.regexPattern, err = conf.FieldBool("regex_pattern"); err != nil {
+	if f.regexPattern, err = conf.FieldBool("regexp_topics"); err != nil {
 		return nil, err
 	}
 
