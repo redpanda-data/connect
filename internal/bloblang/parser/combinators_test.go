@@ -1454,6 +1454,11 @@ baz`,
 			remaining: `"""foo\"bar\"baz and this`,
 			err:       NewFatalError([]rune(``), errors.New("required"), "end triple-quote"),
 		},
+		"unfinished end quotes": {
+			input:     `"""""0`,
+			remaining: `"""""0`,
+			err:       NewFatalError([]rune(``), errors.New("required"), "end triple-quote"),
+		},
 	}
 
 	for name, test := range tests {

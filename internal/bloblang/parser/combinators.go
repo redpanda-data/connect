@@ -408,7 +408,7 @@ func TripleQuoteString() Func {
 			input[2] != '"' {
 			return Fail(NewError(input, "quoted string"), input)
 		}
-		for i := 2; i < len(input)-2; i++ {
+		for i := 3; i < len(input)-2; i++ {
 			if input[i] == '"' &&
 				input[i+1] == '"' &&
 				input[i+2] == '"' {
