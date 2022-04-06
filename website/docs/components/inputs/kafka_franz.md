@@ -36,6 +36,7 @@ input:
   label: ""
   kafka_franz:
     seed_brokers: []
+    regex_pattern: false
     topics: []
     consumer_group: ""
 ```
@@ -49,6 +50,7 @@ input:
   label: ""
   kafka_franz:
     seed_brokers: []
+    regex_pattern: false
     topics: []
     consumer_group: ""
     checkpoint_limit: 1024
@@ -83,6 +85,7 @@ This input adds the following metadata fields to each message:
 - kafka_partition
 - kafka_offset
 - kafka_timestamp_unix
+- regex_pattern
 - All record headers
 ```
 
@@ -109,6 +112,14 @@ seed_brokers:
 seed_brokers:
   - foo:9092,bar:9092
 ```
+
+### `regex_pattern`
+
+An indicator that makes franz use regex pattern in topics.
+
+
+Type: `int`  
+Default: `false`  
 
 ### `topics`
 
