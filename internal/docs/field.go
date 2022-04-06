@@ -482,6 +482,32 @@ func FieldComponent() FieldSpec {
 	}
 }
 
+// CheckRequired returns true if this field, due to various factors, is a field
+// that must be specified within a config. The factors at play are:
+//
+// - Whether the field has a default value
+// - Whether the field was explicitly marked as optional
+// - Whether the field is an object with children, none of which are required
+func (f FieldSpec) CheckRequired() bool {
+	if f.IsOptional {
+		return false
+	}
+	if f.Default != nil {
+		return false
+	}
+	if len(f.Children) == 0 {
+		return true
+	}
+
+	// If none of the children are required then this field is not required.
+	for _, child := range f.Children {
+		if child.CheckRequired() {
+			return true
+		}
+	}
+	return false
+}
+
 //------------------------------------------------------------------------------
 
 // FieldSpecs is a slice of field specs for a component.
