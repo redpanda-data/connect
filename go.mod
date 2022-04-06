@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/iam v0.1.0 // indirect
 	cloud.google.com/go/pubsub v1.17.1
 	cloud.google.com/go/storage v1.18.2
+	cuelang.org/go v0.4.2
 	github.com/AthenZ/athenz v1.10.43 // indirect
 	github.com/Azure/azure-sdk-for-go v61.1.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.22.0
@@ -124,7 +125,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.4.1
 	go.uber.org/atomic v1.9.0 // indirect
 	golang.org/x/crypto v0.0.0-20220213190939-1e6e3497d506
-	golang.org/x/exp v0.0.0-20200331195152-e8c3332aa8e5 // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
