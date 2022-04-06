@@ -20,6 +20,7 @@ This is a major version release, for more information and guidance on how to mig
 - New experimental `snowflake_put` output.
 - New experimental `gcp_cloud_storage` cache.
 - Field `regexp_topics` added to the `kafka_franz` input.
+- The `hdfs` output `directory` field now supports interpolation functions.
 
 ### Fixed
 
