@@ -49,6 +49,8 @@ func NewHDFSConfig() HDFSConfig {
 type HDFS struct {
 	conf HDFSConfig
 
+	directory *field.Expression
+
 	path *field.Expression
 
 	client *hdfs.Client
@@ -68,11 +70,16 @@ func NewHDFSV2(
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
 	}
+	directory, err := mgr.BloblEnvironment().NewField(conf.Directory)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse directory expression: %v", err)
+	}
 	return &HDFS{
-		conf:  conf,
-		path:  path,
-		log:   log,
-		stats: stats,
+		conf:      conf,
+		directory: directory,
+		path:      path,
+		log:       log,
+		stats:     stats,
 	}, nil
 }
 
@@ -116,9 +123,10 @@ func (h *HDFS) Write(msg *message.Batch) error {
 
 	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		path := h.path.String(i, msg)
-		filePath := filepath.Join(h.conf.Directory, path)
+		directory := h.directory.String(i, msg)
+		filePath := filepath.Join(directory, path)
 
-		err := h.client.MkdirAll(h.conf.Directory, os.ModeDir|0o644)
+		err := h.client.MkdirAll(directory, os.ModeDir|0o644)
 		if err != nil {
 			return err
 		}
