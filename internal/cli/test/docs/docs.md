@@ -235,6 +235,9 @@ Executing tests for a specific config can be done by pointing the subcommand `te
 
 In order to execute all tests of a directory simply point `test` to that directory, e.g. `benthos test ./foo` will execute all tests found in the directory `foo`. In order to walk a directory tree and execute all tests found you can use the shortcut `./...`, e.g. `benthos test ./...` will execute all tests found in the current directory, any child directories, and so on.
 
+If you want to allow components to write logs at a provided level to stdout when running the tests, you can use
+`benthos test --log <level>`. Please consult the [logger docs][logger] for further details.
+
 ## Mocking Processors
 
 BETA: This feature is currently in a BETA phase, which means breaking changes could be made if a fundamental issue with the feature is found.
@@ -296,3 +299,4 @@ The schema of a template file is as follows:
 
 [json-pointer]: https://tools.ietf.org/html/rfc6901
 [bloblang]: /docs/guides/bloblang/about
+[logger]: /docs/components/logger/about
