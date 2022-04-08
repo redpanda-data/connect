@@ -73,7 +73,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0
 	github.com/klauspost/compress v1.15.1 // indirect
 	github.com/lib/pq v1.10.4
-	github.com/linkedin/goavro/v2 v2.11.1-0.20220404183248-ee3a1f1d6e9c
+	github.com/linkedin/goavro/v2 v2.11.1
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.17
