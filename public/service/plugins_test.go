@@ -29,20 +29,17 @@ func testSanitConf() docs.SanitiseConfig {
 }
 
 func TestCachePluginWithConfig(t *testing.T) {
-	type testConfig struct {
-		A int `yaml:"a"`
-	}
+	configSpec := service.NewConfigSpec().Field(
+		service.NewIntField("a").Default(100),
+	)
 
-	configSpec, err := service.NewStructConfigSpec(func() interface{} {
-		return &testConfig{A: 100}
-	})
-	require.NoError(t, err)
-
-	var initConf *testConfig
+	var aValue int
+	var errValue error
 	var initLabel string
+
 	require.NoError(t, service.RegisterCache("test_cache_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			aValue, errValue = conf.FieldInt("a")
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
 		}))
@@ -70,8 +67,8 @@ test_cache_plugin_with_config:
 	_, err = mgr.NewCache(cacheConf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "this is a test error")
-	require.NotNil(t, initConf)
-	assert.Equal(t, 20, initConf.A)
+	assert.NoError(t, errValue)
+	assert.Equal(t, 20, aValue)
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -111,20 +108,17 @@ test_cache_plugin_without_config: null
 }
 
 func TestInputPluginWithConfig(t *testing.T) {
-	type testConfig struct {
-		A int `yaml:"a"`
-	}
+	configSpec := service.NewConfigSpec().Field(
+		service.NewIntField("a").Default(100),
+	)
 
-	configSpec, err := service.NewStructConfigSpec(func() interface{} {
-		return &testConfig{A: 100}
-	})
-	require.NoError(t, err)
-
-	var initConf *testConfig
+	var aValue int
+	var errValue error
 	var initLabel string
+
 	require.NoError(t, service.RegisterInput("test_input_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			aValue, errValue = conf.FieldInt("a")
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
 		}))
@@ -152,8 +146,8 @@ test_input_plugin_with_config:
 	_, err = mgr.NewInput(inConf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "this is a test error")
-	require.NotNil(t, initConf)
-	assert.Equal(t, 20, initConf.A)
+	assert.NoError(t, errValue)
+	assert.Equal(t, 20, aValue)
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -193,20 +187,16 @@ test_input_plugin_without_config: null
 }
 
 func TestOutputPluginWithConfig(t *testing.T) {
-	type testConfig struct {
-		A int `yaml:"a"`
-	}
+	configSpec := service.NewConfigSpec().
+		Field(service.NewIntField("a").Default(100))
 
-	configSpec, err := service.NewStructConfigSpec(func() interface{} {
-		return &testConfig{A: 100}
-	})
-	require.NoError(t, err)
-
-	var initConf *testConfig
+	var aValue int
+	var errValue error
 	var initLabel string
+
 	require.NoError(t, service.RegisterOutput("test_output_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			aValue, errValue = conf.FieldInt("a")
 			initLabel = mgr.Label()
 			return nil, 1, errors.New("this is a test error")
 		}))
@@ -234,8 +224,8 @@ test_output_plugin_with_config:
 	_, err = mgr.NewOutput(inConf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "this is a test error")
-	require.NotNil(t, initConf)
-	assert.Equal(t, 20, initConf.A)
+	assert.NoError(t, errValue)
+	assert.Equal(t, 20, aValue)
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -275,23 +265,19 @@ test_output_plugin_without_config: null
 }
 
 func TestBatchOutputPluginWithConfig(t *testing.T) {
-	type testConfig struct {
-		A     int `yaml:"a"`
-		Count int `yaml:"count"`
-	}
+	configSpec := service.NewConfigSpec().
+		Field(service.NewIntField("a").Default(100)).
+		Field(service.NewIntField("count").Default(10))
 
-	configSpec, err := service.NewStructConfigSpec(func() interface{} {
-		return &testConfig{A: 100, Count: 10}
-	})
-	require.NoError(t, err)
-
-	var initConf *testConfig
+	var aValue, countValue int
 	var initLabel string
+
 	require.NoError(t, service.RegisterBatchOutput("test_batch_output_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchOutput, service.BatchPolicy, int, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			aValue, _ = conf.FieldInt("a")
+			countValue, _ = conf.FieldInt("count")
 			initLabel = mgr.Label()
-			batchPolicy := service.BatchPolicy{Count: initConf.Count}
+			batchPolicy := service.BatchPolicy{}
 			return nil, batchPolicy, 1, errors.New("this is a test error")
 		}))
 
@@ -319,9 +305,8 @@ test_batch_output_plugin_with_config:
 	_, err = mgr.NewOutput(inConf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "this is a test error")
-	require.NotNil(t, initConf)
-	assert.Equal(t, 20, initConf.A)
-	assert.Equal(t, 21, initConf.Count)
+	assert.Equal(t, 20, aValue)
+	assert.Equal(t, 21, countValue)
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -361,20 +346,15 @@ test_batch_output_plugin_without_config: null
 }
 
 func TestProcessorPluginWithConfig(t *testing.T) {
-	type testConfig struct {
-		A int `yaml:"a"`
-	}
+	configSpec := service.NewConfigSpec().
+		Field(service.NewIntField("a").Default(100))
 
-	configSpec, err := service.NewStructConfigSpec(func() interface{} {
-		return &testConfig{A: 100}
-	})
-	require.NoError(t, err)
-
-	var initConf *testConfig
+	var aValue int
 	var initLabel string
+
 	require.NoError(t, service.RegisterProcessor("test_processor_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			aValue, _ = conf.FieldInt("a")
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
 		}))
@@ -402,8 +382,7 @@ test_processor_plugin_with_config:
 	_, err = mgr.NewProcessor(inConf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "this is a test error")
-	require.NotNil(t, initConf)
-	assert.Equal(t, 20, initConf.A)
+	assert.Equal(t, 20, aValue)
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -443,20 +422,15 @@ test_processor_plugin_without_config: null
 }
 
 func TestBatchProcessorPluginWithConfig(t *testing.T) {
-	type testConfig struct {
-		A int `yaml:"a"`
-	}
+	configSpec := service.NewConfigSpec().
+		Field(service.NewIntField("a").Default(100))
 
-	configSpec, err := service.NewStructConfigSpec(func() interface{} {
-		return &testConfig{A: 100}
-	})
-	require.NoError(t, err)
-
-	var initConf *testConfig
+	var aValue int
 	var initLabel string
+
 	require.NoError(t, service.RegisterBatchProcessor("test_batch_processor_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			aValue, _ = conf.FieldInt("a")
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
 		}))
@@ -484,8 +458,7 @@ test_batch_processor_plugin_with_config:
 	_, err = mgr.NewProcessor(inConf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "this is a test error")
-	require.NotNil(t, initConf)
-	assert.Equal(t, 20, initConf.A)
+	assert.Equal(t, 20, aValue)
 	assert.Equal(t, "foo", initLabel)
 }
 
@@ -525,20 +498,15 @@ test_batch_processor_plugin_without_config: null
 }
 
 func TestRateLimitPluginWithConfig(t *testing.T) {
-	type testConfig struct {
-		A int `yaml:"a"`
-	}
+	configSpec := service.NewConfigSpec().
+		Field(service.NewIntField("a").Default(100))
 
-	configSpec, err := service.NewStructConfigSpec(func() interface{} {
-		return &testConfig{A: 100}
-	})
-	require.NoError(t, err)
-
-	var initConf *testConfig
+	var aValue int
 	var initLabel string
+
 	require.NoError(t, service.RegisterRateLimit("test_rate_limit_plugin_with_config", configSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {
-			initConf = conf.AsStruct().(*testConfig)
+			aValue, _ = conf.FieldInt("a")
 			initLabel = mgr.Label()
 			return nil, errors.New("this is a test error")
 		}))
@@ -566,8 +534,7 @@ test_rate_limit_plugin_with_config:
 	_, err = mgr.NewRateLimit(inConf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "this is a test error")
-	require.NotNil(t, initConf)
-	assert.Equal(t, 20, initConf.A)
+	assert.Equal(t, 20, aValue)
 	assert.Equal(t, "foo", initLabel)
 }
 

@@ -37,17 +37,12 @@ func init() {
 				}
 			}
 		}
-	}
-	if DateBuilt == "" {
 		DateBuilt = "unknown"
 	}
 }
 
 // OptSetVersionStamp creates an opt func for setting the version and date built
-// stamps that Benthos returns via --version and the /version endpoint. The
-// traditional way of setting these values is via the build flags:
-// -X github.com/benthosdev/benthos/v4/internal/old/service.Version=$(VERSION) and
-// -X github.com/benthosdev/benthos/v4/internal/old/service.DateBuilt=$(DATE)
+// stamps that Benthos returns via --version and the /version endpoint.
 func OptSetVersionStamp(version, dateBuilt string) func() {
 	return func() {
 		Version = version

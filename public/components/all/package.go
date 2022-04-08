@@ -5,7 +5,7 @@ package all
 
 import (
 	// Import old legacy packages.
-	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
+	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 
 	// Import new service packages.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/amqp09"

@@ -224,19 +224,10 @@ func (c *ConfigField) LintRule(blobl string) *ConfigField {
 // component. This will be used for validating and linting configuration files
 // and providing a parsed configuration struct to the plugin constructor.
 type ConfigSpec struct {
-	component  docs.ComponentSpec
-	configCtor ConfigStructConstructor
+	component docs.ComponentSpec
 }
 
 func (c *ConfigSpec) configFromNode(mgr bundle.NewManagement, node *yaml.Node) (*ParsedConfig, error) {
-	if c.configCtor != nil {
-		conf := c.configCtor()
-		if err := node.Decode(conf); err != nil {
-			return nil, err
-		}
-		return &ParsedConfig{mgr: mgr, asStruct: conf}, nil
-	}
-
 	fields, err := c.component.Config.YAMLToValue(node, docs.ToValueConfig{})
 	if err != nil {
 		return nil, err
@@ -288,41 +279,6 @@ func NewConfigSpec() *ConfigSpec {
 			Config: docs.FieldComponent(),
 		},
 	}
-}
-
-// ConfigStructConstructor is a function signature that must return a pointer to
-// a struct to be used for parsing configuration fields of a component plugin,
-// ideally instanciated with default field values.
-//
-// The function will be called each time a parsed configuration file contains
-// the plugin type, and the returned struct will be unmarshalled as YAML using
-// gopkg.in/yaml.v3.
-//
-// The returned value must be a pointer type in order to be properly
-// unmarshalled during config parsing.
-//
-// Deprecated: This config mechanism exists only as an interim solution for
-// plugin authors migrating from the previous APIs.
-type ConfigStructConstructor func() interface{}
-
-// NewStructConfigSpec creates a new component configuration spec around a
-// constructor func. The provided constructor func will be used during parsing
-// in order to validate and return fields for the plugin from a configuration
-// file.
-//
-// Deprecated: This config mechanism exists only as an interim solution for
-// plugin authors migrating from the previous APIs.
-func NewStructConfigSpec(ctor ConfigStructConstructor) (*ConfigSpec, error) {
-	var node yaml.Node
-	if err := node.Encode(ctor()); err != nil {
-		return nil, fmt.Errorf("unable to marshal config struct as yaml: %v", err)
-	}
-
-	confSpec := NewConfigSpec()
-	confSpec.component.Config = confSpec.component.Config.WithChildren(docs.FieldsFromYAML(&node)...)
-	confSpec.configCtor = ctor
-
-	return confSpec, nil
 }
 
 // Stable sets a documentation label on the component indicating that its
@@ -486,27 +442,10 @@ func (c *ConfigView) FormatJSON() ([]byte, error) {
 // ParsedConfig represents a plugin configuration that has been validated and
 // parsed from a ConfigSpec, and allows plugin constructors to access
 // configuration fields.
-//
-// The correct way to access configuration fields depends on how the
-// configuration spec was built. For example, if the spec was established with
-// a struct constructor then the method AsStruct should be used in order to
-// access the parsed struct.
 type ParsedConfig struct {
 	hiddenPath []string
 	mgr        bundle.NewManagement
-	asStruct   interface{}
 	generic    interface{}
-}
-
-// AsStruct returns the root of the parsed config. If the configuration spec was
-// built around a config constructor then the value returned will match the type
-// returned by the constructor, otherwise it will be a generic
-// map[string]interface{} type.
-//
-// Deprecated: This config mechanism exists only as an interim solution for
-// plugin authors migrating from the previous APIs.
-func (p *ParsedConfig) AsStruct() interface{} {
-	return p.asStruct
 }
 
 // Namespace returns a version of the parsed config at a given field namespace.
@@ -521,9 +460,6 @@ func (p *ParsedConfig) Namespace(path ...string) *ParsedConfig {
 // Field accesses a field from the parsed config by its name and returns the
 // value if the field is found and a boolean indicating whether it was found.
 // Nested fields can be accessed by specifing the series of field names.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) field(path ...string) (interface{}, bool) {
 	gObj := gabs.Wrap(p.generic).S(p.hiddenPath...)
 	if exists := gObj.Exists(path...); !exists {
@@ -548,9 +484,6 @@ func (p *ParsedConfig) Contains(path ...string) bool {
 
 // FieldString accesses a string field from the parsed config by its name. If
 // the field is not found or is not a string an error is returned.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) FieldString(path ...string) (string, error) {
 	v, exists := p.field(path...)
 	if !exists {
@@ -566,9 +499,6 @@ func (p *ParsedConfig) FieldString(path ...string) (string, error) {
 // FieldDuration accesses a duration string field from the parsed config by its
 // name. If the field is not found or is not a valid duration string an error is
 // returned.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) FieldDuration(path ...string) (time.Duration, error) {
 	v, exists := p.field(path...)
 	if !exists {
@@ -588,9 +518,6 @@ func (p *ParsedConfig) FieldDuration(path ...string) (time.Duration, error) {
 // FieldStringList accesses a field that is a list of strings from the parsed
 // config by its name and returns the value. Returns an error if the field is
 // not found, or is not a list of strings.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
 	v, exists := p.field(path...)
 	if !exists {
@@ -615,9 +542,6 @@ func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
 // FieldStringMap accesses a field that is an object of arbitrary keys and
 // string values from the parsed config by its name and returns the value.
 // Returns an error if the field is not found, or is not an object of strings.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) FieldStringMap(path ...string) (map[string]string, error) {
 	v, exists := p.field(path...)
 	if !exists {
@@ -641,9 +565,6 @@ func (p *ParsedConfig) FieldStringMap(path ...string) (map[string]string, error)
 
 // FieldInt accesses an int field from the parsed config by its name and returns
 // the value. Returns an error if the field is not found or is not an int.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
 	v, exists := p.field(path...)
 	if !exists {
@@ -659,9 +580,6 @@ func (p *ParsedConfig) FieldInt(path ...string) (int, error) {
 // FieldIntList accesses a field that is a list of integers from the parsed
 // config by its name and returns the value. Returns an error if the field is
 // not found, or is not a list of integers.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) FieldIntList(path ...string) ([]int, error) {
 	v, exists := p.field(path...)
 	if !exists {
@@ -688,9 +606,6 @@ func (p *ParsedConfig) FieldIntList(path ...string) ([]int, error) {
 // FieldIntMap accesses a field that is an object of arbitrary keys and
 // integer values from the parsed config by its name and returns the value.
 // Returns an error if the field is not found, or is not an object of integers.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) FieldIntMap(path ...string) (map[string]int, error) {
 	v, exists := p.field(path...)
 	if !exists {
@@ -717,9 +632,6 @@ func (p *ParsedConfig) FieldIntMap(path ...string) (map[string]int, error) {
 // FieldFloat accesses a float field from the parsed config by its name and
 // returns the value. Returns an error if the field is not found or is not a
 // float.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
 	v, exists := p.field(path...)
 	if !exists {
@@ -735,9 +647,6 @@ func (p *ParsedConfig) FieldFloat(path ...string) (float64, error) {
 // FieldBool accesses a bool field from the parsed config by its name and
 // returns the value. Returns an error if the field is not found or is not a
 // bool.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) FieldBool(path ...string) (bool, error) {
 	v, e := p.field(path...)
 	if !e {
@@ -754,9 +663,6 @@ func (p *ParsedConfig) FieldBool(path ...string) (bool, error) {
 // config by its name and returns the value as an array of *ParsedConfig types,
 // where each one represents an object in the list. Returns an error if the
 // field is not found, or is not a list of objects.
-//
-// This method is not valid when the configuration spec was built around a
-// config constructor.
 func (p *ParsedConfig) FieldObjectList(path ...string) ([]*ParsedConfig, error) {
 	v, exists := p.field(path...)
 	if !exists {

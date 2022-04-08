@@ -7,7 +7,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 
 	// Bring in legacy definition
-	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
+	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func TestIntegrationNanomsg(t *testing.T) {

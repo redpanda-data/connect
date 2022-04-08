@@ -17,7 +17,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 
 	// Bring in legacy definition
-	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
+	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func TestIntegrationRedis(t *testing.T) {

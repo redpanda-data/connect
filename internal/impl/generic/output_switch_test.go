@@ -18,7 +18,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
+	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func newSwitch(t *testing.T, conf ooutput.Config, mockOutputs []*mock.OutputChanneled) *switchOutput {

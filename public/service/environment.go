@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 
 	ibloblang "github.com/benthosdev/benthos/v4/internal/bloblang"
@@ -11,6 +12,7 @@ import (
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/old/output"
@@ -397,4 +399,14 @@ func (e *Environment) WalkTracers(fn func(name string, config *ConfigView)) {
 			component: v,
 		})
 	}
+}
+
+// XFormatConfigJSON returns a byte slice of the Benthos configuration spec
+// formatted as a JSON object. The schema of this method is undocumented and is
+// not intended for general use.
+//
+// Experimental: This method is not intended for general use and could have its
+// signature and/or behaviour changed outside of major version bumps.
+func XFormatConfigJSON() ([]byte, error) {
+	return json.Marshal(config.Spec())
 }

@@ -15,7 +15,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/legacy"
+	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func TestSystemWindowBufferConfigs(t *testing.T) {

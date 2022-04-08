@@ -41,8 +41,8 @@ var httpField = docs.FieldObject("http", "Configures the service-wide HTTP serve
 
 var observabilityFields = docs.FieldSpecs{
 	docs.FieldObject("logger", "Describes how operational logs should be emitted.").WithChildren(log.Spec()...),
-	docs.FieldMetrics("metrics", "A mechanism for exporting metrics."),
-	docs.FieldTracer("tracer", "A mechanism for exporting traces."),
+	docs.FieldMetrics("metrics", "A mechanism for exporting metrics.").Optional(),
+	docs.FieldTracer("tracer", "A mechanism for exporting traces.").Optional(),
 	docs.FieldString("shutdown_timeout", "The maximum period of time to wait for a clean shutdown. If this time is exceeded Benthos will forcefully close.").HasDefault("20s"),
 }
 
