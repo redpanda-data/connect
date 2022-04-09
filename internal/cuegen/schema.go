@@ -43,7 +43,7 @@ func GenerateSchemaAST(sch schema.Full) (ast.Node, error) {
 	}
 	root.Decls = append(root.Decls, inputDecls...)
 
-	outputDecls, err := doOutputs()
+	outputDecls, err := doOutputs(sch)
 	if err != nil {
 		return nil, err
 	}
