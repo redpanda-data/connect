@@ -55,7 +55,7 @@ func GenerateSchemaAST(sch schema.Full) (ast.Node, error) {
 	}
 	root.Decls = append(root.Decls, processorDecls...)
 
-	bufferDecls, err := doBuffers()
+	bufferDecls, err := doBuffers(sch)
 	if err != nil {
 		return nil, err
 	}
