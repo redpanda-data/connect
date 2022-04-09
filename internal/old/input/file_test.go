@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 func TestFileDirectory(t *testing.T) {
@@ -29,6 +32,9 @@ func TestFileDirectory(t *testing.T) {
 	err = tmpFile.Close()
 	require.NoError(t, err)
 
+	err = os.Chtimes(tmpFile.Name(), mockTime(), mockTime())
+	require.NoError(t, err)
+
 	tmpFileTwo, err := os.CreateTemp(tmpInnerDir, "f2*.txt")
 	require.NoError(t, err)
 
@@ -36,6 +42,9 @@ func TestFileDirectory(t *testing.T) {
 	require.NoError(t, err)
 
 	err = tmpFileTwo.Close()
+	require.NoError(t, err)
+
+	err = os.Chtimes(tmpFileTwo.Name(), mockTime(), mockTime())
 	require.NoError(t, err)
 
 	exp := map[string]struct{}{
@@ -60,20 +69,24 @@ func TestFileDirectory(t *testing.T) {
 	msg, aFn, err := f.ReadWithContext(context.Background())
 	require.NoError(t, err)
 
-	resStr := string(msg.Get(0).Get())
+	res := msg.Get(0)
+	resStr := string(res.Get())
 	if _, exists := act[resStr]; exists {
 		t.Errorf("Received duplicate message: %v", resStr)
 	}
+	assertValidMetaData(t, res, tmpFile)
 	act[resStr] = struct{}{}
 	require.NoError(t, aFn(context.Background(), nil))
 
 	msg, aFn, err = f.ReadWithContext(context.Background())
 	require.NoError(t, err)
 
-	resStr = string(msg.Get(0).Get())
+	res = msg.Get(0)
+	resStr = string(res.Get())
 	if _, exists := act[resStr]; exists {
 		t.Errorf("Received duplicate message: %v", resStr)
 	}
+	assertValidMetaData(t, res, tmpFileTwo)
 	act[resStr] = struct{}{}
 	require.NoError(t, aFn(context.Background(), nil))
 
@@ -83,4 +96,14 @@ func TestFileDirectory(t *testing.T) {
 	if !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
+}
+
+func assertValidMetaData(t *testing.T, res *message.Part, tmpFile *os.File) {
+	assert.Equal(t, tmpFile.Name(), res.MetaGet("path"))
+	assert.Equal(t, mockTime().Format(time.RFC3339), res.MetaGet("mod_time"))
+	assert.Equal(t, strconv.Itoa(int(mockTime().Unix())), res.MetaGet("mod_time_unix"))
+}
+
+func mockTime() time.Time {
+	return time.Date(2015, 8, 25, 23, 23, 0, 0, time.UTC)
 }

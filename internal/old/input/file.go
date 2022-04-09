@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -40,6 +41,8 @@ This input adds the following metadata fields to each message:
 
 ` + "```text" + `
 - path
+- mod_time_unix
+- mod_time (RFC3339)
 ` + "```" + `
 
 You can access these metadata fields using
@@ -195,12 +198,19 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 			return nil, nil, err
 		}
 
+		modTimeUnix, modTime := f.getModTime(currentPath)
+
 		msg := message.QuickBatch(nil)
 		for _, part := range parts {
-			if len(part.Get()) > 0 {
-				part.MetaSet("path", currentPath)
-				msg.Append(part)
+			if len(part.Get()) == 0 {
+				continue
 			}
+
+			part.MetaSet("path", currentPath)
+			part.MetaSet("mod_time_unix", modTimeUnix)
+			part.MetaSet("mod_time", modTime)
+
+			msg.Append(part)
 		}
 		if msg.Len() == 0 {
 			_ = codecAckFn(ctx, nil)
@@ -230,4 +240,17 @@ func (f *fileConsumer) CloseAsync() {
 // timeout occurs.
 func (f *fileConsumer) WaitForClose(time.Duration) error {
 	return nil
+}
+
+func (f *fileConsumer) getModTime(currentPath string) (modTimeUnix, modTime string) {
+	fileInfo, err := os.Stat(currentPath)
+	if err == nil {
+		utcModTime := fileInfo.ModTime().UTC()
+		modTimeUnix = strconv.Itoa(int(utcModTime.Unix()))
+		modTime = utcModTime.Format(time.RFC3339)
+	} else {
+		f.log.Errorf("Failed to read metadata from file '%v'\n", currentPath)
+	}
+
+	return modTimeUnix, modTime
 }

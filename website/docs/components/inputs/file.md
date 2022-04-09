@@ -58,6 +58,8 @@ This input adds the following metadata fields to each message:
 
 ```text
 - path
+- mod_time_unix
+- mod_time (RFC3339)
 ```
 
 You can access these metadata fields using
