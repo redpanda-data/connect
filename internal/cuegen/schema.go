@@ -37,7 +37,7 @@ func GenerateSchemaAST(sch schema.Full) (ast.Node, error) {
 	}
 	root.Decls = append(root.Decls, loggerDecls...)
 
-	inputDecls, err := doInputs()
+	inputDecls, err := doInputs(sch)
 	if err != nil {
 		return nil, err
 	}
