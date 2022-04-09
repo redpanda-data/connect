@@ -67,7 +67,7 @@ func GenerateSchemaAST(sch schema.Full) (ast.Node, error) {
 	}
 	root.Decls = append(root.Decls, metricDecls...)
 
-	tracerDecls, err := doTracers()
+	tracerDecls, err := doTracers(sch)
 	if err != nil {
 		return nil, err
 	}

@@ -4,15 +4,13 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue/ast"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/config/schema"
 )
 
-func doTracers() ([]ast.Decl, error) {
-	specs := bundle.AllTracers.Docs()
+func doTracers(sch schema.Full) ([]ast.Decl, error) {
+	fields := make([]interface{}, 0, len(sch.Tracers))
 
-	fields := make([]interface{}, 0, len(specs))
-
-	for _, v := range specs {
+	for _, v := range sch.Tracers {
 		field, err := doComponent(v)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate cue type for component: %s: %w", v.Name, err)
