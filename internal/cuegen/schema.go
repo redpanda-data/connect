@@ -25,12 +25,6 @@ func GenerateSchemaAST(sch schema.Full) (ast.Node, error) {
 	}
 	root.Decls = append(root.Decls, configDecls...)
 
-	resourcesDecls, err := doResources()
-	if err != nil {
-		return nil, err
-	}
-	root.Decls = append(root.Decls, resourcesDecls...)
-
 	httpDecls, err := doHTTP()
 	if err != nil {
 		return nil, err
