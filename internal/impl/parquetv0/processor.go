@@ -1,4 +1,4 @@
-package parquet
+package parquetv0
 
 import (
 	"context"
@@ -16,13 +16,17 @@ import (
 
 func parquetProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Deprecated().
 		Categories("Parsing").
 		Summary("Converts batches of documents to or from [Parquet files](https://parquet.apache.org/documentation/latest/).").
 		Description(`
+:::warning SCHEDULED FOR REMOVAL
+This processor has been deprecated and scheduled for removal. This is due to ongoing concerns with the underlying library used in the implementation. A new library is being investigated and, provided it meets our standards, we will be recreating a more intuitive ` + "`parquet`" + ` processor before eventually removing this one.
+:::
+
 ### Troubleshooting
 
-This processor is experimental and the error messages that it provides are often vague and unhelpful. An error message of the form `+"`interface {} is nil, not <value type>`"+` implies that a field of the given type was expected but not found in the processed message when writing parquet files.
+This processor is experimental and the error messages that it provides are often vague and unhelpful. An error message of the form ` + "`interface {} is nil, not <value type>`" + ` implies that a field of the given type was expected but not found in the processed message when writing parquet files.
 
 Unfortunately the name of the field will sometimes be missing from the error, in which case it's worth double checking the schema you provided to make sure that there are no typos in the field names, and if that doesn't reveal the issue it can help to mark fields as OPTIONAL in the schema and gradually change them back to REQUIRED until the error returns.
 
@@ -30,7 +34,7 @@ Unfortunately the name of the field will sometimes be missing from the error, in
 
 The schema must be specified as a JSON string, containing an object that describes the fields expected at the root of each document. Each field can itself have more fields defined, allowing for nested structures:
 
-`+"```json"+`
+` + "```json" + `
 {
   "Tag": "name=root, repetitiontype=REQUIRED",
   "Fields": [
@@ -47,7 +51,7 @@ The schema must be specified as a JSON string, containing an object that describ
     }
   ]
 }
-`+"```"+``).
+` + "```" + ``).
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{
 			"to_json":   "Expand a file into one or more JSON messages.",
 			"from_json": "Compress a batch of JSON documents into a file.",
@@ -70,37 +74,12 @@ The schema must be specified as a JSON string, containing an object that describ
     {"Tag":"name=age,inname=Age,type=INT32,repetitiontype=REQUIRED"}
   ]
 }`)).
-		Example(
-			"Batching Output Files",
-			"Parquet is often used to write batches of documents to a file store.",
-			`
-output:
-  broker:
-    outputs:
-      - file:
-          path: ./stuff-${! uuid_v4() }.parquet
-          codec: all-bytes
-    batching:
-      count: 100
-      period: 30s
-      processors:
-        - parquet:
-            operator: from_json
-            schema: |-
-              {
-                "Tag": "name=root, repetitiontype=REQUIRED",
-                "Fields": [
-                  {"Tag":"name=name,inname=NameIn,type=BYTE_ARRAY,convertedtype=UTF8, repetitiontype=REQUIRED"},
-                  {"Tag":"name=age,inname=Age,type=INT32,repetitiontype=REQUIRED"}
-                ]
-              }
-`).
 		Version("3.62.0")
 }
 
 func init() {
 	err := service.RegisterBatchProcessor(
-		"parquet", parquetProcessorConfig(),
+		"parquet_old", parquetProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return newParquetProcessorFromConfig(conf, mgr.Logger())
 		})
