@@ -4,12 +4,13 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue/format"
+	"github.com/benthosdev/benthos/v4/internal/config/schema"
 	"github.com/benthosdev/benthos/v4/internal/cuegen"
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func main() {
-	cueAST, err := cuegen.GenerateSchemaAST()
+	cueAST, err := cuegen.GenerateSchemaAST(schema.New("", ""))
 	if err != nil {
 		panic(err)
 	}

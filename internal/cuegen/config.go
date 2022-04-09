@@ -2,62 +2,14 @@ package cuegen
 
 import (
 	"cuelang.org/go/cue/ast"
-	"cuelang.org/go/cue/token"
+	"github.com/benthosdev/benthos/v4/internal/config/schema"
 )
 
-func doConfig() ([]ast.Decl, error) {
-	var members []interface{}
-	members = append(members, resourcesFields...)
-
-	members = append(members, []interface{}{
-		// TODO: replace this with a proper generator from the shutdown_timeout
-		// field spec
-		identShutdownTimeout,
-		token.OPTION,
-		ast.NewIdent("string"),
-
-		identHTTP,
-		token.OPTION,
-		identHTTPConf,
-
-		identLogger,
-		token.OPTION,
-		identLoggerConf,
-
-		identBuffer,
-		token.OPTION,
-		identBufferDisjunction,
-
-		identMetric,
-		token.OPTION,
-		identMetricDisjunction,
-
-		identTracer,
-		token.OPTION,
-		identTracerDisjunction,
-
-		identInput,
-		token.OPTION,
-		identInputDisjunction,
-
-		identPipeline,
-		token.OPTION,
-		ast.NewStruct(
-			ast.NewIdent("threads"),
-			token.OPTION,
-			ast.NewIdent("int"),
-			&ast.Field{
-				Label: ast.NewIdent("processors"),
-				Value: ast.NewList(&ast.Ellipsis{Type: identProcessorDisjunction}),
-			},
-		),
-
-		identOutput,
-		token.OPTION,
-		identOutputDisjunction,
-
-		ast.Embed(identTestSuite),
-	}...)
+func doConfig(sch schema.Full) ([]ast.Decl, error) {
+	members, err := doFieldSpecs(sch.Config)
+	if err != nil {
+		return nil, err
+	}
 
 	return []ast.Decl{
 		&ast.Field{

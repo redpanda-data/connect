@@ -4,12 +4,13 @@ import (
 	"cuelang.org/go/cue/ast"
 
 	// Populating default environment in order to walk it and generate Cue types
+	"github.com/benthosdev/benthos/v4/internal/config/schema"
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 // GenerateSchemaAST generates a Cue AST which includes Cue definitions that
 // represent the configuration file format and component configs.
-func GenerateSchemaAST() (ast.Node, error) {
+func GenerateSchemaAST(sch schema.Full) (ast.Node, error) {
 	root := &ast.File{
 		Decls: []ast.Decl{
 			&ast.Package{
@@ -18,7 +19,7 @@ func GenerateSchemaAST() (ast.Node, error) {
 		},
 	}
 
-	configDecls, err := doConfig()
+	configDecls, err := doConfig(sch)
 	if err != nil {
 		return nil, err
 	}
