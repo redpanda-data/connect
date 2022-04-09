@@ -5,15 +5,13 @@ import (
 
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/token"
-	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/config/schema"
 )
 
-func doProcessors() ([]ast.Decl, error) {
-	specs := bundle.AllProcessors.Docs()
+func doProcessors(sch schema.Full) ([]ast.Decl, error) {
+	fields := make([]interface{}, 0, len(sch.Processors))
 
-	fields := make([]interface{}, 0, len(specs))
-
-	for _, v := range specs {
+	for _, v := range sch.Processors {
 		field, err := doComponent(v)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate cue type for component: %s: %w", v.Name, err)
