@@ -98,6 +98,12 @@ func NewFile(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Ty
 
 //------------------------------------------------------------------------------
 
+type scannerInfo struct {
+	scanner     codec.Reader
+	currentPath string
+	modTime     time.Time
+}
+
 type fileConsumer struct {
 	log log.Modular
 
@@ -105,8 +111,7 @@ type fileConsumer struct {
 	scannerCtor codec.ReaderConstructor
 
 	scannerMut  sync.Mutex
-	scanner     codec.Reader
-	currentPath string
+	scannerInfo *scannerInfo
 
 	delete bool
 }
@@ -138,59 +143,72 @@ func (f *fileConsumer) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (f *fileConsumer) getReader(ctx context.Context) (codec.Reader, string, error) {
+func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 	f.scannerMut.Lock()
 	defer f.scannerMut.Unlock()
 
-	if f.scanner != nil {
-		return f.scanner, f.currentPath, nil
+	if f.scannerInfo != nil {
+		return *f.scannerInfo, nil
 	}
 
 	if len(f.paths) == 0 {
-		return nil, "", component.ErrTypeClosed
+		return scannerInfo{}, component.ErrTypeClosed
 	}
 
 	nextPath := f.paths[0]
 
 	file, err := os.Open(nextPath)
 	if err != nil {
-		return nil, "", err
+		return scannerInfo{}, err
 	}
 
-	if f.scanner, err = f.scannerCtor(nextPath, file, func(ctx context.Context, err error) error {
+	scanner, err := f.scannerCtor(nextPath, file, func(ctx context.Context, err error) error {
 		if err == nil && f.delete {
 			return os.Remove(nextPath)
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		file.Close()
-		return nil, "", err
+		return scannerInfo{}, err
 	}
 
-	f.currentPath = nextPath
+	var modTime time.Time
+	if fInfo, err := file.Stat(); err == nil {
+		modTime = fInfo.ModTime()
+	} else {
+		f.log.Errorf("Failed to read metadata from file '%v'", nextPath)
+	}
+
+	f.scannerInfo = &scannerInfo{
+		scanner:     scanner,
+		currentPath: nextPath,
+		modTime:     modTime,
+	}
+
 	f.paths = f.paths[1:]
 
 	f.log.Infof("Consuming from file '%v'\n", nextPath)
-	return f.scanner, f.currentPath, nil
+	return *f.scannerInfo, nil
 }
 
 // ReadWithContext attempts to read a new message from the target S3 bucket.
 func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	for {
-		scanner, currentPath, err := f.getReader(ctx)
+		scannerInfo, err := f.getReader(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		parts, codecAckFn, err := scanner.Next(ctx)
+		parts, codecAckFn, err := scannerInfo.scanner.Next(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) ||
 				errors.Is(err, context.DeadlineExceeded) {
 				err = component.ErrTimeout
 			}
 			if err != component.ErrTimeout {
-				f.scanner.Close(ctx)
-				f.scanner = nil
+				scannerInfo.scanner.Close(ctx)
+				f.scannerInfo = nil
 			}
 			if errors.Is(err, io.EOF) {
 				continue
@@ -198,7 +216,7 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 			return nil, nil, err
 		}
 
-		modTimeUnix, modTime := f.getModTime(currentPath)
+		modTimeUnix, modTime := f.getModTime(scannerInfo.modTime)
 
 		msg := message.QuickBatch(nil)
 		for _, part := range parts {
@@ -206,7 +224,7 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 				continue
 			}
 
-			part.MetaSet("path", currentPath)
+			part.MetaSet("path", scannerInfo.currentPath)
 			part.MetaSet("mod_time_unix", modTimeUnix)
 			part.MetaSet("mod_time", modTime)
 
@@ -227,9 +245,9 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, rea
 func (f *fileConsumer) CloseAsync() {
 	go func() {
 		f.scannerMut.Lock()
-		if f.scanner != nil {
-			f.scanner.Close(context.Background())
-			f.scanner = nil
+		if f.scannerInfo != nil {
+			f.scannerInfo.scanner.Close(context.Background())
+			f.scannerInfo = nil
 			f.paths = nil
 		}
 		f.scannerMut.Unlock()
@@ -242,15 +260,9 @@ func (f *fileConsumer) WaitForClose(time.Duration) error {
 	return nil
 }
 
-func (f *fileConsumer) getModTime(currentPath string) (modTimeUnix, modTime string) {
-	fileInfo, err := os.Stat(currentPath)
-	if err == nil {
-		utcModTime := fileInfo.ModTime().UTC()
-		modTimeUnix = strconv.Itoa(int(utcModTime.Unix()))
-		modTime = utcModTime.Format(time.RFC3339)
-	} else {
-		f.log.Errorf("Failed to read metadata from file '%v'\n", currentPath)
-	}
-
+func (f *fileConsumer) getModTime(t time.Time) (modTimeUnix, modTime string) {
+	utcModTime := t.UTC()
+	modTimeUnix = strconv.Itoa(int(utcModTime.Unix()))
+	modTime = utcModTime.Format(time.RFC3339)
 	return modTimeUnix, modTime
 }
