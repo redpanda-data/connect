@@ -26,6 +26,7 @@ This is a major version release, for more information and guidance on how to mig
 
 - The `sftp` output no longer opens files in both read and write mode.
 - The `aws_sqs` input with `reset_visibility` set to `false` will no longer reset timeouts on pending messages during gracefully shutdown.
+- The `schema_registry_decode` processor now handles AVRO logical types correctly. Details in [#1198](https://github.com/benthosdev/benthos/pull/1198) and [#1161](https://github.com/benthosdev/benthos/issues/1161) and also in https://github.com/linkedin/goavro/issues/242.
 
 ### Changed
 
