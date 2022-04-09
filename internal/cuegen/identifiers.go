@@ -5,10 +5,6 @@ import "cuelang.org/go/cue/ast"
 var (
 	identConfig = ast.NewIdent("#Config")
 
-	identHTTPConf = ast.NewIdent("#HTTP")
-
-	identLoggerConf = ast.NewIdent("#Logger")
-
 	identInputDisjunction = ast.NewIdent("#Input")
 	identInputCollection  = ast.NewIdent("#AllInputs")
 
@@ -32,8 +28,4 @@ var (
 
 	identTracerDisjunction = ast.NewIdent("#Tracer")
 	identTracerCollection  = ast.NewIdent("#AllTracers")
-
-	identShutdownTimeout = ast.NewIdent("shutdown_timeout")
-
-	identTestSuite = ast.NewIdent("#TestSuite")
 )

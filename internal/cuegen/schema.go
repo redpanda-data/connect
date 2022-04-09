@@ -25,18 +25,6 @@ func GenerateSchemaAST(sch schema.Full) (ast.Node, error) {
 	}
 	root.Decls = append(root.Decls, configDecls...)
 
-	httpDecls, err := doHTTP()
-	if err != nil {
-		return nil, err
-	}
-	root.Decls = append(root.Decls, httpDecls...)
-
-	loggerDecls, err := doLoggers()
-	if err != nil {
-		return nil, err
-	}
-	root.Decls = append(root.Decls, loggerDecls...)
-
 	inputDecls, err := doComponents(
 		sch.Inputs,
 		&componentOptions{
@@ -137,12 +125,6 @@ func GenerateSchemaAST(sch schema.Full) (ast.Node, error) {
 		return nil, err
 	}
 	root.Decls = append(root.Decls, tracerDecls...)
-
-	testDecls, err := doTests()
-	if err != nil {
-		return nil, err
-	}
-	root.Decls = append(root.Decls, testDecls...)
 
 	return root, nil
 }
