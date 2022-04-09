@@ -11,6 +11,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/benthosdev/benthos/v4/internal/config/schema"
+	"github.com/benthosdev/benthos/v4/internal/cuegen"
 )
 
 func listCliCommand() *cli.Command {
@@ -104,5 +105,11 @@ func listComponents(c *cli.Context) {
 			panic(err)
 		}
 		fmt.Println(string(jsonBytes))
+	case "cue":
+		source, err := cuegen.GenerateSchema(schema)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(string(source))
 	}
 }

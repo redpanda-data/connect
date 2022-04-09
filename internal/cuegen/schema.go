@@ -2,15 +2,15 @@ package cuegen
 
 import (
 	"cuelang.org/go/cue/ast"
+	"cuelang.org/go/cue/format"
 
 	// Populating default environment in order to walk it and generate Cue types
 	"github.com/benthosdev/benthos/v4/internal/config/schema"
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
-// GenerateSchemaAST generates a Cue AST which includes Cue definitions that
-// represent the configuration file format and component configs.
-func GenerateSchemaAST(sch schema.Full) (ast.Node, error) {
+// GenerateSchema generates a Cue schema which includes definitions for the
+// configuration file structure and component configs.
+func GenerateSchema(sch schema.Full) ([]byte, error) {
 	root := &ast.File{
 		Decls: []ast.Decl{
 			&ast.Package{
@@ -126,5 +126,5 @@ func GenerateSchemaAST(sch schema.Full) (ast.Node, error) {
 	}
 	root.Decls = append(root.Decls, tracerDecls...)
 
-	return root, nil
+	return format.Node(root)
 }
