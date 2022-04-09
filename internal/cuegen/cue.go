@@ -8,7 +8,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-func doComponent(cs docs.ComponentSpec) (*ast.Field, error) {
+func doComponentSpec(cs docs.ComponentSpec) (*ast.Field, error) {
 	cfg := cs.Config
 	if len(cfg.Children) == 0 {
 		simple, err := doFieldSpec(cfg)
