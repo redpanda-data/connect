@@ -53,9 +53,6 @@ jobs:
       with:
         go-version: 1.18.x
 
-    - name: Install Cue
-      run: go install cuelang.org/go/cmd/cue@latest
-
     - name: Checkout code
       uses: actions/checkout@v2
 
