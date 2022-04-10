@@ -39,7 +39,7 @@ func doFieldSpecs(s docs.FieldSpecs) ([]interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		if checkRequired(fieldSpec) {
+		if fieldSpec.CheckRequired() {
 			fields = append(fields, field)
 		} else {
 			fields = append(fields, field.Label, token.OPTION, field.Value)
@@ -104,7 +104,7 @@ func doScalarField(spec docs.FieldSpec) (*ast.Field, error) {
 				return nil, fmt.Errorf("failed to generate type for object field: %w", err)
 			}
 
-			if checkRequired(child) {
+			if child.CheckRequired() {
 				fields = append(fields, field)
 			} else {
 				fields = append(fields, field.Label, token.OPTION, field.Value)
@@ -148,25 +148,4 @@ func interpolateIdent(ident *ast.Ident) ast.Label {
 		ident,
 		ast.NewLit(token.STRING, ")"),
 	}}
-}
-
-// TODO: Replace with FieldSpec.CheckRequired when available
-func checkRequired(f docs.FieldSpec) bool {
-	if f.IsOptional {
-		return false
-	}
-	if f.Default != nil {
-		return false
-	}
-	if len(f.Children) == 0 {
-		return true
-	}
-
-	// If none of the children are required then this field is not required.
-	for _, child := range f.Children {
-		if checkRequired(child) {
-			return true
-		}
-	}
-	return false
 }
