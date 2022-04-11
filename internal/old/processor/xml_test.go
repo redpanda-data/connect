@@ -3,6 +3,8 @@ package processor
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -109,9 +111,7 @@ func TestXMLCases(t *testing.T) {
 			if exp, act := test.output, string(msgsOut[0].Get(0).Get()); exp != act {
 				tt.Errorf("Wrong result: %v != %v", act, exp)
 			}
-			if errStr := GetFail(msgsOut[0].Get(0)); len(errStr) > 0 {
-				tt.Error(errStr)
-			}
+			assert.NoError(t, msgsOut[0].Get(0).ErrorGet())
 		})
 	}
 }
@@ -139,7 +139,5 @@ func TestXMLWithCast(t *testing.T) {
 	if exp, act := `{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}`, string(msgsOut[0].Get(0).Get()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if errStr := GetFail(msgsOut[0].Get(0)); len(errStr) > 0 {
-		t.Error(errStr)
-	}
+	assert.NoError(t, msgsOut[0].Get(0).ErrorGet())
 }

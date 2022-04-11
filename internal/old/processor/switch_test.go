@@ -178,9 +178,9 @@ func TestSwitchError(t *testing.T) {
 		resStrs = append(resStrs, string(b))
 	}
 
-	assert.Equal(t, "", GetFail(msgs[0].Get(0)))
-	assert.Equal(t, "failed assignment (line 1): expected string, array or object value, got null from field `this.id`", GetFail(msgs[0].Get(1)))
-	assert.Equal(t, "", GetFail(msgs[0].Get(2)))
+	assert.NoError(t, msgs[0].Get(0).ErrorGet())
+	assert.EqualError(t, msgs[0].Get(1).ErrorGet(), "failed assignment (line 1): expected string, array or object value, got null from field `this.id`")
+	assert.NoError(t, msgs[0].Get(2).ErrorGet())
 
 	assert.Equal(t, []string{
 		`Hit case 0: {"id":"foo","content":"just a foo"}`,

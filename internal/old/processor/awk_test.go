@@ -32,7 +32,7 @@ func TestAWKValidation(t *testing.T) {
 	if exp, act := "this is bad json", string(message.GetAllBytes(msgs[0])[0]); exp != act {
 		t.Errorf("Wrong output from bad json: %v != %v", act, exp)
 	}
-	if !HasFailed(msgs[0].Get(0)) {
+	if msgs[0].Get(0).ErrorGet() == nil {
 		t.Error("Expected fail flag on message part")
 	}
 
@@ -64,7 +64,7 @@ func TestAWKBadExitStatus(t *testing.T) {
 	if exp, act := "this will fail", string(message.GetAllBytes(msgs[0])[0]); exp != act {
 		t.Errorf("Wrong output from exit status 1: %v != %v", act, exp)
 	}
-	if !HasFailed(msgs[0].Get(0)) {
+	if msgs[0].Get(0).ErrorGet() == nil {
 		t.Error("Expected fail flag on message part")
 	}
 }

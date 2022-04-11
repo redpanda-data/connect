@@ -143,7 +143,7 @@ func (p *catchProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 	}
 
 	_ = resMsg.Iter(func(i int, p *message.Part) error {
-		ClearFail(p)
+		p.ErrorSet(nil)
 		return nil
 	})
 

@@ -92,15 +92,9 @@ func TestCacheAdd(t *testing.T) {
 		t.Errorf("Wrong result messages: %s != %s", act, exp)
 	}
 
-	if exp, act := false, HasFailed(output[0].Get(0)); exp != act {
-		t.Errorf("Wrong fail flag: %v != %v", act, exp)
-	}
-	if exp, act := false, HasFailed(output[0].Get(1)); exp != act {
-		t.Errorf("Wrong fail flag: %v != %v", act, exp)
-	}
-	if exp, act := true, HasFailed(output[0].Get(2)); exp != act {
-		t.Errorf("Wrong fail flag: %v != %v", act, exp)
-	}
+	assert.NoError(t, output[0].Get(0).ErrorGet())
+	assert.NoError(t, output[0].Get(1).ErrorGet())
+	assert.Error(t, output[0].Get(2).ErrorGet())
 
 	actV, ok := mgr.Caches["foocache"]["1"]
 	require.True(t, ok)
@@ -153,15 +147,9 @@ func TestCacheGet(t *testing.T) {
 		t.Errorf("Wrong result messages: %s != %s", act, exp)
 	}
 
-	if exp, act := false, HasFailed(output[0].Get(0)); exp != act {
-		t.Errorf("Wrong fail flag: %v != %v", act, exp)
-	}
-	if exp, act := false, HasFailed(output[0].Get(1)); exp != act {
-		t.Errorf("Wrong fail flag: %v != %v", act, exp)
-	}
-	if exp, act := true, HasFailed(output[0].Get(2)); exp != act {
-		t.Errorf("Wrong fail flag: %v != %v", act, exp)
-	}
+	assert.NoError(t, output[0].Get(0).ErrorGet())
+	assert.NoError(t, output[0].Get(1).ErrorGet())
+	assert.Error(t, output[0].Get(2).ErrorGet())
 }
 
 func TestCacheDelete(t *testing.T) {
@@ -202,15 +190,9 @@ func TestCacheDelete(t *testing.T) {
 		t.Errorf("Wrong result messages: %s != %s", act, exp)
 	}
 
-	if exp, act := false, HasFailed(output[0].Get(0)); exp != act {
-		t.Errorf("Wrong fail flag: %v != %v", act, exp)
-	}
-	if exp, act := false, HasFailed(output[0].Get(1)); exp != act {
-		t.Errorf("Wrong fail flag: %v != %v", act, exp)
-	}
-	if exp, act := false, HasFailed(output[0].Get(2)); exp != act {
-		t.Errorf("Wrong fail flag: %v != %v", act, exp)
-	}
+	assert.NoError(t, output[0].Get(0).ErrorGet())
+	assert.NoError(t, output[0].Get(1).ErrorGet())
+	assert.NoError(t, output[0].Get(2).ErrorGet())
 
 	_, ok := mgr.Caches["foocache"]["1"]
 	require.False(t, ok)

@@ -43,7 +43,7 @@ func ExecuteTryAll(procs []processor.V1, msgs ...*message.Batch) ([]*message.Bat
 		var nextResultMsgs []*message.Batch
 		for _, m := range resultMsgs {
 			// Skip messages that failed a prior stage.
-			if HasFailed(m.Get(0)) {
+			if m.Get(0).ErrorGet() != nil {
 				nextResultMsgs = append(nextResultMsgs, m)
 				continue
 			}
@@ -77,7 +77,7 @@ func ExecuteCatchAll(procs []processor.V1, msgs ...*message.Batch) ([]*message.B
 	for i, m := range msgs {
 		catchBatches[i] = catchMessage{
 			batches: []*message.Batch{m},
-			caught:  HasFailed(m.Get(0)),
+			caught:  m.Get(0).ErrorGet() != nil,
 		}
 	}
 
@@ -106,42 +106,6 @@ func ExecuteCatchAll(procs []processor.V1, msgs ...*message.Batch) ([]*message.B
 		resultBatches = append(resultBatches, b.batches...)
 	}
 	return resultBatches, nil
-}
-
-//------------------------------------------------------------------------------
-
-// FailFlagKey is a metadata key used for flagging processor errors in Benthos.
-// If a message part has any non-empty value for this metadata key then it will
-// be interpretted as having failed a processor step somewhere in the pipeline.
-var FailFlagKey = message.FailFlagKey
-
-// FlagFail marks a message part as having failed at a processing step.
-func FlagFail(part *message.Part) {
-	part.MetaSet(FailFlagKey, "true")
-}
-
-// FlagErr marks a message part as having failed at a processing step with an
-// error message. If the error is nil the message part remains unchanged.
-func FlagErr(part *message.Part, err error) {
-	if err != nil {
-		part.MetaSet(FailFlagKey, err.Error())
-	}
-}
-
-// GetFail returns an error string for a message part if it has failed, or an
-// empty string if not.
-func GetFail(part *message.Part) string {
-	return part.MetaGet(FailFlagKey)
-}
-
-// HasFailed checks whether a message part has failed a processing step.
-func HasFailed(part *message.Part) bool {
-	return len(part.MetaGet(FailFlagKey)) > 0
-}
-
-// ClearFail removes any existing failure flags from a message part.
-func ClearFail(part *message.Part) {
-	part.MetaDelete(FailFlagKey)
 }
 
 //------------------------------------------------------------------------------
@@ -182,7 +146,7 @@ func IteratePartsWithSpanV2(
 		span := tracing.CreateChildSpan(operationName, part)
 
 		if err := iter(i, span, part); err != nil {
-			FlagErr(part, err)
+			part.ErrorSet(err)
 			span.SetTag("error", "true")
 			span.LogKV(
 				"event", "error",

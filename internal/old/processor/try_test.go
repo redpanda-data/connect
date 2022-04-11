@@ -191,13 +191,13 @@ func TestTryFailJSON(t *testing.T) {
 	if act := message.GetAllBytes(msgs[0]); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
-	if HasFailed(msgs[0].Get(0)) {
+	if msgs[0].Get(0).ErrorGet() != nil {
 		t.Error("Unexpected part 0 failed flag")
 	}
-	if !HasFailed(msgs[0].Get(1)) {
+	if msgs[0].Get(1).ErrorGet() == nil {
 		t.Error("Unexpected part 1 failed flag")
 	}
-	if HasFailed(msgs[0].Get(2)) {
+	if msgs[0].Get(2).ErrorGet() != nil {
 		t.Error("Unexpected part 2 failed flag")
 	}
 }

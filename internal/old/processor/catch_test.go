@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -38,7 +39,7 @@ func TestCatchEmpty(t *testing.T) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
 	_ = msgs[0].Iter(func(i int, p *message.Part) error {
-		if HasFailed(p) {
+		if p.ErrorGet() != nil {
 			t.Errorf("Unexpected part %v failed flag", i)
 		}
 		return nil
@@ -72,7 +73,7 @@ func TestCatchBasic(t *testing.T) {
 
 	msg := message.QuickBatch(parts)
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		FlagFail(p)
+		p.ErrorSet(errors.New("foo"))
 		return nil
 	})
 	msgs, res := proc.ProcessMessage(msg)
@@ -87,7 +88,7 @@ func TestCatchBasic(t *testing.T) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
 	_ = msgs[0].Iter(func(i int, p *message.Part) error {
-		if HasFailed(p) {
+		if p.ErrorGet() != nil {
 			t.Errorf("Unexpected part %v failed flag", i)
 		}
 		return nil
@@ -119,7 +120,7 @@ func TestCatchFilterSome(t *testing.T) {
 	}
 	msg := message.QuickBatch(parts)
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		FlagFail(p)
+		p.ErrorSet(errors.New("foo"))
 		return nil
 	})
 	msgs, res := proc.ProcessMessage(msg)
@@ -134,7 +135,7 @@ func TestCatchFilterSome(t *testing.T) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
 	_ = msgs[0].Iter(func(i int, p *message.Part) error {
-		if HasFailed(p) {
+		if p.ErrorGet() != nil {
 			t.Errorf("Unexpected part %v failed flag", i)
 		}
 		return nil
@@ -170,7 +171,7 @@ func TestCatchMultiProcs(t *testing.T) {
 	}
 	msg := message.QuickBatch(parts)
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		FlagFail(p)
+		p.ErrorSet(errors.New("foo"))
 		return nil
 	})
 	msgs, res := proc.ProcessMessage(msg)
@@ -185,7 +186,7 @@ func TestCatchMultiProcs(t *testing.T) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
 	_ = msgs[0].Iter(func(i int, p *message.Part) error {
-		if HasFailed(p) {
+		if p.ErrorGet() != nil {
 			t.Errorf("Unexpected part %v failed flag", i)
 		}
 		return nil
@@ -217,8 +218,8 @@ func TestCatchNotFails(t *testing.T) {
 		[]byte("RkFJTEVEIEVOQ09ERSBNRSBQTEVBU0UgMg=="),
 	}
 	msg := message.QuickBatch(parts)
-	FlagFail(msg.Get(0))
-	FlagFail(msg.Get(2))
+	msg.Get(0).ErrorSet(errors.New("foo"))
+	msg.Get(2).ErrorSet(errors.New("foo"))
 	msgs, res := proc.ProcessMessage(msg)
 	if res != nil {
 		t.Fatal(res)
@@ -231,7 +232,7 @@ func TestCatchNotFails(t *testing.T) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
 	_ = msgs[0].Iter(func(i int, p *message.Part) error {
-		if HasFailed(p) {
+		if p.ErrorGet() != nil {
 			t.Errorf("Unexpected part %v failed flag", i)
 		}
 		return nil
@@ -259,7 +260,7 @@ func TestCatchFilterAll(t *testing.T) {
 	}
 	msg := message.QuickBatch(parts)
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		FlagFail(p)
+		p.ErrorSet(errors.New("foo"))
 		return nil
 	})
 	msgs, res := proc.ProcessMessage(msg)

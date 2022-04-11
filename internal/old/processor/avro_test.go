@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -152,9 +154,7 @@ func TestAvroBasic(t *testing.T) {
 				tt.Logf("Part 0: %v", strconv.Quote(string(act[0])))
 			}
 			_ = msgs[0].Iter(func(i int, part *message.Part) error {
-				if fail := part.MetaGet(FailFlagKey); len(fail) > 0 {
-					tt.Error(fail)
-				}
+				assert.NoError(t, part.ErrorGet())
 				return nil
 			})
 		})
@@ -311,9 +311,7 @@ func TestAvroSchemaPath(t *testing.T) {
 				tt.Logf("Part 0: %v", strconv.Quote(string(act[0])))
 			}
 			_ = msgs[0].Iter(func(i int, part *message.Part) error {
-				if fail := part.MetaGet(FailFlagKey); len(fail) > 0 {
-					tt.Error(fail)
-				}
+				assert.NoError(t, part.ErrorGet())
 				return nil
 			})
 		})

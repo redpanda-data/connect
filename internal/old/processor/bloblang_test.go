@@ -165,8 +165,8 @@ func TestBloblangFiltering(t *testing.T) {
 	require.Nil(t, res)
 	require.Len(t, outMsgs, 1)
 	require.Equal(t, 2, outMsgs[0].Len())
-	assert.Equal(t, ``, outMsgs[0].Get(0).MetaGet(FailFlagKey))
-	assert.Equal(t, ``, outMsgs[0].Get(1).MetaGet(FailFlagKey))
+	assert.NoError(t, outMsgs[0].Get(0).ErrorGet())
+	assert.NoError(t, outMsgs[0].Get(1).ErrorGet())
 	assert.Equal(t, `{"foo":{"dont":"delete me"}}`, string(outMsgs[0].Get(0).Get()))
 	assert.Equal(t, `{"bar":{"dont":"delete me"}}`, string(outMsgs[0].Get(1).Get()))
 }
@@ -214,5 +214,6 @@ func TestBloblangJSONError(t *testing.T) {
 	resPart := outMsgs[0].Get(0)
 
 	assert.Equal(t, `this is not valid json`, string(resPart.Get()))
-	assert.Equal(t, `failed assignment (line 2): invalid character 'h' in literal true (expecting 'r')`, resPart.MetaGet(message.FailFlagKey))
+	require.Error(t, resPart.ErrorGet())
+	assert.Equal(t, `failed assignment (line 2): invalid character 'h' in literal true (expecting 'r')`, resPart.ErrorGet().Error())
 }

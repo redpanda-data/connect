@@ -131,9 +131,7 @@ func TestProtobuf(t *testing.T) {
 
 			assert.Equal(t, message.GetAllBytes(msgs[0]), test.output)
 			_ = msgs[0].Iter(func(i int, part *message.Part) error {
-				if fail := part.MetaGet(FailFlagKey); len(fail) > 0 {
-					tt.Error(fail)
-				}
+				require.NoError(t, part.ErrorGet())
 				return nil
 			})
 		})
@@ -191,7 +189,9 @@ func TestProtobufErrors(t *testing.T) {
 
 			errs := make([]string, msgs[0].Len())
 			_ = msgs[0].Iter(func(i int, part *message.Part) error {
-				errs[i] = part.MetaGet(FailFlagKey)
+				if err := part.ErrorGet(); err != nil {
+					errs[i] = err.Error()
+				}
 				return nil
 			})
 

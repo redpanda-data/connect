@@ -159,9 +159,7 @@ func TestSubprocessWithErrors(t *testing.T) {
 
 	msgs, _ := proc.ProcessMessage(msgIn)
 
-	if !HasFailed(msgs[0].Get(0)) {
-		t.Errorf("Expected subprocessor to fail")
-	}
+	assert.Error(t, msgs[0].Get(0).ErrorGet())
 
 	proc.CloseAsync()
 	if err := proc.WaitForClose(time.Second); err != nil {
@@ -284,7 +282,7 @@ func main() {
 		require.Nil(t, res)
 
 		for i := 0; i < msgIn.Len(); i++ {
-			assert.Empty(t, msgs[0].Get(i).MetaGet(FailFlagKey))
+			assert.NoError(t, msgs[0].Get(i).ErrorGet())
 		}
 		assert.Equal(t, exp, message.GetAllBytes(msgs[0]))
 

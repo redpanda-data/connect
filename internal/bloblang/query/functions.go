@@ -13,8 +13,6 @@ import (
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/segmentio/ksuid"
-
-	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 type fieldFunction struct {
@@ -336,11 +334,11 @@ var _ = registerSimpleFunction(
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		v := ctx.MsgBatch.Get(ctx.Index).MetaGet(message.FailFlagKey)
-		if v == "" {
-			return nil, nil
+		v := ctx.MsgBatch.Get(ctx.Index).ErrorGet()
+		if v != nil {
+			return v.Error(), nil
 		}
-		return v, nil
+		return nil, nil
 	},
 )
 
@@ -353,7 +351,7 @@ var _ = registerSimpleFunction(
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		return len(ctx.MsgBatch.Get(ctx.Index).MetaGet(message.FailFlagKey)) > 0, nil
+		return ctx.MsgBatch.Get(ctx.Index).ErrorGet() != nil, nil
 	},
 )
 

@@ -493,7 +493,9 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 		require.Nil(t, response)
 		require.Len(t, resMsgs, 1)
 		if tt.expectedErr != nil {
-			require.Equal(t, mongo.ErrNoDocuments.Error(), resMsgs[0].Get(0).MetaGet(message.FailFlagKey))
+			tmpErr := resMsgs[0].Get(0).ErrorGet()
+			require.Error(t, tmpErr)
+			require.Equal(t, mongo.ErrNoDocuments.Error(), tmpErr.Error())
 			continue
 		}
 

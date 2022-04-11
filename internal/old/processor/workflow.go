@@ -476,7 +476,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 		w.log.Errorf("Failed to establish workflow: %v\n", err)
 
 		_ = payload.Iter(func(i int, p *message.Part) error {
-			FlagErr(p, err)
+			p.ErrorSet(err)
 			return nil
 		})
 		w.mSent.Incr(int64(payload.Len()))
@@ -518,7 +518,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 				_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
 					// Remove errors so that they aren't propagated into the
 					// branch.
-					ClearFail(part)
+					part.ErrorSet(nil)
 					if _, exists := skipOnMeta[partIndex][id]; !exists {
 						branchParts[partIndex] = part
 					}
@@ -570,7 +570,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 			if err != nil {
 				w.mError.Incr(1)
 				w.log.Errorf("Failed to parse message for meta update: %v\n", err)
-				FlagErr(p, err)
+				p.ErrorSet(err)
 				return nil
 			}
 
@@ -593,7 +593,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 					failed = append(failed, k)
 				}
 				sort.Strings(failed)
-				FlagErr(p, fmt.Errorf("workflow branches failed: %v", failed))
+				p.ErrorSet(fmt.Errorf("workflow branches failed: %v", failed))
 			}
 			return nil
 		})

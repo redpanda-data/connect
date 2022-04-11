@@ -163,7 +163,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 				if len(codeStr) > 0 {
 					p.MetaSet("http_status_code", codeStr)
 				}
-				FlagErr(p, err)
+				p.ErrorSet(err)
 				return nil
 			})
 		} else {
@@ -199,7 +199,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 				if ok := errors.As(err, &hErr); ok {
 					errPart.MetaSet("http_status_code", strconv.Itoa(hErr.Code))
 				}
-				FlagErr(errPart, err)
+				errPart.ErrorSet(err)
 				_ = responseMsg.Append(errPart)
 				return nil
 			}
@@ -245,7 +245,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 						if ok := errors.As(err, &hErr); ok {
 							results[index].MetaSet("http_status_code", strconv.Itoa(hErr.Code))
 						}
-						FlagErr(results[index], err)
+						results[index].ErrorSet(err)
 					}
 					resChan <- err
 				}

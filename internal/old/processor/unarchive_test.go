@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -343,9 +345,7 @@ func TestUnarchiveBinary(t *testing.T) {
 	if exp, act := 1, msgs[0].Len(); exp != act {
 		t.Fatalf("Wrong count: %v != %v", act, exp)
 	}
-	if !HasFailed(msgs[0].Get(0)) {
-		t.Error("Expected fail")
-	}
+	assert.Error(t, msgs[0].Get(0).ErrorGet())
 
 	testMsg := message.QuickBatch([][]byte{[]byte("hello"), []byte("world")})
 	testMsgBlob := message.ToBytes(testMsg)

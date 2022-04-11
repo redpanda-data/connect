@@ -339,7 +339,7 @@ func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	parts := make([]*message.Part, 0, branchMsg.Len())
 	_ = branchMsg.Iter(func(i int, p *message.Part) error {
 		// Remove errors so that they aren't propagated into the branch.
-		ClearFail(p)
+		p.ErrorSet(nil)
 		parts = append(parts, p)
 		return nil
 	})
@@ -349,12 +349,12 @@ func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		result := msg.Copy()
 		// Add general error to all messages.
 		_ = result.Iter(func(i int, p *message.Part) error {
-			FlagErr(p, err)
+			p.ErrorSet(err)
 			return nil
 		})
 		// And override with mapping specific errors where appropriate.
 		for _, e := range mapErrs {
-			FlagErr(result.Get(e.index), e.err)
+			result.Get(e.index).ErrorSet(e.err)
 		}
 		msgs := [1]*message.Batch{result}
 		return msgs[:], nil
@@ -362,20 +362,20 @@ func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 
 	result := msg.DeepCopy()
 	for _, e := range mapErrs {
-		FlagErr(result.Get(e.index), e.err)
+		result.Get(e.index).ErrorSet(e.err)
 		b.log.Errorf("Branch error: %v", e.err)
 	}
 
 	if mapErrs, err = b.overlayResult(result, resultParts); err != nil {
 		_ = result.Iter(func(i int, p *message.Part) error {
-			FlagErr(p, err)
+			p.ErrorSet(err)
 			return nil
 		})
 		msgs := [1]*message.Batch{result}
 		return msgs[:], nil
 	}
 	for _, e := range mapErrs {
-		FlagErr(result.Get(e.index), e.err)
+		result.Get(e.index).ErrorSet(e.err)
 		b.log.Errorf("Branch error: %v", e.err)
 	}
 
@@ -468,9 +468,9 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 		if p == nil {
 			continue
 		}
-		if fail := GetFail(p); len(fail) > 0 {
+		if fail := p.ErrorGet(); fail != nil {
 			alignedResult[i] = nil
-			mapErrs = append(mapErrs, newBranchMapError(i, fmt.Errorf("processors failed: %v", fail)))
+			mapErrs = append(mapErrs, newBranchMapError(i, fmt.Errorf("processors failed: %w", fail)))
 		}
 	}
 

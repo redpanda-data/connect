@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"os"
 	"strconv"
 	"testing"
@@ -19,6 +20,7 @@ func TestFunctionQueries(t *testing.T) {
 	type easyMsg struct {
 		content string
 		meta    map[string]string
+		err     error
 	}
 
 	tests := map[string]struct {
@@ -320,18 +322,14 @@ bar""")`,
 			input:  `error()`,
 			output: `test error`,
 			messages: []easyMsg{
-				{meta: map[string]string{
-					message.FailFlagKey: "test error",
-				}},
+				{err: errors.New("test error")},
 			},
 		},
 		"error function 2": {
 			input:  `error().from(1)`,
 			output: `null`,
 			messages: []easyMsg{
-				{meta: map[string]string{
-					message.FailFlagKey: "test error",
-				}},
+				{err: errors.New("test error")},
 			},
 		},
 		"error function 3": {
@@ -339,9 +337,7 @@ bar""")`,
 			output: `test error`,
 			messages: []easyMsg{
 				{},
-				{meta: map[string]string{
-					message.FailFlagKey: "test error",
-				}},
+				{err: errors.New("test error")},
 			},
 		},
 		"error function 4": {
@@ -350,18 +346,14 @@ bar""")`,
 			index:  1,
 			messages: []easyMsg{
 				{},
-				{meta: map[string]string{
-					message.FailFlagKey: "test error",
-				}},
+				{err: errors.New("test error")},
 			},
 		},
 		"errored function": {
 			input:  `errored()`,
 			output: `true`,
 			messages: []easyMsg{
-				{meta: map[string]string{
-					message.FailFlagKey: "test error",
-				}},
+				{err: errors.New("test error")},
 			},
 		},
 		"errored function if": {
@@ -370,9 +362,7 @@ bar""")`,
 			index:  1,
 			messages: []easyMsg{
 				{},
-				{meta: map[string]string{
-					message.FailFlagKey: "test error",
-				}},
+				{err: errors.New("test error")},
 			},
 		},
 		"errored function else": {
@@ -381,18 +371,14 @@ bar""")`,
 			index:  0,
 			messages: []easyMsg{
 				{},
-				{meta: map[string]string{
-					message.FailFlagKey: "test error",
-				}},
+				{err: errors.New("test error")},
 			},
 		},
 		"errored function 2": {
 			input:  `errored().from(1)`,
 			output: `false`,
 			messages: []easyMsg{
-				{meta: map[string]string{
-					message.FailFlagKey: "test error",
-				}},
+				{err: errors.New("test error")},
 			},
 		},
 		"errored function 3": {
@@ -400,9 +386,7 @@ bar""")`,
 			output: `true`,
 			messages: []easyMsg{
 				{},
-				{meta: map[string]string{
-					message.FailFlagKey: "test error",
-				}},
+				{err: errors.New("test error")},
 			},
 		},
 		"errored function 4": {
@@ -411,9 +395,7 @@ bar""")`,
 			index:  1,
 			messages: []easyMsg{
 				{},
-				{meta: map[string]string{
-					message.FailFlagKey: "test error",
-				}},
+				{err: errors.New("test error")},
 			},
 		},
 		"content function": {
@@ -689,6 +671,9 @@ bar""")`,
 					for k, v := range m.meta {
 						part.MetaSet(k, v)
 					}
+				}
+				if m.err != nil {
+					part.ErrorSet(m.err)
 				}
 				msg.Append(part)
 			}

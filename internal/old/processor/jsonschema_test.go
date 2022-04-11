@@ -101,8 +101,8 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 				t.Errorf("Wrong result '%v': %v != %v", tt.name, act, exp)
 			}
 			_ = msgs[0].Iter(func(i int, part *message.Part) error {
-				act := part.MetaGet(FailFlagKey)
-				if len(act) > 0 && act != tt.err {
+				act := part.ErrorGet()
+				if act != nil && act.Error() != tt.err {
 					t.Errorf("Wrong error message '%v': %v != %v", tt.name, act, tt.err)
 				}
 				return nil
@@ -193,8 +193,8 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 				t.Errorf("Wrong result '%v': %v != %v", tt.name, act, exp)
 			}
 			_ = msgs[0].Iter(func(i int, part *message.Part) error {
-				act := part.MetaGet(FailFlagKey)
-				if len(act) > 0 && act != tt.err {
+				act := part.ErrorGet()
+				if act != nil && act.Error() != tt.err {
 					t.Errorf("Wrong error message '%v': %v != %v", tt.name, act, tt.err)
 				}
 				return nil
@@ -298,8 +298,8 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 				t.Errorf("Wrong result '%v': %v != %v", tt.name, act, exp)
 			}
 			_ = msgs[0].Iter(func(i int, part *message.Part) error {
-				act := part.MetaGet(FailFlagKey)
-				if len(act) > 0 && act != tt.err {
+				act := part.ErrorGet()
+				if act != nil && act.Error() != tt.err {
 					t.Errorf("Wrong error message '%v': %v != %v", tt.name, act, tt.err)
 				}
 				return nil

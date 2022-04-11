@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -101,16 +103,12 @@ func TestParallelError(t *testing.T) {
 	if exp, act := "baz", string(msgs[0].Get(2).Get()); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if !HasFailed(msgs[0].Get(2)) {
-		t.Error("Expected failed flag")
-	}
+	assert.Error(t, msgs[0].Get(2).ErrorGet())
 	for _, i := range []int{0, 1, 3, 4} {
 		if exp, act := "foobar", string(msgs[0].Get(i).Get()); act != exp {
 			t.Errorf("Wrong result: %v != %v", act, exp)
 		}
-		if HasFailed(msgs[0].Get(i)) {
-			t.Error("Did not expect failed flag")
-		}
+		assert.NoError(t, msgs[0].Get(i).ErrorGet())
 	}
 }
 

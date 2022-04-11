@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -13,11 +14,18 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
+type mockMsg struct {
+	content string
+	meta    map[string]string
+	err     error
+}
+
+func (m mockMsg) withErr(err error) mockMsg {
+	m.err = err
+	return m
+}
+
 func TestBranchBasic(t *testing.T) {
-	type mockMsg struct {
-		content string
-		meta    map[string]string
-	}
 	msg := func(content string, meta ...string) mockMsg {
 		t.Helper()
 		m := mockMsg{
@@ -89,29 +97,14 @@ func TestBranchBasic(t *testing.T) {
 					this.name_upper
 				}`,
 			input: []mockMsg{
-				msg(
-					`{"id":0,"name":"first"}`,
-					FailFlagKey, "this is a pre-existing failure",
-				),
+				msg(`{"id":0,"name":"first"}`).withErr(errors.New("this is a pre-existing failure")),
 				msg(`{"failme":true,"id":1,"name":"second"}`),
-				msg(
-					`{"failme":true,"id":2,"name":"third"}`,
-					FailFlagKey, "this is a pre-existing failure",
-				),
+				msg(`{"failme":true,"id":2,"name":"third"}`).withErr(errors.New("this is a pre-existing failure")),
 			},
 			output: []mockMsg{
-				msg(
-					`{"id":0,"name":"first","result":"FIRST"}`,
-					FailFlagKey, "this is a pre-existing failure",
-				),
-				msg(
-					`{"failme":true,"id":1,"name":"second"}`,
-					FailFlagKey, "result mapping failed: failed assignment (line 1): this is a branch error",
-				),
-				msg(
-					`{"failme":true,"id":2,"name":"third"}`,
-					FailFlagKey, "result mapping failed: failed assignment (line 1): this is a branch error",
-				),
+				msg(`{"id":0,"name":"first","result":"FIRST"}`).withErr(errors.New("this is a pre-existing failure")),
+				msg(`{"failme":true,"id":1,"name":"second"}`).withErr(errors.New("result mapping failed: failed assignment (line 1): this is a branch error")),
+				msg(`{"failme":true,"id":2,"name":"third"}`).withErr(errors.New("result mapping failed: failed assignment (line 1): this is a branch error")),
 			},
 		},
 		"map error into branch": {
@@ -119,17 +112,11 @@ func TestBranchBasic(t *testing.T) {
 			processorMap: `root.err = this.err.string().uppercase()`,
 			resultMap:    `root.result_err = this.err`,
 			input: []mockMsg{
-				msg(
-					`{"id":0,"name":"first"}`,
-					FailFlagKey, "this is a pre-existing failure",
-				),
+				msg(`{"id":0,"name":"first"}`).withErr(errors.New("this is a pre-existing failure")),
 				msg(`{"id":1,"name":"second"}`),
 			},
 			output: []mockMsg{
-				msg(
-					`{"id":0,"name":"first","result_err":"THIS IS A PRE-EXISTING FAILURE"}`,
-					FailFlagKey, "this is a pre-existing failure",
-				),
+				msg(`{"id":0,"name":"first","result_err":"THIS IS A PRE-EXISTING FAILURE"}`).withErr(errors.New("this is a pre-existing failure")),
 				msg(`{"id":1,"name":"second","result_err":"NULL"}`),
 			},
 		},
@@ -153,17 +140,9 @@ func TestBranchBasic(t *testing.T) {
 				msg(`{"id":4,"name":"fifth"}`),
 			},
 			output: []mockMsg{
-				msg(
-					`{"id":0,"name":"first"}`,
-					FailFlagKey,
-					"request mapping failed: failed assignment (line 1): i dont like zero",
-				),
+				msg(`{"id":0,"name":"first"}`).withErr(errors.New("request mapping failed: failed assignment (line 1): i dont like zero")),
 				msg(`{"id":1,"name":"second","result":"SECOND"}`),
-				msg(
-					`{"id":2,"name":"third"}`,
-					FailFlagKey,
-					"result mapping failed: failed assignment (line 1): i dont like two either",
-				),
+				msg(`{"id":2,"name":"third"}`).withErr(errors.New("result mapping failed: failed assignment (line 1): i dont like two either")),
 				msg(`{"id":3,"name":"fourth"}`),
 				msg(`{"id":4,"name":"fifth","result":"FIFTH"}`),
 			},
@@ -199,31 +178,11 @@ func TestBranchBasic(t *testing.T) {
 				msg(`{"id":4,"name":"fifth"}`),
 			},
 			output: []mockMsg{
-				msg(
-					`{"id":0,"name":"first"}`,
-					FailFlagKey,
-					"child processors resulted in zero messages",
-				),
-				msg(
-					`{"id":1,"name":"second"}`,
-					FailFlagKey,
-					"child processors resulted in zero messages",
-				),
-				msg(
-					`{"id":2,"name":"third"}`,
-					FailFlagKey,
-					"child processors resulted in zero messages",
-				),
-				msg(
-					`{"id":3,"name":"fourth"}`,
-					FailFlagKey,
-					"request mapping failed: failed assignment (line 1): foo",
-				),
-				msg(
-					`{"id":4,"name":"fifth"}`,
-					FailFlagKey,
-					"child processors resulted in zero messages",
-				),
+				msg(`{"id":0,"name":"first"}`).withErr(errors.New("child processors resulted in zero messages")),
+				msg(`{"id":1,"name":"second"}`).withErr(errors.New("child processors resulted in zero messages")),
+				msg(`{"id":2,"name":"third"}`).withErr(errors.New("child processors resulted in zero messages")),
+				msg(`{"id":3,"name":"fourth"}`).withErr(errors.New("request mapping failed: failed assignment (line 1): foo")),
+				msg(`{"id":4,"name":"fifth"}`).withErr(errors.New("child processors resulted in zero messages")),
 			},
 		},
 		"filter some during processing": {
@@ -238,31 +197,11 @@ func TestBranchBasic(t *testing.T) {
 				msg(`{"id":4,"name":"fifth"}`),
 			},
 			output: []mockMsg{
-				msg(
-					`{"id":0,"name":"first"}`,
-					FailFlagKey,
-					"message count from branch processors does not match request, started with 4 messages, finished with 5",
-				),
-				msg(
-					`{"id":1,"name":"second"}`,
-					FailFlagKey,
-					"message count from branch processors does not match request, started with 4 messages, finished with 5",
-				),
-				msg(
-					`{"id":2,"name":"third"}`,
-					FailFlagKey,
-					"message count from branch processors does not match request, started with 4 messages, finished with 5",
-				),
-				msg(
-					`{"id":3,"name":"fourth"}`,
-					FailFlagKey,
-					"request mapping failed: failed assignment (line 1): foo",
-				),
-				msg(
-					`{"id":4,"name":"fifth"}`,
-					FailFlagKey,
-					"message count from branch processors does not match request, started with 4 messages, finished with 5",
-				),
+				msg(`{"id":0,"name":"first"}`).withErr(errors.New("message count from branch processors does not match request, started with 4 messages, finished with 5")),
+				msg(`{"id":1,"name":"second"}`).withErr(errors.New("message count from branch processors does not match request, started with 4 messages, finished with 5")),
+				msg(`{"id":2,"name":"third"}`).withErr(errors.New("message count from branch processors does not match request, started with 4 messages, finished with 5")),
+				msg(`{"id":3,"name":"fourth"}`).withErr(errors.New("request mapping failed: failed assignment (line 1): foo")),
+				msg(`{"id":4,"name":"fifth"}`).withErr(errors.New("message count from branch processors does not match request, started with 4 messages, finished with 5")),
 			},
 		},
 	}
@@ -293,6 +232,9 @@ func TestBranchBasic(t *testing.T) {
 						part.MetaSet(k, v)
 					}
 				}
+				if m.err != nil {
+					part.ErrorSet(m.err)
+				}
 				msg.Append(part)
 			}
 
@@ -312,6 +254,14 @@ func TestBranchBasic(t *testing.T) {
 					comparePart.meta[k] = v
 					return nil
 				})
+
+				if out.err != nil {
+					assert.EqualError(t, outMsgs[0].Get(i).ErrorGet(), out.err.Error())
+				} else {
+					assert.NoError(t, outMsgs[0].Get(i).ErrorGet())
+				}
+				outMsgs[0].Get(i).ErrorSet(nil)
+				out.err = nil
 
 				assert.Equal(t, out, comparePart)
 			}

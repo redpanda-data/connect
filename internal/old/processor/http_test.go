@@ -49,9 +49,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	if exp, act := "test", string(msgs[0].Get(0).Get()); exp != act {
 		t.Errorf("Wrong message contents: %v != %v", act, exp)
 	}
-	if !HasFailed(msgs[0].Get(0)) {
-		t.Error("Failed message part not flagged")
-	}
+	assert.Error(t, msgs[0].Get(0).ErrorGet())
 	if exp, act := "403", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
@@ -219,8 +217,8 @@ func TestHTTPClientEmpty404Response(t *testing.T) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	} else if exp, act := "404", msgs[0].Get(0).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
-	} else if !HasFailed(msgs[0].Get(0)) {
-		t.Error("Expected error flag")
+	} else {
+		assert.Error(t, msgs[0].Get(0).ErrorGet())
 	}
 }
 
@@ -303,7 +301,8 @@ func TestHTTPClientSerial(t *testing.T) {
 
 	assert.Equal(t, "foobar foo", string(msgs[0].Get(0).Get()))
 	assert.Equal(t, "bar", string(msgs[0].Get(1).Get()))
-	assert.Contains(t, GetFail(msgs[0].Get(1)), "request returned unexpected response code")
+	require.Error(t, msgs[0].Get(1).ErrorGet())
+	assert.Contains(t, msgs[0].Get(1).ErrorGet().Error(), "request returned unexpected response code")
 	assert.Equal(t, "foobar baz", string(msgs[0].Get(2).Get()))
 	assert.Equal(t, "foobar qux", string(msgs[0].Get(3).Get()))
 	assert.Equal(t, "foobar quz", string(msgs[0].Get(4).Get()))
@@ -397,9 +396,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 	if exp, act := "baz", string(msgs[0].Get(2).Get()); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if !HasFailed(msgs[0].Get(2)) {
-		t.Error("Expected failed flag")
-	}
+	assert.Error(t, msgs[0].Get(2).ErrorGet())
 	if exp, act := "403", msgs[0].Get(2).MetaGet("http_status_code"); exp != act {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
@@ -407,9 +404,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 		if exp, act := "foobar", string(msgs[0].Get(i).Get()); act != exp {
 			t.Errorf("Wrong result: %v != %v", act, exp)
 		}
-		if HasFailed(msgs[0].Get(i)) {
-			t.Error("Did not expect failed flag")
-		}
+		assert.NoError(t, msgs[0].Get(i).ErrorGet())
 		if exp, act := "200", msgs[0].Get(i).MetaGet("http_status_code"); exp != act {
 			t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 		}

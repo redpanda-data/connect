@@ -1,6 +1,7 @@
 package processor_test
 
 import (
+	"errors"
 	"sort"
 	"strconv"
 	"sync"
@@ -256,11 +257,18 @@ func TestWorkflowMissingResources(t *testing.T) {
 	require.EqualError(t, err, "processor resource 'foo' was not found")
 }
 
+type mockMsg struct {
+	content string
+	meta    map[string]string
+	err     error
+}
+
+func (m mockMsg) withErr(err error) mockMsg {
+	m.err = err
+	return m
+}
+
 func TestWorkflows(t *testing.T) {
-	type mockMsg struct {
-		content string
-		meta    map[string]string
-	}
 	msg := func(content string, meta ...string) mockMsg {
 		t.Helper()
 		m := mockMsg{
@@ -388,11 +396,7 @@ func TestWorkflows(t *testing.T) {
 			output: []mockMsg{
 				msg(`{"bar":4,"baz":5,"buz":9,"foo":2,"meta":{"workflow":{"succeeded":["0","1","2"]}}}`),
 				msg(`{"meta":{"workflow":{"failed":{"0":"request mapping failed: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","1":"request mapping failed: failed assignment (line 1): field ` + "`this.foo`" + `: value is null","2":"request mapping failed: failed assignment (line 1): field ` + "`this.bar`" + `: value is null"}}}}`),
-				msg(
-					`not even a json object`,
-					processor.FailFlagKey,
-					"invalid character 'o' in literal null (expecting 'u')",
-				),
+				msg(`not even a json object`).withErr(errors.New("invalid character 'o' in literal null (expecting 'u')")),
 			},
 		},
 		{
@@ -409,28 +413,16 @@ func TestWorkflows(t *testing.T) {
 				},
 			},
 			input: []mockMsg{
-				msg(
-					`{"id":0,"name":"first"}`,
-					processor.FailFlagKey, "this is a pre-existing failure",
-				),
+				msg(`{"id":0,"name":"first"}`).withErr(errors.New("this is a pre-existing failure")),
 				msg(`{"failme":true,"id":1,"name":"second"}`),
-				msg(
-					`{"failme":true,"id":2,"name":"third"}`,
-					processor.FailFlagKey, "this is a pre-existing failure",
-				),
+				msg(`{"failme":true,"id":2,"name":"third"}`).withErr(errors.New("this is a pre-existing failure")),
 			},
 			output: []mockMsg{
-				msg(
-					`{"id":0,"meta":{"workflow":{"succeeded":["0"]}},"name":"first","result":"FIRST"}`,
-					processor.FailFlagKey, "this is a pre-existing failure",
-				),
+				msg(`{"id":0,"meta":{"workflow":{"succeeded":["0"]}},"name":"first","result":"FIRST"}`).withErr(errors.New("this is a pre-existing failure")),
 				msg(
 					`{"failme":true,"id":1,"meta":{"workflow":{"failed":{"0":"result mapping failed: failed assignment (line 1): this is a branch error"}}},"name":"second"}`,
 				),
-				msg(
-					`{"failme":true,"id":2,"meta":{"workflow":{"failed":{"0":"result mapping failed: failed assignment (line 1): this is a branch error"}}},"name":"third"}`,
-					processor.FailFlagKey, "this is a pre-existing failure",
-				),
+				msg(`{"failme":true,"id":2,"meta":{"workflow":{"failed":{"0":"result mapping failed: failed assignment (line 1): this is a branch error"}}},"name":"third"}`).withErr(errors.New("this is a pre-existing failure")),
 			},
 		},
 	}
@@ -462,6 +454,9 @@ func TestWorkflows(t *testing.T) {
 						part.MetaSet(k, v)
 					}
 				}
+				if m.err != nil {
+					part.ErrorSet(m.err)
+				}
 				inputMsg.Append(part)
 			}
 
@@ -482,6 +477,14 @@ func TestWorkflows(t *testing.T) {
 						comparePart.meta[k] = v
 						return nil
 					})
+
+					if out.err != nil {
+						assert.EqualError(t, msgs[0].Get(i).ErrorGet(), out.err.Error())
+					} else {
+						assert.NoError(t, msgs[0].Get(i).ErrorGet())
+					}
+					msgs[0].Get(i).ErrorSet(nil)
+					out.err = nil
 
 					assert.Equal(t, out, comparePart, "part: %v", i)
 				}

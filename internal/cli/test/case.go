@@ -192,7 +192,7 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 			for _, condErr := range condErrs {
 				reportFailure(fmt.Sprintf("batch %v message %v: %v", i, i2, condErr))
 			}
-			if procErr := processor.GetFail(part); len(procErr) > 0 && len(condErrs) > 0 {
+			if procErr := part.ErrorGet(); procErr != nil && len(condErrs) > 0 {
 				reportFailure(fmt.Sprintf("batch %v message %v: %v", i, i2, red(procErr)))
 			}
 			return nil
