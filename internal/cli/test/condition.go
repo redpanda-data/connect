@@ -248,7 +248,11 @@ type FileJSONEqualsCondition string
 
 // Check this condition against a message part.
 func (c FileJSONEqualsCondition) Check(p *message.Part) error {
-	relPath := filepath.Join("", string(c))
+	return c.checkFrom("", p)
+}
+
+func (c FileJSONEqualsCondition) checkFrom(dir string, p *message.Part) error {
+	relPath := filepath.Join(dir, string(c))
 
 	fileContent, err := os.ReadFile(relPath)
 	if err != nil {
