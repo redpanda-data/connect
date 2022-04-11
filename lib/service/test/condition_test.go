@@ -475,3 +475,65 @@ func TestFileEqualsCondition(t *testing.T) {
 		})
 	}
 }
+
+func TestFileJSONEqualsCondition(t *testing.T) {
+	color.NoColor = true
+
+	tmpDir := t.TempDir()
+
+	// Contents of both files are unordered.
+	unformattedPath := filepath.Join(tmpDir, "inner", "unformatted.json")
+	formattedPath := filepath.Join(tmpDir, "formatted.json")
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(unformattedPath), 0o755))
+	require.NoError(t, os.WriteFile(unformattedPath, []byte(`{"id":123456,"name":"Benthos"}`), 0o644))
+	require.NoError(t, os.WriteFile(formattedPath, []byte(
+		`{
+    "id": 123456,
+    "name": "Benthos"
+}`), 0o644))
+
+	type testCase struct {
+		name        string
+		path        string
+		input       string
+		errContains string
+	}
+
+	tests := []testCase{
+		{
+			name:  "positive 1",
+			path:  `./inner/unformatted.json`,
+			input: `{"name":"Benthos","id":123456}`,
+		},
+		{
+			name:  "positive 2",
+			path:  `./formatted.json`,
+			input: `{"name":"Benthos","id":123456}`,
+		},
+		{
+			name:        "negative 1",
+			path:        `./inner/unformatted.json`,
+			input:       `{"name":"Benthos"}`,
+			errContains: "content mismatch",
+		},
+		{
+			name:        "negative 2",
+			path:        `./formatted.json`,
+			input:       `{"name":"Benthos"}`,
+			errContains: "content mismatch",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(tt *testing.T) {
+			testPath := filepath.Join(tmpDir, test.path)
+			actErr := FileJSONEqualsCondition(testPath).Check(message.NewPart([]byte(test.input)))
+			if test.errContains == "" {
+				assert.NoError(t, actErr)
+			} else {
+				assert.Contains(t, actErr.Error(), test.errContains)
+			}
+		})
+	}
+}
