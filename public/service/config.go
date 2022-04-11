@@ -454,6 +454,7 @@ func (p *ParsedConfig) Namespace(path ...string) *ParsedConfig {
 	tmpConfig := *p
 	tmpConfig.hiddenPath = append([]string{}, p.hiddenPath...)
 	tmpConfig.hiddenPath = append(tmpConfig.hiddenPath, path...)
+	tmpConfig.mgr = p.mgr.IntoPath(path...).(bundle.NewManagement)
 	return &tmpConfig
 }
 

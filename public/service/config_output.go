@@ -2,10 +2,12 @@ package service
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/old/output"
 )
@@ -37,7 +39,7 @@ func (p *ParsedConfig) FieldOutput(path ...string) (*OwnedOutput, error) {
 		return nil, err
 	}
 
-	iproc, err := p.mgr.NewOutput(conf)
+	iproc, err := p.mgr.IntoPath(path...).(bundle.NewManagement).NewOutput(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -81,9 +83,10 @@ func (p *ParsedConfig) FieldOutputList(path ...string) ([]*OwnedOutput, error) {
 		configs = append(configs, conf)
 	}
 
+	tmpMgr := p.mgr.IntoPath(path...).(bundle.NewManagement)
 	ins := make([]*OwnedOutput, len(configs))
 	for i, c := range configs {
-		iproc, err := p.mgr.NewOutput(c)
+		iproc, err := tmpMgr.IntoPath(strconv.Itoa(i)).(bundle.NewManagement).NewOutput(c)
 		if err != nil {
 			return nil, fmt.Errorf("output %v: %w", i, err)
 		}

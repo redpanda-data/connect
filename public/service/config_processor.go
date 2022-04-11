@@ -2,10 +2,12 @@ package service
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
@@ -38,7 +40,7 @@ func (p *ParsedConfig) FieldProcessor(path ...string) (*OwnedProcessor, error) {
 		return nil, err
 	}
 
-	iproc, err := p.mgr.NewProcessor(procConf)
+	iproc, err := p.mgr.IntoPath(path...).(bundle.NewManagement).NewProcessor(procConf)
 	if err != nil {
 		return nil, err
 	}
@@ -82,9 +84,10 @@ func (p *ParsedConfig) FieldProcessorList(path ...string) ([]*OwnedProcessor, er
 		procConfigs = append(procConfigs, pconf)
 	}
 
+	tmpMgr := p.mgr.IntoPath(path...).(bundle.NewManagement)
 	procs := make([]*OwnedProcessor, len(procConfigs))
 	for i, c := range procConfigs {
-		iproc, err := p.mgr.NewProcessor(c)
+		iproc, err := tmpMgr.IntoPath(strconv.Itoa(i)).(bundle.NewManagement).NewProcessor(c)
 		if err != nil {
 			return nil, fmt.Errorf("processor %v: %w", i, err)
 		}
