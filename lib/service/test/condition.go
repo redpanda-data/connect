@@ -255,7 +255,7 @@ func (c FileEqualsCondition) checkFrom(dir string, p types.Part) error {
 type FileJSONEqualsCondition string
 
 // Check this condition against a message part.
-func (c FileJSONEqualsCondition) Check(p *message.Part) error {
+func (c FileJSONEqualsCondition) Check(p types.Part) error {
 	relPath := filepath.Join("", string(c))
 
 	fileContent, err := os.ReadFile(relPath)
