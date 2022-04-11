@@ -29,7 +29,7 @@ components will be shown.
 			&cli.StringFlag{
 				Name:  "format",
 				Value: "text",
-				Usage: "Print the component list in a specific format. Options are text or json.",
+				Usage: "Print the component list in a specific format. Options are text, json or cue.",
 			},
 		},
 		Action: func(c *cli.Context) error {
