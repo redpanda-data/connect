@@ -199,7 +199,7 @@ type Config struct {
 	Inproc             InprocConfig                   `json:"inproc" yaml:"inproc"`
 	Kafka              writer.KafkaConfig             `json:"kafka" yaml:"kafka"`
 	MongoDB            MongoDBConfig                  `json:"mongodb" yaml:"mongodb"`
-	MQTT               writer.MQTTConfig              `json:"mqtt" yaml:"mqtt"`
+	MQTT               MQTTConfig                     `json:"mqtt" yaml:"mqtt"`
 	Nanomsg            writer.NanomsgConfig           `json:"nanomsg" yaml:"nanomsg"`
 	NATS               writer.NATSConfig              `json:"nats" yaml:"nats"`
 	NATSStream         writer.NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
@@ -256,7 +256,7 @@ func NewConfig() Config {
 		HTTPServer:         NewHTTPServerConfig(),
 		Inproc:             NewInprocConfig(),
 		Kafka:              writer.NewKafkaConfig(),
-		MQTT:               writer.NewMQTTConfig(),
+		MQTT:               NewMQTTConfig(),
 		MongoDB:            NewMongoDBConfig(),
 		Nanomsg:            writer.NewNanomsgConfig(),
 		NATS:               writer.NewNATSConfig(),

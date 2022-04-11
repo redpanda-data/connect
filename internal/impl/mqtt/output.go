@@ -1,4 +1,4 @@
-package writer
+package mqtt
 
 import (
 	"context"
@@ -12,66 +12,74 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	mqttconf "github.com/benthosdev/benthos/v4/internal/impl/mqtt/shared"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 	"github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-//------------------------------------------------------------------------------
-
-// MQTTConfig contains configuration fields for the MQTT output type.
-type MQTTConfig struct {
-	URLs                  []string      `json:"urls" yaml:"urls"`
-	QoS                   uint8         `json:"qos" yaml:"qos"`
-	Retained              bool          `json:"retained" yaml:"retained"`
-	RetainedInterpolated  string        `json:"retained_interpolated" yaml:"retained_interpolated"`
-	Topic                 string        `json:"topic" yaml:"topic"`
-	ClientID              string        `json:"client_id" yaml:"client_id"`
-	DynamicClientIDSuffix string        `json:"dynamic_client_id_suffix" yaml:"dynamic_client_id_suffix"`
-	Will                  mqttconf.Will `json:"will" yaml:"will"`
-	User                  string        `json:"user" yaml:"user"`
-	Password              string        `json:"password" yaml:"password"`
-	ConnectTimeout        string        `json:"connect_timeout" yaml:"connect_timeout"`
-	WriteTimeout          string        `json:"write_timeout" yaml:"write_timeout"`
-	KeepAlive             int64         `json:"keepalive" yaml:"keepalive"`
-	MaxInFlight           int           `json:"max_in_flight" yaml:"max_in_flight"`
-	TLS                   tls.Config    `json:"tls" yaml:"tls"`
-}
-
-// NewMQTTConfig creates a new MQTTConfig with default values.
-func NewMQTTConfig() MQTTConfig {
-	return MQTTConfig{
-		URLs:           []string{},
-		QoS:            1,
-		Topic:          "",
-		ClientID:       "",
-		Will:           mqttconf.EmptyWill(),
-		User:           "",
-		Password:       "",
-		ConnectTimeout: "30s",
-		WriteTimeout:   "3s",
-		MaxInFlight:    64,
-		KeepAlive:      30,
-		TLS:            tls.NewConfig(),
+func init() {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(conf ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		w, err := newMQTTWriter(conf.MQTT, nm, nm.Logger())
+		if err != nil {
+			return nil, err
+		}
+		a, err := ooutput.NewAsyncWriter("mqtt", conf.MQTT.MaxInFlight, w, nm.Logger(), nm.Metrics())
+		if err != nil {
+			return nil, err
+		}
+		return ooutput.OnlySinglePayloads(a), nil
+	}), docs.ComponentSpec{
+		Name: "mqtt",
+		Summary: `
+Pushes messages to an MQTT broker.`,
+		Description: output.Description(true, false, `
+The `+"`topic`"+` field can be dynamically set using function interpolations
+described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched
+messages these interpolations are performed per message part.`),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"tcp://localhost:1883"}).Array(),
+			docs.FieldString("topic", "The topic to publish messages to."),
+			docs.FieldString("client_id", "An identifier for the client connection."),
+			docs.FieldString("dynamic_client_id_suffix", "Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.").Optional().Advanced().HasAnnotatedOptions(
+				"nanoid", "append a nanoid of length 21 characters",
+			).LinterFunc(nil),
+			docs.FieldInt("qos", "The QoS value to set for each message.").HasOptions("0", "1", "2").LinterFunc(nil),
+			docs.FieldString("connect_timeout", "The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.", "1s", "500ms").HasDefault("30s").AtVersion("3.58.0"),
+			docs.FieldString("write_timeout", "The maximum amount of time to wait to write data before the attempt is abandoned.", "1s", "500ms").HasDefault("3s").AtVersion("3.58.0"),
+			docs.FieldBool("retained", "Set message as retained on the topic."),
+			docs.FieldString("retained_interpolated", "Override the value of `retained` with an interpolable value, this allows it to be dynamically set based on message contents. The value must resolve to either `true` or `false`.").IsInterpolated().Advanced().AtVersion("3.59.0"),
+			mqttconf.WillFieldSpec(),
+			docs.FieldString("user", "A username to connect with.").Advanced(),
+			docs.FieldString("password", "A password to connect with.").Advanced(),
+			docs.FieldInt("keepalive", "Max seconds of inactivity before a keepalive message is sent.").Advanced(),
+			tls.FieldSpec().AtVersion("3.45.0"),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+		).ChildDefaultAndTypesFromStruct(ooutput.NewMQTTConfig()),
+		Categories: []string{
+			"Services",
+		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// MQTT is an output type that serves MQTT messages.
-type MQTT struct {
-	log   log.Modular
-	stats metrics.Type
+type mqttWriter struct {
+	log log.Modular
 
 	connectTimeout time.Duration
 	writeTimeout   time.Duration
 
 	urls     []string
-	conf     MQTTConfig
+	conf     ooutput.MQTTConfig
 	topic    *field.Expression
 	retained *field.Expression
 
@@ -79,17 +87,14 @@ type MQTT struct {
 	connMut sync.RWMutex
 }
 
-// NewMQTTV2 creates a new MQTT output type.
-func NewMQTTV2(
-	conf MQTTConfig,
+func newMQTTWriter(
+	conf ooutput.MQTTConfig,
 	mgr interop.Manager,
 	log log.Modular,
-	stats metrics.Type,
-) (*MQTT, error) {
-	m := &MQTT{
-		log:   log,
-		stats: stats,
-		conf:  conf,
+) (*mqttWriter, error) {
+	m := &mqttWriter{
+		log:  log,
+		conf: conf,
 	}
 
 	var err error
@@ -137,15 +142,7 @@ func NewMQTTV2(
 	return m, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ConnectWithContext establishes a connection to an MQTT server.
-func (m *MQTT) ConnectWithContext(ctx context.Context) error {
-	return m.Connect()
-}
-
-// Connect establishes a connection to an MQTT server.
-func (m *MQTT) Connect() error {
+func (m *mqttWriter) ConnectWithContext(ctx context.Context) error {
 	m.connMut.Lock()
 	defer m.connMut.Unlock()
 
@@ -200,15 +197,7 @@ func (m *MQTT) Connect() error {
 	return nil
 }
 
-//------------------------------------------------------------------------------
-
-// WriteWithContext attempts to write a message by pushing it to an MQTT broker.
-func (m *MQTT) WriteWithContext(ctx context.Context, msg *message.Batch) error {
-	return m.Write(msg)
-}
-
-// Write attempts to write a message by pushing it to an MQTT broker.
-func (m *MQTT) Write(msg *message.Batch) error {
+func (m *mqttWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	m.connMut.RLock()
 	client := m.client
 	m.connMut.RUnlock()
@@ -217,7 +206,7 @@ func (m *MQTT) Write(msg *message.Batch) error {
 		return component.ErrNotConnected
 	}
 
-	return IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		retained := m.conf.Retained
 		if m.retained != nil {
 			var parseErr error
@@ -239,8 +228,7 @@ func (m *MQTT) Write(msg *message.Batch) error {
 	})
 }
 
-// CloseAsync shuts down the MQTT output and stops processing messages.
-func (m *MQTT) CloseAsync() {
+func (m *mqttWriter) CloseAsync() {
 	go func() {
 		m.connMut.Lock()
 		if m.client != nil {
@@ -251,9 +239,6 @@ func (m *MQTT) CloseAsync() {
 	}()
 }
 
-// WaitForClose blocks until the MQTT output has closed down.
-func (m *MQTT) WaitForClose(timeout time.Duration) error {
+func (m *mqttWriter) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-package reader
+package mqtt
 
 import (
 	"context"
@@ -11,76 +11,93 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	mqttconf "github.com/benthosdev/benthos/v4/internal/impl/mqtt/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	"github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-//------------------------------------------------------------------------------
+func init() {
+	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(conf oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+		m, err := newMQTTReader(conf.MQTT, nm.Logger())
+		if err != nil {
+			return nil, err
+		}
+		return oinput.NewAsyncReader(
+			"mqtt",
+			true,
+			reader.NewAsyncPreserver(m),
+			nm.Logger(), nm.Metrics(),
+		)
+	}), docs.ComponentSpec{
+		Name: "mqtt",
+		Summary: `
+Subscribe to topics on MQTT brokers.`,
+		Description: `
+### Metadata
 
-// MQTTConfig contains configuration fields for the MQTT input type.
-type MQTTConfig struct {
-	URLs                  []string      `json:"urls" yaml:"urls"`
-	QoS                   uint8         `json:"qos" yaml:"qos"`
-	Topics                []string      `json:"topics" yaml:"topics"`
-	ClientID              string        `json:"client_id" yaml:"client_id"`
-	DynamicClientIDSuffix string        `json:"dynamic_client_id_suffix" yaml:"dynamic_client_id_suffix"`
-	Will                  mqttconf.Will `json:"will" yaml:"will"`
-	CleanSession          bool          `json:"clean_session" yaml:"clean_session"`
-	User                  string        `json:"user" yaml:"user"`
-	Password              string        `json:"password" yaml:"password"`
-	ConnectTimeout        string        `json:"connect_timeout" yaml:"connect_timeout"`
-	KeepAlive             int64         `json:"keepalive" yaml:"keepalive"`
-	TLS                   tls.Config    `json:"tls" yaml:"tls"`
-}
+This input adds the following metadata fields to each message:
 
-// NewMQTTConfig creates a new MQTTConfig with default values.
-func NewMQTTConfig() MQTTConfig {
-	return MQTTConfig{
-		URLs:           []string{},
-		QoS:            1,
-		Topics:         []string{},
-		ClientID:       "",
-		Will:           mqttconf.EmptyWill(),
-		CleanSession:   true,
-		User:           "",
-		Password:       "",
-		ConnectTimeout: "30s",
-		KeepAlive:      30,
-		TLS:            tls.NewConfig(),
+` + "``` text" + `
+- mqtt_duplicate
+- mqtt_qos
+- mqtt_retained
+- mqtt_topic
+- mqtt_message_id
+` + "```" + `
+
+You can access these metadata fields using
+[function interpolation](/docs/configuration/interpolation#metadata).`,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").Array(),
+			docs.FieldString("topics", "A list of topics to consume from.").Array(),
+			docs.FieldString("client_id", "An identifier for the client connection."),
+			docs.FieldString("dynamic_client_id_suffix", "Append a dynamically generated suffix to the specified `client_id` on each run of the pipeline. This can be useful when clustering Benthos producers.").Optional().Advanced().HasAnnotatedOptions(
+				"nanoid", "append a nanoid of length 21 characters",
+			).LinterFunc(nil),
+			docs.FieldInt("qos", "The level of delivery guarantee to enforce.").HasOptions("0", "1", "2").Advanced().LinterFunc(nil),
+			docs.FieldBool("clean_session", "Set whether the connection is non-persistent.").Advanced(),
+			mqttconf.WillFieldSpec(),
+			docs.FieldString("connect_timeout", "The maximum amount of time to wait in order to establish a connection before the attempt is abandoned.", "1s", "500ms").HasDefault("30s").AtVersion("3.58.0"),
+			docs.FieldString("user", "A username to assume for the connection.").Advanced(),
+			docs.FieldString("password", "A password to provide for the connection.").Advanced(),
+			docs.FieldInt("keepalive", "Max seconds of inactivity before a keepalive message is sent.").Advanced(),
+			tls.FieldSpec().AtVersion("3.45.0"),
+		).ChildDefaultAndTypesFromStruct(oinput.NewMQTTConfig()),
+		Categories: []string{
+			"Services",
+		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// MQTT is an input type that reads MQTT Pub/Sub messages.
-type MQTT struct {
+type mqttReader struct {
 	client  mqtt.Client
 	msgChan chan mqtt.Message
 	cMut    sync.Mutex
 
 	connectTimeout time.Duration
-	conf           MQTTConfig
+	conf           oinput.MQTTConfig
 
 	interruptChan chan struct{}
 
 	urls []string
 
-	stats metrics.Type
-	log   log.Modular
+	log log.Modular
 }
 
-// NewMQTT creates a new MQTT input type.
-func NewMQTT(
-	conf MQTTConfig, log log.Modular, stats metrics.Type,
-) (*MQTT, error) {
-	m := &MQTT{
+func newMQTTReader(conf oinput.MQTTConfig, log log.Modular) (*mqttReader, error) {
+	m := &mqttReader{
 		conf:          conf,
 		interruptChan: make(chan struct{}),
-		stats:         stats,
 		log:           log,
 	}
 
@@ -116,10 +133,7 @@ func NewMQTT(
 	return m, nil
 }
 
-//------------------------------------------------------------------------------
-
-// ConnectWithContext establishes a connection to an MQTT server.
-func (m *MQTT) ConnectWithContext(ctx context.Context) error {
+func (m *mqttReader) ConnectWithContext(ctx context.Context) error {
 	m.cMut.Lock()
 	defer m.cMut.Unlock()
 
@@ -230,8 +244,7 @@ func (m *MQTT) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// ReadWithContext attempts to read a new message from an MQTT broker.
-func (m *MQTT) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
+func (m *mqttReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	m.cMut.Lock()
 	msgChan := m.msgChan
 	m.cMut.Unlock()
@@ -272,8 +285,7 @@ func (m *MQTT) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn,
 	return nil, nil, component.ErrTimeout
 }
 
-// CloseAsync shuts down the MQTT input and stops processing requests.
-func (m *MQTT) CloseAsync() {
+func (m *mqttReader) CloseAsync() {
 	m.cMut.Lock()
 	if m.client != nil {
 		m.client.Disconnect(0)
@@ -283,9 +295,6 @@ func (m *MQTT) CloseAsync() {
 	m.cMut.Unlock()
 }
 
-// WaitForClose blocks until the MQTT input has closed down.
-func (m *MQTT) WaitForClose(timeout time.Duration) error {
+func (m *mqttReader) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

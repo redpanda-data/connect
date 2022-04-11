@@ -171,7 +171,7 @@ type Config struct {
 	HTTPServer        HTTPServerConfig          `json:"http_server" yaml:"http_server"`
 	Inproc            InprocConfig              `json:"inproc" yaml:"inproc"`
 	Kafka             KafkaConfig               `json:"kafka" yaml:"kafka"`
-	MQTT              reader.MQTTConfig         `json:"mqtt" yaml:"mqtt"`
+	MQTT              MQTTConfig                `json:"mqtt" yaml:"mqtt"`
 	Nanomsg           reader.ScaleProtoConfig   `json:"nanomsg" yaml:"nanomsg"`
 	NATS              reader.NATSConfig         `json:"nats" yaml:"nats"`
 	NATSStream        reader.NATSStreamConfig   `json:"nats_stream" yaml:"nats_stream"`
@@ -218,7 +218,7 @@ func NewConfig() Config {
 		HTTPServer:        NewHTTPServerConfig(),
 		Inproc:            NewInprocConfig(),
 		Kafka:             NewKafkaConfig(),
-		MQTT:              reader.NewMQTTConfig(),
+		MQTT:              NewMQTTConfig(),
 		Nanomsg:           reader.NewScaleProtoConfig(),
 		NATS:              reader.NewNATSConfig(),
 		NATSStream:        reader.NewNATSStreamConfig(),

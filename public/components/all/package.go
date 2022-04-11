@@ -21,6 +21,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/maxmind"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/memcached"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/mongodb"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/mqtt"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/msgpack"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/nats"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/parquetv0"
