@@ -13,22 +13,24 @@ if [ ! -f "$benthosbin" ]; then
   exit 1
 fi
 
-if ! command -v cue > /dev/null 2>&1; then
-    echo "🟡  Skipping cue tests since \`cue\` binary is not available."
-    exit 0
-fi
-
 basedir="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+
+# Make sure the CUE CLI is installed so we can run the tests
+cli="cuelang.org/go/cmd/cue"
+echo "[CUE Tests] Installing $cli"
+go install $cli
 
 $benthosbin list --format cue > "$basedir/benthos.cue"
 
 cd "$basedir"
 
+echo "[CUE Tests] Running \`cue export\`"
 cue export --out yaml test.cue > actual.yml
 if [ "${UPDATE:-0}" -ne "0" ]; then
   cp actual.yml expected.yml
 fi
 
+echo "[CUE Tests] Checking output against snapshots"
 result=0
 diff actual.yml expected.yml || result=$?
 
