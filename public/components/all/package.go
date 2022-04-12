@@ -24,7 +24,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/mqtt"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/msgpack"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/nats"
-	_ "github.com/benthosdev/benthos/v4/internal/impl/parquetv0"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/parquet"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/prometheus"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/redis"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/snowflake"

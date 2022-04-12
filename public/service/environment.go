@@ -35,6 +35,13 @@ var globalEnvironment = &Environment{
 	bloblangEnv: bloblang.GlobalEnvironment(),
 }
 
+// GlobalEnvironment returns a reference to the global environment, adding
+// plugins to this environment is the equivalent to adding plugins using global
+// Functions.
+func GlobalEnvironment() *Environment {
+	return globalEnvironment
+}
+
 // NewEnvironment creates a new environment that inherits all globally defined
 // plugins, but can have plugins defined on it that are isolated.
 func NewEnvironment() *Environment {

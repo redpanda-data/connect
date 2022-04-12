@@ -1,4 +1,4 @@
-package parquetv0
+package parquet
 
 import (
 	"context"
@@ -21,7 +21,7 @@ func TestParquetProcessorConfigLinting(t *testing.T) {
 		{
 			name: "missing operator",
 			config: `
-parquet_old:
+parquet:
   schema: '{}'
 `,
 			errContains: `field operator is required`,
@@ -29,7 +29,7 @@ parquet_old:
 		{
 			name: "invalid operator",
 			config: `
-parquet_old:
+parquet:
   operator: not_real
   schema: no
 `,
