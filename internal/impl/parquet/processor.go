@@ -47,6 +47,12 @@ The schema must be specified as a JSON string, containing an object that describ
     }
   ]
 }
+`+"```"+`
+
+A schema can be derived from a source file using https://github.com/xitongsys/parquet-go/tree/master/tool/parquet-tools:
+
+`+"```sh"+`
+./parquet-tools -cmd schema -file foo.parquet
 `+"```"+``).
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{
 			"to_json":   "Expand a file into one or more JSON messages.",
