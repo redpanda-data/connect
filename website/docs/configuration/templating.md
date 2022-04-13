@@ -187,7 +187,15 @@ The scalar type of the field.
 
 
 Type: `string`  
-Options: `string`, `int`, `float`, `bool`.
+
+| Option | Summary |
+|---|---|
+| `string` | standard string type |
+| `int` | standard integer type |
+| `float` | standard float type |
+| `bool` | a boolean true/false |
+| `unknown` | allows for nesting arbitrary configuration inside of a field |
+
 
 ### `fields[].kind`
 

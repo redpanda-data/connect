@@ -1,0 +1,43 @@
+name: dead_letter
+type: output
+status: experimental
+categories: [Utility]
+summary: Route to a dead letter queue on output failure
+fields:
+  - name: max_retries
+    description: Max times to try before routing to the dead letter
+    type: int
+  - name: output
+    description: Regular output to route messages to.
+    type: unknown
+  - name: path
+    description: file to save undeliverable messages to
+    type: string
+mapping: |
+  root.fallback = []
+
+  # Regular Output
+  root.fallback."-".retry.max_retries = this.max_retries
+  root.fallback."0".retry.output = this.output
+
+  # Dead Letter Output
+  root.fallback."-".file.path = this.path
+  root.fallback."1".file.codec = "lines"
+tests:
+  - name: Basic Unknown
+    config:
+      max_retries: 5
+      output:
+        http_client:
+          url: http://localhost:0
+      path: dead.log
+    expected:
+      fallback:
+        - retry:
+            max_retries: 5
+            output:
+              http_client:
+                url: http://localhost:0
+        - file:
+            path: dead.log
+            codec: lines
