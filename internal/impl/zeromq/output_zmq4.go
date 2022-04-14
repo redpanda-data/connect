@@ -1,5 +1,5 @@
-//go:build cgo
-// +build cgo
+//go:build x_benthos_extra
+// +build x_benthos_extra
 
 package zeromq
 
@@ -21,12 +21,17 @@ func zmqOutputConfig() *service.ConfigSpec {
 		Categories("Network").
 		Summary("Writes messages to a ZeroMQ socket.").
 		Description(`
-zmqOutput is supported but currently depends on C bindings. Since this is an annoyance when building or using Benthos it is not compiled by default.
+By default Benthos does not build with components that require linking to external libraries. If you wish to build Benthos locally with this component then set the build tag ` + "`x_benthos_extra`" + `:
 
-There is a specific docker tag postfix ` + "`-cgo`" + ` for C builds containing ZMQ support.
+` + "```shell" + `
+# With go
+go install -tags "x_benthos_extra" github.com/benthosdev/benthos/v4/cmd/benthos@latest
 
-zmqOutput input supports PULL and SUB sockets only. If there is demand for other socket types then they can be added easily.
-`).
+# Using make
+make TAGS=x_benthos_extra
+` + "```" + `
+
+There is a specific docker tag postfix ` + "`-cgo`" + ` for C builds containing this component.`).
 		Field(service.NewStringListField("urls").
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"tcp://localhost:5556"})).
