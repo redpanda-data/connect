@@ -2,8 +2,15 @@ package input
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"strings"
 	"sync"
@@ -28,12 +35,14 @@ func init() {
 		Description: `
 The field ` + "`max_buffer`" + ` specifies the maximum amount of memory to allocate _per connection_ for buffering lines of data. If a line of data from a connection exceeds this value then the connection will be closed.`,
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("network", "A network type to accept (unix|tcp|udp).").HasOptions(
-				"unix", "tcp", "udp",
+			docs.FieldString("network", "A network type to accept (unix|tcp|udp|tls).").HasOptions(
+				"unix", "tcp", "udp", "tls",
 			),
 			docs.FieldString("address", "The address to listen from.", "/tmp/benthos.sock", "0.0.0.0:6000"),
 			codec.ReaderDocs.AtVersion("3.42.0"),
 			docs.FieldInt("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed.").Advanced(),
+			docs.FieldString("cert_file", "PEM encoded certificate for use with TLS."),
+			docs.FieldString("key_file", "PEM encoded private key for use with TLS."),
 		),
 		Categories: []string{
 			"Network",
@@ -49,6 +58,8 @@ type SocketServerConfig struct {
 	Address   string `json:"address" yaml:"address"`
 	Codec     string `json:"codec" yaml:"codec"`
 	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
+	CertFile  string `json:"cert_file" yaml:"cert_file"`
+	KeyFile   string `json:"key_file" yaml:"key_file"`
 }
 
 // NewSocketServerConfig creates a new SocketServerConfig with default values.
@@ -58,6 +69,8 @@ func NewSocketServerConfig() SocketServerConfig {
 		Address:   "",
 		Codec:     "lines",
 		MaxBuffer: 1000000,
+		CertFile:  "",
+		KeyFile:   "",
 	}
 }
 
@@ -94,6 +107,47 @@ type SocketServer struct {
 	mRcvd    metrics.StatCounter
 }
 
+func createSelfSignedCertificate() (tls.Certificate, error) {
+	priv, _ := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+	certOptions := &x509.Certificate{
+		SerialNumber: &big.Int{},
+	}
+
+	certBytes, _ := x509.CreateCertificate(rand.Reader, certOptions, certOptions, &priv.PublicKey, priv)
+	pemcert := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+	key, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	keyBytes := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: key})
+	cert, err := tls.X509KeyPair(pemcert, keyBytes)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	return cert, nil
+}
+
+func loadOrCreateCertificate(sconf SocketServerConfig) (tls.Certificate, error) {
+	var cert tls.Certificate
+	var err error
+	if sconf.CertFile != "" && sconf.KeyFile != "" {
+		cert, err = tls.LoadX509KeyPair(sconf.CertFile, sconf.KeyFile)
+		if err != nil {
+			return tls.Certificate{}, err
+		}
+		return cert, nil
+	}
+
+	// Either CertFile or KeyFile was not specified, so make our own certificate
+	cert, err = createSelfSignedCertificate()
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	return cert, nil
+}
+
 // NewSocketServer creates a new SocketServer input type.
 func NewSocketServer(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	var ln net.Listener
@@ -112,6 +166,15 @@ func NewSocketServer(conf Config, mgr interop.Manager, log log.Modular, stats me
 	switch sconf.Network {
 	case "tcp", "unix":
 		ln, err = net.Listen(sconf.Network, sconf.Address)
+	case "tls":
+		cert, err := loadOrCreateCertificate(sconf)
+		if err != nil {
+			return nil, err
+		}
+		config := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		}
+		ln, err = tls.Listen("tcp", sconf.Address, config)
 	case "udp":
 		cn, err = net.ListenPacket(sconf.Network, sconf.Address)
 	default:
