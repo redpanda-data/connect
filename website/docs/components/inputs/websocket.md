@@ -66,6 +66,7 @@ input:
       private_key_file: ""
       signing_method: ""
       claims: {}
+      headers: {}
 ```
 
 </TabItem>
@@ -326,6 +327,14 @@ Default: `""`
 ### `jwt.claims`
 
 A value used to identify the claims that issued the JWT.
+
+
+Type: `object`  
+Default: `{}`  
+
+### `jwt.headers`
+
+A value used to identify the header that should be included in the JWT.
 
 
 Type: `object`  
