@@ -74,6 +74,12 @@ func (c *ConditionsMap) UnmarshalYAML(value *yaml.Node) error {
 				return fmt.Errorf("line %v: %v", v.Line, err)
 			}
 			cond = val
+		case "file_json_equals":
+			val := FileJSONEqualsCondition("")
+			if err := v.Decode(&val); err != nil {
+				return fmt.Errorf("line %v: %v", v.Line, err)
+			}
+			cond = val
 		case "metadata_equals":
 			val := MetadataEqualsCondition{}
 			if err := v.Decode(&val); err != nil {
@@ -231,6 +237,30 @@ func (c FileEqualsCondition) checkFrom(dir string, p *message.Part) error {
 		return fmt.Errorf("content mismatch\n  expected: %v\n  received: %v", blue(exp), red(act))
 	}
 	return nil
+}
+
+//------------------------------------------------------------------------------
+
+// FileJSONEqualsCondition is a string condition that tests the contents of the file
+// against the contents of a message using JSON comparison and is true if the expected
+// and actual documents are both valid JSON and deeply equal.
+type FileJSONEqualsCondition string
+
+// Check this condition against a message part.
+func (c FileJSONEqualsCondition) Check(p *message.Part) error {
+	return c.checkFrom("", p)
+}
+
+func (c FileJSONEqualsCondition) checkFrom(dir string, p *message.Part) error {
+	relPath := filepath.Join(dir, string(c))
+
+	fileContent, err := os.ReadFile(relPath)
+	if err != nil {
+		return fmt.Errorf("failed to read comparison JSON file: %w", err)
+	}
+
+	comparison := ContentJSONEqualsCondition(fileContent)
+	return comparison.Check(p)
 }
 
 //------------------------------------------------------------------------------

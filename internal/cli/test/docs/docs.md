@@ -206,6 +206,14 @@ file_equals: ./foo/bar.txt
 
 Checks that the contents of a message matches the contents of a file. The path of the file should be relative to the path of the test file.
 
+### `file_json_equals`
+
+```yml
+file_json_equals: ./foo/bar.json
+```
+
+Checks that both the message and the file contents are valid JSON documents, and that they are structurally equivalent. Will ignore formatting and ordering differences. The path of the file should be relative to the path of the test file.
+
 ### `json_equals`
 
 ```yml

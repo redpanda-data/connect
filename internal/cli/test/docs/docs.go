@@ -105,6 +105,11 @@ It is also possible to target processors in a separate file by prefixing the tar
 				"Checks that the contents of a message matches the contents of a file. The path of the file should be relative to the path of the test file.",
 				"./foo/bar.txt",
 			).Optional(),
+			docs.FieldString(
+				`file_json_equals`,
+				"Checks that both the message and the file contents are valid JSON documents, and that they are structurally equivalent. Will ignore formatting and ordering differences. The path of the file should be relative to the path of the test file.",
+				"./foo/bar.json",
+			).Optional(),
 			docs.FieldAnything(
 				`json_equals`,
 				"Checks that both the message and the condition are valid JSON documents, and that they are structurally equivalent. Will ignore formatting and ordering differences.",
