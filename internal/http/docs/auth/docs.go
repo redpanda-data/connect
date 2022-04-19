@@ -84,6 +84,10 @@ func jwtFieldSpec() docs.FieldSpec {
 		docs.FieldAnything(
 			"claims", "A value used to identify the claims that issued the JWT.",
 		).Map().Advanced(),
+
+		docs.FieldAnything(
+			"headers", "A value used to identify the header that should be included in the JWT.",
+		).Map().Advanced(),
 	)
 }
 
