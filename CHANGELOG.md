@@ -21,6 +21,9 @@ This is a major version release, for more information and guidance on how to mig
 - New experimental `gcp_cloud_storage` cache.
 - Field `regexp_topics` added to the `kafka_franz` input.
 - The `hdfs` output `directory` field now supports interpolation functions.
+- The cli `list` subcommand now supports a `cue` format.
+- Field `jwt.headers` added to all HTTP client components.
+- Output condition `file_json_equals` added to config unit test definitions.
 
 ### Fixed
 

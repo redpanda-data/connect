@@ -395,7 +395,7 @@ Default: `{}`
 
 ### `jwt.headers`
 
-A value used to identify the header that should be included in the JWT.
+Add optional key/value headers to the JWT.
 
 
 Type: `object`  

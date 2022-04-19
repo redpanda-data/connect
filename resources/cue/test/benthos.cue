@@ -65,9 +65,10 @@ package benthos
 			metadata_equals?: {
 				[string]: string
 			}
-			file_equals?:   string
-			json_equals?:   _
-			json_contains?: string
+			file_equals?:      string
+			file_json_equals?: string
+			json_equals?:      _
+			json_contains?:    string
 		}]]
 	}]
 }
@@ -321,6 +322,9 @@ package benthos
 			private_key_file?: string
 			signing_method?:   string
 			claims?: {
+				[string]: _
+			}
+			headers?: {
 				[string]: _
 			}
 		}
@@ -799,15 +803,10 @@ package benthos
 			claims?: {
 				[string]: _
 			}
+			headers?: {
+				[string]: _
+			}
 		}
-	}
-	zmq4: {
-		urls: [...string]
-		bind?:       bool
-		socket_type: string
-		sub_filters?: [...string]
-		high_water_mark?: int
-		poll_timeout?:    string
 	}
 }
 #Input: or([ for name, config in #AllInputs {
@@ -1341,6 +1340,9 @@ package benthos
 			private_key_file?: string
 			signing_method?:   string
 			claims?: {
+				[string]: _
+			}
+			headers?: {
 				[string]: _
 			}
 		}
@@ -1938,14 +1940,10 @@ package benthos
 			claims?: {
 				[string]: _
 			}
+			headers?: {
+				[string]: _
+			}
 		}
-	}
-	zmq4: {
-		urls: [...string]
-		bind?:            bool
-		socket_type:      string
-		high_water_mark?: int
-		poll_timeout?:    string
 	}
 }
 #Output: or([ for name, config in #AllOutputs {
@@ -2093,6 +2091,9 @@ package benthos
 			private_key_file?: string
 			signing_method?:   string
 			claims?: {
+				[string]: _
+			}
+			headers?: {
 				[string]: _
 			}
 		}

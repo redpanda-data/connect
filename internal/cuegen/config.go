@@ -2,6 +2,7 @@ package cuegen
 
 import (
 	"cuelang.org/go/cue/ast"
+
 	"github.com/benthosdev/benthos/v4/internal/config/schema"
 )
 

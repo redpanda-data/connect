@@ -5,6 +5,7 @@ import (
 
 	"cuelang.org/go/cue/ast"
 	"cuelang.org/go/cue/token"
+
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 

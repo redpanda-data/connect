@@ -86,7 +86,7 @@ func jwtFieldSpec() docs.FieldSpec {
 		).Map().Advanced(),
 
 		docs.FieldAnything(
-			"headers", "A value used to identify the header that should be included in the JWT.",
+			"headers", "Add optional key/value headers to the JWT.",
 		).Map().Advanced(),
 	)
 }
