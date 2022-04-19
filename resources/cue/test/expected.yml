@@ -1,0 +1,20 @@
+testCases:
+  simple:
+    input:
+      label: sample_input
+      generate:
+        mapping: root = 'hello'
+    pipeline:
+      processors:
+        - label: sample_transform
+          bloblang: root = this.uppercase()
+    output:
+      switch:
+        cases:
+          - check: errored()
+            output:
+              reject: 'failed to process message: ${! error() }'
+          - output:
+              label: sample_output
+              stdout: {}
+    tests: []

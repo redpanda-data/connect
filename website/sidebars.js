@@ -31,6 +31,7 @@ module.exports = {
         'configuration/unit_testing',
         'configuration/templating',
         'configuration/dynamic_inputs_and_outputs',
+        'configuration/using_cue',
       ],
     },
     {
