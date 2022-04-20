@@ -103,6 +103,13 @@ module.exports = {
       ],
       copyright: `Copyright © ${new Date().getFullYear()} Ashley Jeffs.`,
     },
+    announcementBar: {
+      id: 'v4_released',
+      content: '<strong>🎉 Version 4 of Benthos is now released 🎉 For more information <a target="_blank" rel="noopener noreferrer" href="/docs/guides/migration/v4">check out the migration guide</a></strong>',
+      backgroundColor: 'var(--ifm-color-primary)',
+      textColor: 'var(--ifm-background-color)',
+      isCloseable: true,
+    },
     algolia: {
       appId: 'WBY9Z65YR4',
       apiKey: 'a6c476911e6ecef76049a55d9798a51b',
