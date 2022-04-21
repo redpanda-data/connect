@@ -207,7 +207,7 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
   this.exists("password") && this.exists("private_key_file") => [ "both `+"`password`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
   this.exists("snowpipe") && (!this.exists("private_key_file") || this.private_key_file == "") => [ "`+"`private_key_file`"+` is required when setting `+"`snowpipe`"+`" ],
 }`).
-		Example("No compression", "Upload uncompressed messages concatenated into a .json file to a table stage without calling Snowpipe.", `
+		Example("No compression", "Upload concatenated messages into a .json file to a table stage without calling Snowpipe.", `
 output:
   snowflake_put:
     account: benthos
@@ -228,7 +228,7 @@ output:
         - archive:
             format: concatenate
 `).
-		Example("Automatic compression", "Upload messages concatenated into a JSON file to a stage and automatically compressed into a .gz file to a table stage without calling Snowpipe.", `
+		Example("Automatic compression", "Upload concatenated messages compressed automatically into a .gz archive file to a table stage without calling Snowpipe.", `
 output:
   snowflake_put:
     account: benthos
@@ -249,7 +249,7 @@ output:
         - archive:
             format: concatenate
 `).
-		Example("DEFLATE compression", "Upload messages as a compressed .deflate archive of documents to a table stage and call Snowpipe to load it into a table.", `
+		Example("DEFLATE compression", "Upload concatenated messages compressed into a .deflate archive file to a table stage and call Snowpipe to load them into a table.", `
 output:
   snowflake_put:
     account: benthos
@@ -273,7 +273,7 @@ output:
         - compress:
             algorithm: zlib
 `).
-		Example("RAW_DEFLATE compression", "Upload messages as a compressed .rawdeflate archive of documents to a table stage and call Snowpipe to load it into a table.", `
+		Example("RAW_DEFLATE compression", "Upload concatenated messages compressed into a .rawdeflate archive file to a table stage and call Snowpipe to load them into a table.", `
 output:
   snowflake_put:
     account: benthos

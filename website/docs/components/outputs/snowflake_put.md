@@ -223,7 +223,7 @@ Batches can be formed at both the input and output level. You can find out more
 
 <TabItem value="No compression">
 
-Upload uncompressed messages concatenated into a .json file to a table stage without calling Snowpipe.
+Upload concatenated messages into a .json file to a table stage without calling Snowpipe.
 
 ```yaml
 output:
@@ -250,7 +250,7 @@ output:
 </TabItem>
 <TabItem value="Automatic compression">
 
-Upload messages concatenated into a JSON file to a stage and automatically compressed into a .gz file to a table stage without calling Snowpipe.
+Upload concatenated messages compressed automatically into a .gz archive file to a table stage without calling Snowpipe.
 
 ```yaml
 output:
@@ -277,7 +277,7 @@ output:
 </TabItem>
 <TabItem value="DEFLATE compression">
 
-Upload messages as a compressed .deflate archive of documents to a table stage and call Snowpipe to load it into a table.
+Upload concatenated messages compressed into a .deflate archive file to a table stage and call Snowpipe to load them into a table.
 
 ```yaml
 output:
@@ -307,7 +307,7 @@ output:
 </TabItem>
 <TabItem value="RAW_DEFLATE compression">
 
-Upload messages as a compressed .rawdeflate archive of documents to a table stage and call Snowpipe to load it into a table.
+Upload concatenated messages compressed into a .rawdeflate archive file to a table stage and call Snowpipe to load them into a table.
 
 ```yaml
 output:
