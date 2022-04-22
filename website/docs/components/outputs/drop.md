@@ -15,7 +15,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Drops all messages.
 
 ```yml

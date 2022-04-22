@@ -15,7 +15,6 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Attempts to write messages to a child output and if the write fails for one of a list of configurable reasons the message is dropped instead of being reattempted.
 
 ```yml
@@ -62,7 +61,7 @@ A child output.
 
 
 Type: `output`  
-Default: `{}`  
+Default: `null`  
 
 ## Examples
 

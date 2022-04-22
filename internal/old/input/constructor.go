@@ -165,7 +165,7 @@ type Config struct {
 	File              FileConfig                `json:"file" yaml:"file"`
 	GCPCloudStorage   GCPCloudStorageConfig     `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
 	GCPPubSub         reader.GCPPubSubConfig    `json:"gcp_pubsub" yaml:"gcp_pubsub"`
-	Generate          BloblangConfig            `json:"generate" yaml:"generate"`
+	Generate          GenerateConfig            `json:"generate" yaml:"generate"`
 	HDFS              reader.HDFSConfig         `json:"hdfs" yaml:"hdfs"`
 	HTTPClient        HTTPClientConfig          `json:"http_client" yaml:"http_client"`
 	HTTPServer        HTTPServerConfig          `json:"http_server" yaml:"http_server"`
@@ -212,7 +212,7 @@ func NewConfig() Config {
 		File:              NewFileConfig(),
 		GCPCloudStorage:   NewGCPCloudStorageConfig(),
 		GCPPubSub:         reader.NewGCPPubSubConfig(),
-		Generate:          NewBloblangConfig(),
+		Generate:          NewGenerateConfig(),
 		HDFS:              reader.NewHDFSConfig(),
 		HTTPClient:        NewHTTPClientConfig(),
 		HTTPServer:        NewHTTPServerConfig(),

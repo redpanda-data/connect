@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 4.0.0 - TBD
+## 4.0.0 - 2022-04-20
 
 This is a major version release, for more information and guidance on how to migrate please refer to [https://benthos.dev/docs/guides/migration/v4](https://www.benthos.dev/docs/guides/migration/v4).
 
@@ -15,7 +15,7 @@ This is a major version release, for more information and guidance on how to mig
 - The `nats_jetstream` input now supports pull consumers.
 - Field `max_number_of_messages` added to the `aws_sqs` input.
 - Field `file_output_path` added to the `prometheus` metrics type.
-- Unit test definitions can now specify a `label` as a `target_processors` value.
+- Unit test definitions can now specify a label as a `target_processors` value.
 - New connection settings for all sql components.
 - New experimental `snowflake_put` output.
 - New experimental `gcp_cloud_storage` cache.

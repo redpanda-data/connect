@@ -17,7 +17,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
@@ -746,17 +745,35 @@ func BenchmarkAsyncReaderGenerateN1000(b *testing.B) {
 	benchmarkAsyncReaderGenerateN(b, 1000)
 }
 
+type mockStaticReader struct {
+	d []byte
+}
+
+func (r *mockStaticReader) ConnectWithContext(ctx context.Context) error {
+	return nil
+}
+
+func (r *mockStaticReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+	nextMsg := message.QuickBatch([][]byte{r.d})
+	return nextMsg, func(ctx context.Context, res error) error {
+		return nil
+	}, nil
+}
+
+func (r *mockStaticReader) CloseAsync() {
+}
+
+func (r *mockStaticReader) WaitForClose(time.Duration) error {
+	return nil
+}
+
 func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	bloblConf := NewBloblangConfig()
-	bloblConf.Count = 0
-	bloblConf.Interval = ""
-	bloblConf.Mapping = `root = "hello world"`
-
-	readerImpl, err := newBloblang(mock.NewManager(), bloblConf)
-	require.NoError(b, err)
+	readerImpl := &mockStaticReader{
+		d: []byte(`root = "hello world"`),
+	}
 
 	r, err := NewAsyncReader("foo", true, readerImpl, log.Noop(), metrics.Noop())
 	require.NoError(b, err)

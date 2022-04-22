@@ -185,7 +185,7 @@ type Config struct {
 	Broker             BrokerConfig                   `json:"broker" yaml:"broker"`
 	Cache              writer.CacheConfig             `json:"cache" yaml:"cache"`
 	Cassandra          CassandraConfig                `json:"cassandra" yaml:"cassandra"`
-	Drop               writer.DropConfig              `json:"drop" yaml:"drop"`
+	Drop               DropConfig                     `json:"drop" yaml:"drop"`
 	DropOn             DropOnConfig                   `json:"drop_on" yaml:"drop_on"`
 	Dynamic            DynamicConfig                  `json:"dynamic" yaml:"dynamic"`
 	Elasticsearch      writer.ElasticsearchConfig     `json:"elasticsearch" yaml:"elasticsearch"`
@@ -243,7 +243,7 @@ func NewConfig() Config {
 		Broker:             NewBrokerConfig(),
 		Cache:              writer.NewCacheConfig(),
 		Cassandra:          NewCassandraConfig(),
-		Drop:               writer.NewDropConfig(),
+		Drop:               NewDropConfig(),
 		DropOn:             NewDropOnConfig(),
 		Dynamic:            NewDynamicConfig(),
 		Elasticsearch:      writer.NewElasticsearchConfig(),

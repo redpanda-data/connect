@@ -13,8 +13,8 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/aws"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/confluent"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/dgraph"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/fs"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/gcp"
-	_ "github.com/benthosdev/benthos/v4/internal/impl/generic"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/influxdb"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/jaeger"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/kafka"
@@ -24,8 +24,10 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/mqtt"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/msgpack"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/nats"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/net"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/parquet"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/prometheus"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/redis"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/snowflake"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/sql"
@@ -33,7 +35,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/template"
 
 	// Import all (supported) sql drivers
-	_ "github.com/ClickHouse/clickhouse-go/v2"
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
