@@ -65,10 +65,18 @@ func resInfoFromConfig(conf *manager.ResourceConfig) resourceFileInfo {
 	return resInfo
 }
 
-func (r *Reader) readResources(conf *manager.ResourceConfig) (lints []string, err error) {
-	resourcesPaths, err := ifilepath.Globs(r.resourcePaths)
+func (r *Reader) resourcePathsExpanded() ([]string, error) {
+	resourcePaths, err := ifilepath.Globs(r.resourcePaths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve resource glob pattern: %w", err)
+	}
+	return resourcePaths, nil
+}
+
+func (r *Reader) readResources(conf *manager.ResourceConfig) (lints []string, err error) {
+	resourcesPaths, err := r.resourcePathsExpanded()
+	if err != nil {
+		return nil, err
 	}
 	for _, path := range resourcesPaths {
 		rconf := manager.NewResourceConfig()
