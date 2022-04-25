@@ -41,7 +41,7 @@ output:
 
 Could also be expressed as:
 
-``` yaml
+```yaml
 output:
   broker:
     pattern: fan_out

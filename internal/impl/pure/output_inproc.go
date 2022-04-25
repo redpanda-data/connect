@@ -1,23 +1,24 @@
-package output
+package pure
 
 import (
 	"sync/atomic"
 	"time"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeInproc] = TypeSpec{
-		constructor: fromSimpleConstructor(NewInproc),
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		return newInprocOutput(c, nm, nm.Logger())
+	}), docs.ComponentSpec{
+		Name: "inproc",
 		Description: `
 Sends data directly to Benthos inputs by connecting to a unique ID. This allows
 you to hook up isolated streams whilst running Benthos in
@@ -33,29 +34,18 @@ collision occurs.`,
 			"Utility",
 		},
 		Config: docs.FieldString("", "").HasDefault(""),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// InprocConfig contains configuration fields for the Inproc output type.
-type InprocConfig string
-
-// NewInprocConfig creates a new InprocConfig with default values.
-func NewInprocConfig() InprocConfig {
-	return InprocConfig("")
-}
-
-//------------------------------------------------------------------------------
-
-// Inproc is an output type that serves Inproc messages.
-type Inproc struct {
+type inprocOutput struct {
 	running int32
 
-	pipe  string
-	mgr   interop.Manager
-	log   log.Modular
-	stats metrics.Type
+	pipe string
+	mgr  interop.Manager
+	log  log.Modular
 
 	transactionsOut chan message.Transaction
 	transactionsIn  <-chan message.Transaction
@@ -64,14 +54,12 @@ type Inproc struct {
 	closeChan  chan struct{}
 }
 
-// NewInproc creates a new Inproc output type.
-func NewInproc(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	i := &Inproc{
+func newInprocOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular) (output.Streamed, error) {
+	i := &inprocOutput{
 		running:         1,
-		pipe:            string(conf.Inproc),
+		pipe:            conf.Inproc,
 		mgr:             mgr,
 		log:             log,
-		stats:           stats,
 		transactionsOut: make(chan message.Transaction),
 		closedChan:      make(chan struct{}),
 		closeChan:       make(chan struct{}),
@@ -80,10 +68,7 @@ func NewInproc(conf Config, mgr interop.Manager, log log.Modular, stats metrics.
 	return i, nil
 }
 
-//------------------------------------------------------------------------------
-
-// loop is an internal loop that brokers incoming messages to output pipe.
-func (i *Inproc) loop() {
+func (i *inprocOutput) loop() {
 	defer func() {
 		atomic.StoreInt32(&i.running, 0)
 		i.mgr.UnsetPipe(i.pipe, i.transactionsOut)
@@ -113,8 +98,7 @@ func (i *Inproc) loop() {
 	}
 }
 
-// Consume assigns a messages channel for the output to read.
-func (i *Inproc) Consume(ts <-chan message.Transaction) error {
+func (i *inprocOutput) Consume(ts <-chan message.Transaction) error {
 	if i.transactionsIn != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -123,21 +107,17 @@ func (i *Inproc) Consume(ts <-chan message.Transaction) error {
 	return nil
 }
 
-// Connected returns a boolean indicating whether this output is currently
-// connected to its target.
-func (i *Inproc) Connected() bool {
+func (i *inprocOutput) Connected() bool {
 	return true
 }
 
-// CloseAsync shuts down the Inproc output and stops processing messages.
-func (i *Inproc) CloseAsync() {
+func (i *inprocOutput) CloseAsync() {
 	if atomic.CompareAndSwapInt32(&i.running, 1, 0) {
 		close(i.closeChan)
 	}
 }
 
-// WaitForClose blocks until the Inproc output has closed down.
-func (i *Inproc) WaitForClose(timeout time.Duration) error {
+func (i *inprocOutput) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-i.closedChan:
 	case <-time.After(timeout):
@@ -145,5 +125,3 @@ func (i *Inproc) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

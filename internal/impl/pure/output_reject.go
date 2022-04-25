@@ -1,4 +1,4 @@
-package output
+package pure
 
 import (
 	"context"
@@ -7,25 +7,23 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeReject] = TypeSpec{
-		constructor: fromSimpleConstructor(func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-			f, err := newRejectWriter(mgr, string(conf.Reject))
-			if err != nil {
-				return nil, err
-			}
-			return NewAsyncWriter(TypeReject, 1, f, log, stats)
-		}),
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		f, err := newRejectWriter(nm, c.Reject)
+		if err != nil {
+			return nil, err
+		}
+		return ooutput.NewAsyncWriter("reject", 1, f, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:   "reject",
 		Status: docs.StatusStable,
 		Summary: `
 Rejects all messages, treating them as though the output destination failed to publish them.`,
@@ -58,17 +56,10 @@ output:
 			},
 		},
 		Config: docs.FieldString("", "").HasDefault(""),
+	})
+	if err != nil {
+		panic(err)
 	}
-}
-
-//------------------------------------------------------------------------------
-
-// RejectConfig contains configuration fields for the file based output type.
-type RejectConfig string
-
-// NewRejectConfig creates a new RejectConfig with default values.
-func NewRejectConfig() RejectConfig {
-	return RejectConfig("")
 }
 
 type rejectWriter struct {

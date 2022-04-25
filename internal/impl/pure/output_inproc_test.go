@@ -1,9 +1,10 @@
-package output_test
+package pure_test
 
 import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -16,28 +17,22 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
-//------------------------------------------------------------------------------
-
 func TestInproc(t *testing.T) {
 	mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if _, err = mgr.GetPipe("foo"); err != component.ErrPipeNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, component.ErrPipeNotFound)
-	}
+	_, err = mgr.GetPipe("foo")
+	assert.Equal(t, err, component.ErrPipeNotFound)
 
 	conf := output.NewConfig()
+	conf.Type = "inproc"
 	conf.Inproc = "foo"
 
-	ip, err := output.NewInproc(conf, mgr, log.Noop(), metrics.Noop())
+	ip, err := mgr.NewOutput(conf)
 	require.NoError(t, err)
 
 	tinchan := make(chan message.Transaction)
-	if err = ip.Consume(tinchan); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, ip.Consume(tinchan))
 
 	select {
 	case tinchan <- message.NewTransaction(nil, nil):
@@ -57,21 +52,14 @@ func TestInproc(t *testing.T) {
 	}
 
 	ip.CloseAsync()
-	if err = ip.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, ip.WaitForClose(time.Second))
 
 	select {
 	case _, open := <-toutchan:
-		if open {
-			t.Error("transaction chan not closed")
-		}
+		assert.False(t, open)
 	case <-time.After(time.Second):
 		t.Error("Timed out")
 	}
-	if _, err = mgr.GetPipe("foo"); err != component.ErrPipeNotFound {
-		t.Errorf("Wrong error returned: %v != %v", err, component.ErrPipeNotFound)
-	}
+	_, err = mgr.GetPipe("foo")
+	assert.Equal(t, err, component.ErrPipeNotFound)
 }
-
-//------------------------------------------------------------------------------

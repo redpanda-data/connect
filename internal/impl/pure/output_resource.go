@@ -1,22 +1,35 @@
-package output
+package pure
 
 import (
 	"context"
 	"fmt"
 	"time"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func init() {
-	Constructors[TypeResource] = TypeSpec{
-		constructor: fromSimpleConstructor(NewResource),
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		if !nm.ProbeOutput(c.Resource) {
+			return nil, fmt.Errorf("output resource '%v' was not found", c.Resource)
+		}
+		ctx, done := context.WithCancel(context.Background())
+		return &resourceOutput{
+			mgr:  nm,
+			name: c.Resource,
+			log:  nm.Logger(),
+			ctx:  ctx,
+			done: done,
+		}, nil
+	}), docs.ComponentSpec{
+		Name: "resource",
 		Summary: `
 Resource is an output type that runs a resource output by its name.`,
 		Description: `
@@ -37,7 +50,7 @@ output:
 
 Could also be expressed as:
 
-` + "``` yaml" + `
+` + "```yaml" + `
 output:
   broker:
     pattern: fan_out
@@ -62,17 +75,16 @@ You can find out more about resources [in this document.](/docs/configuration/re
 			"Utility",
 		},
 		Config: docs.FieldString("", "").HasDefault(""),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// Resource is a processor that returns the result of a output resource.
-type Resource struct {
-	mgr   interop.Manager
-	name  string
-	log   log.Modular
-	stats metrics.Type
+type resourceOutput struct {
+	mgr  interop.Manager
+	name string
+	log  log.Modular
 
 	transactions <-chan message.Transaction
 
@@ -80,27 +92,7 @@ type Resource struct {
 	done func()
 }
 
-// NewResource returns a resource output.
-func NewResource(
-	conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type,
-) (output.Streamed, error) {
-	if !mgr.ProbeOutput(conf.Resource) {
-		return nil, fmt.Errorf("output resource '%v' was not found", conf.Resource)
-	}
-	ctx, done := context.WithCancel(context.Background())
-	return &Resource{
-		mgr:   mgr,
-		name:  conf.Resource,
-		log:   log,
-		stats: stats,
-		ctx:   ctx,
-		done:  done,
-	}, nil
-}
-
-//------------------------------------------------------------------------------
-
-func (r *Resource) loop() {
+func (r *resourceOutput) loop() {
 	var ts *message.Transaction
 	for {
 		if ts == nil {
@@ -135,10 +127,7 @@ func (r *Resource) loop() {
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// Consume assigns a messages channel for the output to read.
-func (r *Resource) Consume(ts <-chan message.Transaction) error {
+func (r *resourceOutput) Consume(ts <-chan message.Transaction) error {
 	if r.transactions != nil {
 		return component.ErrAlreadyStarted
 	}
@@ -147,9 +136,7 @@ func (r *Resource) Consume(ts <-chan message.Transaction) error {
 	return nil
 }
 
-// Connected returns a boolean indicating whether this output is currently
-// connected to its target.
-func (r *Resource) Connected() (isConnected bool) {
+func (r *resourceOutput) Connected() (isConnected bool) {
 	var err error
 	if err = r.mgr.AccessOutput(context.Background(), r.name, func(o output.Sync) {
 		isConnected = o.Connected()
@@ -159,13 +146,11 @@ func (r *Resource) Connected() (isConnected bool) {
 	return
 }
 
-// CloseAsync shuts down the output and stops processing requests.
-func (r *Resource) CloseAsync() {
+func (r *resourceOutput) CloseAsync() {
 	r.done()
 }
 
-// WaitForClose blocks until the output has closed down.
-func (r *Resource) WaitForClose(timeout time.Duration) error {
+func (r *resourceOutput) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-r.ctx.Done():
 	case <-time.After(timeout):
@@ -173,5 +158,3 @@ func (r *Resource) WaitForClose(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

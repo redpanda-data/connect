@@ -1,4 +1,4 @@
-package output
+package pure_test
 
 import (
 	"context"
@@ -10,10 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func TestResourceOutput(t *testing.T) {
@@ -28,11 +29,11 @@ func TestResourceOutput(t *testing.T) {
 		return nil
 	}
 
-	nConf := NewConfig()
+	nConf := ooutput.NewConfig()
 	nConf.Type = "resource"
 	nConf.Resource = "foo"
 
-	p, err := New(nConf, mgr, log.Noop(), metrics.Noop())
+	p, err := ooutput.New(nConf, mgr, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	assert.True(t, p.Connected())
@@ -70,17 +71,15 @@ func TestResourceOutput(t *testing.T) {
 	assert.NoError(t, p.WaitForClose(time.Second))
 }
 
-func TestResourceBadName(t *testing.T) {
+func TestOutputResourceBadName(t *testing.T) {
 	mgr := mock.NewManager()
 
-	conf := NewConfig()
+	conf := ooutput.NewConfig()
 	conf.Type = "resource"
 	conf.Resource = "foo"
 
-	_, err := NewResource(conf, mgr, log.Noop(), metrics.Noop())
+	_, err := mgr.NewOutput(conf)
 	if err == nil {
 		t.Error("expected error from bad resource")
 	}
 }
-
-//------------------------------------------------------------------------------

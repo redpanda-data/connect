@@ -1,49 +1,52 @@
-package processor
+package processor_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 func TestGroupBy(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeGroupBy
+	conf := processor.NewConfig()
+	conf.Type = "group_by"
 
-	procConf := NewConfig()
-	procConf.Type = TypeArchive
-	procConf.Archive.Format = "lines"
+	procConf := processor.NewConfig()
+	require.NoError(t, yaml.Unmarshal([]byte(`
+archive:
+  format: lines`), &procConf))
 
-	conf.GroupBy = append(conf.GroupBy, GroupByElement{
+	conf.GroupBy = append(conf.GroupBy, processor.GroupByElement{
 		Check: `content().contains("foo")`,
-		Processors: []Config{
+		Processors: []processor.Config{
 			procConf,
 		},
 	})
 
-	procConf = NewConfig()
-	procConf.Type = TypeBloblang
+	procConf = processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = content().uppercase()`
 
-	procConf2 := NewConfig()
-	procConf2.Type = TypeBloblang
+	procConf2 := processor.NewConfig()
+	procConf2.Type = "bloblang"
 	procConf2.Bloblang = `root = content().trim()`
 
-	conf.GroupBy = append(conf.GroupBy, GroupByElement{
+	conf.GroupBy = append(conf.GroupBy, processor.GroupByElement{
 		Check: `content().contains("bar")`,
-		Processors: []Config{
+		Processors: []processor.Config{
 			procConf,
 			procConf2,
 		},
 	})
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
 
 	exp := [][][]byte{
@@ -84,19 +87,21 @@ func TestGroupBy(t *testing.T) {
 }
 
 func TestGroupByErrs(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeGroupBy
+	conf := processor.NewConfig()
+	conf.Type = "group_by"
 
-	procConf := NewConfig()
-	procConf.Type = TypeArchive
-	procConf.Archive.Format = "lines"
+	procConf := processor.NewConfig()
+	require.NoError(t, yaml.Unmarshal([]byte(`
+archive:
+  format: lines`), &procConf))
 
-	conf.GroupBy = append(conf.GroupBy, GroupByElement{
-		Processors: []Config{
+	conf.GroupBy = append(conf.GroupBy, processor.GroupByElement{
+		Processors: []processor.Config{
 			procConf,
 		},
 	})
 
-	_, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
-	require.EqualError(t, err, "a group definition must have a check query")
+	_, err := mock.NewManager().NewProcessor(conf)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "a group definition must have a check query")
 }

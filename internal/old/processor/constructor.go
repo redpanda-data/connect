@@ -128,7 +128,6 @@ const (
 type Config struct {
 	Label        string             `json:"label" yaml:"label"`
 	Type         string             `json:"type" yaml:"type"`
-	Archive      ArchiveConfig      `json:"archive" yaml:"archive"`
 	Avro         AvroConfig         `json:"avro" yaml:"avro"`
 	AWK          AWKConfig          `json:"awk" yaml:"awk"`
 	Bloblang     string             `json:"bloblang" yaml:"bloblang"`
@@ -180,7 +179,6 @@ func NewConfig() Config {
 	return Config{
 		Label:        "",
 		Type:         "bounds_check",
-		Archive:      NewArchiveConfig(),
 		Avro:         NewAvroConfig(),
 		AWK:          NewAWKConfig(),
 		Bloblang:     "",

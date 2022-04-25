@@ -1,4 +1,4 @@
-package writer_test
+package pure_test
 
 import (
 	"context"
@@ -11,11 +11,12 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
@@ -24,14 +25,16 @@ func TestCacheSingle(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf := writer.NewCacheConfig()
+	conf := ooutput.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 
-	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	w, err := pure.NewCacheWriter(conf, mgr, log.Noop())
 	require.NoError(t, err)
 
-	require.NoError(t, w.Write(message.QuickBatch([][]byte{
+	tCtx := context.Background()
+
+	require.NoError(t, w.WriteWithContext(tCtx, message.QuickBatch([][]byte{
 		[]byte(`{"id":"1","value":"first"}`),
 	})))
 
@@ -44,14 +47,16 @@ func TestCacheBatch(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf := writer.NewCacheConfig()
+	conf := ooutput.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 
-	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	w, err := pure.NewCacheWriter(conf, mgr, log.Noop())
 	require.NoError(t, err)
 
-	require.NoError(t, w.Write(message.QuickBatch([][]byte{
+	tCtx := context.Background()
+
+	require.NoError(t, w.WriteWithContext(tCtx, message.QuickBatch([][]byte{
 		[]byte(`{"id":"1","value":"first"}`),
 		[]byte(`{"id":"2","value":"second"}`),
 		[]byte(`{"id":"3","value":"third"}`),
@@ -72,15 +77,17 @@ func TestCacheSingleTTL(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = c
 
-	conf := writer.NewCacheConfig()
+	conf := ooutput.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 	conf.TTL = "2s"
 
-	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	w, err := pure.NewCacheWriter(conf, mgr, log.Noop())
 	require.NoError(t, err)
 
-	require.NoError(t, w.Write(message.QuickBatch([][]byte{
+	tCtx := context.Background()
+
+	require.NoError(t, w.WriteWithContext(tCtx, message.QuickBatch([][]byte{
 		[]byte(`{"id":"1","value":"first"}`),
 	})))
 
@@ -96,15 +103,17 @@ func TestCacheBatchTTL(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = c
 
-	conf := writer.NewCacheConfig()
+	conf := ooutput.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 	conf.TTL = "2s"
 
-	w, err := writer.NewCache(conf, mgr, log.Noop(), metrics.Noop())
+	w, err := pure.NewCacheWriter(conf, mgr, log.Noop())
 	require.NoError(t, err)
 
-	require.NoError(t, w.Write(message.QuickBatch([][]byte{
+	tCtx := context.Background()
+
+	require.NoError(t, w.WriteWithContext(tCtx, message.QuickBatch([][]byte{
 		[]byte(`{"id":"1","value":"first"}`),
 		[]byte(`{"id":"2","value":"second"}`),
 		[]byte(`{"id":"3","value":"third"}`),
@@ -148,21 +157,23 @@ func TestCacheBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cacheConf := writer.NewCacheConfig()
+	cacheConf := ooutput.NewCacheConfig()
 	cacheConf.Target = "foo"
 	cacheConf.Key = "${!json(\"key\")}"
 
-	c, err := writer.NewCache(cacheConf, mgr, log.Noop(), metrics.Noop())
+	c, err := pure.NewCacheWriter(cacheConf, mgr, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	tCtx := context.Background()
 
 	exp := map[string]string{}
 	for i := 0; i < 100; i++ {
 		key := fmt.Sprintf("key%v", i)
 		value := fmt.Sprintf(`{"key":"%v","test":"hello world"}`, key)
 		exp[key] = value
-		if err := c.Write(message.QuickBatch([][]byte{[]byte(value)})); err != nil {
+		if err := c.WriteWithContext(tCtx, message.QuickBatch([][]byte{[]byte(value)})); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -196,14 +207,16 @@ func TestCacheBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cacheConf := writer.NewCacheConfig()
+	cacheConf := ooutput.NewCacheConfig()
 	cacheConf.Target = "foo"
 	cacheConf.Key = "${!json(\"key\")}"
 
-	c, err := writer.NewCache(cacheConf, mgr, log.Noop(), metrics.Noop())
+	c, err := pure.NewCacheWriter(cacheConf, mgr, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	tCtx := context.Background()
 
 	exp := map[string]string{}
 	for i := 0; i < 10; i++ {
@@ -214,7 +227,7 @@ func TestCacheBatches(t *testing.T) {
 			exp[key] = value
 			msg.Append(message.NewPart([]byte(value)))
 		}
-		if err := c.Write(msg); err != nil {
+		if err := c.WriteWithContext(tCtx, msg); err != nil {
 			t.Fatal(err)
 		}
 	}

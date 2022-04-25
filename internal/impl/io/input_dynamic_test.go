@@ -1,4 +1,4 @@
-package net
+package io
 
 import (
 	"bytes"
@@ -13,13 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
-func TestDynamicOutputAPI(t *testing.T) {
+func TestDynamicInputAPI(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*10)
 	defer done()
 
@@ -30,51 +29,51 @@ func TestDynamicOutputAPI(t *testing.T) {
 		gMux.HandleFunc(path, h)
 	}
 
-	conf := ooutput.NewConfig()
+	conf := oinput.NewConfig()
 	conf.Type = "dynamic"
 
-	o, err := mgr.NewOutput(conf)
+	i, err := mgr.NewInput(conf)
 	require.NoError(t, err)
 
-	tChan := make(chan message.Transaction)
-	resChan := make(chan error, 1)
-	require.NoError(t, o.Consume(tChan))
-
-	req := httptest.NewRequest("GET", "/outputs", nil)
+	req := httptest.NewRequest("GET", "/inputs", nil)
 	res := httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 
 	assert.Equal(t, 200, res.Code)
 	assert.Equal(t, `{}`, res.Body.String())
 
-	fooConf := `drop: {}`
-	req = httptest.NewRequest("POST", "/outputs/foo", bytes.NewBuffer([]byte(fooConf)))
+	fooConf := `
+generate:
+  interval: 100ms
+  mapping: 'root.source = "foo"'
+`
+	req = httptest.NewRequest("POST", "/inputs/foo", bytes.NewBuffer([]byte(fooConf)))
 	res = httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 
 	assert.Equal(t, 200, res.Code)
 
 	select {
-	case tChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
-	case <-ctx.Done():
-		t.Fatal(ctx.Err())
-	}
-	select {
-	case err := <-resChan:
-		require.NoError(t, err)
+	case ts, open := <-i.TransactionChan():
+		require.True(t, open)
+		assert.Equal(t, `{"source":"foo"}`, string(ts.Payload.Get(0).Get()))
+		require.NoError(t, ts.Ack(ctx, nil))
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
 
-	req = httptest.NewRequest("GET", "/outputs/foo", nil)
+	req = httptest.NewRequest("GET", "/inputs/foo", nil)
 	res = httptest.NewRecorder()
 	gMux.ServeHTTP(res, req)
 
 	assert.Equal(t, 200, res.Code)
 	assert.Equal(t, `label: ""
-drop: {}
+generate:
+    mapping: root.source = "foo"
+    interval: 100ms
+    count: 0
 `, res.Body.String())
 
-	o.CloseAsync()
-	require.NoError(t, o.WaitForClose(time.Second))
+	i.CloseAsync()
+	require.NoError(t, i.WaitForClose(time.Second))
 }

@@ -1,25 +1,22 @@
-package output
+package pure
 
 import (
 	"context"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeSyncResponse] = TypeSpec{
-		constructor: fromSimpleConstructor(func(_ Config, _ interop.Manager, logger log.Modular, stats metrics.Type) (output.Streamed, error) {
-			return NewAsyncWriter(TypeSyncResponse, 1, SyncResponseWriter{}, logger, stats)
-		}),
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		return ooutput.NewAsyncWriter("sync_response", 1, SyncResponseWriter{}, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name: "sync_response",
 		Summary: `
 Returns the final message payload back to the input origin of the message, where
 it is dealt with according to that specific input type.`,
@@ -58,15 +55,16 @@ For more information please read [Synchronous Responses](/docs/guides/sync_respo
 			"Utility",
 		},
 		Config: docs.FieldObject("", ""),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// SyncResponseWriter is a writer implementation that adds messages to a ResultStore located
-// in the context of the first message part of each batch. This is essentially a
-// mechanism that returns the result of a pipeline directly back to the origin
-// of the message.
+// SyncResponseWriter is a writer implementation that adds messages to a
+// ResultStore located in the context of the first message part of each batch.
+// This is essentially a mechanism that returns the result of a pipeline
+// directly back to the origin of the message.
 type SyncResponseWriter struct{}
 
 // ConnectWithContext is a noop.

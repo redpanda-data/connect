@@ -1,4 +1,4 @@
-package policy
+package policy_test
 
 import (
 	"reflect"
@@ -7,39 +7,44 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
+	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func TestPolicyNoop(t *testing.T) {
-	conf := NewConfig()
+	conf := policy.NewConfig()
 	assert.True(t, conf.IsNoop())
 
-	conf = NewConfig()
+	conf = policy.NewConfig()
 	conf.Count = 2
 	assert.False(t, conf.IsNoop())
 
-	conf = NewConfig()
+	conf = policy.NewConfig()
 	conf.Check = "foo.bar"
 	assert.False(t, conf.IsNoop())
 
-	conf = NewConfig()
+	conf = policy.NewConfig()
 	conf.ByteSize = 10
 	assert.False(t, conf.IsNoop())
 
-	conf = NewConfig()
+	conf = policy.NewConfig()
 	conf.Period = "10s"
 	assert.False(t, conf.IsNoop())
 }
 
 func TestPolicyBasic(t *testing.T) {
-	conf := NewConfig()
+	conf := policy.NewConfig()
 	conf.Count = 2
 	conf.ByteSize = 0
 
-	pol, err := New(conf, mock.NewManager())
+	pol, err := policy.New(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -84,10 +89,10 @@ func TestPolicyBasic(t *testing.T) {
 }
 
 func TestPolicyPeriod(t *testing.T) {
-	conf := NewConfig()
+	conf := policy.NewConfig()
 	conf.Period = "300ms"
 
-	pol, err := New(conf, mock.NewManager())
+	pol, err := policy.New(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,10 +125,10 @@ func TestPolicyPeriod(t *testing.T) {
 }
 
 func TestPolicySize(t *testing.T) {
-	conf := NewConfig()
+	conf := policy.NewConfig()
 	conf.ByteSize = 10
 
-	pol, err := New(conf, mock.NewManager())
+	pol, err := policy.New(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,10 +158,10 @@ func TestPolicySize(t *testing.T) {
 }
 
 func TestPolicyCheck(t *testing.T) {
-	conf := NewConfig()
+	conf := policy.NewConfig()
 	conf.Check = `content() == "bar"`
 
-	pol, err := New(conf, mock.NewManager())
+	pol, err := policy.New(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,10 +191,10 @@ func TestPolicyCheck(t *testing.T) {
 }
 
 func TestPolicyCheckAdvanced(t *testing.T) {
-	conf := NewConfig()
+	conf := policy.NewConfig()
 	conf.Check = `batch_size() >= 3`
 
-	pol, err := New(conf, mock.NewManager())
+	pol, err := policy.New(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,17 +227,19 @@ func TestPolicyCheckAdvanced(t *testing.T) {
 }
 
 func TestPolicyArchived(t *testing.T) {
-	conf := NewConfig()
+	conf := policy.NewConfig()
 	conf.Count = 2
 	conf.ByteSize = 0
 
 	procConf := processor.NewConfig()
-	procConf.Type = processor.TypeArchive
-	procConf.Archive.Format = "lines"
+	require.NoError(t, yaml.Unmarshal([]byte(`
+archive:
+  format: lines
+`), &procConf))
 
 	conf.Processors = append(conf.Processors, procConf)
 
-	pol, err := New(conf, mock.NewManager())
+	pol, err := policy.New(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -257,7 +264,7 @@ func TestPolicyArchived(t *testing.T) {
 }
 
 func TestPolicySplit(t *testing.T) {
-	conf := NewConfig()
+	conf := policy.NewConfig()
 	conf.Count = 2
 	conf.ByteSize = 0
 
@@ -266,7 +273,7 @@ func TestPolicySplit(t *testing.T) {
 
 	conf.Processors = append(conf.Processors, procConf)
 
-	pol, err := New(conf, mock.NewManager())
+	pol, err := policy.New(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

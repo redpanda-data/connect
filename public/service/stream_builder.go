@@ -310,7 +310,7 @@ func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
 
 	conf := output.NewConfig()
 	conf.Type = output.TypeInproc
-	conf.Inproc = output.InprocConfig(s.consumerID)
+	conf.Inproc = s.consumerID
 	s.outputs = append(s.outputs, conf)
 
 	return nil
@@ -346,7 +346,7 @@ func (s *StreamBuilder) AddBatchConsumerFunc(fn MessageBatchHandlerFunc) error {
 
 	conf := output.NewConfig()
 	conf.Type = output.TypeInproc
-	conf.Inproc = output.InprocConfig(s.consumerID)
+	conf.Inproc = s.consumerID
 	s.outputs = append(s.outputs, conf)
 
 	return nil

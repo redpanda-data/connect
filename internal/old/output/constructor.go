@@ -183,7 +183,7 @@ type Config struct {
 	AzureQueueStorage  writer.AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
 	AzureTableStorage  writer.AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
 	Broker             BrokerConfig                   `json:"broker" yaml:"broker"`
-	Cache              writer.CacheConfig             `json:"cache" yaml:"cache"`
+	Cache              CacheConfig                    `json:"cache" yaml:"cache"`
 	Cassandra          CassandraConfig                `json:"cassandra" yaml:"cassandra"`
 	Drop               DropConfig                     `json:"drop" yaml:"drop"`
 	DropOn             DropOnConfig                   `json:"drop_on" yaml:"drop_on"`
@@ -196,7 +196,7 @@ type Config struct {
 	HDFS               writer.HDFSConfig              `json:"hdfs" yaml:"hdfs"`
 	HTTPClient         writer.HTTPClientConfig        `json:"http_client" yaml:"http_client"`
 	HTTPServer         HTTPServerConfig               `json:"http_server" yaml:"http_server"`
-	Inproc             InprocConfig                   `json:"inproc" yaml:"inproc"`
+	Inproc             string                         `json:"inproc" yaml:"inproc"`
 	Kafka              writer.KafkaConfig             `json:"kafka" yaml:"kafka"`
 	MongoDB            MongoDBConfig                  `json:"mongodb" yaml:"mongodb"`
 	MQTT               MQTTConfig                     `json:"mqtt" yaml:"mqtt"`
@@ -209,7 +209,7 @@ type Config struct {
 	RedisList          writer.RedisListConfig         `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub        writer.RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`
 	RedisStreams       writer.RedisStreamsConfig      `json:"redis_streams" yaml:"redis_streams"`
-	Reject             RejectConfig                   `json:"reject" yaml:"reject"`
+	Reject             string                         `json:"reject" yaml:"reject"`
 	Resource           string                         `json:"resource" yaml:"resource"`
 	Retry              RetryConfig                    `json:"retry" yaml:"retry"`
 	SFTP               SFTPConfig                     `json:"sftp" yaml:"sftp"`
@@ -241,7 +241,7 @@ func NewConfig() Config {
 		AzureQueueStorage:  writer.NewAzureQueueStorageConfig(),
 		AzureTableStorage:  writer.NewAzureTableStorageConfig(),
 		Broker:             NewBrokerConfig(),
-		Cache:              writer.NewCacheConfig(),
+		Cache:              NewCacheConfig(),
 		Cassandra:          NewCassandraConfig(),
 		Drop:               NewDropConfig(),
 		DropOn:             NewDropOnConfig(),
@@ -254,7 +254,7 @@ func NewConfig() Config {
 		HDFS:               writer.NewHDFSConfig(),
 		HTTPClient:         writer.NewHTTPClientConfig(),
 		HTTPServer:         NewHTTPServerConfig(),
-		Inproc:             NewInprocConfig(),
+		Inproc:             "",
 		Kafka:              writer.NewKafkaConfig(),
 		MQTT:               NewMQTTConfig(),
 		MongoDB:            NewMongoDBConfig(),
@@ -267,7 +267,7 @@ func NewConfig() Config {
 		RedisList:          writer.NewRedisListConfig(),
 		RedisPubSub:        writer.NewRedisPubSubConfig(),
 		RedisStreams:       writer.NewRedisStreamsConfig(),
-		Reject:             NewRejectConfig(),
+		Reject:             "",
 		Resource:           "",
 		Retry:              NewRetryConfig(),
 		SFTP:               NewSFTPConfig(),
