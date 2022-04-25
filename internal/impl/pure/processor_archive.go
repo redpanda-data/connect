@@ -29,13 +29,9 @@ The functionality of this processor depends on being applied across messages tha
 			`concatenate`: `Join the raw contents of each message into a single binary message.`,
 			`tar`:         `Archive messages to a unix standard tape archive.`,
 			`zip`:         `Archive messages to a zip file.`,
-			`binary`: `Archive messages to a binary blob format consisting of:
-- Four bytes containing number of messages in the batch (in big endian)
-- For each message part:
-  + Four bytes containing the length of the message (in big endian)
-  + The content of message`,
-			`lines`:      `Join the raw contents of each message and insert a line break between each one.`,
-			`json_array`: `Attempt to parse each message as a JSON document and append the result to an array, which becomes the contents of the resulting message.`,
+			`binary`:      `Archive messages to a [binary blob format](https://github.com/benthosdev/benthos/blob/main/internal/message/message.go#L96).`,
+			`lines`:       `Join the raw contents of each message and insert a line break between each one.`,
+			`json_array`:  `Attempt to parse each message as a JSON document and append the result to an array, which becomes the contents of the resulting message.`,
 		}).Description("The archiving format to apply.")).
 		Field(service.NewInterpolatedStringField("path").
 			Description("The path to set for each message in the archive (when applicable).").
