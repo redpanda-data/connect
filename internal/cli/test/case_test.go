@@ -1,4 +1,4 @@
-package test
+package test_test
 
 import (
 	"errors"
@@ -12,11 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
+	"github.com/benthosdev/benthos/v4/internal/cli/test"
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 type mockProvider map[string][]iprocessor.V1
@@ -41,25 +42,25 @@ func TestCase(t *testing.T) {
 	provider := mockProvider{}
 
 	procConf := processor.NewConfig()
-	procConf.Type = processor.TypeNoop
-	proc, err := processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	procConf.Type = "noop"
+	proc, err := mock.NewManager().NewProcessor(procConf)
 	if err != nil {
 		t.Fatal(err)
 	}
 	provider["/pipeline/processors"] = []iprocessor.V1{proc}
 
 	procConf = processor.NewConfig()
-	procConf.Type = processor.TypeBloblang
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = content().uppercase()`
-	if proc, err = processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop()); err != nil {
+	if proc, err = mock.NewManager().NewProcessor(procConf); err != nil {
 		t.Fatal(err)
 	}
 	provider["/input/broker/inputs/0/processors"] = []iprocessor.V1{proc}
 
 	procConf = processor.NewConfig()
-	procConf.Type = processor.TypeBloblang
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = deleted()`
-	if proc, err = processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop()); err != nil {
+	if proc, err = mock.NewManager().NewProcessor(procConf); err != nil {
 		t.Fatal(err)
 	}
 	provider["/input/broker/inputs/1/processors"] = []iprocessor.V1{proc}
@@ -67,7 +68,7 @@ func TestCase(t *testing.T) {
 	type testCase struct {
 		name     string
 		conf     string
-		expected []CaseFailure
+		expected []test.CaseFailure
 	}
 
 	tests := []testCase{
@@ -126,7 +127,7 @@ output_batches:
 -
   - content_equals: "foo baz"
 `,
-			expected: []CaseFailure{
+			expected: []test.CaseFailure{
 				{
 					Name:     "negative 1",
 					TestLine: 2,
@@ -150,7 +151,7 @@ output_batches:
     metadata_equals:
       foo: bar
 `,
-			expected: []CaseFailure{
+			expected: []test.CaseFailure{
 				{
 					Name:     "negative 2",
 					TestLine: 2,
@@ -175,7 +176,7 @@ output_batches:
 -
   - content_equals: "foo bar"
 `,
-			expected: []CaseFailure{
+			expected: []test.CaseFailure{
 				{
 					Name:     "negative batches count 1",
 					TestLine: 2,
@@ -185,17 +186,17 @@ output_batches:
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(tt *testing.T) {
-			c := NewCase()
-			if err = yaml.Unmarshal([]byte(test.conf), &c); err != nil {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(tt *testing.T) {
+			c := test.NewCase()
+			if err = yaml.Unmarshal([]byte(testCase.conf), &c); err != nil {
 				tt.Fatal(err)
 			}
-			fails, err := c.executeFrom("", provider)
+			fails, err := c.ExecuteFrom("", provider)
 			if err != nil {
 				tt.Fatal(err)
 			}
-			if exp, act := test.expected, fails; !reflect.DeepEqual(exp, act) {
+			if exp, act := testCase.expected, fails; !reflect.DeepEqual(exp, act) {
 				tt.Errorf("Wrong results: %v != %v", act, exp)
 			}
 		})
@@ -208,9 +209,9 @@ func TestFileCaseInputs(t *testing.T) {
 	provider := mockProvider{}
 	procConf := processor.NewConfig()
 
-	procConf.Type = processor.TypeBloblang
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "hello world " + content().string()`
-	proc, err := processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(procConf)
 	require.NoError(t, err)
 
 	provider["/pipeline/processors"] = []iprocessor.V1{proc}
@@ -224,7 +225,7 @@ func TestFileCaseInputs(t *testing.T) {
 	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0o644))
 	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0o644))
 
-	c := NewCase()
+	c := test.NewCase()
 	require.NoError(t, yaml.Unmarshal([]byte(`
 name: uppercased
 input_batch:
@@ -234,12 +235,12 @@ output_batches:
   - content_equals: hello world FOO BAR BAZ
 `), &c))
 
-	fails, err := c.executeFrom(tmpDir, provider)
+	fails, err := c.ExecuteFrom(tmpDir, provider)
 	require.NoError(t, err)
 
-	assert.Equal(t, []CaseFailure(nil), fails)
+	assert.Equal(t, []test.CaseFailure(nil), fails)
 
-	c = NewCase()
+	c = test.NewCase()
 	require.NoError(t, yaml.Unmarshal([]byte(`
 name: not uppercased
 input_batch:
@@ -249,10 +250,10 @@ output_batches:
   - content_equals: hello world FOO BAR BAZ
 `), &c))
 
-	fails, err = c.executeFrom(tmpDir, provider)
+	fails, err = c.ExecuteFrom(tmpDir, provider)
 	require.NoError(t, err)
 
-	assert.Equal(t, []CaseFailure{
+	assert.Equal(t, []test.CaseFailure{
 		{
 			Name:     "not uppercased",
 			TestLine: 2,
@@ -267,9 +268,9 @@ func TestFileCaseConditions(t *testing.T) {
 	provider := mockProvider{}
 	procConf := processor.NewConfig()
 
-	procConf.Type = processor.TypeBloblang
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = content().uppercase()`
-	proc, err := processor.New(procConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(procConf)
 	require.NoError(t, err)
 
 	provider["/pipeline/processors"] = []iprocessor.V1{proc}
@@ -283,7 +284,7 @@ func TestFileCaseConditions(t *testing.T) {
 	require.NoError(t, os.WriteFile(uppercasedPath, []byte(`FOO BAR BAZ`), 0o644))
 	require.NoError(t, os.WriteFile(notUppercasedPath, []byte(`foo bar baz`), 0o644))
 
-	c := NewCase()
+	c := test.NewCase()
 	require.NoError(t, yaml.Unmarshal([]byte(`
 name: uppercased
 input_batch:
@@ -293,12 +294,12 @@ output_batches:
   - file_equals: "./inner/uppercased.txt"
 `), &c))
 
-	fails, err := c.executeFrom(tmpDir, provider)
+	fails, err := c.ExecuteFrom(tmpDir, provider)
 	require.NoError(t, err)
 
-	assert.Equal(t, []CaseFailure(nil), fails)
+	assert.Equal(t, []test.CaseFailure(nil), fails)
 
-	c = NewCase()
+	c = test.NewCase()
 	require.NoError(t, yaml.Unmarshal([]byte(`
 name: not uppercased
 input_batch:
@@ -308,10 +309,10 @@ output_batches:
   - file_equals: "./not_uppercased.txt"
 `), &c))
 
-	fails, err = c.executeFrom(tmpDir, provider)
+	fails, err = c.ExecuteFrom(tmpDir, provider)
 	require.NoError(t, err)
 
-	assert.Equal(t, []CaseFailure{
+	assert.Equal(t, []test.CaseFailure{
 		{
 			Name:     "not uppercased",
 			TestLine: 2,

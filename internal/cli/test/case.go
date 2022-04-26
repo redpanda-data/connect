@@ -129,7 +129,9 @@ type ProcProvider interface {
 	ProvideBloblang(path string) ([]iprocessor.V1, error)
 }
 
-func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFailure, err error) {
+// ExecuteFrom executes a test case from the perspective of a given directory,
+// which is used for obtaining relative condition file imports.
+func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFailure, err error) {
 	var procSet []iprocessor.V1
 	if c.TargetMapping != "" {
 		if procSet, err = provider.ProvideBloblang(c.TargetMapping); err != nil {

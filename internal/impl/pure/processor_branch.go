@@ -1,4 +1,4 @@
-package processor
+package pure
 
 import (
 	"errors"
@@ -9,16 +9,15 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
-
-//------------------------------------------------------------------------------
 
 var branchFields = docs.FieldSpecs{
 	docs.FieldBloblang(
@@ -56,11 +55,11 @@ root.bar.id = this.user.id`,
 }
 
 func init() {
-	Constructors[TypeBranch] = TypeSpec{
+	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+		return newBranch(conf.Branch, mgr)
+	}, docs.ComponentSpec{
+		Name:   "branch",
 		Status: docs.StatusStable,
-		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
-			return newBranch(conf.Branch, mgr)
-		},
 		Categories: []string{
 			"Composition",
 		},
@@ -182,28 +181,11 @@ pipeline:
 			},
 		},
 		Config: docs.FieldComponent().WithChildren(branchFields...),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
-
-//------------------------------------------------------------------------------
-
-// BranchConfig contains configuration fields for the Branch processor.
-type BranchConfig struct {
-	RequestMap string   `json:"request_map" yaml:"request_map"`
-	Processors []Config `json:"processors" yaml:"processors"`
-	ResultMap  string   `json:"result_map" yaml:"result_map"`
-}
-
-// NewBranchConfig returns a BranchConfig with default values.
-func NewBranchConfig() BranchConfig {
-	return BranchConfig{
-		RequestMap: "",
-		Processors: []Config{},
-		ResultMap:  "",
-	}
-}
-
-//------------------------------------------------------------------------------
 
 // Branch contains conditions and maps for transforming a batch of messages into
 // a subset of request messages, and mapping results from those requests back
@@ -224,11 +206,11 @@ type Branch struct {
 	mLatency       metrics.StatTimer
 }
 
-func newBranch(conf BranchConfig, mgr interop.Manager) (*Branch, error) {
+func newBranch(conf oprocessor.BranchConfig, mgr bundle.NewManagement) (*Branch, error) {
 	children := make([]processor.V1, 0, len(conf.Processors))
 	for i, pconf := range conf.Processors {
-		pMgr := mgr.IntoPath("branch", "processors", strconv.Itoa(i))
-		proc, err := New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
+		pMgr := mgr.IntoPath("branch", "processors", strconv.Itoa(i)).(bundle.NewManagement)
+		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, fmt.Errorf("failed to init processor %v: %w", i, err)
 		}
@@ -329,7 +311,7 @@ func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	b.mBatchReceived.Incr(1)
 	startedAt := time.Now()
 
-	branchMsg, propSpans := tracing.WithChildSpans(TypeBranch, msg.Copy())
+	branchMsg, propSpans := tracing.WithChildSpans("branch", msg.Copy())
 	defer func() {
 		for _, s := range propSpans {
 			s.Finish()
@@ -443,7 +425,7 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 		var res error
 		msg := message.QuickBatch(nil)
 		msg.SetAll(parts)
-		if procResults, res = ExecuteAll(b.children, msg); res != nil {
+		if procResults, res = oprocessor.ExecuteAll(b.children, msg); res != nil {
 			err = fmt.Errorf("child processors failed: %v", res)
 		}
 		if len(procResults) == 0 {

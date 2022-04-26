@@ -197,7 +197,9 @@ func newSwitch(conf SwitchConfig, mgr interop.Manager) (*switchProc, error) {
 	}, nil
 }
 
-func reorderFromGroup(group *message.SortGroup, parts []*message.Part) {
+// SwitchReorderFromGroup takes a message sort group and rearranges a slice of
+// message parts so that they match up from their origins.
+func SwitchReorderFromGroup(group *message.SortGroup, parts []*message.Part) {
 	partToIndex := map[*message.Part]int{}
 	for _, p := range parts {
 		if i := group.GetIndex(p); i >= 0 {
@@ -282,7 +284,7 @@ func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *m
 
 	result = append(result, remaining...)
 	if len(result) > 1 {
-		reorderFromGroup(sortGroup, result)
+		SwitchReorderFromGroup(sortGroup, result)
 	}
 
 	resMsg := message.QuickBatch(nil)

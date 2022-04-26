@@ -1,4 +1,4 @@
-package processor
+package processor_test
 
 import (
 	"reflect"
@@ -6,19 +6,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 //------------------------------------------------------------------------------
 
 func TestTryEmpty(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeTry
+	conf := processor.NewConfig()
+	conf.Type = "try"
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,15 +41,15 @@ func TestTryEmpty(t *testing.T) {
 }
 
 func TestTryBasic(t *testing.T) {
-	encodeConf := NewConfig()
-	encodeConf.Type = TypeBloblang
+	encodeConf := processor.NewConfig()
+	encodeConf.Type = "bloblang"
 	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
-	conf := NewConfig()
-	conf.Type = TypeTry
+	conf := processor.NewConfig()
+	conf.Type = "try"
 	conf.Try = append(conf.Try, encodeConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,15 +78,15 @@ func TestTryBasic(t *testing.T) {
 }
 
 func TestTryFilterSome(t *testing.T) {
-	filterConf := NewConfig()
-	filterConf.Type = TypeBloblang
+	filterConf := processor.NewConfig()
+	filterConf.Type = "bloblang"
 	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
-	conf := NewConfig()
-	conf.Type = TypeTry
+	conf := processor.NewConfig()
+	conf.Type = "try"
 	conf.Try = append(conf.Try, filterConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,19 +114,19 @@ func TestTryFilterSome(t *testing.T) {
 }
 
 func TestTryMultiProcs(t *testing.T) {
-	encodeConf := NewConfig()
-	encodeConf.Type = TypeBloblang
+	encodeConf := processor.NewConfig()
+	encodeConf.Type = "bloblang"
 	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
-	filterConf := NewConfig()
-	filterConf.Type = TypeBloblang
+	filterConf := processor.NewConfig()
+	filterConf.Type = "bloblang"
 	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
-	conf := NewConfig()
-	conf.Type = TypeTry
+	conf := processor.NewConfig()
+	conf.Type = "try"
 	conf.Try = append(conf.Try, filterConf, encodeConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,19 +154,19 @@ func TestTryMultiProcs(t *testing.T) {
 }
 
 func TestTryFailJSON(t *testing.T) {
-	encodeConf := NewConfig()
-	encodeConf.Type = TypeBloblang
+	encodeConf := processor.NewConfig()
+	encodeConf.Type = "bloblang"
 	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
-	jmespathConf := NewConfig()
-	jmespathConf.Type = TypeJMESPath
+	jmespathConf := processor.NewConfig()
+	jmespathConf.Type = "jmespath"
 	jmespathConf.JMESPath.Query = "foo"
 
-	conf := NewConfig()
-	conf.Type = TypeTry
+	conf := processor.NewConfig()
+	conf.Type = "try"
 	conf.Try = append(conf.Try, jmespathConf, encodeConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,15 +204,15 @@ func TestTryFailJSON(t *testing.T) {
 }
 
 func TestTryFilterAll(t *testing.T) {
-	filterConf := NewConfig()
-	filterConf.Type = TypeBloblang
+	filterConf := processor.NewConfig()
+	filterConf.Type = "bloblang"
 	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
-	conf := NewConfig()
-	conf.Type = TypeTry
+	conf := processor.NewConfig()
+	conf.Type = "try"
 	conf.Try = append(conf.Try, filterConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package processor
+package pure
 
 import (
 	"context"
@@ -8,33 +8,33 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeGroupBy] = TypeSpec{
-		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
-			p, err := newGroupBy(conf.GroupBy, mgr)
-			if err != nil {
-				return nil, err
-			}
-			return processor.NewV2BatchedToV1Processor("group_by", p, mgr.Metrics()), nil
-		},
+	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+		p, err := newGroupBy(conf.GroupBy, mgr)
+		if err != nil {
+			return nil, err
+		}
+		return processor.NewV2BatchedToV1Processor("group_by", p, mgr.Metrics()), nil
+	}, docs.ComponentSpec{
+		Name: "group_by",
 		Categories: []string{
 			"Composition",
 		},
 		Summary: `
 Splits a [batch of messages](/docs/configuration/batching/) into N batches, where each resulting batch contains a group of messages determined by a [Bloblang query](/docs/guides/bloblang/about/).`,
 		Description: `
-Once the groups are established a list of processors are applied to their respective grouped batch, which can be used to label the batch as per their grouping. Messages that do not pass the check of any specified group are placed in their own group.`,
+Once the groups are established a list of processors are applied to their respective grouped batch, which can be used to label the batch as per their grouping. Messages that do not pass the check of any specified group are placed in their own group.
+
+The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).`,
 		Examples: []docs.AnnotatedExample{
 			{
 				Title:   "Grouped Processing",
@@ -79,32 +79,11 @@ output:
 				"A list of [processors](/docs/components/processors/about/) to execute on the newly formed group.",
 			).HasDefault([]interface{}{}).Array(),
 		),
-		UsesBatches: true,
+	})
+	if err != nil {
+		panic(err)
 	}
 }
-
-//------------------------------------------------------------------------------
-
-// GroupByElement represents a group determined by a condition and a list of
-// group specific processors.
-type GroupByElement struct {
-	Check      string   `json:"check" yaml:"check"`
-	Processors []Config `json:"processors" yaml:"processors"`
-}
-
-//------------------------------------------------------------------------------
-
-// GroupByConfig is a configuration struct containing fields for the GroupBy
-// processor, which breaks message batches down into N batches of a smaller size
-// according to conditions.
-type GroupByConfig []GroupByElement
-
-// NewGroupByConfig returns a GroupByConfig with default values.
-func NewGroupByConfig() GroupByConfig {
-	return GroupByConfig{}
-}
-
-//------------------------------------------------------------------------------
 
 type group struct {
 	Check      *mapping.Executor
@@ -116,7 +95,7 @@ type groupByProc struct {
 	groups []group
 }
 
-func newGroupBy(conf GroupByConfig, mgr interop.Manager) (processor.V2Batched, error) {
+func newGroupBy(conf oprocessor.GroupByConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
 	var err error
 	groups := make([]group, len(conf))
 
@@ -130,8 +109,8 @@ func newGroupBy(conf GroupByConfig, mgr interop.Manager) (processor.V2Batched, e
 		}
 
 		for j, pConf := range gConf.Processors {
-			pMgr := mgr.IntoPath("group_by", strconv.Itoa(i), "processors", strconv.Itoa(j))
-			proc, err := New(pConf, pMgr, pMgr.Logger(), pMgr.Metrics())
+			pMgr := mgr.IntoPath("group_by", strconv.Itoa(i), "processors", strconv.Itoa(j)).(bundle.NewManagement)
+			proc, err := pMgr.NewProcessor(pConf)
 			if err != nil {
 				return nil, err
 			}
@@ -190,7 +169,7 @@ func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 			continue
 		}
 
-		resultMsgs, res := ExecuteAll(g.groups[i].Processors, gmsg)
+		resultMsgs, res := oprocessor.ExecuteAll(g.groups[i].Processors, gmsg)
 		if len(resultMsgs) > 0 {
 			msgs = append(msgs, resultMsgs...)
 		}

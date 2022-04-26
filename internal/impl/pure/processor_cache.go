@@ -1,4 +1,4 @@
-package processor
+package pure
 
 import (
 	"context"
@@ -7,28 +7,26 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeCache] = TypeSpec{
-		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
-			p, err := newCache(conf.Cache, mgr)
-			if err != nil {
-				return nil, err
-			}
-			return processor.NewV2BatchedToV1Processor("cache", p, mgr.Metrics()), nil
-		},
+	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+		p, err := newCache(conf.Cache, mgr)
+		if err != nil {
+			return nil, err
+		}
+		return processor.NewV2BatchedToV1Processor("cache", p, mgr.Metrics()), nil
+	}, docs.ComponentSpec{
+		Name: "cache",
 		Categories: []string{
 			"Integration",
 		},
@@ -45,7 +43,7 @@ This processor will interpolate functions within the ` + "`key` and `value`" + `
 				"ttl", "The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, those that do will have a configuration field `default_ttl`, and those that do not will fall back to their generally configured TTL setting.",
 				"60s", "5m", "36h",
 			).IsInterpolated().AtVersion("3.33.0").Advanced(),
-		),
+		).ChildDefaultAndTypesFromStruct(oprocessor.NewCacheConfig()),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "Deduplication",
@@ -146,28 +144,9 @@ can be detected with [processor error handling](/docs/configuration/error_handli
 
 Delete a key and its contents from the cache.  If the key does not exist the
 action is a no-op and will not fail with an error.`,
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// CacheConfig contains configuration fields for the Cache processor.
-type CacheConfig struct {
-	Resource string `json:"resource" yaml:"resource"`
-	Operator string `json:"operator" yaml:"operator"`
-	Key      string `json:"key" yaml:"key"`
-	Value    string `json:"value" yaml:"value"`
-	TTL      string `json:"ttl" yaml:"ttl"`
-}
-
-// NewCacheConfig returns a CacheConfig with default values.
-func NewCacheConfig() CacheConfig {
-	return CacheConfig{
-		Resource: "",
-		Operator: "",
-		Key:      "",
-		Value:    "",
-		TTL:      "",
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
@@ -183,7 +162,7 @@ type cacheProc struct {
 	operator  cacheOperator
 }
 
-func newCache(conf CacheConfig, mgr interop.Manager) (*cacheProc, error) {
+func newCache(conf oprocessor.CacheConfig, mgr interop.Manager) (*cacheProc, error) {
 	cacheName := conf.Resource
 	if cacheName == "" {
 		return nil, errors.New("cache name must be specified")

@@ -108,31 +108,6 @@ func ExecuteCatchAll(procs []processor.V1, msgs ...*message.Batch) ([]*message.B
 	return resultBatches, nil
 }
 
-//------------------------------------------------------------------------------
-
-func iterateParts(
-	parts []int, msg *message.Batch,
-	iter func(int, *message.Part) error,
-) error {
-	exec := func(i int) error {
-		return iter(i, msg.Get(i))
-	}
-	if len(parts) == 0 {
-		for i := 0; i < msg.Len(); i++ {
-			if err := exec(i); err != nil {
-				return err
-			}
-		}
-	} else {
-		for _, i := range parts {
-			if err := exec(i); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 // IteratePartsWithSpanV2 iterates the parts of a message according to a slice
 // of indexes (if empty all parts are iterated) and calls a func for each part
 // along with a tracing span for that part. If an error is returned the part is

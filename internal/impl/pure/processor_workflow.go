@@ -1,4 +1,4 @@
-package processor
+package pure
 
 import (
 	"fmt"
@@ -8,23 +8,22 @@ import (
 
 	"github.com/Jeffail/gabs/v2"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeWorkflow] = TypeSpec{
-		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
-			p, err := NewWorkflow(conf.Workflow, mgr)
-			return p, err
-		},
+	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+		p, err := NewWorkflow(conf.Workflow, mgr)
+		return p, err
+	}, docs.ComponentSpec{
+		Name: "workflow",
 		Categories: []string{
 			"Composition",
 		},
@@ -242,43 +241,25 @@ processor_resources:
 			},
 		},
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("meta_path", "A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution."),
+			docs.FieldString("meta_path", "A [dot path](/docs/configuration/field_paths) indicating where to store and reference [structured metadata](#structured-metadata) about the workflow execution.").HasDefault("meta.workflow"),
 			docs.FieldString(
 				"order",
 				"An explicit declaration of branch ordered tiers, which describes the order in which parallel tiers of branches should be executed. Branches should be identified by the name as they are configured in the field `branches`. It's also possible to specify branch processors configured [as a resource](#resources).",
 				[][]string{{"foo", "bar"}, {"baz"}},
 				[][]string{{"foo"}, {"bar"}, {"baz"}},
-			).ArrayOfArrays(),
+			).ArrayOfArrays().HasDefault([]interface{}{}),
 			docs.FieldString(
 				"branch_resources",
 				"An optional list of [`branch` processor](/docs/components/processors/branch) names that are configured as [resources](#resources). These resources will be included in the workflow with any branches configured inline within the [`branches`](#branches) field. The order and parallelism in which branches are executed is automatically resolved based on the mappings of each branch. When using resources with an explicit order it is not necessary to list resources in this field.",
-			).AtVersion("3.38.0").Advanced().Array(),
+			).AtVersion("3.38.0").Advanced().Array().HasDefault([]interface{}{}),
 			docs.FieldObject(
 				"branches",
 				"An object of named [`branch` processors](/docs/components/processors/branch) that make up the workflow. The order and parallelism in which branches are executed can either be made explicit with the field `order`, or if omitted an attempt is made to automatically resolve an ordering based on the mappings of each branch.",
-			).Map().WithChildren(branchFields...),
+			).Map().WithChildren(branchFields...).HasDefault(map[string]interface{}{}),
 		),
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// WorkflowConfig is a config struct containing fields for the Workflow
-// processor.
-type WorkflowConfig struct {
-	MetaPath        string                  `json:"meta_path" yaml:"meta_path"`
-	Order           [][]string              `json:"order" yaml:"order"`
-	BranchResources []string                `json:"branch_resources" yaml:"branch_resources"`
-	Branches        map[string]BranchConfig `json:"branches" yaml:"branches"`
-}
-
-// NewWorkflowConfig returns a default WorkflowConfig.
-func NewWorkflowConfig() WorkflowConfig {
-	return WorkflowConfig{
-		MetaPath:        "meta.workflow",
-		Order:           [][]string{},
-		BranchResources: []string{},
-		Branches:        map[string]BranchConfig{},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
@@ -304,7 +285,7 @@ type Workflow struct {
 }
 
 // NewWorkflow instanciates a new workflow processor.
-func NewWorkflow(conf WorkflowConfig, mgr interop.Manager) (*Workflow, error) {
+func NewWorkflow(conf oprocessor.WorkflowConfig, mgr bundle.NewManagement) (*Workflow, error) {
 	stats := mgr.Metrics()
 	w := &Workflow{
 		log:       mgr.Logger(),
@@ -616,5 +597,3 @@ func (w *Workflow) CloseAsync() {
 func (w *Workflow) WaitForClose(timeout time.Duration) error {
 	return w.children.WaitForClose(timeout)
 }
-
-//------------------------------------------------------------------------------

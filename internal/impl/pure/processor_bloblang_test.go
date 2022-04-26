@@ -1,4 +1,4 @@
-package processor
+package pure_test
 
 import (
 	"context"
@@ -8,10 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 func TestBloblangCrossfire(t *testing.T) {
@@ -30,7 +31,7 @@ func TestBloblangCrossfire(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "bloblang"
 	conf.Bloblang = `
 	foo = json("foo").from(0)
@@ -40,7 +41,7 @@ func TestBloblangCrossfire(t *testing.T) {
 	meta bar = meta("bar").from(0)
 	meta baz = "new meta"
 `
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,10 +90,10 @@ func TestBloblangContext(t *testing.T) {
 	key, val := testFooKey, "bar"
 	msg.Append(message.WithContext(context.WithValue(context.Background(), key, val), part))
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "bloblang"
 	conf.Bloblang = `result = foo.bar.baz.uppercase()`
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,10 +127,10 @@ func TestBloblangCustomObject(t *testing.T) {
 	part.SetJSON(gObj.Data())
 	msg.Append(part)
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "bloblang"
 	conf.Bloblang = `root.foos = this.foos`
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
 
 	outMsgs, res := proc.ProcessMessage(msg)
@@ -149,14 +150,14 @@ func TestBloblangFiltering(t *testing.T) {
 		[]byte(`{"bar":{"dont":"delete me"}}`),
 	})
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "bloblang"
 	conf.Bloblang = `
 	root = match {
 		(foo | bar).delete.or(false) => deleted(),
 	}
 	`
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,10 +180,10 @@ func TestBloblangFilterAll(t *testing.T) {
 		[]byte(`{"bar":{"dont":"delete me"}}`),
 	})
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "bloblang"
 	conf.Bloblang = `root = deleted()`
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,12 +198,12 @@ func TestBloblangJSONError(t *testing.T) {
 		[]byte(`this is not valid json`),
 	})
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "bloblang"
 	conf.Bloblang = `
 	foo = json().bar
 `
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}

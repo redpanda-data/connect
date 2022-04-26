@@ -1,4 +1,4 @@
-package processor
+package pure_test
 
 import (
 	"testing"
@@ -6,28 +6,28 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func TestMetricBad(t *testing.T) {
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "metric"
 	conf.Metric.Type = "bad type"
 	conf.Metric.Name = "some.path"
-	_, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	_, err := mock.NewManager().NewProcessor(conf)
 	require.Error(t, err)
 
-	conf = NewConfig()
+	conf = processor.NewConfig()
 	conf.Type = "metric"
-	_, err = New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	_, err = mock.NewManager().NewProcessor(conf)
 	require.Error(t, err)
 }
 
 func TestMetricCounter(t *testing.T) {
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "metric"
 	conf.Metric.Type = "counter"
 	conf.Metric.Name = "foo.bar"
@@ -35,7 +35,10 @@ func TestMetricCounter(t *testing.T) {
 
 	mockMetrics := metrics.NewLocal()
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), mockMetrics)
+	mgr := mock.NewManager()
+	mgr.M = mockMetrics
+
+	proc, err := mgr.NewProcessor(conf)
 	require.NoError(t, err)
 
 	inputs := [][][]byte{
@@ -71,7 +74,7 @@ func TestMetricCounter(t *testing.T) {
 }
 
 func TestMetricCounterBy(t *testing.T) {
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "metric"
 	conf.Metric.Type = "counter_by"
 	conf.Metric.Name = "foo.bar"
@@ -79,7 +82,10 @@ func TestMetricCounterBy(t *testing.T) {
 
 	mockMetrics := metrics.NewLocal()
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), mockMetrics)
+	mgr := mock.NewManager()
+	mgr.M = mockMetrics
+
+	proc, err := mgr.NewProcessor(conf)
 	require.NoError(t, err)
 
 	inputs := [][][]byte{
@@ -118,7 +124,7 @@ func TestMetricCounterBy(t *testing.T) {
 }
 
 func TestMetricGauge(t *testing.T) {
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "metric"
 	conf.Metric.Type = "gauge"
 	conf.Metric.Name = "foo.bar"
@@ -126,7 +132,10 @@ func TestMetricGauge(t *testing.T) {
 
 	mockMetrics := metrics.NewLocal()
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), mockMetrics)
+	mgr := mock.NewManager()
+	mgr.M = mockMetrics
+
+	proc, err := mgr.NewProcessor(conf)
 	require.NoError(t, err)
 
 	inputs := [][][]byte{
@@ -165,7 +174,7 @@ func TestMetricGauge(t *testing.T) {
 }
 
 func TestMetricTiming(t *testing.T) {
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "metric"
 	conf.Metric.Type = "timing"
 	conf.Metric.Name = "foo.bar"
@@ -173,7 +182,10 @@ func TestMetricTiming(t *testing.T) {
 
 	mockMetrics := metrics.NewLocal()
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), mockMetrics)
+	mgr := mock.NewManager()
+	mgr.M = mockMetrics
+
+	proc, err := mgr.NewProcessor(conf)
 	require.NoError(t, err)
 
 	inputs := [][][]byte{

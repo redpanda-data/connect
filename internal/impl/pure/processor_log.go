@@ -1,4 +1,4 @@
-package processor
+package pure
 
 import (
 	"fmt"
@@ -9,19 +9,20 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeLog] = TypeSpec{
-		constructor: NewLog,
+	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+		return newLogProcessor(conf, mgr, mgr.Logger())
+	}, docs.ComponentSpec{
+		Name: "log",
 		Categories: []string{
 			"Utility",
 		},
@@ -57,34 +58,14 @@ root.age = this.user.age.number()
 root.kafka_topic = meta("kafka_topic")`,
 			).AtVersion("3.40.0").IsBloblang(),
 			docs.FieldString("message", "The message to print.").IsInterpolated(),
-		),
+		).ChildDefaultAndTypesFromStruct(oprocessor.NewLogConfig()),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// LogConfig contains configuration fields for the Log processor.
-type LogConfig struct {
-	Level         string            `json:"level" yaml:"level"`
-	Fields        map[string]string `json:"fields" yaml:"fields"`
-	FieldsMapping string            `json:"fields_mapping" yaml:"fields_mapping"`
-	Message       string            `json:"message" yaml:"message"`
-}
-
-// NewLogConfig returns a LogConfig with default values.
-func NewLogConfig() LogConfig {
-	return LogConfig{
-		Level:         "INFO",
-		Fields:        map[string]string{},
-		FieldsMapping: "",
-		Message:       "",
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// Log is a processor that prints a log event each time it processes a message.
-type Log struct {
+type logProcessor struct {
 	logger        log.Modular
 	level         string
 	message       *field.Expression
@@ -93,15 +74,12 @@ type Log struct {
 	fieldsMapping *mapping.Executor
 }
 
-// NewLog returns a Log processor.
-func NewLog(
-	conf Config, mgr interop.Manager, logger log.Modular, stats metrics.Type,
-) (processor.V1, error) {
+func newLogProcessor(conf oprocessor.Config, mgr interop.Manager, logger log.Modular) (processor.V1, error) {
 	message, err := mgr.BloblEnvironment().NewField(conf.Log.Message)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message expression: %v", err)
 	}
-	l := &Log{
+	l := &logProcessor{
 		logger:  logger,
 		level:   conf.Log.Level,
 		fields:  map[string]*field.Expression{},
@@ -125,9 +103,7 @@ func NewLog(
 	return l, nil
 }
 
-//------------------------------------------------------------------------------
-
-func (l *Log) levelToLogFn(level string) (func(logger log.Modular, msg string), error) {
+func (l *logProcessor) levelToLogFn(level string) (func(logger log.Modular, msg string), error) {
 	level = strings.ToUpper(level)
 	switch level {
 	case "TRACE":
@@ -154,10 +130,7 @@ func (l *Log) levelToLogFn(level string) (func(logger log.Modular, msg string), 
 	return nil, fmt.Errorf("log level not recognised: %v", level)
 }
 
-//------------------------------------------------------------------------------
-
-// ProcessMessage logs an event and returns the message unchanged.
-func (l *Log) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
+func (l *logProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	_ = msg.Iter(func(i int, _ *message.Part) error {
 		targetLog := l.logger
 		if l.fieldsMapping != nil {
@@ -211,11 +184,9 @@ func (l *Log) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	return []*message.Batch{msg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (l *Log) CloseAsync() {
+func (l *logProcessor) CloseAsync() {
 }
 
-// WaitForClose blocks until the processor has closed down.
-func (l *Log) WaitForClose(timeout time.Duration) error {
+func (l *logProcessor) WaitForClose(timeout time.Duration) error {
 	return nil
 }

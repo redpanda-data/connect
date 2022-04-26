@@ -1,4 +1,4 @@
-package processor
+package pure_test
 
 import (
 	"errors"
@@ -7,19 +7,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
-//------------------------------------------------------------------------------
-
 func TestCatchEmpty(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeCatch
+	conf := processor.NewConfig()
+	conf.Type = "catch"
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,15 +46,15 @@ func TestCatchEmpty(t *testing.T) {
 }
 
 func TestCatchBasic(t *testing.T) {
-	encodeConf := NewConfig()
-	encodeConf.Type = TypeBloblang
+	encodeConf := processor.NewConfig()
+	encodeConf.Type = "bloblang"
 	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
-	conf := NewConfig()
-	conf.Type = TypeCatch
+	conf := processor.NewConfig()
+	conf.Type = "catch"
 	conf.Catch = append(conf.Catch, encodeConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,15 +95,15 @@ func TestCatchBasic(t *testing.T) {
 }
 
 func TestCatchFilterSome(t *testing.T) {
-	filterConf := NewConfig()
-	filterConf.Type = TypeBloblang
+	filterConf := processor.NewConfig()
+	filterConf.Type = "bloblang"
 	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
-	conf := NewConfig()
-	conf.Type = TypeCatch
+	conf := processor.NewConfig()
+	conf.Type = "catch"
 	conf.Catch = append(conf.Catch, filterConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,19 +142,19 @@ func TestCatchFilterSome(t *testing.T) {
 }
 
 func TestCatchMultiProcs(t *testing.T) {
-	encodeConf := NewConfig()
-	encodeConf.Type = TypeBloblang
+	encodeConf := processor.NewConfig()
+	encodeConf.Type = "bloblang"
 	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
-	filterConf := NewConfig()
-	filterConf.Type = TypeBloblang
+	filterConf := processor.NewConfig()
+	filterConf.Type = "bloblang"
 	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
-	conf := NewConfig()
-	conf.Type = TypeCatch
+	conf := processor.NewConfig()
+	conf.Type = "catch"
 	conf.Catch = append(conf.Catch, filterConf, encodeConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,15 +193,15 @@ func TestCatchMultiProcs(t *testing.T) {
 }
 
 func TestCatchNotFails(t *testing.T) {
-	encodeConf := NewConfig()
-	encodeConf.Type = TypeBloblang
+	encodeConf := processor.NewConfig()
+	encodeConf.Type = "bloblang"
 	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
-	conf := NewConfig()
-	conf.Type = TypeCatch
+	conf := processor.NewConfig()
+	conf.Type = "catch"
 	conf.Catch = append(conf.Catch, encodeConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,15 +239,15 @@ func TestCatchNotFails(t *testing.T) {
 }
 
 func TestCatchFilterAll(t *testing.T) {
-	filterConf := NewConfig()
-	filterConf.Type = TypeBloblang
+	filterConf := processor.NewConfig()
+	filterConf.Type = "bloblang"
 	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
-	conf := NewConfig()
-	conf.Type = TypeCatch
+	conf := processor.NewConfig()
+	conf.Type = "catch"
 	conf.Catch = append(conf.Catch, filterConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,5 +268,3 @@ func TestCatchFilterAll(t *testing.T) {
 		t.Errorf("Wrong count of result msgs: %v", len(msgs))
 	}
 }
-
-//------------------------------------------------------------------------------

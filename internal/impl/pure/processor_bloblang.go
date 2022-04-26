@@ -1,4 +1,4 @@
-package processor
+package pure
 
 import (
 	"context"
@@ -6,26 +6,25 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeBloblang] = TypeSpec{
-		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
-			p, err := newBloblang(conf.Bloblang, mgr)
-			if err != nil {
-				return nil, err
-			}
-			return processor.NewV2BatchedToV1Processor("bloblang", p, mgr.Metrics()), nil
-		},
+	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+		p, err := newBloblang(conf.Bloblang, mgr)
+		if err != nil {
+			return nil, err
+		}
+		return processor.NewV2BatchedToV1Processor("bloblang", p, mgr.Metrics()), nil
+	}, docs.ComponentSpec{
+		Name: "bloblang",
 		Categories: []string{
 			"Mapping",
 			"Parsing",
@@ -122,10 +121,11 @@ pipeline:
 `,
 			},
 		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
-
-//------------------------------------------------------------------------------
 
 type bloblangProc struct {
 	exec *mapping.Executor
@@ -140,18 +140,11 @@ func newBloblang(conf string, mgr interop.Manager) (processor.V2Batched, error) 
 		}
 		return nil, err
 	}
-	return NewBloblangFromExecutor(exec, mgr.Logger()), nil
-}
-
-// NewBloblangFromExecutor returns a new bloblang processor from an executor.
-func NewBloblangFromExecutor(exec *mapping.Executor, log log.Modular) processor.V2Batched {
 	return &bloblangProc{
 		exec: exec,
-		log:  log,
-	}
+		log:  mgr.Logger(),
+	}, nil
 }
-
-//------------------------------------------------------------------------------
 
 func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	newParts := make([]*message.Part, 0, msg.Len())

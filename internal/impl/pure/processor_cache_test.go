@@ -1,4 +1,4 @@
-package processor
+package pure_test
 
 import (
 	"reflect"
@@ -7,26 +7,27 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
+	mmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 func TestCacheSet(t *testing.T) {
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
+	mgr.Caches["foocache"] = map[string]mmock.CacheItem{}
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "cache"
 	conf.Cache.Operator = "set"
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Value = "${!json(\"value\")}"
 	conf.Cache.Resource = "foocache"
-	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	input := message.QuickBatch([][]byte{
@@ -59,18 +60,17 @@ func TestCacheSet(t *testing.T) {
 
 func TestCacheAdd(t *testing.T) {
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
+	mgr.Caches["foocache"] = map[string]mmock.CacheItem{}
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "cache"
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Value = "${!json(\"value\")}"
 	conf.Cache.Resource = "foocache"
 	conf.Cache.Operator = "add"
-	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	input := message.QuickBatch([][]byte{
@@ -107,20 +107,19 @@ func TestCacheAdd(t *testing.T) {
 
 func TestCacheGet(t *testing.T) {
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]mock.CacheItem{
+	mgr.Caches["foocache"] = map[string]mmock.CacheItem{
 		"1": {Value: "foo 1"},
 		"2": {Value: "foo 2"},
 	}
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "cache"
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Resource = "foocache"
 	conf.Cache.Operator = "get"
-	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	input := message.QuickBatch([][]byte{
@@ -154,21 +153,20 @@ func TestCacheGet(t *testing.T) {
 
 func TestCacheDelete(t *testing.T) {
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]mock.CacheItem{
+	mgr.Caches["foocache"] = map[string]mmock.CacheItem{
 		"1": {Value: "foo 1"},
 		"2": {Value: "foo 2"},
 		"3": {Value: "foo 3"},
 	}
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "cache"
 	conf.Cache.Key = "${!json(\"key\")}"
 	conf.Cache.Resource = "foocache"
 	conf.Cache.Operator = "delete"
-	proc, err := New(conf, mgr, log.Noop(), metrics.Noop())
+	proc, err := mgr.NewProcessor(conf)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	input := message.QuickBatch([][]byte{

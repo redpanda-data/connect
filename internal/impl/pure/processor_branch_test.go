@@ -1,4 +1,4 @@
-package processor
+package pure_test
 
 import (
 	"errors"
@@ -8,22 +8,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
-
-type mockMsg struct {
-	content string
-	meta    map[string]string
-	err     error
-}
-
-func (m mockMsg) withErr(err error) mockMsg {
-	m.err = err
-	return m
-}
 
 func TestBranchBasic(t *testing.T) {
 	msg := func(content string, meta ...string) mockMsg {
@@ -211,17 +201,17 @@ func TestBranchBasic(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			procConf := NewConfig()
-			procConf.Type = TypeBloblang
+			procConf := processor.NewConfig()
+			procConf.Type = "bloblang"
 			procConf.Bloblang = test.processorMap
 
-			conf := NewConfig()
-			conf.Type = TypeBranch
+			conf := processor.NewConfig()
+			conf.Type = "branch"
 			conf.Branch.RequestMap = test.requestMap
 			conf.Branch.Processors = append(conf.Branch.Processors, procConf)
 			conf.Branch.ResultMap = test.resultMap
 
-			proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+			proc, err := mock.NewManager().NewProcessor(conf)
 			require.NoError(t, err)
 
 			msg := message.QuickBatch(nil)

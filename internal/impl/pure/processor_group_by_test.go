@@ -1,4 +1,4 @@
-package processor_test
+package pure_test
 
 import (
 	"testing"

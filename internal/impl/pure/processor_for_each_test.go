@@ -1,4 +1,4 @@
-package processor
+package pure_test
 
 import (
 	"reflect"
@@ -6,19 +6,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 //------------------------------------------------------------------------------
 
 func TestForEachEmpty(t *testing.T) {
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "for_each"
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,15 +41,15 @@ func TestForEachEmpty(t *testing.T) {
 }
 
 func TestForEachBasic(t *testing.T) {
-	encodeConf := NewConfig()
-	encodeConf.Type = TypeBloblang
+	encodeConf := processor.NewConfig()
+	encodeConf.Type = "bloblang"
 	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "for_each"
 	conf.ForEach = append(conf.ForEach, encodeConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,15 +78,15 @@ func TestForEachBasic(t *testing.T) {
 }
 
 func TestForEachFilterSome(t *testing.T) {
-	filterConf := NewConfig()
-	filterConf.Type = TypeBloblang
+	filterConf := processor.NewConfig()
+	filterConf.Type = "bloblang"
 	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "for_each"
 	conf.ForEach = append(conf.ForEach, filterConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,19 +114,19 @@ func TestForEachFilterSome(t *testing.T) {
 }
 
 func TestForEachMultiProcs(t *testing.T) {
-	encodeConf := NewConfig()
-	encodeConf.Type = TypeBloblang
+	encodeConf := processor.NewConfig()
+	encodeConf.Type = "bloblang"
 	encodeConf.Bloblang = `root = if batch_index() == 0 { content().encode("base64") }`
 
-	filterConf := NewConfig()
-	filterConf.Type = TypeBloblang
+	filterConf := processor.NewConfig()
+	filterConf.Type = "bloblang"
 	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "for_each"
 	conf.ForEach = append(conf.ForEach, filterConf, encodeConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,15 +154,15 @@ func TestForEachMultiProcs(t *testing.T) {
 }
 
 func TestForEachFilterAll(t *testing.T) {
-	filterConf := NewConfig()
-	filterConf.Type = TypeBloblang
+	filterConf := processor.NewConfig()
+	filterConf.Type = "bloblang"
 	filterConf.Bloblang = `root = if !content().contains("foo") { deleted() }`
 
-	conf := NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "for_each"
 	conf.ForEach = append(conf.ForEach, filterConf)
 
-	proc, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	proc, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}

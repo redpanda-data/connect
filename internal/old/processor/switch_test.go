@@ -1,4 +1,4 @@
-package processor
+package processor_test
 
 import (
 	"fmt"
@@ -8,47 +8,48 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 func TestSwitchCases(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeSwitch
+	conf := processor.NewConfig()
+	conf.Type = "switch"
 
-	procConf := NewConfig()
-	procConf.Type = TypeBloblang
+	procConf := processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 0: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `content().contains("A")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: false,
 	})
 
-	procConf = NewConfig()
-	procConf.Type = TypeBloblang
+	procConf = processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 1: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `content().contains("B")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: true,
 	})
 
-	procConf = NewConfig()
-	procConf.Type = TypeBloblang
+	procConf = processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 2: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `content().contains("C")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: false,
 	})
 
-	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	c, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
 
 	defer func() {
@@ -131,30 +132,30 @@ func TestSwitchCases(t *testing.T) {
 }
 
 func TestSwitchError(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeSwitch
+	conf := processor.NewConfig()
+	conf.Type = "switch"
 
-	procConf := NewConfig()
-	procConf.Type = TypeBloblang
+	procConf := processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 0: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `this.id.not_empty().contains("foo")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: false,
 	})
 
-	procConf = NewConfig()
-	procConf.Type = TypeBloblang
+	procConf = processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 1: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `this.content.contains("bar")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: false,
 	})
 
-	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	c, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
 
 	defer func() {
@@ -190,40 +191,40 @@ func TestSwitchError(t *testing.T) {
 }
 
 func BenchmarkSwitch10(b *testing.B) {
-	conf := NewConfig()
-	conf.Type = TypeSwitch
+	conf := processor.NewConfig()
+	conf.Type = "switch"
 
-	procConf := NewConfig()
-	procConf.Type = TypeBloblang
+	procConf := processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 0: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `content().contains("A")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: false,
 	})
 
-	procConf = NewConfig()
-	procConf.Type = TypeBloblang
+	procConf = processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 1: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `content().contains("B")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: true,
 	})
 
-	procConf = NewConfig()
-	procConf.Type = TypeBloblang
+	procConf = processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 2: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `content().contains("C")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: false,
 	})
 
-	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	c, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(b, err)
 	defer func() {
 		c.CloseAsync()
@@ -266,40 +267,40 @@ func BenchmarkSwitch10(b *testing.B) {
 }
 
 func BenchmarkSwitch1(b *testing.B) {
-	conf := NewConfig()
-	conf.Type = TypeSwitch
+	conf := processor.NewConfig()
+	conf.Type = "switch"
 
-	procConf := NewConfig()
-	procConf.Type = TypeBloblang
+	procConf := processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 0: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `content().contains("A")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: false,
 	})
 
-	procConf = NewConfig()
-	procConf.Type = TypeBloblang
+	procConf = processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 1: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `content().contains("B")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: true,
 	})
 
-	procConf = NewConfig()
-	procConf.Type = TypeBloblang
+	procConf = processor.NewConfig()
+	procConf.Type = "bloblang"
 	procConf.Bloblang = `root = "Hit case 2: " + content().string()`
 
-	conf.Switch = append(conf.Switch, SwitchCaseConfig{
+	conf.Switch = append(conf.Switch, processor.SwitchCaseConfig{
 		Check:       `content().contains("C")`,
-		Processors:  []Config{procConf},
+		Processors:  []processor.Config{procConf},
 		Fallthrough: false,
 	})
 
-	c, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	c, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(b, err)
 	defer func() {
 		c.CloseAsync()
@@ -352,7 +353,7 @@ func BenchmarkSortCorrect(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	reorderFromGroup(group, parts)
+	processor.SwitchReorderFromGroup(group, parts)
 }
 
 func BenchmarkSortReverse(b *testing.B) {
@@ -370,5 +371,5 @@ func BenchmarkSortReverse(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	reorderFromGroup(group, unsortedParts)
+	processor.SwitchReorderFromGroup(group, unsortedParts)
 }

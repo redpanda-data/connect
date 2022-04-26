@@ -1,4 +1,4 @@
-package processor_test
+package pure_test
 
 import (
 	"errors"
@@ -11,11 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
@@ -182,7 +183,7 @@ func TestWorkflowDeps(t *testing.T) {
 				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
 			}
 
-			p, err := processor.NewWorkflow(conf.Workflow, mock.NewManager())
+			p, err := pure.NewWorkflow(conf.Workflow, mock.NewManager())
 			if len(test.err) > 0 {
 				assert.EqualError(t, err, test.err)
 			} else {
@@ -198,7 +199,7 @@ func TestWorkflowDeps(t *testing.T) {
 	}
 }
 
-func newMockProcProvider(t *testing.T, confs map[string]processor.Config) interop.Manager {
+func newMockProcProvider(t *testing.T, confs map[string]processor.Config) bundle.NewManagement {
 	t.Helper()
 
 	resConf := manager.NewResourceConfig()
@@ -253,7 +254,7 @@ func TestWorkflowMissingResources(t *testing.T) {
 		"baz": branchConf,
 	})
 
-	_, err := processor.NewWorkflow(conf.Workflow, mgr)
+	_, err := pure.NewWorkflow(conf.Workflow, mgr)
 	require.EqualError(t, err, "processor resource 'foo' was not found")
 }
 
@@ -443,7 +444,7 @@ func TestWorkflows(t *testing.T) {
 				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
 			}
 
-			p, err := processor.NewWorkflow(conf.Workflow, mock.NewManager())
+			p, err := pure.NewWorkflow(conf.Workflow, mock.NewManager())
 			require.NoError(t, err)
 
 			inputMsg := message.QuickBatch(nil)
@@ -639,7 +640,7 @@ func TestWorkflowsWithResources(t *testing.T) {
 			}
 
 			mgr := newMockProcProvider(t, quickTestBranches(test.branches...))
-			p, err := processor.NewWorkflow(conf.Workflow, mgr)
+			p, err := pure.NewWorkflow(conf.Workflow, mgr)
 			require.NoError(t, err)
 
 			var parts [][]byte
@@ -706,7 +707,7 @@ func TestWorkflowsParallel(t *testing.T) {
 
 	for loops := 0; loops < 10; loops++ {
 		mgr := newMockProcProvider(t, quickTestBranches(branches...))
-		p, err := processor.NewWorkflow(conf.Workflow, mgr)
+		p, err := pure.NewWorkflow(conf.Workflow, mgr)
 		require.NoError(t, err)
 
 		startChan := make(chan struct{})
@@ -897,7 +898,7 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 			conf.Workflow.Order = test.order
 
 			mgr := newMockProcProvider(t, quickTestBranches(test.branches...))
-			p, err := processor.NewWorkflow(conf.Workflow, mgr)
+			p, err := pure.NewWorkflow(conf.Workflow, mgr)
 			require.NoError(t, err)
 
 			var parts [][]byte

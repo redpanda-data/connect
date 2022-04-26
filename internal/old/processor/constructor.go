@@ -134,11 +134,11 @@ type Config struct {
 	BoundsCheck  BoundsCheckConfig  `json:"bounds_check" yaml:"bounds_check"`
 	Branch       BranchConfig       `json:"branch" yaml:"branch"`
 	Cache        CacheConfig        `json:"cache" yaml:"cache"`
-	Catch        CatchConfig        `json:"catch" yaml:"catch"`
+	Catch        []Config           `json:"catch" yaml:"catch"`
 	Compress     CompressConfig     `json:"compress" yaml:"compress"`
 	Decompress   DecompressConfig   `json:"decompress" yaml:"decompress"`
 	Dedupe       DedupeConfig       `json:"dedupe" yaml:"dedupe"`
-	ForEach      ForEachConfig      `json:"for_each" yaml:"for_each"`
+	ForEach      []Config           `json:"for_each" yaml:"for_each"`
 	Grok         GrokConfig         `json:"grok" yaml:"grok"`
 	GroupBy      GroupByConfig      `json:"group_by" yaml:"group_by"`
 	GroupByValue GroupByValueConfig `json:"group_by_value" yaml:"group_by_value"`
@@ -150,11 +150,10 @@ type Config struct {
 	Log          LogConfig          `json:"log" yaml:"log"`
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	MongoDB      MongoDBConfig      `json:"mongodb" yaml:"mongodb"`
-	Noop         NoopConfig         `json:"noop" yaml:"noop"`
+	Noop         struct{}           `json:"noop" yaml:"noop"`
 	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
 	ParseLog     ParseLogConfig     `json:"parse_log" yaml:"parse_log"`
-	ProcessBatch ForEachConfig      `json:"process_batch" yaml:"process_batch"`
 	Protobuf     ProtobufConfig     `json:"protobuf" yaml:"protobuf"`
 	RateLimit    RateLimitConfig    `json:"rate_limit" yaml:"rate_limit"`
 	Redis        RedisConfig        `json:"redis" yaml:"redis"`
@@ -185,11 +184,11 @@ func NewConfig() Config {
 		BoundsCheck:  NewBoundsCheckConfig(),
 		Branch:       NewBranchConfig(),
 		Cache:        NewCacheConfig(),
-		Catch:        NewCatchConfig(),
+		Catch:        []Config{},
 		Compress:     NewCompressConfig(),
 		Decompress:   NewDecompressConfig(),
 		Dedupe:       NewDedupeConfig(),
-		ForEach:      NewForEachConfig(),
+		ForEach:      []Config{},
 		Grok:         NewGrokConfig(),
 		GroupBy:      NewGroupByConfig(),
 		GroupByValue: NewGroupByValueConfig(),
@@ -201,11 +200,10 @@ func NewConfig() Config {
 		Log:          NewLogConfig(),
 		Metric:       NewMetricConfig(),
 		MongoDB:      NewMongoDBConfig(),
-		Noop:         NewNoopConfig(),
+		Noop:         struct{}{},
 		Plugin:       nil,
 		Parallel:     NewParallelConfig(),
 		ParseLog:     NewParseLogConfig(),
-		ProcessBatch: NewForEachConfig(),
 		Protobuf:     NewProtobufConfig(),
 		RateLimit:    NewRateLimitConfig(),
 		Redis:        NewRedisConfig(),

@@ -1,30 +1,27 @@
-package processor
+package pure
 
 import (
 	"context"
 	"strconv"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeCatch] = TypeSpec{
-		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
-			p, err := newCatch(conf.Catch, mgr)
-			if err != nil {
-				return nil, err
-			}
-			return processor.NewV2BatchedToV1Processor("catch", p, mgr.Metrics()), nil
-		},
+	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+		p, err := newCatch(conf.Catch, mgr)
+		if err != nil {
+			return nil, err
+		}
+		return processor.NewV2BatchedToV1Processor("catch", p, mgr.Metrics()), nil
+	}, docs.ComponentSpec{
+		Name: "catch",
 		Categories: []string{
 			"Composition",
 		},
@@ -81,17 +78,10 @@ More information about error handing can be found [here](/docs/configuration/err
 				}
 				return nil
 			}),
+	})
+	if err != nil {
+		panic(err)
 	}
-}
-
-//------------------------------------------------------------------------------
-
-// CatchConfig is a config struct containing fields for the Catch processor.
-type CatchConfig []Config
-
-// NewCatchConfig returns a default CatchConfig.
-func NewCatchConfig() CatchConfig {
-	return []Config{}
 }
 
 //------------------------------------------------------------------------------
@@ -100,11 +90,11 @@ type catchProc struct {
 	children []processor.V1
 }
 
-func newCatch(conf CatchConfig, mgr interop.Manager) (*catchProc, error) {
+func newCatch(conf []oprocessor.Config, mgr bundle.NewManagement) (*catchProc, error) {
 	var children []processor.V1
 	for i, pconf := range conf {
-		pMgr := mgr.IntoPath("catch", strconv.Itoa(i))
-		proc, err := New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
+		pMgr := mgr.IntoPath("catch", strconv.Itoa(i)).(bundle.NewManagement)
+		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, err
 		}
@@ -114,8 +104,6 @@ func newCatch(conf CatchConfig, mgr interop.Manager) (*catchProc, error) {
 		children: children,
 	}, nil
 }
-
-//------------------------------------------------------------------------------
 
 func (p *catchProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	resultMsgs := make([]*message.Batch, msg.Len())
@@ -127,7 +115,7 @@ func (p *catchProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 	})
 
 	var res error
-	if resultMsgs, res = ExecuteCatchAll(p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
+	if resultMsgs, res = oprocessor.ExecuteCatchAll(p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
 		return nil, res
 	}
 

@@ -30,6 +30,9 @@ type Manager struct {
 	// OnRegisterEndpoint can be set in order to intercept endpoints registered
 	// by components.
 	OnRegisterEndpoint func(path string, h http.HandlerFunc)
+
+	M metrics.Type
+	L log.Modular
 }
 
 // NewManager provides a new mock manager.
@@ -41,6 +44,8 @@ func NewManager() *Manager {
 		Outputs:    map[string]OutputWriter{},
 		Processors: map[string]Processor{},
 		Pipes:      map[string]<-chan message.Transaction{},
+		M:          metrics.Noop(),
+		L:          log.Noop(),
 	}
 }
 
@@ -60,10 +65,10 @@ func (m *Manager) WithAddedMetrics(m2 metrics.Type) interop.Manager { return m }
 func (m *Manager) Label() string { return "" }
 
 // Metrics returns a no-op metrics.
-func (m *Manager) Metrics() metrics.Type { return metrics.Noop() }
+func (m *Manager) Metrics() metrics.Type { return m.M }
 
 // Logger returns a no-op logger.
-func (m *Manager) Logger() log.Modular { return log.Noop() }
+func (m *Manager) Logger() log.Modular { return m.L }
 
 // RegisterEndpoint registers a server wide HTTP endpoint.
 func (m *Manager) RegisterEndpoint(path, desc string, h http.HandlerFunc) {

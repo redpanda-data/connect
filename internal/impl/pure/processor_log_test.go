@@ -1,4 +1,4 @@
-package processor
+package pure_test
 
 import (
 	"fmt"
@@ -8,13 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
-
-//------------------------------------------------------------------------------
 
 type mockLog struct {
 	traces        []string
@@ -71,21 +69,19 @@ func (m *mockLog) Traceln(message string) {
 	m.traces = append(m.traces, message)
 }
 
-//------------------------------------------------------------------------------
-
 func TestLogBadLevel(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeLog
+	conf := processor.NewConfig()
+	conf.Type = "log"
 	conf.Log.Level = "does not exist"
 
-	if _, err := New(conf, mock.NewManager(), log.Noop(), metrics.Noop()); err == nil {
+	if _, err := mock.NewManager().NewProcessor(conf); err == nil {
 		t.Error("expected err from bad log level")
 	}
 }
 
 func TestLogLevelTrace(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeLog
+	conf := processor.NewConfig()
+	conf.Type = "log"
 	conf.Log.Message = "${!json(\"foo\")}"
 
 	logMock := &mockLog{}
@@ -93,7 +89,11 @@ func TestLogLevelTrace(t *testing.T) {
 	levels := []string{"TRACE", "DEBUG", "INFO", "WARN", "ERROR"}
 	for _, level := range levels {
 		conf.Log.Level = level
-		l, err := New(conf, mock.NewManager(), logMock, metrics.Noop())
+
+		mgr := mock.NewManager()
+		mgr.L = logMock
+
+		l, err := mgr.NewProcessor(conf)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -127,8 +127,8 @@ func TestLogLevelTrace(t *testing.T) {
 }
 
 func TestLogWithFields(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeLog
+	conf := processor.NewConfig()
+	conf.Type = "log"
 	conf.Log.Message = "${!json(\"foo\")}"
 	conf.Log.Fields = map[string]string{
 		"static":  "foo",
@@ -138,7 +138,11 @@ func TestLogWithFields(t *testing.T) {
 	logMock := &mockLog{}
 
 	conf.Log.Level = "INFO"
-	l, err := New(conf, mock.NewManager(), logMock, metrics.Noop())
+
+	mgr := mock.NewManager()
+	mgr.L = logMock
+
+	l, err := mgr.NewProcessor(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,8 +194,8 @@ func TestLogWithFields(t *testing.T) {
 }
 
 func TestLogWithFieldsMapping(t *testing.T) {
-	conf := NewConfig()
-	conf.Type = TypeLog
+	conf := processor.NewConfig()
+	conf.Type = "log"
 	conf.Log.Message = "hello world"
 	conf.Log.FieldsMapping = `
 root.static = "static value"
@@ -201,7 +205,11 @@ root.is_cool = this.is_cool`
 	logMock := &mockLog{}
 
 	conf.Log.Level = "INFO"
-	l, err := New(conf, mock.NewManager(), logMock, metrics.Noop())
+
+	mgr := mock.NewManager()
+	mgr.L = logMock
+
+	l, err := mgr.NewProcessor(conf)
 	require.NoError(t, err)
 
 	input := message.QuickBatch([][]byte{[]byte(
@@ -219,5 +227,3 @@ root.is_cool = this.is_cool`
 		"static", "static value",
 	}, logMock.mappingFields)
 }
-
-//------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-package processor
+package pure
 
 import (
 	"context"
@@ -6,26 +6,23 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeForEach] = TypeSpec{
-		constructor: func(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
-			p, err := newForEach(conf.ForEach, mgr)
-			if err != nil {
-				return nil, err
-			}
-			return processor.NewV2BatchedToV1Processor("for_each", p, mgr.Metrics()), nil
-		},
+	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+		p, err := newForEach(conf.ForEach, mgr)
+		if err != nil {
+			return nil, err
+		}
+		return processor.NewV2BatchedToV1Processor("for_each", p, mgr.Metrics()), nil
+	}, docs.ComponentSpec{
+		Name: "for_each",
 		Categories: []string{
 			"Composition",
 		},
@@ -40,32 +37,22 @@ on individual message parts of a batch instead.
 
 Please note that most processors already process per message of a batch, and
 this processor is not needed in those cases.`,
-		Config: docs.FieldProcessor("", "").Array(),
+		Config: docs.FieldProcessor("", "").Array().HasDefault([]interface{}{}),
+	})
+	if err != nil {
+		panic(err)
 	}
 }
-
-//------------------------------------------------------------------------------
-
-// ForEachConfig is a config struct containing fields for the ForEach
-// processor.
-type ForEachConfig []Config
-
-// NewForEachConfig returns a default ForEachConfig.
-func NewForEachConfig() ForEachConfig {
-	return []Config{}
-}
-
-//------------------------------------------------------------------------------
 
 type forEachProc struct {
 	children []processor.V1
 }
 
-func newForEach(conf ForEachConfig, mgr interop.Manager) (*forEachProc, error) {
+func newForEach(conf []oprocessor.Config, mgr bundle.NewManagement) (*forEachProc, error) {
 	var children []processor.V1
 	for i, pconf := range conf {
-		pMgr := mgr.IntoPath("for_each", strconv.Itoa(i))
-		proc, err := New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
+		pMgr := mgr.IntoPath("for_each", strconv.Itoa(i)).(bundle.NewManagement)
+		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, fmt.Errorf("child processor [%v]: %w", i, err)
 		}
@@ -85,7 +72,7 @@ func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 
 	resMsg := message.QuickBatch(nil)
 	for _, tmpMsg := range individualMsgs {
-		resultMsgs, err := ExecuteAll(p.children, tmpMsg)
+		resultMsgs, err := oprocessor.ExecuteAll(p.children, tmpMsg)
 		if err != nil {
 			return nil, err
 		}
