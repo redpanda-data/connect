@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/google/go-cmp/cmp"
 )
 
 //------------------------------------------------------------------------------
@@ -298,32 +296,13 @@ func compareBoolFn(op ArithmeticOperator) func(lhs, rhs bool) bool {
 func compareGenericFn(op ArithmeticOperator) func(lhs, rhs interface{}) bool {
 	switch op {
 	case ArithmeticEq:
-		return func(lhs, rhs interface{}) bool {
-			return cmp.Equal(lhs, rhs)
-		}
+		return ICompare
 	case ArithmeticNeq:
 		return func(lhs, rhs interface{}) bool {
-			return !cmp.Equal(lhs, rhs)
+			return !ICompare(lhs, rhs)
 		}
 	}
 	return nil
-}
-
-func restrictForComparison(v interface{}) interface{} {
-	v = ISanitize(v)
-	switch t := v.(type) {
-	case int64:
-		return float64(t)
-	case uint64:
-		return float64(t)
-	case json.Number:
-		if f, err := IGetNumber(t); err == nil {
-			return f
-		}
-	case []byte:
-		return string(t)
-	}
-	return v
 }
 
 func compareOp(op ArithmeticOperator) (arithmeticOpFunc, bool) {

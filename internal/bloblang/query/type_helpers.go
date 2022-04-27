@@ -237,6 +237,23 @@ func IIsNull(i interface{}) bool {
 	return false
 }
 
+func restrictForComparison(v interface{}) interface{} {
+	v = ISanitize(v)
+	switch t := v.(type) {
+	case int64:
+		return float64(t)
+	case uint64:
+		return float64(t)
+	case json.Number:
+		if f, err := IGetNumber(t); err == nil {
+			return f
+		}
+	case []byte:
+		return string(t)
+	}
+	return v
+}
+
 // ISanitize takes a boxed value of any type and attempts to convert it into one
 // of the following types: string, []byte, int64, uint64, float64, bool,
 // []interface{}, map[string]interface{}, Delete, Nothing.
@@ -416,4 +433,66 @@ func IClone(root interface{}) interface{} {
 	return root
 }
 
-//------------------------------------------------------------------------------
+// ICompare returns true if both the left and right are equal according to one
+// of the following conditions:
+//
+// - The types exactly match and have the same value
+// - The types are both either a string or byte slice and the underlying data is
+//   the same
+// - The types are both numerical and have the same value
+// - Both types are a matching slice or map containing values matching these
+//   same conditions
+func ICompare(left, right interface{}) bool {
+	if left == nil && right == nil {
+		return true
+	}
+	switch lhs := restrictForComparison(left).(type) {
+	case string:
+		rhs, err := IGetString(right)
+		if err != nil {
+			return false
+		}
+		return lhs == rhs
+	case float64:
+		rhs, err := IGetNumber(right)
+		if err != nil {
+			return false
+		}
+		return lhs == rhs
+	case bool:
+		rhs, err := IGetBool(right)
+		if err != nil {
+			return false
+		}
+		return lhs == rhs
+	case []interface{}:
+		rhs, matches := right.([]interface{})
+		if !matches {
+			return false
+		}
+		if len(lhs) != len(rhs) {
+			return false
+		}
+		for i, vl := range lhs {
+			if !ICompare(vl, rhs[i]) {
+				return false
+			}
+		}
+		return true
+	case map[string]interface{}:
+		rhs, matches := right.(map[string]interface{})
+		if !matches {
+			return false
+		}
+		if len(lhs) != len(rhs) {
+			return false
+		}
+		for k, vl := range lhs {
+			if !ICompare(vl, rhs[k]) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
