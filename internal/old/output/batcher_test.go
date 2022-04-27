@@ -1,4 +1,4 @@
-package output
+package output_test
 
 import (
 	"context"
@@ -18,9 +18,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
 )
-
-//------------------------------------------------------------------------------
 
 func TestBatcherEarlyTermination(t *testing.T) {
 	tInChan := make(chan message.Transaction)
@@ -34,7 +33,7 @@ func TestBatcherEarlyTermination(t *testing.T) {
 
 	out := &mockOutput{}
 
-	b := NewBatcher(batcher, out, log.Noop(), metrics.Noop())
+	b := output.NewBatcher(batcher, out, log.Noop(), metrics.Noop())
 	require.NoError(t, b.Consume(tInChan))
 
 	require.Error(t, b.WaitForClose(time.Millisecond*100))
@@ -59,7 +58,7 @@ func TestBatcherBasic(t *testing.T) {
 
 	out := &mockOutput{}
 
-	b := NewBatcher(batcher, out, log.Noop(), metrics.Noop())
+	b := output.NewBatcher(batcher, out, log.Noop(), metrics.Noop())
 	require.NoError(t, b.Consume(tInChan))
 
 	tOutChan := out.ts
@@ -195,7 +194,7 @@ func TestBatcherBatchError(t *testing.T) {
 
 	out := &mockOutput{}
 
-	b := NewBatcher(batcher, out, log.Noop(), metrics.Noop())
+	b := output.NewBatcher(batcher, out, log.Noop(), metrics.Noop())
 	require.NoError(t, b.Consume(tInChan))
 
 	tOutChan := out.ts
@@ -276,7 +275,7 @@ func TestBatcherTimed(t *testing.T) {
 
 	out := &mockOutput{}
 
-	b := NewBatcher(batcher, out, log.Noop(), metrics.Noop())
+	b := output.NewBatcher(batcher, out, log.Noop(), metrics.Noop())
 	if err := b.Consume(tInChan); err != nil {
 		t.Fatal(err)
 	}
@@ -314,5 +313,3 @@ func TestBatcherTimed(t *testing.T) {
 
 	close(resChan)
 }
-
-//------------------------------------------------------------------------------

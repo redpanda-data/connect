@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"os"
 	"sync"
 	"time"
 
@@ -296,35 +295,6 @@ root.bar = deleted()`,
 
 //------------------------------------------------------------------------------
 
-var _ = registerFunction(
-	NewFunctionSpec(
-		FunctionCategoryEnvironment, "env",
-		"Returns the value of an environment variable, or `null` if the environment variable does not exist.",
-		NewExampleSpec("",
-			`root.thing.key = env("key").or("default value")`,
-		),
-	).
-		MarkImpure().
-		Param(ParamString("name", "The name of an environment variable.")),
-	envFunction,
-)
-
-func envFunction(args *ParsedParams) (Function, error) {
-	name, err := args.FieldString("name")
-	if err != nil {
-		return nil, err
-	}
-
-	var value interface{}
-	if valueStr, exists := os.LookupEnv(name); exists {
-		value = valueStr
-	}
-
-	return NewLiteralFunction("env "+name, value), nil
-}
-
-//------------------------------------------------------------------------------
-
 var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "error",
@@ -354,34 +324,6 @@ var _ = registerSimpleFunction(
 		return ctx.MsgBatch.Get(ctx.Index).ErrorGet() != nil, nil
 	},
 )
-
-//------------------------------------------------------------------------------
-
-var _ = registerFunction(
-	NewFunctionSpec(
-		FunctionCategoryEnvironment, "file",
-		"Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.",
-		NewExampleSpec("",
-			`root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()`,
-			`{}`,
-			`{"doc":{"foo":"bar"}}`,
-		),
-	).Beta().MarkImpure().
-		Param(ParamString("path", "The path of the target file.")),
-	fileFunction,
-)
-
-func fileFunction(args *ParsedParams) (Function, error) {
-	path, err := args.FieldString("path")
-	if err != nil {
-		return nil, err
-	}
-	pathBytes, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return NewLiteralFunction("file "+path, pathBytes), nil
-}
 
 //------------------------------------------------------------------------------
 
@@ -434,30 +376,6 @@ func rangeFunction(args *ParsedParams) (Function, error) {
 		return r, nil
 	}, nil), nil
 }
-
-//------------------------------------------------------------------------------
-
-var _ = registerSimpleFunction(
-	NewFunctionSpec(
-		FunctionCategoryEnvironment, "hostname",
-		"Returns a string matching the hostname of the machine running Benthos.",
-		NewExampleSpec("",
-			`root.thing.host = hostname()`,
-		),
-	).MarkImpure(),
-	func(_ FunctionContext) (interface{}, error) {
-		hn, err := os.Hostname()
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: "",
-				Err:       err,
-			}
-		}
-		return hn, err
-	},
-)
-
-//------------------------------------------------------------------------------
 
 var _ = registerFunction(
 	NewFunctionSpec(

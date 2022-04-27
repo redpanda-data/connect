@@ -40,9 +40,6 @@ the last element with be selected, and so on.
 
 This processor is only applicable to [batched messages](/docs/configuration/batching).
 
-The functionality of this processor depends on being applied across messages
-that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
-
 ## Fields
 
 ### `parts`

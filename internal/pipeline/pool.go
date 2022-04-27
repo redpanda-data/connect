@@ -29,7 +29,8 @@ type Pool struct {
 	closed    chan struct{}
 }
 
-func newPoolV2(threads int, log log.Modular, msgProcessors ...iprocessor.V1) (*Pool, error) {
+// NewPool creates a new processing pool.
+func NewPool(threads int, log log.Modular, msgProcessors ...iprocessor.V1) (*Pool, error) {
 	if threads <= 0 {
 		threads = runtime.NumCPU()
 	}

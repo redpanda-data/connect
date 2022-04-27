@@ -16,10 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-A processor that applies a list of child processors to messages of a batch as
-though they were each a batch of one message (similar to the
-[`for_each`](/docs/components/processors/for_each) processor), but where each message is
-processed in parallel.
+A processor that applies a list of child processors to messages of a batch as though they were each a batch of one message (similar to the [`for_each`](/docs/components/processors/for_each) processor), but where each message is processed in parallel.
 
 ```yml
 # Config fields, showing default values
@@ -29,11 +26,9 @@ parallel:
   processors: []
 ```
 
-The field `cap`, if greater than zero, caps the maximum number of
-parallel processing threads.
+The field `cap`, if greater than zero, caps the maximum number of parallel processing threads.
 
-The functionality of this processor depends on being applied across messages
-that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
+The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
 
 ## Fields
 

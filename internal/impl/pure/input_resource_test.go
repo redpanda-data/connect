@@ -12,7 +12,7 @@ import (
 	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
-func TestResourceProc(t *testing.T) {
+func TestResourceInput(t *testing.T) {
 	mgr := bmock.NewManager()
 	mgr.Inputs["foo"] = mock.NewInput(nil)
 
@@ -29,7 +29,7 @@ func TestResourceProc(t *testing.T) {
 	assert.NoError(t, p.WaitForClose(time.Second))
 }
 
-func TestResourceBadName(t *testing.T) {
+func TestResourceInputBadName(t *testing.T) {
 	conf := oinput.NewConfig()
 	conf.Type = "resource"
 	conf.Resource = "foo"

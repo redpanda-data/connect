@@ -9,8 +9,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-//------------------------------------------------------------------------------
-
 type passthrough struct {
 	called int
 }
@@ -20,11 +18,9 @@ func (p *passthrough) ProcessMessage(msg *message.Batch) ([]*message.Batch, erro
 	return []*message.Batch{msg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
 func (p *passthrough) CloseAsync() {
 }
 
-// WaitForClose blocks until the processor has closed down.
 func (p *passthrough) WaitForClose(timeout time.Duration) error {
 	return nil
 }
@@ -130,11 +126,9 @@ func (p *errored) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	return nil, errors.New("test error")
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
 func (p *errored) CloseAsync() {
 }
 
-// WaitForClose blocks until the processor has closed down.
 func (p *errored) WaitForClose(timeout time.Duration) error {
 	return nil
 }
@@ -165,5 +159,3 @@ func TestExecuteAllErrored(t *testing.T) {
 		t.Errorf("Wrong call count from processor: %v != %v", act, exp)
 	}
 }
-
-//------------------------------------------------------------------------------

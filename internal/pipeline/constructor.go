@@ -45,5 +45,5 @@ func New(conf Config, mgr interop.Manager) (Type, error) {
 	if conf.Threads == 1 {
 		return NewProcessor(processors...), nil
 	}
-	return newPoolV2(conf.Threads, mgr.Logger(), processors...)
+	return NewPool(conf.Threads, mgr.Logger(), processors...)
 }

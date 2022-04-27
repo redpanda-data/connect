@@ -10,9 +10,12 @@ import (
 	// Import new service packages.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/amqp09"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/amqp1"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/avro"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/awk"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/aws"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/confluent"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/dgraph"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/elasticsearch"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/gcp"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/influxdb"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/io"
@@ -31,6 +34,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/snowflake"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/sql"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/statsd"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/xml"
 	"github.com/benthosdev/benthos/v4/internal/template"
 
 	// Import all (supported) sql drivers

@@ -114,7 +114,6 @@ const (
 	TypeSyncResponse = "sync_response"
 	TypeTry          = "try"
 	TypeThrottle     = "throttle"
-	TypeUnarchive    = "unarchive"
 	TypeWhile        = "while"
 	TypeWorkflow     = "workflow"
 	TypeXML          = "xml"
@@ -163,9 +162,8 @@ type Config struct {
 	Split        SplitConfig        `json:"split" yaml:"split"`
 	Subprocess   SubprocessConfig   `json:"subprocess" yaml:"subprocess"`
 	Switch       SwitchConfig       `json:"switch" yaml:"switch"`
-	SyncResponse SyncResponseConfig `json:"sync_response" yaml:"sync_response"`
-	Try          TryConfig          `json:"try" yaml:"try"`
-	Unarchive    UnarchiveConfig    `json:"unarchive" yaml:"unarchive"`
+	SyncResponse struct{}           `json:"sync_response" yaml:"sync_response"`
+	Try          []Config           `json:"try" yaml:"try"`
 	While        WhileConfig        `json:"while" yaml:"while"`
 	Workflow     WorkflowConfig     `json:"workflow" yaml:"workflow"`
 	XML          XMLConfig          `json:"xml" yaml:"xml"`
@@ -213,9 +211,8 @@ func NewConfig() Config {
 		Split:        NewSplitConfig(),
 		Subprocess:   NewSubprocessConfig(),
 		Switch:       NewSwitchConfig(),
-		SyncResponse: NewSyncResponseConfig(),
-		Try:          NewTryConfig(),
-		Unarchive:    NewUnarchiveConfig(),
+		SyncResponse: struct{}{},
+		Try:          []Config{},
 		While:        NewWhileConfig(),
 		Workflow:     NewWorkflowConfig(),
 		XML:          NewXMLConfig(),

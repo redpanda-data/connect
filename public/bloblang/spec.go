@@ -84,6 +84,7 @@ func (d ParamDefinition) Default(v interface{}) ParamDefinition {
 type PluginSpec struct {
 	category    string
 	description string
+	impure      bool
 	params      query.Params
 	examples    []pluginExample
 }
@@ -134,6 +135,15 @@ func (p *PluginSpec) Example(summary, mapping string, inputOutputs ...[2]string)
 // added to the spec.
 func (p *PluginSpec) Param(def ParamDefinition) *PluginSpec {
 	p.params = p.params.Add(def.def)
+	return p
+}
+
+// Impure marks the plugin as "impure", meaning it either reads from or
+// interacts with state outside of the boundaries of a single mapping
+// invocation. This usually means reading state from the machine. Impure plugins
+// are excluded from some bloblang environments.
+func (p *PluginSpec) Impure() *PluginSpec {
+	p.impure = true
 	return p
 }
 

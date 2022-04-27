@@ -108,6 +108,9 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
 	}
 	iSpec := query.NewMethodSpec(name, spec.description).InCategory(category, "", examples...)
+	if spec.impure {
+		iSpec = iSpec.MarkImpure()
+	}
 	iSpec.Params = spec.params
 	return e.env.RegisterMethod(iSpec, func(target query.Function, args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(&ParsedParams{par: args})
@@ -160,6 +163,9 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
 	}
 	iSpec := query.NewFunctionSpec(category, name, spec.description, examples...)
+	if spec.impure {
+		iSpec = iSpec.MarkImpure()
+	}
 	iSpec.Params = spec.params
 	return e.env.RegisterFunction(iSpec, func(args *query.ParsedParams) (query.Function, error) {
 		fn, err := ctor(&ParsedParams{par: args})

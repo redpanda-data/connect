@@ -18,7 +18,7 @@ func archiveProcConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Parsing", "Utility").
-		Summary("Archives all the messages of a batch into a single message according to the selected archive [format](#formats).").
+		Summary("Archives all the messages of a batch into a single message according to the selected archive format.").
 		Description(`
 Some archive formats (such as tar, zip) treat each archive item (message part) as a file with a path. Since message parts only contain raw data a unique path must be generated for each part. This can be done by using function interpolations on the 'path' field as described [here](/docs/configuration/interpolation#bloblang-queries). For types that aren't file based (such as binary) the file field is ignored.
 

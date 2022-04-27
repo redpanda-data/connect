@@ -126,7 +126,7 @@ func TestIntegrationElasticsearchV7(t *testing.T) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Second * 60
 	resource, err := pool.Run("elasticsearch", "7.17.2", []string{
 		"discovery.type=single-node",
 	})

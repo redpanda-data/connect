@@ -348,8 +348,6 @@ root.thing.key = env("key").or("default value")
 
 ### `file`
 
-BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
 Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.
 
 #### Parameters

@@ -2,7 +2,6 @@ package parser
 
 import (
 	"errors"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -15,8 +14,6 @@ import (
 )
 
 func TestFunctionQueries(t *testing.T) {
-	hostname, _ := os.Hostname()
-
 	type easyMsg struct {
 		content string
 		meta    map[string]string
@@ -171,10 +168,6 @@ func TestFunctionQueries(t *testing.T) {
 				{content: `not json`},
 				{content: `{"foo":"bar"}`},
 			},
-		},
-		"hostname": {
-			input:  `hostname()`,
-			output: hostname,
 		},
 		"metadata triple quote string arg 1": {
 			input:  `meta("""foo""")`,

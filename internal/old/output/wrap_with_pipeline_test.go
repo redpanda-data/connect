@@ -1,4 +1,4 @@
-package output
+package output_test
 
 import (
 	"context"
@@ -9,16 +9,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
-)
 
-//------------------------------------------------------------------------------
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
+)
 
 type mockOutput struct {
 	ts <-chan message.Transaction
@@ -81,14 +80,14 @@ func TestBasicWrapPipeline(t *testing.T) {
 		ts: make(chan message.Transaction),
 	}
 
-	_, err := WrapWithPipeline(mockOut, func() (iprocessor.Pipeline, error) {
+	_, err := output.WrapWithPipeline(mockOut, func() (iprocessor.Pipeline, error) {
 		return nil, errors.New("nope")
 	})
 	if err == nil {
 		t.Error("expected error from back constructor")
 	}
 
-	newOutput, err := WrapWithPipeline(mockOut, func() (iprocessor.Pipeline, error) {
+	newOutput, err := output.WrapWithPipeline(mockOut, func() (iprocessor.Pipeline, error) {
 		return mockPi, nil
 	})
 	if err != nil {
@@ -129,20 +128,20 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 	secondProc.Type = "select_parts"
 	secondProc.SelectParts.Parts = []int{0}
 
-	conf := NewConfig()
+	conf := output.NewConfig()
 	conf.Processors = append(conf.Processors, firstProc)
 
-	newOutput, err := WrapWithPipelines(
+	newOutput, err := output.WrapWithPipelines(
 		mockOut,
 		func() (iprocessor.Pipeline, error) {
-			proc, err := processor.New(firstProc, mock.NewManager(), log.Noop(), metrics.Noop())
+			proc, err := mock.NewManager().NewProcessor(firstProc)
 			if err != nil {
 				return nil, err
 			}
 			return pipeline.NewProcessor(proc), nil
 		},
 		func() (iprocessor.Pipeline, error) {
-			proc, err := processor.New(secondProc, mock.NewManager(), log.Noop(), metrics.Noop())
+			proc, err := mock.NewManager().NewProcessor(secondProc)
 			if err != nil {
 				return nil, err
 			}
@@ -199,5 +198,3 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 		t.Error(err)
 	}
 }
-
-//------------------------------------------------------------------------------

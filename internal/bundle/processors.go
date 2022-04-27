@@ -37,7 +37,7 @@ func (e *Environment) ProcessorDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // ProcessorConstructor constructs an processor component.
-type ProcessorConstructor func(processor.Config, NewManagement) (iprocessor.V1, error)
+type ProcessorConstructor func(conf processor.Config, mgr NewManagement) (iprocessor.V1, error)
 
 type processorSpec struct {
 	constructor ProcessorConstructor

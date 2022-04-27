@@ -161,8 +161,8 @@ func ToBytes(m *Batch) []byte {
 	return SerializeBytes(parts)
 }
 
-// FromBytes deserialises a Message from a byte array.
-func FromBytes(b []byte) (*Batch, error) {
+// DeserializeBytes rebuilds a 2D byte array from a binary serialized blob.
+func DeserializeBytes(b []byte) ([][]byte, error) {
 	if len(b) < 4 {
 		return nil, ErrBadMessageBytes
 	}
@@ -174,7 +174,7 @@ func FromBytes(b []byte) (*Batch, error) {
 
 	b = b[4:]
 
-	m := QuickBatch(nil)
+	var parts [][]byte
 	for i := uint32(0); i < numParts; i++ {
 		if len(b) < 4 {
 			return nil, ErrBadMessageBytes
@@ -185,8 +185,18 @@ func FromBytes(b []byte) (*Batch, error) {
 		if uint32(len(b)) < partSize {
 			return nil, ErrBadMessageBytes
 		}
-		m.Append(NewPart(b[:partSize]))
+
+		parts = append(parts, b[:partSize])
 		b = b[partSize:]
 	}
-	return m, nil
+	return parts, nil
+}
+
+// FromBytes deserialises a Message from a byte array.
+func FromBytes(b []byte) (*Batch, error) {
+	parts, err := DeserializeBytes(b)
+	if err != nil {
+		return nil, err
+	}
+	return QuickBatch(parts), nil
 }

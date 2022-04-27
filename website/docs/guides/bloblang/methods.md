@@ -2006,7 +2006,6 @@ root = this.encoded.decode("base64").parse_msgpack()
 
 ### `parse_xml`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
 
@@ -2016,9 +2015,10 @@ Attempts to parse a string as an XML document and returns a structured result, w
 - When elements are repeated the resulting JSON value is an array.
 - If cast is true, try to cast values to numbers and booleans instead of returning strings.
 
+
 #### Parameters
 
-**`cast`** &lt;(optional) bool&gt; whether to try to cast values that are numbers and booleans to the right type. default: false  
+**`cast`** &lt;(optional) bool, default `false`&gt; whether to try to cast values that are numbers and booleans to the right type.  
 
 #### Examples
 

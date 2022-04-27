@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 
@@ -275,21 +274,6 @@ func TestKsuidFunction(t *testing.T) {
 	res, err := e.Exec(FunctionContext{})
 	require.NoError(t, err)
 	assert.NotEmpty(t, res)
-}
-
-func TestEnvFunction(t *testing.T) {
-	key := "BENTHOS_TEST_BLOBLANG_FUNCTION"
-	os.Setenv(key, "foobar")
-	t.Cleanup(func() {
-		os.Unsetenv(key)
-	})
-
-	e, err := InitFunctionHelper("env", key)
-	require.Nil(t, err)
-
-	res, err := e.Exec(FunctionContext{})
-	require.NoError(t, err)
-	assert.Equal(t, "foobar", res)
 }
 
 func TestRandomInt(t *testing.T) {
