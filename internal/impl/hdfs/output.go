@@ -1,0 +1,143 @@
+package hdfs
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/colinmarc/hdfs"
+
+	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/interop"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
+	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
+)
+
+func init() {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		return newHDFSOutput(c, nm, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:        "hdfs",
+		Summary:     `Sends message parts as files to a HDFS directory.`,
+		Description: output.Description(true, false, `Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`),
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("hosts", "A list of hosts to connect to.", "localhost:9000").Array(),
+			docs.FieldString("user", "A user identifier."),
+			docs.FieldString("directory", "A directory to store message files within. If the directory does not exist it will be created."),
+			docs.FieldString(
+				"path", "The path to upload messages as, interpolation functions should be used in order to generate unique file paths.",
+				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
+			).IsInterpolated(),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			policy.FieldSpec(),
+		).ChildDefaultAndTypesFromStruct(ooutput.NewHDFSConfig()),
+		Categories: []string{
+			"Services",
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
+func newHDFSOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+	h, err := newHDFSWriter(conf.HDFS, mgr, log)
+	if err != nil {
+		return nil, err
+	}
+	w, err := ooutput.NewAsyncWriter("hdfs", conf.HDFS.MaxInFlight, h, log, stats)
+	if err != nil {
+		return nil, err
+	}
+	return ooutput.NewBatcherFromConfig(conf.HDFS.Batching, ooutput.OnlySinglePayloads(w), mgr, log, stats)
+}
+
+type hdfsWriter struct {
+	conf      ooutput.HDFSConfig
+	directory *field.Expression
+	path      *field.Expression
+
+	client *hdfs.Client
+	log    log.Modular
+}
+
+func newHDFSWriter(conf ooutput.HDFSConfig, mgr interop.Manager, log log.Modular) (*hdfsWriter, error) {
+	path, err := mgr.BloblEnvironment().NewField(conf.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse path expression: %v", err)
+	}
+	directory, err := mgr.BloblEnvironment().NewField(conf.Directory)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse directory expression: %v", err)
+	}
+	return &hdfsWriter{
+		conf:      conf,
+		directory: directory,
+		path:      path,
+		log:       log,
+	}, nil
+}
+
+func (h *hdfsWriter) ConnectWithContext(ctx context.Context) error {
+	if h.client != nil {
+		return nil
+	}
+
+	client, err := hdfs.NewClient(hdfs.ClientOptions{
+		Addresses: h.conf.Hosts,
+		User:      h.conf.User,
+	})
+	if err != nil {
+		return err
+	}
+
+	h.client = client
+
+	h.log.Infof("Writing message parts as files to HDFS directory: %v\n", h.conf.Directory)
+	return nil
+}
+
+func (h *hdfsWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+	if h.client == nil {
+		return component.ErrNotConnected
+	}
+
+	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+		path := h.path.String(i, msg)
+		directory := h.directory.String(i, msg)
+		filePath := filepath.Join(directory, path)
+
+		err := h.client.MkdirAll(directory, os.ModeDir|0o644)
+		if err != nil {
+			return err
+		}
+
+		fw, err := h.client.Create(filePath)
+		if err != nil {
+			return err
+		}
+
+		if _, err := fw.Write(p.Get()); err != nil {
+			return err
+		}
+		fw.Close()
+		return nil
+	})
+}
+
+func (h *hdfsWriter) CloseAsync() {
+}
+
+func (h *hdfsWriter) WaitForClose(time.Duration) error {
+	return nil
+}

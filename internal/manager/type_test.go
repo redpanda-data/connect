@@ -46,7 +46,7 @@ func TestManagerProcessorLabels(t *testing.T) {
 	}
 	for _, l := range goodLabels {
 		conf := processor.NewConfig()
-		conf.Type = processor.TypeBloblang
+		conf.Type = "bloblang"
 		conf.Bloblang = "root = this"
 		conf.Label = l
 
@@ -65,7 +65,7 @@ func TestManagerProcessorLabels(t *testing.T) {
 	}
 	for _, l := range badLabels {
 		conf := processor.NewConfig()
-		conf.Type = processor.TypeBloblang
+		conf.Type = "bloblang"
 		conf.Bloblang = "root = this"
 		conf.Label = l
 

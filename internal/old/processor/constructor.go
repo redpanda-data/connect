@@ -7,119 +7,10 @@ import (
 	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
-	"github.com/benthosdev/benthos/v4/internal/log"
 )
-
-type procConstructor func(
-	conf Config,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-) (processor.V1, error)
-
-// TypeSpec Constructor and a usage description for each processor type.
-type TypeSpec struct {
-	constructor procConstructor
-
-	// UsesBatches indicates whether this processors functionality is best
-	// applied on messages that are already batched.
-	UsesBatches bool
-
-	Status      docs.Status
-	Version     string
-	Summary     string
-	Description string
-	Categories  []string
-	Footnotes   string
-	Config      docs.FieldSpec
-	Examples    []docs.AnnotatedExample
-}
-
-// ConstructorFunc is a func signature able to construct a processor.
-type ConstructorFunc func(Config, interop.Manager, log.Modular, metrics.Type) (processor.V1, error)
-
-// WalkConstructors iterates each component constructor.
-func WalkConstructors(fn func(ConstructorFunc, docs.ComponentSpec)) {
-	inferred := docs.ComponentFieldsFromConf(NewConfig())
-	for k, v := range Constructors {
-		conf := v.Config
-		conf.Children = conf.Children.DefaultAndTypeFrom(inferred[k])
-		spec := docs.ComponentSpec{
-			Type:        docs.TypeProcessor,
-			Name:        k,
-			Summary:     v.Summary,
-			Description: v.Description,
-			Categories:  v.Categories,
-			Examples:    v.Examples,
-			Footnotes:   v.Footnotes,
-			Config:      conf,
-			Status:      v.Status,
-			Version:     v.Version,
-		}
-		if v.UsesBatches {
-			spec.Description = spec.Description + "\n" + DocsUsesBatches
-		}
-		fn(ConstructorFunc(v.constructor), spec)
-	}
-}
-
-// Constructors is a map of all processor types with their specs.
-var Constructors = map[string]TypeSpec{}
-
-//------------------------------------------------------------------------------
-
-// String constants representing each processor type.
-// Deprecated: Do not add new components here. Instead, use the public plugin
-// APIs. Examples can be found in: ./internal/impl
-const (
-	TypeArchive      = "archive"
-	TypeAvro         = "avro"
-	TypeAWK          = "awk"
-	TypeBloblang     = "bloblang"
-	TypeBoundsCheck  = "bounds_check"
-	TypeBranch       = "branch"
-	TypeCache        = "cache"
-	TypeCatch        = "catch"
-	TypeCompress     = "compress"
-	TypeDecompress   = "decompress"
-	TypeDedupe       = "dedupe"
-	TypeForEach      = "for_each"
-	TypeGrok         = "grok"
-	TypeGroupBy      = "group_by"
-	TypeGroupByValue = "group_by_value"
-	TypeHTTP         = "http"
-	TypeInsertPart   = "insert_part"
-	TypeJMESPath     = "jmespath"
-	TypeJQ           = "jq"
-	TypeJSONSchema   = "json_schema"
-	TypeLog          = "log"
-	TypeMetric       = "metric"
-	TypeMongoDB      = "mongodb"
-	TypeNoop         = "noop"
-	TypeParallel     = "parallel"
-	TypeParseLog     = "parse_log"
-	TypeProtobuf     = "protobuf"
-	TypeRateLimit    = "rate_limit"
-	TypeRedis        = "redis"
-	TypeResource     = "resource"
-	TypeSelectParts  = "select_parts"
-	TypeSleep        = "sleep"
-	TypeSplit        = "split"
-	TypeSubprocess   = "subprocess"
-	TypeSwitch       = "switch"
-	TypeSyncResponse = "sync_response"
-	TypeTry          = "try"
-	TypeThrottle     = "throttle"
-	TypeWhile        = "while"
-	TypeWorkflow     = "workflow"
-	TypeXML          = "xml"
-)
-
-//------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all processor types.
 // Deprecated: Do not add new components here. Instead, use the public plugin
@@ -219,8 +110,6 @@ func NewConfig() Config {
 	}
 }
 
-//------------------------------------------------------------------------------
-
 // UnmarshalYAML ensures that when parsing configs that are in a slice the
 // default values are still applied.
 func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
@@ -254,22 +143,12 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-//------------------------------------------------------------------------------
-
 // New creates a processor type based on a processor configuration.
-func New(
-	conf Config,
-	mgr interop.Manager,
-	log log.Modular,
-	stats metrics.Type,
-) (processor.V1, error) {
+func New(conf Config, mgr interop.Manager) (processor.V1, error) {
 	if mgrV2, ok := mgr.(interface {
 		NewProcessor(conf Config) (processor.V1, error)
 	}); ok {
 		return mgrV2.NewProcessor(conf)
-	}
-	if c, ok := Constructors[conf.Type]; ok {
-		return c.constructor(conf, mgr, log, stats)
 	}
 	return nil, component.ErrInvalidType("processor", conf.Type)
 }

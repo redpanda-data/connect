@@ -19,8 +19,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
-//------------------------------------------------------------------------------
-
 // Config contains the configuration fields for the Benthos API.
 type Config struct {
 	Address        string              `json:"address" yaml:"address"`
@@ -232,6 +230,11 @@ func New(
 	return t, nil
 }
 
+// Handler returns the underlying http.Hander where paths are registered.
+func (t *Type) Handler() http.Handler {
+	return t.server.Handler
+}
+
 // RegisterEndpoint registers a http.HandlerFunc under a path with a
 // description that will be displayed under the /endpoints path.
 func (t *Type) RegisterEndpoint(path, desc string, handlerFunc http.HandlerFunc) {
@@ -280,5 +283,3 @@ func (t *Type) Shutdown(ctx context.Context) error {
 	t.cancel()
 	return t.server.Shutdown(ctx)
 }
-
-//------------------------------------------------------------------------------

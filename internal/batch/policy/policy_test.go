@@ -269,7 +269,7 @@ func TestPolicySplit(t *testing.T) {
 	conf.ByteSize = 0
 
 	procConf := processor.NewConfig()
-	procConf.Type = processor.TypeSplit
+	procConf.Type = "split"
 
 	conf.Processors = append(conf.Processors, procConf)
 

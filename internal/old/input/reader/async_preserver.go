@@ -13,8 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-//------------------------------------------------------------------------------
-
 type asyncPreserverResend struct {
 	boff     backoff.BackOff
 	attempts int
@@ -216,5 +214,3 @@ func (p *AsyncPreserver) CloseAsync() {
 func (p *AsyncPreserver) WaitForClose(tout time.Duration) error {
 	return p.r.WaitForClose(tout)
 }
-
-//------------------------------------------------------------------------------

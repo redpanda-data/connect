@@ -99,7 +99,7 @@ func TestProcessorIntegration(t *testing.T) {
 
 func testMongoDBProcessorInsert(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -170,7 +170,7 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 
 func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -229,7 +229,7 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 
 func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -289,7 +289,7 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 
 func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -353,7 +353,7 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 
 func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -417,7 +417,7 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 
 func testMongoDBProcessorFindOne(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,

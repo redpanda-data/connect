@@ -215,7 +215,7 @@ func TestBundleProcessorTracing(t *testing.T) {
 
 	procConfig := processor.NewConfig()
 	procConfig.Label = "foo"
-	procConfig.Type = processor.TypeBloblang
+	procConfig.Type = "bloblang"
 	procConfig.Bloblang = `
 let ctr = content().number()
 root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }

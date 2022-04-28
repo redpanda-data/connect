@@ -37,7 +37,7 @@ func init() {
 		}
 		return iprocessor.NewV2BatchedToV1Processor("", v2Proc, nm.Metrics()), nil
 	}, docs.ComponentSpec{
-		Name:       processor.TypeMongoDB,
+		Name:       "mongodb",
 		Type:       docs.TypeProcessor,
 		Status:     docs.StatusExperimental,
 		Version:    "3.43.0",

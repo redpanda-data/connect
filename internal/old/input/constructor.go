@@ -68,7 +68,7 @@ func AppendProcessorsFromConfig(conf Config, mgr interop.Manager, pipelines ...i
 			for j, procConf := range conf.Processors {
 				newMgr := mgr.IntoPath("processors", strconv.Itoa(j))
 				var err error
-				processors[j], err = processor.New(procConf, newMgr, newMgr.Logger(), newMgr.Metrics())
+				processors[j], err = processor.New(procConf, newMgr)
 				if err != nil {
 					return nil, fmt.Errorf("failed to create processor '%v': %v", procConf.Type, err)
 				}
@@ -150,46 +150,46 @@ const (
 // Deprecated: Do not add new components here. Instead, use the public plugin
 // APIs. Examples can be found in: ./internal/impl
 type Config struct {
-	Label             string                    `json:"label" yaml:"label"`
-	Type              string                    `json:"type" yaml:"type"`
-	AMQP09            AMQP09Config              `json:"amqp_0_9" yaml:"amqp_0_9"`
-	AMQP1             AMQP1Config               `json:"amqp_1" yaml:"amqp_1"`
-	AWSKinesis        AWSKinesisConfig          `json:"aws_kinesis" yaml:"aws_kinesis"`
-	AWSS3             AWSS3Config               `json:"aws_s3" yaml:"aws_s3"`
-	AWSSQS            AWSSQSConfig              `json:"aws_sqs" yaml:"aws_sqs"`
-	AzureBlobStorage  AzureBlobStorageConfig    `json:"azure_blob_storage" yaml:"azure_blob_storage"`
-	AzureQueueStorage AzureQueueStorageConfig   `json:"azure_queue_storage" yaml:"azure_queue_storage"`
-	Broker            BrokerConfig              `json:"broker" yaml:"broker"`
-	CSVFile           CSVFileConfig             `json:"csv" yaml:"csv"`
-	Dynamic           DynamicConfig             `json:"dynamic" yaml:"dynamic"`
-	File              FileConfig                `json:"file" yaml:"file"`
-	GCPCloudStorage   GCPCloudStorageConfig     `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
-	GCPPubSub         reader.GCPPubSubConfig    `json:"gcp_pubsub" yaml:"gcp_pubsub"`
-	Generate          GenerateConfig            `json:"generate" yaml:"generate"`
-	HDFS              reader.HDFSConfig         `json:"hdfs" yaml:"hdfs"`
-	HTTPClient        HTTPClientConfig          `json:"http_client" yaml:"http_client"`
-	HTTPServer        HTTPServerConfig          `json:"http_server" yaml:"http_server"`
-	Inproc            InprocConfig              `json:"inproc" yaml:"inproc"`
-	Kafka             KafkaConfig               `json:"kafka" yaml:"kafka"`
-	MQTT              MQTTConfig                `json:"mqtt" yaml:"mqtt"`
-	Nanomsg           reader.ScaleProtoConfig   `json:"nanomsg" yaml:"nanomsg"`
-	NATS              reader.NATSConfig         `json:"nats" yaml:"nats"`
-	NATSStream        reader.NATSStreamConfig   `json:"nats_stream" yaml:"nats_stream"`
-	NSQ               reader.NSQConfig          `json:"nsq" yaml:"nsq"`
-	Plugin            interface{}               `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	ReadUntil         ReadUntilConfig           `json:"read_until" yaml:"read_until"`
-	RedisList         reader.RedisListConfig    `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub       reader.RedisPubSubConfig  `json:"redis_pubsub" yaml:"redis_pubsub"`
-	RedisStreams      reader.RedisStreamsConfig `json:"redis_streams" yaml:"redis_streams"`
-	Resource          string                    `json:"resource" yaml:"resource"`
-	Sequence          SequenceConfig            `json:"sequence" yaml:"sequence"`
-	SFTP              SFTPConfig                `json:"sftp" yaml:"sftp"`
-	Socket            SocketConfig              `json:"socket" yaml:"socket"`
-	SocketServer      SocketServerConfig        `json:"socket_server" yaml:"socket_server"`
-	STDIN             STDINConfig               `json:"stdin" yaml:"stdin"`
-	Subprocess        SubprocessConfig          `json:"subprocess" yaml:"subprocess"`
-	Websocket         reader.WebsocketConfig    `json:"websocket" yaml:"websocket"`
-	Processors        []processor.Config        `json:"processors" yaml:"processors"`
+	Label             string                  `json:"label" yaml:"label"`
+	Type              string                  `json:"type" yaml:"type"`
+	AMQP09            AMQP09Config            `json:"amqp_0_9" yaml:"amqp_0_9"`
+	AMQP1             AMQP1Config             `json:"amqp_1" yaml:"amqp_1"`
+	AWSKinesis        AWSKinesisConfig        `json:"aws_kinesis" yaml:"aws_kinesis"`
+	AWSS3             AWSS3Config             `json:"aws_s3" yaml:"aws_s3"`
+	AWSSQS            AWSSQSConfig            `json:"aws_sqs" yaml:"aws_sqs"`
+	AzureBlobStorage  AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
+	AzureQueueStorage AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
+	Broker            BrokerConfig            `json:"broker" yaml:"broker"`
+	CSVFile           CSVFileConfig           `json:"csv" yaml:"csv"`
+	Dynamic           DynamicConfig           `json:"dynamic" yaml:"dynamic"`
+	File              FileConfig              `json:"file" yaml:"file"`
+	GCPCloudStorage   GCPCloudStorageConfig   `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
+	GCPPubSub         GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
+	Generate          GenerateConfig          `json:"generate" yaml:"generate"`
+	HDFS              HDFSConfig              `json:"hdfs" yaml:"hdfs"`
+	HTTPClient        HTTPClientConfig        `json:"http_client" yaml:"http_client"`
+	HTTPServer        HTTPServerConfig        `json:"http_server" yaml:"http_server"`
+	Inproc            InprocConfig            `json:"inproc" yaml:"inproc"`
+	Kafka             KafkaConfig             `json:"kafka" yaml:"kafka"`
+	MQTT              MQTTConfig              `json:"mqtt" yaml:"mqtt"`
+	Nanomsg           NanomsgConfig           `json:"nanomsg" yaml:"nanomsg"`
+	NATS              NATSConfig              `json:"nats" yaml:"nats"`
+	NATSStream        NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
+	NSQ               NSQConfig               `json:"nsq" yaml:"nsq"`
+	Plugin            interface{}             `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	ReadUntil         ReadUntilConfig         `json:"read_until" yaml:"read_until"`
+	RedisList         RedisListConfig         `json:"redis_list" yaml:"redis_list"`
+	RedisPubSub       RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`
+	RedisStreams      RedisStreamsConfig      `json:"redis_streams" yaml:"redis_streams"`
+	Resource          string                  `json:"resource" yaml:"resource"`
+	Sequence          SequenceConfig          `json:"sequence" yaml:"sequence"`
+	SFTP              SFTPConfig              `json:"sftp" yaml:"sftp"`
+	Socket            SocketConfig            `json:"socket" yaml:"socket"`
+	SocketServer      SocketServerConfig      `json:"socket_server" yaml:"socket_server"`
+	STDIN             STDINConfig             `json:"stdin" yaml:"stdin"`
+	Subprocess        SubprocessConfig        `json:"subprocess" yaml:"subprocess"`
+	Websocket         reader.WebsocketConfig  `json:"websocket" yaml:"websocket"`
+	Processors        []processor.Config      `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -211,23 +211,23 @@ func NewConfig() Config {
 		Dynamic:           NewDynamicConfig(),
 		File:              NewFileConfig(),
 		GCPCloudStorage:   NewGCPCloudStorageConfig(),
-		GCPPubSub:         reader.NewGCPPubSubConfig(),
+		GCPPubSub:         NewGCPPubSubConfig(),
 		Generate:          NewGenerateConfig(),
-		HDFS:              reader.NewHDFSConfig(),
+		HDFS:              NewHDFSConfig(),
 		HTTPClient:        NewHTTPClientConfig(),
 		HTTPServer:        NewHTTPServerConfig(),
 		Inproc:            NewInprocConfig(),
 		Kafka:             NewKafkaConfig(),
 		MQTT:              NewMQTTConfig(),
-		Nanomsg:           reader.NewScaleProtoConfig(),
-		NATS:              reader.NewNATSConfig(),
-		NATSStream:        reader.NewNATSStreamConfig(),
-		NSQ:               reader.NewNSQConfig(),
+		Nanomsg:           NewNanomsgConfig(),
+		NATS:              NewNATSConfig(),
+		NATSStream:        NewNATSStreamConfig(),
+		NSQ:               NewNSQConfig(),
 		Plugin:            nil,
 		ReadUntil:         NewReadUntilConfig(),
-		RedisList:         reader.NewRedisListConfig(),
-		RedisPubSub:       reader.NewRedisPubSubConfig(),
-		RedisStreams:      reader.NewRedisStreamsConfig(),
+		RedisList:         NewRedisListConfig(),
+		RedisPubSub:       NewRedisPubSubConfig(),
+		RedisStreams:      NewRedisStreamsConfig(),
 		Resource:          "",
 		Sequence:          NewSequenceConfig(),
 		SFTP:              NewSFTPConfig(),

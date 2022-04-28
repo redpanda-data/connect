@@ -132,7 +132,7 @@ func New(conf Config, mgr interop.Manager) (*Batcher, error) {
 	var procs []iprocessor.V1
 	for i, pconf := range conf.Processors {
 		pMgr := mgr.IntoPath("processors", strconv.Itoa(i))
-		proc, err := processor.New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
+		proc, err := processor.New(pconf, pMgr)
 		if err != nil {
 			return nil, err
 		}

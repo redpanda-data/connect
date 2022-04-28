@@ -177,7 +177,7 @@ func TestWorkflowDeps(t *testing.T) {
 				branchConf.RequestMap = mappings[0]
 				branchConf.ResultMap = mappings[1]
 				dudProc := processor.NewConfig()
-				dudProc.Type = processor.TypeBloblang
+				dudProc.Type = "bloblang"
 				dudProc.Bloblang = "root = this"
 				branchConf.Processors = append(branchConf.Processors, dudProc)
 				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf
@@ -218,11 +218,11 @@ func quickTestBranches(branches ...[4]string) map[string]processor.Config {
 	m := map[string]processor.Config{}
 	for _, b := range branches {
 		blobConf := processor.NewConfig()
-		blobConf.Type = processor.TypeBloblang
+		blobConf.Type = "bloblang"
 		blobConf.Bloblang = b[2]
 
 		conf := processor.NewConfig()
-		conf.Type = processor.TypeBranch
+		conf.Type = "branch"
 		conf.Branch.RequestMap = b[1]
 		conf.Branch.Processors = append(conf.Branch.Processors, blobConf)
 		conf.Branch.ResultMap = b[3]
@@ -243,7 +243,7 @@ func TestWorkflowMissingResources(t *testing.T) {
 	branchConf.Branch.ResultMap = "root = this"
 
 	blobConf := processor.NewConfig()
-	blobConf.Type = processor.TypeBloblang
+	blobConf.Type = "bloblang"
 	blobConf.Bloblang = "root = this"
 
 	branchConf.Branch.Processors = append(branchConf.Branch.Processors, blobConf)
@@ -438,7 +438,7 @@ func TestWorkflows(t *testing.T) {
 				branchConf.RequestMap = mappings[0]
 				branchConf.ResultMap = mappings[2]
 				proc := processor.NewConfig()
-				proc.Type = processor.TypeBloblang
+				proc.Type = "bloblang"
 				proc.Bloblang = mappings[1]
 				branchConf.Processors = append(branchConf.Processors, proc)
 				conf.Workflow.Branches[strconv.Itoa(j)] = branchConf

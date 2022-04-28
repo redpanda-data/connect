@@ -15,7 +15,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Connects to Kafka brokers and consumes one or more topics.
 
 

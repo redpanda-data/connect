@@ -21,10 +21,10 @@ import (
 
 func TestTypeConstruction(t *testing.T) {
 	conf := stream.NewConfig()
-	conf.Input.Type = input.TypeNanomsg
+	conf.Input.Type = "nanomsg"
 	conf.Input.Nanomsg.PollTimeout = "100ms"
 	conf.Buffer.Type = "memory"
-	conf.Output.Type = output.TypeNanomsg
+	conf.Output.Type = "nanomsg"
 
 	newMgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)

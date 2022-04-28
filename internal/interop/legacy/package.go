@@ -11,7 +11,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func init() {
@@ -33,13 +32,6 @@ func init() {
 			pipes ...iprocessor.PipelineConstructorFunc,
 		) (ioutput.Streamed, error) {
 			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics(), pipes...)
-		}, spec); err != nil {
-			panic(err)
-		}
-	})
-	processor.WalkConstructors(func(ctor processor.ConstructorFunc, spec docs.ComponentSpec) {
-		if err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (iprocessor.V1, error) {
-			return ctor(conf, mgr, mgr.Logger(), mgr.Metrics())
 		}, spec); err != nil {
 			panic(err)
 		}

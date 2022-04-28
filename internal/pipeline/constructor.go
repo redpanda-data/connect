@@ -37,7 +37,7 @@ func New(conf Config, mgr interop.Manager) (Type, error) {
 	for j, procConf := range conf.Processors {
 		var err error
 		pMgr := mgr.IntoPath("processors", strconv.Itoa(j))
-		processors[j], err = processor.New(procConf, pMgr, pMgr.Logger(), pMgr.Metrics())
+		processors[j], err = processor.New(procConf, pMgr)
 		if err != nil {
 			return nil, err
 		}

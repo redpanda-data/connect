@@ -1,4 +1,4 @@
-package api
+package api_test
 
 import (
 	"net/http"
@@ -8,19 +8,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestAPIEnableCORS(t *testing.T) {
-	conf := NewConfig()
+	conf := api.NewConfig()
 	conf.CORS.Enabled = true
 	conf.CORS.AllowedOrigins = []string{"*"}
 
-	s, err := New("", "", conf, nil, log.Noop(), metrics.Noop())
+	s, err := api.New("", "", conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	handler := s.server.Handler
+	handler := s.Handler()
 
 	request, _ := http.NewRequest("OPTIONS", "/version", http.NoBody)
 	request.Header.Add("Origin", "meow")
@@ -34,14 +37,14 @@ func TestAPIEnableCORS(t *testing.T) {
 }
 
 func TestAPIEnableCORSOrigins(t *testing.T) {
-	conf := NewConfig()
+	conf := api.NewConfig()
 	conf.CORS.Enabled = true
 	conf.CORS.AllowedOrigins = []string{"foo", "bar"}
 
-	s, err := New("", "", conf, nil, log.Noop(), metrics.Noop())
+	s, err := api.New("", "", conf, nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	handler := s.server.Handler
+	handler := s.Handler()
 
 	request, _ := http.NewRequest("OPTIONS", "/version", http.NoBody)
 	request.Header.Add("Origin", "foo")
@@ -75,10 +78,10 @@ func TestAPIEnableCORSOrigins(t *testing.T) {
 }
 
 func TestAPIEnableCORSNoHeaders(t *testing.T) {
-	conf := NewConfig()
+	conf := api.NewConfig()
 	conf.CORS.Enabled = true
 
-	_, err := New("", "", conf, nil, log.Noop(), metrics.Noop())
+	_, err := api.New("", "", conf, nil, log.Noop(), metrics.Noop())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "must specify at least one allowed origin")
 }

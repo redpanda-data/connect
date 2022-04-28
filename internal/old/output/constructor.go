@@ -49,7 +49,7 @@ func AppendProcessorsFromConfig(conf Config, mgr interop.Manager, pipelines ...i
 			for j, procConf := range conf.Processors {
 				var err error
 				pMgr := mgr.IntoPath("processors", strconv.Itoa(j))
-				processors[j], err = processor.New(procConf, pMgr, pMgr.Logger(), pMgr.Metrics())
+				processors[j], err = processor.New(procConf, pMgr)
 				if err != nil {
 					return nil, err
 				}
@@ -169,57 +169,57 @@ const (
 // Deprecated: Do not add new components here. Instead, use the public plugin
 // APIs. Examples can be found in: ./internal/impl
 type Config struct {
-	Label              string                         `json:"label" yaml:"label"`
-	Type               string                         `json:"type" yaml:"type"`
-	AMQP09             AMQPConfig                     `json:"amqp_0_9" yaml:"amqp_0_9"`
-	AMQP1              AMQP1Config                    `json:"amqp_1" yaml:"amqp_1"`
-	AWSDynamoDB        DynamoDBConfig                 `json:"aws_dynamodb" yaml:"aws_dynamodb"`
-	AWSKinesis         KinesisConfig                  `json:"aws_kinesis" yaml:"aws_kinesis"`
-	AWSKinesisFirehose KinesisFirehoseConfig          `json:"aws_kinesis_firehose" yaml:"aws_kinesis_firehose"`
-	AWSS3              AmazonS3Config                 `json:"aws_s3" yaml:"aws_s3"`
-	AWSSNS             SNSConfig                      `json:"aws_sns" yaml:"aws_sns"`
-	AWSSQS             AmazonSQSConfig                `json:"aws_sqs" yaml:"aws_sqs"`
-	AzureBlobStorage   writer.AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
-	AzureQueueStorage  writer.AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
-	AzureTableStorage  writer.AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
-	Broker             BrokerConfig                   `json:"broker" yaml:"broker"`
-	Cache              CacheConfig                    `json:"cache" yaml:"cache"`
-	Cassandra          CassandraConfig                `json:"cassandra" yaml:"cassandra"`
-	Drop               DropConfig                     `json:"drop" yaml:"drop"`
-	DropOn             DropOnConfig                   `json:"drop_on" yaml:"drop_on"`
-	Dynamic            DynamicConfig                  `json:"dynamic" yaml:"dynamic"`
-	Elasticsearch      ElasticsearchConfig            `json:"elasticsearch" yaml:"elasticsearch"`
-	Fallback           TryConfig                      `json:"fallback" yaml:"fallback"`
-	File               FileConfig                     `json:"file" yaml:"file"`
-	GCPCloudStorage    GCPCloudStorageConfig          `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
-	GCPPubSub          writer.GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
-	HDFS               writer.HDFSConfig              `json:"hdfs" yaml:"hdfs"`
-	HTTPClient         writer.HTTPClientConfig        `json:"http_client" yaml:"http_client"`
-	HTTPServer         HTTPServerConfig               `json:"http_server" yaml:"http_server"`
-	Inproc             string                         `json:"inproc" yaml:"inproc"`
-	Kafka              writer.KafkaConfig             `json:"kafka" yaml:"kafka"`
-	MongoDB            MongoDBConfig                  `json:"mongodb" yaml:"mongodb"`
-	MQTT               MQTTConfig                     `json:"mqtt" yaml:"mqtt"`
-	Nanomsg            writer.NanomsgConfig           `json:"nanomsg" yaml:"nanomsg"`
-	NATS               writer.NATSConfig              `json:"nats" yaml:"nats"`
-	NATSStream         writer.NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
-	NSQ                writer.NSQConfig               `json:"nsq" yaml:"nsq"`
-	Plugin             interface{}                    `json:"plugin,omitempty" yaml:"plugin,omitempty"`
-	RedisHash          writer.RedisHashConfig         `json:"redis_hash" yaml:"redis_hash"`
-	RedisList          writer.RedisListConfig         `json:"redis_list" yaml:"redis_list"`
-	RedisPubSub        writer.RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`
-	RedisStreams       writer.RedisStreamsConfig      `json:"redis_streams" yaml:"redis_streams"`
-	Reject             string                         `json:"reject" yaml:"reject"`
-	Resource           string                         `json:"resource" yaml:"resource"`
-	Retry              RetryConfig                    `json:"retry" yaml:"retry"`
-	SFTP               SFTPConfig                     `json:"sftp" yaml:"sftp"`
-	STDOUT             STDOUTConfig                   `json:"stdout" yaml:"stdout"`
-	Subprocess         SubprocessConfig               `json:"subprocess" yaml:"subprocess"`
-	Switch             SwitchConfig                   `json:"switch" yaml:"switch"`
-	SyncResponse       struct{}                       `json:"sync_response" yaml:"sync_response"`
-	Socket             writer.SocketConfig            `json:"socket" yaml:"socket"`
-	Websocket          writer.WebsocketConfig         `json:"websocket" yaml:"websocket"`
-	Processors         []processor.Config             `json:"processors" yaml:"processors"`
+	Label              string                  `json:"label" yaml:"label"`
+	Type               string                  `json:"type" yaml:"type"`
+	AMQP09             AMQPConfig              `json:"amqp_0_9" yaml:"amqp_0_9"`
+	AMQP1              AMQP1Config             `json:"amqp_1" yaml:"amqp_1"`
+	AWSDynamoDB        DynamoDBConfig          `json:"aws_dynamodb" yaml:"aws_dynamodb"`
+	AWSKinesis         KinesisConfig           `json:"aws_kinesis" yaml:"aws_kinesis"`
+	AWSKinesisFirehose KinesisFirehoseConfig   `json:"aws_kinesis_firehose" yaml:"aws_kinesis_firehose"`
+	AWSS3              AmazonS3Config          `json:"aws_s3" yaml:"aws_s3"`
+	AWSSNS             SNSConfig               `json:"aws_sns" yaml:"aws_sns"`
+	AWSSQS             AmazonSQSConfig         `json:"aws_sqs" yaml:"aws_sqs"`
+	AzureBlobStorage   AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
+	AzureQueueStorage  AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
+	AzureTableStorage  AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
+	Broker             BrokerConfig            `json:"broker" yaml:"broker"`
+	Cache              CacheConfig             `json:"cache" yaml:"cache"`
+	Cassandra          CassandraConfig         `json:"cassandra" yaml:"cassandra"`
+	Drop               DropConfig              `json:"drop" yaml:"drop"`
+	DropOn             DropOnConfig            `json:"drop_on" yaml:"drop_on"`
+	Dynamic            DynamicConfig           `json:"dynamic" yaml:"dynamic"`
+	Elasticsearch      ElasticsearchConfig     `json:"elasticsearch" yaml:"elasticsearch"`
+	Fallback           TryConfig               `json:"fallback" yaml:"fallback"`
+	File               FileConfig              `json:"file" yaml:"file"`
+	GCPCloudStorage    GCPCloudStorageConfig   `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
+	GCPPubSub          GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
+	HDFS               HDFSConfig              `json:"hdfs" yaml:"hdfs"`
+	HTTPClient         writer.HTTPClientConfig `json:"http_client" yaml:"http_client"`
+	HTTPServer         HTTPServerConfig        `json:"http_server" yaml:"http_server"`
+	Inproc             string                  `json:"inproc" yaml:"inproc"`
+	Kafka              KafkaConfig             `json:"kafka" yaml:"kafka"`
+	MongoDB            MongoDBConfig           `json:"mongodb" yaml:"mongodb"`
+	MQTT               MQTTConfig              `json:"mqtt" yaml:"mqtt"`
+	Nanomsg            NanomsgConfig           `json:"nanomsg" yaml:"nanomsg"`
+	NATS               NATSConfig              `json:"nats" yaml:"nats"`
+	NATSStream         NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
+	NSQ                NSQConfig               `json:"nsq" yaml:"nsq"`
+	Plugin             interface{}             `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	RedisHash          RedisHashConfig         `json:"redis_hash" yaml:"redis_hash"`
+	RedisList          RedisListConfig         `json:"redis_list" yaml:"redis_list"`
+	RedisPubSub        RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`
+	RedisStreams       RedisStreamsConfig      `json:"redis_streams" yaml:"redis_streams"`
+	Reject             string                  `json:"reject" yaml:"reject"`
+	Resource           string                  `json:"resource" yaml:"resource"`
+	Retry              RetryConfig             `json:"retry" yaml:"retry"`
+	SFTP               SFTPConfig              `json:"sftp" yaml:"sftp"`
+	STDOUT             STDOUTConfig            `json:"stdout" yaml:"stdout"`
+	Subprocess         SubprocessConfig        `json:"subprocess" yaml:"subprocess"`
+	Switch             SwitchConfig            `json:"switch" yaml:"switch"`
+	SyncResponse       struct{}                `json:"sync_response" yaml:"sync_response"`
+	Socket             writer.SocketConfig     `json:"socket" yaml:"socket"`
+	Websocket          writer.WebsocketConfig  `json:"websocket" yaml:"websocket"`
+	Processors         []processor.Config      `json:"processors" yaml:"processors"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -237,9 +237,9 @@ func NewConfig() Config {
 		AWSS3:              NewAmazonS3Config(),
 		AWSSNS:             NewSNSConfig(),
 		AWSSQS:             NewAmazonSQSConfig(),
-		AzureBlobStorage:   writer.NewAzureBlobStorageConfig(),
-		AzureQueueStorage:  writer.NewAzureQueueStorageConfig(),
-		AzureTableStorage:  writer.NewAzureTableStorageConfig(),
+		AzureBlobStorage:   NewAzureBlobStorageConfig(),
+		AzureQueueStorage:  NewAzureQueueStorageConfig(),
+		AzureTableStorage:  NewAzureTableStorageConfig(),
 		Broker:             NewBrokerConfig(),
 		Cache:              NewCacheConfig(),
 		Cassandra:          NewCassandraConfig(),
@@ -250,23 +250,23 @@ func NewConfig() Config {
 		Fallback:           NewTryConfig(),
 		File:               NewFileConfig(),
 		GCPCloudStorage:    NewGCPCloudStorageConfig(),
-		GCPPubSub:          writer.NewGCPPubSubConfig(),
-		HDFS:               writer.NewHDFSConfig(),
+		GCPPubSub:          NewGCPPubSubConfig(),
+		HDFS:               NewHDFSConfig(),
 		HTTPClient:         writer.NewHTTPClientConfig(),
 		HTTPServer:         NewHTTPServerConfig(),
 		Inproc:             "",
-		Kafka:              writer.NewKafkaConfig(),
+		Kafka:              NewKafkaConfig(),
 		MQTT:               NewMQTTConfig(),
 		MongoDB:            NewMongoDBConfig(),
-		Nanomsg:            writer.NewNanomsgConfig(),
-		NATS:               writer.NewNATSConfig(),
-		NATSStream:         writer.NewNATSStreamConfig(),
-		NSQ:                writer.NewNSQConfig(),
+		Nanomsg:            NewNanomsgConfig(),
+		NATS:               NewNATSConfig(),
+		NATSStream:         NewNATSStreamConfig(),
+		NSQ:                NewNSQConfig(),
 		Plugin:             nil,
-		RedisHash:          writer.NewRedisHashConfig(),
-		RedisList:          writer.NewRedisListConfig(),
-		RedisPubSub:        writer.NewRedisPubSubConfig(),
-		RedisStreams:       writer.NewRedisStreamsConfig(),
+		RedisHash:          NewRedisHashConfig(),
+		RedisList:          NewRedisListConfig(),
+		RedisPubSub:        NewRedisPubSubConfig(),
+		RedisStreams:       NewRedisStreamsConfig(),
 		Reject:             "",
 		Resource:           "",
 		Retry:              NewRetryConfig(),

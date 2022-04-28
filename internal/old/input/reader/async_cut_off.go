@@ -8,8 +8,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-//------------------------------------------------------------------------------
-
 type asyncCutOffMsg struct {
 	msg   *message.Batch
 	ackFn AsyncAckFn
@@ -90,5 +88,3 @@ func (c *AsyncCutOff) CloseAsync() {
 func (c *AsyncCutOff) WaitForClose(tout time.Duration) error {
 	return nil // We don't block here.
 }
-
-//------------------------------------------------------------------------------

@@ -15,7 +15,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Sends message parts as files to a HDFS directory.
 
 
@@ -67,9 +66,7 @@ output:
 </TabItem>
 </Tabs>
 
-Each file is written with the path specified with the 'path' field, in order to
-have a different path for each object you should use function interpolations
-described [here](/docs/configuration/interpolation#bloblang-queries).
+Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Performance
 

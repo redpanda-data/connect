@@ -24,7 +24,7 @@ func TestFanOutBroker(t *testing.T) {
 	outTwo.File.Codec = "all-bytes"
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = processor.TypeBloblang, processor.TypeBloblang
+	procOne.Type, procTwo.Type = "bloblang", "bloblang"
 	procOne.Bloblang = `root = "one-" + content()`
 	procTwo.Bloblang = `root = "two-" + content()`
 
@@ -108,7 +108,7 @@ func TestRoundRobinBroker(t *testing.T) {
 	outTwo.File.Codec = "all-bytes"
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = processor.TypeBloblang, processor.TypeBloblang
+	procOne.Type, procTwo.Type = "bloblang", "bloblang"
 	procOne.Bloblang = `root = "one-" + content()`
 	procTwo.Bloblang = `root = "two-" + content()`
 
@@ -190,7 +190,7 @@ func TestGreedyBroker(t *testing.T) {
 	outTwo.File.Codec = "all-bytes"
 
 	procOne, procTwo := processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = processor.TypeBloblang, processor.TypeBloblang
+	procOne.Type, procTwo.Type = "bloblang", "bloblang"
 	procOne.Bloblang = `root = "one-" + content()`
 	procTwo.Bloblang = `root = "two-" + content()`
 
@@ -198,7 +198,7 @@ func TestGreedyBroker(t *testing.T) {
 	outTwo.Processors = append(outTwo.Processors, procTwo)
 
 	procOne, procTwo = processor.NewConfig(), processor.NewConfig()
-	procOne.Type, procTwo.Type = processor.TypeSleep, processor.TypeSleep
+	procOne.Type, procTwo.Type = "sleep", "sleep"
 	procOne.Sleep.Duration = "50ms"
 	procTwo.Sleep.Duration = "50ms"
 

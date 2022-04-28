@@ -99,7 +99,7 @@ func (t *Type) start() (err error) {
 		}
 	}
 	if tLen := len(t.conf.Pipeline.Processors); tLen > 0 {
-		pMgr := t.manager.IntoPath("pipeline")
+		pMgr := t.manager.IntoPath("pipeline").(bundle.NewManagement)
 		if t.pipelineLayer, err = pipeline.New(t.conf.Pipeline, pMgr); err != nil {
 			return
 		}

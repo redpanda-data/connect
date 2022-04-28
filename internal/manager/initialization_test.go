@@ -110,7 +110,7 @@ func TestInitialization(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not this processor")
 
-	_, err = processor.New(pConf, mgr, log.Noop(), metrics.Noop())
+	_, err = processor.New(pConf, mgr)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not this processor")
 
