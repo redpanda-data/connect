@@ -685,7 +685,7 @@ func (k *kinesisReader) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := k.conf.GetSession()
+	sess, err := GetSessionFromConf(k.conf.Config)
 	if err != nil {
 		return err
 	}

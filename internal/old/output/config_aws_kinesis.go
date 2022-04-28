@@ -8,7 +8,7 @@ import (
 
 // KinesisConfig contains configuration fields for the Kinesis output type.
 type KinesisConfig struct {
-	sessionConfig  `json:",inline" yaml:",inline"`
+	SessionConfig  `json:",inline" yaml:",inline"`
 	Stream         string `json:"stream" yaml:"stream"`
 	HashKey        string `json:"hash_key" yaml:"hash_key"`
 	PartitionKey   string `json:"partition_key" yaml:"partition_key"`
@@ -24,7 +24,7 @@ func NewKinesisConfig() KinesisConfig {
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
 	return KinesisConfig{
-		sessionConfig: sessionConfig{
+		SessionConfig: SessionConfig{
 			Config: sess.NewConfig(),
 		},
 		Stream:       "",

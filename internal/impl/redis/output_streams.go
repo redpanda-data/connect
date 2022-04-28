@@ -91,7 +91,7 @@ func newRedisStreamsWriter(conf ooutput.RedisStreamsConfig, log log.Modular) (*r
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
 
-	if _, err = conf.Config.Client(); err != nil {
+	if _, err = clientFromConfig(conf.Config); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -101,7 +101,7 @@ func (r *redisStreamsWriter) ConnectWithContext(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := r.conf.Config.Client()
+	client, err := clientFromConfig(r.conf.Config)
 	if err != nil {
 		return err
 	}

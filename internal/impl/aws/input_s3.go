@@ -563,7 +563,7 @@ func (a *awsS3Reader) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := a.conf.GetSession(func(c *aws.Config) {
+	sess, err := GetSessionFromConf(a.conf.Config, func(c *aws.Config) {
 		c.S3ForcePathStyle = aws.Bool(a.conf.ForcePathStyleURLs)
 	})
 	if err != nil {

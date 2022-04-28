@@ -32,7 +32,7 @@ output:
   kafka:
     addresses: []
     topic: ""
-    target_version: 1.0.0
+    target_version: 2.0.0
     key: ""
     partitioner: fnv1a_hash
     compression: none
@@ -72,7 +72,7 @@ output:
       token_key: ""
     topic: ""
     client_id: benthos
-    target_version: 1.0.0
+    target_version: 2.0.0
     rack_id: ""
     key: ""
     partitioner: fnv1a_hash
@@ -300,7 +300,7 @@ Default: `"none"`
 
 ### `sasl.user`
 
-A `PLAIN` username. It is recommended that you use environment variables to populate this field.
+A PLAIN username. It is recommended that you use environment variables to populate this field.
 
 
 Type: `string`  
@@ -314,7 +314,7 @@ user: ${USER}
 
 ### `sasl.password`
 
-A `PLAIN` password. It is recommended that you use environment variables to populate this field.
+A PLAIN password. It is recommended that you use environment variables to populate this field.
 
 
 Type: `string`  
@@ -328,7 +328,7 @@ password: ${PASSWORD}
 
 ### `sasl.access_token`
 
-A static `OAUTHBEARER` access token
+A static OAUTHBEARER access token
 
 
 Type: `string`  
@@ -336,7 +336,7 @@ Default: `""`
 
 ### `sasl.token_cache`
 
-Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch `OAUTHBEARER` tokens from
+Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch OAUTHBEARER tokens from
 
 
 Type: `string`  
@@ -373,7 +373,7 @@ The version of the Kafka protocol to use. This limits the capabilities used by t
 
 
 Type: `string`  
-Default: `"1.0.0"`  
+Default: `"2.0.0"`  
 
 ### `rack_id`
 

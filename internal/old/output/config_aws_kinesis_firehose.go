@@ -8,7 +8,7 @@ import (
 
 // KinesisFirehoseConfig contains configuration fields for the KinesisFirehose output type.
 type KinesisFirehoseConfig struct {
-	sessionConfig  `json:",inline" yaml:",inline"`
+	SessionConfig  `json:",inline" yaml:",inline"`
 	Stream         string `json:"stream" yaml:"stream"`
 	MaxInFlight    int    `json:"max_in_flight" yaml:"max_in_flight"`
 	retries.Config `json:",inline" yaml:",inline"`
@@ -23,7 +23,7 @@ func NewKinesisFirehoseConfig() KinesisFirehoseConfig {
 	rConf.Backoff.MaxElapsedTime = "30s"
 
 	return KinesisFirehoseConfig{
-		sessionConfig: sessionConfig{
+		SessionConfig: SessionConfig{
 			Config: sess.NewConfig(),
 		},
 		Stream:      "",

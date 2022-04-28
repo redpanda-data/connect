@@ -9,7 +9,7 @@ import (
 
 // AmazonSQSConfig contains configuration fields for the output AmazonSQS type.
 type AmazonSQSConfig struct {
-	sessionConfig          `json:",inline" yaml:",inline"`
+	SessionConfig          `json:",inline" yaml:",inline"`
 	URL                    string                       `json:"url" yaml:"url"`
 	MessageGroupID         string                       `json:"message_group_id" yaml:"message_group_id"`
 	MessageDeduplicationID string                       `json:"message_deduplication_id" yaml:"message_deduplication_id"`
@@ -27,7 +27,7 @@ func NewAmazonSQSConfig() AmazonSQSConfig {
 	rConf.Backoff.MaxElapsedTime = "30s"
 
 	return AmazonSQSConfig{
-		sessionConfig: sessionConfig{
+		SessionConfig: SessionConfig{
 			Config: sess.NewConfig(),
 		},
 		URL:                    "",

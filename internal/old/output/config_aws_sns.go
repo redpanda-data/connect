@@ -11,7 +11,7 @@ type SNSConfig struct {
 	MessageGroupID         string                       `json:"message_group_id" yaml:"message_group_id"`
 	MessageDeduplicationID string                       `json:"message_deduplication_id" yaml:"message_deduplication_id"`
 	Metadata               metadata.ExcludeFilterConfig `json:"metadata" yaml:"metadata"`
-	sessionConfig          `json:",inline" yaml:",inline"`
+	SessionConfig          `json:",inline" yaml:",inline"`
 	Timeout                string `json:"timeout" yaml:"timeout"`
 	MaxInFlight            int    `json:"max_in_flight" yaml:"max_in_flight"`
 }
@@ -19,7 +19,7 @@ type SNSConfig struct {
 // NewSNSConfig creates a new Config with default values.
 func NewSNSConfig() SNSConfig {
 	return SNSConfig{
-		sessionConfig: sessionConfig{
+		SessionConfig: SessionConfig{
 			Config: sess.NewConfig(),
 		},
 		TopicArn:               "",

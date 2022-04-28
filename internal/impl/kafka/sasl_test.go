@@ -1,4 +1,4 @@
-package sasl_test
+package kafka_test
 
 import (
 	"testing"
@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/impl/kafka"
 	"github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
@@ -25,7 +26,7 @@ func TestApplyPlaintext(t *testing.T) {
 		Password:  "bar",
 	}
 
-	err := saslConf.Apply(mock.NewManager(), conf)
+	err := kafka.ApplySASLConfig(saslConf, mock.NewManager(), conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +56,7 @@ func TestApplyOAuthBearerStaticProvider(t *testing.T) {
 		AccessToken: "foo",
 	}
 
-	err := saslConf.Apply(mock.NewManager(), conf)
+	err := kafka.ApplySASLConfig(saslConf, mock.NewManager(), conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +100,7 @@ cache_resources:
 	mgr, err := manager.NewV2(resConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
-	require.NoError(t, saslConf.Apply(mgr, conf))
+	require.NoError(t, kafka.ApplySASLConfig(saslConf, mgr, conf))
 
 	if !conf.Net.SASL.Enable {
 		t.Errorf("SASL not enabled")
@@ -120,7 +121,7 @@ cache_resources:
 
 	// Test with missing key
 	saslConf.TokenKey = "bar"
-	err = saslConf.Apply(mgr, conf)
+	err = kafka.ApplySASLConfig(saslConf, mgr, conf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,10 +138,8 @@ func TestApplyUnknownMechanism(t *testing.T) {
 		Mechanism: "foo",
 	}
 
-	err := saslConf.Apply(mock.NewManager(), conf)
-	if err != sasl.ErrUnsupportedSASLMechanism {
-		t.Errorf("Err %v != %v", err, sasl.ErrUnsupportedSASLMechanism)
+	err := kafka.ApplySASLConfig(saslConf, mock.NewManager(), conf)
+	if err != kafka.ErrUnsupportedSASLMechanism {
+		t.Errorf("Err %v != %v", err, kafka.ErrUnsupportedSASLMechanism)
 	}
 }
-
-//------------------------------------------------------------------------------

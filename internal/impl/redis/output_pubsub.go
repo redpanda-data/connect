@@ -79,7 +79,7 @@ func newRedisPubSubWriter(conf ooutput.RedisPubSubConfig, mgr interop.Manager, l
 	if r.channelStr, err = mgr.BloblEnvironment().NewField(conf.Channel); err != nil {
 		return nil, fmt.Errorf("failed to parse channel expression: %v", err)
 	}
-	if _, err = conf.Config.Client(); err != nil {
+	if _, err = clientFromConfig(conf.Config); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -89,7 +89,7 @@ func (r *redisPubSubWriter) ConnectWithContext(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := r.conf.Config.Client()
+	client, err := clientFromConfig(r.conf.Config)
 	if err != nil {
 		return err
 	}

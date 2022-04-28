@@ -107,7 +107,7 @@ func (a *awsSQSReader) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := a.conf.GetSession()
+	sess, err := GetSessionFromConf(a.conf.Config)
 	if err != nil {
 		return err
 	}

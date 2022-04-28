@@ -128,7 +128,7 @@ func newRedisHashWriter(conf ooutput.RedisHashConfig, mgr interop.Manager, log l
 		return nil, errors.New("at least one mechanism for setting fields must be enabled")
 	}
 
-	if _, err := conf.Config.Client(); err != nil {
+	if _, err := clientFromConfig(conf.Config); err != nil {
 		return nil, err
 	}
 
@@ -139,7 +139,7 @@ func (r *redisHashWriter) ConnectWithContext(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := r.conf.Config.Client()
+	client, err := clientFromConfig(r.conf.Config)
 	if err != nil {
 		return err
 	}

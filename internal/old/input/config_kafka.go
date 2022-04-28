@@ -1,8 +1,6 @@
 package input
 
 import (
-	"github.com/Shopify/sarama"
-
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
@@ -59,7 +57,7 @@ func NewKafkaConfig() KafkaConfig {
 		MaxProcessingPeriod: "100ms",
 		FetchBufferCap:      256,
 		StartFromOldest:     true,
-		TargetVersion:       sarama.V2_0_0_0.String(),
+		TargetVersion:       "2.0.0",
 		TLS:                 btls.NewConfig(),
 		SASL:                sasl.NewConfig(),
 		Batching:            policy.NewConfig(),

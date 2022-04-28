@@ -320,7 +320,7 @@ func (k *kafkaWriter) ConnectWithContext(ctx context.Context) error {
 	if k.conf.TLS.Enabled {
 		config.Net.TLS.Config = k.tlsConf
 	}
-	if err := k.conf.SASL.Apply(k.mgr, config); err != nil {
+	if err := ApplySASLConfig(k.conf.SASL, k.mgr, config); err != nil {
 		return err
 	}
 

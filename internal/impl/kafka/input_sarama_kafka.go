@@ -466,7 +466,7 @@ func (k *kafkaReader) ConnectWithContext(ctx context.Context) error {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	if err := k.conf.SASL.Apply(k.mgr, config); err != nil {
+	if err := ApplySASLConfig(k.conf.SASL, k.mgr, config); err != nil {
 		return err
 	}
 

@@ -85,7 +85,7 @@ func newRedisListWriter(conf ooutput.RedisListConfig, mgr interop.Manager, log l
 	if r.keyStr, err = mgr.BloblEnvironment().NewField(conf.Key); err != nil {
 		return nil, fmt.Errorf("failed to parse key expression: %v", err)
 	}
-	if _, err := conf.Config.Client(); err != nil {
+	if _, err := clientFromConfig(conf.Config); err != nil {
 		return nil, err
 	}
 
@@ -96,7 +96,7 @@ func (r *redisListWriter) ConnectWithContext(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
-	client, err := r.conf.Config.Client()
+	client, err := clientFromConfig(r.conf.Config)
 	if err != nil {
 		return err
 	}

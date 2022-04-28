@@ -1,8 +1,6 @@
 package output
 
 import (
-	"github.com/Shopify/sarama"
-
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
@@ -54,7 +52,7 @@ func NewKafkaConfig() KafkaConfig {
 		MaxMsgBytes:   1000000,
 		Timeout:       "5s",
 		AckReplicas:   false,
-		TargetVersion: sarama.V1_0_0_0.String(),
+		TargetVersion: "2.0.0",
 		StaticHeaders: map[string]string{},
 		Metadata:      metadata.NewExcludeFilterConfig(),
 		TLS:           btls.NewConfig(),

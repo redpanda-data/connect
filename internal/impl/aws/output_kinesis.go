@@ -152,7 +152,7 @@ func (a *kinesisWriter) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := a.conf.GetSession()
+	sess, err := GetSessionFromConf(a.conf.SessionConfig.Config)
 	if err != nil {
 		return err
 	}

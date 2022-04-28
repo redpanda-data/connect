@@ -76,7 +76,7 @@ func newRedisPubSubReader(conf oinput.RedisPubSubConfig, log log.Modular) (*redi
 		log:  log,
 	}
 
-	_, err := r.conf.Config.Client()
+	_, err := clientFromConfig(r.conf.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func (r *redisPubSubReader) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	client, err := r.conf.Config.Client()
+	client, err := clientFromConfig(r.conf.Config)
 	if err != nil {
 		return err
 	}

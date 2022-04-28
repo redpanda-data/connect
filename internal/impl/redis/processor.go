@@ -155,7 +155,7 @@ func newRedisProc(conf oprocessor.RedisConfig, mgr interop.Manager) (*redisProc,
 		}
 	}
 
-	client, err := conf.Config.Client()
+	client, err := clientFromConfig(conf.Config)
 	if err != nil {
 		return nil, err
 	}

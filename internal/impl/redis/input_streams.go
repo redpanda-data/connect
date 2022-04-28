@@ -107,7 +107,7 @@ func newRedisStreamsReader(conf oinput.RedisStreamsConfig, log log.Modular) (*re
 		r.backlogs[str] = "0"
 	}
 
-	if _, err := r.conf.Config.Client(); err != nil {
+	if _, err := clientFromConfig(r.conf.Config); err != nil {
 		return nil, err
 	}
 
@@ -203,7 +203,7 @@ func (r *redisStreamsReader) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	client, err := r.conf.Config.Client()
+	client, err := clientFromConfig(r.conf.Config)
 	if err != nil {
 		return err
 	}

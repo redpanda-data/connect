@@ -20,6 +20,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
+	baws "github.com/benthosdev/benthos/v4/internal/impl/aws"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -213,7 +214,7 @@ func (e *Elasticsearch) Connect() error {
 	}
 
 	if e.conf.AWS.Enabled {
-		tsess, err := e.conf.AWS.GetSession()
+		tsess, err := baws.GetSessionFromConf(e.conf.AWS.Config)
 		if err != nil {
 			return err
 		}

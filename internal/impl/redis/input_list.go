@@ -72,7 +72,7 @@ func newRedisListReader(conf oinput.RedisListConfig, log log.Modular) (*redisLis
 		}
 	}
 
-	if _, err := conf.Config.Client(); err != nil {
+	if _, err := clientFromConfig(conf.Config); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -86,7 +86,7 @@ func (r *redisListReader) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	client, err := r.conf.Config.Client()
+	client, err := clientFromConfig(r.conf.Config)
 	if err == nil {
 		_, err = client.Ping().Result()
 	}

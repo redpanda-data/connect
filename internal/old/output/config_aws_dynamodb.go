@@ -6,13 +6,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
-type sessionConfig struct {
+// SessionConfig hides a general AWS session config struct.
+type SessionConfig struct {
 	sess.Config `json:",inline" yaml:",inline"`
 }
 
 // DynamoDBConfig contains config fields for the DynamoDB output type.
 type DynamoDBConfig struct {
-	sessionConfig  `json:",inline" yaml:",inline"`
+	SessionConfig  `json:",inline" yaml:",inline"`
 	Table          string            `json:"table" yaml:"table"`
 	StringColumns  map[string]string `json:"string_columns" yaml:"string_columns"`
 	JSONMapColumns map[string]string `json:"json_map_columns" yaml:"json_map_columns"`
@@ -31,7 +32,7 @@ func NewDynamoDBConfig() DynamoDBConfig {
 	rConf.Backoff.MaxInterval = "5s"
 	rConf.Backoff.MaxElapsedTime = "30s"
 	return DynamoDBConfig{
-		sessionConfig: sessionConfig{
+		SessionConfig: SessionConfig{
 			Config: sess.NewConfig(),
 		},
 		Table:          "",

@@ -189,7 +189,7 @@ func (d *dynamoDBWriter) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := d.conf.GetSession()
+	sess, err := GetSessionFromConf(d.conf.SessionConfig.Config)
 	if err != nil {
 		return err
 	}

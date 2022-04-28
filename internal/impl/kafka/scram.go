@@ -1,4 +1,4 @@
-package sasl
+package kafka
 
 import (
 	"crypto/sha256"
@@ -6,8 +6,6 @@ import (
 
 	"github.com/xdg/scram"
 )
-
-//------------------------------------------------------------------------------
 
 // SHA256 generates the SHA256 hash
 var SHA256 scram.HashGeneratorFcn = sha256.New
@@ -43,5 +41,3 @@ func (x *XDGSCRAMClient) Step(challenge string) (response string, err error) {
 func (x *XDGSCRAMClient) Done() bool {
 	return x.ClientConversation.Done()
 }
-
-//------------------------------------------------------------------------------
