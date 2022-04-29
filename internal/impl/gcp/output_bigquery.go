@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"cloud.google.com/go/bigquery"
+	"go.uber.org/multierr"
 	"golang.org/x/text/encoding/charmap"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
@@ -374,12 +375,21 @@ func (g *gcpBigQueryOutput) WriteBatch(ctx context.Context, batch service.Messag
 	}
 
 	status, err := job.Wait(ctx)
-	if err == nil {
-		err = status.Err()
-	}
 	if err != nil {
-		return fmt.Errorf("error inserting data in bigquery: %w", err)
+		return fmt.Errorf("error while waiting on bigquery job: %w", err)
 	}
+
+	// status.Err() tells us that the job _completed unsuccessfully_.
+	// If that is set, then we can proceed to look at status.Errors.
+	if serr := status.Err(); serr != nil {
+		var merr error
+		for _, cerr := range status.Errors {
+			merr = multierr.Append(merr, cerr)
+		}
+
+		return fmt.Errorf("error inserting data in bigquery: %w", merr)
+	}
+
 	return nil
 }
 

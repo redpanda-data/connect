@@ -6,6 +6,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/Masterminds/squirrel"
+	"go.uber.org/multierr"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -46,8 +47,15 @@ func (client *wrappedBQClient) RunQuery(ctx context.Context, options *bqQueryBui
 		return nil, fmt.Errorf("failed to wait on job: %w", err)
 	}
 
+	// status.Err() tells us that the job _completed unsuccessfully_.
+	// If that is set, then we can proceed to look at status.Errors.
 	if err := status.Err(); err != nil {
-		return nil, fmt.Errorf("failed to complete job successfully: %w", err)
+		var merr error
+		for _, cerr := range status.Errors {
+			merr = multierr.Append(merr, cerr)
+		}
+
+		return nil, fmt.Errorf("failed to complete job successfully: %w", merr)
 	}
 
 	it, err := job.Read(ctx)
