@@ -1,4 +1,4 @@
-package input
+package io
 
 import (
 	"context"
@@ -18,10 +18,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
-func TestSocketBasic(t *testing.T) {
+func TestSocketInputBasic(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
@@ -33,11 +34,11 @@ func TestSocketBasic(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestSocketBasic(t *testing.T) {
 	conn.Close()
 }
 
-func TestSocketReconnect(t *testing.T) {
+func TestSocketInputReconnect(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
@@ -123,11 +124,11 @@ func TestSocketReconnect(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +208,7 @@ func TestSocketReconnect(t *testing.T) {
 	conn.Close()
 }
 
-func TestSocketMultipart(t *testing.T) {
+func TestSocketInputMultipart(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
@@ -219,12 +220,12 @@ func TestSocketMultipart(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,12 +306,12 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Codec = "delim:@/multipart"
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,12 +392,12 @@ func TestSocketMultipartShutdown(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,7 +466,7 @@ func TestSocketMultipartShutdown(t *testing.T) {
 	wg.Wait()
 }
 
-func TestTCPSocketBasic(t *testing.T) {
+func TestTCPSocketInputBasic(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
@@ -477,11 +478,11 @@ func TestTCPSocketBasic(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,11 +568,11 @@ func TestTCPSocketReconnect(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -651,7 +652,7 @@ func TestTCPSocketReconnect(t *testing.T) {
 	conn.Close()
 }
 
-func TestTCPSocketMultipart(t *testing.T) {
+func TestTCPSocketInputMultipart(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
@@ -663,12 +664,12 @@ func TestTCPSocketMultipart(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -749,12 +750,12 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Codec = "delim:@/multipart"
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -835,12 +836,12 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Address = ln.Addr().String()
 
-	rdr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	rdr, err := newSocketInput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -922,14 +923,14 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 		ln.Close()
 	})
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Address = ln.Addr().String()
 
-	sRdr, err := newSocketClient(conf.Socket, log.Noop())
+	sRdr, err := newSocketReader(conf.Socket, log.Noop())
 	require.NoError(b, err)
 
-	rdr, err := NewAsyncReader(TypeSocket, true, reader.NewAsyncCutOff(reader.NewAsyncPreserver(sRdr)), log.Noop(), metrics.Noop())
+	rdr, err := oinput.NewAsyncReader("socket", true, reader.NewAsyncCutOff(reader.NewAsyncPreserver(sRdr)), log.Noop(), metrics.Noop())
 	require.NoError(b, err)
 
 	defer func() {
@@ -992,14 +993,14 @@ func BenchmarkTCPSocketNoCutOff(b *testing.B) {
 		ln.Close()
 	})
 
-	conf := NewConfig()
+	conf := oinput.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Address = ln.Addr().String()
 
-	sRdr, err := newSocketClient(conf.Socket, log.Noop())
+	sRdr, err := newSocketReader(conf.Socket, log.Noop())
 	require.NoError(b, err)
 
-	rdr, err := NewAsyncReader(TypeSocket, true, reader.NewAsyncPreserver(sRdr), log.Noop(), metrics.Noop())
+	rdr, err := oinput.NewAsyncReader("socket", true, reader.NewAsyncPreserver(sRdr), log.Noop(), metrics.Noop())
 	require.NoError(b, err)
 
 	defer func() {

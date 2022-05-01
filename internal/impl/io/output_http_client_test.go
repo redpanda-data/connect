@@ -1,6 +1,7 @@
-package writer
+package io
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,10 +21,134 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
 )
 
-//------------------------------------------------------------------------------
+func TestHTTPClientMultipartEnabled(t *testing.T) {
+	resultChan := make(chan string, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		require.NoError(t, err)
+		require.True(t, strings.HasPrefix(mediaType, "multipart/"))
+
+		mr := multipart.NewReader(r.Body, params["boundary"])
+		for {
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+
+			msgBytes, err := io.ReadAll(p)
+			require.NoError(t, err)
+
+			resultChan <- string(msgBytes)
+		}
+	}))
+	defer ts.Close()
+
+	conf := ooutput.NewConfig()
+	conf.Type = "http_client"
+	conf.HTTPClient.BatchAsMultipart = true
+	conf.HTTPClient.URL = ts.URL + "/testpost"
+
+	h, err := newHTTPClientOutput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	tChan := make(chan message.Transaction)
+	require.NoError(t, h.Consume(tChan))
+
+	resChan := make(chan error)
+	select {
+	case tChan <- message.NewTransaction(message.QuickBatch([][]byte{
+		[]byte("PART-A"),
+		[]byte("PART-B"),
+		[]byte("PART-C"),
+	}), resChan):
+	case <-time.After(time.Second):
+		t.Fatal("Action timed out")
+	}
+
+	for _, exp := range []string{
+		"PART-A",
+		"PART-B",
+		"PART-C",
+	} {
+		select {
+		case resMsg := <-resultChan:
+			assert.Equal(t, exp, resMsg)
+		case <-time.After(time.Second):
+			t.Fatal("Action timed out")
+		}
+	}
+
+	select {
+	case res := <-resChan:
+		assert.NoError(t, res)
+	case <-time.After(time.Second):
+		t.Fatal("Action timed out")
+	}
+
+	h.CloseAsync()
+	require.NoError(t, h.WaitForClose(time.Second))
+}
+
+func TestHTTPClientMultipartDisabled(t *testing.T) {
+	resultChan := make(chan string, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resBytes, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		resultChan <- string(resBytes)
+	}))
+	defer ts.Close()
+
+	conf := ooutput.NewConfig()
+	conf.Type = "http_client"
+	conf.HTTPClient.URL = ts.URL + "/testpost"
+	conf.HTTPClient.BatchAsMultipart = false
+	conf.HTTPClient.MaxInFlight = 1
+
+	h, err := newHTTPClientOutput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	tChan := make(chan message.Transaction)
+	require.NoError(t, h.Consume(tChan))
+
+	resChan := make(chan error)
+	select {
+	case tChan <- message.NewTransaction(message.QuickBatch([][]byte{
+		[]byte("PART-A"),
+		[]byte("PART-B"),
+		[]byte("PART-C"),
+	}), resChan):
+	case <-time.After(time.Second):
+		t.Fatal("Action timed out")
+	}
+
+	for _, exp := range []string{
+		"PART-A",
+		"PART-B",
+		"PART-C",
+	} {
+		select {
+		case resMsg := <-resultChan:
+			assert.Equal(t, exp, resMsg)
+		case <-time.After(time.Second):
+			t.Fatal("Action timed out")
+		}
+	}
+
+	select {
+	case res := <-resChan:
+		assert.NoError(t, res)
+	case <-time.After(time.Second):
+		t.Fatal("Action timed out")
+	}
+
+	h.CloseAsync()
+	require.NoError(t, h.WaitForClose(time.Second))
+}
 
 func TestHTTPClientRetries(t *testing.T) {
 	var reqCount uint32
@@ -33,17 +158,17 @@ func TestHTTPClientRetries(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewHTTPClientConfig()
+	conf := ooutput.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.Retry = "1ms"
 	conf.NumRetries = 3
 
-	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = h.Write(message.QuickBatch([][]byte{[]byte("test")})); err == nil {
+	if err = h.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err == nil {
 		t.Error("Expected error from end of retries")
 	}
 
@@ -76,10 +201,10 @@ func TestHTTPClientBasic(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewHTTPClientConfig()
+	conf := ooutput.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +213,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		testStr := fmt.Sprintf("test%v", i)
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 
-		if err = h.Write(testMsg); err != nil {
+		if err = h.WriteWithContext(context.Background(), testMsg); err != nil {
 			t.Error(err)
 		}
 
@@ -129,11 +254,11 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewHTTPClientConfig()
+	conf := ooutput.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.PropagateResponse = true
 
-	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +270,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 		transaction.AddResultStore(testMsg, resultStore)
 
-		require.NoError(t, h.Write(testMsg))
+		require.NoError(t, h.WriteWithContext(context.Background(), testMsg))
 		resMsgs := resultStore.Get()
 		require.Len(t, resMsgs, 1)
 
@@ -176,12 +301,12 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewHTTPClientConfig()
+	conf := ooutput.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.PropagateResponse = true
 	conf.ExtractMetadata.IncludePatterns = []string{".*"}
 
-	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +318,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 		transaction.AddResultStore(testMsg, resultStore)
 
-		require.NoError(t, h.Write(testMsg))
+		require.NoError(t, h.WriteWithContext(context.Background(), testMsg))
 		resMsgs := resultStore.Get()
 		require.Len(t, resMsgs, 1)
 
@@ -254,10 +379,10 @@ func TestHTTPClientMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewHTTPClientConfig()
+	conf := ooutput.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +394,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 			[]byte(testStr + "PART-B"),
 		})
 
-		if err = h.Write(testMsg); err != nil {
+		if err = h.WriteWithContext(context.Background(), testMsg); err != nil {
 			t.Error(err)
 		}
 
@@ -336,9 +461,9 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewHTTPClientConfig()
+	conf := ooutput.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
-	conf.Multipart = []HTTPClientMultipartExpression{
+	conf.Multipart = []ooutput.HTTPClientMultipartExpression{
 		{
 			ContentDisposition: `form-data; name="text"`,
 			ContentType:        "text/plain",
@@ -348,12 +473,12 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 			ContentType:        "text/plain",
 			Body:               "PART-B"},
 	}
-	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < nTestLoops; i++ {
-		if err = h.Write(message.QuickBatch([][]byte{[]byte("test")})); err != nil {
+		if err = h.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err != nil {
 			t.Error(err)
 		}
 		select {
@@ -419,9 +544,9 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := NewHTTPClientConfig()
+	conf := ooutput.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
-	conf.Multipart = []HTTPClientMultipartExpression{
+	conf.Multipart = []ooutput.HTTPClientMultipartExpression{
 		{
 			ContentDisposition: `form-data; name="text"`,
 			ContentType:        "text/plain",
@@ -431,11 +556,11 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 			ContentType:        "text/plain",
 			Body:               "PART-B"},
 	}
-	h, err := NewHTTPClient(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = h.Write(message.QuickBatch([][]byte{[]byte("test")})); err != nil {
+	if err = h.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err != nil {
 		t.Error(err)
 	}
 	select {

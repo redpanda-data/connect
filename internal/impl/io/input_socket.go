@@ -1,4 +1,4 @@
-package input
+package io
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
@@ -17,16 +18,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
-//------------------------------------------------------------------------------
-
 func init() {
-	Constructors[TypeSocket] = TypeSpec{
-		constructor: fromSimpleConstructor(NewSocket),
-		Summary: `
-Connects to a tcp or unix socket and consumes a continuous stream of messages.`,
+	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+		return newSocketInput(c, nm, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:    "socket",
+		Summary: `Connects to a tcp or unix socket and consumes a continuous stream of messages.`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("network", "A network type to assume (unix|tcp).").HasOptions(
 				"unix", "tcp",
@@ -34,38 +35,18 @@ Connects to a tcp or unix socket and consumes a continuous stream of messages.`,
 			docs.FieldString("address", "The address to connect to.", "/tmp/benthos.sock", "127.0.0.1:6000"),
 			codec.ReaderDocs.AtVersion("3.42.0"),
 			docs.FieldInt("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed.").Advanced(),
-		),
+		).ChildDefaultAndTypesFromStruct(oinput.NewSocketConfig()),
 		Categories: []string{
 			"Network",
 		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
-
-// SocketConfig contains configuration values for the Socket input type.
-type SocketConfig struct {
-	Network   string `json:"network" yaml:"network"`
-	Address   string `json:"address" yaml:"address"`
-	Codec     string `json:"codec" yaml:"codec"`
-	MaxBuffer int    `json:"max_buffer" yaml:"max_buffer"`
-}
-
-// NewSocketConfig creates a new SocketConfig with default values.
-func NewSocketConfig() SocketConfig {
-	return SocketConfig{
-		Network:   "",
-		Address:   "",
-		Codec:     "lines",
-		MaxBuffer: 1000000,
-	}
-}
-
-//------------------------------------------------------------------------------
-
-// NewSocket creates a new Socket input type.
-func NewSocket(conf Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-	rdr, err := newSocketClient(conf.Socket, log)
+func newSocketInput(conf oinput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+	rdr, err := newSocketReader(conf.Socket, log)
 	if err != nil {
 		return nil, err
 	}
@@ -73,22 +54,20 @@ func NewSocket(conf Config, mgr interop.Manager, log log.Modular, stats metrics.
 	// we can get the same results by making sure that the async readers forward
 	// CloseAsync all the way through. We would need it to be configurable as it
 	// wouldn't be appropriate for inputs that have real acks.
-	return NewAsyncReader(TypeSocket, true, reader.NewAsyncCutOff(reader.NewAsyncPreserver(rdr)), log, stats)
+	return oinput.NewAsyncReader("socket", true, reader.NewAsyncCutOff(reader.NewAsyncPreserver(rdr)), log, stats)
 }
 
-//------------------------------------------------------------------------------
-
-type socketClient struct {
+type socketReader struct {
 	log log.Modular
 
-	conf      SocketConfig
+	conf      oinput.SocketConfig
 	codecCtor codec.ReaderConstructor
 
 	codecMut sync.Mutex
 	codec    codec.Reader
 }
 
-func newSocketClient(conf SocketConfig, logger log.Modular) (*socketClient, error) {
+func newSocketReader(conf oinput.SocketConfig, logger log.Modular) (*socketReader, error) {
 	switch conf.Network {
 	case "tcp", "unix":
 	default:
@@ -102,16 +81,14 @@ func newSocketClient(conf SocketConfig, logger log.Modular) (*socketClient, erro
 		return nil, err
 	}
 
-	return &socketClient{
+	return &socketReader{
 		log:       logger,
 		conf:      conf,
 		codecCtor: ctor,
 	}, nil
 }
 
-// ConnectWithContext attempts to establish a connection to the target S3 bucket
-// and any relevant queues used to traverse the objects (SQS, etc).
-func (s *socketClient) ConnectWithContext(ctx context.Context) error {
+func (s *socketReader) ConnectWithContext(ctx context.Context) error {
 	s.codecMut.Lock()
 	defer s.codecMut.Unlock()
 
@@ -135,8 +112,7 @@ func (s *socketClient) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// ReadWithContext attempts to read a new message from the target S3 bucket.
-func (s *socketClient) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (s *socketReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
 	s.codecMut.Lock()
 	codec := s.codec
 	s.codecMut.Unlock()
@@ -181,8 +157,7 @@ func (s *socketClient) ReadWithContext(ctx context.Context) (*message.Batch, rea
 	}, nil
 }
 
-// CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (s *socketClient) CloseAsync() {
+func (s *socketReader) CloseAsync() {
 	s.codecMut.Lock()
 	if s.codec != nil {
 		s.codec.Close(context.Background())
@@ -191,8 +166,6 @@ func (s *socketClient) CloseAsync() {
 	s.codecMut.Unlock()
 }
 
-// WaitForClose will block until either the reader is closed or a specified
-// timeout occurs.
-func (s *socketClient) WaitForClose(time.Duration) error {
+func (s *socketReader) WaitForClose(time.Duration) error {
 	return nil
 }

@@ -12,10 +12,6 @@ import (
 // delivered. Returns an error if the acknowledge was not propagated.
 type AsyncAckFn func(context.Context, error) error
 
-var noopAsyncAckFn AsyncAckFn = func(context.Context, error) error {
-	return nil
-}
-
 // Async is a type that reads Benthos messages from an external source and
 // allows acknowledgements for a message batch to be propagated asynchronously.
 type Async interface {

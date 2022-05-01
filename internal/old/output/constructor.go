@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
@@ -194,7 +193,7 @@ type Config struct {
 	GCPCloudStorage    GCPCloudStorageConfig   `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
 	GCPPubSub          GCPPubSubConfig         `json:"gcp_pubsub" yaml:"gcp_pubsub"`
 	HDFS               HDFSConfig              `json:"hdfs" yaml:"hdfs"`
-	HTTPClient         writer.HTTPClientConfig `json:"http_client" yaml:"http_client"`
+	HTTPClient         HTTPClientConfig        `json:"http_client" yaml:"http_client"`
 	HTTPServer         HTTPServerConfig        `json:"http_server" yaml:"http_server"`
 	Inproc             string                  `json:"inproc" yaml:"inproc"`
 	Kafka              KafkaConfig             `json:"kafka" yaml:"kafka"`
@@ -217,8 +216,8 @@ type Config struct {
 	Subprocess         SubprocessConfig        `json:"subprocess" yaml:"subprocess"`
 	Switch             SwitchConfig            `json:"switch" yaml:"switch"`
 	SyncResponse       struct{}                `json:"sync_response" yaml:"sync_response"`
-	Socket             writer.SocketConfig     `json:"socket" yaml:"socket"`
-	Websocket          writer.WebsocketConfig  `json:"websocket" yaml:"websocket"`
+	Socket             SocketConfig            `json:"socket" yaml:"socket"`
+	Websocket          WebsocketConfig         `json:"websocket" yaml:"websocket"`
 	Processors         []processor.Config      `json:"processors" yaml:"processors"`
 }
 
@@ -252,7 +251,7 @@ func NewConfig() Config {
 		GCPCloudStorage:    NewGCPCloudStorageConfig(),
 		GCPPubSub:          NewGCPPubSubConfig(),
 		HDFS:               NewHDFSConfig(),
-		HTTPClient:         writer.NewHTTPClientConfig(),
+		HTTPClient:         NewHTTPClientConfig(),
 		HTTPServer:         NewHTTPServerConfig(),
 		Inproc:             "",
 		Kafka:              NewKafkaConfig(),
@@ -275,8 +274,8 @@ func NewConfig() Config {
 		Subprocess:         NewSubprocessConfig(),
 		Switch:             NewSwitchConfig(),
 		SyncResponse:       struct{}{},
-		Socket:             writer.NewSocketConfig(),
-		Websocket:          writer.NewWebsocketConfig(),
+		Socket:             NewSocketConfig(),
+		Websocket:          NewWebsocketConfig(),
 		Processors:         []processor.Config{},
 	}
 }

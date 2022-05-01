@@ -1,4 +1,4 @@
-package writer
+package io
 
 import (
 	"context"
@@ -11,12 +11,12 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
-func TestWebsocketBasic(t *testing.T) {
+func TestWebsocketOutputBasic(t *testing.T) {
 	expMsgs := []string{
 		"foo",
 		"bar",
@@ -44,7 +44,7 @@ func TestWebsocketBasic(t *testing.T) {
 		}
 	}))
 
-	conf := NewWebsocketConfig()
+	conf := ooutput.NewWebsocketConfig()
 	if wsURL, err := url.Parse(server.URL); err != nil {
 		t.Fatal(err)
 	} else {
@@ -52,7 +52,7 @@ func TestWebsocketBasic(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := NewWebsocket(conf, log.Noop(), metrics.Noop())
+	m, err := newWebsocketWriter(conf, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestWebsocketBasic(t *testing.T) {
 	}
 }
 
-func TestWebsocketClose(t *testing.T) {
+func TestWebsocketOutputClose(t *testing.T) {
 	closeChan := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upgrader := websocket.Upgrader{}
@@ -87,7 +87,7 @@ func TestWebsocketClose(t *testing.T) {
 		ws.Close()
 	}))
 
-	conf := NewWebsocketConfig()
+	conf := ooutput.NewWebsocketConfig()
 	if wsURL, err := url.Parse(server.URL); err != nil {
 		t.Fatal(err)
 	} else {
@@ -95,7 +95,7 @@ func TestWebsocketClose(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := NewWebsocket(conf, log.Noop(), metrics.Noop())
+	m, err := newWebsocketWriter(conf, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,17 +1,18 @@
-package writer
+package io
 
 import (
 	"bytes"
+	"context"
 	"net"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func TestSocketBasic(t *testing.T) {
@@ -23,11 +24,11 @@ func TestSocketBasic(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewSocketConfig()
+	conf := ooutput.NewSocketConfig()
 	conf.Network = ln.Addr().Network()
 	conf.Address = ln.Addr().String()
 
-	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	wtr, err := newSocketWriter(conf, mock.NewManager(), log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +40,7 @@ func TestSocketBasic(t *testing.T) {
 	}()
 
 	go func() {
-		if cerr := wtr.Connect(); cerr != nil {
+		if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
 			t.Error(cerr)
 		}
 	}()
@@ -59,13 +60,13 @@ func TestSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -88,11 +89,11 @@ func TestSocketMultipart(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewSocketConfig()
+	conf := ooutput.NewSocketConfig()
 	conf.Network = ln.Addr().Network()
 	conf.Address = ln.Addr().String()
 
-	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	wtr, err := newSocketWriter(conf, mock.NewManager(), log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +105,7 @@ func TestSocketMultipart(t *testing.T) {
 	}()
 
 	go func() {
-		if cerr := wtr.Connect(); cerr != nil {
+		if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
 			t.Error(cerr)
 		}
 	}()
@@ -124,10 +125,10 @@ func TestSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -159,11 +160,11 @@ func TestUDPSocketBasic(t *testing.T) {
 	}
 	defer conn.Close()
 
-	conf := NewSocketConfig()
+	conf := ooutput.NewSocketConfig()
 	conf.Network = "udp"
 	conf.Address = conn.LocalAddr().String()
 
-	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	wtr, err := newSocketWriter(conf, mock.NewManager(), log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +175,7 @@ func TestUDPSocketBasic(t *testing.T) {
 		}
 	}()
 
-	if cerr := wtr.Connect(); cerr != nil {
+	if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
 		t.Fatal(cerr)
 	}
 
@@ -188,13 +189,13 @@ func TestUDPSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -217,11 +218,11 @@ func TestUDPSocketMultipart(t *testing.T) {
 	}
 	defer conn.Close()
 
-	conf := NewSocketConfig()
+	conf := ooutput.NewSocketConfig()
 	conf.Network = "udp"
 	conf.Address = conn.LocalAddr().String()
 
-	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	wtr, err := newSocketWriter(conf, mock.NewManager(), log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +233,7 @@ func TestUDPSocketMultipart(t *testing.T) {
 		}
 	}()
 
-	if cerr := wtr.Connect(); cerr != nil {
+	if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
 		t.Fatal(cerr)
 	}
 
@@ -246,10 +247,10 @@ func TestUDPSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -272,11 +273,11 @@ func TestTCPSocketBasic(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewSocketConfig()
+	conf := ooutput.NewSocketConfig()
 	conf.Network = "tcp"
 	conf.Address = ln.Addr().String()
 
-	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	wtr, err := newSocketWriter(conf, mock.NewManager(), log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +289,7 @@ func TestTCPSocketBasic(t *testing.T) {
 	}()
 
 	go func() {
-		if cerr := wtr.Connect(); cerr != nil {
+		if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
 			t.Error(cerr)
 		}
 	}()
@@ -308,13 +309,13 @@ func TestTCPSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -337,11 +338,11 @@ func TestTCPSocketMultipart(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewSocketConfig()
+	conf := ooutput.NewSocketConfig()
 	conf.Network = "tcp"
 	conf.Address = ln.Addr().String()
 
-	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	wtr, err := newSocketWriter(conf, mock.NewManager(), log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +354,7 @@ func TestTCPSocketMultipart(t *testing.T) {
 	}()
 
 	go func() {
-		if cerr := wtr.Connect(); cerr != nil {
+		if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
 			t.Error(cerr)
 		}
 	}()
@@ -373,10 +374,10 @@ func TestTCPSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()
@@ -399,12 +400,12 @@ func TestSocketCustomDelimeter(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := NewSocketConfig()
+	conf := ooutput.NewSocketConfig()
 	conf.Network = ln.Addr().Network()
 	conf.Address = ln.Addr().String()
 	conf.Codec = "delim:\t"
 
-	wtr, err := NewSocket(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	wtr, err := newSocketWriter(conf, mock.NewManager(), log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +417,7 @@ func TestSocketCustomDelimeter(t *testing.T) {
 	}()
 
 	go func() {
-		if cerr := wtr.Connect(); cerr != nil {
+		if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
 			t.Error(cerr)
 		}
 	}()
@@ -436,13 +437,13 @@ func TestSocketCustomDelimeter(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.Write(message.QuickBatch([][]byte{[]byte("baz\t")})); err != nil {
+	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("baz\t")})); err != nil {
 		t.Error(err)
 	}
 	wtr.CloseAsync()

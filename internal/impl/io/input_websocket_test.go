@@ -1,4 +1,4 @@
-package reader
+package io
 
 import (
 	"context"
@@ -12,9 +12,9 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 func TestWebsocketBasic(t *testing.T) {
@@ -42,7 +42,7 @@ func TestWebsocketBasic(t *testing.T) {
 		}
 	}))
 
-	conf := NewWebsocketConfig()
+	conf := oinput.NewWebsocketConfig()
 	if wsURL, err := url.Parse(server.URL); err != nil {
 		t.Fatal(err)
 	} else {
@@ -50,7 +50,7 @@ func TestWebsocketBasic(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := NewWebsocket(conf, log.Noop(), metrics.Noop())
+	m, err := newWebsocketReader(conf, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestWebsocketOpenMsg(t *testing.T) {
 		}
 	}))
 
-	conf := NewWebsocketConfig()
+	conf := oinput.NewWebsocketConfig()
 	conf.OpenMsg = "hello world"
 	if wsURL, err := url.Parse(server.URL); err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestWebsocketOpenMsg(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := NewWebsocket(conf, log.Noop(), metrics.Noop())
+	m, err := newWebsocketReader(conf, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestWebsocketClose(t *testing.T) {
 		<-closeChan
 	}))
 
-	conf := NewWebsocketConfig()
+	conf := oinput.NewWebsocketConfig()
 	if wsURL, err := url.Parse(server.URL); err != nil {
 		t.Fatal(err)
 	} else {
@@ -167,7 +167,7 @@ func TestWebsocketClose(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := NewWebsocket(conf, log.Noop(), metrics.Noop())
+	m, err := newWebsocketReader(conf, log.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

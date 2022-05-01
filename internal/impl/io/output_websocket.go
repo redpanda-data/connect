@@ -1,4 +1,4 @@
-package writer
+package io
 
 import (
 	"context"
@@ -10,57 +10,65 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
+	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-//------------------------------------------------------------------------------
-
-// WebsocketConfig contains configuration fields for the Websocket output type.
-type WebsocketConfig struct {
-	URL         string `json:"url" yaml:"url"`
-	auth.Config `json:",inline" yaml:",inline"`
-	TLS         btls.Config `json:"tls" yaml:"tls"`
-}
-
-// NewWebsocketConfig creates a new WebsocketConfig with default values.
-func NewWebsocketConfig() WebsocketConfig {
-	return WebsocketConfig{
-		URL:    "",
-		Config: auth.NewConfig(),
-		TLS:    btls.NewConfig(),
+func init() {
+	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		return newWebsocketOutput(c, nm, nm.Logger(), nm.Metrics())
+	}), docs.ComponentSpec{
+		Name:    "websocket",
+		Summary: `Sends messages to an HTTP server via a websocket connection.`,
+		Config: docs.FieldComponent().WithChildren(
+			docs.FieldString("url", "The URL to connect to."),
+			btls.FieldSpec(),
+		).WithChildren(auth.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewWebsocketConfig()),
+		Categories: []string{
+			"Network",
+		},
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
-//------------------------------------------------------------------------------
+func newWebsocketOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+	w, err := newWebsocketWriter(conf.Websocket, log)
+	if err != nil {
+		return nil, err
+	}
+	a, err := ooutput.NewAsyncWriter("websocket", 1, w, log, stats)
+	if err != nil {
+		return nil, err
+	}
+	return ooutput.OnlySinglePayloads(a), nil
+}
 
-// Websocket is an output type that serves Websocket messages.
-type Websocket struct {
-	log   log.Modular
-	stats metrics.Type
+type websocketWriter struct {
+	log log.Modular
 
 	lock *sync.Mutex
 
-	conf    WebsocketConfig
+	conf    ooutput.WebsocketConfig
 	client  *websocket.Conn
 	tlsConf *tls.Config
 }
 
-// NewWebsocket creates a new Websocket output type.
-func NewWebsocket(
-	conf WebsocketConfig,
-	log log.Modular,
-	stats metrics.Type,
-) (*Websocket, error) {
-	ws := &Websocket{
-		log:   log,
-		stats: stats,
-		lock:  &sync.Mutex{},
-		conf:  conf,
+func newWebsocketWriter(conf ooutput.WebsocketConfig, log log.Modular) (*websocketWriter, error) {
+	ws := &websocketWriter{
+		log:  log,
+		lock: &sync.Mutex{},
+		conf: conf,
 	}
 	if conf.TLS.Enabled {
 		var err error
@@ -71,19 +79,14 @@ func NewWebsocket(
 	return ws, nil
 }
 
-//------------------------------------------------------------------------------
-
-func (w *Websocket) getWS() *websocket.Conn {
+func (w *websocketWriter) getWS() *websocket.Conn {
 	w.lock.Lock()
 	ws := w.client
 	w.lock.Unlock()
 	return ws
 }
 
-//------------------------------------------------------------------------------
-
-// ConnectWithContext establishes a connection to an Websocket server.
-func (w *Websocket) ConnectWithContext(ctx context.Context) error {
+func (w *websocketWriter) ConnectWithContext(ctx context.Context) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -131,10 +134,7 @@ func (w *Websocket) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-//------------------------------------------------------------------------------
-
-// WriteWithContext attempts to write a message by pushing it to an Websocket broker.
-func (w *Websocket) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (w *websocketWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
 	client := w.getWS()
 	if client == nil {
 		return component.ErrNotConnected
@@ -155,8 +155,7 @@ func (w *Websocket) WriteWithContext(ctx context.Context, msg *message.Batch) er
 	return nil
 }
 
-// CloseAsync shuts down the Websocket output and stops processing messages.
-func (w *Websocket) CloseAsync() {
+func (w *websocketWriter) CloseAsync() {
 	go func() {
 		w.lock.Lock()
 		if w.client != nil {
@@ -167,9 +166,6 @@ func (w *Websocket) CloseAsync() {
 	}()
 }
 
-// WaitForClose blocks until the Websocket output has closed down.
-func (w *Websocket) WaitForClose(timeout time.Duration) error {
+func (w *websocketWriter) WaitForClose(timeout time.Duration) error {
 	return nil
 }
-
-//------------------------------------------------------------------------------

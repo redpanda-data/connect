@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
@@ -188,7 +187,7 @@ type Config struct {
 	SocketServer      SocketServerConfig      `json:"socket_server" yaml:"socket_server"`
 	STDIN             STDINConfig             `json:"stdin" yaml:"stdin"`
 	Subprocess        SubprocessConfig        `json:"subprocess" yaml:"subprocess"`
-	Websocket         reader.WebsocketConfig  `json:"websocket" yaml:"websocket"`
+	Websocket         WebsocketConfig         `json:"websocket" yaml:"websocket"`
 	Processors        []processor.Config      `json:"processors" yaml:"processors"`
 }
 
@@ -235,7 +234,7 @@ func NewConfig() Config {
 		SocketServer:      NewSocketServerConfig(),
 		STDIN:             NewSTDINConfig(),
 		Subprocess:        NewSubprocessConfig(),
-		Websocket:         reader.NewWebsocketConfig(),
+		Websocket:         NewWebsocketConfig(),
 		Processors:        []processor.Config{},
 	}
 }
