@@ -373,6 +373,12 @@ func (j *jetStreamReader) Close(ctx context.Context) error {
 func convertMessage(m *nats.Msg) (*service.Message, service.AckFunc, error) {
 	msg := service.NewMessage(m.Data)
 	msg.MetaSet("nats_subject", m.Subject)
+	for k := range m.Header {
+		v := m.Header.Get(k)
+		if v != "" {
+			msg.MetaSet(k, v)
+		}
+	}
 
 	return msg, func(ctx context.Context, res error) error {
 		if res == nil {
