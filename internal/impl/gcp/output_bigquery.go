@@ -382,12 +382,17 @@ func (g *gcpBigQueryOutput) WriteBatch(ctx context.Context, batch service.Messag
 	// status.Err() tells us that the job _completed unsuccessfully_.
 	// If that is set, then we can proceed to look at status.Errors.
 	if serr := status.Err(); serr != nil {
-		var merr error
-		for _, cerr := range status.Errors {
-			merr = multierr.Append(merr, cerr)
+		var bqErr error
+
+		if len(status.Errors) > 0 {
+			for _, cerr := range status.Errors {
+				bqErr = multierr.Append(bqErr, cerr)
+			}
+		} else {
+			bqErr = err
 		}
 
-		return fmt.Errorf("error inserting data in bigquery: %w", merr)
+		return fmt.Errorf("error inserting data in bigquery: %w", bqErr)
 	}
 
 	return nil

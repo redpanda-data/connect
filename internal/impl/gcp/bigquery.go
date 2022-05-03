@@ -49,13 +49,18 @@ func (client *wrappedBQClient) RunQuery(ctx context.Context, options *bqQueryBui
 
 	// status.Err() tells us that the job _completed unsuccessfully_.
 	// If that is set, then we can proceed to look at status.Errors.
-	if err := status.Err(); err != nil {
-		var merr error
-		for _, cerr := range status.Errors {
-			merr = multierr.Append(merr, cerr)
+	if serr := status.Err(); serr != nil {
+		var bqErr error
+
+		if len(status.Errors) > 0 {
+			for _, cerr := range status.Errors {
+				bqErr = multierr.Append(bqErr, cerr)
+			}
+		} else {
+			bqErr = serr
 		}
 
-		return nil, fmt.Errorf("failed to complete job successfully: %w", merr)
+		return nil, fmt.Errorf("failed to complete job successfully: %w", bqErr)
 	}
 
 	it, err := job.Read(ctx)
