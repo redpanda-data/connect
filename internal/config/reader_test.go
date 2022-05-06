@@ -47,7 +47,7 @@ output:
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	testMgr, err := manager.New(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 
@@ -98,7 +98,7 @@ output:
 	}))
 
 	// Watch for configuration changes
-	testMgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	testMgr, err := manager.New(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
 

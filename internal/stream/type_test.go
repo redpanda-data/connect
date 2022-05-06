@@ -26,7 +26,7 @@ func TestTypeConstruction(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = "nanomsg"
 
-	newMgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, newMgr)
@@ -36,7 +36,7 @@ func TestTypeConstruction(t *testing.T) {
 
 	newStats := metrics.Noop()
 	newLogger := log.Noop()
-	newMgr, err = manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), newLogger, newStats)
+	newMgr, err = manager.New(manager.NewResourceConfig(), mock.NewManager(), newLogger, newStats)
 	require.NoError(t, err)
 
 	strm, err = stream.New(conf, newMgr)
@@ -51,7 +51,7 @@ func TestTypeCloseGracefully(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = output.TypeHTTPServer
 
-	newMgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, newMgr)
@@ -77,7 +77,7 @@ func TestTypeCloseOrdered(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = output.TypeHTTPServer
 
-	newMgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, newMgr)
@@ -103,7 +103,7 @@ func TestTypeCloseUnordered(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = output.TypeHTTPServer
 
-	newMgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, newMgr)

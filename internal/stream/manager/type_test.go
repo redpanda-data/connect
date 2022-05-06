@@ -24,7 +24,7 @@ func harmlessConf() stream.Config {
 }
 
 func TestTypeBasicOperations(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	res, err := bmanager.New(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := New(res)
@@ -83,7 +83,7 @@ func TestTypeBasicOperations(t *testing.T) {
 }
 
 func TestTypeBasicClose(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	res, err := bmanager.New(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := New(res)

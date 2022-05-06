@@ -17,7 +17,7 @@ import (
 func TestInprocDryRun(t *testing.T) {
 	t.Parallel()
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

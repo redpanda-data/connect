@@ -208,7 +208,7 @@ func newMockProcProvider(t *testing.T, confs map[string]processor.Config) bundle
 		resConf.ResourceProcessors = append(resConf.ResourceProcessors, v)
 	}
 
-	mgr, err := manager.NewV2(resConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(resConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	return mgr

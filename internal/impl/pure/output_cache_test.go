@@ -152,7 +152,7 @@ func TestCacheBasic(t *testing.T) {
 
 	mgrConf.ResourceCaches = append(mgrConf.ResourceCaches, fooCache)
 
-	mgr, err := manager.NewV2(mgrConf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(mgrConf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestCacheBatches(t *testing.T) {
 
 	mgrConf.ResourceCaches = append(mgrConf.ResourceCaches, fooCache)
 
-	mgr, err := manager.NewV2(mgrConf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(mgrConf, nil, log.Noop(), metrics.Noop())
 	if err != nil {
 		t.Fatal(err)
 	}

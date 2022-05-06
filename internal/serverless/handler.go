@@ -124,7 +124,7 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	}
 
 	// Create resource manager.
-	manager, err := manager.NewV2(conf.ResourceConfig, mock.NewManager(), logger, stats)
+	manager, err := manager.New(conf.ResourceConfig, mock.NewManager(), logger, stats)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %v", err)
 	}

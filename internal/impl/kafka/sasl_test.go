@@ -97,7 +97,7 @@ cache_resources:
         jwt: foo
 `), &resConf))
 
-	mgr, err := manager.NewV2(resConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(resConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	require.NoError(t, kafka.ApplySASLConfig(saslConf, mgr, conf))

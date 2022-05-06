@@ -256,7 +256,7 @@ func (c *ConfigSpec) ParseYAML(yamlStr string, env *Environment) (*ParsedConfig,
 		nconf = *nconf.Content[0]
 	}
 
-	mgr, err := manager.NewV2(
+	mgr, err := manager.New(
 		manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop(),
 		manager.OptSetEnvironment(env.internal),
 		manager.OptSetBloblangEnvironment(env.getBloblangParserEnv()),

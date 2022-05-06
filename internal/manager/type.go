@@ -103,9 +103,19 @@ func OptSetBloblangEnvironment(env *bloblang.Environment) OptFunc {
 	}
 }
 
-// NewV2 returns an instance of manager.Type, which can be shared amongst
+// OptSetStreamsMode marks the manager as being created for running streams mode
+// resources. This ensures that a label "stream" is added to metrics.
+func OptSetStreamsMode(b bool) OptFunc {
+	return func(t *Type) {
+		if b {
+			t.stats = t.stats.WithLabels("stream", "")
+		}
+	}
+}
+
+// New returns an instance of manager.Type, which can be shared amongst
 // components and logical threads of a Benthos service.
-func NewV2(conf ResourceConfig, apiReg APIReg, log log.Modular, stats *metrics.Namespaced, opts ...OptFunc) (*Type, error) {
+func New(conf ResourceConfig, apiReg APIReg, log log.Modular, stats *metrics.Namespaced, opts ...OptFunc) (*Type, error) {
 	t := &Type{
 		apiReg: apiReg,
 

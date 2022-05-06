@@ -18,7 +18,7 @@ import (
 )
 
 func TestInproc(t *testing.T) {
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.GetPipe("foo")

@@ -306,7 +306,7 @@ func cmdService(
 	}
 
 	// Create resource manager.
-	manager, err := manager.NewV2(conf.ResourceConfig, httpServer, logger, stats)
+	manager, err := manager.New(conf.ResourceConfig, httpServer, logger, stats, manager.OptSetStreamsMode(streamsMode))
 	if err != nil {
 		logger.Errorf("Failed to create resource: %v\n", err)
 		return 1

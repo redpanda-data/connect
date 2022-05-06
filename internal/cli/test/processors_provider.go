@@ -146,7 +146,7 @@ func (b *bloblangProc) Close(context.Context) error {
 //------------------------------------------------------------------------------
 
 func (p *ProcessorsProvider) initProcs(confs cachedConfig) ([]iprocessor.V1, error) {
-	mgr, err := manager.NewV2(confs.mgr, mock.NewManager(), p.logger, metrics.Noop())
+	mgr, err := manager.New(confs.mgr, mock.NewManager(), p.logger, metrics.Noop())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise resources: %v", err)
 	}

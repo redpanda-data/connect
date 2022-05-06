@@ -34,7 +34,7 @@ func TestBundleInputTracing(t *testing.T) {
 	inConfig.Generate.Interval = "1us"
 	inConfig.Generate.Mapping = `root.count = count("counting the number of input tracing messages")`
 
-	mgr, err := manager.NewV2(
+	mgr, err := manager.New(
 		manager.NewResourceConfig(),
 		mock.NewManager(),
 		log.Noop(),
@@ -83,7 +83,7 @@ func TestBundleOutputTracing(t *testing.T) {
 	outConfig.Label = "foo"
 	outConfig.Type = output.TypeDrop
 
-	mgr, err := manager.NewV2(
+	mgr, err := manager.New(
 		manager.NewResourceConfig(),
 		mock.NewManager(),
 		log.Noop(),
@@ -144,7 +144,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 	blobConf.Bloblang = "root = content().uppercase()"
 	outConfig.Processors = append(outConfig.Processors, blobConf)
 
-	mgr, err := manager.NewV2(
+	mgr, err := manager.New(
 		manager.NewResourceConfig(),
 		mock.NewManager(),
 		log.Noop(),
@@ -221,7 +221,7 @@ let ctr = content().number()
 root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 `
 
-	mgr, err := manager.NewV2(
+	mgr, err := manager.New(
 		manager.NewResourceConfig(),
 		mock.NewManager(),
 		log.Noop(),

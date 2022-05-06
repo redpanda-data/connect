@@ -67,7 +67,7 @@ func TestInitialization(t *testing.T) {
 		Name: "testratelimit",
 	}))
 
-	mgr, err := NewV2(NewResourceConfig(), nil, log.Noop(), metrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
+	mgr, err := New(NewResourceConfig(), nil, log.Noop(), metrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
 	require.NoError(t, err)
 
 	bConf := buffer.NewConfig()
@@ -172,7 +172,7 @@ func TestInitializationOrdering(t *testing.T) {
 	resConf.ResourceProcessors = append(resConf.ResourceProcessors, procConf)
 	resConf.ResourceRateLimits = append(resConf.ResourceRateLimits, rlConf)
 
-	_, err := NewV2(resConf, nil, log.Noop(), metrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
+	_, err := New(resConf, nil, log.Noop(), metrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
 	require.NoError(t, err)
 
 	wg.Wait()

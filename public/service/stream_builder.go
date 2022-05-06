@@ -725,7 +725,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		apiMut.RegisterEndpoint("/metrics", "Exposes service-wide metrics in the format configured.", hler)
 	}
 
-	mgr, err := manager.NewV2(
+	mgr, err := manager.New(
 		conf.ResourceConfig, apiMut, logger, stats,
 		manager.OptSetEnvironment(env),
 		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
