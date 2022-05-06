@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Fixed an issue where resource and stream configs imported via wildcard pattern could not be live-reloaded with the watcher (`-w`) flag.
 - Bloblang comparisons between numerical values (including `match` expression patterns) no longer require coercion into explicit types.
+- Reintroduced basic metrics from the `twitter` and `discord` template based inputs.
 
 ## 4.0.0 - 2022-04-20
 

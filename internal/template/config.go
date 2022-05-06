@@ -226,6 +226,14 @@ func FieldConfigSpec() docs.FieldSpecs {
 	}
 }
 
+func templateMetricsMappingDocs() docs.FieldSpec {
+	f := docs.MetricsMappingFieldSpec("metrics_mapping")
+	f.Description += `
+
+Invocations of this mapping are able to reference a variable $label in order to obtain the value of the label provided to the template config. This allows you to match labels with the root of the config.`
+	return f
+}
+
 // ConfigSpec returns a configuration spec for a template.
 func ConfigSpec() docs.FieldSpecs {
 	return docs.FieldSpecs{
@@ -251,7 +259,7 @@ func ConfigSpec() docs.FieldSpecs {
 		docs.FieldBloblang(
 			"mapping", "A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of the template into a valid Benthos configuration for the target component type.",
 		),
-		docs.MetricsMappingFieldSpec("metrics_mapping"),
+		templateMetricsMappingDocs(),
 		docs.FieldObject(
 			"tests", "Optional unit test definitions for the template that verify certain configurations produce valid configs. These tests are executed with the command `benthos template lint`.",
 		).Array().WithChildren(

@@ -168,7 +168,9 @@ func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
 		}
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": conf.Label,
+			}))
 		}
 		return nm.NewCache(conf)
 	}, tmpl.spec)
@@ -190,7 +192,9 @@ func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
 		conf.Processors = append(conf.Processors, c.Processors...)
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": conf.Label,
+			}))
 		}
 		return nm.NewInput(conf, pcf...)
 	}, tmpl.spec)
@@ -212,7 +216,9 @@ func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
 		conf.Processors = append(c.Processors, conf.Processors...)
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": conf.Label,
+			}))
 		}
 		return nm.NewOutput(conf, pcf...)
 	}, tmpl.spec)
@@ -231,7 +237,9 @@ func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
 		}
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": conf.Label,
+			}))
 		}
 		return nm.NewProcessor(conf)
 	}, tmpl.spec)
@@ -250,7 +258,9 @@ func registerRateLimitTemplate(tmpl *compiled, set *bundle.RateLimitSet) error {
 		}
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": conf.Label,
+			}))
 		}
 		return nm.NewRateLimit(conf)
 	}, tmpl.spec)
