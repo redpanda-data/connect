@@ -25,6 +25,8 @@ func init() {
 				Example("pulsar+ssl://pulsar.us-west.example.com:6651")).
 			Field(service.NewStringField("topic").
 				Description("The topic to publish to.")).
+			Field(service.NewStringField("cacert_path").
+				Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
 			Field(service.NewInterpolatedStringField("key").
 				Description("The key to publish messages with.").
 				Default("")).
@@ -63,6 +65,7 @@ type pulsarWriter struct {
 	authConf    authConfig
 	url         string
 	topic       string
+	caCert      string
 	key         *service.InterpolatedString
 	orderingKey *service.InterpolatedString
 }
@@ -80,6 +83,9 @@ func newPulsarWriterFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 		return
 	}
 	if p.topic, err = conf.FieldString("topic"); err != nil {
+		return
+	}
+	if p.caCert, err = conf.FieldString("cacert_path"); err != nil {
 		return
 	}
 	if p.key, err = conf.FieldInterpolatedString("key"); err != nil {
@@ -108,9 +114,10 @@ func (p *pulsarWriter) Connect(ctx context.Context) error {
 	)
 
 	opts := pulsar.ClientOptions{
-		Logger:            createDefaultLogger(p.log),
-		ConnectionTimeout: time.Second * 3,
-		URL:               p.url,
+		Logger:                createDefaultLogger(p.log),
+		ConnectionTimeout:     time.Second * 3,
+		URL:                   p.url,
+		TLSTrustCertsFilePath: p.caCert,
 	}
 
 	if p.authConf.OAuth2.Enabled {
