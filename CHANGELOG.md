@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - The `nats_jetstream` input now adds headers to messages as metadata.
 - Field `headers` added to the `nats_jetstream` output.
 - Field `lazy_quotes` added to the CSV input.
+- New `slug` bloblang string method.
 
 ### Fixed
 

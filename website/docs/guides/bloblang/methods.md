@@ -476,6 +476,35 @@ root.the_rest = this.value.slice(0, -4)
 # Out: {"last_chunk":" bar","the_rest":"foo"}
 ```
 
+### `slug`
+
+Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its [docs](https://pkg.go.dev/github.com/gosimple/slug) for more information.
+
+#### Parameters
+
+**`lang`** &lt;(optional) string, default `"en"`&gt;   
+
+#### Examples
+
+
+Creates a slug from an English string
+
+```coffee
+root.slug = this.value.slug()
+
+# In:  {"value":"Gopher & Benthos"}
+# Out: {"slug":"gopher-and-benthos"}
+```
+
+Creates a slug from a French string
+
+```coffee
+root.slug = this.value.slug("fr")
+
+# In:  {"value":"Gaufre & Poisson d'Eau Profonde"}
+# Out: {"slug":"gaufre-et-poisson-deau-profonde"}
+```
+
 ### `split`
 
 Split a string value into an array of strings by splitting it on a string separator.
