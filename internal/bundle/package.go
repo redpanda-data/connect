@@ -56,7 +56,7 @@ func wrapComponentErr(mgr NewManagement, typeStr string, err error) error {
 		annotation = "'" + mgr.Label() + "'"
 	}
 	if p := mgr.Path(); len(p) > 0 {
-		annotation += "path root."
+		annotation += " path root."
 		annotation += query.SliceToDotPath(mgr.Path()...)
 	}
 	return fmt.Errorf("failed to init %v %v: %w", typeStr, annotation, err)
