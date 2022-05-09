@@ -374,13 +374,11 @@ func (g *gcpBigQueryOutput) WriteBatch(ctx context.Context, batch service.Messag
 	}
 
 	status, err := job.Wait(ctx)
-	if err == nil {
-		err = status.Err()
-	}
 	if err != nil {
-		return fmt.Errorf("error inserting data in bigquery: %w", err)
+		return fmt.Errorf("error while waiting on bigquery job: %w", err)
 	}
-	return nil
+
+	return errorFromStatus(status)
 }
 
 func (g *gcpBigQueryOutput) createTableLoader(data *[]byte) *bigquery.Loader {
