@@ -36,7 +36,7 @@ func init() {
 			docs.FieldBool("parse_header_row", "Whether to reference the first row as a header row. If set to true the output structure for messages will be an object where field keys are determined by the header row."),
 			docs.FieldString("delimiter", `The delimiter to use for splitting values in each record, must be a single character.`),
 			docs.FieldInt("batch_count", `Optionally process records in batches. This can help to speed up the consumption of exceptionally large CSV files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).Advanced(),
-			docs.FieldBool("lazy_quotes", `If LazyQuotes is true, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.`),
+			docs.FieldBool("lazy_quotes", "If set to `true`, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field."),
 		),
 		Description: `
 This input offers more control over CSV parsing than the ` + "[`file` input](/docs/components/inputs/file)" + `.

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `nats_jetstream` input now adds headers to messages as metadata.
+- Field `headers` added to the `nats_jetstream` output.
+- Field `lazy_quotes` added to the CSV input.
+
 ### Fixed
 
 - Fixed an issue where resource and stream configs imported via wildcard pattern could not be live-reloaded with the watcher (`-w`) flag.

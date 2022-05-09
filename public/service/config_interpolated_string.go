@@ -50,11 +50,9 @@ func (p *ParsedConfig) FieldInterpolatedString(path ...string) (*InterpolatedStr
 // FieldInterpolatedStringMap accesses a field that is an object of arbitrary
 // keys and interpolated string values from the parsed config by its name and
 // returns the value.
-// Returns an error if the field is not found, or is not an object of
-// iterpolated strings.
 //
-// This method is not valid when the configuration spec was built around a
-// config constructor.
+// Returns an error if the field is not found, or is not an object of
+// interpolated strings.
 func (p *ParsedConfig) FieldInterpolatedStringMap(path ...string) (map[string]*InterpolatedString, error) {
 	v, exists := p.field(path...)
 	if !exists {
@@ -62,8 +60,16 @@ func (p *ParsedConfig) FieldInterpolatedStringMap(path ...string) (map[string]*I
 	}
 	iMap, ok := v.(map[string]interface{})
 	if !ok {
-		if sMap, ok := v.(map[string]*InterpolatedString); ok {
-			return sMap, nil
+		if sMap, ok := v.(map[string]string); ok {
+			iMap := make(map[string]*InterpolatedString, len(sMap))
+			for k, sv := range sMap {
+				e, err := p.mgr.BloblEnvironment().NewField(sv)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse interpolated field '%v': %v", strings.Join(path, "."), err)
+				}
+				iMap[k] = &InterpolatedString{expr: e}
+			}
+			return iMap, nil
 		}
 		return nil, fmt.Errorf("expected field '%v' to be a string map, got %T", p.fullDotPath(path...), v)
 	}

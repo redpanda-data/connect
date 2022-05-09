@@ -67,7 +67,6 @@ type jetStreamOutput struct {
 	urls          string
 	subjectStrRaw string
 	subjectStr    *service.InterpolatedString
-	headersRaw    map[string]string
 	headers       map[string]*service.InterpolatedString
 	authConf      auth.Config
 	tlsConf       *tls.Config
@@ -98,10 +97,6 @@ func newJetStreamWriterFromConfig(conf *service.ParsedConfig, log *service.Logge
 	}
 
 	if j.subjectStr, err = conf.FieldInterpolatedString("subject"); err != nil {
-		return nil, err
-	}
-
-	if j.headersRaw, err = conf.FieldStringMap("headers"); err != nil {
 		return nil, err
 	}
 

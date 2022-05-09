@@ -123,7 +123,7 @@ Default: `1`
 
 ### `lazy_quotes`
 
-If LazyQuotes is true, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.
+If set to `true`, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.
 
 
 Type: `bool`  
