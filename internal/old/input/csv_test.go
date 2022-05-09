@@ -464,3 +464,83 @@ func TestCSVReaderStrict(t *testing.T) {
 	err = f.ConnectWithContext(context.Background())
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
+
+func TestLazyQuotes(t *testing.T) {
+
+	tests := []struct {
+		name        string
+		lazyQuotes  bool
+		input       string
+		expected    string
+		errContains string
+	}{
+		{
+			name:       "quotes in unquoted field w/ LazyQuotes = true",
+			input:      `f"oo"1,f"oo"2,f"oo"3`,
+			expected:   `["f\"oo\"1","f\"oo\"2","f\"oo\"3"]`,
+			lazyQuotes: true,
+		},
+		{
+			name:        "quotes in unquoted field w/ LazyQuotes = false",
+			input:       `f"oo"1,f"oo"2,f"oo"3`,
+			errContains: `bare " in non-quoted-field`,
+			lazyQuotes:  false,
+		},
+		{
+			name:       "non-doubled quote in quoted field w/ LazyQuotes = true",
+			input:      `"f"oo1","f"oo2","f"oo3"`,
+			expected:   `["f\"oo1","f\"oo2","f\"oo3"]`,
+			lazyQuotes: true,
+		},
+		{
+			name:        "non-doubled quote in quoted field w/ LazyQuotes = false",
+			input:       `f"oo1,"f'oo'2","f'oo'3"`,
+			errContains: `bare " in non-quoted-field`,
+			lazyQuotes:  false,
+		},
+		{
+			name:       "quotes in unquoted field AND non-doubled quote in quoted field w/ LazyQuotes = true",
+			input:      `f"oo"1,"f"oo2",f"oo"3`,
+			expected:   `[\"f"oo"1\","f"oo2",\"f"oo"3\"]`,
+			lazyQuotes: true,
+		},
+		{
+			name:        "quotes in unquoted field AND non-doubled quote in quoted field w/ LazyQuotes = false",
+			input:       `f"oo"1,"f"oo2",f"oo"3`,
+			errContains: `bare " in non-quoted-field`,
+			lazyQuotes:  false,
+		},
+	}
+	for _, test := range tests {
+		var handle bytes.Buffer
+
+		handle.Write([]byte(test.input))
+
+		f, err := newCSVReader(
+			func(ctx context.Context) (io.Reader, error) {
+				return &handle, nil
+			},
+			func(ctx context.Context) {},
+			optCSVSetExpectHeaders(false),
+			optCSVSetLazyQuotes(test.lazyQuotes),
+		)
+		require.NoError(t, err, test.name)
+		t.Cleanup(func() {
+			f.CloseAsync()
+			require.NoError(t, f.WaitForClose(time.Second), test.name)
+		})
+
+		require.NoError(t, f.ConnectWithContext(context.Background()), test.name)
+
+		resMsg, _, err := f.ReadWithContext(context.Background())
+		if test.errContains != "" {
+			require.Contains(t, err.Error(), test.errContains, test.name)
+			return
+		}
+		require.NoError(t, err, test.name)
+
+		actual := string(resMsg.Get(0).Get())
+
+		assert.Equal(t, test.expected, actual, test.name)
+	}
+}
