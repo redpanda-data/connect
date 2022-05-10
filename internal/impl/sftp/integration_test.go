@@ -11,8 +11,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/impl/sftp/shared"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 
-	// Bring in all other components
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	// Bring in memory cache
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 var sftpUsername = "foo"

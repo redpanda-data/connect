@@ -11,7 +11,6 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -77,7 +76,7 @@ You can access these metadata fields using
 
 func init() {
 	err := service.RegisterInput(
-		input.TypeNATSJetStream, natsJetStreamInputConfig(),
+		"nats_jetstream", natsJetStreamInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newJetStreamReaderFromConfig(conf, mgr.Logger())
 		})

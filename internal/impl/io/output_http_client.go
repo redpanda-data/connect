@@ -9,18 +9,18 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/http"
 	ihttpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newHTTPClientOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "http_client",
@@ -47,7 +47,7 @@ It's possible to propagate the response from each HTTP request back to the input
 				docs.FieldInterpolatedString("content_disposition", "The content disposition of the individual message part.", `form-data; name="bin"; filename='${! meta("AttachmentName") }`).HasDefault(""),
 				docs.FieldInterpolatedString("body", "The body of the individual message part.", `${! json("data.part1") }`).HasDefault(""),
 			).AtVersion("3.63.0"),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewHTTPClientConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewHTTPClientConfig()),
 		Categories: []string{
 			"Network",
 		},
@@ -57,19 +57,19 @@ It's possible to propagate the response from each HTTP request back to the input
 	}
 }
 
-func newHTTPClientOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newHTTPClientOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	h, err := newHTTPClientWriter(conf.HTTPClient, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	w, err := ooutput.NewAsyncWriter("http_client", conf.HTTPClient.MaxInFlight, h, log, stats)
+	w, err := output.NewAsyncWriter("http_client", conf.HTTPClient.MaxInFlight, h, log, stats)
 	if err != nil {
 		return w, err
 	}
 	if !conf.HTTPClient.BatchAsMultipart {
-		w = ooutput.OnlySinglePayloads(w)
+		w = output.OnlySinglePayloads(w)
 	}
-	return ooutput.NewBatcherFromConfig(conf.HTTPClient.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.HTTPClient.Batching, w, mgr, log, stats)
 }
 
 type httpClientWriter struct {
@@ -77,11 +77,11 @@ type httpClientWriter struct {
 
 	log log.Modular
 
-	conf      ooutput.HTTPClientConfig
+	conf      output.HTTPClientConfig
 	closeChan chan struct{}
 }
 
-func newHTTPClientWriter(conf ooutput.HTTPClientConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*httpClientWriter, error) {
+func newHTTPClientWriter(conf output.HTTPClientConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (*httpClientWriter, error) {
 	h := httpClientWriter{
 		log:       log,
 		conf:      conf,

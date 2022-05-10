@@ -12,15 +12,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newSocketOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "socket",
@@ -31,7 +30,7 @@ func init() {
 			),
 			docs.FieldString("address", "The address (or path) to connect to.", "/tmp/benthos.sock", "localhost:9000"),
 			codec.WriterDocs,
-		).ChildDefaultAndTypesFromStruct(ooutput.NewSocketConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewSocketConfig()),
 		Categories: []string{
 			"Network",
 		},
@@ -41,12 +40,12 @@ func init() {
 	}
 }
 
-func newSocketOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newSocketOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	t, err := newSocketWriter(conf.Socket, mgr, log)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.NewAsyncWriter("socket", 1, t, log, stats)
+	return output.NewAsyncWriter("socket", 1, t, log, stats)
 }
 
 type socketWriter struct {
@@ -61,7 +60,7 @@ type socketWriter struct {
 	writerMut sync.Mutex
 }
 
-func newSocketWriter(conf ooutput.SocketConfig, mgr interop.Manager, log log.Modular) (*socketWriter, error) {
+func newSocketWriter(conf output.SocketConfig, mgr bundle.NewManagement, log log.Modular) (*socketWriter, error) {
 	switch conf.Network {
 	case "tcp", "udp", "unix":
 	default:

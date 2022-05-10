@@ -16,19 +16,17 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 
 	// Import all transport types
 	_ "go.nanomsg.org/mangos/v3/transport/all"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newNanomsgOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:        "nanomsg",
@@ -40,7 +38,7 @@ func init() {
 			docs.FieldString("socket_type", "The socket type to send with.").HasOptions("PUSH", "PUB"),
 			docs.FieldString("poll_timeout", "The maximum period of time to wait for a message to send before the request is abandoned and reattempted."),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewNanomsgConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewNanomsgConfig()),
 		Categories: []string{
 			"Network",
 		},
@@ -50,23 +48,23 @@ func init() {
 	}
 }
 
-func newNanomsgOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newNanomsgOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	s, err := newNanomsgWriter(conf.Nanomsg, log)
 	if err != nil {
 		return nil, err
 	}
-	a, err := ooutput.NewAsyncWriter("nanomsg", conf.Nanomsg.MaxInFlight, s, log, stats)
+	a, err := output.NewAsyncWriter("nanomsg", conf.Nanomsg.MaxInFlight, s, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.OnlySinglePayloads(a), nil
+	return output.OnlySinglePayloads(a), nil
 }
 
 type nanomsgWriter struct {
 	log log.Modular
 
 	urls []string
-	conf ooutput.NanomsgConfig
+	conf output.NanomsgConfig
 
 	timeout time.Duration
 
@@ -74,7 +72,7 @@ type nanomsgWriter struct {
 	sockMut sync.RWMutex
 }
 
-func newNanomsgWriter(conf ooutput.NanomsgConfig, log log.Modular) (*nanomsgWriter, error) {
+func newNanomsgWriter(conf output.NanomsgConfig, log log.Modular) (*nanomsgWriter, error) {
 	s := nanomsgWriter{
 		log:  log,
 		conf: conf,
@@ -175,7 +173,7 @@ func (s *nanomsgWriter) WriteWithContext(ctx context.Context, msg *message.Batch
 		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		return socket.Send(p.Get())
 	})
 }

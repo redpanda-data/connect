@@ -10,18 +10,16 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		return newGCPPubSubInput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "gcp_pubsub",
@@ -58,8 +56,8 @@ You can access these metadata fields using
 	}
 }
 
-func newGCPPubSubInput(conf input.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (iinput.Streamed, error) {
-	var c reader.Async
+func newGCPPubSubInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+	var c input.Async
 	var err error
 	if c, err = newGCPPubSubReader(conf.GCPPubSub, log, stats); err != nil {
 		return nil, err
@@ -136,7 +134,7 @@ func (c *gcpPubSubReader) ConnectWithContext(ignored context.Context) error {
 	return nil
 }
 
-func (c *gcpPubSubReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (c *gcpPubSubReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	c.subMut.Lock()
 	msgsChan := c.msgsChan
 	c.subMut.Unlock()

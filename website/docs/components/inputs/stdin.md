@@ -15,7 +15,6 @@ categories: ["Local"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Consumes data piped to stdin as line delimited messages.
 
 
@@ -49,8 +48,7 @@ input:
 </TabItem>
 </Tabs>
 
-If the multipart option is set to true then lines are interpretted as message
-parts, and an empty line indicates the end of the message.
+If the multipart option is set to true then lines are interpretted as message parts, and an empty line indicates the end of the message.
 
 If the delimiter field is left empty then line feed (\n) is used.
 

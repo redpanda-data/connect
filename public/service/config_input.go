@@ -7,9 +7,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 // NewInputField defines a new input field, it is then possible to extract an
@@ -39,7 +38,7 @@ func (p *ParsedConfig) FieldInput(path ...string) (*OwnedInput, error) {
 		return nil, err
 	}
 
-	iproc, err := p.mgr.IntoPath(path...).(bundle.NewManagement).NewInput(conf)
+	iproc, err := p.mgr.IntoPath(path...).NewInput(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -83,10 +82,10 @@ func (p *ParsedConfig) FieldInputList(path ...string) ([]*OwnedInput, error) {
 		configs = append(configs, conf)
 	}
 
-	tmpMgr := p.mgr.IntoPath(path...).(bundle.NewManagement)
+	tmpMgr := p.mgr.IntoPath(path...)
 	ins := make([]*OwnedInput, len(configs))
 	for i, c := range configs {
-		iproc, err := tmpMgr.IntoPath(strconv.Itoa(i)).(bundle.NewManagement).NewInput(c)
+		iproc, err := tmpMgr.IntoPath(strconv.Itoa(i)).NewInput(c)
 		if err != nil {
 			return nil, fmt.Errorf("input %v: %w", i, err)
 		}

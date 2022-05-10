@@ -10,12 +10,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newForEach(conf.ForEach, mgr)
 		if err != nil {
 			return nil, err
@@ -48,10 +47,10 @@ type forEachProc struct {
 	children []processor.V1
 }
 
-func newForEach(conf []oprocessor.Config, mgr bundle.NewManagement) (*forEachProc, error) {
+func newForEach(conf []processor.Config, mgr bundle.NewManagement) (*forEachProc, error) {
 	var children []processor.V1
 	for i, pconf := range conf {
-		pMgr := mgr.IntoPath("for_each", strconv.Itoa(i)).(bundle.NewManagement)
+		pMgr := mgr.IntoPath("for_each", strconv.Itoa(i))
 		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, fmt.Errorf("child processor [%v]: %w", i, err)
@@ -72,7 +71,7 @@ func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 
 	resMsg := message.QuickBatch(nil)
 	for _, tmpMsg := range individualMsgs {
-		resultMsgs, err := oprocessor.ExecuteAll(p.children, tmpMsg)
+		resultMsgs, err := processor.ExecuteAll(p.children, tmpMsg)
 		if err != nil {
 			return nil, err
 		}

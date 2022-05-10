@@ -10,18 +10,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestReadUntilErrs(t *testing.T) {
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Type = "read_until"
 
-	inConf := oinput.NewConfig()
+	inConf := input.NewConfig()
 	conf.ReadUntil.Input = &inConf
 
 	_, err := bmock.NewManager().NewInput(conf)
@@ -47,7 +47,7 @@ baz`)
 		t.Fatal(err)
 	}
 
-	inconf := oinput.NewConfig()
+	inconf := input.NewConfig()
 	inconf.Type = "file"
 	inconf.File.Paths = []string{tmpfile.Name()}
 
@@ -59,11 +59,11 @@ baz`)
 	})
 }
 
-func testReadUntilBasic(inConf oinput.Config, t *testing.T) {
+func testReadUntilBasic(inConf input.Config, t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	rConf := oinput.NewConfig()
+	rConf := input.NewConfig()
 	rConf.Type = "read_until"
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Check = `content() == "bar"`
@@ -118,11 +118,11 @@ func testReadUntilBasic(inConf oinput.Config, t *testing.T) {
 	}
 }
 
-func testReadUntilRetry(inConf oinput.Config, t *testing.T) {
+func testReadUntilRetry(inConf input.Config, t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	rConf := oinput.NewConfig()
+	rConf := input.NewConfig()
 	rConf.Type = "read_until"
 	rConf.ReadUntil.Input = &inConf
 	rConf.ReadUntil.Check = `content() == "bar"`

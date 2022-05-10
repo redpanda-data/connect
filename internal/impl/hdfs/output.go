@@ -15,16 +15,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newHDFSOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:        "hdfs",
@@ -40,7 +39,7 @@ func init() {
 			).IsInterpolated(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewHDFSConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewHDFSConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -50,20 +49,20 @@ func init() {
 	}
 }
 
-func newHDFSOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newHDFSOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	h, err := newHDFSWriter(conf.HDFS, mgr, log)
 	if err != nil {
 		return nil, err
 	}
-	w, err := ooutput.NewAsyncWriter("hdfs", conf.HDFS.MaxInFlight, h, log, stats)
+	w, err := output.NewAsyncWriter("hdfs", conf.HDFS.MaxInFlight, h, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.NewBatcherFromConfig(conf.HDFS.Batching, ooutput.OnlySinglePayloads(w), mgr, log, stats)
+	return batcher.NewFromConfig(conf.HDFS.Batching, output.OnlySinglePayloads(w), mgr, log, stats)
 }
 
 type hdfsWriter struct {
-	conf      ooutput.HDFSConfig
+	conf      output.HDFSConfig
 	directory *field.Expression
 	path      *field.Expression
 
@@ -71,7 +70,7 @@ type hdfsWriter struct {
 	log    log.Modular
 }
 
-func newHDFSWriter(conf ooutput.HDFSConfig, mgr interop.Manager, log log.Modular) (*hdfsWriter, error) {
+func newHDFSWriter(conf output.HDFSConfig, mgr bundle.NewManagement, log log.Modular) (*hdfsWriter, error) {
 	path, err := mgr.BloblEnvironment().NewField(conf.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
@@ -112,7 +111,7 @@ func (h *hdfsWriter) WriteWithContext(ctx context.Context, msg *message.Batch) e
 		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		path := h.path.String(i, msg)
 		directory := h.directory.String(i, msg)
 		filePath := filepath.Join(directory, path)

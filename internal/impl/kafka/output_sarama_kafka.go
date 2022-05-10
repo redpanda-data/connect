@@ -20,19 +20,19 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newKafkaOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "kafka",
@@ -80,7 +80,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			docs.FieldString("timeout", "The maximum period of time to wait for message sends before abandoning the request and retrying.").Advanced(),
 			docs.FieldBool("retry_as_batch", "When enabled forces an entire batch of messages to be retried if any individual message fails on a send, otherwise only the individual messages that failed are retried. Disabling this helps to reduce message duplicates during intermittent errors, but also makes it impossible to guarantee strict ordering of messages.").Advanced(),
 			policy.FieldSpec(),
-		).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewKafkaConfig()),
+		).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewKafkaConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -90,32 +90,35 @@ Unfortunately this error message will appear for a wide range of connection prob
 	}
 }
 
-func newKafkaOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newKafkaOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	k, err := NewKafkaWriter(conf.Kafka, mgr, log)
 	if err != nil {
 		return nil, err
 	}
-	w, err := ooutput.NewAsyncWriter("kafka", conf.Kafka.MaxInFlight, k, log, stats)
+	w, err := output.NewAsyncWriter("kafka", conf.Kafka.MaxInFlight, k, log, stats)
 	if err != nil {
 		return nil, err
 	}
 
 	if conf.Kafka.InjectTracingMap != "" {
-		aw, ok := w.(*ooutput.AsyncWriter)
+		aw, ok := w.(*output.AsyncWriter)
 		if !ok {
 			return nil, fmt.Errorf("unable to set an inject_tracing_map due to wrong type: %T", w)
 		}
-		if err = aw.SetInjectTracingMap(conf.Kafka.InjectTracingMap); err != nil {
+
+		injectTracingMap, err := mgr.BloblEnvironment().NewMapping(conf.Kafka.InjectTracingMap)
+		if err != nil {
 			return nil, fmt.Errorf("failed to initialize inject tracing map: %v", err)
 		}
+		aw.SetInjectTracingMap(injectTracingMap)
 	}
 
-	return ooutput.NewBatcherFromConfig(conf.Kafka.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.Kafka.Batching, w, mgr, log, stats)
 }
 
 type kafkaWriter struct {
 	log log.Modular
-	mgr interop.Manager
+	mgr bundle.NewManagement
 
 	backoffCtor func() backoff.BackOff
 
@@ -124,7 +127,7 @@ type kafkaWriter struct {
 
 	addresses []string
 	version   sarama.KafkaVersion
-	conf      ooutput.KafkaConfig
+	conf      output.KafkaConfig
 
 	key       *field.Expression
 	topic     *field.Expression
@@ -141,7 +144,7 @@ type kafkaWriter struct {
 }
 
 // NewKafkaWriter returns a kafka writer.
-func NewKafkaWriter(conf ooutput.KafkaConfig, mgr interop.Manager, log log.Modular) (ooutput.AsyncSink, error) {
+func NewKafkaWriter(conf output.KafkaConfig, mgr bundle.NewManagement, log log.Modular) (output.AsyncSink, error) {
 	compression, err := strToCompressionCodec(conf.Compression)
 	if err != nil {
 		return nil, err

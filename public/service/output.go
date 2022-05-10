@@ -9,7 +9,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
@@ -81,7 +80,7 @@ type airGapWriter struct {
 	sig *shutdown.Signaller
 }
 
-func newAirGapWriter(w Output) output.AsyncSink {
+func newAirGapWriter(w Output) ioutput.AsyncSink {
 	return &airGapWriter{w, shutdown.NewSignaller()}
 }
 
@@ -123,7 +122,7 @@ type airGapBatchWriter struct {
 	sig *shutdown.Signaller
 }
 
-func newAirGapBatchWriter(w BatchOutput) output.AsyncSink {
+func newAirGapBatchWriter(w BatchOutput) ioutput.AsyncSink {
 	return &airGapBatchWriter{w, shutdown.NewSignaller()}
 }
 

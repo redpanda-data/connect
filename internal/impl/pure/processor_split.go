@@ -6,15 +6,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newSplit(conf.Split, mgr)
 		if err != nil {
 			return nil, err
@@ -48,7 +46,7 @@ type splitProc struct {
 	byteSize int
 }
 
-func newSplit(conf oprocessor.SplitConfig, mgr interop.Manager) (*splitProc, error) {
+func newSplit(conf processor.SplitConfig, mgr bundle.NewManagement) (*splitProc, error) {
 	return &splitProc{
 		log:      mgr.Logger(),
 		size:     conf.Size,

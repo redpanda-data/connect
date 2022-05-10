@@ -11,17 +11,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		return newHDFSInput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "hdfs",
@@ -45,22 +43,22 @@ You can access these metadata fields using
 			docs.FieldString("hosts", "A list of target host addresses to connect to.").Array(),
 			docs.FieldString("user", "A user ID to connect as."),
 			docs.FieldString("directory", "The directory to consume from."),
-		).ChildDefaultAndTypesFromStruct(oinput.NewHDFSConfig()),
+		).ChildDefaultAndTypesFromStruct(input.NewHDFSConfig()),
 	})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newHDFSInput(conf oinput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func newHDFSInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	if conf.HDFS.Directory == "" {
 		return nil, errors.New("invalid directory (cannot be empty)")
 	}
-	return oinput.NewAsyncReader("hdfs", true, reader.NewAsyncPreserver(newHDFSReader(conf.HDFS, log)), log, stats)
+	return input.NewAsyncReader("hdfs", true, input.NewAsyncPreserver(newHDFSReader(conf.HDFS, log)), log, stats)
 }
 
 type hdfsReader struct {
-	conf oinput.HDFSConfig
+	conf input.HDFSConfig
 
 	targets []string
 
@@ -69,7 +67,7 @@ type hdfsReader struct {
 	log log.Modular
 }
 
-func newHDFSReader(conf oinput.HDFSConfig, log log.Modular) *hdfsReader {
+func newHDFSReader(conf input.HDFSConfig, log log.Modular) *hdfsReader {
 	return &hdfsReader{
 		conf: conf,
 		log:  log,
@@ -105,7 +103,7 @@ func (h *hdfsReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (h *hdfsReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (h *hdfsReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	if len(h.targets) == 0 {
 		return nil, nil, component.ErrTypeClosed
 	}

@@ -10,18 +10,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
@@ -270,13 +267,13 @@ func TestManagerProcessorList(t *testing.T) {
 	mgr, err := manager.New(conf, nil, log.Noop(), noopStats())
 	require.NoError(t, err)
 
-	err = mgr.AccessProcessor(context.Background(), "foo", func(iprocessor.V1) {})
+	err = mgr.AccessProcessor(context.Background(), "foo", func(processor.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessProcessor(context.Background(), "bar", func(iprocessor.V1) {})
+	err = mgr.AccessProcessor(context.Background(), "bar", func(processor.V1) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessProcessor(context.Background(), "baz", func(iprocessor.V1) {})
+	err = mgr.AccessProcessor(context.Background(), "baz", func(processor.V1) {})
 	assert.EqualError(t, err, "unable to locate resource: baz")
 }
 
@@ -303,11 +300,11 @@ func TestManagerProcessorListErrors(t *testing.T) {
 
 func TestManagerInputList(t *testing.T) {
 	cFoo := input.NewConfig()
-	cFoo.Type = input.TypeHTTPServer
+	cFoo.Type = "http_server"
 	cFoo.Label = "foo"
 
 	cBar := input.NewConfig()
-	cBar.Type = input.TypeHTTPServer
+	cBar.Type = "http_server"
 	cBar.Label = "bar"
 
 	conf := manager.NewResourceConfig()
@@ -316,13 +313,13 @@ func TestManagerInputList(t *testing.T) {
 	mgr, err := manager.New(conf, nil, log.Noop(), noopStats())
 	require.NoError(t, err)
 
-	err = mgr.AccessInput(context.Background(), "foo", func(i iinput.Streamed) {})
+	err = mgr.AccessInput(context.Background(), "foo", func(i input.Streamed) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessInput(context.Background(), "bar", func(i iinput.Streamed) {})
+	err = mgr.AccessInput(context.Background(), "bar", func(i input.Streamed) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessInput(context.Background(), "baz", func(i iinput.Streamed) {})
+	err = mgr.AccessInput(context.Background(), "baz", func(i input.Streamed) {})
 	assert.EqualError(t, err, "unable to locate resource: baz")
 }
 
@@ -349,11 +346,11 @@ func TestManagerInputListErrors(t *testing.T) {
 
 func TestManagerOutputList(t *testing.T) {
 	cFoo := output.NewConfig()
-	cFoo.Type = output.TypeHTTPServer
+	cFoo.Type = "http_server"
 	cFoo.Label = "foo"
 
 	cBar := output.NewConfig()
-	cBar.Type = output.TypeHTTPServer
+	cBar.Type = "http_server"
 	cBar.Label = "bar"
 
 	conf := manager.NewResourceConfig()
@@ -362,13 +359,13 @@ func TestManagerOutputList(t *testing.T) {
 	mgr, err := manager.New(conf, nil, log.Noop(), noopStats())
 	require.NoError(t, err)
 
-	err = mgr.AccessOutput(context.Background(), "foo", func(ow ioutput.Sync) {})
+	err = mgr.AccessOutput(context.Background(), "foo", func(ow output.Sync) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessOutput(context.Background(), "bar", func(ow ioutput.Sync) {})
+	err = mgr.AccessOutput(context.Background(), "bar", func(ow output.Sync) {})
 	require.NoError(t, err)
 
-	err = mgr.AccessOutput(context.Background(), "baz", func(ow ioutput.Sync) {})
+	err = mgr.AccessOutput(context.Background(), "baz", func(ow output.Sync) {})
 	assert.EqualError(t, err, "unable to locate resource: baz")
 }
 

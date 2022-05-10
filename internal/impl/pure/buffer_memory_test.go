@@ -14,8 +14,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
-
-	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func msgEqual(t testing.TB, expected string, m *service.Message) {

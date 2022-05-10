@@ -16,16 +16,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(conf ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newAzureBlobStorageOutput(conf, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "azure_blob_storage",
@@ -75,7 +73,7 @@ calculated per message of a batch.`),
 				"BLOCK", "APPEND",
 			).IsInterpolated().Advanced(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewAzureBlobStorageConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewAzureBlobStorageConfig()),
 		Categories: []string{
 			"Services",
 			"Azure",
@@ -86,20 +84,20 @@ calculated per message of a batch.`),
 	}
 }
 
-func newAzureBlobStorageOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newAzureBlobStorageOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	blobStorage, err := newAzureBlobStorageWriter(mgr, conf.AzureBlobStorage, log)
 	if err != nil {
 		return nil, err
 	}
-	a, err := ooutput.NewAsyncWriter("azure_blob_storage", conf.AzureBlobStorage.MaxInFlight, blobStorage, log, stats)
+	a, err := output.NewAsyncWriter("azure_blob_storage", conf.AzureBlobStorage.MaxInFlight, blobStorage, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.OnlySinglePayloads(a), nil
+	return output.OnlySinglePayloads(a), nil
 }
 
 type azureBlobStorageWriter struct {
-	conf        ooutput.AzureBlobStorageConfig
+	conf        output.AzureBlobStorageConfig
 	container   *field.Expression
 	path        *field.Expression
 	blobType    *field.Expression
@@ -108,7 +106,7 @@ type azureBlobStorageWriter struct {
 	log         log.Modular
 }
 
-func newAzureBlobStorageWriter(mgr interop.Manager, conf ooutput.AzureBlobStorageConfig, log log.Modular) (*azureBlobStorageWriter, error) {
+func newAzureBlobStorageWriter(mgr bundle.NewManagement, conf output.AzureBlobStorageConfig, log log.Modular) (*azureBlobStorageWriter, error) {
 	if conf.StorageAccount == "" && conf.StorageConnectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
@@ -186,7 +184,7 @@ func (a *azureBlobStorageWriter) createContainer(c *storage.Container, accessLev
 }
 
 func (a *azureBlobStorageWriter) WriteWithContext(_ context.Context, msg *message.Batch) error {
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		c := a.client.GetContainerReference(a.container.String(i, msg))
 		b := c.GetBlobReference(a.path.String(i, msg))
 		if err := a.uploadBlob(b, a.blobType.String(i, msg), p.Get()); err != nil {

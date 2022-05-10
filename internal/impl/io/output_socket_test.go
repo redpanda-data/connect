@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func TestSocketBasic(t *testing.T) {
@@ -24,7 +24,7 @@ func TestSocketBasic(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := ooutput.NewSocketConfig()
+	conf := output.NewSocketConfig()
 	conf.Network = ln.Addr().Network()
 	conf.Address = ln.Addr().String()
 
@@ -89,7 +89,7 @@ func TestSocketMultipart(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := ooutput.NewSocketConfig()
+	conf := output.NewSocketConfig()
 	conf.Network = ln.Addr().Network()
 	conf.Address = ln.Addr().String()
 
@@ -142,11 +142,11 @@ func TestSocketMultipart(t *testing.T) {
 	conn.Close()
 }
 
-type wrapPacketConn struct {
+type testOutputWrapPacketConn struct {
 	r net.PacketConn
 }
 
-func (w *wrapPacketConn) Read(p []byte) (n int, err error) {
+func (w *testOutputWrapPacketConn) Read(p []byte) (n int, err error) {
 	n, _, err = w.r.ReadFrom(p)
 	return
 }
@@ -160,7 +160,7 @@ func TestUDPSocketBasic(t *testing.T) {
 	}
 	defer conn.Close()
 
-	conf := ooutput.NewSocketConfig()
+	conf := output.NewSocketConfig()
 	conf.Network = "udp"
 	conf.Address = conn.LocalAddr().String()
 
@@ -185,7 +185,7 @@ func TestUDPSocketBasic(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		_ = conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		_, _ = buf.ReadFrom(&wrapPacketConn{r: conn})
+		_, _ = buf.ReadFrom(&testOutputWrapPacketConn{r: conn})
 		wg.Done()
 	}()
 
@@ -218,7 +218,7 @@ func TestUDPSocketMultipart(t *testing.T) {
 	}
 	defer conn.Close()
 
-	conf := ooutput.NewSocketConfig()
+	conf := output.NewSocketConfig()
 	conf.Network = "udp"
 	conf.Address = conn.LocalAddr().String()
 
@@ -243,7 +243,7 @@ func TestUDPSocketMultipart(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		_ = conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		_, _ = buf.ReadFrom(&wrapPacketConn{r: conn})
+		_, _ = buf.ReadFrom(&testOutputWrapPacketConn{r: conn})
 		wg.Done()
 	}()
 
@@ -273,7 +273,7 @@ func TestTCPSocketBasic(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := ooutput.NewSocketConfig()
+	conf := output.NewSocketConfig()
 	conf.Network = "tcp"
 	conf.Address = ln.Addr().String()
 
@@ -338,7 +338,7 @@ func TestTCPSocketMultipart(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := ooutput.NewSocketConfig()
+	conf := output.NewSocketConfig()
 	conf.Network = "tcp"
 	conf.Address = ln.Addr().String()
 
@@ -400,7 +400,7 @@ func TestSocketCustomDelimeter(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := ooutput.NewSocketConfig()
+	conf := output.NewSocketConfig()
 	conf.Network = ln.Addr().Network()
 	conf.Address = ln.Addr().String()
 	conf.Codec = "delim:\t"

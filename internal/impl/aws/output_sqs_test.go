@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func TestSQSHeaderCheck(t *testing.T) {
@@ -127,7 +127,7 @@ type inEntries []inMsg
 func TestSQSRetries(t *testing.T) {
 	tCtx := context.Background()
 
-	conf := ooutput.NewAmazonSQSConfig()
+	conf := output.NewAmazonSQSConfig()
 	w, err := newSQSWriter(conf, mock.NewManager())
 	require.NoError(t, err)
 
@@ -189,7 +189,7 @@ func TestSQSRetries(t *testing.T) {
 func TestSQSSendLimit(t *testing.T) {
 	tCtx := context.Background()
 
-	conf := ooutput.NewAmazonSQSConfig()
+	conf := output.NewAmazonSQSConfig()
 	w, err := newSQSWriter(conf, mock.NewManager())
 	require.NoError(t, err)
 

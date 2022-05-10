@@ -9,7 +9,6 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -46,7 +45,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 
 func init() {
 	err := service.RegisterOutput(
-		output.TypeNATSJetStream, natsJetStreamOutputConfig(),
+		"nats_jetstream", natsJetStreamOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 			maxInFlight, err := conf.FieldInt("max_in_flight")
 			if err != nil {

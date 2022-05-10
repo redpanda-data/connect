@@ -14,16 +14,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		return newSequenceInput(c, nm, nm.Logger())
 	}), docs.ComponentSpec{
 		Name: "sequence",
@@ -159,7 +158,7 @@ Each message must be structured (JSON or otherwise processed into a structured f
 				).HasOptions("array", "replace", "keep"),
 			).AtVersion("3.40.0").Advanced(),
 			docs.FieldInput("inputs", "An array of inputs to read from sequentially.").Array(),
-		).ChildDefaultAndTypesFromStruct(oinput.NewSequenceConfig()),
+		).ChildDefaultAndTypesFromStruct(input.NewSequenceConfig()),
 		Categories: []string{
 			"Utility",
 		},
@@ -309,7 +308,7 @@ func (m *messageJoiner) Empty(fn func(*message.Batch)) bool {
 //------------------------------------------------------------------------------
 
 type sequenceInput struct {
-	conf oinput.SequenceConfig
+	conf input.SequenceConfig
 
 	targetMut sync.Mutex
 	target    input.Streamed
@@ -318,7 +317,7 @@ type sequenceInput struct {
 
 	joiner *messageJoiner
 
-	mgr interop.Manager
+	mgr bundle.NewManagement
 	log log.Modular
 
 	transactions chan message.Transaction
@@ -328,10 +327,10 @@ type sequenceInput struct {
 
 type sequenceTarget struct {
 	index  int
-	config oinput.Config
+	config input.Config
 }
 
-func newSequenceInput(conf oinput.Config, mgr interop.Manager, log log.Modular) (input.Streamed, error) {
+func newSequenceInput(conf input.Config, mgr bundle.NewManagement, log log.Modular) (input.Streamed, error) {
 	if len(conf.Sequence.Inputs) == 0 {
 		return nil, errors.New("requires at least one child input")
 	}
@@ -369,7 +368,7 @@ func newSequenceInput(conf oinput.Config, mgr interop.Manager, log log.Modular) 
 	return rdr, nil
 }
 
-func validateShardedConfig(s oinput.SequenceShardedJoinConfig) (*messageJoiner, error) {
+func validateShardedConfig(s input.SequenceShardedJoinConfig) (*messageJoiner, error) {
 	var flushOnLast bool
 	switch s.Type {
 	case "none":
@@ -419,7 +418,7 @@ func (r *sequenceInput) createNextTarget() (input.Streamed, bool, error) {
 	if len(r.remaining) > 0 {
 		next := r.remaining[0]
 		wMgr := r.mgr.IntoPath("sequence", "inputs", strconv.Itoa(next.index))
-		if target, err = oinput.New(next.config, wMgr, wMgr.Logger(), wMgr.Metrics()); err == nil {
+		if target, err = wMgr.NewInput(next.config); err == nil {
 			r.spent = append(r.spent, next)
 			r.remaining = r.remaining[1:]
 		} else {

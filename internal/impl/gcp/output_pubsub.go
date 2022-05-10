@@ -13,22 +13,21 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newGCPPubSubOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "gcp_pubsub",
 		Summary: `Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/metadata) from messages are sent as attributes.`,
-		Description: ioutput.Description(true, false, `
+		Description: output.Description(true, false, `
 For information on how to set up credentials check out [this guide](https://cloud.google.com/docs/authentication/production).
 
 ### Troubleshooting
@@ -69,7 +68,7 @@ pipeline:
 	}
 }
 
-func newGCPPubSubOutput(conf output.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (ioutput.Streamed, error) {
+func newGCPPubSubOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	a, err := newGCPPubSubWriter(conf.GCPPubSub, mgr, log)
 	if err != nil {
 		return nil, err
@@ -98,7 +97,7 @@ type gcpPubSubWriter struct {
 	log log.Modular
 }
 
-func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr interop.Manager, log log.Modular) (*gcpPubSubWriter, error) {
+func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, log log.Modular) (*gcpPubSubWriter, error) {
 	client, err := pubsub.NewClient(context.Background(), conf.ProjectID)
 	if err != nil {
 		return nil, err

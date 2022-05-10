@@ -10,14 +10,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func init() {
 	err := bundle.AllOutputs.Add(
-		bundle.OutputConstructorFromSimple(newDynamicOutput),
+		processors.WrapConstructor(newDynamicOutput),
 		docs.ComponentSpec{
 			Name: "dynamic",
 			Summary: `
@@ -47,13 +47,13 @@ already exists it will be changed.`,
 	}
 }
 
-func newDynamicOutput(conf ooutput.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+func newDynamicOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
 	dynAPI := api.NewDynamic()
 
 	outputs := map[string]output.Streamed{}
 	for k, v := range conf.Dynamic.Outputs {
 		oMgr := mgr.IntoPath("dynamic", "outputs", k)
-		newOutput, err := ooutput.New(v, oMgr, oMgr.Logger(), oMgr.Metrics())
+		newOutput, err := oMgr.NewOutput(v)
 		if err != nil {
 			return nil, err
 		}
@@ -97,12 +97,12 @@ func newDynamicOutput(conf ooutput.Config, mgr bundle.NewManagement) (output.Str
 	}
 
 	dynAPI.OnUpdate(func(ctx context.Context, id string, c []byte) error {
-		newConf := ooutput.NewConfig()
+		newConf := output.NewConfig()
 		if err := yaml.Unmarshal(c, &newConf); err != nil {
 			return err
 		}
 		oMgr := mgr.IntoPath("dynamic", "outputs", id)
-		newOutput, err := ooutput.New(newConf, oMgr, oMgr.Logger(), oMgr.Metrics())
+		newOutput, err := oMgr.NewOutput(newConf)
 		if err != nil {
 			return err
 		}

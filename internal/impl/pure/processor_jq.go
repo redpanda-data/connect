@@ -11,14 +11,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newJQ(conf.JQ, mgr)
 		if err != nil {
 			return nil, err
@@ -100,7 +98,7 @@ pipeline:
 			docs.FieldString("query", "The jq query to filter and transform messages with."),
 			docs.FieldBool("raw", "Whether to process the input as a raw string instead of as JSON.").Advanced(),
 			docs.FieldBool("output_raw", "Whether to output raw text (unquoted) instead of JSON strings when the emitted values are string types.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewJQConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewJQConfig()),
 	})
 	if err != nil {
 		panic(err)
@@ -118,7 +116,7 @@ type jqProc struct {
 	code   *gojq.Code
 }
 
-func newJQ(conf oprocessor.JQConfig, mgr interop.Manager) (*jqProc, error) {
+func newJQ(conf processor.JQConfig, mgr bundle.NewManagement) (*jqProc, error) {
 	j := &jqProc{
 		inRaw:  conf.Raw,
 		outRaw: conf.OutputRaw,

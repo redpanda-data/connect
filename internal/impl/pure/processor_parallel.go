@@ -10,12 +10,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newParallel(conf.Parallel, mgr)
 		if err != nil {
 			return nil, err
@@ -35,7 +34,7 @@ The functionality of this processor depends on being applied across messages tha
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldInt("cap", "The maximum number of messages to have processing at a given time."),
 			docs.FieldProcessor("processors", "A list of child processors to apply.").Array(),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewParallelConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewParallelConfig()),
 	})
 	if err != nil {
 		panic(err)
@@ -47,10 +46,10 @@ type parallelProc struct {
 	cap      int
 }
 
-func newParallel(conf oprocessor.ParallelConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
+func newParallel(conf processor.ParallelConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
 	var children []processor.V1
 	for i, pconf := range conf.Processors {
-		pMgr := mgr.IntoPath("parallel", strconv.Itoa(i)).(bundle.NewManagement)
+		pMgr := mgr.IntoPath("parallel", strconv.Itoa(i))
 		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, err
@@ -85,7 +84,7 @@ func (p *parallelProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 		go func() {
 			// TODO: V4 Handle processor errors when we migrate to service APIs
 			for index := range reqChan {
-				resMsgs, _ := oprocessor.ExecuteAll(p.children, resultMsgs[index])
+				resMsgs, _ := processor.ExecuteAll(p.children, resultMsgs[index])
 				resultParts := []*message.Part{}
 				for _, m := range resMsgs {
 					_ = m.Iter(func(i int, p *message.Part) error {

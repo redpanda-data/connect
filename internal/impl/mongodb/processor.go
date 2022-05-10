@@ -16,12 +16,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
@@ -30,12 +29,12 @@ import (
 //------------------------------------------------------------------------------
 
 func init() {
-	err := bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
+	err := bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (processor.V1, error) {
 		v2Proc, err := NewProcessor(c, nm, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
-		return iprocessor.NewV2BatchedToV1Processor("", v2Proc, nm.Metrics()), nil
+		return processor.NewV2BatchedToV1Processor("", v2Proc, nm.Metrics()), nil
 	}, docs.ComponentSpec{
 		Name:       "mongodb",
 		Type:       docs.TypeProcessor,
@@ -118,7 +117,7 @@ type Processor struct {
 // NewProcessor returns a MongoDB processor.
 func NewProcessor(
 	conf processor.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type,
-) (iprocessor.V2Batched, error) {
+) (processor.V2Batched, error) {
 	// TODO: V4 Remove this after V4 lands and #972 is fixed
 	operation := client.NewOperation(conf.MongoDB.Operation)
 	if operation == client.OperationInvalid {
@@ -352,7 +351,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			if _, err := collection.BulkWrite(context.Background(), writeModels); err != nil {
 				m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
 				_ = newBatch.Iter(func(i int, p *message.Part) error {
-					iprocessor.MarkErr(p, spans[i], err)
+					processor.MarkErr(p, spans[i], err)
 					return nil
 				})
 			}

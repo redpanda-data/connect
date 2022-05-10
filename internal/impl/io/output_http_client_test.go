@@ -18,10 +18,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
 )
 
@@ -48,7 +48,7 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Type = "http_client"
 	conf.HTTPClient.BatchAsMultipart = true
 	conf.HTTPClient.URL = ts.URL + "/testpost"
@@ -103,7 +103,7 @@ func TestHTTPClientMultipartDisabled(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Type = "http_client"
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 	conf.HTTPClient.BatchAsMultipart = false
@@ -158,7 +158,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := ooutput.NewHTTPClientConfig()
+	conf := output.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.Retry = "1ms"
 	conf.NumRetries = 3
@@ -201,7 +201,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := ooutput.NewHTTPClientConfig()
+	conf := output.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
@@ -254,7 +254,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := ooutput.NewHTTPClientConfig()
+	conf := output.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.PropagateResponse = true
 
@@ -301,7 +301,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := ooutput.NewHTTPClientConfig()
+	conf := output.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.PropagateResponse = true
 	conf.ExtractMetadata.IncludePatterns = []string{".*"}
@@ -379,7 +379,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := ooutput.NewHTTPClientConfig()
+	conf := output.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
 	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
@@ -461,9 +461,9 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := ooutput.NewHTTPClientConfig()
+	conf := output.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
-	conf.Multipart = []ooutput.HTTPClientMultipartExpression{
+	conf.Multipart = []output.HTTPClientMultipartExpression{
 		{
 			ContentDisposition: `form-data; name="text"`,
 			ContentType:        "text/plain",
@@ -544,9 +544,9 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := ooutput.NewHTTPClientConfig()
+	conf := output.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
-	conf.Multipart = []ooutput.HTTPClientMultipartExpression{
+	conf.Multipart = []output.HTTPClientMultipartExpression{
 		{
 			ContentDisposition: `form-data; name="text"`,
 			ContentType:        "text/plain",

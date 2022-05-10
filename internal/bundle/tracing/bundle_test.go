@@ -9,14 +9,14 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,7 +29,7 @@ func TestBundleInputTracing(t *testing.T) {
 
 	inConfig := input.NewConfig()
 	inConfig.Label = "foo"
-	inConfig.Type = input.TypeGenerate
+	inConfig.Type = "generate"
 	inConfig.Generate.Count = 10
 	inConfig.Generate.Interval = "1us"
 	inConfig.Generate.Mapping = `root.count = count("counting the number of input tracing messages")`
@@ -81,7 +81,7 @@ func TestBundleOutputTracing(t *testing.T) {
 
 	outConfig := output.NewConfig()
 	outConfig.Label = "foo"
-	outConfig.Type = output.TypeDrop
+	outConfig.Type = "drop"
 
 	mgr, err := manager.New(
 		manager.NewResourceConfig(),
@@ -137,7 +137,7 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 
 	outConfig := output.NewConfig()
 	outConfig.Label = "foo"
-	outConfig.Type = output.TypeDrop
+	outConfig.Type = "drop"
 
 	blobConf := processor.NewConfig()
 	blobConf.Type = "bloblang"

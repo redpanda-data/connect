@@ -22,17 +22,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(conf oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		var rdr reader.Async
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
+		var rdr input.Async
 		var err error
 		if rdr, err = newAmazonS3Reader(conf.AWSS3, nm); err != nil {
 			return nil, err
@@ -41,9 +40,9 @@ func init() {
 		// there's no concept of propagating nacks upstream, therefore wrap
 		// our reader within a preserver in order to retry indefinitely.
 		if conf.AWSS3.SQS.URL == "" {
-			rdr = reader.NewAsyncPreserver(rdr)
+			rdr = input.NewAsyncPreserver(rdr)
 		}
-		return oinput.NewAsyncReader("aws_s3", false, rdr, nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("aws_s3", false, rdr, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:   "aws_s3",
 		Status: docs.StatusStable,
@@ -103,7 +102,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				).Advanced(),
 				docs.FieldInt("max_messages", "The maximum number of SQS messages to consume from each request.").Advanced(),
 			),
-		).ChildDefaultAndTypesFromStruct(oinput.NewAWSS3Config()),
+		).ChildDefaultAndTypesFromStruct(input.NewAWSS3Config()),
 		Categories: []string{
 			"Services",
 			"AWS",
@@ -170,13 +169,13 @@ func deleteS3ObjectAckFn(
 type staticTargetReader struct {
 	pending    []*s3ObjectTarget
 	s3         *s3.S3
-	conf       oinput.AWSS3Config
+	conf       input.AWSS3Config
 	startAfter *string
 }
 
 func newStaticTargetReader(
 	ctx context.Context,
-	conf oinput.AWSS3Config,
+	conf input.AWSS3Config,
 	log log.Modular,
 	s3Client *s3.S3,
 ) (*staticTargetReader, error) {
@@ -243,7 +242,7 @@ func (s staticTargetReader) Close(context.Context) error {
 //------------------------------------------------------------------------------
 
 type sqsTargetReader struct {
-	conf oinput.AWSS3Config
+	conf input.AWSS3Config
 	log  log.Modular
 	sqs  *sqs.SQS
 	s3   *s3.S3
@@ -254,7 +253,7 @@ type sqsTargetReader struct {
 }
 
 func newSQSTargetReader(
-	conf oinput.AWSS3Config,
+	conf input.AWSS3Config,
 	log log.Modular,
 	s3 *s3.S3,
 	sqs *sqs.SQS,
@@ -501,7 +500,7 @@ func (s *sqsTargetReader) ackSQSMessage(ctx context.Context, msg *sqs.Message) e
 // AmazonS3 is a benthos reader.Type implementation that reads messages from an
 // Amazon S3 bucket.
 type awsS3Reader struct {
-	conf oinput.AWSS3Config
+	conf input.AWSS3Config
 
 	objectScannerCtor codec.ReaderConstructor
 	keyReader         s3ObjectTargetReader
@@ -526,7 +525,7 @@ type s3PendingObject struct {
 }
 
 // NewAmazonS3 creates a new Amazon S3 bucket reader.Type.
-func newAmazonS3Reader(conf oinput.AWSS3Config, nm bundle.NewManagement) (*awsS3Reader, error) {
+func newAmazonS3Reader(conf input.AWSS3Config, nm bundle.NewManagement) (*awsS3Reader, error) {
 	if conf.Bucket == "" && conf.SQS.URL == "" {
 		return nil, errors.New("either a bucket or an sqs.url must be specified")
 	}
@@ -665,7 +664,7 @@ func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, er
 }
 
 // ReadWithContext attempts to read a new message from the target S3 bucket.
-func (a *awsS3Reader) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn reader.AsyncAckFn, err error) {
+func (a *awsS3Reader) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn input.AsyncAckFn, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 	if a.session == nil {

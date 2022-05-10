@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 )
 
 // Common errors that might occur throughout checkpointing.
@@ -25,7 +25,7 @@ var (
 // awsKinesisCheckpointer manages the shard checkpointing for a given client
 // identifier.
 type awsKinesisCheckpointer struct {
-	conf oinput.DynamoDBCheckpointConfig
+	conf input.DynamoDBCheckpointConfig
 
 	clientID      string
 	leaseDuration time.Duration
@@ -38,7 +38,7 @@ type awsKinesisCheckpointer struct {
 func newAWSKinesisCheckpointer(
 	session *session.Session,
 	clientID string,
-	conf oinput.DynamoDBCheckpointConfig,
+	conf input.DynamoDBCheckpointConfig,
 	leaseDuration time.Duration,
 	commitPeriod time.Duration,
 ) (*awsKinesisCheckpointer, error) {
