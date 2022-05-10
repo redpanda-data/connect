@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - Reintroduced basic metrics from the `twitter` and `discord` template based inputs.
 - Prevented a metrics label mismatch when running in streams mode with resources and `prometheus` metrics.
 - Label mismatches with the `prometheus` metric type now log errors and skip the metric without stopping the service.
+- Fixed a case where empty files consumed by the `aws_s3` input would trigger early graceful termination.
 
 ## 4.0.0 - 2022-04-20
 

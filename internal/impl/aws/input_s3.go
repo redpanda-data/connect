@@ -655,6 +655,12 @@ func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, er
 		obj:    obj,
 	}
 	if object.scanner, err = a.objectScannerCtor(target.key, obj.Body, target.ackFn); err != nil {
+		// Warning: NEVER return io.EOF from a scanner constructor, as this will
+		// falsely indicate that we've reached the end of our list of object
+		// targets when running an SQS feed.
+		if errors.Is(err, io.EOF) {
+			err = fmt.Errorf("encountered an empty file for key '%v'", target.key)
+		}
 		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
@@ -695,7 +701,7 @@ func (a *awsS3Reader) ReadWithContext(ctx context.Context) (msg *message.Batch, 
 			break
 		}
 		a.object = nil
-		if err != io.EOF {
+		if !errors.Is(err, io.EOF) {
 			return
 		}
 		if err = object.scanner.Close(ctx); err != nil {
