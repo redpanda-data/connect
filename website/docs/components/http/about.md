@@ -40,7 +40,7 @@ http:
     allowed_origins: []
   basic_auth:
     username: ""
-	password: ""
+    password: ""
 ```
 
 </TabItem>
