@@ -15,7 +15,7 @@ type Config struct {
 	Format       string            `json:"format" yaml:"format"`
 	AddTimeStamp bool              `json:"add_timestamp" yaml:"add_timestamp"`
 	StaticFields map[string]string `json:"static_fields" yaml:"static_fields"`
-	FilePath     string            `json:"file_path", yaml:"file_path"`
+	FilePath     string            `json:"file_path" yaml:"file_path"`
 }
 
 // NewConfig returns a config struct with the default values for each field.
