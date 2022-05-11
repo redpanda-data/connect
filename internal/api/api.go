@@ -30,19 +30,19 @@ type Config struct {
 	CertFile       string              `json:"cert_file" yaml:"cert_file"`
 	KeyFile        string              `json:"key_file" yaml:"key_file"`
 	CORS           httpdocs.ServerCORS `json:"cors" yaml:"cors"`
-	BasicAuth      *basicAuth          `json:"basic_auth" yaml:"basic_auth"`
+	BasicAuth      *BasicAuth          `json:"basic_auth" yaml:"basic_auth"`
 }
 
-type basicAuth struct {
+type BasicAuth struct {
 	Username string `json:"username" yaml:"username"`
 	Password string `json:"password" yaml:"password"`
 }
 
-func (b *basicAuth) Enabled() bool {
+func (b *BasicAuth) Enabled() bool {
 	return b.Username != "" && b.Password != ""
 }
 
-func (b *basicAuth) Matches(user, pass string) bool {
+func (b *BasicAuth) Matches(user, pass string) bool {
 	userHash := sha256.Sum256([]byte(user))
 	passHash := sha256.Sum256([]byte(pass))
 	expectedUserHash := sha256.Sum256([]byte(b.Username))
@@ -64,7 +64,7 @@ func NewConfig() Config {
 		CertFile:       "",
 		KeyFile:        "",
 		CORS:           httpdocs.NewServerCORS(),
-		BasicAuth: &basicAuth{
+		BasicAuth: &BasicAuth{
 			Username: "",
 			Password: "",
 		},
@@ -283,7 +283,7 @@ func (t *Type) RegisterEndpoint(path, desc string, handlerFunc http.HandlerFunc)
 		}
 
 		if t.conf.BasicAuth.Enabled() {
-			wrapHandler = func(next http.HandlerFunc, auth *basicAuth) http.HandlerFunc {
+			wrapHandler = func(next http.HandlerFunc, auth *BasicAuth) http.HandlerFunc {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					user, pass, ok := r.BasicAuth()
 					if !(ok && auth.Matches(user, pass)) {
