@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -30,28 +28,7 @@ type Config struct {
 	CertFile       string              `json:"cert_file" yaml:"cert_file"`
 	KeyFile        string              `json:"key_file" yaml:"key_file"`
 	CORS           httpdocs.ServerCORS `json:"cors" yaml:"cors"`
-	BasicAuth      *BasicAuth          `json:"basic_auth" yaml:"basic_auth"`
-}
-
-type BasicAuth struct {
-	Username string `json:"username" yaml:"username"`
-	Password string `json:"password" yaml:"password"`
-}
-
-func (b *BasicAuth) Enabled() bool {
-	return b.Username != "" && b.Password != ""
-}
-
-func (b *BasicAuth) Matches(user, pass string) bool {
-	userHash := sha256.Sum256([]byte(user))
-	passHash := sha256.Sum256([]byte(pass))
-	expectedUserHash := sha256.Sum256([]byte(b.Username))
-	expectedPassHash := sha256.Sum256([]byte(b.Password))
-
-	userMatch := (subtle.ConstantTimeCompare(userHash[:], expectedUserHash[:]) == 1)
-	passMatch := (subtle.ConstantTimeCompare(passHash[:], expectedPassHash[:]) == 1)
-
-	return userMatch && passMatch
+	BasicAuth      httpdocs.BasicAuth  `json:"basic_auth" yaml:"basic_auth"`
 }
 
 // NewConfig creates a new API config with default values.
@@ -64,10 +41,7 @@ func NewConfig() Config {
 		CertFile:       "",
 		KeyFile:        "",
 		CORS:           httpdocs.NewServerCORS(),
-		BasicAuth: &BasicAuth{
-			Username: "",
-			Password: "",
-		},
+		BasicAuth:      httpdocs.NewBasicAuth(),
 	}
 }
 
@@ -275,26 +249,12 @@ func (t *Type) RegisterEndpoint(path, desc string, handlerFunc http.HandlerFunc)
 	defer t.handlersMut.Unlock()
 
 	if _, exists := t.handlers[path]; !exists {
-		wrapHandler := func(w http.ResponseWriter, r *http.Request) {
+		wrapHandler := t.conf.BasicAuth.WrapHandler(func(w http.ResponseWriter, r *http.Request) {
 			t.handlersMut.RLock()
 			h := t.handlers[path]
 			t.handlersMut.RUnlock()
 			h(w, r)
-		}
-
-		if t.conf.BasicAuth.Enabled() {
-			wrapHandler = func(next http.HandlerFunc, auth *BasicAuth) http.HandlerFunc {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					user, pass, ok := r.BasicAuth()
-					if !(ok && auth.Matches(user, pass)) {
-						w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
-						http.Error(w, "Unauthorized", http.StatusUnauthorized)
-						return
-					}
-					next.ServeHTTP(w, r)
-				})
-			}(wrapHandler, t.conf.BasicAuth)
-		}
+		})
 
 		t.mux.HandleFunc(path, wrapHandler)
 		t.mux.HandleFunc(t.conf.RootPath+path, wrapHandler)

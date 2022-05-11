@@ -19,9 +19,6 @@ func Spec() docs.FieldSpecs {
 		docs.FieldString("cert_file", "An optional certificate file for enabling TLS.").Advanced().HasDefault(""),
 		docs.FieldString("key_file", "An optional key file for enabling TLS.").Advanced().HasDefault(""),
 		httpdocs.ServerCORSFieldSpec(),
-		docs.FieldObject("basic_auth", "Require HTTP Basic Auth for the HTTP server.").WithChildren(
-			docs.FieldString("username", "Basic Auth Username").HasDefault(""),
-			docs.FieldString("password", "Basic Auth Password").HasDefault(""),
-		).Advanced(),
+		httpdocs.BasicAuthFieldSpec(),
 	}
 }
