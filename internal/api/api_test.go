@@ -85,3 +85,27 @@ func TestAPIEnableCORSNoHeaders(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "must specify at least one allowed origin")
 }
+
+func TestAPIBasicAuth(t *testing.T) {
+	conf := api.NewConfig()
+	conf.BasicAuth.Username = "myuser"
+	conf.BasicAuth.Password = "secret"
+
+	s, err := api.New("", "", conf, nil, log.Noop(), metrics.Noop())
+	require.NoError(t, err)
+
+	handler := s.Handler()
+
+	request, _ := http.NewRequest("GET", "/version", http.NoBody)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusUnauthorized, response.Code)
+
+	request, _ = http.NewRequest("GET", "/version", http.NoBody)
+	request.SetBasicAuth("myuser", "secret")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusOK, response.Code)
+}
