@@ -25,6 +25,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	strmmgr "github.com/benthosdev/benthos/v4/internal/stream/manager"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 //------------------------------------------------------------------------------
@@ -255,6 +256,15 @@ func cmdService(
 	// here as this is only a special circumstance for very basic use cases.
 	if !streamsMode && conf.Output.Type == "stdout" {
 		logger, err = log.NewV2(os.Stderr, conf.Logger)
+	} else if conf.Logger.FilePath != "" {
+		logrotate := &lumberjack.Logger{
+			Filename:   conf.Logger.FilePath + "/benthos.log",
+			MaxSize:    10,
+			MaxAge:     1,
+			MaxBackups: 1,
+			Compress:   true,
+		}
+		logger, err = log.NewV2(logrotate, conf.Logger)
 	} else {
 		logger, err = log.NewV2(os.Stdout, conf.Logger)
 	}
