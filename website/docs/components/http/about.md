@@ -6,6 +6,27 @@ When Benthos runs it kicks off an HTTP server that provides a few generally usef
 
 The configuration for this server lives under the `http` namespace, with the following default values:
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
+```yaml
+http:
+  address: 0.0.0.0:4195
+  enabled: true
+  root_path: /benthos
+  debug_endpoints: false
+```
+
+</TabItem>
+<TabItem value="advanced">
+
 ```yaml
 http:
   address: 0.0.0.0:4195
@@ -17,7 +38,12 @@ http:
   cors:
     enabled: false
     allowed_origins: []
+  basic_auth:
+    username: ""
+	password: ""
 ```
+
+</TabItem>
 
 The field `enabled` can be set to `false` in order to disable the server.
 
@@ -28,6 +54,10 @@ The field `root_path` specifies a general prefix for all endpoints, this can hel
 By default Benthos will serve traffic over HTTP. In order to enforce TLS and serve traffic exclusively over HTTPS you must provide a `cert_file` and `key_file` path in your config, which point to a file containing a certificate and a matching private key for the server respectively.
 
 If the certificate is signed by a certificate authority, the `cert_file` should be the concatenation of the server's certificate, any intermediates, and the CA's certificate.
+
+## Enabling BasicAuth
+
+By default Benthos does not do any sort of authentication. Set `basic_auth.username` and `basic_auth.password` to enforce Basic authentication on all endpoints.
 
 ## Endpoints
 
