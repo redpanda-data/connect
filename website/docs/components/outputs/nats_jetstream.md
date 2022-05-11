@@ -140,6 +140,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `object`  
 Default: `{}`  
+Requires version 4.1.0 or newer  
 
 ```yml
 # Examples

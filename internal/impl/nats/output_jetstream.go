@@ -35,7 +35,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 			Example(map[string]interface{}{
 				"Content-Type": "application/json",
 				"Timestamp":    `${!meta("Timestamp")}`,
-			})).
+			}).Version("4.1.0")).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
 			Default(1024)).

@@ -128,6 +128,7 @@ If set to `true`, a quote may appear in an unquoted field and a non-doubled quot
 
 Type: `bool`  
 Default: `false`  
+Requires version 4.1.0 or newer  
 
 This input is particularly useful when consuming CSV from files too large to
 parse entirely within memory. However, in cases where CSV is consumed from other
