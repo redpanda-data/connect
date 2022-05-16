@@ -3,9 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.1.0 - 2022-05-11
-
 ## Unreleased
+
+### Added
+
+- Field `credentials.use_ec2_credentials` added to all AWS based components.
+
+## 4.1.0 - 2022-05-11
 
 ### Added
 
