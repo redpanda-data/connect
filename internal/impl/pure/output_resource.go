@@ -8,15 +8,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		if !nm.ProbeOutput(c.Resource) {
 			return nil, fmt.Errorf("output resource '%v' was not found", c.Resource)
 		}
@@ -82,7 +81,7 @@ You can find out more about resources [in this document.](/docs/configuration/re
 }
 
 type resourceOutput struct {
-	mgr  interop.Manager
+	mgr  bundle.NewManagement
 	name string
 	log  log.Modular
 

@@ -17,16 +17,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
@@ -160,7 +160,7 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 	s.producerID = uuid.String()
 
 	conf := input.NewConfig()
-	conf.Type = input.TypeInproc
+	conf.Type = "inproc"
 	conf.Inproc = input.InprocConfig(s.producerID)
 	s.inputs = append(s.inputs, conf)
 
@@ -209,7 +209,7 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 	s.producerID = uuid.String()
 
 	conf := input.NewConfig()
-	conf.Type = input.TypeInproc
+	conf.Type = "inproc"
 	conf.Inproc = input.InprocConfig(s.producerID)
 	s.inputs = append(s.inputs, conf)
 
@@ -309,7 +309,7 @@ func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
 	s.consumerID = uuid.String()
 
 	conf := output.NewConfig()
-	conf.Type = output.TypeInproc
+	conf.Type = "inproc"
 	conf.Inproc = s.consumerID
 	s.outputs = append(s.outputs, conf)
 
@@ -345,7 +345,7 @@ func (s *StreamBuilder) AddBatchConsumerFunc(fn MessageBatchHandlerFunc) error {
 	s.consumerID = uuid.String()
 
 	conf := output.NewConfig()
-	conf.Type = output.TypeInproc
+	conf.Type = "inproc"
 	conf.Inproc = s.consumerID
 	s.outputs = append(s.outputs, conf)
 
@@ -725,7 +725,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		apiMut.RegisterEndpoint("/metrics", "Exposes service-wide metrics in the format configured.", hler)
 	}
 
-	mgr, err := manager.NewV2(
+	mgr, err := manager.New(
 		conf.ResourceConfig, apiMut, logger, stats,
 		manager.OptSetEnvironment(env),
 		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
@@ -765,7 +765,7 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 	if len(s.inputs) == 1 {
 		conf.Input = s.inputs[0]
 	} else if len(s.inputs) > 1 {
-		conf.Input.Type = input.TypeBroker
+		conf.Input.Type = "broker"
 		conf.Input.Broker.Inputs = s.inputs
 	}
 
@@ -777,7 +777,7 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 	if len(s.outputs) == 1 {
 		conf.Output = s.outputs[0]
 	} else if len(s.outputs) > 1 {
-		conf.Output.Type = output.TypeBroker
+		conf.Output.Type = "broker"
 		conf.Output.Broker.Outputs = s.outputs
 	}
 

@@ -3,6 +3,7 @@ package aws
 import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 
@@ -33,6 +34,9 @@ func sessionFields() []*service.ConfigField {
 			service.NewStringField("token").
 				Description("The token for the credentials being used, required when using short term credentials.").
 				Default("").Advanced(),
+			service.NewBoolField("use_ec2_credentials").
+				Description("Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).").
+				Default(false).Version("4.2.0"),
 			service.NewStringField("role").
 				Description("A role ARN to assume.").
 				Default("").Advanced(),
@@ -88,6 +92,10 @@ func getSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*s
 		)
 	}
 
+	if useEC2, _ := parsedConf.FieldBool("use_ec2_credentials"); useEC2 {
+		sess.Config = sess.Config.WithCredentials(ec2rolecreds.NewCredentials(sess))
+	}
+
 	return sess, nil
 }
 
@@ -135,6 +143,10 @@ func GetSessionFromConf(c bsession.Config, opts ...func(*aws.Config)) (*session.
 		sess.Config = sess.Config.WithCredentials(
 			stscreds.NewCredentials(sess, c.Credentials.Role, opts...),
 		)
+	}
+
+	if c.Credentials.UseEC2Creds {
+		sess.Config = sess.Config.WithCredentials(ec2rolecreds.NewCredentials(sess))
 	}
 
 	return sess, nil

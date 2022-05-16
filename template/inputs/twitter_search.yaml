@@ -147,13 +147,23 @@ mapping: |
   root.processors."-".split = {}
 
 metrics_mapping: |
-  root = match this {
-    this.has_suffix("processor.7.count") => this.replace_all("processor.7.count", "count"),
-    this.has_suffix("processor.3.client.error") => this.replace_all("processor.3.client.error", "error"),
-    this.contains("processor.3.client.error") => deleted(), # Ignore more specialized client errors
-    this.contains("processor.3.client") => this.replace_all("processor.3.client", "request"),
-    _ => deleted(),
+  meta label = $label | ""
+  let mpath = meta("path").or("")
+
+  let name_path = if $mpath.has_suffix("processors.7") && this == "processor_received" {
+    {
+      "name": "input_received",
+      "path": $mpath.re_replace(".processors.7$", ""),
+    }
+  } else if $mpath.has_suffix("processors.3") && this == "processor_error" {
+    {
+      "name": "input_error",
+      "path": $mpath.re_replace(".processors.3$", ""),
+    }
   }
+
+  meta path = $name_path.path | deleted()
+  root = $name_path.name | deleted()
 
 tests:
   - name: Basic fields

@@ -11,18 +11,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		return newRedisListInput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name: "redis_list",
@@ -31,7 +29,7 @@ Pops messages from the beginning of a Redis list using the BLPop command.`,
 		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
 			docs.FieldString("key", "The key of a list to read from."),
 			docs.FieldString("timeout", "The length of time to poll for new messages before reattempting.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(oinput.NewRedisListConfig()),
+		).ChildDefaultAndTypesFromStruct(input.NewRedisListConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -41,25 +39,25 @@ Pops messages from the beginning of a Redis list using the BLPop command.`,
 	}
 }
 
-func newRedisListInput(conf oinput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func newRedisListInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	r, err := newRedisListReader(conf.RedisList, log)
 	if err != nil {
 		return nil, err
 	}
-	return oinput.NewAsyncReader("redis_list", true, reader.NewAsyncPreserver(r), log, stats)
+	return input.NewAsyncReader("redis_list", true, input.NewAsyncPreserver(r), log, stats)
 }
 
 type redisListReader struct {
 	client redis.UniversalClient
 	cMut   sync.Mutex
 
-	conf    oinput.RedisListConfig
+	conf    input.RedisListConfig
 	timeout time.Duration
 
 	log log.Modular
 }
 
-func newRedisListReader(conf oinput.RedisListConfig, log log.Modular) (*redisListReader, error) {
+func newRedisListReader(conf input.RedisListConfig, log log.Modular) (*redisListReader, error) {
 	r := &redisListReader{
 		conf: conf,
 		log:  log,
@@ -100,7 +98,7 @@ func (r *redisListReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (r *redisListReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (r *redisListReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	var client redis.UniversalClient
 
 	r.cMut.Lock()

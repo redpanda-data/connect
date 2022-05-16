@@ -17,16 +17,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newAzureTableStorageOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "azure_table_storage",
@@ -98,7 +97,7 @@ properties:
 				"The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
 			policy.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewAzureTableStorageConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewAzureTableStorageConfig()),
 		Categories: []string{
 			"Services",
 			"Azure",
@@ -109,20 +108,20 @@ properties:
 	}
 }
 
-func newAzureTableStorageOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newAzureTableStorageOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	tableStorage, err := newAzureTableStorageWriter(conf.AzureTableStorage, mgr, log)
 	if err != nil {
 		return nil, err
 	}
-	w, err := ooutput.NewAsyncWriter("azure_table_storage", conf.AzureTableStorage.MaxInFlight, tableStorage, log, stats)
+	w, err := output.NewAsyncWriter("azure_table_storage", conf.AzureTableStorage.MaxInFlight, tableStorage, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.NewBatcherFromConfig(conf.AzureTableStorage.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.AzureTableStorage.Batching, w, mgr, log, stats)
 }
 
 type azureTableStorageWriter struct {
-	conf         ooutput.AzureTableStorageConfig
+	conf         output.AzureTableStorageConfig
 	tableName    *field.Expression
 	partitionKey *field.Expression
 	rowKey       *field.Expression
@@ -132,7 +131,7 @@ type azureTableStorageWriter struct {
 	log          log.Modular
 }
 
-func newAzureTableStorageWriter(conf ooutput.AzureTableStorageConfig, mgr interop.Manager, log log.Modular) (*azureTableStorageWriter, error) {
+func newAzureTableStorageWriter(conf output.AzureTableStorageConfig, mgr bundle.NewManagement, log log.Modular) (*azureTableStorageWriter, error) {
 	var timeout time.Duration
 	var err error
 	if tout := conf.Timeout; len(tout) > 0 {
@@ -195,7 +194,7 @@ func (a *azureTableStorageWriter) ConnectWithContext(ctx context.Context) error 
 
 func (a *azureTableStorageWriter) WriteWithContext(wctx context.Context, msg *message.Batch) error {
 	writeReqs := make(map[string]map[string][]*aztables.EDMEntity)
-	if err := writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	if err := output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		entity := &aztables.EDMEntity{}
 		tableName := a.tableName.String(i, msg)
 		partitionKey := a.partitionKey.String(i, msg)

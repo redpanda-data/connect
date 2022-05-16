@@ -16,22 +16,21 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/amqp1/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	itls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		a, err := newAMQP1Reader(c.AMQP1, nm.Logger())
 		if err != nil {
 			return nil, err
 		}
-		return oinput.NewAsyncReader("amqp_1", true, a, nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("amqp_1", true, a, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "amqp_1",
 		Status:  docs.StatusBeta,
@@ -114,14 +113,14 @@ func (c *amqp1Conn) Close(ctx context.Context) {
 type amqp1Reader struct {
 	tlsConf *tls.Config
 
-	conf oinput.AMQP1Config
+	conf input.AMQP1Config
 	log  log.Modular
 
 	m    sync.RWMutex
 	conn *amqp1Conn
 }
 
-func newAMQP1Reader(conf oinput.AMQP1Config, log log.Modular) (*amqp1Reader, error) {
+func newAMQP1Reader(conf input.AMQP1Config, log log.Modular) (*amqp1Reader, error) {
 	a := amqp1Reader{
 		conf: conf,
 		log:  log,
@@ -213,7 +212,7 @@ func (a *amqp1Reader) disconnect(ctx context.Context) error {
 	return nil
 }
 
-func (a *amqp1Reader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (a *amqp1Reader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	a.m.RLock()
 	conn := a.conn
 	a.m.RUnlock()

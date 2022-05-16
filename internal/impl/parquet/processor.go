@@ -18,7 +18,7 @@ func parquetProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
 		Categories("Parsing").
-		Summary("Converts batches of documents to or from [Parquet files](https://parquet.apache.org/documentation/latest/).").
+		Summary("Converts batches of documents to or from [Parquet files](https://parquet.apache.org/docs/).").
 		Description(`
 ### Troubleshooting
 

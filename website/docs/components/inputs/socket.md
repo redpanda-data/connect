@@ -15,7 +15,6 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Connects to a tcp or unix socket and consumes a continuous stream of messages.
 
 

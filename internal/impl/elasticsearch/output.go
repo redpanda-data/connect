@@ -18,20 +18,20 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
 	baws "github.com/benthosdev/benthos/v4/internal/impl/aws"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 	itls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(conf ooutput.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
 		return NewElasticsearch(conf, mgr, mgr.Logger(), mgr.Metrics())
 	}), docs.ComponentSpec{
 		Name: "elasticsearch",
@@ -70,7 +70,7 @@ false for connections to succeed.`),
 				}.Merge(sess.FieldSpecs())...,
 			).Advanced(),
 			docs.FieldBool("gzip_compression", "Enable gzip compression on the request side.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewElasticsearchConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewElasticsearchConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -81,18 +81,18 @@ false for connections to succeed.`),
 }
 
 // NewElasticsearch creates a new Elasticsearch output type.
-func NewElasticsearch(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func NewElasticsearch(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	elasticWriter, err := NewElasticsearchV2(conf.Elasticsearch, mgr, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	w, err := ooutput.NewAsyncWriter(
+	w, err := output.NewAsyncWriter(
 		"elasticsearch", conf.Elasticsearch.MaxInFlight, elasticWriter, log, stats,
 	)
 	if err != nil {
 		return w, err
 	}
-	return ooutput.NewBatcherFromConfig(conf.Elasticsearch.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.Elasticsearch.Batching, w, mgr, log, stats)
 }
 
 // Elasticsearch is a writer type that writes messages into elasticsearch.
@@ -103,7 +103,7 @@ type Elasticsearch struct {
 	urls        []string
 	sniff       bool
 	healthcheck bool
-	conf        ooutput.ElasticsearchConfig
+	conf        output.ElasticsearchConfig
 
 	backoffCtor func() backoff.BackOff
 	timeout     time.Duration
@@ -119,7 +119,7 @@ type Elasticsearch struct {
 }
 
 // NewElasticsearchV2 creates a new Elasticsearch writer type.
-func NewElasticsearchV2(conf ooutput.ElasticsearchConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
+func NewElasticsearchV2(conf output.ElasticsearchConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
 	e := Elasticsearch{
 		log:         log,
 		stats:       stats,

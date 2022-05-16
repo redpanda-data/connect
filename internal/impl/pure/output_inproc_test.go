@@ -9,16 +9,16 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
 func TestInproc(t *testing.T) {
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	_, err = mgr.GetPipe("foo")

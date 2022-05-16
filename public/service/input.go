@@ -8,7 +8,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
@@ -107,7 +106,7 @@ type airGapReader struct {
 	sig *shutdown.Signaller
 }
 
-func newAirGapReader(r Input) reader.Async {
+func newAirGapReader(r Input) input.Async {
 	return &airGapReader{r, shutdown.NewSignaller()}
 }
 
@@ -119,7 +118,7 @@ func (a *airGapReader) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (a *airGapReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (a *airGapReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	msg, ackFn, err := a.r.Read(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNotConnected) {
@@ -162,7 +161,7 @@ type airGapBatchReader struct {
 	sig *shutdown.Signaller
 }
 
-func newAirGapBatchReader(r BatchInput) reader.Async {
+func newAirGapBatchReader(r BatchInput) input.Async {
 	return &airGapBatchReader{r, shutdown.NewSignaller()}
 }
 
@@ -174,7 +173,7 @@ func (a *airGapBatchReader) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	batch, ackFn, err := a.r.ReadBatch(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNotConnected) {

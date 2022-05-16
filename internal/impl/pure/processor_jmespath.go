@@ -10,14 +10,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newJMESPath(conf.JMESPath, mgr)
 		if err != nil {
 			return nil, err
@@ -82,7 +80,7 @@ type jmespathProc struct {
 	log   log.Modular
 }
 
-func newJMESPath(conf oprocessor.JMESPathConfig, mgr interop.Manager) (processor.V2, error) {
+func newJMESPath(conf processor.JMESPathConfig, mgr bundle.NewManagement) (processor.V2, error) {
 	query, err := jmespath.Compile(conf.Query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile JMESPath query: %v", err)

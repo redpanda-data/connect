@@ -17,7 +17,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
 )
@@ -124,7 +123,7 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	}
 
 	// Create resource manager.
-	manager, err := manager.NewV2(conf.ResourceConfig, mock.NewManager(), logger, stats)
+	manager, err := manager.New(conf.ResourceConfig, mock.NewManager(), logger, stats)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %v", err)
 	}
@@ -135,13 +134,13 @@ func NewHandler(conf config.Type) (*Handler, error) {
 
 	transactionChan := make(chan message.Transaction, 1)
 
-	pMgr := manager.IntoPath("pipeline").(bundle.NewManagement)
+	pMgr := manager.IntoPath("pipeline")
 	if pipelineLayer, err = pipeline.New(conf.Pipeline, pMgr); err != nil {
 		return nil, fmt.Errorf("failed to create resource pipeline: %w", err)
 	}
 
 	oMgr := manager.IntoPath("output")
-	if outputLayer, err = output.New(conf.Output, oMgr, oMgr.Logger(), oMgr.Metrics()); err != nil {
+	if outputLayer, err = oMgr.NewOutput(conf.Output); err != nil {
 		return nil, fmt.Errorf("failed to create resource output: %w", err)
 	}
 

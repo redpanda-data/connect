@@ -12,6 +12,7 @@ import (
 	"github.com/Shopify/sarama"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -37,7 +38,7 @@ func (k *kafkaReader) runPartitionConsumer(
 	batchPolicy, err := policy.New(k.conf.Batching, k.mgr.IntoPath("kafka", "batching"))
 	if err != nil {
 		k.log.Errorf("Failed to initialise batch policy: %v, falling back to no policy.\n", err)
-		conf := policy.NewConfig()
+		conf := batchconfig.NewConfig()
 		conf.Count = 1
 		if batchPolicy, err = policy.New(conf, k.mgr.IntoPath("kafka", "batching")); err != nil {
 			panic(err)

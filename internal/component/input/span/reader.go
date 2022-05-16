@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
@@ -25,21 +25,20 @@ var ExtractTracingSpanMappingDocs = docs.FieldBloblang(
 type Reader struct {
 	inputName string
 
-	mgr interop.Manager
 	log log.Modular
 
 	mapping *mapping.Executor
-	rdr     reader.Async
+	rdr     input.Async
 }
 
 // NewReader wraps an async reader with a mechanism for extracting tracing
 // spans from the consumed message using a Bloblang mapping.
-func NewReader(inputName, mapping string, rdr reader.Async, mgr interop.Manager, logger log.Modular) (reader.Async, error) {
+func NewReader(inputName, mapping string, rdr input.Async, mgr bundle.NewManagement) (input.Async, error) {
 	exe, err := mgr.BloblEnvironment().NewMapping(mapping)
 	if err != nil {
 		return nil, err
 	}
-	return &Reader{inputName, mgr, logger, exe, rdr}, nil
+	return &Reader{inputName, mgr.Logger(), exe, rdr}, nil
 }
 
 // ConnectWithContext attempts to establish a connection to the source, if
@@ -53,7 +52,7 @@ func (s *Reader) ConnectWithContext(ctx context.Context) error {
 // successful a message is returned along with a function used to
 // acknowledge receipt of the returned message. It's safe to process the
 // returned message and read the next message asynchronously.
-func (s *Reader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (s *Reader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	m, afn, err := s.rdr.ReadWithContext(ctx)
 	if err != nil {
 		return nil, nil, err

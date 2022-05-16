@@ -9,7 +9,6 @@ import (
 
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 // InputPart defines an input part for a test case.
@@ -167,7 +166,7 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 
 	inputMsg := message.QuickBatch(nil)
 	inputMsg.SetAll(parts)
-	outputBatches, result := processor.ExecuteAll(procSet, inputMsg)
+	outputBatches, result := iprocessor.ExecuteAll(procSet, inputMsg)
 	if result != nil {
 		reportFailure(fmt.Sprintf("processors resulted in error: %v", result))
 	}

@@ -10,19 +10,20 @@ package bundle
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"regexp"
 
+	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
-	"github.com/benthosdev/benthos/v4/internal/interop"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
@@ -31,20 +32,49 @@ var nameRegexp = regexp.MustCompile(nameRegexpRaw)
 // NewManagement defines the latest API for a Benthos manager, which will become
 // the only API (internally) in Benthos V4.
 type NewManagement interface {
-	interop.Manager
+	ForStream(id string) NewManagement
+	IntoPath(segments ...string) NewManagement
+	WithAddedMetrics(m metrics.Type) NewManagement
+
+	Path() []string
+	Label() string
+
+	Metrics() metrics.Type
+	Logger() log.Modular
+	BloblEnvironment() *bloblang.Environment
+
+	RegisterEndpoint(path, desc string, h http.HandlerFunc)
 
 	NewBuffer(conf buffer.Config) (buffer.Streamed, error)
 	NewCache(conf cache.Config) (cache.V1, error)
-	NewInput(conf input.Config, pipelines ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error)
-	NewProcessor(conf processor.Config) (iprocessor.V1, error)
-	NewOutput(conf output.Config, pipelines ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error)
+	NewInput(conf input.Config, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error)
+	NewProcessor(conf processor.Config) (processor.V1, error)
+	NewOutput(conf output.Config, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error)
 	NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error)
 
+	ProbeCache(name string) bool
+	AccessCache(ctx context.Context, name string, fn func(cache.V1)) error
 	StoreCache(ctx context.Context, name string, conf cache.Config) error
+
+	ProbeInput(name string) bool
+	AccessInput(ctx context.Context, name string, fn func(input.Streamed)) error
 	StoreInput(ctx context.Context, name string, conf input.Config) error
+
+	ProbeProcessor(name string) bool
+	AccessProcessor(ctx context.Context, name string, fn func(processor.V1)) error
 	StoreProcessor(ctx context.Context, name string, conf processor.Config) error
+
+	ProbeOutput(name string) bool
+	AccessOutput(ctx context.Context, name string, fn func(output.Sync)) error
 	StoreOutput(ctx context.Context, name string, conf output.Config) error
+
+	ProbeRateLimit(name string) bool
+	AccessRateLimit(ctx context.Context, name string, fn func(ratelimit.V1)) error
 	StoreRateLimit(ctx context.Context, name string, conf ratelimit.Config) error
+
+	GetPipe(name string) (<-chan message.Transaction, error)
+	SetPipe(name string, t <-chan message.Transaction)
+	UnsetPipe(name string, t <-chan message.Transaction)
 }
 
 func wrapComponentErr(mgr NewManagement, typeStr string, err error) error {
@@ -56,7 +86,7 @@ func wrapComponentErr(mgr NewManagement, typeStr string, err error) error {
 		annotation = "'" + mgr.Label() + "'"
 	}
 	if p := mgr.Path(); len(p) > 0 {
-		annotation += "path root."
+		annotation += " path root."
 		annotation += query.SliceToDotPath(mgr.Path()...)
 	}
 	return fmt.Errorf("failed to init %v %v: %w", typeStr, annotation, err)

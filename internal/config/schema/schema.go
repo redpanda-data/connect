@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"sort"
-
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/config"
@@ -23,7 +21,6 @@ type Full struct {
 	RateLimits        []docs.ComponentSpec `json:"rate-limits,omitempty"`
 	Metrics           []docs.ComponentSpec `json:"metrics,omitempty"`
 	Tracers           []docs.ComponentSpec `json:"tracers,omitempty"`
-	conditions        []string
 	BloblangFunctions []query.FunctionSpec `json:"bloblang-functions,omitempty"`
 	BloblangMethods   []query.MethodSpec   `json:"bloblang-methods,omitempty"`
 }
@@ -46,7 +43,6 @@ func New(version, date string) Full {
 		BloblangFunctions: query.FunctionDocs(),
 		BloblangMethods:   query.MethodDocs(),
 	}
-	sort.Strings(s.conditions)
 	return s
 }
 
@@ -89,7 +85,6 @@ func (f *Full) Flattened() map[string][]string {
 		"rate-limits":        justNames(f.RateLimits),
 		"metrics":            justNames(f.Metrics),
 		"tracers":            justNames(f.Tracers),
-		"conditions":         f.conditions,
 		"bloblang-functions": justNamesBloblFuncs(f.BloblangFunctions),
 		"bloblang-methods":   justNamesBloblMethods(f.BloblangMethods),
 	}

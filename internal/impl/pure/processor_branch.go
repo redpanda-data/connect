@@ -15,7 +15,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
@@ -55,7 +54,7 @@ root.bar.id = this.user.id`,
 }
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		return newBranch(conf.Branch, mgr)
 	}, docs.ComponentSpec{
 		Name:   "branch",
@@ -206,10 +205,10 @@ type Branch struct {
 	mLatency       metrics.StatTimer
 }
 
-func newBranch(conf oprocessor.BranchConfig, mgr bundle.NewManagement) (*Branch, error) {
+func newBranch(conf processor.BranchConfig, mgr bundle.NewManagement) (*Branch, error) {
 	children := make([]processor.V1, 0, len(conf.Processors))
 	for i, pconf := range conf.Processors {
-		pMgr := mgr.IntoPath("branch", "processors", strconv.Itoa(i)).(bundle.NewManagement)
+		pMgr := mgr.IntoPath("branch", "processors", strconv.Itoa(i))
 		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, fmt.Errorf("failed to init processor %v: %w", i, err)
@@ -425,7 +424,7 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 		var res error
 		msg := message.QuickBatch(nil)
 		msg.SetAll(parts)
-		if procResults, res = oprocessor.ExecuteAll(b.children, msg); res != nil {
+		if procResults, res = processor.ExecuteAll(b.children, msg); res != nil {
 			err = fmt.Errorf("child processors failed: %v", res)
 		}
 		if len(procResults) == 0 {

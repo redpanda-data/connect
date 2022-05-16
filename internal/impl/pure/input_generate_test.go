@@ -9,8 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
@@ -18,7 +17,7 @@ func TestBloblangInterval(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*80)
 	defer done()
 
-	conf := oinput.NewGenerateConfig()
+	conf := input.NewGenerateConfig()
 	conf.Mapping = `root = "hello world"`
 	conf.Interval = "50ms"
 
@@ -48,7 +47,7 @@ func TestBloblangInterval(t *testing.T) {
 }
 
 func TestBloblangZeroInterval(t *testing.T) {
-	conf := oinput.NewGenerateConfig()
+	conf := input.NewGenerateConfig()
 	conf.Mapping = `root = "hello world"`
 	conf.Interval = "0s"
 	_, err := newGenerateReader(mock.NewManager(), conf)
@@ -61,7 +60,7 @@ func TestBloblangCron(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*1100)
 	defer done()
 
-	conf := oinput.NewGenerateConfig()
+	conf := input.NewGenerateConfig()
 	conf.Mapping = `root = "hello world"`
 	conf.Interval = "@every 1s"
 
@@ -90,7 +89,7 @@ func TestBloblangMapping(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
 
-	conf := oinput.NewGenerateConfig()
+	conf := input.NewGenerateConfig()
 	conf.Mapping = `root = {
 		"id": count("docs")
 	}`
@@ -114,7 +113,7 @@ func TestBloblangRemaining(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
 
-	conf := oinput.NewGenerateConfig()
+	conf := input.NewGenerateConfig()
 	conf.Mapping = `root = "foobar"`
 	conf.Interval = "1ms"
 	conf.Count = 10
@@ -146,7 +145,7 @@ func TestBloblangUnbounded(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
 
-	conf := oinput.NewGenerateConfig()
+	conf := input.NewGenerateConfig()
 	conf.Mapping = `root = "foobar"`
 	conf.Interval = "0s"
 
@@ -171,7 +170,7 @@ func TestBloblangUnboundedEmpty(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
 
-	conf := oinput.NewGenerateConfig()
+	conf := input.NewGenerateConfig()
 	conf.Mapping = `root = "foobar"`
 	conf.Interval = ""
 

@@ -10,10 +10,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 
 	// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
 	"github.com/golang/protobuf/jsonpb"
@@ -26,7 +24,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newProtobuf(conf.Protobuf, mgr)
 		if err != nil {
 			return nil, err
@@ -67,7 +65,7 @@ Attempts to create a target protobuf message from a generic JSON structure.`,
 			docs.FieldString("operator", "The [operator](#operators) to execute").HasOptions("to_json", "from_json"),
 			docs.FieldString("message", "The fully qualified name of the protobuf message to convert to/from."),
 			docs.FieldString("import_paths", "A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").Array(),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewProtobufConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewProtobufConfig()),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "JSON to Protobuf",
@@ -300,7 +298,7 @@ type protobufProc struct {
 	log      log.Modular
 }
 
-func newProtobuf(conf oprocessor.ProtobufConfig, mgr interop.Manager) (*protobufProc, error) {
+func newProtobuf(conf processor.ProtobufConfig, mgr bundle.NewManagement) (*protobufProc, error) {
 	p := &protobufProc{
 		log: mgr.Logger(),
 	}

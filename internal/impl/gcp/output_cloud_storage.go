@@ -15,28 +15,28 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		g, err := newGCPCloudStorageOutput(nm, c.GCPCloudStorage, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
-		w, err := output.NewAsyncWriter(output.TypeGCPCloudStorage, c.GCPCloudStorage.MaxInFlight, g, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("gcp_cloud_storage", c.GCPCloudStorage.MaxInFlight, g, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
 		w = output.OnlySinglePayloads(w)
-		return output.NewBatcherFromConfig(c.GCPCloudStorage.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(c.GCPCloudStorage.Batching, w, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
-		Name:       output.TypeGCPCloudStorage,
+		Name:       "gcp_cloud_storage",
 		Type:       docs.TypeOutput,
 		Status:     docs.StatusBeta,
 		Version:    "3.43.0",
@@ -44,7 +44,7 @@ func init() {
 		Summary: `
 Sends message parts as objects to a Google Cloud Storage bucket. Each object is
 uploaded with the path specified with the ` + "`path`" + ` field.`,
-		Description: ioutput.Description(true, true, `
+		Description: output.Description(true, true, `
 In order to have a different path for each object you should use function
 interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
 calculated per message of a batch.
@@ -198,7 +198,7 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg *messa
 		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		metadata := map[string]string{}
 		_ = p.MetaIter(func(k, v string) error {
 			metadata[k] = v

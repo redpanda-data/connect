@@ -17,10 +17,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 var varInvalidRegexp *regexp.Regexp
@@ -28,7 +26,7 @@ var varInvalidRegexp *regexp.Regexp
 func init() {
 	varInvalidRegexp = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newAWKProc(conf.AWK, mgr)
 		if err != nil {
 			return nil, err
@@ -300,7 +298,7 @@ optional, and if omitted the level ` + "`INFO`" + ` will be used.
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("codec", "A [codec](#codecs) defines how messages should be inserted into the AWK program as variables. The codec does not change which [custom Benthos functions](#awk-functions) are available. The `text` codec is the closest to a typical AWK use case.").HasOptions("none", "text", "json"),
 			docs.FieldString("program", "An AWK program to execute"),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewAWKConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewAWKConfig()),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "JSON Mapping and Arithmetic",
@@ -403,7 +401,7 @@ type awkProc struct {
 	functions map[string]interface{}
 }
 
-func newAWKProc(conf oprocessor.AWKConfig, mgr interop.Manager) (processor.V2, error) {
+func newAWKProc(conf processor.AWKConfig, mgr bundle.NewManagement) (processor.V2, error) {
 	program, err := parser.ParseProgram([]byte(conf.Program), &parser.ParserConfig{
 		Funcs: awkFunctionsMap,
 	})

@@ -11,12 +11,12 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
 
@@ -48,7 +48,7 @@ func addExpression(conf *config.Type, expression string) error {
 			return fmt.Errorf("unrecognised input type '%v'", t)
 		}
 	} else if lInputs > 1 {
-		conf.Input.Type = input.TypeBroker
+		conf.Input.Type = "broker"
 		for _, t := range inputTypes {
 			c := input.NewConfig()
 			if _, exists := bundle.AllInputs.DocsFor(t); exists {
@@ -78,7 +78,7 @@ func addExpression(conf *config.Type, expression string) error {
 			return fmt.Errorf("unrecognised output type '%v'", t)
 		}
 	} else if lOutputs > 1 {
-		conf.Output.Type = output.TypeBroker
+		conf.Output.Type = "broker"
 		for _, t := range outputTypes {
 			c := output.NewConfig()
 			if _, exists := bundle.AllOutputs.DocsFor(t); exists {

@@ -8,14 +8,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		return newResourceProcessor(conf, mgr, mgr.Logger())
 	}, docs.ComponentSpec{
 		Name: "resource",
@@ -60,12 +58,12 @@ You can find out more about resources [in this document.](/docs/configuration/re
 }
 
 type resourceProcessor struct {
-	mgr  interop.Manager
+	mgr  bundle.NewManagement
 	name string
 	log  log.Modular
 }
 
-func newResourceProcessor(conf oprocessor.Config, mgr interop.Manager, log log.Modular) (*resourceProcessor, error) {
+func newResourceProcessor(conf processor.Config, mgr bundle.NewManagement, log log.Modular) (*resourceProcessor, error) {
 	if !mgr.ProbeProcessor(conf.Resource) {
 		return nil, fmt.Errorf("processor resource '%v' was not found", conf.Resource)
 	}

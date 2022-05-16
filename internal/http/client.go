@@ -16,11 +16,11 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/http/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -59,7 +59,7 @@ type Client struct {
 
 	log   log.Modular
 	stats metrics.Type
-	mgr   interop.Manager
+	mgr   bundle.NewManagement
 
 	mLatency metrics.StatTimer
 	mCodes   map[int]metrics.StatCounter
@@ -223,7 +223,7 @@ func OptSetStats(stats metrics.Type) func(*Client) {
 }
 
 // OptSetManager sets the manager to use.
-func OptSetManager(mgr interop.Manager) func(*Client) {
+func OptSetManager(mgr bundle.NewManagement) func(*Client) {
 	return func(t *Client) {
 		t.mgr = mgr
 	}

@@ -33,6 +33,7 @@ input:
     paths: []
     parse_header_row: true
     delimiter: ','
+    lazy_quotes: false
 ```
 
 </TabItem>
@@ -47,6 +48,7 @@ input:
     parse_header_row: true
     delimiter: ','
     batch_count: 1
+    lazy_quotes: false
 ```
 
 </TabItem>
@@ -118,6 +120,15 @@ Optionally process records in batches. This can help to speed up the consumption
 
 Type: `int`  
 Default: `1`  
+
+### `lazy_quotes`
+
+If set to `true`, a quote may appear in an unquoted field and a non-doubled quote may appear in a quoted field.
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.1.0 or newer  
 
 This input is particularly useful when consuming CSV from files too large to
 parse entirely within memory. However, in cases where CSV is consumed from other

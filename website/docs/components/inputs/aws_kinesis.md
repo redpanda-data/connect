@@ -74,6 +74,7 @@ input:
       id: ""
       secret: ""
       token: ""
+      use_ec2_credentials: false
       role: ""
       role_external_id: ""
     batching:
@@ -256,6 +257,15 @@ The token for the credentials being used, required when using short term credent
 
 Type: `string`  
 Default: `""`  
+
+### `credentials.use_ec2_credentials`
+
+Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.2.0 or newer  
 
 ### `credentials.role`
 

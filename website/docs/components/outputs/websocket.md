@@ -15,7 +15,6 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Sends messages to an HTTP server via a websocket connection.
 
 

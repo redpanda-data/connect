@@ -12,15 +12,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/http"
 	ihttpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newHTTPProc(conf.HTTP, mgr)
 		if err != nil {
 			return nil, err
@@ -74,7 +72,7 @@ can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](/docs/configuration/error_handling).`,
 		Config: ihttpdocs.ClientFieldSpec(false,
 			docs.FieldBool("batch_as_multipart", "Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).").Advanced().HasDefault(false),
-			docs.FieldBool("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent serially.").HasDefault(false)).ChildDefaultAndTypesFromStruct(oprocessor.NewHTTPConfig()),
+			docs.FieldBool("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent serially.").HasDefault(false)).ChildDefaultAndTypesFromStruct(processor.NewHTTPConfig()),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "Branched Request",
@@ -107,7 +105,7 @@ type httpProc struct {
 	log         log.Modular
 }
 
-func newHTTPProc(conf oprocessor.HTTPConfig, mgr interop.Manager) (processor.V2Batched, error) {
+func newHTTPProc(conf processor.HTTPConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
 	g := &httpProc{
 		rawURL:      conf.URL,
 		log:         mgr.Logger(),

@@ -7,11 +7,10 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(c oprocessor.Config, nm bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (processor.V1, error) {
 		return &noopProcessor{}, nil
 	}, docs.ComponentSpec{
 		Name:    "noop",

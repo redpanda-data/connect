@@ -15,7 +15,6 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Connects to a websocket server and continuously receives messages.
 
 
@@ -72,9 +71,7 @@ input:
 </TabItem>
 </Tabs>
 
-It is possible to configure an `open_message`, which when set to a
-non-empty string will be sent to the websocket server each time a connection is
-first established.
+It is possible to configure an `open_message`, which when set to a non-empty string will be sent to the websocket server each time a connection is first established.
 
 ## Fields
 

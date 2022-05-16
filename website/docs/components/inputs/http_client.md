@@ -15,7 +15,6 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Connects to a server and continuously performs requests for a single message.
 
 
@@ -113,8 +112,7 @@ input:
 </TabItem>
 </Tabs>
 
-The URL and header values of this type can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+The URL and header values of this type can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ### Streaming
 

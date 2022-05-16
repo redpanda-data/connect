@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func TestWorkflowDeps(t *testing.T) {
@@ -208,7 +208,7 @@ func newMockProcProvider(t *testing.T, confs map[string]processor.Config) bundle
 		resConf.ResourceProcessors = append(resConf.ResourceProcessors, v)
 	}
 
-	mgr, err := manager.NewV2(resConf, mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(resConf, mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	return mgr

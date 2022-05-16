@@ -8,9 +8,10 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/input/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 var (
@@ -86,8 +87,8 @@ child nodes processors.`,
 	}
 }
 
-func newBrokerInput(conf oinput.Config, mgr bundle.NewManagement, pipelines ...iprocessor.PipelineConstructorFunc) (input.Streamed, error) {
-	pipelines = oinput.AppendProcessorsFromConfig(conf, mgr, pipelines...)
+func newBrokerInput(conf input.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
+	pipelines = processors.AppendFromConfig(conf, mgr, pipelines...)
 
 	lInputs := len(conf.Broker.Inputs) * conf.Broker.Copies
 
@@ -106,7 +107,7 @@ func newBrokerInput(conf oinput.Config, mgr bundle.NewManagement, pipelines ...i
 
 		for j := 0; j < conf.Broker.Copies; j++ {
 			for i, iConf := range conf.Broker.Inputs {
-				iMgr := mgr.IntoPath("broker", "inputs", strconv.Itoa(i)).(bundle.NewManagement)
+				iMgr := mgr.IntoPath("broker", "inputs", strconv.Itoa(i))
 				inputs[len(conf.Broker.Inputs)*j+i], err = iMgr.NewInput(iConf, pipelines...)
 				if err != nil {
 					return nil, err
@@ -129,5 +130,5 @@ func newBrokerInput(conf oinput.Config, mgr bundle.NewManagement, pipelines ...i
 		return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 	}
 
-	return oinput.NewBatcher(policy, b, mgr.Logger(), mgr.Metrics()), nil
+	return batcher.New(policy, b, mgr.Logger(), mgr.Metrics()), nil
 }

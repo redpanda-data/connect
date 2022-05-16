@@ -17,27 +17,25 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		a, err := newAMQP09Writer(nm, c.AMQP09, nm.Logger())
 		if err != nil {
 			return nil, err
 		}
-		w, err := ooutput.NewAsyncWriter("amqp_0_9", c.AMQP09.MaxInFlight, a, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("amqp_0_9", c.AMQP09.MaxInFlight, a, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
-		return ooutput.OnlySinglePayloads(w), nil
+		return output.OnlySinglePayloads(w), nil
 
 	}), docs.ComponentSpec{
 		Name: "amqp_0_9",
@@ -102,7 +100,7 @@ type amqp09Writer struct {
 
 	log log.Modular
 
-	conf    ooutput.AMQPConfig
+	conf    output.AMQPConfig
 	urls    []string
 	tlsConf *tls.Config
 
@@ -116,7 +114,7 @@ type amqp09Writer struct {
 	connLock sync.RWMutex
 }
 
-func newAMQP09Writer(mgr interop.Manager, conf ooutput.AMQPConfig, log log.Modular) (*amqp09Writer, error) {
+func newAMQP09Writer(mgr bundle.NewManagement, conf output.AMQPConfig, log log.Modular) (*amqp09Writer, error) {
 	a := amqp09Writer{
 		log:          log,
 		conf:         conf,
@@ -239,7 +237,7 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		bindingKey := strings.ReplaceAll(a.key.String(i, msg), "/", ".")
 		msgType := strings.ReplaceAll(a.msgType.String(i, msg), "/", ".")
 		contentType := a.contentType.String(i, msg)

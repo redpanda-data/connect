@@ -13,18 +13,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
-	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-
-	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
-func newSwitch(t *testing.T, conf ooutput.Config, mockOutputs []*mock.OutputChanneled) *switchOutput {
+func newSwitch(t *testing.T, conf output.Config, mockOutputs []*mock.OutputChanneled) *switchOutput {
 	t.Helper()
 
-	mgr := bmock.NewManager()
+	mgr := mock.NewManager()
 
 	conf.Type = "switch"
 	genType, err := mgr.NewOutput(conf)
@@ -48,10 +45,10 @@ func TestSwitchNoConditions(t *testing.T) {
 
 	nOutputs, nMsgs := 10, 1000
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	mockOutputs := []*mock.OutputChanneled{}
 	for i := 0; i < nOutputs; i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, ooutput.NewSwitchConfigCase())
+		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
 		conf.Switch.Cases[i].Continue = true
 		mockOutputs = append(mockOutputs, &mock.OutputChanneled{})
 	}
@@ -103,11 +100,11 @@ func TestSwitchNoRetries(t *testing.T) {
 
 	nOutputs, nMsgs := 10, 1000
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Switch.RetryUntilSuccess = false
 	mockOutputs := []*mock.OutputChanneled{}
 	for i := 0; i < nOutputs; i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, ooutput.NewSwitchConfigCase())
+		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
 		conf.Switch.Cases[i].Continue = true
 		mockOutputs = append(mockOutputs, &mock.OutputChanneled{})
 	}
@@ -160,25 +157,25 @@ func TestSwitchNoRetries(t *testing.T) {
 }
 
 func TestSwitchBatchNoRetries(t *testing.T) {
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Switch.RetryUntilSuccess = false
 
-	okOut := ooutput.NewConfig()
+	okOut := output.NewConfig()
 	okOut.Type = "drop"
-	conf.Switch.Cases = append(conf.Switch.Cases, ooutput.SwitchConfigCase{
+	conf.Switch.Cases = append(conf.Switch.Cases, output.SwitchConfigCase{
 		Check:  `root = this.id % 2 == 0`,
 		Output: okOut,
 	})
 
-	errOut := ooutput.NewConfig()
+	errOut := output.NewConfig()
 	errOut.Type = "reject"
 	errOut.Reject = "meow"
-	conf.Switch.Cases = append(conf.Switch.Cases, ooutput.SwitchConfigCase{
+	conf.Switch.Cases = append(conf.Switch.Cases, output.SwitchConfigCase{
 		Check:  `root = true`,
 		Output: errOut,
 	})
 
-	s, err := newSwitchOutput(conf.Switch, bmock.NewManager())
+	s, err := newSwitchOutput(conf.Switch, mock.NewManager())
 	require.NoError(t, err, 1)
 
 	readChan := make(chan message.Transaction)
@@ -235,13 +232,13 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Switch.RetryUntilSuccess = false
 	mockOutputs := []*mock.OutputChanneled{}
 	nOutputs := 2
 
 	for i := 0; i < nOutputs; i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, ooutput.NewSwitchConfigCase())
+		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
 		conf.Switch.Cases[i].Continue = true
 		mockOutputs = append(mockOutputs, &mock.OutputChanneled{})
 	}
@@ -326,9 +323,9 @@ func TestSwitchWithConditions(t *testing.T) {
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, ooutput.NewSwitchConfigCase())
+		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
 	}
 	conf.Switch.Cases[0].Check = `this.foo == "bar"`
 	conf.Switch.Cases[1].Check = `this.foo == "baz"`
@@ -423,9 +420,9 @@ func TestSwitchError(t *testing.T) {
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, ooutput.NewSwitchConfigCase())
+		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
 	}
 	conf.Switch.Cases[0].Check = `this.foo == "bar"`
 	conf.Switch.Cases[1].Check = `this.foo.not_null() == "baz"`
@@ -490,9 +487,9 @@ func TestSwitchBatchSplit(t *testing.T) {
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, ooutput.NewSwitchConfigCase())
+		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
 	}
 	conf.Switch.Cases[0].Check = `this.foo == "bar"`
 	conf.Switch.Cases[1].Check = `this.foo == "baz"`
@@ -554,9 +551,9 @@ func TestSwitchBatchGroup(t *testing.T) {
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, ooutput.NewSwitchConfigCase())
+		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
 	}
 	conf.Switch.Cases[0].Check = `json().foo.from(0) == "bar"`
 	conf.Switch.Cases[1].Check = `json().foo.from(0) == "baz"`
@@ -620,9 +617,9 @@ func TestSwitchBatchGroup(t *testing.T) {
 func TestSwitchNoMatch(t *testing.T) {
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, ooutput.NewSwitchConfigCase())
+		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
 	}
 	conf.Switch.Cases[0].Check = `this.foo == "bar"`
 	conf.Switch.Cases[1].Check = `this.foo == "baz"`
@@ -656,10 +653,10 @@ func TestSwitchNoMatch(t *testing.T) {
 func TestSwitchNoMatchStrict(t *testing.T) {
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Switch.StrictMode = true
 	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, ooutput.NewSwitchConfigCase())
+		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
 	}
 	conf.Switch.Cases[0].Check = `this.foo == "bar"`
 	conf.Switch.Cases[1].Check = `this.foo == "baz"`
@@ -698,9 +695,9 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
-		conf.Switch.Cases = append(conf.Switch.Cases, ooutput.NewSwitchConfigCase())
+		conf.Switch.Cases = append(conf.Switch.Cases, output.NewSwitchConfigCase())
 	}
 	conf.Switch.Cases[0].Check = `this.foo == "bar"`
 	conf.Switch.Cases[1].Check = `this.foo == "baz"`
@@ -801,10 +798,10 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 		&mockOne, &mockTwo,
 	}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Switch.RetryUntilSuccess = true
 	for i := 0; i < len(mockOutputs); i++ {
-		outConf := ooutput.NewSwitchConfigCase()
+		outConf := output.NewSwitchConfigCase()
 		outConf.Continue = true
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
@@ -862,9 +859,9 @@ func TestSwitchShutDownFromErrorResponse(t *testing.T) {
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
-		outConf := ooutput.NewSwitchConfigCase()
+		outConf := output.NewSwitchConfigCase()
 		outConf.Continue = true
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
@@ -911,9 +908,9 @@ func TestSwitchShutDownFromErrorResponse(t *testing.T) {
 func TestSwitchShutDownFromReceive(t *testing.T) {
 	mockOutputs := []*mock.OutputChanneled{{}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
-		outConf := ooutput.NewSwitchConfigCase()
+		outConf := output.NewSwitchConfigCase()
 		outConf.Continue = true
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
@@ -951,9 +948,9 @@ func TestSwitchShutDownFromReceive(t *testing.T) {
 func TestSwitchShutDownFromSend(t *testing.T) {
 	mockOutputs := []*mock.OutputChanneled{{}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
-		outConf := ooutput.NewSwitchConfigCase()
+		outConf := output.NewSwitchConfigCase()
 		outConf.Continue = true
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}
@@ -989,9 +986,9 @@ func TestSwitchBackPressure(t *testing.T) {
 
 	mockOutputs := []*mock.OutputChanneled{{}, {}}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	for i := 0; i < len(mockOutputs); i++ {
-		outConf := ooutput.NewSwitchConfigCase()
+		outConf := output.NewSwitchConfigCase()
 		outConf.Continue = true
 		conf.Switch.Cases = append(conf.Switch.Cases, outConf)
 	}

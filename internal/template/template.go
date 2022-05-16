@@ -10,17 +10,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/template"
 )
 
@@ -168,14 +165,16 @@ func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
 		}
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": c.Label,
+			}))
 		}
 		return nm.NewCache(conf)
 	}, tmpl.spec)
 }
 
 func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
-	return set.Add(func(c input.Config, nm bundle.NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
+	return set.Add(func(c input.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (input.Streamed, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -190,14 +189,16 @@ func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
 		conf.Processors = append(conf.Processors, c.Processors...)
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": c.Label,
+			}))
 		}
 		return nm.NewInput(conf, pcf...)
 	}, tmpl.spec)
 }
 
 func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
-	return set.Add(func(c output.Config, nm bundle.NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
+	return set.Add(func(c output.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (output.Streamed, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -212,14 +213,16 @@ func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
 		conf.Processors = append(c.Processors, conf.Processors...)
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": c.Label,
+			}))
 		}
 		return nm.NewOutput(conf, pcf...)
 	}, tmpl.spec)
 }
 
 func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
-	return set.Add(func(c processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
+	return set.Add(func(c processor.Config, nm bundle.NewManagement) (processor.V1, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -231,7 +234,9 @@ func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
 		}
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": c.Label,
+			}))
 		}
 		return nm.NewProcessor(conf)
 	}, tmpl.spec)
@@ -250,7 +255,9 @@ func registerRateLimitTemplate(tmpl *compiled, set *bundle.RateLimitSet) error {
 		}
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": c.Label,
+			}))
 		}
 		return nm.NewRateLimit(conf)
 	}, tmpl.spec)

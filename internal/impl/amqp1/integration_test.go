@@ -12,9 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
-
-	// Bring in legacy definition
-	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func TestIntegrationAMQP1(t *testing.T) {

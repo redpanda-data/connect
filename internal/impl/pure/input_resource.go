@@ -7,15 +7,14 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		if !nm.ProbeInput(c.Resource) {
 			return nil, fmt.Errorf("input resource '%v' was not found", c.Resource)
 		}
@@ -79,7 +78,7 @@ You can find out more about resources [in this document.](/docs/configuration/re
 //------------------------------------------------------------------------------
 
 type resourceInput struct {
-	mgr  interop.Manager
+	mgr  bundle.NewManagement
 	name string
 	log  log.Modular
 }

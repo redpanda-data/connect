@@ -13,12 +13,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newGroupBy(conf.GroupBy, mgr)
 		if err != nil {
 			return nil, err
@@ -95,7 +94,7 @@ type groupByProc struct {
 	groups []group
 }
 
-func newGroupBy(conf oprocessor.GroupByConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
+func newGroupBy(conf processor.GroupByConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
 	var err error
 	groups := make([]group, len(conf))
 
@@ -109,7 +108,7 @@ func newGroupBy(conf oprocessor.GroupByConfig, mgr bundle.NewManagement) (proces
 		}
 
 		for j, pConf := range gConf.Processors {
-			pMgr := mgr.IntoPath("group_by", strconv.Itoa(i), "processors", strconv.Itoa(j)).(bundle.NewManagement)
+			pMgr := mgr.IntoPath("group_by", strconv.Itoa(i), "processors", strconv.Itoa(j))
 			proc, err := pMgr.NewProcessor(pConf)
 			if err != nil {
 				return nil, err
@@ -169,7 +168,7 @@ func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 			continue
 		}
 
-		resultMsgs, res := oprocessor.ExecuteAll(g.groups[i].Processors, gmsg)
+		resultMsgs, res := processor.ExecuteAll(g.groups[i].Processors, gmsg)
 		if len(resultMsgs) > 0 {
 			msgs = append(msgs, resultMsgs...)
 		}

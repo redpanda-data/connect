@@ -5,10 +5,28 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `credentials.use_ec2_credentials` added to all AWS based components.
+- The `mongodb` input now supports aggregation filters by setting the new `operation` field.
+- New `gcp_cloudtrace` tracer.
+
+## 4.1.0 - 2022-05-11
+
+### Added
+
+- The `nats_jetstream` input now adds headers to messages as metadata.
+- Field `headers` added to the `nats_jetstream` output.
+- Field `lazy_quotes` added to the CSV input.
+
 ### Fixed
 
 - Fixed an issue where resource and stream configs imported via wildcard pattern could not be live-reloaded with the watcher (`-w`) flag.
 - Bloblang comparisons between numerical values (including `match` expression patterns) no longer require coercion into explicit types.
+- Reintroduced basic metrics from the `twitter` and `discord` template based inputs.
+- Prevented a metrics label mismatch when running in streams mode with resources and `prometheus` metrics.
+- Label mismatches with the `prometheus` metric type now log errors and skip the metric without stopping the service.
+- Fixed a case where empty files consumed by the `aws_s3` input would trigger early graceful termination.
 
 ## 4.0.0 - 2022-04-20
 
