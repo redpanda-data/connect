@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `credentials.use_ec2_credentials` added to all AWS based components.
+- The `mongodb` input now supports aggregation filters by setting the new `operation` field.
 
 ## 4.1.0 - 2022-05-11
 
