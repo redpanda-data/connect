@@ -247,8 +247,8 @@ github.com/aws/smithy-go v1.11.1/go.mod h1:3xHYmszWVx2c0kIwQeEVf9uSm4fYZt67FBJnw
 github.com/aymerick/douceur v0.2.0 h1:Mv+mAeH1Q+n9Fr+oyamOlAkUNPWPlA8PPGR0QAaYuPk=
 github.com/aymerick/douceur v0.2.0/go.mod h1:wlT5vV2O3h55X9m7iVYN0TBM0NH/MmbLnd30/FjWUq4=
 github.com/beefsack/go-rate v0.0.0-20180408011153-efa7637bb9b6/go.mod h1:6YNgTHLutezwnBvyneBbwvB8C82y3dcoOj5EQJIdGXA=
-github.com/benhoyt/goawk v1.13.1-0.20220123120908-f9c293546b6d h1:OYrzbYyj7SUNQuYik+cQ7IX6t68nx45JXx3td5ow2GU=
-github.com/benhoyt/goawk v1.13.1-0.20220123120908-f9c293546b6d/go.mod h1:UKzPyqDh9O7HZ/ftnU33MYlAP2rPbXdwQ+OVlEOPsjM=
+github.com/benhoyt/goawk v1.17.1 h1:ritTxg1s3NRIq25RmCgxPnlt2gtbMKCg0qvmYWo9heE=
+github.com/benhoyt/goawk v1.17.1/go.mod h1:UKzPyqDh9O7HZ/ftnU33MYlAP2rPbXdwQ+OVlEOPsjM=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
