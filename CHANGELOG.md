@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Field `credentials.use_ec2_credentials` added to all AWS based components.
+- Field `credentials.from_ec2_role` added to all AWS based components.
 - The `mongodb` input now supports aggregation filters by setting the new `operation` field.
 - New `gcp_cloudtrace` tracer.
 - New `slug` bloblang string method.

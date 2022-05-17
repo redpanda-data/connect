@@ -34,7 +34,7 @@ func sessionFields() []*service.ConfigField {
 			service.NewStringField("token").
 				Description("The token for the credentials being used, required when using short term credentials.").
 				Default("").Advanced(),
-			service.NewBoolField("use_ec2_credentials").
+			service.NewBoolField("from_ec2_role").
 				Description("Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).").
 				Default(false).Version("4.2.0"),
 			service.NewStringField("role").
@@ -92,7 +92,7 @@ func getSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*s
 		)
 	}
 
-	if useEC2, _ := parsedConf.FieldBool("use_ec2_credentials"); useEC2 {
+	if useEC2, _ := parsedConf.FieldBool("from_ec2_role"); useEC2 {
 		sess.Config = sess.Config.WithCredentials(ec2rolecreds.NewCredentials(sess))
 	}
 

@@ -6,7 +6,7 @@ type CredentialsConfig struct {
 	ID          string `json:"id" yaml:"id"`
 	Secret      string `json:"secret" yaml:"secret"`
 	Token       string `json:"token" yaml:"token"`
-	UseEC2Creds bool   `json:"use_ec2_credentials" yaml:"use_ec2_credentials"`
+	UseEC2Creds bool   `json:"from_ec2_role" yaml:"from_ec2_role"`
 	Role        string `json:"role" yaml:"role"`
 	ExternalID  string `json:"role_external_id" yaml:"role_external_id"`
 }

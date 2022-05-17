@@ -1,8 +1,9 @@
 package url
 
 import (
-	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/gosimple/slug"
+
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 func init() {

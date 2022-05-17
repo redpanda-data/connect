@@ -68,7 +68,7 @@ output:
       id: ""
       secret: ""
       token: ""
-      use_ec2_credentials: false
+      from_ec2_role: false
       role: ""
       role_external_id: ""
     max_retries: 0
@@ -291,7 +291,7 @@ The token for the credentials being used, required when using short term credent
 Type: `string`  
 Default: `""`  
 
-### `credentials.use_ec2_credentials`
+### `credentials.from_ec2_role`
 
 Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).
 
