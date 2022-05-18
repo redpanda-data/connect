@@ -95,7 +95,7 @@ func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error 
 // Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) error {
-	category := query.MethodCategory(spec.category)
+	category := spec.category
 	if category == "" {
 		category = query.MethodCategoryPlugin
 	}
@@ -150,7 +150,7 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 // Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
-	category := query.FunctionCategory(spec.category)
+	category := spec.category
 	if category == "" {
 		category = query.FunctionCategoryPlugin
 	}

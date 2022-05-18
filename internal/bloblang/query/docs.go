@@ -38,16 +38,13 @@ var (
 
 //------------------------------------------------------------------------------
 
-// FunctionCategory is an abstract title for functions of a similar purpose.
-type FunctionCategory string
-
 // Function categories.
 var (
-	FunctionCategoryGeneral     FunctionCategory = "General"
-	FunctionCategoryMessage     FunctionCategory = "Message Info"
-	FunctionCategoryEnvironment FunctionCategory = "Environment"
-	FunctionCategoryDeprecated  FunctionCategory = "Deprecated"
-	FunctionCategoryPlugin      FunctionCategory = "Plugin"
+	FunctionCategoryGeneral     = "General"
+	FunctionCategoryMessage     = "Message Info"
+	FunctionCategoryEnvironment = "Environment"
+	FunctionCategoryDeprecated  = "Deprecated"
+	FunctionCategoryPlugin      = "Plugin"
 )
 
 // FunctionSpec describes a Bloblang function.
@@ -56,7 +53,7 @@ type FunctionSpec struct {
 	Status Status `json:"status"`
 
 	// A category to place the function within.
-	Category FunctionCategory `json:"category"`
+	Category string `json:"category"`
 
 	// Name of the function (as it appears in config).
 	Name string `json:"name"`
@@ -76,7 +73,7 @@ type FunctionSpec struct {
 }
 
 // NewFunctionSpec creates a new function spec.
-func NewFunctionSpec(category FunctionCategory, name, description string, examples ...ExampleSpec) FunctionSpec {
+func NewFunctionSpec(category, name, description string, examples ...ExampleSpec) FunctionSpec {
 	return FunctionSpec{
 		Status:      StatusStable,
 		Category:    category,
@@ -129,28 +126,25 @@ func NewHiddenFunctionSpec(name string) FunctionSpec {
 
 //------------------------------------------------------------------------------
 
-// MethodCategory is an abstract title for methods of a similar purpose.
-type MethodCategory string
-
 // Method categories.
 var (
-	MethodCategoryStrings        MethodCategory = "String Manipulation"
-	MethodCategoryNumbers        MethodCategory = "Number Manipulation"
-	MethodCategoryTime           MethodCategory = "Timestamp Manipulation"
-	MethodCategoryRegexp         MethodCategory = "Regular Expressions"
-	MethodCategoryEncoding       MethodCategory = "Encoding and Encryption"
-	MethodCategoryCoercion       MethodCategory = "Type Coercion"
-	MethodCategoryParsing        MethodCategory = "Parsing"
-	MethodCategoryObjectAndArray MethodCategory = "Object & Array Manipulation"
-	MethodCategoryGeoIP          MethodCategory = "GeoIP"
-	MethodCategoryDeprecated     MethodCategory = "Deprecated"
-	MethodCategoryPlugin         MethodCategory = "Plugin"
+	MethodCategoryStrings        = "String Manipulation"
+	MethodCategoryNumbers        = "Number Manipulation"
+	MethodCategoryTime           = "Timestamp Manipulation"
+	MethodCategoryRegexp         = "Regular Expressions"
+	MethodCategoryEncoding       = "Encoding and Encryption"
+	MethodCategoryCoercion       = "Type Coercion"
+	MethodCategoryParsing        = "Parsing"
+	MethodCategoryObjectAndArray = "Object & Array Manipulation"
+	MethodCategoryGeoIP          = "GeoIP"
+	MethodCategoryDeprecated     = "Deprecated"
+	MethodCategoryPlugin         = "Plugin"
 )
 
 // MethodCatSpec describes how a method behaves in the context of a given
 // category.
 type MethodCatSpec struct {
-	Category    MethodCategory
+	Category    string
 	Description string
 	Examples    []ExampleSpec
 }
@@ -241,7 +235,7 @@ func (m MethodSpec) VariadicParams() MethodSpec {
 // category, methods can belong to multiple categories. For example, the
 // `contains` method behaves differently in the object and array category versus
 // the strings one, but belongs in both.
-func (m MethodSpec) InCategory(category MethodCategory, description string, examples ...ExampleSpec) MethodSpec {
+func (m MethodSpec) InCategory(category, description string, examples ...ExampleSpec) MethodSpec {
 	if m.Status == StatusDeprecated {
 		category = MethodCategoryDeprecated
 	}

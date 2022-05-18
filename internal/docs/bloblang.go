@@ -181,14 +181,14 @@ func BloblangFunctionsMarkdown() ([]byte, error) {
 		prefixExamples(s.Examples)
 	}
 
-	for _, cat := range []query.FunctionCategory{
+	for _, cat := range []string{
 		query.FunctionCategoryGeneral,
 		query.FunctionCategoryMessage,
 		query.FunctionCategoryEnvironment,
 		query.FunctionCategoryDeprecated,
 	} {
 		functions := functionCategory{
-			Name: string(cat),
+			Name: cat,
 		}
 		for _, spec := range specs {
 			if spec.Category == cat {
@@ -310,7 +310,7 @@ root.foo_two = this.(bar | baz).trim().replace_all("dog", "cat")
 [methods.string]: #string
 `
 
-func methodForCat(s query.MethodSpec, cat query.MethodCategory) (query.MethodSpec, bool) {
+func methodForCat(s query.MethodSpec, cat string) (query.MethodSpec, bool) {
 	for _, c := range s.Categories {
 		if c.Category == cat {
 			spec := s
@@ -338,7 +338,7 @@ func BloblangMethodsMarkdown() ([]byte, error) {
 		}
 	}
 
-	for _, cat := range []query.MethodCategory{
+	for _, cat := range []string{
 		query.MethodCategoryStrings,
 		query.MethodCategoryRegexp,
 		query.MethodCategoryNumbers,
@@ -351,7 +351,7 @@ func BloblangMethodsMarkdown() ([]byte, error) {
 		query.MethodCategoryDeprecated,
 	} {
 		methods := methodCategory{
-			Name: string(cat),
+			Name: cat,
 		}
 		for _, spec := range specs {
 			var ok bool
