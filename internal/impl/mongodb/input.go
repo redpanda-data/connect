@@ -28,7 +28,10 @@ func mongoConfigSpec() *service.ConfigSpec {
 		Field(service.NewStringField("collection").Description("The collection to select from.")).
 		Field(service.NewStringField("username").Description("The username to connect to the database.").Default("")).
 		Field(service.NewStringField("password").Description("The password to connect to the database.").Default("")).
-		Field(service.NewStringEnumField("operation", FindInputOperation, AggregateInputOperation).Description("The mongodb operation to perform.").Default(FindInputOperation).Advanced()).
+		Field(service.NewStringEnumField("operation", FindInputOperation, AggregateInputOperation).
+			Description("The mongodb operation to perform.").
+			Default(FindInputOperation).Advanced().
+			Version("4.2.0")).
 		Field(queryField)
 }
 

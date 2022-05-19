@@ -21,7 +21,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/io"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/jaeger"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/kafka"
-	_ "github.com/benthosdev/benthos/v4/internal/impl/lang/url"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/lang"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/maxmind"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/memcached"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/mongodb"

@@ -19,6 +19,8 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Send tracing events to a [Google Cloud Trace](https://cloud.google.com/trace).
 
+Introduced in version 4.2.0.
+
 
 <Tabs defaultValue="common" values={[
   { label: 'Common', value: 'common', },

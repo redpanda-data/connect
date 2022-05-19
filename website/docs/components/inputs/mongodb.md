@@ -117,6 +117,7 @@ The mongodb operation to perform.
 
 Type: `string`  
 Default: `"find"`  
+Requires version 4.2.0 or newer  
 Options: `find`, `aggregate`.
 
 ### `query`

@@ -478,7 +478,13 @@ root.the_rest = this.value.slice(0, -4)
 
 ### `slug`
 
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
 Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its [docs](https://pkg.go.dev/github.com/gosimple/slug) for more information.
+
+Introduced in version 4.2.0.
+
 
 #### Parameters
 
@@ -906,8 +912,9 @@ root.new_value = this.value.round()
 
 ### `format_timestamp`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Attempts to format a timestamp value as a string according to a specified format, or ISO 8601 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
 
 #### Parameters
@@ -954,8 +961,9 @@ root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05.99999
 
 ### `format_timestamp_strftime`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
 
 #### Parameters
@@ -986,8 +994,9 @@ root.something_at = this.created_at.format_timestamp_strftime("%Y-%b-%d %H:%M:%S
 
 ### `format_timestamp_unix`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
 
 #### Examples
@@ -1002,8 +1011,9 @@ root.created_at_unix = this.created_at.format_timestamp_unix()
 
 ### `format_timestamp_unix_nano`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
 
 #### Examples
@@ -1039,8 +1049,9 @@ root.delay_for_s = this.delay_for.parse_duration() / 1000000000
 
 ### `parse_duration_iso8601`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Attempts to parse a string using ISO-8601 rules as a duration and returns an integer of nanoseconds. A duration string is represented by the format "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". In these representations, the "[n]" is replaced by the value for each of the date and time elements that follow the "[n]". For example, "P3Y6M4DT12H30M5S" represents a duration of "three years, six months, four days, twelve hours, thirty minutes, and five seconds". The last field of the format allows fractions with one decimal place, so "P3.5S" will return 3500000000ns. Any additional decimals will be truncated.
 
 #### Examples
@@ -1075,8 +1086,9 @@ root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
 
 ### `parse_timestamp`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Attempts to parse a string as a timestamp following a specified format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
 
 #### Parameters
@@ -1095,8 +1107,9 @@ root.doc.timestamp = this.doc.timestamp.parse_timestamp("2006-Jan-02")
 
 ### `parse_timestamp_strptime`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`.
 
 #### Parameters
@@ -1575,8 +1588,9 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")
 
 ### `json_schema`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.
 
 #### Parameters
@@ -1875,8 +1889,9 @@ root = this.without("inner.a","inner.c","d")
 
 ### `bloblang`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Imports and functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.
 
 #### Parameters
@@ -1898,8 +1913,9 @@ root.body = this.body.bloblang(this.mapping)
 
 ### `format_json`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Serializes a target value into a pretty-printed JSON byte array (with 4 space indentation by default).
 
 #### Parameters
@@ -2213,7 +2229,10 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")
 
 ### `geoip_anonymous_ip`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the anonymous IP associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the anonymous IP associated with it.
 
 #### Parameters
 
@@ -2221,7 +2240,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_asn`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ASN associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ASN associated with it.
 
 #### Parameters
 
@@ -2229,7 +2251,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_city`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the city associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the city associated with it.
 
 #### Parameters
 
@@ -2237,7 +2262,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_connection_type`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the connection type associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the connection type associated with it.
 
 #### Parameters
 
@@ -2245,7 +2273,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_country`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the country associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the country associated with it.
 
 #### Parameters
 
@@ -2253,7 +2284,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_domain`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the domain associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the domain associated with it.
 
 #### Parameters
 
@@ -2261,7 +2295,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_enterprise`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the enterprise associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the enterprise associated with it.
 
 #### Parameters
 
@@ -2269,7 +2306,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_isp`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ISP associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ISP associated with it.
 
 #### Parameters
 

@@ -94,10 +94,19 @@ var bloblangFunctionsTemplate = bloblangParamsTemplate + `{{define "function_exa
 ### ` + "`{{.Name}}`" + `
 
 {{if eq .Status "beta" -}}
-BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 {{end -}}
-{{.Description}}
+{{if eq .Status "experimental" -}}
+:::caution EXPERIMENTAL
+This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+{{end -}}
+{{.Description}}{{if gt (len .Version) 0}}
+
+Introduced in version {{.Version}}.
+{{end}}
 {{template "parameters" .Params -}}
 {{if gt (len .Examples) 0}}
 #### Examples
@@ -237,10 +246,19 @@ var bloblangMethodsTemplate = bloblangParamsTemplate + `{{define "method_example
 ### ` + "`{{.Name}}`" + `
 
 {{if eq .Status "beta" -}}
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 {{end -}}
-{{.Description}}
+{{if eq .Status "experimental" -}}
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+{{end -}}
+{{.Description}}{{if gt (len .Version) 0}}
+
+Introduced in version {{.Version}}.
+{{end}}
 {{template "parameters" .Params -}}
 {{if gt (len .Examples) 0}}
 #### Examples

@@ -107,7 +107,10 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 		}
 		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
 	}
-	iSpec := query.NewMethodSpec(name, spec.description).InCategory(category, "", examples...)
+	iSpec := query.NewMethodSpec(name, spec.description).InCategory(category, "", examples...).AtVersion(spec.version)
+	if spec.status != "" {
+		iSpec.Status = spec.status
+	}
 	if spec.impure {
 		iSpec = iSpec.MarkImpure()
 	}
@@ -162,7 +165,10 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 		}
 		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
 	}
-	iSpec := query.NewFunctionSpec(category, name, spec.description, examples...)
+	iSpec := query.NewFunctionSpec(category, name, spec.description, examples...).AtVersion(spec.version)
+	if spec.status != "" {
+		iSpec.Status = spec.status
+	}
 	if spec.impure {
 		iSpec = iSpec.MarkImpure()
 	}

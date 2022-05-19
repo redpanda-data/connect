@@ -30,10 +30,11 @@ type Status string
 
 // Component statuses.
 var (
-	StatusStable     Status = "stable"
-	StatusBeta       Status = "beta"
-	StatusDeprecated Status = "deprecated"
-	StatusHidden     Status = "hidden"
+	StatusStable       Status = "stable"
+	StatusBeta         Status = "beta"
+	StatusExperimental Status = "experimental"
+	StatusDeprecated   Status = "deprecated"
+	StatusHidden       Status = "hidden"
 )
 
 //------------------------------------------------------------------------------
@@ -70,6 +71,9 @@ type FunctionSpec struct {
 	// Impure indicates that a function accesses or interacts with the outter
 	// environment, and is therefore unsafe to execute in shared environments.
 	Impure bool `json:"impure"`
+
+	// Version is the Benthos version this component was introduced.
+	Version string `json:"version,omitempty"`
 }
 
 // NewFunctionSpec creates a new function spec.
@@ -84,9 +88,21 @@ func NewFunctionSpec(category, name, description string, examples ...ExampleSpec
 	}
 }
 
+// Experimental flags the function as an experimental component.
+func (s FunctionSpec) Experimental() FunctionSpec {
+	s.Status = StatusExperimental
+	return s
+}
+
 // Beta flags the function as a beta component.
 func (s FunctionSpec) Beta() FunctionSpec {
 	s.Status = StatusBeta
+	return s
+}
+
+// AtVersion sets the Benthos version this component was introduced.
+func (s FunctionSpec) AtVersion(v string) FunctionSpec {
+	s.Version = v
 	return s
 }
 
@@ -172,6 +188,9 @@ type MethodSpec struct {
 	// Impure indicates that a method accesses or interacts with the outter
 	// environment, and is therefore unsafe to execute in shared environments.
 	Impure bool `json:"impure"`
+
+	// Version is the Benthos version this component was introduced.
+	Version string `json:"version,omitempty"`
 }
 
 // NewMethodSpec creates a new method spec.
@@ -206,9 +225,21 @@ func NewHiddenMethodSpec(name string) MethodSpec {
 	}
 }
 
+// Experimental flags the method as an experimental component.
+func (m MethodSpec) Experimental() MethodSpec {
+	m.Status = StatusExperimental
+	return m
+}
+
 // Beta flags the function as a beta component.
 func (m MethodSpec) Beta() MethodSpec {
 	m.Status = StatusBeta
+	return m
+}
+
+// AtVersion sets the Benthos version this component was introduced.
+func (m MethodSpec) AtVersion(v string) MethodSpec {
+	m.Version = v
 	return m
 }
 

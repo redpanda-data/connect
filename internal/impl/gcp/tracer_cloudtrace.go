@@ -28,6 +28,7 @@ func init() {
 		Name:    "gcp_cloudtrace",
 		Type:    docs.TypeTracer,
 		Status:  docs.StatusExperimental,
+		Version: "4.2.0",
 		Summary: `Send tracing events to a [Google Cloud Trace](https://cloud.google.com/trace).`,
 		Config: docs.FieldObject("", "").WithChildren(
 			docs.FieldString("project", "The google project with Cloud Trace API enabled. If this is ommitted then the Google Cloud SDK will attempt auto-detect it from the environment.").HasDefault(""),
