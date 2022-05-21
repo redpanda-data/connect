@@ -107,3 +107,33 @@ pipeline:
 	assert.Equal(t, `root = "second"`, streamConfs["inner_second"].Pipeline.Processors[0].Bloblang)
 	assert.Equal(t, `root = "third"`, streamConfs["inner_third"].Pipeline.Processors[0].Bloblang)
 }
+
+func TestStreamsMultipleDocuments(t *testing.T) {
+	dir := t.TempDir()
+
+	streamPath := filepath.Join(dir, "streams.yaml")
+	require.NoError(t, os.WriteFile(streamPath, []byte(`
+pipeline:
+  processors:
+  - bloblang: 'root = "first"'
+---
+pipeline:
+  processors:
+  - bloblang: 'root = "second"'
+`), 0o644))
+	rdr := config.NewReader("", nil, config.OptSetStreamPaths(streamPath))
+
+	conf := config.New()
+	lints, err := rdr.Read(&conf)
+	require.NoError(t, err)
+	require.Len(t, lints, 0)
+	streamConfs := map[string]stream.Config{}
+	lints, err = rdr.ReadStreams(streamConfs)
+	require.NoError(t, err)
+	require.Len(t, lints, 0)
+	require.Len(t, streamConfs, 2)
+	require.Contains(t, streamConfs, "streams@0")
+	require.Contains(t, streamConfs, "streams@1")
+	assert.Equal(t, `root = "first"`, streamConfs["streams@0"].Pipeline.Processors[0].Bloblang)
+	assert.Equal(t, `root = "second"`, streamConfs["streams@1"].Pipeline.Processors[0].Bloblang)
+}

@@ -164,7 +164,7 @@ func (r *Reader) SubscribeConfigChanges(fn MainUpdateFunc) error {
 // been updated. A boolean should be returned indicating whether the stream was
 // successfully updated, if false then the attempt will be made again after a
 // grace period.
-type StreamUpdateFunc func(id string, conf stream.Config) bool
+type StreamUpdateFunc func(id string, conf []stream.Config) bool
 
 // SubscribeStreamChanges registers a closure to be called whenever the
 // configuration of a stream is updated.

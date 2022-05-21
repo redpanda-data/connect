@@ -12,6 +12,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
@@ -161,6 +162,21 @@ func (m *Type) Create(id string, conf stream.Config) error {
 	return nil
 }
 
+func (m *Type) CreateMany(id string, confs []stream.Config) (err error) {
+	if len(confs) == 1 {
+		return m.Create(id, confs[0])
+	}
+	err = nil
+	for idx, conf := range confs {
+		id := config.IndexedStreamID(id, idx)
+		err = m.Create(id, conf)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
 // Read attempts to obtain the status of a managed stream. Returns an error if
 // the stream does not exist.
 func (m *Type) Read(id string) (*StreamStatus, error) {
@@ -177,6 +193,21 @@ func (m *Type) Read(id string) (*StreamStatus, error) {
 	}
 
 	return wrapper, nil
+}
+
+func (m *Type) UpdateMany(id string, confs []stream.Config, timeout time.Duration) (err error) {
+	if len(confs) == 1 {
+		return m.Update(id, confs[0], timeout)
+	}
+	err = nil
+	for idx, conf := range confs {
+		id := config.IndexedStreamID(id, idx)
+		err = m.Update(id, conf, timeout)
+		if err != nil {
+			return
+		}
+	}
+	return
 }
 
 // Update attempts to stop an existing stream and replace it with a new version

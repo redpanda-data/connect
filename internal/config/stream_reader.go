@@ -2,7 +2,9 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,31 +43,44 @@ func InferStreamID(dir, path string) (string, error) {
 	return id, nil
 }
 
-// ReadStreamFile attempts to read a stream config and returns the result
-func ReadStreamFile(path string) (conf stream.Config, lints []string, err error) {
-	conf = stream.NewConfig()
-
+// ReadStreamFile attempts to read stream configs and returns the result
+// but bails at the first error while decoding
+func ReadStreamFile(path string) (confs []stream.Config, lints []string, err error) {
 	var confBytes []byte
 	if confBytes, lints, err = ReadFileEnvSwap(path); err != nil {
 		return
 	}
 
-	var rawNode yaml.Node
-	if err = yaml.Unmarshal(confBytes, &rawNode); err != nil {
-		return
-	}
-
-	confSpec := stream.Spec()
-	confSpec = append(confSpec, tdocs.ConfigSpec())
-
-	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
-		for _, lint := range confSpec.LintYAML(docs.NewLintContext(), &rawNode) {
-			lints = append(lints, fmt.Sprintf("%v: line %v: %v", path, lint.Line, lint.What))
+	enableLint := !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE"))
+	decoder := yaml.NewDecoder(bytes.NewBuffer(confBytes))
+	for {
+		conf := stream.NewConfig()
+		var rawNode yaml.Node
+		if err = decoder.Decode(&rawNode); err != nil {
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+			return
 		}
-	}
 
-	err = rawNode.Decode(&conf)
-	return
+		confSpec := stream.Spec()
+		confSpec = append(confSpec, tdocs.ConfigSpec())
+		if enableLint {
+			for _, lint := range confSpec.LintYAML(docs.NewLintContext(), &rawNode) {
+				lints = append(lints, fmt.Sprintf("%v: line %v: %v", path, lint.Line, lint.What))
+			}
+		}
+
+		err = rawNode.Decode(&conf)
+		if err != nil {
+			return
+		}
+		confs = append(confs, conf)
+	}
+}
+
+func IndexedStreamID(id string, idx int) string {
+	return fmt.Sprintf("%v@%d", id, idx)
 }
 
 func (r *Reader) readStreamFile(dir, path string, confs map[string]stream.Config) ([]string, error) {
@@ -79,11 +94,7 @@ func (r *Reader) readStreamFile(dir, path string, confs map[string]stream.Config
 		return nil, nil
 	}
 
-	if _, exists := confs[id]; exists {
-		return nil, fmt.Errorf("stream id (%v) collision from file: %v", id, path)
-	}
-
-	conf, lints, err := ReadStreamFile(path)
+	parsedConfs, lints, err := ReadStreamFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +105,20 @@ func (r *Reader) readStreamFile(dir, path string, confs map[string]stream.Config
 
 	r.streamFileInfo[path] = strmInfo
 
-	confs[id] = conf
+	if len(parsedConfs) > 1 {
+		for idx, conf := range parsedConfs {
+			id := IndexedStreamID(id, idx)
+			if _, exists := confs[id]; exists {
+				return nil, fmt.Errorf("stream id (%v) collision from file: %v", id, path)
+			}
+			confs[id] = conf
+		}
+	} else if len(parsedConfs) > 0 {
+		if _, exists := confs[id]; exists {
+			return nil, fmt.Errorf("stream id (%v) collision from file: %v", id, path)
+		}
+		confs[id] = parsedConfs[0]
+	}
 	return lints, nil
 }
 
@@ -163,7 +187,7 @@ func (r *Reader) reactStreamUpdate(mgr bundle.NewManagement, strict bool, path s
 
 	mgr.Logger().Infof("Stream %v config updated, attempting to update stream.", info.id)
 
-	conf, lints, err := ReadStreamFile(path)
+	confs, lints, err := ReadStreamFile(path)
 	if err != nil {
 		mgr.Logger().Errorf("Failed to read updated stream config: %v", err)
 		return true
@@ -178,5 +202,5 @@ func (r *Reader) reactStreamUpdate(mgr bundle.NewManagement, strict bool, path s
 		return true
 	}
 
-	return r.streamUpdateFn(info.id, conf)
+	return r.streamUpdateFn(info.id, confs)
 }

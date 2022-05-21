@@ -98,9 +98,9 @@ func initStreamsMode(
 	}
 	logger.Infoln("Launching benthos in streams mode, use CTRL+C to close.")
 
-	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf stream.Config) bool {
-		if err = streamMgr.Update(id, newStreamConf, time.Second*30); err != nil && errors.Is(err, strmmgr.ErrStreamDoesNotExist) {
-			err = streamMgr.Create(id, newStreamConf)
+	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf []stream.Config) bool {
+		if err = streamMgr.UpdateMany(id, newStreamConf, time.Second*30); err != nil && errors.Is(err, strmmgr.ErrStreamDoesNotExist) {
+			err = streamMgr.CreateMany(id, newStreamConf)
 		}
 		if err != nil {
 			logger.Errorf("Failed to update stream %v: %v", id, err)

@@ -21,16 +21,25 @@ func loadFile(dir, path, testSuffix string, confs map[string]stream.Config) ([]s
 		return nil, nil
 	}
 
-	if _, exists := confs[id]; exists {
-		return nil, fmt.Errorf("stream id (%v) collision from file: %v", id, path)
-	}
-
-	conf, lints, err := config.ReadStreamFile(path)
+	parsedConfs, lints, err := config.ReadStreamFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	confs[id] = conf
+	if len(parsedConfs) > 1 {
+		for idx, conf := range parsedConfs {
+			id := config.IndexedStreamID(id, idx)
+			if _, exists := confs[id]; exists {
+				return nil, fmt.Errorf("stream id (%v) collision from file: %v", id, path)
+			}
+			confs[id] = conf
+		}
+	} else if len(parsedConfs) > 0 {
+		if _, exists := confs[id]; exists {
+			return nil, fmt.Errorf("stream id (%v) collision from file: %v", id, path)
+		}
+		confs[id] = parsedConfs[0]
+	}
 	return lints, nil
 }
 
