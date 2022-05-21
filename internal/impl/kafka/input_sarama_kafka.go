@@ -442,8 +442,16 @@ func (k *kafkaReader) ConnectWithContext(ctx context.Context) error {
 	config.Version = k.version
 	config.Consumer.Return.Errors = true
 	config.Consumer.MaxProcessingTime = k.maxProcPeriod
+
+	// NOTE: The following activates an async goroutine that periodically
+	// commits marked offsets, but that does NOT mean we automatically commit
+	// consumed message offsets.
+	//
+	// Offsets are manually marked ready for commit only once the associated
+	// message is successfully sent via outputs (look for k.session.MarkOffset).
 	config.Consumer.Offsets.AutoCommit.Enable = true
 	config.Consumer.Offsets.AutoCommit.Interval = k.commitPeriod
+
 	config.Consumer.Group.Session.Timeout = k.sessionTimeout
 	config.Consumer.Group.Heartbeat.Interval = k.heartbeatInterval
 	config.Consumer.Group.Rebalance.Timeout = k.rebalanceTimeout
