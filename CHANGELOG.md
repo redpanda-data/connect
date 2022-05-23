@@ -12,6 +12,11 @@ All notable changes to this project will be documented in this file.
 - New `gcp_cloudtrace` tracer.
 - New `slug` bloblang string method.
 
+### Fixed
+
+- The default docker image no longer throws configuration errors when running streams mode without an explicit general config.
+- The field `metrics.mapping` now allows environment functions such as `hostname` and `env`.
+
 ## 4.1.0 - 2022-05-11
 
 ### Added
