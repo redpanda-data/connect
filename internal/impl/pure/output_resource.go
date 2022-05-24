@@ -28,11 +28,9 @@ func init() {
 			done: done,
 		}, nil
 	}), docs.ComponentSpec{
-		Name: "resource",
-		Summary: `
-Resource is an output type that runs a resource output by its name.`,
-		Description: `
-This output allows you to reference the same configured output resource in multiple places, and can also tidy up large nested configs. For example, the config:
+		Name:    "resource",
+		Summary: `Resource is an output type that channels messages to a resource output, identified by its name.`,
+		Description: `Resources allow you to tidy up deeply nested configs. For example, the config:
 
 ` + "```yaml" + `
 output:
