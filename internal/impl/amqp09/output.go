@@ -104,10 +104,9 @@ type amqp09Writer struct {
 	urls    []string
 	tlsConf *tls.Config
 
-	conn        *amqp.Connection
-	amqpChan    *amqp.Channel
-	confirmChan <-chan amqp.Confirmation
-	returnChan  <-chan amqp.Return
+	conn       *amqp.Connection
+	amqpChan   *amqp.Channel
+	returnChan <-chan amqp.Return
 
 	deliveryMode uint8
 
@@ -199,7 +198,6 @@ func (a *amqp09Writer) ConnectWithContext(ctx context.Context) error {
 
 	a.conn = conn
 	a.amqpChan = amqpChan
-	a.confirmChan = amqpChan.NotifyPublish(make(chan amqp.Confirmation, a.conf.MaxInFlight))
 	if a.conf.Mandatory || a.conf.Immediate {
 		a.returnChan = amqpChan.NotifyReturn(make(chan amqp.Return, 1))
 	}
@@ -229,7 +227,6 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 	a.connLock.RLock()
 	conn := a.conn
 	amqpChan := a.amqpChan
-	confirmChan := a.confirmChan
 	returnChan := a.returnChan
 	a.connLock.RUnlock()
 
@@ -261,7 +258,7 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 			return nil
 		})
 
-		err := amqpChan.Publish(
+		conf, err := amqpChan.PublishWithDeferredConfirm(
 			a.conf.Exchange,  // publish to an exchange
 			bindingKey,       // routing to 0 or more queues
 			a.conf.Mandatory, // mandatory
@@ -282,21 +279,19 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 			a.log.Errorf("Failed to send message: %v\n", err)
 			return component.ErrNotConnected
 		}
-		select {
-		case confirm, open := <-confirmChan:
-			if !open {
-				a.log.Errorln("Failed to send message, ensure your target exchange exists.")
-				return component.ErrNotConnected
-			}
-			if !confirm.Ack {
-				a.log.Errorln("Failed to acknowledge message.")
-				return component.ErrNoAck
-			}
-		case _, open := <-returnChan:
-			if !open {
-				return fmt.Errorf("acknowledgement not supported, ensure server supports immediate and mandatory flags")
-			}
+		if !conf.Wait() {
+			a.log.Errorln("Failed to acknowledge message.")
 			return component.ErrNoAck
+		}
+		if returnChan != nil {
+			select {
+			case _, open := <-returnChan:
+				if !open {
+					return fmt.Errorf("acknowledgement not supported, ensure server supports immediate and mandatory flags")
+				}
+				return component.ErrNoAck
+			default:
+			}
 		}
 		return nil
 	})
