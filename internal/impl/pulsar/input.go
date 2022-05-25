@@ -57,7 +57,7 @@ You can access these metadata fields using
 			Field(service.NewStringEnumField("subscription_type", "shared", "key_shared", "failover", "exclusive").
 				Description("Specify the subscription type for this consumer.\n\n> NOTE: Using a `key_shared` subscription type will __allow out-of-order delivery__ since nack-ing messages sets non-zero nack delivery delay - this can potentially cause consumers to stall. See [Pulsar documentation](https://pulsar.apache.org/docs/en/2.8.1/concepts-messaging/#negative-acknowledgement) and [this Github issue](https://github.com/apache/pulsar/issues/12208) for more details.").
 				Default(defaultSubscriptionType)).
-			Field(service.NewStringField("cacert_path").
+			Field(service.NewObjectField("tls", service.NewStringField("root_cas_file")).
 				Description("Specify the path to a custom CA certificate to trust broker TLS service.")).
 			Field(authField()),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
@@ -77,12 +77,12 @@ type pulsarReader struct {
 
 	log *service.Logger
 
-	authConf authConfig
-	url      string
-	topics   []string
-	subName  string
-	subType  string
-	caCert   string
+	authConf      authConfig
+	url           string
+	topics        []string
+	subName       string
+	subType       string
+	root_cas_file string
 }
 
 func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) (p *pulsarReader, err error) {
@@ -106,7 +106,7 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 	if p.subType, err = conf.FieldString("subscription_type"); err != nil {
 		return
 	}
-	if p.caCert, err = conf.FieldString("cacert_path"); err != nil {
+	if p.root_cas_file, err = conf.FieldString("tls", "root_cas_file"); err != nil {
 		return
 	}
 
@@ -171,7 +171,7 @@ func (p *pulsarReader) Connect(ctx context.Context) error {
 		Logger:                createDefaultLogger(p.log),
 		ConnectionTimeout:     time.Second * 3,
 		URL:                   p.url,
-		TLSTrustCertsFilePath: p.caCert,
+		TLSTrustCertsFilePath: p.root_cas_file,
 	}
 
 	if p.authConf.OAuth2.Enabled {
