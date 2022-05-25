@@ -155,7 +155,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"index"`  
-Options: `index`, `update`, `delete`.
+Options: `create`, `index`, `update`, `delete`.
 
 ### `pipeline`
 

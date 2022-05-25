@@ -51,7 +51,7 @@ false for connections to succeed.`),
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"http://localhost:9200"}).Array(),
 			docs.FieldString("index", "The index to place messages.").IsInterpolated(),
-			docs.FieldString("action", "The action to take on the document.").IsInterpolated().HasOptions("index", "update", "delete").Advanced(),
+			docs.FieldString("action", "The action to take on the document.").IsInterpolated().HasOptions("create", "index", "update", "delete").Advanced(),
 			docs.FieldString("pipeline", "An optional pipeline id to preprocess incoming documents.").IsInterpolated().Advanced(),
 			docs.FieldString("id", "The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").IsInterpolated(),
 			docs.FieldString("type", "The document type.").Deprecated(),
@@ -383,6 +383,17 @@ func (e *Elasticsearch) buildBulkableRequest(p *pendingBulkIndex) (elastic.Bulka
 		return r, nil
 	case "index":
 		r := elastic.NewBulkIndexRequest().
+			Index(p.Index).
+			Pipeline(p.Pipeline).
+			Routing(p.Routing).
+			Id(p.ID).
+			Doc(p.Doc)
+		if p.Type != "" {
+			r = r.Type(p.Type)
+		}
+		return r, nil
+	case "create":
+		r := elastic.NewBulkCreateRequest().
 			Index(p.Index).
 			Pipeline(p.Pipeline).
 			Routing(p.Routing).
