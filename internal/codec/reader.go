@@ -22,7 +22,7 @@ import (
 
 // ReaderDocs is a static field documentation for input codecs.
 var ReaderDocs = docs.FieldString(
-	"codec", "The way in which the bytes of a data source should be converted into discrete messages, codecs are useful for specifying how large files or contiunous streams of data might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. Codecs can be chained with `/`, for example a gzip compressed CSV file can be consumed with the codec `gzip/csv`.", "lines", "delim:\t", "delim:foobar", "gzip/csv",
+	"codec", "The way in which the bytes of a data source should be converted into discrete messages, codecs are useful for specifying how large files or continuous streams of data might be processed in small chunks rather than loading it all in memory. It's possible to consume lines using a custom delimiter with the `delim:x` codec, where x is the character sequence custom delimiter. Codecs can be chained with `/`, for example a gzip compressed CSV file can be consumed with the codec `gzip/csv`.", "lines", "delim:\t", "delim:foobar", "gzip/csv",
 ).HasAnnotatedOptions(
 	"auto", "EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the `gzip/tar` codec. Defaults to all-bytes.",
 	"all-bytes", "Consume the entire file as a single binary message.",
