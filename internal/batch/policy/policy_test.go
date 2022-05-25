@@ -10,37 +10,37 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
+	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
-	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func TestPolicyNoop(t *testing.T) {
-	conf := policy.NewConfig()
+	conf := batchconfig.NewConfig()
 	assert.True(t, conf.IsNoop())
 
-	conf = policy.NewConfig()
+	conf = batchconfig.NewConfig()
 	conf.Count = 2
 	assert.False(t, conf.IsNoop())
 
-	conf = policy.NewConfig()
+	conf = batchconfig.NewConfig()
 	conf.Check = "foo.bar"
 	assert.False(t, conf.IsNoop())
 
-	conf = policy.NewConfig()
+	conf = batchconfig.NewConfig()
 	conf.ByteSize = 10
 	assert.False(t, conf.IsNoop())
 
-	conf = policy.NewConfig()
+	conf = batchconfig.NewConfig()
 	conf.Period = "10s"
 	assert.False(t, conf.IsNoop())
 }
 
 func TestPolicyBasic(t *testing.T) {
-	conf := policy.NewConfig()
+	conf := batchconfig.NewConfig()
 	conf.Count = 2
 	conf.ByteSize = 0
 
@@ -89,7 +89,7 @@ func TestPolicyBasic(t *testing.T) {
 }
 
 func TestPolicyPeriod(t *testing.T) {
-	conf := policy.NewConfig()
+	conf := batchconfig.NewConfig()
 	conf.Period = "300ms"
 
 	pol, err := policy.New(conf, mock.NewManager())
@@ -125,7 +125,7 @@ func TestPolicyPeriod(t *testing.T) {
 }
 
 func TestPolicySize(t *testing.T) {
-	conf := policy.NewConfig()
+	conf := batchconfig.NewConfig()
 	conf.ByteSize = 10
 
 	pol, err := policy.New(conf, mock.NewManager())
@@ -158,7 +158,7 @@ func TestPolicySize(t *testing.T) {
 }
 
 func TestPolicyCheck(t *testing.T) {
-	conf := policy.NewConfig()
+	conf := batchconfig.NewConfig()
 	conf.Check = `content() == "bar"`
 
 	pol, err := policy.New(conf, mock.NewManager())
@@ -191,7 +191,7 @@ func TestPolicyCheck(t *testing.T) {
 }
 
 func TestPolicyCheckAdvanced(t *testing.T) {
-	conf := policy.NewConfig()
+	conf := batchconfig.NewConfig()
 	conf.Check = `batch_size() >= 3`
 
 	pol, err := policy.New(conf, mock.NewManager())
@@ -227,7 +227,7 @@ func TestPolicyCheckAdvanced(t *testing.T) {
 }
 
 func TestPolicyArchived(t *testing.T) {
-	conf := policy.NewConfig()
+	conf := batchconfig.NewConfig()
 	conf.Count = 2
 	conf.ByteSize = 0
 
@@ -264,7 +264,7 @@ archive:
 }
 
 func TestPolicySplit(t *testing.T) {
-	conf := policy.NewConfig()
+	conf := batchconfig.NewConfig()
 	conf.Count = 2
 	conf.ByteSize = 0
 

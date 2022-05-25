@@ -8,8 +8,8 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/config"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/serverless"
 )
 

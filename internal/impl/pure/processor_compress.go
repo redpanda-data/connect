@@ -14,14 +14,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newCompress(conf.Compress, mgr)
 		if err != nil {
 			return nil, err
@@ -40,7 +38,7 @@ The 'level' field might not apply to all algorithms.`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("algorithm", "The compression algorithm to use.").HasOptions("gzip", "zlib", "flate", "snappy", "lz4"),
 			docs.FieldInt("level", "The level of compression to use. May not be applicable to all algorithms."),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewCompressConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewCompressConfig()),
 	})
 	if err != nil {
 		panic(err)
@@ -145,7 +143,7 @@ type compressProc struct {
 	log   log.Modular
 }
 
-func newCompress(conf oprocessor.CompressConfig, mgr interop.Manager) (*compressProc, error) {
+func newCompress(conf processor.CompressConfig, mgr bundle.NewManagement) (*compressProc, error) {
 	cor, err := strToCompressor(conf.Algorithm)
 	if err != nil {
 		return nil, err

@@ -14,20 +14,18 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		b, err := newGenerateReader(nm, c.Generate)
 		if err != nil {
 			return nil, err
 		}
-		return oinput.NewAsyncReader("generate", false, reader.NewAsyncPreserver(b), nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("generate", false, input.NewAsyncPreserver(b), nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "generate",
 		Version: "3.40.0",
@@ -49,7 +47,7 @@ testing your pipeline configs.`,
 				"@every 1s", "0,30 */2 * * * *", "TZ=Europe/London 30 3-6,20-23 * * *",
 			),
 			docs.FieldInt("count", "An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down."),
-		).ChildDefaultAndTypesFromStruct(oinput.NewGenerateConfig()),
+		).ChildDefaultAndTypesFromStruct(input.NewGenerateConfig()),
 		Categories: []string{
 			"Utility",
 		},
@@ -111,7 +109,7 @@ type generateReader struct {
 	location    *time.Location
 }
 
-func newGenerateReader(mgr interop.Manager, conf oinput.GenerateConfig) (*generateReader, error) {
+func newGenerateReader(mgr bundle.NewManagement, conf input.GenerateConfig) (*generateReader, error) {
 	var (
 		duration    time.Duration
 		timer       *time.Ticker
@@ -189,7 +187,7 @@ func (b *generateReader) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext a new bloblang generated message.
-func (b *generateReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (b *generateReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	if b.limited {
 		if remaining := atomic.AddInt64(&b.remaining, -1); remaining < 0 {
 			return nil, nil, component.ErrTypeClosed

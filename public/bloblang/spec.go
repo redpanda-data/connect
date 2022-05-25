@@ -82,11 +82,13 @@ func (d ParamDefinition) Default(v interface{}) ParamDefinition {
 // following the order in which the parameters are added, or named style
 // (c: baz, a: foo).
 type PluginSpec struct {
+	status      query.Status
 	category    string
 	description string
 	impure      bool
 	params      query.Params
 	examples    []pluginExample
+	version     string
 }
 
 type pluginExample struct {
@@ -103,6 +105,18 @@ func NewPluginSpec() *PluginSpec {
 	}
 }
 
+// Experimental flags the plugin as an experimental component.
+func (p *PluginSpec) Experimental() *PluginSpec {
+	p.status = query.StatusExperimental
+	return p
+}
+
+// Beta flags the plugin as a beta component.
+func (p *PluginSpec) Beta() *PluginSpec {
+	p.status = query.StatusBeta
+	return p
+}
+
 // Category adds an optional category string to the plugin spec, this is used
 // when generating documentation for the plugin.
 func (p *PluginSpec) Category(str string) *PluginSpec {
@@ -114,6 +128,12 @@ func (p *PluginSpec) Category(str string) *PluginSpec {
 // when generating documentation for the plugin.
 func (p *PluginSpec) Description(str string) *PluginSpec {
 	p.description = str
+	return p
+}
+
+// Version specifies that this plugin was introduced in a given version.
+func (p *PluginSpec) Version(v string) *PluginSpec {
+	p.version = v
 	return p
 }
 

@@ -23,7 +23,7 @@ func NewExpression(resolvers ...Resolver) *Expression {
 	var staticBuf bytes.Buffer
 	for _, r := range resolvers {
 		if s, is := r.(StaticResolver); is {
-			staticBuf.Write(s.ResolveBytes(0, message.QuickBatch(nil), false, false))
+			staticBuf.Write(s.ResolveBytes(0, message.QuickBatch(nil), false))
 		} else {
 			e.dynamicExpressions++
 		}
@@ -50,13 +50,13 @@ type Expression struct {
 	dynamicExpressions int
 }
 
-func (e *Expression) resolve(index int, msg Message, escaped, legacy bool) []byte {
+func (e *Expression) resolve(index int, msg Message, escaped bool) []byte {
 	if len(e.resolvers) == 1 {
-		return e.resolvers[0].ResolveBytes(index, msg, escaped, legacy)
+		return e.resolvers[0].ResolveBytes(index, msg, escaped)
 	}
 	var buf bytes.Buffer
 	for _, r := range e.resolvers {
-		buf.Write(r.ResolveBytes(index, msg, escaped, legacy))
+		buf.Write(r.ResolveBytes(index, msg, escaped))
 	}
 	return buf.Bytes()
 }
@@ -73,16 +73,7 @@ func (e *Expression) Bytes(index int, msg Message) []byte {
 	if len(e.resolvers) == 0 {
 		return []byte(e.static)
 	}
-	return e.resolve(index, msg, false, false)
-}
-
-// BytesEscaped returns a byte slice representing the expression resolved for a
-// message of a batch with the contents of resolved expressions escaped.
-func (e *Expression) BytesEscaped(index int, msg Message) []byte {
-	if len(e.resolvers) == 0 {
-		return []byte(e.static)
-	}
-	return e.resolve(index, msg, true, false)
+	return e.resolve(index, msg, false)
 }
 
 // String returns a string representing the expression resolved for a message of

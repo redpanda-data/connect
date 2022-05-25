@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
@@ -29,7 +29,7 @@ func TestDynamicInputAPI(t *testing.T) {
 		gMux.HandleFunc(path, h)
 	}
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Type = "dynamic"
 
 	i, err := mgr.NewInput(conf)

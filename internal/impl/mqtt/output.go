@@ -15,27 +15,25 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	mqttconf "github.com/benthosdev/benthos/v4/internal/impl/mqtt/shared"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 	"github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(conf ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		w, err := newMQTTWriter(conf.MQTT, nm, nm.Logger())
 		if err != nil {
 			return nil, err
 		}
-		a, err := ooutput.NewAsyncWriter("mqtt", conf.MQTT.MaxInFlight, w, nm.Logger(), nm.Metrics())
+		a, err := output.NewAsyncWriter("mqtt", conf.MQTT.MaxInFlight, w, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
-		return ooutput.OnlySinglePayloads(a), nil
+		return output.OnlySinglePayloads(a), nil
 	}), docs.ComponentSpec{
 		Name: "mqtt",
 		Summary: `
@@ -62,7 +60,7 @@ messages these interpolations are performed per message part.`),
 			docs.FieldInt("keepalive", "Max seconds of inactivity before a keepalive message is sent.").Advanced(),
 			tls.FieldSpec().AtVersion("3.45.0"),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewMQTTConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewMQTTConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -79,7 +77,7 @@ type mqttWriter struct {
 	writeTimeout   time.Duration
 
 	urls     []string
-	conf     ooutput.MQTTConfig
+	conf     output.MQTTConfig
 	topic    *field.Expression
 	retained *field.Expression
 
@@ -88,8 +86,8 @@ type mqttWriter struct {
 }
 
 func newMQTTWriter(
-	conf ooutput.MQTTConfig,
-	mgr interop.Manager,
+	conf output.MQTTConfig,
+	mgr bundle.NewManagement,
 	log log.Modular,
 ) (*mqttWriter, error) {
 	m := &mqttWriter{
@@ -206,7 +204,7 @@ func (m *mqttWriter) WriteWithContext(ctx context.Context, msg *message.Batch) e
 		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		retained := m.conf.Retained
 		if m.retained != nil {
 			var parseErr error

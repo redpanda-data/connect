@@ -21,25 +21,25 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(conf ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		c, err := newCassandraWriter(conf.Cassandra, nm, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
-		w, err := ooutput.NewAsyncWriter("cassandra", conf.Cassandra.MaxInFlight, c, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("cassandra", conf.Cassandra.MaxInFlight, c, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
-		return ooutput.NewBatcherFromConfig(conf.Cassandra.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(conf.Cassandra.Batching, w, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:   "cassandra",
 		Status: docs.StatusBeta,
@@ -125,7 +125,7 @@ output:
 		).WithChildren(
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewCassandraConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewCassandraConfig()),
 	})
 	if err != nil {
 		panic(err)
@@ -133,7 +133,7 @@ output:
 }
 
 type cassandraWriter struct {
-	conf    ooutput.CassandraConfig
+	conf    output.CassandraConfig
 	log     log.Modular
 	stats   metrics.Type
 	tlsConf *tls.Config
@@ -148,7 +148,7 @@ type cassandraWriter struct {
 	argsMapping *mapping.Executor
 }
 
-func newCassandraWriter(conf ooutput.CassandraConfig, mgr interop.Manager, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
+func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
 	c := cassandraWriter{
 		log:   log,
 		stats: stats,
@@ -174,7 +174,7 @@ func newCassandraWriter(conf ooutput.CassandraConfig, mgr interop.Manager, log l
 	return &c, nil
 }
 
-func (c *cassandraWriter) parseArgs(mgr interop.Manager) error {
+func (c *cassandraWriter) parseArgs(mgr bundle.NewManagement) error {
 	if c.conf.ArgsMapping != "" {
 		var err error
 		if c.argsMapping, err = mgr.BloblEnvironment().NewMapping(c.conf.ArgsMapping); err != nil {

@@ -8,15 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 type fnReader struct {
 	connectWithContext func(ctx context.Context) error
-	readWithContext    func(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error)
+	readWithContext    func(ctx context.Context) (*message.Batch, input.AsyncAckFn, error)
 	closeAsync         func()
 	waitForClose       func(timeout time.Duration) error
 }
@@ -25,7 +24,7 @@ func (f *fnReader) ConnectWithContext(ctx context.Context) error {
 	return f.connectWithContext(ctx)
 }
 
-func (f *fnReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (f *fnReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	return f.readWithContext(ctx)
 }
 
@@ -75,7 +74,7 @@ func TestSpanReader(t *testing.T) {
 					connCalled = true
 					return nil
 				},
-				readWithContext: func(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+				readWithContext: func(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 					m := message.QuickBatch([][]byte{
 						[]byte(test.contents),
 					})
@@ -90,7 +89,7 @@ func TestSpanReader(t *testing.T) {
 					waitCalled = true
 					return nil
 				},
-			}, mock.NewManager(), log.Noop())
+			}, mock.NewManager())
 			require.NoError(t, err)
 
 			assert.Nil(t, r.ConnectWithContext(context.Background()))

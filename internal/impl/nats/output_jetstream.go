@@ -9,7 +9,6 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -30,6 +29,13 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 			Example("foo.bar.baz").
 			Example(`${! meta("kafka_topic") }`).
 			Example(`foo.${! json("meta.type") }`)).
+		Field(service.NewInterpolatedStringMapField("headers").
+			Description("Explicit message headers to add to messages.").
+			Default(map[string]interface{}{}).
+			Example(map[string]interface{}{
+				"Content-Type": "application/json",
+				"Timestamp":    `${!meta("Timestamp")}`,
+			}).Version("4.1.0")).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
 			Default(1024)).
@@ -39,7 +45,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 
 func init() {
 	err := service.RegisterOutput(
-		output.TypeNATSJetStream, natsJetStreamOutputConfig(),
+		"nats_jetstream", natsJetStreamOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 			maxInFlight, err := conf.FieldInt("max_in_flight")
 			if err != nil {
@@ -60,6 +66,7 @@ type jetStreamOutput struct {
 	urls          string
 	subjectStrRaw string
 	subjectStr    *service.InterpolatedString
+	headers       map[string]*service.InterpolatedString
 	authConf      auth.Config
 	tlsConf       *tls.Config
 
@@ -89,6 +96,10 @@ func newJetStreamWriterFromConfig(conf *service.ParsedConfig, log *service.Logge
 	}
 
 	if j.subjectStr, err = conf.FieldInterpolatedString("subject"); err != nil {
+		return nil, err
+	}
+
+	if j.headers, err = conf.FieldInterpolatedStringMap("headers"); err != nil {
 		return nil, err
 	}
 
@@ -167,13 +178,17 @@ func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error
 		return service.ErrNotConnected
 	}
 
-	subject := j.subjectStr.String(msg)
+	jsmsg := nats.NewMsg(j.subjectStr.String(msg))
 	msgBytes, err := msg.AsBytes()
 	if err != nil {
 		return err
 	}
+	jsmsg.Data = msgBytes
+	for k, v := range j.headers {
+		jsmsg.Header.Add(k, v.String(msg))
+	}
 
-	_, err = jCtx.Publish(subject, msgBytes)
+	_, err = jCtx.PublishMsg(jsmsg)
 	return err
 }
 

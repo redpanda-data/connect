@@ -12,14 +12,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newAvro(conf.Avro, mgr)
 		if err != nil {
 			return nil, err
@@ -57,7 +55,7 @@ specified encoding.`,
 				"file://path/to/spec.avsc",
 				"http://localhost:8081/path/to/spec/versions/1",
 			),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewAvroConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewAvroConfig()),
 	})
 	if err != nil {
 		panic(err)
@@ -185,7 +183,7 @@ type avro struct {
 	log      log.Modular
 }
 
-func newAvro(conf oprocessor.AvroConfig, mgr interop.Manager) (processor.V2, error) {
+func newAvro(conf processor.AvroConfig, mgr bundle.NewManagement) (processor.V2, error) {
 	a := &avro{log: mgr.Logger()}
 
 	var schema string

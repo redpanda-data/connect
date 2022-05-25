@@ -146,7 +146,7 @@ func (m *Type) Create(id string, conf stream.Config) error {
 	}
 
 	strmFlatMetrics := metrics.NewLocal()
-	sMgr := m.manager.ForStream(id).WithAddedMetrics(strmFlatMetrics).(bundle.NewManagement)
+	sMgr := m.manager.ForStream(id).WithAddedMetrics(strmFlatMetrics)
 
 	var wrapper *StreamStatus
 	strm, err := stream.New(conf, sMgr, stream.OptOnClose(func() {

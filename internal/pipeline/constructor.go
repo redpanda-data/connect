@@ -3,9 +3,8 @@ package pipeline
 import (
 	"strconv"
 
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/interop"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 )
 
 // Config is a configuration struct for creating parallel processing pipelines.
@@ -32,12 +31,12 @@ func NewConfig() Config {
 //------------------------------------------------------------------------------
 
 // New creates an input type based on an input configuration.
-func New(conf Config, mgr interop.Manager) (Type, error) {
-	processors := make([]iprocessor.V1, len(conf.Processors))
+func New(conf Config, mgr bundle.NewManagement) (Type, error) {
+	processors := make([]processor.V1, len(conf.Processors))
 	for j, procConf := range conf.Processors {
 		var err error
 		pMgr := mgr.IntoPath("processors", strconv.Itoa(j))
-		processors[j], err = processor.New(procConf, pMgr)
+		processors[j], err = pMgr.NewProcessor(procConf)
 		if err != nil {
 			return nil, err
 		}

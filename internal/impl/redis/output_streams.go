@@ -14,17 +14,17 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newRedisStreamsOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name: "redis_streams",
@@ -47,7 +47,7 @@ a metadata item and the body then the body takes precedence.`),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are included in the message body.").WithChildren(metadata.ExcludeFilterFields()...),
 			policy.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewRedisStreamsConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewRedisStreamsConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -57,29 +57,29 @@ a metadata item and the body then the body takes precedence.`),
 	}
 }
 
-func newRedisStreamsOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newRedisStreamsOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	w, err := newRedisStreamsWriter(conf.RedisStreams, log)
 	if err != nil {
 		return nil, err
 	}
-	a, err := ooutput.NewAsyncWriter("redis_streams", conf.RedisStreams.MaxInFlight, w, log, stats)
+	a, err := output.NewAsyncWriter("redis_streams", conf.RedisStreams.MaxInFlight, w, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.NewBatcherFromConfig(conf.RedisStreams.Batching, a, mgr, log, stats)
+	return batcher.NewFromConfig(conf.RedisStreams.Batching, a, mgr, log, stats)
 }
 
 type redisStreamsWriter struct {
 	log log.Modular
 
-	conf       ooutput.RedisStreamsConfig
+	conf       output.RedisStreamsConfig
 	metaFilter *metadata.ExcludeFilter
 
 	client  redis.UniversalClient
 	connMut sync.RWMutex
 }
 
-func newRedisStreamsWriter(conf ooutput.RedisStreamsConfig, log log.Modular) (*redisStreamsWriter, error) {
+func newRedisStreamsWriter(conf output.RedisStreamsConfig, log log.Modular) (*redisStreamsWriter, error) {
 
 	r := &redisStreamsWriter{
 		log:  log,

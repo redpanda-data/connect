@@ -14,17 +14,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newRedisHashOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "redis_hash",
@@ -72,7 +70,7 @@ Where latter stages will overwrite matching field names of a former stage.`),
 			docs.FieldBool("walk_json_object", "Whether to walk each message as a JSON object and add each key/value pair to the list of hash fields to set."),
 			docs.FieldString("fields", "A map of key/value pairs to set as hash fields.").IsInterpolated().Map(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewRedisHashConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewRedisHashConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -82,22 +80,22 @@ Where latter stages will overwrite matching field names of a former stage.`),
 	}
 }
 
-func newRedisHashOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newRedisHashOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	rhash, err := newRedisHashWriter(conf.RedisHash, mgr, log)
 	if err != nil {
 		return nil, err
 	}
-	a, err := ooutput.NewAsyncWriter("redis_hash", conf.RedisHash.MaxInFlight, rhash, log, stats)
+	a, err := output.NewAsyncWriter("redis_hash", conf.RedisHash.MaxInFlight, rhash, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.OnlySinglePayloads(a), nil
+	return output.OnlySinglePayloads(a), nil
 }
 
 type redisHashWriter struct {
 	log log.Modular
 
-	conf ooutput.RedisHashConfig
+	conf output.RedisHashConfig
 
 	keyStr *field.Expression
 	fields map[string]*field.Expression
@@ -106,7 +104,7 @@ type redisHashWriter struct {
 	connMut sync.RWMutex
 }
 
-func newRedisHashWriter(conf ooutput.RedisHashConfig, mgr interop.Manager, log log.Modular) (*redisHashWriter, error) {
+func newRedisHashWriter(conf output.RedisHashConfig, mgr bundle.NewManagement, log log.Modular) (*redisHashWriter, error) {
 	r := &redisHashWriter{
 		log:    log,
 		conf:   conf,
@@ -181,7 +179,7 @@ func (r *redisHashWriter) WriteWithContext(ctx context.Context, msg *message.Bat
 		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		key := r.keyStr.String(i, msg)
 		fields := map[string]interface{}{}
 		if r.conf.WalkMetadata {

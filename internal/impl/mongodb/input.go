@@ -4,11 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
 	"github.com/benthosdev/benthos/v4/public/service"
+)
+
+// mongodb input component allowed operations
+const (
+	FindInputOperation      = "find"
+	AggregateInputOperation = "aggregate"
 )
 
 func mongoConfigSpec() *service.ConfigSpec {
@@ -23,6 +28,10 @@ func mongoConfigSpec() *service.ConfigSpec {
 		Field(service.NewStringField("collection").Description("The collection to select from.")).
 		Field(service.NewStringField("username").Description("The username to connect to the database.").Default("")).
 		Field(service.NewStringField("password").Description("The password to connect to the database.").Default("")).
+		Field(service.NewStringEnumField("operation", FindInputOperation, AggregateInputOperation).
+			Description("The mongodb operation to perform.").
+			Default(FindInputOperation).Advanced().
+			Version("4.2.0")).
 		Field(queryField)
 }
 
@@ -58,15 +67,15 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 	if err != nil {
 		return nil, err
 	}
+	operation, err := conf.FieldString("operation")
+	if err != nil {
+		return nil, err
+	}
 	queryExecutor, err := conf.FieldBloblang("query")
 	if err != nil {
 		return nil, err
 	}
 	query, err := queryExecutor.Query(struct{}{})
-	if err != nil {
-		return nil, err
-	}
-	queryBSON, err := bson.Marshal(query)
 	if err != nil {
 		return nil, err
 	}
@@ -78,15 +87,18 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 		Password:   password,
 	}
 	return service.AutoRetryNacks(&mongoInput{
-		queryBSON,
-		config, nil, nil}), nil
+		query:     query,
+		config:    config,
+		operation: operation,
+	}), nil
 }
 
 type mongoInput struct {
-	query  interface{}
-	config client.Config
-	client *mongo.Client
-	cursor *mongo.Cursor
+	query     interface{}
+	config    client.Config
+	client    *mongo.Client
+	cursor    *mongo.Cursor
+	operation string
 }
 
 func (m *mongoInput) Connect(ctx context.Context) error {
@@ -103,7 +115,14 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 		return fmt.Errorf("ping failed: %v", err)
 	}
 	collection := m.client.Database(m.config.Database).Collection(m.config.Collection)
-	m.cursor, err = collection.Find(ctx, m.query)
+	switch m.operation {
+	case "find":
+		m.cursor, err = collection.Find(ctx, m.query)
+	case "aggregate":
+		m.cursor, err = collection.Aggregate(ctx, m.query)
+	default:
+		return fmt.Errorf("opertaion %s not supported. the supported values are \"find\" and \"aggregate\"", m.operation)
+	}
 	if err != nil {
 		_ = m.client.Disconnect(ctx)
 		return err

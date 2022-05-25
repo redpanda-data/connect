@@ -6,15 +6,15 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return ooutput.NewAsyncWriter("drop", 1, newDropWriter(c.Drop, nm.Logger()), nm.Logger(), nm.Metrics())
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
+		return output.NewAsyncWriter("drop", 1, newDropWriter(c.Drop, nm.Logger()), nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:       "drop",
 		Summary:    `Drops all messages.`,
@@ -30,7 +30,7 @@ type dropWriter struct {
 	log log.Modular
 }
 
-func newDropWriter(conf ooutput.DropConfig, log log.Modular) *dropWriter {
+func newDropWriter(conf output.DropConfig, log log.Modular) *dropWriter {
 	return &dropWriter{log: log}
 }
 

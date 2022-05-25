@@ -9,12 +9,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newCatch(conf.Catch, mgr)
 		if err != nil {
 			return nil, err
@@ -90,10 +89,10 @@ type catchProc struct {
 	children []processor.V1
 }
 
-func newCatch(conf []oprocessor.Config, mgr bundle.NewManagement) (*catchProc, error) {
+func newCatch(conf []processor.Config, mgr bundle.NewManagement) (*catchProc, error) {
 	var children []processor.V1
 	for i, pconf := range conf {
-		pMgr := mgr.IntoPath("catch", strconv.Itoa(i)).(bundle.NewManagement)
+		pMgr := mgr.IntoPath("catch", strconv.Itoa(i))
 		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, err
@@ -115,7 +114,7 @@ func (p *catchProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 	})
 
 	var res error
-	if resultMsgs, res = oprocessor.ExecuteCatchAll(p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
+	if resultMsgs, res = processor.ExecuteCatchAll(p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
 		return nil, res
 	}
 

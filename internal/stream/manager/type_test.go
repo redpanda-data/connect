@@ -12,7 +12,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
@@ -89,7 +88,7 @@ func TestTypeBasicClose(t *testing.T) {
 	mgr := New(res)
 
 	conf := harmlessConf()
-	conf.Output.Type = output.TypeNanomsg
+	conf.Output.Type = "nanomsg"
 
 	if err := mgr.Create("foo", conf); err != nil {
 		t.Fatal(err)

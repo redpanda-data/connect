@@ -16,10 +16,10 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
@@ -36,7 +36,7 @@ var (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newSwitchOutput(c.Switch, nm)
 	}), docs.ComponentSpec{
 		Name: "switch",
@@ -200,7 +200,7 @@ type switchOutput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newSwitchOutput(conf ooutput.SwitchConfig, mgr bundle.NewManagement) (output.Streamed, error) {
+func newSwitchOutput(conf output.SwitchConfig, mgr bundle.NewManagement) (output.Streamed, error) {
 	o := &switchOutput{
 		logger:       mgr.Logger(),
 		transactions: nil,
@@ -221,7 +221,7 @@ func newSwitchOutput(conf ooutput.SwitchConfig, mgr bundle.NewManagement) (outpu
 
 	var err error
 	for i, cConf := range conf.Cases {
-		oMgr := mgr.IntoPath("switch", strconv.Itoa(i), "output").(bundle.NewManagement)
+		oMgr := mgr.IntoPath("switch", strconv.Itoa(i), "output")
 		if o.outputs[i], err = oMgr.NewOutput(cConf.Output); err != nil {
 			return nil, err
 		}

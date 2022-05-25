@@ -15,14 +15,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/filepath"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newGrok(conf.Grok, mgr)
 		if err != nil {
 			return nil, err
@@ -48,7 +46,7 @@ This processor currently uses the [Go RE2](https://golang.org/s/re2syntax) regul
 			docs.FieldBool("named_captures_only", "Whether to only capture values from named patterns.").Advanced(),
 			docs.FieldBool("use_default_patterns", "Whether to use a [default set of patterns](#default-patterns).").Advanced(),
 			docs.FieldBool("remove_empty_values", "Whether to remove values that are empty from the resulting structure.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewGrokConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewGrokConfig()),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "VPC Flow Logs",
@@ -92,7 +90,7 @@ type grokProc struct {
 	log      log.Modular
 }
 
-func newGrok(conf oprocessor.GrokConfig, mgr interop.Manager) (processor.V2, error) {
+func newGrok(conf processor.GrokConfig, mgr bundle.NewManagement) (processor.V2, error) {
 	grokConf := grok.Config{
 		RemoveEmptyValues:   conf.RemoveEmpty,
 		NamedCapturesOnly:   conf.NamedOnly,

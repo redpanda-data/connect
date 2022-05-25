@@ -14,18 +14,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 // ErrResourceNotFound represents an error where a named resource could not be
@@ -68,7 +64,7 @@ type Type struct {
 
 	inputs       map[string]*inputWrapper
 	caches       map[string]cache.V1
-	processors   map[string]iprocessor.V1
+	processors   map[string]processor.V1
 	outputs      map[string]*outputWrapper
 	rateLimits   map[string]ratelimit.V1
 	resourceLock *sync.RWMutex
@@ -121,7 +117,7 @@ func New(conf ResourceConfig, apiReg APIReg, log log.Modular, stats *metrics.Nam
 
 		inputs:       map[string]*inputWrapper{},
 		caches:       map[string]cache.V1{},
-		processors:   map[string]iprocessor.V1{},
+		processors:   map[string]processor.V1{},
 		outputs:      map[string]*outputWrapper{},
 		rateLimits:   map[string]ratelimit.V1{},
 		resourceLock: &sync.RWMutex{},
@@ -229,7 +225,7 @@ func New(conf ResourceConfig, apiReg APIReg, log log.Modular, stats *metrics.Nam
 
 // ForStream returns a variant of this manager to be used by a particular stream
 // identifer, where APIs registered will be namespaced by that id.
-func (t *Type) ForStream(id string) interop.Manager {
+func (t *Type) ForStream(id string) bundle.NewManagement {
 	return t.forStream(id)
 }
 
@@ -256,7 +252,7 @@ func (t *Type) forLabel(name string) *Type {
 // IntoPath returns a variant of this manager to be used by a particular
 // component path, which is a child of the current component, where
 // observability components will be automatically tagged with the new path.
-func (t *Type) IntoPath(segments ...string) interop.Manager {
+func (t *Type) IntoPath(segments ...string) bundle.NewManagement {
 	return t.intoPath(segments...)
 }
 
@@ -287,7 +283,7 @@ func (t *Type) Label() string {
 
 // WithAddedMetrics returns a modified version of the manager where metrics are
 // registered to both the current metrics target as well as the provided one.
-func (t *Type) WithAddedMetrics(m metrics.Type) interop.Manager {
+func (t *Type) WithAddedMetrics(m metrics.Type) bundle.NewManagement {
 	newT := *t
 	newT.stats = newT.stats.WithStats(metrics.Combine(newT.stats.Child(), m))
 	return &newT
@@ -473,7 +469,7 @@ func (t *Type) ProbeInput(name string) bool {
 // During the execution of the provided closure it is guaranteed that the
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
-func (t *Type) AccessInput(ctx context.Context, name string, fn func(iinput.Streamed)) error {
+func (t *Type) AccessInput(ctx context.Context, name string, fn func(input.Streamed)) error {
 	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
 	// profiling for heavy use within a busy loop.
 	t.resourceLock.RLock()
@@ -487,7 +483,7 @@ func (t *Type) AccessInput(ctx context.Context, name string, fn func(iinput.Stre
 }
 
 // NewInput attempts to create a new input component from a config.
-func (t *Type) NewInput(conf input.Config, pipelines ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
+func (t *Type) NewInput(conf input.Config, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
 	return t.env.InputInit(conf, t.forLabel(conf.Label), pipelines...)
 }
 
@@ -542,7 +538,7 @@ func (t *Type) ProbeProcessor(name string) bool {
 // During the execution of the provided closure it is guaranteed that the
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
-func (t *Type) AccessProcessor(ctx context.Context, name string, fn func(iprocessor.V1)) error {
+func (t *Type) AccessProcessor(ctx context.Context, name string, fn func(processor.V1)) error {
 	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
 	// profiling for heavy use within a busy loop.
 	t.resourceLock.RLock()
@@ -556,7 +552,7 @@ func (t *Type) AccessProcessor(ctx context.Context, name string, fn func(iproces
 }
 
 // NewProcessor attempts to create a new processor component from a config.
-func (t *Type) NewProcessor(conf processor.Config) (iprocessor.V1, error) {
+func (t *Type) NewProcessor(conf processor.Config) (processor.V1, error) {
 	return t.env.ProcessorInit(conf, t.forLabel(conf.Label))
 }
 
@@ -606,7 +602,7 @@ func (t *Type) ProbeOutput(name string) bool {
 // During the execution of the provided closure it is guaranteed that the
 // resource will not be closed or removed. However, it is possible for the
 // resource to be accessed by any number of components in parallel.
-func (t *Type) AccessOutput(ctx context.Context, name string, fn func(ioutput.Sync)) error {
+func (t *Type) AccessOutput(ctx context.Context, name string, fn func(output.Sync)) error {
 	// TODO: Eventually use ctx to cancel blocking on the mutex lock. Needs
 	// profiling for heavy use within a busy loop.
 	t.resourceLock.RLock()
@@ -620,7 +616,7 @@ func (t *Type) AccessOutput(ctx context.Context, name string, fn func(ioutput.Sy
 }
 
 // NewOutput attempts to create a new output component from a config.
-func (t *Type) NewOutput(conf output.Config, pipelines ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
+func (t *Type) NewOutput(conf output.Config, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error) {
 	return t.env.OutputInit(conf, t.forLabel(conf.Label), pipelines...)
 }
 

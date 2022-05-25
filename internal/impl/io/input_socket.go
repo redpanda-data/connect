@@ -13,17 +13,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		return newSocketInput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "socket",
@@ -35,7 +33,7 @@ func init() {
 			docs.FieldString("address", "The address to connect to.", "/tmp/benthos.sock", "127.0.0.1:6000"),
 			codec.ReaderDocs.AtVersion("3.42.0"),
 			docs.FieldInt("max_buffer", "The maximum message buffer size. Must exceed the largest message to be consumed.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(oinput.NewSocketConfig()),
+		).ChildDefaultAndTypesFromStruct(input.NewSocketConfig()),
 		Categories: []string{
 			"Network",
 		},
@@ -45,7 +43,7 @@ func init() {
 	}
 }
 
-func newSocketInput(conf oinput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func newSocketInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	rdr, err := newSocketReader(conf.Socket, log)
 	if err != nil {
 		return nil, err
@@ -54,20 +52,20 @@ func newSocketInput(conf oinput.Config, mgr interop.Manager, log log.Modular, st
 	// we can get the same results by making sure that the async readers forward
 	// CloseAsync all the way through. We would need it to be configurable as it
 	// wouldn't be appropriate for inputs that have real acks.
-	return oinput.NewAsyncReader("socket", true, reader.NewAsyncCutOff(reader.NewAsyncPreserver(rdr)), log, stats)
+	return input.NewAsyncReader("socket", true, input.NewAsyncCutOff(input.NewAsyncPreserver(rdr)), log, stats)
 }
 
 type socketReader struct {
 	log log.Modular
 
-	conf      oinput.SocketConfig
+	conf      input.SocketConfig
 	codecCtor codec.ReaderConstructor
 
 	codecMut sync.Mutex
 	codec    codec.Reader
 }
 
-func newSocketReader(conf oinput.SocketConfig, logger log.Modular) (*socketReader, error) {
+func newSocketReader(conf input.SocketConfig, logger log.Modular) (*socketReader, error) {
 	switch conf.Network {
 	case "tcp", "unix":
 	default:
@@ -112,7 +110,7 @@ func (s *socketReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *socketReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (s *socketReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	s.codecMut.Lock()
 	codec := s.codec
 	s.codecMut.Unlock()

@@ -13,12 +13,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newSwitchProc(conf.Switch, mgr)
 		if err != nil {
 			return nil, err
@@ -100,7 +99,7 @@ type switchProc struct {
 	log   log.Modular
 }
 
-func newSwitchProc(conf oprocessor.SwitchConfig, mgr bundle.NewManagement) (*switchProc, error) {
+func newSwitchProc(conf processor.SwitchConfig, mgr bundle.NewManagement) (*switchProc, error) {
 	var cases []switchCase
 	for i, caseConf := range conf {
 		var err error
@@ -118,7 +117,7 @@ func newSwitchProc(conf oprocessor.SwitchConfig, mgr bundle.NewManagement) (*swi
 		}
 
 		for j, procConf := range caseConf.Processors {
-			pMgr := mgr.IntoPath("switch", strconv.Itoa(i), "processors", strconv.Itoa(j)).(bundle.NewManagement)
+			pMgr := mgr.IntoPath("switch", strconv.Itoa(i), "processors", strconv.Itoa(j))
 			proc, err := pMgr.NewProcessor(procConf)
 			if err != nil {
 				return nil, fmt.Errorf("case [%v] processor [%v]: %w", i, j, err)
@@ -205,7 +204,7 @@ func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *m
 			execMsg := message.QuickBatch(nil)
 			execMsg.SetAll(passed)
 
-			msgs, res := oprocessor.ExecuteAll(switchCase.processors, execMsg)
+			msgs, res := processor.ExecuteAll(switchCase.processors, execMsg)
 			if res != nil {
 				return nil, res
 			}

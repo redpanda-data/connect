@@ -16,18 +16,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newNATSStreamOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:        "nats_stream",
@@ -46,7 +44,7 @@ func init() {
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			btls.FieldSpec(),
 			auth.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewNATSStreamConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewNATSStreamConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -56,16 +54,16 @@ func init() {
 	}
 }
 
-func newNATSStreamOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newNATSStreamOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	w, err := newNATSStreamWriter(conf.NATSStream, log)
 	if err != nil {
 		return nil, err
 	}
-	a, err := ooutput.NewAsyncWriter("nats_stream", conf.NATSStream.MaxInFlight, w, log, stats)
+	a, err := output.NewAsyncWriter("nats_stream", conf.NATSStream.MaxInFlight, w, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.OnlySinglePayloads(a), nil
+	return output.OnlySinglePayloads(a), nil
 }
 
 type natsStreamWriter struct {
@@ -76,11 +74,11 @@ type natsStreamWriter struct {
 	connMut  sync.RWMutex
 
 	urls    string
-	conf    ooutput.NATSStreamConfig
+	conf    output.NATSStreamConfig
 	tlsConf *tls.Config
 }
 
-func newNATSStreamWriter(conf ooutput.NATSStreamConfig, log log.Modular) (*natsStreamWriter, error) {
+func newNATSStreamWriter(conf output.NATSStreamConfig, log log.Modular) (*natsStreamWriter, error) {
 	if conf.ClientID == "" {
 		rgen := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -150,7 +148,7 @@ func (n *natsStreamWriter) WriteWithContext(ctx context.Context, msg *message.Ba
 		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		err := conn.Publish(n.conf.Subject, p.Get())
 		if err == stan.ErrConnectionClosed {
 			conn.Close()

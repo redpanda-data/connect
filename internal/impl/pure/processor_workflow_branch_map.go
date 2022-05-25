@@ -12,8 +12,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/interop"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 type workflowBranch interface {
@@ -98,14 +96,14 @@ func (w *workflowBranchMap) WaitForClose(timeout time.Duration) error {
 
 var processDAGStageName = regexp.MustCompile("[a-zA-Z0-9-_]+")
 
-func newWorkflowBranchMap(conf oprocessor.WorkflowConfig, mgr bundle.NewManagement) (*workflowBranchMap, error) {
+func newWorkflowBranchMap(conf processor.WorkflowConfig, mgr bundle.NewManagement) (*workflowBranchMap, error) {
 	dynamicBranches, staticBranches := map[string]workflowBranch{}, map[string]*Branch{}
 	for k, v := range conf.Branches {
 		if len(processDAGStageName.FindString(k)) != len(k) {
 			return nil, fmt.Errorf("workflow branch name '%v' contains invalid characters", k)
 		}
 
-		child, err := newBranch(v, mgr.IntoPath("workflow", "branches", k).(bundle.NewManagement))
+		child, err := newBranch(v, mgr.IntoPath("workflow", "branches", k))
 		if err != nil {
 			return nil, err
 		}
@@ -171,7 +169,7 @@ func newWorkflowBranchMap(conf oprocessor.WorkflowConfig, mgr bundle.NewManageme
 
 type resourcedBranch struct {
 	name string
-	mgr  interop.Manager
+	mgr  bundle.NewManagement
 }
 
 func (r *resourcedBranch) lock() (branch *Branch, unlockFn func()) {

@@ -308,8 +308,9 @@ root.all_metadata = meta()
 
 ### `root_meta`
 
-BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Returns the value of a metadata key from the new message being created, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.
 
 #### Parameters

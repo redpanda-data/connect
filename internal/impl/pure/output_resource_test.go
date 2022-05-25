@@ -10,11 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func TestResourceOutput(t *testing.T) {
@@ -29,11 +27,11 @@ func TestResourceOutput(t *testing.T) {
 		return nil
 	}
 
-	nConf := ooutput.NewConfig()
+	nConf := output.NewConfig()
 	nConf.Type = "resource"
 	nConf.Resource = "foo"
 
-	p, err := ooutput.New(nConf, mgr, log.Noop(), metrics.Noop())
+	p, err := mgr.NewOutput(nConf)
 	require.NoError(t, err)
 
 	assert.True(t, p.Connected())
@@ -74,7 +72,7 @@ func TestResourceOutput(t *testing.T) {
 func TestOutputResourceBadName(t *testing.T) {
 	mgr := mock.NewManager()
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Type = "resource"
 	conf.Resource = "foo"
 

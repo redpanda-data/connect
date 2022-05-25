@@ -107,9 +107,7 @@ func (e *events) Extract() []NodeEvent {
 	defer e.mut.Unlock()
 
 	eventsCopy := make([]NodeEvent, len(e.m))
-	for i, e := range e.m {
-		eventsCopy[i] = e
-	}
+	copy(eventsCopy, e.m)
 
 	return eventsCopy
 }

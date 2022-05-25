@@ -6,10 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
-	mmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func TestDedupe(t *testing.T) {
@@ -18,7 +17,7 @@ func TestDedupe(t *testing.T) {
 	doc3 := []byte("hello world 2")
 
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]mmock.CacheItem{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	conf := processor.NewConfig()
 	conf.Type = "dedupe"
@@ -43,7 +42,7 @@ func TestDedupe(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, msgOut, 1)
 
-	mgr.Caches["foocache"] = map[string]mmock.CacheItem{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	proc, err = mgr.NewProcessor(conf)
 	require.NoError(t, err)
@@ -72,7 +71,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 	conf.Dedupe.Key = "${! content() }"
 
 	mgr := mock.NewManager()
-	mgr.Caches["foocache"] = map[string]mmock.CacheItem{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	proc, err := mgr.NewProcessor(conf)
 	require.NoError(t, err)
@@ -84,7 +83,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 	assert.Len(t, msgs, 0)
 
 	conf.Dedupe.DropOnCacheErr = false
-	mgr.Caches["foocache"] = map[string]mmock.CacheItem{}
+	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
 	proc, err = mgr.NewProcessor(conf)
 	require.NoError(t, err)

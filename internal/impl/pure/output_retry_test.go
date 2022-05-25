@@ -8,26 +8,25 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func TestRetryConfigErrs(t *testing.T) {
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Type = "retry"
 
-	if _, err := bundle.AllOutputs.Init(conf, bmock.NewManager()); err == nil {
+	if _, err := bundle.AllOutputs.Init(conf, mock.NewManager()); err == nil {
 		t.Error("Expected error from bad retry output")
 	}
 
-	oConf := ooutput.NewConfig()
+	oConf := output.NewConfig()
 	conf.Retry.Output = &oConf
 	conf.Retry.Backoff.InitialInterval = "not a time period"
 
-	if _, err := bundle.AllOutputs.Init(conf, bmock.NewManager()); err == nil {
+	if _, err := bundle.AllOutputs.Init(conf, mock.NewManager()); err == nil {
 		t.Error("Expected error from bad initial period")
 	}
 }
@@ -36,13 +35,13 @@ func TestRetryBasic(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Type = "retry"
 
-	childConf := ooutput.NewConfig()
+	childConf := output.NewConfig()
 	conf.Retry.Output = &childConf
 
-	output, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
+	output, err := bundle.AllOutputs.Init(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,15 +99,15 @@ func TestRetrySadPath(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Type = "retry"
 
-	childConf := ooutput.NewConfig()
+	childConf := output.NewConfig()
 	conf.Retry.Output = &childConf
 	conf.Retry.Backoff.InitialInterval = "10us"
 	conf.Retry.Backoff.MaxInterval = "10us"
 
-	output, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
+	output, err := bundle.AllOutputs.Init(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,15 +251,15 @@ func ackForRetry(
 }
 
 func TestRetryParallel(t *testing.T) {
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Type = "retry"
 
-	childConf := ooutput.NewConfig()
+	childConf := output.NewConfig()
 	conf.Retry.Output = &childConf
 	conf.Retry.Backoff.InitialInterval = "10us"
 	conf.Retry.Backoff.MaxInterval = "10us"
 
-	output, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
+	output, err := bundle.AllOutputs.Init(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

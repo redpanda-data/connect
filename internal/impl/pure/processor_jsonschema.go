@@ -9,16 +9,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 
 	jsonschema "github.com/xeipuuv/gojsonschema"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newJSONSchema(conf.JSONSchema, mgr)
 		if err != nil {
 			return nil, err
@@ -90,7 +88,7 @@ dropped.`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("schema", "A schema to apply. Use either this or the `schema_path` field."),
 			docs.FieldString("schema_path", "The path of a schema document to apply. Use either this or the `schema` field."),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewJSONSchemaConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewJSONSchemaConfig()),
 	})
 	if err != nil {
 		panic(err)
@@ -102,7 +100,7 @@ type jsonSchemaProc struct {
 	schema *jsonschema.Schema
 }
 
-func newJSONSchema(conf oprocessor.JSONSchemaConfig, mgr interop.Manager) (processor.V2, error) {
+func newJSONSchema(conf processor.JSONSchemaConfig, mgr bundle.NewManagement) (processor.V2, error) {
 	var schema *jsonschema.Schema
 	var err error
 

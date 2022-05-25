@@ -16,28 +16,27 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		r, err := newGCPCloudStorageInput(c.GCPCloudStorage, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
 		return input.NewAsyncReader(
-			input.TypeGCPCloudStorage, true,
-			reader.NewAsyncPreserver(r),
+			"gcp_cloud_storage", true,
+			input.NewAsyncPreserver(r),
 			nm.Logger(), nm.Metrics(),
 		)
 	}), docs.ComponentSpec{
-		Name:       input.TypeGCPCloudStorage,
+		Name:       "gcp_cloud_storage",
 		Type:       docs.TypeInput,
 		Status:     docs.StatusBeta,
 		Version:    "3.43.0",
@@ -305,7 +304,7 @@ func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*messa
 
 // ReadWithContext attempts to read a new message from the target Google Cloud
 // Storage bucket.
-func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn reader.AsyncAckFn, err error) {
+func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn input.AsyncAckFn, err error) {
 	g.objectMut.Lock()
 	defer g.objectMut.Unlock()
 

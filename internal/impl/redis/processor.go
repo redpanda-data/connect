@@ -13,17 +13,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	bredis "github.com/benthosdev/benthos/v4/internal/impl/redis/old"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 //------------------------------------------------------------------------------
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newRedisProc(conf.Redis, mgr)
 		if err != nil {
 			return nil, err
@@ -146,7 +144,7 @@ type redisProc struct {
 	retryPeriod time.Duration
 }
 
-func newRedisProc(conf oprocessor.RedisConfig, mgr interop.Manager) (*redisProc, error) {
+func newRedisProc(conf processor.RedisConfig, mgr bundle.NewManagement) (*redisProc, error) {
 	var retryPeriod time.Duration
 	if tout := conf.RetryPeriod; len(tout) > 0 {
 		var err error

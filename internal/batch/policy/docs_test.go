@@ -8,11 +8,12 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 func TestBatchPolicySanit(t *testing.T) {
-	conf := policy.NewConfig()
+	conf := batchconfig.NewConfig()
 
 	var node yaml.Node
 	require.NoError(t, node.Encode(conf))
