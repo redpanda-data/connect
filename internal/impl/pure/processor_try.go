@@ -10,12 +10,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newTryProc(conf.Try, mgr)
 		if err != nil {
 			return nil, err
@@ -82,10 +81,10 @@ type tryProc struct {
 	log      log.Modular
 }
 
-func newTryProc(conf []oprocessor.Config, mgr bundle.NewManagement) (*tryProc, error) {
+func newTryProc(conf []processor.Config, mgr bundle.NewManagement) (*tryProc, error) {
 	var children []processor.V1
 	for i, pconf := range conf {
-		pMgr := mgr.IntoPath("try", strconv.Itoa(i)).(bundle.NewManagement)
+		pMgr := mgr.IntoPath("try", strconv.Itoa(i))
 		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, err
@@ -108,7 +107,7 @@ func (p *tryProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *mess
 	})
 
 	var res error
-	if resultMsgs, res = oprocessor.ExecuteTryAll(p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
+	if resultMsgs, res = processor.ExecuteTryAll(p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
 		return nil, res
 	}
 

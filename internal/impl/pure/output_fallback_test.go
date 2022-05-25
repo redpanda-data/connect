@@ -16,14 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
-
-	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 var _ output.Streamed = &fallbackBroker{}
@@ -31,7 +27,7 @@ var _ output.Streamed = &fallbackBroker{}
 func TestFallbackOutputBasic(t *testing.T) {
 	dir := t.TempDir()
 
-	outOne, outTwo, outThree := ooutput.NewConfig(), ooutput.NewConfig(), ooutput.NewConfig()
+	outOne, outTwo, outThree := output.NewConfig(), output.NewConfig(), output.NewConfig()
 	outOne.Type, outTwo.Type, outThree.Type = "http_client", "file", "file"
 	outOne.HTTPClient.URL = "http://localhost:11111111/badurl"
 	outOne.HTTPClient.NumRetries = 1
@@ -50,11 +46,11 @@ func TestFallbackOutputBasic(t *testing.T) {
 	outTwo.Processors = append(outTwo.Processors, procTwo)
 	outThree.Processors = append(outThree.Processors, procThree)
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Type = "fallback"
 	conf.Fallback = append(conf.Fallback, outOne, outTwo, outThree)
 
-	s, err := bundle.AllOutputs.Init(conf, bmock.NewManager())
+	s, err := bundle.AllOutputs.Init(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	sendChan := make(chan message.Transaction)

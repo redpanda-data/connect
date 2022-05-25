@@ -39,7 +39,7 @@ func (t *tracedProcessor) ProcessMessage(m *message.Batch) ([]*message.Batch, er
 			if fail == nil {
 				return nil
 			}
-			// TODO
+			// TODO: Improve mechanism for tracking the introduction of errors?
 			if len(prevErrs) <= i || prevErrs[i] == fail {
 				return nil
 			}

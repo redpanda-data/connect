@@ -680,7 +680,7 @@ tests:
 
 As you can see we've defined a single test, where we point to our mapping file which will be executed in our test. We then specify an input message which is a reduced version of the document we tried out before, and finally we specify output predicates, which is a JSON comparison against the output document.
 
-We can execute these tests with `benthos test ./naught_man_test.yaml`, Benthos will also automatically find our tests if you simply run `benthos test ./...`. You should see an output something like:
+We can execute these tests with `benthos test ./naughty_man_test.yaml`, Benthos will also automatically find our tests if you simply run `benthos test ./...`. You should see an output something like:
 
 ```text
 Test 'naughty_man_test.yaml' failed

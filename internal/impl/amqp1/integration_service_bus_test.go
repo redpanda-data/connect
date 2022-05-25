@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/log"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 func TestIntegrationAzureServiceBus(t *testing.T) {
@@ -46,7 +46,7 @@ func TestIntegrationAzureServiceBus(t *testing.T) {
 func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	ctx := context.Background()
 
-	conf := oinput.NewAMQP1Config()
+	conf := input.NewAMQP1Config()
 	conf.URL = url
 	conf.SourceAddress = sourceAddress
 	conf.AzureRenewLock = true
@@ -133,7 +133,7 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
 	ctx := context.Background()
 
-	conf := oinput.NewAMQP1Config()
+	conf := input.NewAMQP1Config()
 	conf.URL = url
 	conf.SourceAddress = sourceAddress
 	conf.AzureRenewLock = true

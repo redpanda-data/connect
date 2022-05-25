@@ -4,15 +4,15 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 func TestGroupByValueBasic(t *testing.T) {
-	conf := oprocessor.NewConfig()
+	conf := processor.NewConfig()
 	conf.Type = "group_by_value"
 	conf.GroupByValue.Value = "${!json(\"foo\")}"
 

@@ -14,25 +14,24 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	mqttconf "github.com/benthosdev/benthos/v4/internal/impl/mqtt/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	"github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(conf oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		m, err := newMQTTReader(conf.MQTT, nm.Logger())
 		if err != nil {
 			return nil, err
 		}
-		return oinput.NewAsyncReader(
+		return input.NewAsyncReader(
 			"mqtt",
 			true,
-			reader.NewAsyncPreserver(m),
+			input.NewAsyncPreserver(m),
 			nm.Logger(), nm.Metrics(),
 		)
 	}), docs.ComponentSpec{
@@ -69,7 +68,7 @@ You can access these metadata fields using
 			docs.FieldString("password", "A password to provide for the connection.").Advanced(),
 			docs.FieldInt("keepalive", "Max seconds of inactivity before a keepalive message is sent.").Advanced(),
 			tls.FieldSpec().AtVersion("3.45.0"),
-		).ChildDefaultAndTypesFromStruct(oinput.NewMQTTConfig()),
+		).ChildDefaultAndTypesFromStruct(input.NewMQTTConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -85,7 +84,7 @@ type mqttReader struct {
 	cMut    sync.Mutex
 
 	connectTimeout time.Duration
-	conf           oinput.MQTTConfig
+	conf           input.MQTTConfig
 
 	interruptChan chan struct{}
 
@@ -94,7 +93,7 @@ type mqttReader struct {
 	log log.Modular
 }
 
-func newMQTTReader(conf oinput.MQTTConfig, log log.Modular) (*mqttReader, error) {
+func newMQTTReader(conf input.MQTTConfig, log log.Modular) (*mqttReader, error) {
 	m := &mqttReader{
 		conf:          conf,
 		interruptChan: make(chan struct{}),
@@ -244,7 +243,7 @@ func (m *mqttReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (m *mqttReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (m *mqttReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	m.cMut.Lock()
 	msgChan := m.msgChan
 	m.cMut.Unlock()

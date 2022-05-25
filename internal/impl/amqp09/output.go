@@ -17,27 +17,25 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		a, err := newAMQP09Writer(nm, c.AMQP09, nm.Logger())
 		if err != nil {
 			return nil, err
 		}
-		w, err := ooutput.NewAsyncWriter("amqp_0_9", c.AMQP09.MaxInFlight, a, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("amqp_0_9", c.AMQP09.MaxInFlight, a, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
-		return ooutput.OnlySinglePayloads(w), nil
+		return output.OnlySinglePayloads(w), nil
 
 	}), docs.ComponentSpec{
 		Name: "amqp_0_9",
@@ -102,21 +100,20 @@ type amqp09Writer struct {
 
 	log log.Modular
 
-	conf    ooutput.AMQPConfig
+	conf    output.AMQPConfig
 	urls    []string
 	tlsConf *tls.Config
 
-	conn        *amqp.Connection
-	amqpChan    *amqp.Channel
-	confirmChan <-chan amqp.Confirmation
-	returnChan  <-chan amqp.Return
+	conn       *amqp.Connection
+	amqpChan   *amqp.Channel
+	returnChan <-chan amqp.Return
 
 	deliveryMode uint8
 
 	connLock sync.RWMutex
 }
 
-func newAMQP09Writer(mgr interop.Manager, conf ooutput.AMQPConfig, log log.Modular) (*amqp09Writer, error) {
+func newAMQP09Writer(mgr bundle.NewManagement, conf output.AMQPConfig, log log.Modular) (*amqp09Writer, error) {
 	a := amqp09Writer{
 		log:          log,
 		conf:         conf,
@@ -201,7 +198,6 @@ func (a *amqp09Writer) ConnectWithContext(ctx context.Context) error {
 
 	a.conn = conn
 	a.amqpChan = amqpChan
-	a.confirmChan = amqpChan.NotifyPublish(make(chan amqp.Confirmation, a.conf.MaxInFlight))
 	if a.conf.Mandatory || a.conf.Immediate {
 		a.returnChan = amqpChan.NotifyReturn(make(chan amqp.Return, 1))
 	}
@@ -231,7 +227,6 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 	a.connLock.RLock()
 	conn := a.conn
 	amqpChan := a.amqpChan
-	confirmChan := a.confirmChan
 	returnChan := a.returnChan
 	a.connLock.RUnlock()
 
@@ -239,7 +234,7 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		bindingKey := strings.ReplaceAll(a.key.String(i, msg), "/", ".")
 		msgType := strings.ReplaceAll(a.msgType.String(i, msg), "/", ".")
 		contentType := a.contentType.String(i, msg)
@@ -263,7 +258,7 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 			return nil
 		})
 
-		err := amqpChan.Publish(
+		conf, err := amqpChan.PublishWithDeferredConfirm(
 			a.conf.Exchange,  // publish to an exchange
 			bindingKey,       // routing to 0 or more queues
 			a.conf.Mandatory, // mandatory
@@ -284,21 +279,19 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 			a.log.Errorf("Failed to send message: %v\n", err)
 			return component.ErrNotConnected
 		}
-		select {
-		case confirm, open := <-confirmChan:
-			if !open {
-				a.log.Errorln("Failed to send message, ensure your target exchange exists.")
-				return component.ErrNotConnected
-			}
-			if !confirm.Ack {
-				a.log.Errorln("Failed to acknowledge message.")
-				return component.ErrNoAck
-			}
-		case _, open := <-returnChan:
-			if !open {
-				return fmt.Errorf("acknowledgement not supported, ensure server supports immediate and mandatory flags")
-			}
+		if !conf.Wait() {
+			a.log.Errorln("Failed to acknowledge message.")
 			return component.ErrNoAck
+		}
+		if returnChan != nil {
+			select {
+			case _, open := <-returnChan:
+				if !open {
+					return fmt.Errorf("acknowledgement not supported, ensure server supports immediate and mandatory flags")
+				}
+				return component.ErrNoAck
+			default:
+			}
 		}
 		return nil
 	})

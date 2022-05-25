@@ -15,7 +15,7 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Resource is an input type that runs a resource input by its name.
+Resource is an input type that channels messages from a resource input, identified by its name.
 
 ```yml
 # Config fields, showing default values
@@ -23,9 +23,8 @@ input:
   resource: ""
 ```
 
-This input allows you to reference the same configured input resource in multiple places, and can also tidy up large nested configs. For
-example, the config:
-
+Resources allow you to tidy up deeply nested configs. For example, the config:
+		
 ```yaml
 input:
   broker:
@@ -60,6 +59,8 @@ input_resources:
       project: bar
       subscription: baz
  ```
+
+Resources also allow you to reference a single input in multiple places, such as multiple streams mode configs, or multiple entries in a broker input. However, when a resource is referenced more than once the messages it produces are distributed across those references, so each message will only be directed to a single reference, not all of them.
 
 You can find out more about resources [in this document.](/docs/configuration/resources)
 

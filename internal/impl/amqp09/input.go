@@ -17,22 +17,21 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		var a reader.Async
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
+		var a input.Async
 		var err error
 		if a, err = newAMQP09Reader(c.AMQP09, nm.Logger()); err != nil {
 			return nil, err
 		}
-		return oinput.NewAsyncReader("amqp_0_9", true, a, nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("amqp_0_9", true, a, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name: "amqp_0_9",
 		Summary: `
@@ -126,13 +125,13 @@ type amqp09Reader struct {
 
 	nackRejectPattens []*regexp.Regexp
 
-	conf oinput.AMQP09Config
+	conf input.AMQP09Config
 	log  log.Modular
 
 	m sync.RWMutex
 }
 
-func newAMQP09Reader(conf oinput.AMQP09Config, log log.Modular) (*amqp09Reader, error) {
+func newAMQP09Reader(conf input.AMQP09Config, log log.Modular) (*amqp09Reader, error) {
 	a := amqp09Reader{
 		conf: conf,
 		log:  log,
@@ -311,7 +310,7 @@ func amqpSetMetadata(p *message.Part, k string, v interface{}) {
 }
 
 // ReadWithContext a new AMQP09 message.
-func (a *amqp09Reader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (a *amqp09Reader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	var c <-chan amqp.Delivery
 
 	a.m.RLock()

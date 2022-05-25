@@ -19,13 +19,11 @@ import (
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	"github.com/benthosdev/benthos/v4/internal/stream/manager"
 
@@ -828,9 +826,9 @@ file:
 	assert.Equal(t, http.StatusOK, hResponse.Code, hResponse.Body.String())
 
 	streamConf := stream.NewConfig()
-	streamConf.Input.Type = input.TypeInproc
+	streamConf.Input.Type = "inproc"
 	streamConf.Input.Inproc = "feed_in"
-	streamConf.Output.Type = output.TypeCache
+	streamConf.Output.Type = "cache"
 	streamConf.Output.Cache.Key = `${! json("id") }`
 	streamConf.Output.Cache.Target = "foocache"
 

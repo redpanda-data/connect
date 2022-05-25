@@ -12,9 +12,9 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 func TestWebsocketBasic(t *testing.T) {
@@ -42,7 +42,7 @@ func TestWebsocketBasic(t *testing.T) {
 		}
 	}))
 
-	conf := oinput.NewWebsocketConfig()
+	conf := input.NewWebsocketConfig()
 	if wsURL, err := url.Parse(server.URL); err != nil {
 		t.Fatal(err)
 	} else {
@@ -109,7 +109,7 @@ func TestWebsocketOpenMsg(t *testing.T) {
 		}
 	}))
 
-	conf := oinput.NewWebsocketConfig()
+	conf := input.NewWebsocketConfig()
 	conf.OpenMsg = "hello world"
 	if wsURL, err := url.Parse(server.URL); err != nil {
 		t.Fatal(err)
@@ -159,7 +159,7 @@ func TestWebsocketClose(t *testing.T) {
 		<-closeChan
 	}))
 
-	conf := oinput.NewWebsocketConfig()
+	conf := input.NewWebsocketConfig()
 	if wsURL, err := url.Parse(server.URL); err != nil {
 		t.Fatal(err)
 	} else {

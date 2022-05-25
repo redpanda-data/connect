@@ -8,7 +8,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
@@ -68,7 +67,7 @@ func (p *Processor) loop() {
 			return
 		}
 
-		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
+		resultMsgs, resultRes := iprocessor.ExecuteAll(p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
 			if err := tran.Ack(closeCtx, resultRes); err != nil && closeCtx.Err() != nil {
 				return

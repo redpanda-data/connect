@@ -11,3 +11,16 @@ tests:
         - content_equals: EXAMPLE CONTENTend
           metadata_equals:
             example_key: example metadata value
+
+  - name: empty message test
+    target_processors: '/pipeline/processors'
+    environment: {}
+    input_batch:
+      - content: ''
+        metadata:
+          example_key: example metadata value
+    output_batches:
+      -
+        - content_equals: end
+          metadata_equals:
+            example_key: example metadata value

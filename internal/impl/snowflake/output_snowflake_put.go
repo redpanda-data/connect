@@ -25,7 +25,7 @@ import (
 	"github.com/youmark/pkcs8"
 	"golang.org/x/crypto/ssh"
 
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -55,7 +55,7 @@ func snowflakePutOutputConfig() *service.ConfigSpec {
 		Categories("Services").
 		//  Version("4.0.0").
 		Summary("Sends messages to Snowflake stages and, optionally, calls Snowpipe to load this data into one or more tables.").
-		Description(ioutput.Description(true, true, `
+		Description(output.Description(true, true, `
 In order to use a different stage and / or Snowpipe for each message, you can use function interpolations as described
 [here](/docs/configuration/interpolation#bloblang-queries). When using batching, messages are grouped by the calculated
 stage and Snowpipe and are streamed to individual files in their corresponding stage and, optionally, a Snowpipe

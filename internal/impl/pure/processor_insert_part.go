@@ -8,14 +8,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newInsertPart(conf.InsertPart, mgr)
 		if err != nil {
 			return nil, err
@@ -44,7 +42,7 @@ find a list of functions [here](/docs/configuration/interpolation#bloblang-queri
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldInt("index", "The index within the batch to insert the message at."),
 			docs.FieldString("content", "The content of the message being inserted.").IsInterpolated(),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewInsertPartConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewInsertPartConfig()),
 	})
 	if err != nil {
 		panic(err)
@@ -56,7 +54,7 @@ type insertPart struct {
 	part  *field.Expression
 }
 
-func newInsertPart(conf oprocessor.InsertPartConfig, mgr interop.Manager) (processor.V2Batched, error) {
+func newInsertPart(conf processor.InsertPartConfig, mgr bundle.NewManagement) (processor.V2Batched, error) {
 	part, err := mgr.BloblEnvironment().NewField(conf.Content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse content expression: %v", err)

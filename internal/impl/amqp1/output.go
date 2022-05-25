@@ -12,27 +12,26 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/amqp1/shared"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 	itls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		a, err := newAMQP1Writer(c.AMQP1, nm.Logger())
 		if err != nil {
 			return nil, err
 		}
-		w, err := ooutput.NewAsyncWriter("amqp_1", c.AMQP1.MaxInFlight, a, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("amqp_1", c.AMQP1.MaxInFlight, a, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
-		return ooutput.OnlySinglePayloads(w), nil
+		return output.OnlySinglePayloads(w), nil
 	}), docs.ComponentSpec{
 		Name:    "amqp_1",
 		Status:  docs.StatusBeta,
@@ -73,13 +72,13 @@ type amqp1Writer struct {
 
 	log log.Modular
 
-	conf    ooutput.AMQP1Config
+	conf    output.AMQP1Config
 	tlsConf *tls.Config
 
 	connLock sync.RWMutex
 }
 
-func newAMQP1Writer(conf ooutput.AMQP1Config, log log.Modular) (*amqp1Writer, error) {
+func newAMQP1Writer(conf output.AMQP1Config, log log.Modular) (*amqp1Writer, error) {
 	a := amqp1Writer{
 		log:  log,
 		conf: conf,
@@ -189,7 +188,7 @@ func (a *amqp1Writer) WriteWithContext(ctx context.Context, msg *message.Batch) 
 		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		m := amqp.NewMessage(p.Get())
 		_ = a.metaFilter.Iter(p, func(k, v string) error {
 			if m.Annotations == nil {

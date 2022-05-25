@@ -298,8 +298,12 @@ func IToBytes(i interface{}) []byte {
 		return t
 	case json.Number:
 		return []byte(t.String())
-	case int64, uint64, float64:
-		return []byte(fmt.Sprintf("%v", t)) // TODO
+	case int64:
+		return strconv.AppendInt(nil, t, 10)
+	case uint64:
+		return strconv.AppendUint(nil, t, 10)
+	case float64:
+		return strconv.AppendFloat(nil, t, 'g', -1, 64)
 	case bool:
 		if t {
 			return []byte("true")
@@ -320,8 +324,12 @@ func IToString(i interface{}) string {
 		return t
 	case []byte:
 		return string(t)
-	case int64, uint64, float64:
-		return fmt.Sprintf("%v", t) // TODO
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case uint64:
+		return strconv.FormatUint(t, 10)
+	case float64:
+		return strconv.FormatFloat(t, 'g', -1, 64)
 	case json.Number:
 		return t.String()
 	case bool:

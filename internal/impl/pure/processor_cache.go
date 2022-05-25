@@ -12,14 +12,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newCache(conf.Cache, mgr)
 		if err != nil {
 			return nil, err
@@ -43,7 +41,7 @@ This processor will interpolate functions within the ` + "`key` and `value`" + `
 				"ttl", "The TTL of each individual item as a duration string. After this period an item will be eligible for removal during the next compaction. Not all caches support per-key TTLs, those that do will have a configuration field `default_ttl`, and those that do not will fall back to their generally configured TTL setting.",
 				"60s", "5m", "36h",
 			).IsInterpolated().AtVersion("3.33.0").Advanced(),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewCacheConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewCacheConfig()),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title: "Deduplication",
@@ -157,12 +155,12 @@ type cacheProc struct {
 	value *field.Expression
 	ttl   *field.Expression
 
-	mgr       interop.Manager
+	mgr       bundle.NewManagement
 	cacheName string
 	operator  cacheOperator
 }
 
-func newCache(conf oprocessor.CacheConfig, mgr interop.Manager) (*cacheProc, error) {
+func newCache(conf processor.CacheConfig, mgr bundle.NewManagement) (*cacheProc, error) {
 	cacheName := conf.Resource
 	if cacheName == "" {
 		return nil, errors.New("cache name must be specified")

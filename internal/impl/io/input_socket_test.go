@@ -14,12 +14,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func TestSocketInputBasic(t *testing.T) {
@@ -34,7 +33,7 @@ func TestSocketInputBasic(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
@@ -124,7 +123,7 @@ func TestSocketInputReconnect(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
 
@@ -220,7 +219,7 @@ func TestSocketInputMultipart(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
@@ -306,7 +305,7 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Codec = "delim:@/multipart"
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
@@ -392,7 +391,7 @@ func TestSocketMultipartShutdown(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Network = ln.Addr().Network()
 	conf.Socket.Address = ln.Addr().String()
@@ -478,7 +477,7 @@ func TestTCPSocketInputBasic(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Address = ln.Addr().String()
 
@@ -568,7 +567,7 @@ func TestTCPSocketReconnect(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Address = ln.Addr().String()
 
@@ -664,7 +663,7 @@ func TestTCPSocketInputMultipart(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Address = ln.Addr().String()
@@ -750,7 +749,7 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Codec = "delim:@/multipart"
 	conf.Socket.Address = ln.Addr().String()
@@ -836,7 +835,7 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 	}
 	defer ln.Close()
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Codec = "lines/multipart"
 	conf.Socket.Address = ln.Addr().String()
@@ -923,14 +922,14 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 		ln.Close()
 	})
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Address = ln.Addr().String()
 
 	sRdr, err := newSocketReader(conf.Socket, log.Noop())
 	require.NoError(b, err)
 
-	rdr, err := oinput.NewAsyncReader("socket", true, reader.NewAsyncCutOff(reader.NewAsyncPreserver(sRdr)), log.Noop(), metrics.Noop())
+	rdr, err := input.NewAsyncReader("socket", true, input.NewAsyncCutOff(input.NewAsyncPreserver(sRdr)), log.Noop(), metrics.Noop())
 	require.NoError(b, err)
 
 	defer func() {
@@ -993,14 +992,14 @@ func BenchmarkTCPSocketNoCutOff(b *testing.B) {
 		ln.Close()
 	})
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Socket.Network = "tcp"
 	conf.Socket.Address = ln.Addr().String()
 
 	sRdr, err := newSocketReader(conf.Socket, log.Noop())
 	require.NoError(b, err)
 
-	rdr, err := oinput.NewAsyncReader("socket", true, reader.NewAsyncPreserver(sRdr), log.Noop(), metrics.Noop())
+	rdr, err := input.NewAsyncReader("socket", true, input.NewAsyncPreserver(sRdr), log.Noop(), metrics.Noop())
 	require.NoError(b, err)
 
 	defer func() {

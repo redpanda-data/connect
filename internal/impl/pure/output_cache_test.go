@@ -11,12 +11,12 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
@@ -25,7 +25,7 @@ func TestCacheSingle(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf := ooutput.NewCacheConfig()
+	conf := output.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 
@@ -47,7 +47,7 @@ func TestCacheBatch(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = map[string]mock.CacheItem{}
 
-	conf := ooutput.NewCacheConfig()
+	conf := output.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 
@@ -77,7 +77,7 @@ func TestCacheSingleTTL(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = c
 
-	conf := ooutput.NewCacheConfig()
+	conf := output.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 	conf.TTL = "2s"
@@ -103,7 +103,7 @@ func TestCacheBatchTTL(t *testing.T) {
 	mgr := mock.NewManager()
 	mgr.Caches["foocache"] = c
 
-	conf := ooutput.NewCacheConfig()
+	conf := output.NewCacheConfig()
 	conf.Key = `${!json("id")}`
 	conf.Target = "foocache"
 	conf.TTL = "2s"
@@ -157,7 +157,7 @@ func TestCacheBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cacheConf := ooutput.NewCacheConfig()
+	cacheConf := output.NewCacheConfig()
 	cacheConf.Target = "foo"
 	cacheConf.Key = "${!json(\"key\")}"
 
@@ -207,7 +207,7 @@ func TestCacheBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cacheConf := ooutput.NewCacheConfig()
+	cacheConf := output.NewCacheConfig()
 	cacheConf.Target = "foo"
 	cacheConf.Key = "${!json(\"key\")}"
 

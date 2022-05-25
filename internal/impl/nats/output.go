@@ -15,18 +15,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newNATSOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "nats",
@@ -52,7 +50,7 @@ This output will interpolate functions within the subject field, you can find a 
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			btls.FieldSpec(),
 			auth.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewNATSConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewNATSConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -62,12 +60,12 @@ This output will interpolate functions within the subject field, you can find a 
 	}
 }
 
-func newNATSOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newNATSOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	w, err := newNATSWriter(conf.NATS, mgr, log)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.NewAsyncWriter("nats", conf.NATS.MaxInFlight, w, log, stats)
+	return output.NewAsyncWriter("nats", conf.NATS.MaxInFlight, w, log, stats)
 }
 
 type natsWriter struct {
@@ -77,13 +75,13 @@ type natsWriter struct {
 	connMut  sync.RWMutex
 
 	urls       string
-	conf       ooutput.NATSConfig
+	conf       output.NATSConfig
 	headers    map[string]*field.Expression
 	subjectStr *field.Expression
 	tlsConf    *tls.Config
 }
 
-func newNATSWriter(conf ooutput.NATSConfig, mgr interop.Manager, log log.Modular) (*natsWriter, error) {
+func newNATSWriter(conf output.NATSConfig, mgr bundle.NewManagement, log log.Modular) (*natsWriter, error) {
 	n := natsWriter{
 		log:     log,
 		conf:    conf,
@@ -151,7 +149,7 @@ func (n *natsWriter) Write(msg *message.Batch) error {
 		return component.ErrNotConnected
 	}
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		subject := n.subjectStr.String(i, msg)
 		n.log.Debugf("Writing NATS message to topic %s", subject)
 		// fill message data

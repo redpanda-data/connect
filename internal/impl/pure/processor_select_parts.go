@@ -6,14 +6,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newSelectParts(conf.SelectParts, mgr)
 		if err != nil {
 			return nil, err
@@ -54,7 +52,7 @@ type selectPartsProc struct {
 	parts []int
 }
 
-func newSelectParts(conf oprocessor.SelectPartsConfig, mgr interop.Manager) (*selectPartsProc, error) {
+func newSelectParts(conf processor.SelectPartsConfig, mgr bundle.NewManagement) (*selectPartsProc, error) {
 	return &selectPartsProc{
 		parts: conf.Parts,
 	}, nil

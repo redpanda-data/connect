@@ -15,8 +15,7 @@ categories: ["Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Resource is an output type that runs a resource output by its name.
+Resource is an output type that channels messages to a resource output, identified by its name.
 
 ```yml
 # Config fields, showing default values
@@ -24,7 +23,7 @@ output:
   resource: ""
 ```
 
-This output allows you to reference the same configured output resource in multiple places, and can also tidy up large nested configs. For example, the config:
+Resources allow you to tidy up deeply nested configs. For example, the config:
 
 ```yaml
 output:

@@ -12,16 +12,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(conf ooutput.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
 		return retryOutputFromConfig(conf.Retry, mgr)
 	}), docs.ComponentSpec{
 		Name: "retry",
@@ -64,16 +63,16 @@ use the ` + "[`fallback`](/docs/components/outputs/fallback)" + ` output type.`,
 // RetryOutputIndefinitely returns a wrapped variant of the provided output
 // where send errors downstream are automatically caught and retried rather than
 // propagated upstream as nacks.
-func RetryOutputIndefinitely(mgr interop.Manager, wrapped output.Streamed) (output.Streamed, error) {
+func RetryOutputIndefinitely(mgr bundle.NewManagement, wrapped output.Streamed) (output.Streamed, error) {
 	return newIndefiniteRetry(mgr, nil, wrapped)
 }
 
-func retryOutputFromConfig(conf ooutput.RetryConfig, mgr interop.Manager) (output.Streamed, error) {
+func retryOutputFromConfig(conf output.RetryConfig, mgr bundle.NewManagement) (output.Streamed, error) {
 	if conf.Output == nil {
 		return nil, errors.New("cannot create retry output without a child")
 	}
 
-	wrapped, err := ooutput.New(*conf.Output, mgr, mgr.Logger(), mgr.Metrics())
+	wrapped, err := mgr.NewOutput(*conf.Output)
 	if err != nil {
 		return nil, err
 	}
@@ -86,9 +85,9 @@ func retryOutputFromConfig(conf ooutput.RetryConfig, mgr interop.Manager) (outpu
 	return newIndefiniteRetry(mgr, boffCtor, wrapped)
 }
 
-func newIndefiniteRetry(mgr interop.Manager, backoffCtor func() backoff.BackOff, wrapped output.Streamed) (*indefiniteRetry, error) {
+func newIndefiniteRetry(mgr bundle.NewManagement, backoffCtor func() backoff.BackOff, wrapped output.Streamed) (*indefiniteRetry, error) {
 	if backoffCtor == nil {
-		tmpConf := ooutput.NewRetryConfig()
+		tmpConf := output.NewRetryConfig()
 		var err error
 		if backoffCtor, err = tmpConf.GetCtor(); err != nil {
 			return nil, err

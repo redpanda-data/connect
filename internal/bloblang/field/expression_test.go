@@ -53,7 +53,6 @@ func TestExpressions(t *testing.T) {
 		numDyn     int
 		messages   []easyMsg
 		index      int
-		escaped    bool
 	}{
 		"static string": {
 			expression: NewExpression(
@@ -128,10 +127,9 @@ func TestExpressions(t *testing.T) {
 				require.NoError(t, err)
 				return fn
 			}())),
-			numDyn:  1,
-			output:  `{\"bar\":\"baz\"}`,
-			index:   0,
-			escaped: true,
+			numDyn: 1,
+			output: `{"bar":"baz"}`,
+			index:  0,
 			messages: []easyMsg{
 				{content: `{"foo":{"bar":"baz"}}`},
 			},
@@ -150,10 +148,9 @@ func TestExpressions(t *testing.T) {
 					return fn
 				}()),
 			),
-			numDyn:  2,
-			output:  `foo value and bar value`,
-			index:   0,
-			escaped: true,
+			numDyn: 2,
+			output: `foo value and bar value`,
+			index:  0,
 			messages: []easyMsg{
 				{content: `{"foo":"foo value","bar":"bar value"}`},
 			},
@@ -345,12 +342,7 @@ func TestExpressions(t *testing.T) {
 				msg.Append(part)
 			}
 
-			var res string
-			if test.escaped {
-				res = string(test.expression.BytesEscaped(test.index, msg))
-			} else {
-				res = test.expression.String(test.index, msg)
-			}
+			res := test.expression.String(test.index, msg)
 			assert.Equal(t, test.output, res)
 			assert.Equal(t, test.numDyn, test.expression.NumDynamicExpressions())
 		})

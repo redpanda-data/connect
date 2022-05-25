@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `credentials.from_ec2_role` added to all AWS based components.
+- The `mongodb` input now supports aggregation filters by setting the new `operation` field.
+- New `gcp_cloudtrace` tracer.
+- New `slug` bloblang string method.
+
+### Fixed
+
+- The default docker image no longer throws configuration errors when running streams mode without an explicit general config.
+- The field `metrics.mapping` now allows environment functions such as `hostname` and `env`.
+- Fixed a lock-up in the `amqp_0_9` output caused when messages sent with the `immediate` or `mandatory` flags were rejected.
+
+## 4.1.0 - 2022-05-11
+
+### Added
+
+- The `nats_jetstream` input now adds headers to messages as metadata.
+- Field `headers` added to the `nats_jetstream` output.
+- Field `lazy_quotes` added to the CSV input.
+
 ### Fixed
 
 - Fixed an issue where resource and stream configs imported via wildcard pattern could not be live-reloaded with the watcher (`-w`) flag.
@@ -12,6 +33,7 @@ All notable changes to this project will be documented in this file.
 - Reintroduced basic metrics from the `twitter` and `discord` template based inputs.
 - Prevented a metrics label mismatch when running in streams mode with resources and `prometheus` metrics.
 - Label mismatches with the `prometheus` metric type now log errors and skip the metric without stopping the service.
+- Fixed a case where empty files consumed by the `aws_s3` input would trigger early graceful termination.
 
 ## 4.0.0 - 2022-04-20
 

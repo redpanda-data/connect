@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@algolia/client-search": "^4.12.1",
-    "@docusaurus/core": "^2.0.0-beta.15",
-    "@docusaurus/preset-classic": "^2.0.0-beta.15",
+    "@docusaurus/core": "^2.0.0-beta.20",
+    "@docusaurus/preset-classic": "^2.0.0-beta.20",
     "@types/react": "^17.0.38",
     "classnames": "^2.2.6",
     "prism-react-renderer": "^1.2.1",

@@ -8,9 +8,10 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 // BatchPolicy describes the mechanisms by which batching should be performed of
@@ -26,8 +27,8 @@ type BatchPolicy struct {
 	procs []processor.Config
 }
 
-func (b BatchPolicy) toInternal() policy.Config {
-	batchConf := policy.NewConfig()
+func (b BatchPolicy) toInternal() batchconfig.Config {
+	batchConf := batchconfig.NewConfig()
 	batchConf.ByteSize = b.ByteSize
 	batchConf.Count = b.Count
 	batchConf.Check = b.Check

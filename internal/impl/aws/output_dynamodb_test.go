@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 type mockDynamoDB struct {
@@ -33,7 +33,7 @@ func (m *mockDynamoDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dyn
 }
 
 func TestDynamoDBHappy(t *testing.T) {
-	conf := ooutput.NewDynamoDBConfig()
+	conf := output.NewDynamoDBConfig()
 	conf.StringColumns = map[string]string{
 		"id":      `${!json("id")}`,
 		"content": `${!json("content")}`,
@@ -96,7 +96,7 @@ func TestDynamoDBHappy(t *testing.T) {
 func TestDynamoDBSadToGood(t *testing.T) {
 	t.Parallel()
 
-	conf := ooutput.NewDynamoDBConfig()
+	conf := output.NewDynamoDBConfig()
 	conf.StringColumns = map[string]string{
 		"id":      `${!json("id")}`,
 		"content": `${!json("content")}`,
@@ -196,7 +196,7 @@ func TestDynamoDBSadToGood(t *testing.T) {
 func TestDynamoDBSadToGoodBatch(t *testing.T) {
 	t.Parallel()
 
-	conf := ooutput.NewDynamoDBConfig()
+	conf := output.NewDynamoDBConfig()
 	conf.StringColumns = map[string]string{
 		"id":      `${!json("id")}`,
 		"content": `${!json("content")}`,
@@ -294,7 +294,7 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 func TestDynamoDBSad(t *testing.T) {
 	t.Parallel()
 
-	conf := ooutput.NewDynamoDBConfig()
+	conf := output.NewDynamoDBConfig()
 	conf.StringColumns = map[string]string{
 		"id":      `${!json("id")}`,
 		"content": `${!json("content")}`,
@@ -404,7 +404,7 @@ func TestDynamoDBSad(t *testing.T) {
 func TestDynamoDBSadBatch(t *testing.T) {
 	t.Parallel()
 
-	conf := ooutput.NewDynamoDBConfig()
+	conf := output.NewDynamoDBConfig()
 	conf.StringColumns = map[string]string{
 		"id":      `${!json("id")}`,
 		"content": `${!json("content")}`,

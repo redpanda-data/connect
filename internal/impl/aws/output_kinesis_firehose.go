@@ -15,25 +15,26 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		kin, err := newKinesisFirehoseWriter(c.AWSKinesisFirehose, nm.Logger())
 		if err != nil {
 			return nil, err
 		}
-		w, err := ooutput.NewAsyncWriter("aws_kinesis_firehose", c.AWSKinesisFirehose.MaxInFlight, kin, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("aws_kinesis_firehose", c.AWSKinesisFirehose.MaxInFlight, kin, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return w, err
 		}
-		return ooutput.NewBatcherFromConfig(c.AWSKinesisFirehose.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(c.AWSKinesisFirehose.Batching, w, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "aws_kinesis_firehose",
 		Version: "3.36.0",
@@ -50,7 +51,7 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldString("stream", "The stream to publish messages to."),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
-		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewKinesisFirehoseConfig()),
+		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewKinesisFirehoseConfig()),
 		Categories: []string{
 			"Services",
 			"AWS",
@@ -62,7 +63,7 @@ allowing you to transfer data across accounts. You can find out more
 }
 
 type kinesisFirehoseWriter struct {
-	conf ooutput.KinesisFirehoseConfig
+	conf output.KinesisFirehoseConfig
 
 	session  *session.Session
 	firehose firehoseiface.FirehoseAPI
@@ -73,7 +74,7 @@ type kinesisFirehoseWriter struct {
 	log log.Modular
 }
 
-func newKinesisFirehoseWriter(conf ooutput.KinesisFirehoseConfig, log log.Modular) (*kinesisFirehoseWriter, error) {
+func newKinesisFirehoseWriter(conf output.KinesisFirehoseConfig, log log.Modular) (*kinesisFirehoseWriter, error) {
 	k := kinesisFirehoseWriter{
 		conf:       conf,
 		log:        log,

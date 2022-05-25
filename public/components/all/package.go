@@ -4,9 +4,6 @@
 package all
 
 import (
-	// Import old legacy packages.
-	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
-
 	// Import new service packages.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/amqp09"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/amqp1"
@@ -24,6 +21,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/io"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/jaeger"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/kafka"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/lang"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/maxmind"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/memcached"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/mongodb"
@@ -36,6 +34,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/prometheus"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/redis"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/sftp"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/snowflake"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/sql"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/statsd"

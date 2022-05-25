@@ -13,14 +13,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		return newMetricProcessor(conf, mgr, mgr.Logger(), mgr.Metrics())
 	}, docs.ComponentSpec{
 		Name: "metric",
@@ -48,7 +46,7 @@ Custom metrics such as these are emitted along with Benthos internal metrics, wh
 				},
 			).IsInterpolated().Map(),
 			docs.FieldString("value", "For some metric types specifies a value to set, increment.").IsInterpolated(),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewMetricConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewMetricConfig()),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title:   "Counter",
@@ -146,7 +144,7 @@ Equivalent to ` + "`gauge`" + ` where instead the metric is a timing. It is reco
 }
 
 type metricProcessor struct {
-	conf  oprocessor.Config
+	conf  processor.Config
 	log   log.Modular
 	stats metrics.Type
 
@@ -190,7 +188,7 @@ func (l labels) values(index int, msg *message.Batch) []string {
 	return values
 }
 
-func newMetricProcessor(conf oprocessor.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (processor.V1, error) {
+func newMetricProcessor(conf processor.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (processor.V1, error) {
 	value, err := mgr.BloblEnvironment().NewField(conf.Metric.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)

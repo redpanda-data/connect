@@ -9,19 +9,19 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		if c.DropOn.Output == nil {
 			return nil, errors.New("cannot create a drop_on output without a child")
 		}
-		wrapped, err := ooutput.New(*c.DropOn.Output, nm, nm.Logger(), nm.Metrics())
+		wrapped, err := nm.NewOutput(*c.DropOn.Output)
 		if err != nil {
 			return nil, err
 		}
@@ -37,7 +37,7 @@ func init() {
 			docs.FieldBool("error", "Whether messages should be dropped when the child output returns an error. For example, this could be when an http_client output gets a 4XX response code."),
 			docs.FieldString("back_pressure", "An optional duration string that determines the maximum length of time to wait for a given message to be accepted by the child output before the message should be dropped instead. The most common reason for an output to block is when waiting for a lost connection to be re-established. Once a message has been dropped due to back pressure all subsequent messages are dropped immediately until the output is ready to process them again. Note that if `error` is set to `false` and this field is specified then messages dropped due to back pressure will return an error response.", "30s", "1m"),
 			docs.FieldOutput("output", "A child output.").HasDefault(nil),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewDropOnConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewDropOnConfig()),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title:   "Dropping failed HTTP requests",
@@ -94,7 +94,7 @@ type dropOnWriter struct {
 	closedChan chan struct{}
 }
 
-func newDropOnWriter(conf ooutput.DropOnConditions, wrapped output.Streamed, log log.Modular) (*dropOnWriter, error) {
+func newDropOnWriter(conf output.DropOnConditions, wrapped output.Streamed, log log.Modular) (*dropOnWriter, error) {
 	var backPressure time.Duration
 	if len(conf.BackPressure) > 0 {
 		var err error

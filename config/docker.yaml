@@ -4,12 +4,6 @@
 http:
   enabled: true
 
-input:
-  stdin: {}
-
-output:
-  stdout: {}
-
 metrics:
   prometheus: {}
 

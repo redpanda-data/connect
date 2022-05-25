@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
@@ -40,11 +40,11 @@ func TestSequenceHappy(t *testing.T) {
 
 	writeFiles(t, tmpDir, files)
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Type = "sequence"
 
 	for _, k := range []string{"f1", "f2", "f3"} {
-		inConf := oinput.NewConfig()
+		inConf := input.NewConfig()
 		inConf.Type = "file"
 		inConf.File.Paths = []string{filepath.Join(tmpDir, k)}
 		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
@@ -96,13 +96,13 @@ func TestSequenceJoins(t *testing.T) {
 
 	writeFiles(t, tmpDir, files)
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Type = "sequence"
 	conf.Sequence.ShardedJoin.IDPath = "id"
 	conf.Sequence.ShardedJoin.Iterations = 1
 	conf.Sequence.ShardedJoin.Type = "full-outter"
 
-	csvConf := oinput.NewConfig()
+	csvConf := input.NewConfig()
 	csvConf.Type = "csv"
 	csvConf.CSVFile.Paths = []string{
 		filepath.Join(tmpDir, "csv1"),
@@ -110,7 +110,7 @@ func TestSequenceJoins(t *testing.T) {
 	}
 	conf.Sequence.Inputs = append(conf.Sequence.Inputs, csvConf)
 	for _, k := range []string{"ndjson1"} {
-		inConf := oinput.NewConfig()
+		inConf := input.NewConfig()
 		inConf.Type = "file"
 		inConf.File.Paths = []string{filepath.Join(tmpDir, k)}
 		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
@@ -219,7 +219,7 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 				"final.csv": test.finalFile,
 			})
 
-			conf := oinput.NewConfig()
+			conf := input.NewConfig()
 			conf.Type = "sequence"
 			conf.Sequence.ShardedJoin.IDPath = "id"
 			conf.Sequence.ShardedJoin.MergeStrategy = test.mergeStrat
@@ -230,14 +230,14 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 			}
 			conf.Sequence.ShardedJoin.Iterations = 1
 
-			csvConf := oinput.NewConfig()
+			csvConf := input.NewConfig()
 			csvConf.Type = "csv"
 			for k := range test.files {
 				csvConf.CSVFile.Paths = append(csvConf.CSVFile.Paths, filepath.Join(tmpDir, k))
 			}
 			conf.Sequence.Inputs = append(conf.Sequence.Inputs, csvConf)
 
-			finalConf := oinput.NewConfig()
+			finalConf := input.NewConfig()
 			finalConf.Type = "csv"
 			finalConf.CSVFile.Paths = []string{filepath.Join(tmpDir, "final.csv")}
 			conf.Sequence.Inputs = append(conf.Sequence.Inputs, finalConf)
@@ -290,18 +290,18 @@ func TestSequenceJoinsBig(t *testing.T) {
 	csvFile, err := os.Create(csvPath)
 	require.NoError(t, err)
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Type = "sequence"
 	conf.Sequence.ShardedJoin.IDPath = "id"
 	conf.Sequence.ShardedJoin.Iterations = 5
 	conf.Sequence.ShardedJoin.Type = "full-outter"
 
-	csvConf := oinput.NewConfig()
+	csvConf := input.NewConfig()
 	csvConf.Type = "csv"
 	csvConf.CSVFile.Paths = []string{csvPath}
 	conf.Sequence.Inputs = append(conf.Sequence.Inputs, csvConf)
 
-	jsonConf := oinput.NewConfig()
+	jsonConf := input.NewConfig()
 	jsonConf.Type = "file"
 	jsonConf.File.Paths = []string{jsonPath}
 	jsonConf.File.Codec = "lines"
@@ -370,11 +370,11 @@ func TestSequenceSad(t *testing.T) {
 
 	writeFiles(t, tmpDir, files)
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Type = "sequence"
 
 	for _, k := range []string{"f1", "f2", "f3"} {
-		inConf := oinput.NewConfig()
+		inConf := input.NewConfig()
 		inConf.Type = "file"
 		inConf.File.Paths = []string{filepath.Join(tmpDir, k)}
 		conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)
@@ -440,10 +440,10 @@ func TestSequenceEarlyTermination(t *testing.T) {
 		"f1": "foo\nbar\nbaz",
 	})
 
-	conf := oinput.NewConfig()
+	conf := input.NewConfig()
 	conf.Type = "sequence"
 
-	inConf := oinput.NewConfig()
+	inConf := input.NewConfig()
 	inConf.Type = "file"
 	inConf.File.Paths = []string{filepath.Join(tmpDir, "f1")}
 	conf.Sequence.Inputs = append(conf.Sequence.Inputs, inConf)

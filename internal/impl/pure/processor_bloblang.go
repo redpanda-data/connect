@@ -9,15 +9,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newBloblang(conf.Bloblang, mgr)
 		if err != nil {
 			return nil, err
@@ -132,7 +130,7 @@ type bloblangProc struct {
 	log  log.Modular
 }
 
-func newBloblang(conf string, mgr interop.Manager) (processor.V2Batched, error) {
+func newBloblang(conf string, mgr bundle.NewManagement) (processor.V2Batched, error) {
 	exec, err := mgr.BloblEnvironment().NewMapping(conf)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {

@@ -12,17 +12,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		return newReadUntilInput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name: "read_until",
@@ -73,14 +72,12 @@ input:
 }
 
 type readUntilInput struct {
-	conf oinput.ReadUntilConfig
+	conf input.ReadUntilConfig
 
 	wrapped input.Streamed
 	check   *mapping.Executor
 
-	wrapperMgr   interop.Manager
-	wrapperLog   log.Modular
-	wrapperStats metrics.Type
+	wrapperMgr bundle.NewManagement
 
 	stats metrics.Type
 	log   log.Modular
@@ -90,14 +87,13 @@ type readUntilInput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newReadUntilInput(conf oinput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func newReadUntilInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	if conf.ReadUntil.Input == nil {
 		return nil, errors.New("cannot create read_until input without a child")
 	}
 
 	wMgr := mgr.IntoPath("read_until", "input")
-	wLog, wStats := wMgr.Logger(), wMgr.Metrics()
-	wrapped, err := oinput.New(*conf.ReadUntil.Input, wMgr, wLog, wStats)
+	wrapped, err := wMgr.NewInput(*conf.ReadUntil.Input)
 	if err != nil {
 		return nil, err
 	}
@@ -116,9 +112,7 @@ func newReadUntilInput(conf oinput.Config, mgr interop.Manager, log log.Modular,
 	rdr := &readUntilInput{
 		conf: conf.ReadUntil,
 
-		wrapperLog:   wLog,
-		wrapperStats: wStats,
-		wrapperMgr:   wMgr,
+		wrapperMgr: wMgr,
 
 		log:          log,
 		stats:        stats,
@@ -169,7 +163,7 @@ runLoop:
 					return
 				}
 				var err error
-				if r.wrapped, err = oinput.New(*r.conf.Input, r.wrapperMgr, r.wrapperLog, r.wrapperStats); err != nil {
+				if r.wrapped, err = r.wrapperMgr.NewInput(*r.conf.Input); err != nil {
 					r.log.Errorf("Failed to create input '%v': %v\n", r.conf.Input.Type, err)
 					return
 				}
