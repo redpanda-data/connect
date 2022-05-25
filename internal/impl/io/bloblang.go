@@ -30,6 +30,7 @@ func init() {
 	if err := bloblang.RegisterFunctionV2("env",
 		bloblang.NewPluginSpec().
 			Impure().
+			Static().
 			Category(query.FunctionCategoryEnvironment).
 			Description("Returns the value of an environment variable, or `null` if the environment variable does not exist.").
 			Param(bloblang.NewStringParam("name").Description("The name of an environment variable.")).
@@ -56,6 +57,7 @@ func init() {
 	if err := bloblang.RegisterFunctionV2("file",
 		bloblang.NewPluginSpec().
 			Impure().
+			Static().
 			Category(query.FunctionCategoryEnvironment).
 			Description("Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.").
 			Param(bloblang.NewStringParam("path").Description("The path of the target file.")).
