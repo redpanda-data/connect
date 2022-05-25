@@ -19,28 +19,28 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return NewOutput(c.MongoDB, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
-		Name:        output.TypeMongoDB,
+		Name:        "mongodb",
 		Type:        docs.TypeOutput,
 		Status:      docs.StatusExperimental,
 		Version:     "3.43.0",
 		Categories:  []string{"Services"},
 		Summary:     `Inserts items into a MongoDB collection.`,
-		Description: ioutput.Description(true, true, ""),
+		Description: output.Description(true, true, ""),
 		Config: docs.FieldComponent().WithChildren(
 			client.ConfigDocs().Add(
 				outputOperationDocs(client.OperationUpdateOne),
@@ -89,16 +89,16 @@ func init() {
 //------------------------------------------------------------------------------
 
 // NewOutput creates a new MongoDB output type.
-func NewOutput(conf output.MongoDBConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (ioutput.Streamed, error) {
+func NewOutput(conf output.MongoDBConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	m, err := NewWriter(mgr, conf, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	var w ioutput.Streamed
-	if w, err = output.NewAsyncWriter(output.TypeMongoDB, conf.MaxInFlight, m, log, stats); err != nil {
+	var w output.Streamed
+	if w, err = output.NewAsyncWriter("mongodb", conf.MaxInFlight, m, log, stats); err != nil {
 		return w, err
 	}
-	return output.NewBatcherFromConfig(conf.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.Batching, w, mgr, log, stats)
 }
 
 // NewWriter creates a new MongoDB writer.Type.
@@ -264,7 +264,7 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error
 	}
 
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
-	err := writer.IterateBatchedSend(msg, func(i int, _ *message.Part) error {
+	err := output.IterateBatchedSend(msg, func(i int, _ *message.Part) error {
 		var err error
 		var filterVal, documentVal *message.Part
 		var upsertVal, filterValWanted, documentValWanted bool

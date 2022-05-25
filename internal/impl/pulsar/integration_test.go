@@ -77,7 +77,6 @@ input:
 		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
 		integration.StreamTestOptPort(resource.GetPort("6650/tcp")),
-		integration.StreamTestOptLogging("TRACE"),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()

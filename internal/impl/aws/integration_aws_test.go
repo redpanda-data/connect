@@ -19,7 +19,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
-	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func createBucketQueue(s3Port, sqsPort, id string) error {

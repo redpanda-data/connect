@@ -18,15 +18,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newSubprocess(conf.Subprocess, mgr)
 		if err != nil {
 			return nil, err
@@ -65,7 +63,7 @@ If a message contains line breaks each line of the message is piped to the subpr
 			docs.FieldString(
 				"codec_recv", "Determines how messages read from the subprocess are decoded, which allows them to be logically separated.",
 			).HasOptions("lines", "length_prefixed_uint32_be", "netstring").AtVersion("3.37.0").Advanced(),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewSubprocessConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewSubprocessConfig()),
 	})
 	if err != nil {
 		panic(err)
@@ -80,7 +78,7 @@ type subprocessProc struct {
 	mut      sync.Mutex
 }
 
-func newSubprocess(conf oprocessor.SubprocessConfig, mgr interop.Manager) (*subprocessProc, error) {
+func newSubprocess(conf processor.SubprocessConfig, mgr bundle.NewManagement) (*subprocessProc, error) {
 	e := &subprocessProc{
 		log: mgr.Logger(),
 	}

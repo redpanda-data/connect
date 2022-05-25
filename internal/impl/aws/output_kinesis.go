@@ -17,12 +17,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
@@ -32,16 +32,16 @@ const (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		kin, err := newKinesisWriter(c.AWSKinesis, nm, nm.Logger())
 		if err != nil {
 			return nil, err
 		}
-		w, err := ooutput.NewAsyncWriter("aws_kinesis", c.AWSKinesis.MaxInFlight, kin, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("aws_kinesis", c.AWSKinesis.MaxInFlight, kin, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return w, err
 		}
-		return ooutput.NewBatcherFromConfig(c.AWSKinesis.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(c.AWSKinesis.Batching, w, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "aws_kinesis",
 		Version: "3.36.0",
@@ -65,7 +65,7 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldString("hash_key", "A optional hash key for partitioning messages.").IsInterpolated().Advanced(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
-		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewKinesisConfig()),
+		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewKinesisConfig()),
 		Categories: []string{
 			"Services",
 			"AWS",
@@ -77,7 +77,7 @@ allowing you to transfer data across accounts. You can find out more
 }
 
 type kinesisWriter struct {
-	conf ooutput.KinesisConfig
+	conf output.KinesisConfig
 
 	session *session.Session
 	kinesis kinesisiface.KinesisAPI
@@ -91,8 +91,8 @@ type kinesisWriter struct {
 }
 
 func newKinesisWriter(
-	conf ooutput.KinesisConfig,
-	mgr interop.Manager,
+	conf output.KinesisConfig,
+	mgr bundle.NewManagement,
 	log log.Modular,
 ) (*kinesisWriter, error) {
 	if conf.PartitionKey == "" {

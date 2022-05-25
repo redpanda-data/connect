@@ -94,10 +94,19 @@ var bloblangFunctionsTemplate = bloblangParamsTemplate + `{{define "function_exa
 ### ` + "`{{.Name}}`" + `
 
 {{if eq .Status "beta" -}}
-BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 {{end -}}
-{{.Description}}
+{{if eq .Status "experimental" -}}
+:::caution EXPERIMENTAL
+This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+{{end -}}
+{{.Description}}{{if gt (len .Version) 0}}
+
+Introduced in version {{.Version}}.
+{{end}}
 {{template "parameters" .Params -}}
 {{if gt (len .Examples) 0}}
 #### Examples
@@ -181,14 +190,14 @@ func BloblangFunctionsMarkdown() ([]byte, error) {
 		prefixExamples(s.Examples)
 	}
 
-	for _, cat := range []query.FunctionCategory{
+	for _, cat := range []string{
 		query.FunctionCategoryGeneral,
 		query.FunctionCategoryMessage,
 		query.FunctionCategoryEnvironment,
 		query.FunctionCategoryDeprecated,
 	} {
 		functions := functionCategory{
-			Name: string(cat),
+			Name: cat,
 		}
 		for _, spec := range specs {
 			if spec.Category == cat {
@@ -237,10 +246,19 @@ var bloblangMethodsTemplate = bloblangParamsTemplate + `{{define "method_example
 ### ` + "`{{.Name}}`" + `
 
 {{if eq .Status "beta" -}}
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 {{end -}}
-{{.Description}}
+{{if eq .Status "experimental" -}}
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+{{end -}}
+{{.Description}}{{if gt (len .Version) 0}}
+
+Introduced in version {{.Version}}.
+{{end}}
 {{template "parameters" .Params -}}
 {{if gt (len .Examples) 0}}
 #### Examples
@@ -310,7 +328,7 @@ root.foo_two = this.(bar | baz).trim().replace_all("dog", "cat")
 [methods.string]: #string
 `
 
-func methodForCat(s query.MethodSpec, cat query.MethodCategory) (query.MethodSpec, bool) {
+func methodForCat(s query.MethodSpec, cat string) (query.MethodSpec, bool) {
 	for _, c := range s.Categories {
 		if c.Category == cat {
 			spec := s
@@ -338,7 +356,7 @@ func BloblangMethodsMarkdown() ([]byte, error) {
 		}
 	}
 
-	for _, cat := range []query.MethodCategory{
+	for _, cat := range []string{
 		query.MethodCategoryStrings,
 		query.MethodCategoryRegexp,
 		query.MethodCategoryNumbers,
@@ -351,7 +369,7 @@ func BloblangMethodsMarkdown() ([]byte, error) {
 		query.MethodCategoryDeprecated,
 	} {
 		methods := methodCategory{
-			Name: string(cat),
+			Name: cat,
 		}
 		for _, spec := range specs {
 			var ok bool

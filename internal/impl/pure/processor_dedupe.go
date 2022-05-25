@@ -11,15 +11,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newDedupe(conf.Dedupe, mgr)
 		if err != nil {
 			return nil, err
@@ -49,7 +47,7 @@ This problem can be mitigated by using an in-memory cache and distributing messa
 			docs.FieldString("cache", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),
 			docs.FieldString("key", "An interpolated string yielding the key to deduplicate by for each message.", `${! meta("kafka_key") }`, `${! content().hash("xxhash64") }`).IsInterpolated(),
 			docs.FieldBool("drop_on_err", "Whether messages should be dropped when the cache returns a general error such as a network issue."),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewDedupeConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewDedupeConfig()),
 		Examples: []docs.AnnotatedExample{
 			{
 				Title:   "Deduplicate based on Kafka key",
@@ -79,11 +77,11 @@ type dedupeProc struct {
 
 	dropOnErr bool
 	key       *field.Expression
-	mgr       interop.Manager
+	mgr       bundle.NewManagement
 	cacheName string
 }
 
-func newDedupe(conf oprocessor.DedupeConfig, mgr interop.Manager) (*dedupeProc, error) {
+func newDedupe(conf processor.DedupeConfig, mgr bundle.NewManagement) (*dedupeProc, error) {
 	if conf.Key == "" {
 		return nil, errors.New("dedupe key must not be empty")
 	}

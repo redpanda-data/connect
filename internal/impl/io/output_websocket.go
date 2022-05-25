@@ -14,17 +14,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newWebsocketOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "websocket",
@@ -32,7 +31,7 @@ func init() {
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("url", "The URL to connect to."),
 			btls.FieldSpec(),
-		).WithChildren(auth.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewWebsocketConfig()),
+		).WithChildren(auth.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewWebsocketConfig()),
 		Categories: []string{
 			"Network",
 		},
@@ -42,16 +41,16 @@ func init() {
 	}
 }
 
-func newWebsocketOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newWebsocketOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	w, err := newWebsocketWriter(conf.Websocket, log)
 	if err != nil {
 		return nil, err
 	}
-	a, err := ooutput.NewAsyncWriter("websocket", 1, w, log, stats)
+	a, err := output.NewAsyncWriter("websocket", 1, w, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.OnlySinglePayloads(a), nil
+	return output.OnlySinglePayloads(a), nil
 }
 
 type websocketWriter struct {
@@ -59,12 +58,12 @@ type websocketWriter struct {
 
 	lock *sync.Mutex
 
-	conf    ooutput.WebsocketConfig
+	conf    output.WebsocketConfig
 	client  *websocket.Conn
 	tlsConf *tls.Config
 }
 
-func newWebsocketWriter(conf ooutput.WebsocketConfig, log log.Modular) (*websocketWriter, error) {
+func newWebsocketWriter(conf output.WebsocketConfig, log log.Modular) (*websocketWriter, error) {
 	ws := &websocketWriter{
 		log:  log,
 		lock: &sync.Mutex{},

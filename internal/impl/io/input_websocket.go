@@ -13,19 +13,17 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		return newWebsocketInput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:        "websocket",
@@ -35,7 +33,7 @@ func init() {
 			docs.FieldString("url", "The URL to connect to.", "ws://localhost:4195/get/ws"),
 			docs.FieldString("open_message", "An optional message to send to the server upon connection.").Advanced(),
 			btls.FieldSpec(),
-		).WithChildren(auth.FieldSpecs()...).ChildDefaultAndTypesFromStruct(oinput.NewWebsocketConfig()),
+		).WithChildren(auth.FieldSpecs()...).ChildDefaultAndTypesFromStruct(input.NewWebsocketConfig()),
 		Categories: []string{
 			"Network",
 		},
@@ -45,12 +43,12 @@ func init() {
 	}
 }
 
-func newWebsocketInput(conf oinput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func newWebsocketInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	ws, err := newWebsocketReader(conf.Websocket, log)
 	if err != nil {
 		return nil, err
 	}
-	return oinput.NewAsyncReader("websocket", true, reader.NewAsyncPreserver(ws), log, stats)
+	return input.NewAsyncReader("websocket", true, input.NewAsyncPreserver(ws), log, stats)
 }
 
 type websocketReader struct {
@@ -58,12 +56,12 @@ type websocketReader struct {
 
 	lock *sync.Mutex
 
-	conf    oinput.WebsocketConfig
+	conf    input.WebsocketConfig
 	client  *websocket.Conn
 	tlsConf *tls.Config
 }
 
-func newWebsocketReader(conf oinput.WebsocketConfig, log log.Modular) (*websocketReader, error) {
+func newWebsocketReader(conf input.WebsocketConfig, log log.Modular) (*websocketReader, error) {
 	ws := &websocketReader{
 		log:  log,
 		lock: &sync.Mutex{},
@@ -131,7 +129,7 @@ func (w *websocketReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *websocketReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (w *websocketReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	client := w.getWS()
 	if client == nil {
 		return nil, nil, component.ErrNotConnected

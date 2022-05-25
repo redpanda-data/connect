@@ -10,7 +10,7 @@ import (
 func init() {
 	if err := bloblang.RegisterMethodV2("parse_xml",
 		bloblang.NewPluginSpec().
-			Category(string(query.MethodCategoryParsing)).
+			Category(query.MethodCategoryParsing).
 			Description(`
 Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
 

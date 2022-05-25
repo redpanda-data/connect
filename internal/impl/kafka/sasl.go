@@ -7,9 +7,9 @@ import (
 
 	"github.com/Shopify/sarama"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	ksasl "github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/public/service"
 
 	"github.com/twmb/franz-go/pkg/sasl"
@@ -167,7 +167,7 @@ var (
 )
 
 // ApplySASLConfig applies a SASL config to a sarama config.
-func ApplySASLConfig(s ksasl.Config, mgr interop.Manager, conf *sarama.Config) error {
+func ApplySASLConfig(s ksasl.Config, mgr bundle.NewManagement, conf *sarama.Config) error {
 	switch s.Mechanism {
 	case sarama.SASLTypeOAuth:
 		var tp sarama.AccessTokenProvider
@@ -216,12 +216,12 @@ func ApplySASLConfig(s ksasl.Config, mgr interop.Manager, conf *sarama.Config) e
 
 // cacheAccessTokenProvider fetches SASL OAUTHBEARER access tokens from a cache.
 type cacheAccessTokenProvider struct {
-	mgr       interop.Manager
+	mgr       bundle.NewManagement
 	cacheName string
 	key       string
 }
 
-func newCacheAccessTokenProvider(mgr interop.Manager, cache, key string) (*cacheAccessTokenProvider, error) {
+func newCacheAccessTokenProvider(mgr bundle.NewManagement, cache, key string) (*cacheAccessTokenProvider, error) {
 	if !mgr.ProbeCache(cache) {
 		return nil, fmt.Errorf("cache resource '%v' was not found", cache)
 	}

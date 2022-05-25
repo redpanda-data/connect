@@ -18,7 +18,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func TestIntegrationRedisProcessor(t *testing.T) {
@@ -75,7 +74,7 @@ func TestIntegrationRedisProcessor(t *testing.T) {
 }
 
 func testRedisKeys(t *testing.T, client *redis.Client, url string) {
-	conf := oprocessor.NewRedisConfig()
+	conf := processor.NewRedisConfig()
 	conf.URL = url
 	conf.Operator = "keys"
 	conf.Key = "foo*"
@@ -118,7 +117,7 @@ func testRedisKeys(t *testing.T, client *redis.Client, url string) {
 }
 
 func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
-	conf := oprocessor.NewRedisConfig()
+	conf := processor.NewRedisConfig()
 	conf.URL = url
 	conf.Operator = "sadd"
 	conf.Key = "${! meta(\"key\") }"
@@ -180,7 +179,7 @@ func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
 
 func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 	// WARNING: Relies on testRedisSAdd succeeding.
-	conf := oprocessor.NewRedisConfig()
+	conf := processor.NewRedisConfig()
 	conf.URL = url
 	conf.Operator = "scard"
 	conf.Key = "${! content() }"
@@ -214,7 +213,7 @@ func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 }
 
 func testRedisIncrby(t *testing.T, client *redis.Client, url string) {
-	conf := oprocessor.NewRedisConfig()
+	conf := processor.NewRedisConfig()
 	conf.URL = url
 	conf.Operator = "incrby"
 	conf.Key = "incrby"

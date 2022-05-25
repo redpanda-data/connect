@@ -1,10 +1,10 @@
 package pure
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
@@ -12,15 +12,18 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
-		return newLogProcessor(conf, mgr, mgr.Logger())
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+		p, err := newLogProcessor(conf, mgr, mgr.Logger())
+		if err != nil {
+			return nil, err
+		}
+		return processor.NewV2BatchedToV1Processor("log", p, mgr.Metrics()), nil
 	}, docs.ComponentSpec{
 		Name: "log",
 		Categories: []string{
@@ -58,7 +61,7 @@ root.age = this.user.age.number()
 root.kafka_topic = meta("kafka_topic")`,
 			).AtVersion("3.40.0").IsBloblang(),
 			docs.FieldString("message", "The message to print.").IsInterpolated(),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewLogConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewLogConfig()),
 	})
 	if err != nil {
 		panic(err)
@@ -74,7 +77,7 @@ type logProcessor struct {
 	fieldsMapping *mapping.Executor
 }
 
-func newLogProcessor(conf oprocessor.Config, mgr interop.Manager, logger log.Modular) (processor.V1, error) {
+func newLogProcessor(conf processor.Config, mgr bundle.NewManagement, logger log.Modular) (processor.V2Batched, error) {
 	message, err := mgr.BloblEnvironment().NewField(conf.Log.Message)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message expression: %v", err)
@@ -130,7 +133,7 @@ func (l *logProcessor) levelToLogFn(level string) (func(logger log.Modular, msg 
 	return nil, fmt.Errorf("log level not recognised: %v", level)
 }
 
-func (l *logProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
+func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
 	_ = msg.Iter(func(i int, _ *message.Part) error {
 		targetLog := l.logger
 		if l.fieldsMapping != nil {
@@ -184,9 +187,6 @@ func (l *logProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, err
 	return []*message.Batch{msg}, nil
 }
 
-func (l *logProcessor) CloseAsync() {
-}
-
-func (l *logProcessor) WaitForClose(timeout time.Duration) error {
+func (l *logProcessor) Close(ctx context.Context) error {
 	return nil
 }

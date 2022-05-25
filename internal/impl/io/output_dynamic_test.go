@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	bmock "github.com/benthosdev/benthos/v4/internal/bundle/mock"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
@@ -30,7 +30,7 @@ func TestDynamicOutputAPI(t *testing.T) {
 		gMux.HandleFunc(path, h)
 	}
 
-	conf := ooutput.NewConfig()
+	conf := output.NewConfig()
 	conf.Type = "dynamic"
 
 	o, err := mgr.NewOutput(conf)

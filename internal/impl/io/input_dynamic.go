@@ -10,14 +10,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(func(conf oinput.Config, mgr bundle.NewManagement, pipelines ...iprocessor.PipelineConstructorFunc) (input.Streamed, error) {
-		pipelines = oinput.AppendProcessorsFromConfig(conf, mgr, pipelines...)
+	err := bundle.AllInputs.Add(func(conf input.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
+		pipelines = processors.AppendFromConfig(conf, mgr, pipelines...)
 		return newDynamicInput(conf, mgr, pipelines...)
 	}, docs.ComponentSpec{
 		Name: "dynamic",
@@ -45,12 +45,12 @@ already exists it will be changed.`,
 	}
 }
 
-func newDynamicInput(conf oinput.Config, mgr bundle.NewManagement, pipelines ...iprocessor.PipelineConstructorFunc) (input.Streamed, error) {
+func newDynamicInput(conf input.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
 	dynAPI := api.NewDynamic()
 
 	inputs := map[string]input.Streamed{}
 	for k, v := range conf.Dynamic.Inputs {
-		iMgr := mgr.IntoPath("dynamic", "inputs", k).(bundle.NewManagement)
+		iMgr := mgr.IntoPath("dynamic", "inputs", k)
 		newInput, err := iMgr.NewInput(v, pipelines...)
 		if err != nil {
 			return nil, err
@@ -94,11 +94,11 @@ func newDynamicInput(conf oinput.Config, mgr bundle.NewManagement, pipelines ...
 	}
 
 	dynAPI.OnUpdate(func(ctx context.Context, id string, c []byte) error {
-		newConf := oinput.NewConfig()
+		newConf := input.NewConfig()
 		if err := yaml.Unmarshal(c, &newConf); err != nil {
 			return err
 		}
-		iMgr := mgr.IntoPath("dynamic", "inputs", id).(bundle.NewManagement)
+		iMgr := mgr.IntoPath("dynamic", "inputs", id)
 		newInput, err := iMgr.NewInput(newConf, pipelines...)
 		if err != nil {
 			return err

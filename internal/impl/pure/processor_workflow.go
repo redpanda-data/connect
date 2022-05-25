@@ -14,12 +14,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := NewWorkflow(conf.Workflow, mgr)
 		return p, err
 	}, docs.ComponentSpec{
@@ -285,7 +284,7 @@ type Workflow struct {
 }
 
 // NewWorkflow instanciates a new workflow processor.
-func NewWorkflow(conf oprocessor.WorkflowConfig, mgr bundle.NewManagement) (*Workflow, error) {
+func NewWorkflow(conf processor.WorkflowConfig, mgr bundle.NewManagement) (*Workflow, error) {
 	stats := mgr.Metrics()
 	w := &Workflow{
 		log:       mgr.Logger(),

@@ -9,10 +9,10 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
@@ -76,8 +76,8 @@ However, depending on the output and the error returned it is sometimes not poss
 
 //------------------------------------------------------------------------------
 
-func newFallback(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error) {
-	pipelines = ooutput.AppendProcessorsFromConfig(conf, mgr, pipelines...)
+func newFallback(conf output.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error) {
+	pipelines = processors.AppendFromConfig(conf, mgr, pipelines...)
 
 	outputConfs := conf.Fallback
 
@@ -88,7 +88,7 @@ func newFallback(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...pro
 
 	var err error
 	for i, oConf := range outputConfs {
-		oMgr := mgr.IntoPath("fallback", strconv.Itoa(i)).(bundle.NewManagement)
+		oMgr := mgr.IntoPath("fallback", strconv.Itoa(i))
 		if outputs[i], err = oMgr.NewOutput(oConf); err != nil {
 			return nil, err
 		}
@@ -98,7 +98,7 @@ func newFallback(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...pro
 	if t, err = newFallbackBroker(outputs); err != nil {
 		return nil, err
 	}
-	return ooutput.WrapWithPipelines(t, pipelines...)
+	return output.WrapWithPipelines(t, pipelines...)
 }
 
 type fallbackBroker struct {

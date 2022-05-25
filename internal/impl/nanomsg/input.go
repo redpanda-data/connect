@@ -9,26 +9,26 @@ import (
 	"time"
 
 	"go.nanomsg.org/mangos/v3"
+	"go.nanomsg.org/mangos/v3/protocol/pub"
 	"go.nanomsg.org/mangos/v3/protocol/pull"
+	"go.nanomsg.org/mangos/v3/protocol/push"
 	"go.nanomsg.org/mangos/v3/protocol/sub"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 
 	// Import all transport types
 	_ "go.nanomsg.org/mangos/v3/transport/all"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		return newNanomsgInput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:        "nanomsg",
@@ -40,7 +40,7 @@ func init() {
 			docs.FieldString("socket_type", "The socket type to use.").HasOptions("PULL", "SUB"),
 			docs.FieldString("sub_filters", "A list of subscription topic filters to use when consuming from a SUB socket. Specifying a single sub_filter of `''` will subscribe to everything.").Array(),
 			docs.FieldString("poll_timeout", "The period to wait until a poll is abandoned and reattempted.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(oinput.NewNanomsgConfig()),
+		).ChildDefaultAndTypesFromStruct(input.NewNanomsgConfig()),
 		Categories: []string{
 			"Network",
 		},
@@ -50,12 +50,12 @@ func init() {
 	}
 }
 
-func newNanomsgInput(conf oinput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func newNanomsgInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
 	s, err := newNanomsgReader(conf.Nanomsg, log)
 	if err != nil {
 		return nil, err
 	}
-	return oinput.NewAsyncReader("nanomsg", true, reader.NewAsyncPreserver(s), log, stats)
+	return input.NewAsyncReader("nanomsg", true, input.NewAsyncPreserver(s), log, stats)
 }
 
 type nanomsgReader struct {
@@ -66,11 +66,11 @@ type nanomsgReader struct {
 	repTimeout  time.Duration
 
 	urls []string
-	conf oinput.NanomsgConfig
+	conf input.NanomsgConfig
 	log  log.Modular
 }
 
-func newNanomsgReader(conf oinput.NanomsgConfig, log log.Modular) (*nanomsgReader, error) {
+func newNanomsgReader(conf input.NanomsgConfig, log log.Modular) (*nanomsgReader, error) {
 	s := nanomsgReader{
 		conf:       conf,
 		log:        log,
@@ -105,6 +105,10 @@ func getSocketFromType(t string) (mangos.Socket, error) {
 		return pull.NewSocket()
 	case "SUB":
 		return sub.NewSocket()
+	case "PUSH":
+		return push.NewSocket()
+	case "PUB":
+		return pub.NewSocket()
 	}
 	return nil, errors.New("invalid Scalability Protocols socket type")
 }
@@ -183,7 +187,7 @@ func (s *nanomsgReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *nanomsgReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (s *nanomsgReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	s.cMut.Lock()
 	socket := s.socket
 	s.cMut.Unlock()

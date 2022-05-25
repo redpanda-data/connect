@@ -11,15 +11,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newSleep(conf.Sleep, mgr)
 		if err != nil {
 			return nil, err
@@ -47,7 +45,7 @@ type sleepProc struct {
 	log         log.Modular
 }
 
-func newSleep(conf oprocessor.SleepConfig, mgr interop.Manager) (*sleepProc, error) {
+func newSleep(conf processor.SleepConfig, mgr bundle.NewManagement) (*sleepProc, error) {
 	durationStr, err := mgr.BloblEnvironment().NewField(conf.Duration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse duration expression: %v", err)

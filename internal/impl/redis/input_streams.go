@@ -12,18 +12,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		return newRedisStreamsInput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name: "redis_streams",
@@ -44,7 +42,7 @@ as metadata fields.`,
 			docs.FieldBool("start_from_oldest", "If an offset is not found for a stream, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").Advanced(),
 			docs.FieldString("commit_period", "The period of time between each commit of the current offset. Offsets are always committed during shutdown.").Advanced(),
 			docs.FieldString("timeout", "The length of time to poll for new messages before reattempting.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(oinput.NewRedisStreamsConfig()),
+		).ChildDefaultAndTypesFromStruct(input.NewRedisStreamsConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -54,14 +52,14 @@ as metadata fields.`,
 	}
 }
 
-func newRedisStreamsInput(conf oinput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-	var c reader.Async
+func newRedisStreamsInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+	var c input.Async
 	var err error
 	if c, err = newRedisStreamsReader(conf.RedisStreams, log); err != nil {
 		return nil, err
 	}
-	c = reader.NewAsyncPreserver(c)
-	return oinput.NewAsyncReader("redis_streams", true, c, log, stats)
+	c = input.NewAsyncPreserver(c)
+	return input.NewAsyncReader("redis_streams", true, c, log, stats)
 }
 
 type pendingRedisStreamMsg struct {
@@ -79,7 +77,7 @@ type redisStreamsReader struct {
 	timeout      time.Duration
 	commitPeriod time.Duration
 
-	conf oinput.RedisStreamsConfig
+	conf input.RedisStreamsConfig
 
 	backlogs map[string]string
 
@@ -93,7 +91,7 @@ type redisStreamsReader struct {
 	closeOnce  sync.Once
 }
 
-func newRedisStreamsReader(conf oinput.RedisStreamsConfig, log log.Modular) (*redisStreamsReader, error) {
+func newRedisStreamsReader(conf input.RedisStreamsConfig, log log.Modular) (*redisStreamsReader, error) {
 	r := &redisStreamsReader{
 		conf:       conf,
 		log:        log,
@@ -334,7 +332,7 @@ func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
 	return msg, nil
 }
 
-func (r *redisStreamsReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (r *redisStreamsReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	msg, err := r.read()
 	if err != nil {
 		if err == component.ErrTimeout {

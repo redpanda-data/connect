@@ -14,18 +14,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		return newNSQInput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "nsq",
@@ -38,7 +36,7 @@ func init() {
 			docs.FieldString("channel", "The channel to consume from."),
 			docs.FieldString("user_agent", "A user agent to assume when connecting."),
 			docs.FieldInt("max_in_flight", "The maximum number of pending messages to consume at any given time."),
-		).ChildDefaultAndTypesFromStruct(oinput.NewNSQConfig()),
+		).ChildDefaultAndTypesFromStruct(input.NewNSQConfig()),
 		Categories: []string{
 			"Services",
 		},
@@ -48,13 +46,13 @@ func init() {
 	}
 }
 
-func newNSQInput(conf oinput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-	var n reader.Async
+func newNSQInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+	var n input.Async
 	var err error
 	if n, err = newNSQReader(conf.NSQ, log); err != nil {
 		return nil, err
 	}
-	return oinput.NewAsyncReader("nsq", true, n, log, stats)
+	return input.NewAsyncReader("nsq", true, n, log, stats)
 }
 
 type nsqReader struct {
@@ -66,14 +64,14 @@ type nsqReader struct {
 	tlsConf         *tls.Config
 	addresses       []string
 	lookupAddresses []string
-	conf            oinput.NSQConfig
+	conf            input.NSQConfig
 	log             log.Modular
 
 	internalMessages chan *nsq.Message
 	interruptChan    chan struct{}
 }
 
-func newNSQReader(conf oinput.NSQConfig, log log.Modular) (*nsqReader, error) {
+func newNSQReader(conf input.NSQConfig, log log.Modular) (*nsqReader, error) {
 	n := nsqReader{
 		conf:             conf,
 		log:              log,
@@ -181,7 +179,7 @@ func (n *nsqReader) read(ctx context.Context) (*nsq.Message, error) {
 	return nil, component.ErrTimeout
 }
 
-func (n *nsqReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (n *nsqReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	msg, err := n.read(ctx)
 	if err != nil {
 		return nil, nil, err

@@ -8,9 +8,10 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 var (
@@ -103,8 +104,8 @@ outputs.`,
 
 //------------------------------------------------------------------------------
 
-func newBroker(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error) {
-	pipelines = ooutput.AppendProcessorsFromConfig(conf, mgr, pipelines...)
+func newBroker(conf output.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error) {
+	pipelines = processors.AppendFromConfig(conf, mgr, pipelines...)
 
 	outputConfs := conf.Broker.Outputs
 
@@ -114,11 +115,11 @@ func newBroker(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...proce
 		return nil, ErrBrokerNoOutputs
 	}
 	if lOutputs == 1 {
-		b, err := ooutput.New(outputConfs[0], mgr, mgr.Logger(), mgr.Metrics(), pipelines...)
+		b, err := mgr.NewOutput(outputConfs[0], pipelines...)
 		if err != nil {
 			return nil, err
 		}
-		if b, err = ooutput.NewBatcherFromConfig(conf.Broker.Batching, b, mgr, mgr.Logger(), mgr.Metrics()); err != nil {
+		if b, err = batcher.NewFromConfig(conf.Broker.Batching, b, mgr, mgr.Logger(), mgr.Metrics()); err != nil {
 			return nil, err
 		}
 		return b, nil
@@ -144,7 +145,7 @@ func newBroker(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...proce
 				pipes = pipelines
 			}
 			oMgr := mgr.IntoPath("broker", "outputs", strconv.Itoa(i))
-			tmpOut, err := ooutput.New(oConf, oMgr, oMgr.Logger(), oMgr.Metrics(), pipes...)
+			tmpOut, err := oMgr.NewOutput(oConf, pipes...)
 			if err != nil {
 				return nil, err
 			}
@@ -171,7 +172,7 @@ func newBroker(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...proce
 		return nil, fmt.Errorf("broker pattern was not recognised: %v", conf.Broker.Pattern)
 	}
 	if err == nil && !isThreaded {
-		b, err = ooutput.WrapWithPipelines(b, pipelines...)
+		b, err = output.WrapWithPipelines(b, pipelines...)
 	}
 
 	if !conf.Broker.Batching.IsNoop() {
@@ -179,7 +180,7 @@ func newBroker(conf ooutput.Config, mgr bundle.NewManagement, pipelines ...proce
 		if err != nil {
 			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 		}
-		b = ooutput.NewBatcher(policy, b, mgr.Logger(), mgr.Metrics())
+		b = batcher.New(policy, b, mgr.Logger(), mgr.Metrics())
 	}
 	return b, err
 }

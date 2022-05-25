@@ -7,15 +7,14 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(c oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		if !nm.ProbeInput(c.Resource) {
 			return nil, fmt.Errorf("input resource '%v' was not found", c.Resource)
 		}
@@ -26,10 +25,9 @@ func init() {
 		}, nil
 	}), docs.ComponentSpec{
 		Name:    "resource",
-		Summary: `Resource is an input type that runs a resource input by its name.`,
-		Description: `This input allows you to reference the same configured input resource in multiple places, and can also tidy up large nested configs. For
-example, the config:
-
+		Summary: `Resource is an input type that channels messages from a resource input, identified by its name.`,
+		Description: `Resources allow you to tidy up deeply nested configs. For example, the config:
+		
 ` + "```yaml" + `
 input:
   broker:
@@ -65,6 +63,8 @@ input_resources:
       subscription: baz
  ` + "```" + `
 
+Resources also allow you to reference a single input in multiple places, such as multiple streams mode configs, or multiple entries in a broker input. However, when a resource is referenced more than once the messages it produces are distributed across those references, so each message will only be directed to a single reference, not all of them.
+
 You can find out more about resources [in this document.](/docs/configuration/resources)`,
 		Categories: []string{
 			"Utility",
@@ -79,7 +79,7 @@ You can find out more about resources [in this document.](/docs/configuration/re
 //------------------------------------------------------------------------------
 
 type resourceInput struct {
-	mgr  interop.Manager
+	mgr  bundle.NewManagement
 	name string
 	log  log.Modular
 }

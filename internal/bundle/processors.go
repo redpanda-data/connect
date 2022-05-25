@@ -5,9 +5,8 @@ import (
 	"sort"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 // AllProcessors is a set containing every single processor that has been
@@ -25,7 +24,7 @@ func (e *Environment) ProcessorAdd(constructor ProcessorConstructor, spec docs.C
 }
 
 // ProcessorInit attempts to initialise a processor from a config.
-func (e *Environment) ProcessorInit(conf processor.Config, mgr NewManagement) (iprocessor.V1, error) {
+func (e *Environment) ProcessorInit(conf processor.Config, mgr NewManagement) (processor.V1, error) {
 	return e.processors.Init(conf, mgr)
 }
 
@@ -37,7 +36,7 @@ func (e *Environment) ProcessorDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // ProcessorConstructor constructs an processor component.
-type ProcessorConstructor func(conf processor.Config, mgr NewManagement) (iprocessor.V1, error)
+type ProcessorConstructor func(conf processor.Config, mgr NewManagement) (processor.V1, error)
 
 type processorSpec struct {
 	constructor ProcessorConstructor
@@ -69,7 +68,7 @@ func (s *ProcessorSet) Add(constructor ProcessorConstructor, spec docs.Component
 }
 
 // Init attempts to initialise an processor from a config.
-func (s *ProcessorSet) Init(conf processor.Config, mgr NewManagement) (iprocessor.V1, error) {
+func (s *ProcessorSet) Init(conf processor.Config, mgr NewManagement) (processor.V1, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidType("processor", conf.Type)

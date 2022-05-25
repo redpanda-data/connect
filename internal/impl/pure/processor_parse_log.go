@@ -13,14 +13,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oprocessor "github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func init() {
-	err := bundle.AllProcessors.Add(func(conf oprocessor.Config, mgr bundle.NewManagement) (processor.V1, error) {
+	err := bundle.AllProcessors.Add(func(conf processor.Config, mgr bundle.NewManagement) (processor.V1, error) {
 		p, err := newParseLog(conf.ParseLog, mgr)
 		if err != nil {
 			return nil, err
@@ -49,7 +47,7 @@ easier and often much faster than ` + "[`grok`](/docs/components/processors/grok
 				" set to an integer that value will be used. Leave this field empty to not set a default year at all.").Advanced(),
 			docs.FieldString("default_timezone", "Sets the strategy to decide the timezone for rfc3164 timestamps."+
 				" Applicable to format `syslog_rfc3164`. This value should follow the [time.LoadLocation](https://golang.org/pkg/time/#LoadLocation) format.").Advanced(),
-		).ChildDefaultAndTypesFromStruct(oprocessor.NewParseLogConfig()),
+		).ChildDefaultAndTypesFromStruct(processor.NewParseLogConfig()),
 		Footnotes: `
 ## Codecs
 
@@ -238,7 +236,7 @@ type parseLogProc struct {
 	log       log.Modular
 }
 
-func newParseLog(conf oprocessor.ParseLogConfig, mgr interop.Manager) (processor.V2, error) {
+func newParseLog(conf processor.ParseLogConfig, mgr bundle.NewManagement) (processor.V2, error) {
 	s := &parseLogProc{
 		formatStr: conf.Format,
 		log:       mgr.Logger(),

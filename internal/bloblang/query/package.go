@@ -64,7 +64,6 @@ type FunctionContext struct {
 	Vars     map[string]interface{}
 	Index    int
 	MsgBatch MessageBatch
-	Legacy   bool
 
 	// Reference new message being mapped
 	NewMeta  MetaMsg

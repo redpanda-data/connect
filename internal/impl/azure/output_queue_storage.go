@@ -12,17 +12,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newAzureQueueStorageOutput(c, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "azure_queue_storage",
@@ -45,7 +44,7 @@ In order to set the `+"`queue_name`"+` you can use function interpolations descr
 			).IsInterpolated().Advanced(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").AtVersion("3.45.0"),
 			policy.FieldSpec(),
-		).ChildDefaultAndTypesFromStruct(ooutput.NewAzureQueueStorageConfig()),
+		).ChildDefaultAndTypesFromStruct(output.NewAzureQueueStorageConfig()),
 		Categories: []string{
 			"Services",
 			"Azure",
@@ -56,20 +55,20 @@ In order to set the `+"`queue_name`"+` you can use function interpolations descr
 	}
 }
 
-func newAzureQueueStorageOutput(conf ooutput.Config, mgr interop.Manager, log log.Modular, stats metrics.Type) (output.Streamed, error) {
+func newAzureQueueStorageOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
 	s, err := newAzureQueueStorageWriter(conf.AzureQueueStorage, mgr, log)
 	if err != nil {
 		return nil, err
 	}
-	w, err := ooutput.NewAsyncWriter("azure_queue_storage", conf.AzureQueueStorage.MaxInFlight, s, log, stats)
+	w, err := output.NewAsyncWriter("azure_queue_storage", conf.AzureQueueStorage.MaxInFlight, s, log, stats)
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.NewBatcherFromConfig(conf.AzureQueueStorage.Batching, ooutput.OnlySinglePayloads(w), mgr, log, stats)
+	return batcher.NewFromConfig(conf.AzureQueueStorage.Batching, output.OnlySinglePayloads(w), mgr, log, stats)
 }
 
 type azureQueueStorageWriter struct {
-	conf ooutput.AzureQueueStorageConfig
+	conf output.AzureQueueStorageConfig
 
 	queueName  *field.Expression
 	ttl        *field.Expression
@@ -78,7 +77,7 @@ type azureQueueStorageWriter struct {
 	log log.Modular
 }
 
-func newAzureQueueStorageWriter(conf ooutput.AzureQueueStorageConfig, mgr interop.Manager, log log.Modular) (*azureQueueStorageWriter, error) {
+func newAzureQueueStorageWriter(conf output.AzureQueueStorageConfig, mgr bundle.NewManagement, log log.Modular) (*azureQueueStorageWriter, error) {
 	serviceURL, err := shared.GetQueueServiceURL(conf.StorageAccount, conf.StorageAccessKey, conf.StorageConnectionString)
 	if err != nil {
 		return nil, err
@@ -105,7 +104,7 @@ func (a *azureQueueStorageWriter) ConnectWithContext(ctx context.Context) error 
 }
 
 func (a *azureQueueStorageWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		queueURL := a.serviceURL.NewQueueURL(a.queueName.String(i, msg))
 		msgURL := queueURL.NewMessagesURL()
 		var ttl *time.Duration

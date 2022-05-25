@@ -17,11 +17,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/ory/dockertest/v3"
 
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 func TestKinesisIntegration(t *testing.T) {
@@ -61,7 +61,7 @@ func TestKinesisIntegration(t *testing.T) {
 	}
 
 	endpoint := fmt.Sprintf("http://localhost:%d", port)
-	config := ooutput.KinesisConfig{
+	config := output.KinesisConfig{
 		Stream:       "foo",
 		PartitionKey: "${!json(\"id\")}",
 	}
@@ -94,7 +94,7 @@ func TestKinesisIntegration(t *testing.T) {
 	})
 }
 
-func testKinesisConnect(t *testing.T, c ooutput.KinesisConfig, client *kinesis.Kinesis) {
+func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Kinesis) {
 	log := log.Noop()
 	r, err := newKinesisWriter(c, mock.NewManager(), log)
 	if err != nil {

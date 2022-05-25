@@ -11,9 +11,9 @@ import (
 	"github.com/golang/snappy"
 	"github.com/pierrec/lz4/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle/mock"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 func TestDecompressBadAlgo(t *testing.T) {
