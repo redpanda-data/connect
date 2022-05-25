@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - The `mongodb` input now supports aggregation filters by setting the new `operation` field.
 - New `gcp_cloudtrace` tracer.
 - New `slug` bloblang string method.
+- The `elasticsearch` output now supports the `create` action.
 
 ### Fixed
 

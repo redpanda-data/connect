@@ -178,6 +178,13 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 		if err != nil {
 			return nil, err
 		}
+		if spec.static {
+			v, err := fn()
+			if err != nil {
+				return nil, err
+			}
+			return query.NewLiteralFunction("function "+name, v), nil
+		}
 		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (interface{}, error) {
 			return fn()
 		}, nil), nil

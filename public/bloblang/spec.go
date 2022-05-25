@@ -86,6 +86,7 @@ type PluginSpec struct {
 	category    string
 	description string
 	impure      bool
+	static      bool
 	params      query.Params
 	examples    []pluginExample
 	version     string
@@ -164,6 +165,18 @@ func (p *PluginSpec) Param(def ParamDefinition) *PluginSpec {
 // are excluded from some bloblang environments.
 func (p *PluginSpec) Impure() *PluginSpec {
 	p.impure = true
+	return p
+}
+
+// Static marks the plugin as a statically evaluated function or method. This is
+// a guarantee that given the name parameters this plugin will always yield the
+// same value.
+//
+// Marking a function or method as static has the advantage that it can
+// sometimes be optimistically evaluated at mapping parse time when given static
+// arguments.
+func (p *PluginSpec) Static() *PluginSpec {
+	p.static = true
 	return p
 }
 
