@@ -16,15 +16,14 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.9.18 // indirect
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/ClickHouse/clickhouse-go/v2 v2.0.12
-	github.com/DataDog/zstd v1.5.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.4.0
 	github.com/Jeffail/gabs/v2 v2.6.1
 	github.com/Jeffail/grok v1.1.0
 	github.com/Masterminds/squirrel v1.5.2
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/Shopify/sarama v1.30.1
-	github.com/apache/pulsar-client-go v0.7.0
-	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20220210221528-5daa17b02bff // indirect
+	github.com/apache/pulsar-client-go v0.8.1
+	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20220524063205-c41616b2f512 // indirect
 	github.com/apache/thrift v0.15.0 // indirect
 	github.com/armon/go-metrics v0.3.4 // indirect
 	github.com/aws/aws-lambda-go v1.28.0
@@ -93,7 +92,7 @@ require (
 	github.com/pebbe/zmq4 v1.2.7
 	github.com/pierrec/lz4/v4 v4.1.14
 	github.com/pkg/sftp v1.13.4
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/common v0.32.1
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
 	github.com/rabbitmq/amqp091-go v1.3.4

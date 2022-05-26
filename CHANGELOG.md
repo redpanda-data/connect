@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New `gcp_cloudtrace` tracer.
 - New `slug` bloblang string method.
 - The `elasticsearch` output now supports the `create` action.
+- Field `tls.root_cas_file` added to the `pulsar` input and output.
 
 ### Fixed
 
