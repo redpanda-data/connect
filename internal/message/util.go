@@ -5,19 +5,6 @@ import (
 	"fmt"
 )
 
-//------------------------------------------------------------------------------
-
-// SetAllMetadata sets the metadata of all message parts to match a provided
-// metadata implementation.
-func SetAllMetadata(m *Batch, meta map[string]string) {
-	_ = m.Iter(func(i int, p *Part) error {
-		for k, v := range meta {
-			p.MetaSet(k, v)
-		}
-		return nil
-	})
-}
-
 // GetAllBytes returns a 2D byte slice representing the raw byte content of the
 // parts of a message.
 func GetAllBytes(m *Batch) [][]byte {
@@ -30,19 +17,6 @@ func GetAllBytes(m *Batch) [][]byte {
 		return nil
 	})
 	return parts
-}
-
-// GetAllBytesLen returns total length of message content in bytes
-func GetAllBytesLen(m *Batch) int {
-	if m.Len() == 0 {
-		return 0
-	}
-	length := 0
-	_ = m.Iter(func(i int, p *Part) error {
-		length += len(p.Get())
-		return nil
-	})
-	return length
 }
 
 //------------------------------------------------------------------------------
@@ -110,5 +84,3 @@ func cloneGeneric(root interface{}) (interface{}, error) {
 func CopyJSON(root interface{}) (interface{}, error) {
 	return cloneGeneric(root)
 }
-
-//------------------------------------------------------------------------------

@@ -11,23 +11,21 @@ import (
 )
 
 func TestMessageSerialization(t *testing.T) {
-	m := QuickBatch([][]byte{
+	input := [][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 		[]byte("12345"),
-	})
+	}
 
-	b := ToBytes(m)
-
-	m2, err := FromBytes(b)
+	m2, err := FromBytes(SerializeBytes(input))
 
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	if !reflect.DeepEqual(GetAllBytes(m), GetAllBytes(m2)) {
-		t.Errorf("Messages not equal: %v != %v", m, m2)
+	if !reflect.DeepEqual(input, GetAllBytes(m2)) {
+		t.Errorf("Messages not equal: %v != %v", input, m2)
 	}
 }
 

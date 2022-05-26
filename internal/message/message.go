@@ -151,16 +151,6 @@ func SerializeBytes(parts [][]byte) []byte {
 	return b
 }
 
-// ToBytes serialises a message into a single byte array.
-func ToBytes(m *Batch) []byte {
-	parts := make([][]byte, 0, m.Len())
-	_ = m.Iter(func(i int, p *Part) error {
-		parts = append(parts, p.Get())
-		return nil
-	})
-	return SerializeBytes(parts)
-}
-
 // DeserializeBytes rebuilds a 2D byte array from a binary serialized blob.
 func DeserializeBytes(b []byte) ([][]byte, error) {
 	if len(b) < 4 {

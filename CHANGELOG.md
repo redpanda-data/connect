@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New `slug` bloblang string method.
 - The `elasticsearch` output now supports the `create` action.
 - Field `tls.root_cas_file` added to the `pulsar` input and output.
+- The `fallback` output now adds a metadata field `fallback_error` to messages when shifted.
 
 ### Fixed
 

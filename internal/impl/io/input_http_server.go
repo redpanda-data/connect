@@ -281,27 +281,28 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (*message.B
 		msg.Append(message.NewPart(msgBytes))
 	}
 
-	meta := map[string]string{}
-	meta["http_server_user_agent"] = r.UserAgent()
-	meta["http_server_request_path"] = r.URL.Path
-	meta["http_server_verb"] = r.Method
-	for k, v := range r.Header {
-		if len(v) > 0 {
-			meta[k] = v[0]
+	_ = msg.Iter(func(i int, p *message.Part) error {
+		p.MetaSet("http_server_user_agent", r.UserAgent())
+		p.MetaSet("http_server_request_path", r.URL.Path)
+		p.MetaSet("http_server_verb", r.Method)
+		for k, v := range r.Header {
+			if len(v) > 0 {
+				p.MetaSet(k, v[0])
+			}
 		}
-	}
-	for k, v := range r.URL.Query() {
-		if len(v) > 0 {
-			meta[k] = v[0]
+		for k, v := range r.URL.Query() {
+			if len(v) > 0 {
+				p.MetaSet(k, v[0])
+			}
 		}
-	}
-	for k, v := range mux.Vars(r) {
-		meta[k] = v
-	}
-	for _, c := range r.Cookies() {
-		meta[c.Name] = c.Value
-	}
-	message.SetAllMetadata(msg, meta)
+		for k, v := range mux.Vars(r) {
+			p.MetaSet(k, v)
+		}
+		for _, c := range r.Cookies() {
+			p.MetaSet(c.Name, c.Value)
+		}
+		return nil
+	})
 
 	textMapGeneric := map[string]interface{}{}
 	for k, vals := range r.Header {
