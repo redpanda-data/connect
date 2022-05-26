@@ -1238,6 +1238,12 @@ var _ = registerSimpleMethod(
 			`{"doc":{"timestamp":"2020-Aug-14"}}`,
 			`{"doc":{"timestamp":"2020-08-14T00:00:00Z"}}`,
 		),
+		NewExampleSpec(
+			"As an extension provided by the underlying formatting library, [itchyny/timefmt-go](https://github.com/itchyny/timefmt-go), the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.",
+			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d %H:%M:%S.%f")`,
+			`{"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}`,
+			`{"doc":{"timestamp":"2020-08-14T11:50:26.371Z"}}`,
+		),
 	).Beta().Param(ParamString("format", "The format of the target string.")),
 	func(args *ParsedParams) (simpleMethod, error) {
 		layout, err := args.FieldString("format")
@@ -1397,6 +1403,16 @@ var _ = registerSimpleMethod(
 
 			`{"created_at":"2020-08-14T11:50:26.371Z"}`,
 			`{"something_at":"2020-Aug-14 11:50:26"}`,
+		),
+		NewExampleSpec(
+			"As an extension provided by the underlying formatting library, [itchyny/timefmt-go](https://github.com/itchyny/timefmt-go), the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.",
+			`root.something_at = this.created_at.format_timestamp_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")`,
+
+			`{"created_at":1597405526}`,
+			`{"something_at":"2020-Aug-14 11:45:26.000000"}`,
+
+			`{"created_at":"2020-08-14T11:50:26.371Z"}`,
+			`{"something_at":"2020-Aug-14 11:50:26.371000"}`,
 		),
 	).Beta().
 		Param(ParamString("format", "The output format to use.")).
