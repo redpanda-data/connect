@@ -992,6 +992,18 @@ root.something_at = this.created_at.format_timestamp_strftime("%Y-%b-%d %H:%M:%S
 # Out: {"something_at":"2020-Aug-14 11:50:26"}
 ```
 
+As an extension provided by the underlying formatting library, [itchyny/timefmt-go](https://github.com/itchyny/timefmt-go), the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.
+
+```coffee
+root.something_at = this.created_at.format_timestamp_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")
+
+# In:  {"created_at":1597405526}
+# Out: {"something_at":"2020-Aug-14 11:45:26.000000"}
+
+# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
+# Out: {"something_at":"2020-Aug-14 11:50:26.371000"}
+```
+
 ### `format_timestamp_unix`
 
 :::caution BETA
@@ -1126,6 +1138,15 @@ root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d")
 
 # In:  {"doc":{"timestamp":"2020-Aug-14"}}
 # Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
+```
+
+As an extension provided by the underlying formatting library, [itchyny/timefmt-go](https://github.com/itchyny/timefmt-go), the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d %H:%M:%S.%f")
+
+# In:  {"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}
+# Out: {"doc":{"timestamp":"2020-08-14T11:50:26.371Z"}}
 ```
 
 ## Type Coercion
