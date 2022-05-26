@@ -62,12 +62,12 @@ type pulsarWriter struct {
 
 	log *service.Logger
 
-	authConf      authConfig
-	url           string
-	topic         string
-	root_cas_file string
-	key           *service.InterpolatedString
-	orderingKey   *service.InterpolatedString
+	authConf    authConfig
+	url         string
+	topic       string
+	rootCasFile string
+	key         *service.InterpolatedString
+	orderingKey *service.InterpolatedString
 }
 
 func newPulsarWriterFromParsed(conf *service.ParsedConfig, log *service.Logger) (p *pulsarWriter, err error) {
@@ -85,7 +85,7 @@ func newPulsarWriterFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 	if p.topic, err = conf.FieldString("topic"); err != nil {
 		return
 	}
-	if p.root_cas_file, err = conf.FieldString("tls", "root_cas_file"); err != nil {
+	if p.rootCasFile, err = conf.FieldString("tls", "root_cas_file"); err != nil {
 		return
 	}
 	if p.key, err = conf.FieldInterpolatedString("key"); err != nil {
@@ -117,7 +117,7 @@ func (p *pulsarWriter) Connect(ctx context.Context) error {
 		Logger:                createDefaultLogger(p.log),
 		ConnectionTimeout:     time.Second * 3,
 		URL:                   p.url,
-		TLSTrustCertsFilePath: p.root_cas_file,
+		TLSTrustCertsFilePath: p.rootCasFile,
 	}
 
 	if p.authConf.OAuth2.Enabled {

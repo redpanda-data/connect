@@ -77,12 +77,12 @@ type pulsarReader struct {
 
 	log *service.Logger
 
-	authConf      authConfig
-	url           string
-	topics        []string
-	subName       string
-	subType       string
-	root_cas_file string
+	authConf    authConfig
+	url         string
+	topics      []string
+	subName     string
+	subType     string
+	rootCasFile string
 }
 
 func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) (p *pulsarReader, err error) {
@@ -106,7 +106,7 @@ func newPulsarReaderFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 	if p.subType, err = conf.FieldString("subscription_type"); err != nil {
 		return
 	}
-	if p.root_cas_file, err = conf.FieldString("tls", "root_cas_file"); err != nil {
+	if p.rootCasFile, err = conf.FieldString("tls", "root_cas_file"); err != nil {
 		return
 	}
 
@@ -171,7 +171,7 @@ func (p *pulsarReader) Connect(ctx context.Context) error {
 		Logger:                createDefaultLogger(p.log),
 		ConnectionTimeout:     time.Second * 3,
 		URL:                   p.url,
-		TLSTrustCertsFilePath: p.root_cas_file,
+		TLSTrustCertsFilePath: p.rootCasFile,
 	}
 
 	if p.authConf.OAuth2.Enabled {
