@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -256,15 +257,20 @@ func cmdService(
 	// here as this is only a special circumstance for very basic use cases.
 	if !streamsMode && conf.Output.Type == "stdout" {
 		logger, err = log.NewV2(os.Stderr, conf.Logger)
-	} else if conf.Logger.FilePath != "" {
-		logrotate := &lumberjack.Logger{
-			Filename:   conf.Logger.FilePath + "/benthos.log",
-			MaxSize:    10,
-			MaxAge:     1,
-			MaxBackups: 1,
-			Compress:   true,
+	} else if conf.Logger.File != nil {
+		var writer io.Writer
+		if conf.Logger.File.Rotate {
+			writer = &lumberjack.Logger{
+				Filename:   conf.Logger.File.Path,
+				MaxSize:    10,
+				MaxAge:     conf.Logger.File.RotateMaxAge,
+				MaxBackups: 1,
+				Compress:   true,
+			}
+		} else {
+			writer, err = os.OpenFile(conf.Logger.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		}
-		logger, err = log.NewV2(logrotate, conf.Logger)
+		logger, err = log.NewV2(writer, conf.Logger)
 	} else {
 		logger, err = log.NewV2(os.Stdout, conf.Logger)
 	}

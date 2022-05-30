@@ -15,7 +15,13 @@ type Config struct {
 	Format       string            `json:"format" yaml:"format"`
 	AddTimeStamp bool              `json:"add_timestamp" yaml:"add_timestamp"`
 	StaticFields map[string]string `json:"static_fields" yaml:"static_fields"`
-	FilePath     string            `json:"file_path" yaml:"file_path"`
+	File         *File             `json:"file,omitempty" yaml:"file,omitempty"`
+}
+
+type File struct {
+	Path         string `json:"path" yaml:"path"`
+	Rotate       bool   `json:"rotate" yaml:"rotate"`
+	RotateMaxAge int    `json:"rotate_max_age" yaml:"rotate_max_age"`
 }
 
 // NewConfig returns a config struct with the default values for each field.
