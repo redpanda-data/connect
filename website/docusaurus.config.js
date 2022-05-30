@@ -104,8 +104,8 @@ module.exports = {
       copyright: `Copyright © ${new Date().getFullYear()} Ashley Jeffs.`,
     },
     announcementBar: {
-      id: 'v4_released',
-      content: '<strong>🎉 Version 4 of Benthos is now released 🎉 For more information <a target="_blank" rel="noopener noreferrer" href="/docs/guides/migration/v4">check out the migration guide</a></strong>',
+      id: 'introducing_studio',
+      content: '<strong>🎨 Build your configs visually with the new <a target="_blank" rel="noopener noreferrer" href="https://studio.benthos.dev">Benthos Studio</a> (BETA) 🎨</strong>',
       backgroundColor: 'var(--ifm-color-primary)',
       textColor: 'var(--ifm-background-color)',
       isCloseable: true,
