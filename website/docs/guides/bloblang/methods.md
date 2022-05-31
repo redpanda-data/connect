@@ -1439,6 +1439,20 @@ root = this.explode("value")
 # Out: {"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}},"foo":{"id":1,"value":2}}
 ```
 
+### `fake`
+
+Uses the values in the structure to map to functions in the faker library. If value doesn't match a faker method, it remains unchanged.
+
+#### Examples
+
+
+```coffee
+root.result = this.fake()
+
+# In:  {"foo":"email"}
+# Out: {"result":{"foo":"mJBJtbv@OSAaT.com"}}
+```
+
 ### `filter`
 
 Executes a mapping query argument for each element of an array or key/value pair of an object. If the query returns `false` the item is removed from the resulting array or object. The item will also be removed if the query returns any non-boolean value.
