@@ -915,7 +915,7 @@ root.new_value = this.value.round()
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Attempts to format a timestamp value as a string according to a specified format, or ISO 8601 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
+Attempts to format a timestamp value as a string according to a specified format, or RFC3339 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format.
 
 #### Parameters
 
@@ -964,7 +964,7 @@ root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05.99999
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
+Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format.
 
 #### Parameters
 
@@ -1009,7 +1009,7 @@ root.something_at = this.created_at.format_timestamp_strftime("%Y-%b-%d %H:%M:%S
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
+Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
 
 #### Examples
 
@@ -1026,7 +1026,7 @@ root.created_at_unix = this.created_at.format_timestamp_unix()
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
+Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
 
 #### Examples
 
@@ -1101,7 +1101,7 @@ root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Attempts to parse a string as a timestamp following a specified format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+Attempts to parse a string as a timestamp following a specified format and outputs a string in RFC3339 format, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
 
 #### Parameters
 
@@ -1122,7 +1122,7 @@ root.doc.timestamp = this.doc.timestamp.parse_timestamp("2006-Jan-02")
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`.
+Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following RFC3339 format, which can then be fed into `format_timestamp`.
 
 #### Parameters
 
@@ -1147,6 +1147,32 @@ root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d %H:%M
 
 # In:  {"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}
 # Out: {"doc":{"timestamp":"2020-08-14T11:50:26.371Z"}}
+```
+
+### `timestamp_round`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the result of rounding a timestamp to the nearest multiple of the argument duration (nanoseconds). The rounding behavior for halfway values is to round up.
+
+Introduced in version 4.2.0.
+
+
+#### Parameters
+
+**`duration`** &lt;integer&gt; A duration measured in nanoseconds to round by.  
+
+#### Examples
+
+
+Use the method `parse_duration` to convert a duration string into an integer argument.
+
+```coffee
+root.created_at_hour = this.created_at.timestamp_round("1h".parse_duration())
+
+# In:  {"created_at":"2020-08-14T05:54:23Z"}
+# Out: {"created_at_hour":"2020-08-14T06:00:00Z"}
 ```
 
 ## Type Coercion

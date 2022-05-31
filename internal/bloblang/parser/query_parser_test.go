@@ -47,7 +47,7 @@ func TestFunctionParserErrors(t *testing.T) {
 			err:   `line 1 char 40: required: expected argument value`,
 		},
 		"cannot mix args types": {
-			input: `foo.format_timestamp("foo", tz: "bar")`,
+			input: `foo.slice(0, high: 5)`,
 			err:   `line 1 char 5: cannot mix named and nameless arguments`,
 		},
 		"bad operators": {

@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - The `elasticsearch` output now supports the `create` action.
 - Field `tls.root_cas_file` added to the `pulsar` input and output.
 - The `fallback` output now adds a metadata field `fallback_error` to messages when shifted.
+- New bloblang method `timestamp_round`.
 
 ### Fixed
 
