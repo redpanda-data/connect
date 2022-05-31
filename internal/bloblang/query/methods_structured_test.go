@@ -101,15 +101,6 @@ func TestMethodImmutability(t *testing.T) {
 				"baz": "buz",
 			},
 		},
-		{
-			name:   "fake",
-			method: "fake",
-			target: map[string]interface{}{"foo": "email"},
-			args:   []interface{}{},
-			exp: map[string]interface{}{
-				"foo": "asdf@asdf.com",
-			},
-		},
 	}
 
 	for _, test := range testCases {
