@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Jeffail/gabs/v2"
+	"github.com/bxcodec/faker/v3"
 	jsonschema "github.com/xeipuuv/gojsonschema"
 )
 
@@ -1561,4 +1562,66 @@ func mapWithout(m map[string]interface{}, paths [][]string) map[string]interface
 		}
 	}
 	return newMap
+}
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleMethod(
+	NewMethodSpec(
+		"fake",
+		"Uses the values in the structure to map to functions in the faker library. If value doesn't match a faker method, it remains unchanged.",
+	).InCategory(
+		MethodCategoryObjectAndArray, "",
+		NewExampleSpec(``,
+			`root.result = this.fake()`,
+			`{"foo":"email"}`,
+			`{"result":{"foo":"mJBJtbv@OSAaT.com"}}`,
+		),
+	),
+	func(*ParsedParams) (simpleMethod, error) {
+		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			return PopulateFakeData(v), nil
+		}, nil
+	},
+)
+
+func PopulateFakeData(data interface{}) interface{} {
+	str, isString := data.(string)
+	if isString {
+		fakeValue := GetFakeValue(str)
+		return fakeValue
+	} else {
+		array, isArray := data.([]interface{})
+		if isArray {
+			var newArray []interface{}
+			for _, value := range array {
+				newValue := PopulateFakeData(value)
+				newArray = append(newArray, newValue)
+			}
+			return newArray
+		}
+
+		m, isMap := data.(map[string]interface{})
+		if isMap {
+			newMap := map[string]interface{}{}
+			for key, value := range m {
+				newValue := PopulateFakeData(value)
+				newMap[key] = newValue
+			}
+			return newMap
+		}
+
+		return data
+	}
+}
+
+func GetFakeValue(value string) string {
+	result := value
+	switch strings.ToLower(value) {
+	case "email":
+		result = faker.Email()
+	case "date":
+		result = faker.Date()
+	}
+	return result
 }

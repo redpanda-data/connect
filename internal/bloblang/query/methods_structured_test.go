@@ -1,6 +1,7 @@
 package query
 
 import (
+	"net/mail"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -100,6 +101,15 @@ func TestMethodImmutability(t *testing.T) {
 				"baz": "buz",
 			},
 		},
+		{
+			name:   "fake",
+			method: "fake",
+			target: map[string]interface{}{"foo": "email"},
+			args:   []interface{}{},
+			exp: map[string]interface{}{
+				"foo": "asdf@asdf.com",
+			},
+		},
 	}
 
 	for _, test := range testCases {
@@ -123,4 +133,29 @@ func TestMethodImmutability(t *testing.T) {
 			assert.Equal(t, test.args, argsClone)
 		})
 	}
+}
+
+func TestFakeMethod(t *testing.T) {
+	target := map[string]interface{}{"foo": "email"}
+
+	targetClone := IClone(target)
+	argsClone := IClone([]interface{}{}).([]interface{})
+
+	fn, err := InitMethodHelper("fake", NewLiteralFunction("", targetClone), argsClone...)
+	require.NoError(t, err)
+
+	res, err := fn.Exec(FunctionContext{
+		Maps:     map[string]Function{},
+		Index:    0,
+		MsgBatch: nil,
+	})
+	require.NoError(t, err)
+
+	resMap := res.(map[string]interface{})
+	email := resMap["foo"]
+	_, err = mail.ParseAddress(email.(string))
+	assert.NoError(t, err)
+
+	assert.Equal(t, target, targetClone)
+	assert.Equal(t, []interface{}{}, argsClone)
 }
