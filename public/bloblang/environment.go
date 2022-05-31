@@ -120,6 +120,15 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 		if err != nil {
 			return nil, err
 		}
+		if spec.static {
+			if sTarget, isLiteral := target.(*query.Literal); isLiteral {
+				v, err := fn(sTarget.Value)
+				if err != nil {
+					return nil, err
+				}
+				return query.NewLiteralFunction("method "+name, v), nil
+			}
+		}
 		return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (interface{}, error) {
 			v, err := target.Exec(ctx)
 			if err != nil {

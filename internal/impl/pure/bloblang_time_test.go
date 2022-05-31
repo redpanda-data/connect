@@ -31,24 +31,41 @@ func TestTimestampMethods(t *testing.T) {
 			output:  "2020-08-14T05:54:00Z",
 		},
 		{
+			name:              "timestamp_round bad timestamp",
+			mapping:           `root = this.timestamp_round("1h".parse_duration())`,
+			input:             "not a timestamp",
+			execErrorContains: "parsing time \"not a timestamp\" as",
+		},
+		{
+			name:               "timestamp_round bad timestamp static",
+			mapping:            `root = "not a timestamp".timestamp_round("1h".parse_duration())`,
+			parseErrorContains: "parsing time \"not a timestamp\" as",
+		},
+		{
 			name:    "check parse_timestamp with format",
 			mapping: `root = "2020-Aug-14".parse_timestamp("2006-Jan-02")`,
 			output:  "2020-08-14T00:00:00Z",
 		},
 		{
 			name:              "check parse_timestamp invalid",
-			mapping:           `root = "not valid timestamp".parse_timestamp("2006-01-02T15:04:05Z07:00")`,
-			execErrorContains: `string literal: parsing time "not valid timestamp" as "2006-01-02T15:04:05Z07:00": cannot parse "not valid timestamp" as "2006"`,
+			mapping:           `root = this.parse_timestamp("2006-01-02T15:04:05Z07:00")`,
+			input:             "not valid timestamp",
+			execErrorContains: `parsing time "not valid timestamp" as "2006-01-02T15:04:05Z07:00": cannot parse "not valid timestamp" as "2006"`,
 		},
 		{
-			name:              "check parse_timestamp with invalid format",
-			mapping:           `root = "invalid format".parse_timestamp("2006-Jan-02")`,
-			execErrorContains: `string literal: parsing time "invalid format" as "2006-Jan-02": cannot parse "invalid format" as "2006"`,
+			name:               "check parse_timestamp invalid static",
+			mapping:            `root = "not valid timestamp".parse_timestamp("2006-01-02T15:04:05Z07:00")`,
+			parseErrorContains: `parsing time "not valid timestamp" as "2006-01-02T15:04:05Z07:00": cannot parse "not valid timestamp" as "2006"`,
 		},
 		{
-			name:              "check parse_timestamp with invalid literal type",
-			mapping:           `root = 1.parse_timestamp("2006-Jan-02")`,
-			execErrorContains: `expected string value, got number from number literal (1)`,
+			name:               "check parse_timestamp with invalid format",
+			mapping:            `root = "invalid format".parse_timestamp("2006-Jan-02")`,
+			parseErrorContains: `parsing time "invalid format" as "2006-Jan-02": cannot parse "invalid format" as "2006"`,
+		},
+		{
+			name:               "check parse_timestamp with invalid literal type",
+			mapping:            `root = 1.parse_timestamp("2006-Jan-02")`,
+			parseErrorContains: `expected string value, got number (1)`,
 		},
 		{
 			name:    "check parse_timestamp_strptime with format",
@@ -56,19 +73,19 @@ func TestTimestampMethods(t *testing.T) {
 			output:  "2020-08-14T00:00:00Z",
 		},
 		{
-			name:              "check parse_timestamp_strptime invalid",
-			mapping:           `root = "not valid timestamp".parse_timestamp_strptime("%Y-%b-%d")`,
-			execErrorContains: `string literal: failed to parse "not valid timestamp" with "%Y-%b-%d": cannot parse %Y`,
+			name:               "check parse_timestamp_strptime invalid",
+			mapping:            `root = "not valid timestamp".parse_timestamp_strptime("%Y-%b-%d")`,
+			parseErrorContains: `failed to parse "not valid timestamp" with "%Y-%b-%d": cannot parse %Y`,
 		},
 		{
-			name:              "check parse_timestamp_strptime with invalid format",
-			mapping:           `root = "invalid format".parse_timestamp_strptime("INVALID_FORMAT")`,
-			execErrorContains: `string literal: failed to parse "invalid format" with "INVALID_FORMAT": expected 'I'`,
+			name:               "check parse_timestamp_strptime with invalid format",
+			mapping:            `root = "invalid format".parse_timestamp_strptime("INVALID_FORMAT")`,
+			parseErrorContains: `failed to parse "invalid format" with "INVALID_FORMAT": expected 'I'`,
 		},
 		{
-			name:              "check parse_timestamp_strptime with invalid literal type",
-			mapping:           `root = 1.parse_timestamp_strptime("%Y-%b-%d")`,
-			execErrorContains: `expected string value, got number from number literal (1)`,
+			name:               "check parse_timestamp_strptime with invalid literal type",
+			mapping:            `root = 1.parse_timestamp_strptime("%Y-%b-%d")`,
+			parseErrorContains: `expected string value, got number`,
 		},
 		{
 			name:    "check format_timestamp string default",
@@ -126,37 +143,40 @@ func TestTimestampMethods(t *testing.T) {
 			output:  int64(110839937300000000),
 		},
 		{
-			name:              "check parse duration ISO-8601 only allow fractions in the last field",
-			mapping:           `root = "P2.5YT7.5S".parse_duration_iso8601()`,
-			execErrorContains: "string literal: P2.5YT7.5S: 'Y' & 'S' only the last field can have a fraction",
+			name:               "check parse duration ISO-8601 only allow fractions in the last field",
+			mapping:            `root = "P2.5YT7.5S".parse_duration_iso8601()`,
+			parseErrorContains: "P2.5YT7.5S: 'Y' & 'S' only the last field can have a fraction",
 		},
 		{
-			name:              "check parse duration ISO-8601 with invalid format",
-			mapping:           `root = "P3S".parse_duration_iso8601()`,
-			execErrorContains: "string literal: P3S: 'S' designator cannot occur here",
+			name:               "check parse duration ISO-8601 with invalid format",
+			mapping:            `root = "P3S".parse_duration_iso8601()`,
+			parseErrorContains: "P3S: 'S' designator cannot occur here",
 		},
 		{
-			name:              "check parse duration ISO-8601 with bogus format",
-			mapping:           `root = "gibberish".parse_duration_iso8601()`,
-			execErrorContains: "string literal: gibberish: expected 'P' period mark at the start",
+			name:               "check parse duration ISO-8601 with bogus format",
+			mapping:            `root = "gibberish".parse_duration_iso8601()`,
+			parseErrorContains: "gibberish: expected 'P' period mark at the start",
 		},
 	}
 
 	for _, test := range tests {
-		m, err := bloblang.Parse(test.mapping)
-		if test.parseErrorContains != "" {
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), test.parseErrorContains)
-		} else {
-			require.NoError(t, err)
-			v, err := m.Query(test.input)
-			if test.execErrorContains != "" {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			m, err := bloblang.Parse(test.mapping)
+			if test.parseErrorContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.parseErrorContains)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, test.output, v)
+				v, err := m.Query(test.input)
+				if test.execErrorContains != "" {
+					require.Error(t, err)
+					assert.Contains(t, err.Error(), test.execErrorContains)
+				} else {
+					require.NoError(t, err)
+					assert.Equal(t, test.output, v)
+				}
 			}
-		}
+		})
 	}
 }

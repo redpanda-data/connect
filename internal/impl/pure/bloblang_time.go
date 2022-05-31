@@ -17,6 +17,7 @@ func init() {
 
 	tsRoundSpec := bloblang.NewPluginSpec().
 		Beta().
+		Static().
 		Category(query.MethodCategoryTime).
 		Description(`Returns the result of rounding a timestamp to the nearest multiple of the argument duration (nanoseconds). The rounding behavior for halfway values is to round up.`).
 		Param(bloblang.NewInt64Param("duration").Description("A duration measured in nanoseconds to round by.")).
@@ -45,6 +46,7 @@ func init() {
 	}
 
 	parseDurSpec := bloblang.NewPluginSpec().
+		Static().
 		Category(query.MethodCategoryTime).
 		Description(`Attempts to parse a string as a duration and returns an integer of nanoseconds. A duration string is a possibly signed sequence of decimal numbers, each with an optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".`).
 		Example("",
@@ -80,6 +82,7 @@ func init() {
 	parseDurISOSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().
+		Static().
 		Description(`Attempts to parse a string using ISO-8601 rules as a duration and returns an integer of nanoseconds. A duration string is represented by the format "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". In these representations, the "[n]" is replaced by the value for each of the date and time elements that follow the "[n]". For example, "P3Y6M4DT12H30M5S" represents a duration of "three years, six months, four days, twelve hours, thirty minutes, and five seconds". The last field of the format allows fractions with one decimal place, so "P3.5S" will return 3500000000ns. Any additional decimals will be truncated.`).
 		Example("Arbitrary ISO-8601 duration string to nanoseconds:",
 			`root.delay_for_ns = this.delay_for.parse_duration_iso8601()`,
@@ -124,6 +127,7 @@ func init() {
 	parseTSSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().
+		Static().
 		Description("Attempts to parse a string as a timestamp following a specified format and outputs a string in RFC3339 format, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.").
 		Param(bloblang.NewStringParam("format").Description("The format of the target string.")).
 		Example("",
@@ -156,6 +160,7 @@ func init() {
 	parseTSStrptimeSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().
+		Static().
 		Description("Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following RFC3339 format, which can then be fed into `format_timestamp`.").
 		Param(bloblang.NewStringParam("format").Description("The format of the target string.")).
 		Example(
@@ -197,6 +202,7 @@ func init() {
 	formatTSSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().
+		Static().
 		Description("Attempts to format a timestamp value as a string according to a specified format, or RFC3339 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format.").
 		Param(bloblang.NewStringParam("format").Description("The output format to use.").Default(time.RFC3339Nano)).
 		Param(bloblang.NewStringParam("tz").Description("An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.").Optional()).
@@ -267,6 +273,7 @@ func init() {
 	formatTSStrftimeSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().
+		Static().
 		Description("Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format.").
 		Param(bloblang.NewStringParam("format").Description("The output format to use.")).
 		Param(bloblang.NewStringParam("tz").Description("An optional timezone to use, otherwise the timezone of the input string is used.").Optional()).
@@ -332,6 +339,7 @@ func init() {
 	formatTSUnixSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().
+		Static().
 		Description("Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.").
 		Example("",
 			`root.created_at_unix = this.created_at.format_timestamp_unix()`,
@@ -355,6 +363,7 @@ func init() {
 	formatTSUnixNanoSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().
+		Static().
 		Description("Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.").
 		Example("",
 			`root.created_at_unix = this.created_at.format_timestamp_unix_nano()`,
