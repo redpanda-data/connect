@@ -1580,42 +1580,42 @@ var _ = registerSimpleMethod(
 	),
 	func(*ParsedParams) (simpleMethod, error) {
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			return PopulateFakeData(v), nil
+			return populateFakeData(v), nil
 		}, nil
 	},
 )
 
-func PopulateFakeData(data interface{}) interface{} {
+func populateFakeData(data interface{}) interface{} {
 	str, isString := data.(string)
 	if isString {
-		fakeValue := GetFakeValue(str)
+		fakeValue := getFakeValue(str)
 		return fakeValue
-	} else {
-		array, isArray := data.([]interface{})
-		if isArray {
-			var newArray []interface{}
-			for _, value := range array {
-				newValue := PopulateFakeData(value)
-				newArray = append(newArray, newValue)
-			}
-			return newArray
-		}
-
-		m, isMap := data.(map[string]interface{})
-		if isMap {
-			newMap := map[string]interface{}{}
-			for key, value := range m {
-				newValue := PopulateFakeData(value)
-				newMap[key] = newValue
-			}
-			return newMap
-		}
-
-		return data
 	}
+
+	array, isArray := data.([]interface{})
+	if isArray {
+		var newArray []interface{}
+		for _, value := range array {
+			newValue := populateFakeData(value)
+			newArray = append(newArray, newValue)
+		}
+		return newArray
+	}
+
+	m, isMap := data.(map[string]interface{})
+	if isMap {
+		newMap := map[string]interface{}{}
+		for key, value := range m {
+			newValue := populateFakeData(value)
+			newMap[key] = newValue
+		}
+		return newMap
+	}
+
+	return data
 }
 
-func GetFakeValue(value string) string {
+func getFakeValue(value string) string {
 	result := value
 	switch strings.ToLower(value) {
 	case "email":
