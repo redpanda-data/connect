@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"net/mail"
 	"sync"
 	"testing"
 
@@ -399,15 +398,4 @@ func TestRandomIntDynamicParallel(t *testing.T) {
 
 	close(startChan)
 	wg.Wait()
-}
-
-func TestFakeFunction(t *testing.T) {
-	e, err := InitFunctionHelper("fake", "email")
-	require.Nil(t, err)
-
-	res, err := e.Exec(FunctionContext{})
-	require.NoError(t, err)
-
-	_, err = mail.ParseAddress(res.(string))
-	assert.NoError(t, err)
 }

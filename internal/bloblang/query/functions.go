@@ -779,28 +779,3 @@ func NewVarFunction(name string) Function {
 		return ctx, paths
 	})
 }
-
-//------------------------------------------------------------------------------
-
-var _ = registerFunction(
-	NewFunctionSpec(
-		FunctionCategoryGeneral, "fake",
-		"The `fake` takes in a string and returns a generated string using the faker function specified",
-		NewExampleSpec("",
-			`root = this
-root.email = fake("email")`,
-		),
-	).Param(ParamString("function", "An identifier for the faker function to use.")).MarkImpure(),
-	fakeFunction,
-)
-
-func fakeFunction(args *ParsedParams) (Function, error) {
-	functionKey, err := args.FieldString("function")
-	if err != nil {
-		return nil, err
-	}
-
-	return ClosureFunction("fake data generation", func(ctx FunctionContext) (interface{}, error) {
-		return GetFakeValue(functionKey), nil
-	}, nil), nil
-}

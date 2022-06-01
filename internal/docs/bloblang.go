@@ -129,7 +129,7 @@ description: A list of Bloblang functions
 
      To make changes please edit the contents of:
      internal/bloblang/query/functions.go
-     internal/docs/bloblang.go
+     internal/docs/bloblang_methods.go
 -->
 
 import Tabs from '@theme/Tabs';
@@ -282,7 +282,7 @@ description: A list of Bloblang methods
      To make changes please edit the contents of:
      internal/bloblang/query/methods.go
      internal/bloblang/query/methods_strings.go
-     internal/docs/bloblang.go
+     internal/docs/bloblang_methods.go
 -->
 
 import Tabs from '@theme/Tabs';

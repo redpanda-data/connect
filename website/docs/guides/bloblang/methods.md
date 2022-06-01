@@ -10,7 +10,7 @@ description: A list of Bloblang methods
      To make changes please edit the contents of:
      internal/bloblang/query/methods.go
      internal/bloblang/query/methods_strings.go
-     internal/docs/bloblang.go
+     internal/docs/bloblang_methods.go
 -->
 
 import Tabs from '@theme/Tabs';
@@ -231,6 +231,25 @@ root.escaped = this.value.escape_url_query()
 
 # In:  {"value":"foo & bar"}
 # Out: {"escaped":"foo+%26+bar"}
+```
+
+### `faker`
+
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Uses the values in the structure to map to functions in the faker library. If value doesn't match a faker method, it remains unchanged.
+
+Introduced in version 4.2.0.
+
+
+#### Examples
+
+
+Replaces any strings in 'this' that map to faker functions with generated strings
+
+```coffee
+root.result = this.fake()
 ```
 
 ### `filepath_join`
@@ -1437,17 +1456,6 @@ root = this.explode("value")
 
 # In:  {"id":1,"value":{"foo":2,"bar":[3,4],"baz":{"bev":5}}}
 # Out: {"bar":{"id":1,"value":[3,4]},"baz":{"id":1,"value":{"bev":5}},"foo":{"id":1,"value":2}}
-```
-
-### `fake`
-
-Uses the values in the structure to map to functions in the faker library. If value doesn't match a faker method, it remains unchanged.
-
-#### Examples
-
-
-```coffee
-root.result = this.fake()
 ```
 
 ### `filter`
