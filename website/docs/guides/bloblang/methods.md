@@ -233,7 +233,7 @@ root.escaped = this.value.escape_url_query()
 # Out: {"escaped":"foo+%26+bar"}
 ```
 
-### `faker`
+### `fake`
 
 :::caution EXPERIMENTAL
 This method is experimental and therefore breaking changes could be made to it outside of major version releases.

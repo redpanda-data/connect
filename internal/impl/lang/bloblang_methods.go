@@ -54,7 +54,7 @@ func init() {
 			"root.result = this.fake()")
 
 	if err := bloblang.RegisterMethodV2(
-		"faker", fakerSpec,
+		"fake", fakerSpec,
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			return bloblang.ObjectMethod(func(obj map[string]interface{}) (interface{}, error) {
 				return populateFakeData(obj), nil
