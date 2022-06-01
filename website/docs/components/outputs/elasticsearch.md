@@ -35,6 +35,7 @@ output:
     urls: []
     index: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
+    type: ""
     max_in_flight: 64
     batching:
       count: 0
@@ -56,6 +57,7 @@ output:
     action: index
     pipeline: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
+    type: ""
     routing: ""
     sniff: true
     healthcheck: true
@@ -174,6 +176,14 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"${!count(\"elastic_ids\")}-${!timestamp_unix()}"`  
+
+### `type`
+
+The document mapping type. This field is required for versions of elasticsearch earlier than 6.0.0, but are invalid for versions 7.0.0 or later.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `routing`
 
