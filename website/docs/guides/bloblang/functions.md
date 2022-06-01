@@ -78,6 +78,22 @@ root.new_nums = this.nums.map_each(num -> if num < 10 { deleted() } else { num -
 # Out: {"new_nums":[1,7]}
 ```
 
+### `fake`
+
+The `fake` takes in a string and returns a generated string using the faker function specified
+
+#### Parameters
+
+**`function`** &lt;string&gt; An identifier for the faker function to use.  
+
+#### Examples
+
+
+```coffee
+root = this
+root.email = fake("email")
+```
+
 ### `ksuid`
 
 Generates a new ksuid each time it is invoked and prints a string representation.

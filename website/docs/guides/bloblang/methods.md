@@ -1448,9 +1448,6 @@ Uses the values in the structure to map to functions in the faker library. If va
 
 ```coffee
 root.result = this.fake()
-
-# In:  {"foo":"email"}
-# Out: {"result":{"foo":"mJBJtbv@OSAaT.com"}}
 ```
 
 ### `filter`
