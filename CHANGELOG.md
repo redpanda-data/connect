@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - The default docker image no longer throws configuration errors when running streams mode without an explicit general config.
 - The field `metrics.mapping` now allows environment functions such as `hostname` and `env`.
 - Fixed a lock-up in the `amqp_0_9` output caused when messages sent with the `immediate` or `mandatory` flags were rejected.
+- Fixed a race condition upon creating dynamic streams that self-terminate, this was causing panics in cases where the stream finishes immediately.
 
 ## 4.1.0 - 2022-05-11
 
