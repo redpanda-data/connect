@@ -35,7 +35,7 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 			Optional()).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
-			Example(`root = [ "article", now().format_timestamp("2006-01-02") ]`).
+			Example(`root = [ "article", now().ts_format("2006-01-02") ]`).
 			Optional()).
 		Field(service.NewStringField("prefix").
 			Description("An optional prefix to prepend to the select query (before SELECT).").
@@ -65,7 +65,7 @@ input:
     where: created_at >= ?
     args_mapping: |
       root = [
-        now().format_timestamp_unix() - 3600
+        now().ts_unix() - 3600
       ]
 `,
 		)

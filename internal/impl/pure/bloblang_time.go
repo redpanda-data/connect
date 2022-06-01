@@ -11,6 +11,13 @@ import (
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
+func asDeprecated(s *bloblang.PluginSpec) *bloblang.PluginSpec {
+	tmpSpec := *s
+	newSpec := &tmpSpec
+	newSpec = newSpec.Deprecated()
+	return newSpec
+}
+
 func init() {
 	// Note: The examples are run and tested from within
 	// ./internal/bloblang/query/parsed_test.go
@@ -19,31 +26,32 @@ func init() {
 		Beta().
 		Static().
 		Category(query.MethodCategoryTime).
-		Description(`Returns the result of rounding a timestamp to the nearest multiple of the argument duration (nanoseconds). The rounding behavior for halfway values is to round up.`).
+		Description(`Returns the result of rounding a timestamp to the nearest multiple of the argument duration (nanoseconds). The rounding behavior for halfway values is to round up. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The `+"[`ts_parse`](#ts_parse)"+` method can be used in order to parse different timestamp formats.`).
 		Param(bloblang.NewInt64Param("duration").Description("A duration measured in nanoseconds to round by.")).
 		Version("4.2.0").
 		Example("Use the method `parse_duration` to convert a duration string into an integer argument.",
-			`root.created_at_hour = this.created_at.timestamp_round("1h".parse_duration())`,
+			`root.created_at_hour = this.created_at.ts_round("1h".parse_duration())`,
 			[2]string{
 				`{"created_at":"2020-08-14T05:54:23Z"}`,
 				`{"created_at_hour":"2020-08-14T06:00:00Z"}`,
 			})
 
-	if err := bloblang.RegisterMethodV2(
-		"timestamp_round", tsRoundSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			iDur, err := args.GetInt64("duration")
-			if err != nil {
-				return nil, err
-			}
-			dur := time.Duration(iDur)
-			return bloblang.TimestampMethod(func(t time.Time) (interface{}, error) {
-				return t.Round(dur).Format(time.RFC3339Nano), nil
-			}), nil
-		},
-	); err != nil {
+	tsRoundCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		iDur, err := args.GetInt64("duration")
+		if err != nil {
+			return nil, err
+		}
+		dur := time.Duration(iDur)
+		return bloblang.TimestampMethod(func(t time.Time) (interface{}, error) {
+			return t.Round(dur).Format(time.RFC3339Nano), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_round", tsRoundSpec, tsRoundCtor); err != nil {
 		panic(err)
 	}
+
+	//--------------------------------------------------------------------------
 
 	parseDurSpec := bloblang.NewPluginSpec().
 		Static().
@@ -64,18 +72,17 @@ func init() {
 			},
 		)
 
-	if err := bloblang.RegisterMethodV2(
-		"parse_duration", parseDurSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			return bloblang.StringMethod(func(s string) (interface{}, error) {
-				d, err := time.ParseDuration(s)
-				if err != nil {
-					return nil, err
-				}
-				return d.Nanoseconds(), nil
-			}), nil
-		},
-	); err != nil {
+	parseDurCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		return bloblang.StringMethod(func(s string) (interface{}, error) {
+			d, err := time.ParseDuration(s)
+			if err != nil {
+				return nil, err
+			}
+			return d.Nanoseconds(), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("parse_duration", parseDurSpec, parseDurCtor); err != nil {
 		panic(err)
 	}
 
@@ -106,54 +113,64 @@ func init() {
 			},
 		)
 
-	if err := bloblang.RegisterMethodV2(
-		"parse_duration_iso8601", parseDurISOSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			return bloblang.StringMethod(func(s string) (interface{}, error) {
-				// No need to normalise the output since we need it expressed as nanoseconds.
-				d, err := period.Parse(s, false)
-				if err != nil {
-					return nil, err
-				}
-				// The conversion is likely imprecise when the period specifies years, months and days.
-				// See method documentation for details on precision.
-				return d.DurationApprox().Nanoseconds(), nil
-			}), nil
-		},
-	); err != nil {
+	parseDurISOCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		return bloblang.StringMethod(func(s string) (interface{}, error) {
+			// No need to normalise the output since we need it expressed as nanoseconds.
+			d, err := period.Parse(s, false)
+			if err != nil {
+				return nil, err
+			}
+			// The conversion is likely imprecise when the period specifies years, months and days.
+			// See method documentation for details on precision.
+			return d.DurationApprox().Nanoseconds(), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("parse_duration_iso8601", parseDurISOSpec, parseDurISOCtor); err != nil {
 		panic(err)
 	}
+
+	//--------------------------------------------------------------------------
 
 	parseTSSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to parse a string as a timestamp following a specified format and outputs a string in RFC3339 format, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.").
-		Param(bloblang.NewStringParam("format").Description("The format of the target string.")).
+		Description(`Attempts to parse a string as a timestamp following a specified format and outputs a string in RFC 3339 format, which can then be fed into ` + "[`ts_format`](#ts_format)" + `.
+
+The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the ` + "[`ts_strptime`](#ts_strptime)" + ` method.`).
+		Param(bloblang.NewStringParam("format").Description("The format of the target string."))
+
+	parseTSSpecDep := asDeprecated(parseTSSpec)
+
+	parseTSSpec = parseTSSpec.
 		Example("",
-			`root.doc.timestamp = this.doc.timestamp.parse_timestamp("2006-Jan-02")`,
+			`root.doc.timestamp = this.doc.timestamp.ts_parse("2006-Jan-02")`,
 			[2]string{
 				`{"doc":{"timestamp":"2020-Aug-14"}}`,
 				`{"doc":{"timestamp":"2020-08-14T00:00:00Z"}}`,
 			},
 		)
 
-	if err := bloblang.RegisterMethodV2(
-		"parse_timestamp", parseTSSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			layout, err := args.GetString("format")
+	parseTSCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		layout, err := args.GetString("format")
+		if err != nil {
+			return nil, err
+		}
+		return bloblang.StringMethod(func(s string) (interface{}, error) {
+			ut, err := time.Parse(layout, s)
 			if err != nil {
 				return nil, err
 			}
-			return bloblang.StringMethod(func(s string) (interface{}, error) {
-				ut, err := time.Parse(layout, s)
-				if err != nil {
-					return nil, err
-				}
-				return ut.Format(time.RFC3339Nano), nil
-			}), nil
-		},
-	); err != nil {
+			return ut.Format(time.RFC3339Nano), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_parse", parseTSSpec, parseTSCtor); err != nil {
+		panic(err)
+	}
+
+	if err := bloblang.RegisterMethodV2("parse_timestamp", parseTSSpecDep, parseTSCtor); err != nil {
 		panic(err)
 	}
 
@@ -161,11 +178,15 @@ func init() {
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following RFC3339 format, which can then be fed into `format_timestamp`.").
-		Param(bloblang.NewStringParam("format").Description("The format of the target string.")).
+		Description("Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following RFC 3339 format, which can then be fed into [`ts_format`](#ts_format).").
+		Param(bloblang.NewStringParam("format").Description("The format of the target string."))
+
+	parseTSStrptimeSpecDep := asDeprecated(parseTSStrptimeSpec)
+
+	parseTSStrptimeSpec = parseTSStrptimeSpec.
 		Example(
 			"The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with a `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strptime](https://linux.die.net/man/3/strptime) for the list of format specifiers.",
-			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d")`,
+			`root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d")`,
 			[2]string{
 				`{"doc":{"timestamp":"2020-Aug-14"}}`,
 				`{"doc":{"timestamp":"2020-08-14T00:00:00Z"}}`,
@@ -173,53 +194,64 @@ func init() {
 		).
 		Example(
 			"As an extension provided by the underlying formatting library, [itchyny/timefmt-go](https://github.com/itchyny/timefmt-go), the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.",
-			`root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d %H:%M:%S.%f")`,
+			`root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")`,
 			[2]string{
 				`{"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}`,
 				`{"doc":{"timestamp":"2020-08-14T11:50:26.371Z"}}`,
 			},
 		)
 
-	if err := bloblang.RegisterMethodV2(
-		"parse_timestamp_strptime", parseTSStrptimeSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			layout, err := args.GetString("format")
+	parseTSStrptimeCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		layout, err := args.GetString("format")
+		if err != nil {
+			return nil, err
+		}
+		return bloblang.StringMethod(func(s string) (interface{}, error) {
+			ut, err := timefmt.Parse(s, layout)
 			if err != nil {
 				return nil, err
 			}
-			return bloblang.StringMethod(func(s string) (interface{}, error) {
-				ut, err := timefmt.Parse(s, layout)
-				if err != nil {
-					return nil, err
-				}
-				return ut.Format(time.RFC3339Nano), nil
-			}), nil
-		},
-	); err != nil {
+			return ut.Format(time.RFC3339Nano), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_strptime", parseTSStrptimeSpec, parseTSStrptimeCtor); err != nil {
 		panic(err)
 	}
+
+	if err := bloblang.RegisterMethodV2("parse_timestamp_strptime", parseTSStrptimeSpecDep, parseTSStrptimeCtor); err != nil {
+		panic(err)
+	}
+
+	//--------------------------------------------------------------------------
 
 	formatTSSpec := bloblang.NewPluginSpec().
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to format a timestamp value as a string according to a specified format, or RFC3339 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format.").
+		Description(`Attempts to format a timestamp value as a string according to a specified format, or RFC 3339 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.
+
+The output format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the ` + "[`ts_strftime`](#ts_strftime)" + ` method.`).
 		Param(bloblang.NewStringParam("format").Description("The output format to use.").Default(time.RFC3339Nano)).
-		Param(bloblang.NewStringParam("tz").Description("An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.").Optional()).
+		Param(bloblang.NewStringParam("tz").Description("An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.").Optional())
+
+	formatTSSpecDep := asDeprecated(formatTSSpec)
+
+	formatTSSpec = formatTSSpec.
 		Example("",
-			`root.something_at = (this.created_at + 300).format_timestamp()`,
+			`root.something_at = (this.created_at + 300).ts_format()`,
 			// `{"created_at":1597405526}`,
 			// `{"something_at":"2020-08-14T11:50:26.371Z"}`,
 		).
 		Example(
 			"An optional string argument can be used in order to specify the output format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.",
-			`root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:05")`,
+			`root.something_at = (this.created_at + 300).ts_format("2006-Jan-02 15:04:05")`,
 			// `{"created_at":1597405526}`,
 			// `{"something_at":"2020-Aug-14 11:50:26"}`,
 		).
 		Example(
 			"A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.",
-			`root.something_at = this.created_at.format_timestamp(format: "2006-Jan-02 15:04:05", tz: "UTC")`,
+			`root.something_at = this.created_at.ts_format(format: "2006-Jan-02 15:04:05", tz: "UTC")`,
 			[2]string{
 				`{"created_at":1597405526}`,
 				`{"something_at":"2020-Aug-14 11:45:26"}`,
@@ -230,8 +262,8 @@ func init() {
 			},
 		).
 		Example(
-			"And `format_timestamp` supports up to nanosecond precision with floating point timestamp values.",
-			`root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05.999999", "UTC")`,
+			"And `ts_format` supports up to nanosecond precision with floating point timestamp values.",
+			`root.something_at = this.created_at.ts_format("2006-Jan-02 15:04:05.999999", "UTC")`,
 			[2]string{
 				`{"created_at":1597405526.123456}`,
 				`{"something_at":"2020-Aug-14 11:45:26.123456"}`,
@@ -242,31 +274,34 @@ func init() {
 			},
 		)
 
-	if err := bloblang.RegisterMethodV2(
-		"format_timestamp", formatTSSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			layout, err := args.GetString("format")
-			if err != nil {
-				return nil, err
+	formatTSCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		layout, err := args.GetString("format")
+		if err != nil {
+			return nil, err
+		}
+		var timezone *time.Location
+		tzOpt, err := args.GetOptionalString("tz")
+		if err != nil {
+			return nil, err
+		}
+		if tzOpt != nil {
+			if timezone, err = time.LoadLocation(*tzOpt); err != nil {
+				return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
 			}
-			var timezone *time.Location
-			tzOpt, err := args.GetOptionalString("tz")
-			if err != nil {
-				return nil, err
+		}
+		return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
+			if timezone != nil {
+				target = target.In(timezone)
 			}
-			if tzOpt != nil {
-				if timezone, err = time.LoadLocation(*tzOpt); err != nil {
-					return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
-				}
-			}
-			return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
-				if timezone != nil {
-					target = target.In(timezone)
-				}
-				return target.Format(layout), nil
-			}), nil
-		},
-	); err != nil {
+			return target.Format(layout), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_format", formatTSSpec, formatTSCtor); err != nil {
+		panic(err)
+	}
+
+	if err := bloblang.RegisterMethodV2("format_timestamp", formatTSSpecDep, formatTSCtor); err != nil {
 		panic(err)
 	}
 
@@ -274,18 +309,22 @@ func init() {
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format.").
+		Description("Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.").
 		Param(bloblang.NewStringParam("format").Description("The output format to use.")).
-		Param(bloblang.NewStringParam("tz").Description("An optional timezone to use, otherwise the timezone of the input string is used.").Optional()).
+		Param(bloblang.NewStringParam("tz").Description("An optional timezone to use, otherwise the timezone of the input string is used.").Optional())
+
+	formatTSStrftimeSpecDep := asDeprecated(formatTSStrftimeSpec)
+
+	formatTSStrftimeSpec = formatTSStrftimeSpec.
 		Example(
 			"The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strftime](https://linux.die.net/man/3/strftime) for the list of format specifiers.",
-			`root.something_at = (this.created_at + 300).format_timestamp_strftime("%Y-%b-%d %H:%M:%S")`,
+			`root.something_at = (this.created_at + 300).ts_strftime("%Y-%b-%d %H:%M:%S")`,
 			// `{"created_at":1597405526}`,
 			// `{"something_at":"2020-Aug-14 11:50:26"}`,
 		).
 		Example(
 			"A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.",
-			`root.something_at = this.created_at.format_timestamp_strftime("%Y-%b-%d %H:%M:%S", "UTC")`,
+			`root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S", "UTC")`,
 			[2]string{
 				`{"created_at":1597405526}`,
 				`{"something_at":"2020-Aug-14 11:45:26"}`,
@@ -297,7 +336,7 @@ func init() {
 		).
 		Example(
 			"As an extension provided by the underlying formatting library, [itchyny/timefmt-go](https://github.com/itchyny/timefmt-go), the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.",
-			`root.something_at = this.created_at.format_timestamp_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")`,
+			`root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")`,
 			[2]string{
 				`{"created_at":1597405526}`,
 				`{"something_at":"2020-Aug-14 11:45:26.000000"}`,
@@ -308,31 +347,34 @@ func init() {
 			},
 		)
 
-	if err := bloblang.RegisterMethodV2(
-		"format_timestamp_strftime", formatTSStrftimeSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			layout, err := args.GetString("format")
-			if err != nil {
-				return nil, err
+	formatTSStrftimeCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		layout, err := args.GetString("format")
+		if err != nil {
+			return nil, err
+		}
+		var timezone *time.Location
+		tzOpt, err := args.GetOptionalString("tz")
+		if err != nil {
+			return nil, err
+		}
+		if tzOpt != nil {
+			if timezone, err = time.LoadLocation(*tzOpt); err != nil {
+				return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
 			}
-			var timezone *time.Location
-			tzOpt, err := args.GetOptionalString("tz")
-			if err != nil {
-				return nil, err
+		}
+		return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
+			if timezone != nil {
+				target = target.In(timezone)
 			}
-			if tzOpt != nil {
-				if timezone, err = time.LoadLocation(*tzOpt); err != nil {
-					return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
-				}
-			}
-			return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
-				if timezone != nil {
-					target = target.In(timezone)
-				}
-				return timefmt.Format(target, layout), nil
-			}), nil
-		},
-	); err != nil {
+			return timefmt.Format(target, layout), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_strftime", formatTSStrftimeSpec, formatTSStrftimeCtor); err != nil {
+		panic(err)
+	}
+
+	if err := bloblang.RegisterMethodV2("format_timestamp_strftime", formatTSStrftimeSpecDep, formatTSStrftimeCtor); err != nil {
 		panic(err)
 	}
 
@@ -340,23 +382,30 @@ func init() {
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.").
+		Description("Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.")
+
+	formatTSUnixSpecDep := asDeprecated(formatTSUnixSpec)
+
+	formatTSUnixSpec = formatTSUnixSpec.
 		Example("",
-			`root.created_at_unix = this.created_at.format_timestamp_unix()`,
+			`root.created_at_unix = this.created_at.ts_unix()`,
 			[2]string{
 				`{"created_at":"2009-11-10T23:00:00Z"}`,
 				`{"created_at_unix":1257894000}`,
 			},
 		)
 
-	if err := bloblang.RegisterMethodV2(
-		"format_timestamp_unix", formatTSUnixSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
-				return target.Unix(), nil
-			}), nil
-		},
-	); err != nil {
+	formatTSUnixCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
+			return target.Unix(), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_unix", formatTSUnixSpec, formatTSUnixCtor); err != nil {
+		panic(err)
+	}
+
+	if err := bloblang.RegisterMethodV2("format_timestamp_unix", formatTSUnixSpecDep, formatTSUnixCtor); err != nil {
 		panic(err)
 	}
 
@@ -364,23 +413,30 @@ func init() {
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC3339 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.").
+		Description("Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.")
+
+	formatTSUnixNanoSpecDep := asDeprecated(formatTSUnixNanoSpec)
+
+	formatTSUnixNanoSpec = formatTSUnixNanoSpec.
 		Example("",
-			`root.created_at_unix = this.created_at.format_timestamp_unix_nano()`,
+			`root.created_at_unix = this.created_at.ts_unix_nano()`,
 			[2]string{
 				`{"created_at":"2009-11-10T23:00:00Z"}`,
 				`{"created_at_unix":1257894000000000000}`,
 			},
 		)
 
-	if err := bloblang.RegisterMethodV2(
-		"format_timestamp_unix_nano", formatTSUnixNanoSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
-				return target.UnixNano(), nil
-			}), nil
-		},
-	); err != nil {
+	formatTSUnixNanoCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
+			return target.UnixNano(), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_unix_nano", formatTSUnixNanoSpec, formatTSUnixNanoCtor); err != nil {
+		panic(err)
+	}
+
+	if err := bloblang.RegisterMethodV2("format_timestamp_unix_nano", formatTSUnixNanoSpecDep, formatTSUnixNanoCtor); err != nil {
 		panic(err)
 	}
 }

@@ -91,7 +91,7 @@ input:
     where: created_at >= ?
     args_mapping: |
       root = [
-        now().format_timestamp_unix() - 3600
+        now().ts_unix() - 3600
       ]
 ```
 
@@ -195,7 +195,7 @@ Type: `string`
 ```yml
 # Examples
 
-args_mapping: root = [ "article", now().format_timestamp("2006-01-02") ]
+args_mapping: root = [ "article", now().ts_format("2006-01-02") ]
 ```
 
 ### `prefix`

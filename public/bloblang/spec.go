@@ -118,6 +118,13 @@ func (p *PluginSpec) Beta() *PluginSpec {
 	return p
 }
 
+// Deprecated flags the plugin as a deprecated component, it will still be valid
+// in mappings but won't appear prominently in documentation.
+func (p *PluginSpec) Deprecated() *PluginSpec {
+	p.status = query.StatusDeprecated
+	return p
+}
+
 // Category adds an optional category string to the plugin spec, this is used
 // when generating documentation for the plugin.
 func (p *PluginSpec) Category(str string) *PluginSpec {

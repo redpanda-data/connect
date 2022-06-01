@@ -73,7 +73,7 @@ input:
   http_client:
     url: >-
       https://api.example.com/search?query=allmyfoos&start_time=${! (
-        (timestamp_unix()-300).format_timestamp("2006-01-02T15:04:05Z","UTC").escape_url_query()
+        (timestamp_unix()-300).ts_format("2006-01-02T15:04:05Z","UTC").escape_url_query()
       ) }${! ("&next_token="+this.meta.next_token.not_null()) | "" }
     verb: GET
     rate_limit: foo_searches

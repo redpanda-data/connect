@@ -99,6 +99,10 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 	if category == "" {
 		category = query.MethodCategoryPlugin
 	}
+	// Deprecated overrides all others
+	if spec.status == query.StatusDeprecated {
+		category = query.MethodCategoryDeprecated
+	}
 	var examples []query.ExampleSpec
 	for _, e := range spec.examples {
 		var res []string
@@ -165,6 +169,10 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 	category := spec.category
 	if category == "" {
 		category = query.FunctionCategoryPlugin
+	}
+	// Deprecated overrides all others
+	if spec.status == query.StatusDeprecated {
+		category = query.FunctionCategoryDeprecated
 	}
 	var examples []query.ExampleSpec
 	for _, e := range spec.examples {
