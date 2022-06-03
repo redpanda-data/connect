@@ -609,12 +609,12 @@ func randomIntFunction(args *ParsedParams) (Function, error) {
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryEnvironment, "now",
-		"Returns the current timestamp as a string in ISO 8601 format with the local timezone. Use the method `format_timestamp` in order to change the format and timezone.",
+		"Returns the current timestamp as a string in RFC 3339 format with the local timezone. Use the method `ts_format` in order to change the format and timezone.",
 		NewExampleSpec("",
 			`root.received_at = now()`,
 		),
 		NewExampleSpec("",
-			`root.received_at = now().format_timestamp("Mon Jan 2 15:04:05 -0700 MST 2006", "UTC")`,
+			`root.received_at = now().ts_format("Mon Jan 2 15:04:05 -0700 MST 2006", "UTC")`,
 		),
 	),
 	func(args *ParsedParams) (Function, error) {

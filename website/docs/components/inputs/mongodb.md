@@ -22,8 +22,16 @@ Executes a find query and creates a message for each row received.
 
 Introduced in version 3.64.0.
 
+
+<Tabs defaultValue="common" values={[
+  { label: 'Common', value: 'common', },
+  { label: 'Advanced', value: 'advanced', },
+]}>
+
+<TabItem value="common">
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   label: ""
   mongodb:
@@ -34,6 +42,26 @@ input:
     password: ""
     query: ""
 ```
+
+</TabItem>
+<TabItem value="advanced">
+
+```yml
+# All config fields, showing default values
+input:
+  label: ""
+  mongodb:
+    url: ""
+    database: ""
+    collection: ""
+    username: ""
+    password: ""
+    operation: find
+    query: ""
+```
+
+</TabItem>
+</Tabs>
 
 Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).
 
@@ -81,6 +109,16 @@ The password to connect to the database.
 
 Type: `string`  
 Default: `""`  
+
+### `operation`
+
+The mongodb operation to perform.
+
+
+Type: `string`  
+Default: `"find"`  
+Requires version 4.2.0 or newer  
+Options: `find`, `aggregate`.
 
 ### `query`
 

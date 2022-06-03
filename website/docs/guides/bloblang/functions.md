@@ -308,8 +308,9 @@ root.all_metadata = meta()
 
 ### `root_meta`
 
-BETA: This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This function is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Returns the value of a metadata key from the new message being created, or `null` if the key does not exist. Changes made to metadata during a mapping will be reflected by this function.
 
 #### Parameters
@@ -377,7 +378,7 @@ root.thing.host = hostname()
 
 ### `now`
 
-Returns the current timestamp as a string in ISO 8601 format with the local timezone. Use the method `format_timestamp` in order to change the format and timezone.
+Returns the current timestamp as a string in RFC 3339 format with the local timezone. Use the method `ts_format` in order to change the format and timezone.
 
 #### Examples
 
@@ -387,7 +388,7 @@ root.received_at = now()
 ```
 
 ```coffee
-root.received_at = now().format_timestamp("Mon Jan 2 15:04:05 -0700 MST 2006", "UTC")
+root.received_at = now().ts_format("Mon Jan 2 15:04:05 -0700 MST 2006", "UTC")
 ```
 
 ### `timestamp_unix`

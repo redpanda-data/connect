@@ -3,9 +3,27 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.1.0 - 2022-05-11
-
 ## Unreleased
+
+### Added
+
+- Field `credentials.from_ec2_role` added to all AWS based components.
+- The `mongodb` input now supports aggregation filters by setting the new `operation` field.
+- New `gcp_cloudtrace` tracer.
+- New `slug` bloblang string method.
+- The `elasticsearch` output now supports the `create` action.
+- Field `tls.root_cas_file` added to the `pulsar` input and output.
+- The `fallback` output now adds a metadata field `fallback_error` to messages when shifted.
+- New bloblang methods `ts_round`, `ts_parse`, `ts_format`, `ts_strptime`, `ts_strftime`, `ts_unix` and `ts_unix_nano`. Most are aliases of (now deprecated) time methods with `timestamp_` prefixes.
+
+### Fixed
+
+- The default docker image no longer throws configuration errors when running streams mode without an explicit general config.
+- The field `metrics.mapping` now allows environment functions such as `hostname` and `env`.
+- Fixed a lock-up in the `amqp_0_9` output caused when messages sent with the `immediate` or `mandatory` flags were rejected.
+- Fixed a race condition upon creating dynamic streams that self-terminate, this was causing panics in cases where the stream finishes immediately.
+
+## 4.1.0 - 2022-05-11
 
 ### Added
 
@@ -75,6 +93,7 @@ This is a major version release, for more information and guidance on how to mig
 - The `dedupe` processor now acts upon individual messages by default, and the `hash` field has been removed.
 - The `log` processor now executes for each individual message of a batch.
 - The `sleep` processor now executes for each individual message of a batch.
+- The `benthos test` subcommand no longer walks when targetting a directory, instead use triple-dot syntax (`./dir/...`) or wildcard patterns.
 - Go API: Module name has changed to `github.com/benthosdev/benthos/v4`.
 - Go API: All packages within the `lib` directory have been removed in favour of the newer [APIs within `public`](https://pkg.go.dev/github.com/benthosdev/benthos/v4/public).
 - Go API: Distributed tracing is now via the Open Telemetry client library.

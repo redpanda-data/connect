@@ -1,7 +1,6 @@
 module github.com/benthosdev/benthos/v4
 
 require (
-	cloud.google.com/go v0.100.2 // indirect
 	cloud.google.com/go/bigquery v1.26.0
 	cloud.google.com/go/iam v0.1.0 // indirect
 	cloud.google.com/go/pubsub v1.17.1
@@ -17,14 +16,14 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.9.18 // indirect
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/ClickHouse/clickhouse-go/v2 v2.0.12
-	github.com/DataDog/zstd v1.5.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.4.0
 	github.com/Jeffail/gabs/v2 v2.6.1
 	github.com/Jeffail/grok v1.1.0
 	github.com/Masterminds/squirrel v1.5.2
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/Shopify/sarama v1.30.1
-	github.com/apache/pulsar-client-go v0.7.0
-	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20220210221528-5daa17b02bff // indirect
+	github.com/apache/pulsar-client-go v0.8.1
+	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20220524063205-c41616b2f512 // indirect
 	github.com/apache/thrift v0.15.0 // indirect
 	github.com/armon/go-metrics v0.3.4 // indirect
 	github.com/aws/aws-lambda-go v1.28.0
@@ -32,7 +31,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.15.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.0 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.9.1 // indirect
-	github.com/benhoyt/goawk v1.13.1-0.20220123120908-f9c293546b6d
+	github.com/benhoyt/goawk v1.17.1
 	github.com/bradfitz/gomemcache v0.0.0-20220106215444-fb4bf637b56d
 	github.com/cenkalti/backoff/v4 v4.1.2
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
@@ -47,7 +46,6 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/fatih/color v1.13.0
-	github.com/felixge/httpsnoop v1.0.2 // indirect
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/go-redis/redis/v7 v7.4.1
 	github.com/go-sql-driver/mysql v1.6.0
@@ -64,6 +62,7 @@ require (
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
+	github.com/gosimple/slug v1.12.0
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/influxdata/go-syslog/v3 v3.0.0
@@ -93,10 +92,10 @@ require (
 	github.com/pebbe/zmq4 v1.2.7
 	github.com/pierrec/lz4/v4 v4.1.14
 	github.com/pkg/sftp v1.13.4
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/common v0.32.1
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
-	github.com/rabbitmq/amqp091-go v1.2.0
+	github.com/rabbitmq/amqp091-go v1.3.4
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/rickb777/date v1.17.0
 	github.com/robfig/cron/v3 v3.0.1
@@ -104,7 +103,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smira/go-statsd v1.3.2
 	github.com/snowflakedb/gosnowflake v1.6.6
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/tilinna/z85 v1.0.0
 	github.com/twmb/franz-go v1.3.1
 	github.com/twmb/franz-go/pkg/kmsg v0.0.0-20220106200407-cfd3330d96f5
@@ -119,19 +118,18 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a
 	go.mongodb.org/mongo-driver v1.8.2
 	go.nanomsg.org/mangos/v3 v3.3.0
-	go.opentelemetry.io/otel v1.4.1
+	go.opentelemetry.io/otel v1.6.2
 	go.opentelemetry.io/otel/exporters/jaeger v1.4.1
-	go.opentelemetry.io/otel/sdk v1.4.1
-	go.opentelemetry.io/otel/trace v1.4.1
+	go.opentelemetry.io/otel/sdk v1.6.2
+	go.opentelemetry.io/otel/trace v1.6.2
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0
 	golang.org/x/crypto v0.0.0-20220213190939-1e6e3497d506
-	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
-	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
-	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
+	golang.org/x/net v0.0.0-20220325170049-de3da57026de
+	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
 	golang.org/x/text v0.3.7
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
-	google.golang.org/api v0.64.0
+	google.golang.org/api v0.74.0
 	google.golang.org/genproto v0.0.0-20220107163113-42d7afdf6368 // indirect
 	google.golang.org/grpc v1.43.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0

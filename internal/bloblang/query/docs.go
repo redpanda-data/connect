@@ -30,24 +30,22 @@ type Status string
 
 // Component statuses.
 var (
-	StatusStable     Status = "stable"
-	StatusBeta       Status = "beta"
-	StatusDeprecated Status = "deprecated"
-	StatusHidden     Status = "hidden"
+	StatusStable       Status = "stable"
+	StatusBeta         Status = "beta"
+	StatusExperimental Status = "experimental"
+	StatusDeprecated   Status = "deprecated"
+	StatusHidden       Status = "hidden"
 )
 
 //------------------------------------------------------------------------------
 
-// FunctionCategory is an abstract title for functions of a similar purpose.
-type FunctionCategory string
-
 // Function categories.
 var (
-	FunctionCategoryGeneral     FunctionCategory = "General"
-	FunctionCategoryMessage     FunctionCategory = "Message Info"
-	FunctionCategoryEnvironment FunctionCategory = "Environment"
-	FunctionCategoryDeprecated  FunctionCategory = "Deprecated"
-	FunctionCategoryPlugin      FunctionCategory = "Plugin"
+	FunctionCategoryGeneral     = "General"
+	FunctionCategoryMessage     = "Message Info"
+	FunctionCategoryEnvironment = "Environment"
+	FunctionCategoryDeprecated  = "Deprecated"
+	FunctionCategoryPlugin      = "Plugin"
 )
 
 // FunctionSpec describes a Bloblang function.
@@ -56,7 +54,7 @@ type FunctionSpec struct {
 	Status Status `json:"status"`
 
 	// A category to place the function within.
-	Category FunctionCategory `json:"category"`
+	Category string `json:"category"`
 
 	// Name of the function (as it appears in config).
 	Name string `json:"name"`
@@ -73,10 +71,13 @@ type FunctionSpec struct {
 	// Impure indicates that a function accesses or interacts with the outter
 	// environment, and is therefore unsafe to execute in shared environments.
 	Impure bool `json:"impure"`
+
+	// Version is the Benthos version this component was introduced.
+	Version string `json:"version,omitempty"`
 }
 
 // NewFunctionSpec creates a new function spec.
-func NewFunctionSpec(category FunctionCategory, name, description string, examples ...ExampleSpec) FunctionSpec {
+func NewFunctionSpec(category, name, description string, examples ...ExampleSpec) FunctionSpec {
 	return FunctionSpec{
 		Status:      StatusStable,
 		Category:    category,
@@ -87,9 +88,21 @@ func NewFunctionSpec(category FunctionCategory, name, description string, exampl
 	}
 }
 
+// Experimental flags the function as an experimental component.
+func (s FunctionSpec) Experimental() FunctionSpec {
+	s.Status = StatusExperimental
+	return s
+}
+
 // Beta flags the function as a beta component.
 func (s FunctionSpec) Beta() FunctionSpec {
 	s.Status = StatusBeta
+	return s
+}
+
+// AtVersion sets the Benthos version this component was introduced.
+func (s FunctionSpec) AtVersion(v string) FunctionSpec {
+	s.Version = v
 	return s
 }
 
@@ -129,28 +142,25 @@ func NewHiddenFunctionSpec(name string) FunctionSpec {
 
 //------------------------------------------------------------------------------
 
-// MethodCategory is an abstract title for methods of a similar purpose.
-type MethodCategory string
-
 // Method categories.
 var (
-	MethodCategoryStrings        MethodCategory = "String Manipulation"
-	MethodCategoryNumbers        MethodCategory = "Number Manipulation"
-	MethodCategoryTime           MethodCategory = "Timestamp Manipulation"
-	MethodCategoryRegexp         MethodCategory = "Regular Expressions"
-	MethodCategoryEncoding       MethodCategory = "Encoding and Encryption"
-	MethodCategoryCoercion       MethodCategory = "Type Coercion"
-	MethodCategoryParsing        MethodCategory = "Parsing"
-	MethodCategoryObjectAndArray MethodCategory = "Object & Array Manipulation"
-	MethodCategoryGeoIP          MethodCategory = "GeoIP"
-	MethodCategoryDeprecated     MethodCategory = "Deprecated"
-	MethodCategoryPlugin         MethodCategory = "Plugin"
+	MethodCategoryStrings        = "String Manipulation"
+	MethodCategoryNumbers        = "Number Manipulation"
+	MethodCategoryTime           = "Timestamp Manipulation"
+	MethodCategoryRegexp         = "Regular Expressions"
+	MethodCategoryEncoding       = "Encoding and Encryption"
+	MethodCategoryCoercion       = "Type Coercion"
+	MethodCategoryParsing        = "Parsing"
+	MethodCategoryObjectAndArray = "Object & Array Manipulation"
+	MethodCategoryGeoIP          = "GeoIP"
+	MethodCategoryDeprecated     = "Deprecated"
+	MethodCategoryPlugin         = "Plugin"
 )
 
 // MethodCatSpec describes how a method behaves in the context of a given
 // category.
 type MethodCatSpec struct {
-	Category    MethodCategory
+	Category    string
 	Description string
 	Examples    []ExampleSpec
 }
@@ -178,6 +188,9 @@ type MethodSpec struct {
 	// Impure indicates that a method accesses or interacts with the outter
 	// environment, and is therefore unsafe to execute in shared environments.
 	Impure bool `json:"impure"`
+
+	// Version is the Benthos version this component was introduced.
+	Version string `json:"version,omitempty"`
 }
 
 // NewMethodSpec creates a new method spec.
@@ -212,9 +225,21 @@ func NewHiddenMethodSpec(name string) MethodSpec {
 	}
 }
 
+// Experimental flags the method as an experimental component.
+func (m MethodSpec) Experimental() MethodSpec {
+	m.Status = StatusExperimental
+	return m
+}
+
 // Beta flags the function as a beta component.
 func (m MethodSpec) Beta() MethodSpec {
 	m.Status = StatusBeta
+	return m
+}
+
+// AtVersion sets the Benthos version this component was introduced.
+func (m MethodSpec) AtVersion(v string) MethodSpec {
+	m.Version = v
 	return m
 }
 
@@ -241,7 +266,7 @@ func (m MethodSpec) VariadicParams() MethodSpec {
 // category, methods can belong to multiple categories. For example, the
 // `contains` method behaves differently in the object and array category versus
 // the strings one, but belongs in both.
-func (m MethodSpec) InCategory(category MethodCategory, description string, examples ...ExampleSpec) MethodSpec {
+func (m MethodSpec) InCategory(category, description string, examples ...ExampleSpec) MethodSpec {
 	if m.Status == StatusDeprecated {
 		category = MethodCategoryDeprecated
 	}

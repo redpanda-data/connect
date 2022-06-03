@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -253,6 +254,7 @@ func TestFallbackHappyishPath(t *testing.T) {
 				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
 				}
+				assert.Equal(t, ts.Payload.Get(0).MetaGet("fallback_error"), "test err")
 			case <-mockOutputs[0].TChan:
 				t.Error("Received message in wrong order")
 				return

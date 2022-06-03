@@ -22,7 +22,6 @@ const DEFAULT_OPTIONS = {
 };
 
 const {
-  STATIC_DIR_NAME,
   DEFAULT_PLUGIN_ID,
 } = require('@docusaurus/utils');
 
@@ -30,7 +29,7 @@ module.exports = pluginContentCookbook;
 
 function pluginContentCookbook(context, opts) {
   const options = {...DEFAULT_OPTIONS, ...opts};
-  const {siteDir, generatedFilesDir} = context;
+  const {siteDir, siteConfig, generatedFilesDir} = context;
   const contentPath = path.resolve(siteDir, options.path);
 
   const pluginDataDirRoot = path.join(
@@ -158,7 +157,9 @@ function pluginContentCookbook(context, opts) {
                   options: {
                     remarkPlugins,
                     rehypePlugins,
-                    staticDir: path.join(siteDir, STATIC_DIR_NAME),
+                    staticDirs: siteConfig.staticDirectories.map((dir) =>
+                      path.resolve(siteDir, dir),
+                    ),
                     // Note that metadataPath must be the same/ in-sync as the path from createData for each MDX
                     metadataPath: (mdxPath) => {
                       const aliasedPath = aliasedSitePath(mdxPath, siteDir);

@@ -35,6 +35,7 @@ output:
     urls: []
     index: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
+    type: ""
     max_in_flight: 64
     batching:
       count: 0
@@ -56,6 +57,7 @@ output:
     action: index
     pipeline: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
+    type: ""
     routing: ""
     sniff: true
     healthcheck: true
@@ -92,6 +94,7 @@ output:
         id: ""
         secret: ""
         token: ""
+        from_ec2_role: false
         role: ""
         role_external_id: ""
     gzip_compression: false
@@ -154,7 +157,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"index"`  
-Options: `index`, `update`, `delete`.
+Options: `create`, `index`, `update`, `delete`.
 
 ### `pipeline`
 
@@ -173,6 +176,14 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `"${!count(\"elastic_ids\")}-${!timestamp_unix()}"`  
+
+### `type`
+
+The document mapping type. This field is required for versions of elasticsearch earlier than 6.0.0, but are invalid for versions 7.0.0 or later.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `routing`
 
@@ -566,6 +577,15 @@ The token for the credentials being used, required when using short term credent
 
 Type: `string`  
 Default: `""`  
+
+### `aws.credentials.from_ec2_role`
+
+Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.2.0 or newer  
 
 ### `aws.credentials.role`
 

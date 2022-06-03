@@ -12,7 +12,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
@@ -21,25 +20,20 @@ type StreamStatus struct {
 	stoppedAfter int64
 	config       stream.Config
 	strm         *stream.Type
-	logger       log.Modular
 	metrics      *metrics.Local
 	createdAt    time.Time
 }
 
-// NewStreamStatus creates a new StreamStatus.
-func NewStreamStatus(
-	conf stream.Config,
-	strm *stream.Type,
-	logger log.Modular,
-	stats *metrics.Local,
-) *StreamStatus {
+func newStreamStatus(conf stream.Config, stats *metrics.Local) *StreamStatus {
 	return &StreamStatus{
 		config:    conf,
-		strm:      strm,
-		logger:    logger,
 		metrics:   stats,
 		createdAt: time.Now(),
 	}
+}
+
+func (s *StreamStatus) setStream(strm *stream.Type) {
+	s.strm = strm
 }
 
 // IsRunning returns a boolean indicating whether the stream is currently
@@ -148,7 +142,12 @@ func (m *Type) Create(id string, conf stream.Config) error {
 	strmFlatMetrics := metrics.NewLocal()
 	sMgr := m.manager.ForStream(id).WithAddedMetrics(strmFlatMetrics)
 
-	var wrapper *StreamStatus
+	// Note we initialise the status without a stream pointer, this is okay as
+	// long as we do not add it to m.streams without one set.
+	//
+	// This seems a bit wonky but we can't rule out a race condition between
+	// the stream terminating and setClosed and actually initialising a status.
+	wrapper := newStreamStatus(conf, strmFlatMetrics)
 	strm, err := stream.New(conf, sMgr, stream.OptOnClose(func() {
 		wrapper.setClosed()
 	}))
@@ -156,7 +155,7 @@ func (m *Type) Create(id string, conf stream.Config) error {
 		return err
 	}
 
-	wrapper = NewStreamStatus(conf, strm, sMgr.Logger(), strmFlatMetrics)
+	wrapper.setStream(strm)
 	m.streams[id] = wrapper
 	return nil
 }

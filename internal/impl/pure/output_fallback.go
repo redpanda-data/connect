@@ -42,6 +42,10 @@ output:
         path: /usr/local/benthos/everything_failed.jsonl
 ` + "```" + `
 
+### Metadata
+
+When a given output fails the message routed to the following output will have a metadata value named ` + "`fallback_error`" + ` containing a string error message outlining the cause of the failure. The content of this string will depend on the particular output and can be used to enrich the message or provide information used to broker the data to an appropriate output using something like a ` + "`switch`" + ` output.
+
 ### Batching
 
 When an output within a fallback sequence uses batching, like so:
@@ -185,8 +189,13 @@ func (t *fallbackBroker) loop() {
 			if err == nil || len(t.outputTSChans) <= i {
 				return tran.Ack(ctx, err)
 			}
+			newPayload := tran.Payload.Copy()
+			_ = newPayload.Iter(func(i int, p *message.Part) error {
+				p.MetaSet("fallback_error", err.Error())
+				return nil
+			})
 			select {
-			case t.outputTSChans[i] <- message.NewTransactionFunc(tran.Payload, ackFn):
+			case t.outputTSChans[i] <- message.NewTransactionFunc(newPayload, ackFn):
 			case <-ctx.Done():
 				return ctx.Err()
 			}

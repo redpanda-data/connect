@@ -95,9 +95,13 @@ func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error 
 // Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor MethodConstructorV2) error {
-	category := query.MethodCategory(spec.category)
+	category := spec.category
 	if category == "" {
 		category = query.MethodCategoryPlugin
+	}
+	// Deprecated overrides all others
+	if spec.status == query.StatusDeprecated {
+		category = query.MethodCategoryDeprecated
 	}
 	var examples []query.ExampleSpec
 	for _, e := range spec.examples {
@@ -107,7 +111,10 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 		}
 		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
 	}
-	iSpec := query.NewMethodSpec(name, spec.description).InCategory(category, "", examples...)
+	iSpec := query.NewMethodSpec(name, spec.description).InCategory(category, "", examples...).AtVersion(spec.version)
+	if spec.status != "" {
+		iSpec.Status = spec.status
+	}
 	if spec.impure {
 		iSpec = iSpec.MarkImpure()
 	}
@@ -116,6 +123,15 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 		fn, err := ctor(&ParsedParams{par: args})
 		if err != nil {
 			return nil, err
+		}
+		if spec.static {
+			if sTarget, isLiteral := target.(*query.Literal); isLiteral {
+				v, err := fn(sTarget.Value)
+				if err != nil {
+					return nil, err
+				}
+				return query.NewLiteralFunction("method "+name, v), nil
+			}
 		}
 		return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (interface{}, error) {
 			v, err := target.Exec(ctx)
@@ -150,9 +166,13 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 // Plugin names must match the regular expression /^[a-z0-9]+(_[a-z0-9]+)*$/
 // (snake case).
 func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor FunctionConstructorV2) error {
-	category := query.FunctionCategory(spec.category)
+	category := spec.category
 	if category == "" {
 		category = query.FunctionCategoryPlugin
+	}
+	// Deprecated overrides all others
+	if spec.status == query.StatusDeprecated {
+		category = query.FunctionCategoryDeprecated
 	}
 	var examples []query.ExampleSpec
 	for _, e := range spec.examples {
@@ -162,7 +182,10 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 		}
 		examples = append(examples, query.NewExampleSpec(e.summary, e.mapping, res...))
 	}
-	iSpec := query.NewFunctionSpec(category, name, spec.description, examples...)
+	iSpec := query.NewFunctionSpec(category, name, spec.description, examples...).AtVersion(spec.version)
+	if spec.status != "" {
+		iSpec.Status = spec.status
+	}
 	if spec.impure {
 		iSpec = iSpec.MarkImpure()
 	}
@@ -171,6 +194,13 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 		fn, err := ctor(&ParsedParams{par: args})
 		if err != nil {
 			return nil, err
+		}
+		if spec.static {
+			v, err := fn()
+			if err != nil {
+				return nil, err
+			}
+			return query.NewLiteralFunction("function "+name, v), nil
 		}
 		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (interface{}, error) {
 			return fn()

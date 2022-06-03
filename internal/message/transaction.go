@@ -30,6 +30,11 @@ type Transaction struct {
 	// (once the message is no longer owned by the receiver.) The error
 	// indicates whether the message has been propagated successfully.
 	responseFunc func(context.Context, error) error
+
+	// Used for cancelling transactions. When cancelled it is up to the receiver
+	// of this transaction to abort any attempt to deliver the transaction
+	// message.
+	ctx context.Context
 }
 
 //------------------------------------------------------------------------------
@@ -40,6 +45,7 @@ func NewTransaction(payload *Batch, resChan chan<- error) Transaction {
 	return Transaction{
 		Payload:      payload,
 		ResponseChan: resChan,
+		ctx:          context.Background(),
 	}
 }
 
@@ -49,7 +55,28 @@ func NewTransactionFunc(payload *Batch, fn func(context.Context, error) error) T
 	return Transaction{
 		Payload:      payload,
 		responseFunc: fn,
+		ctx:          context.Background(),
 	}
+}
+
+// Context returns a context that indicates the cancellation of a transaction.
+// It is optional for receivers of a transaction to honour this context, and is
+// worth doing in cases where the transaction is blocked (on reconnect loops,
+// etc) as it is often used as a fail-fast mechanism.
+//
+// When a transaction is aborted due to cancellation it is still required that
+// acknowledgment is made, and should be done so with t.Context().Err().
+func (t *Transaction) Context() context.Context {
+	return t.ctx
+}
+
+// WithContext returns a copy of the transaction associated with a context used
+// for cancellation. When cancelled it is up to the receiver of this transaction
+// to abort any attempt to deliver the transaction message.
+func (t *Transaction) WithContext(ctx context.Context) *Transaction {
+	newT := *t
+	newT.ctx = ctx
+	return &newT
 }
 
 // Ack returns a delivery response back through the transaction to the message

@@ -8,5 +8,4 @@ import (
 var (
 	ErrMessagePartNotExist = errors.New("target message part does not exist")
 	ErrBadMessageBytes     = errors.New("serialised message bytes were in unexpected format")
-	ErrBlockCorrupted      = errors.New("serialised messages block was in unexpected format")
 )
