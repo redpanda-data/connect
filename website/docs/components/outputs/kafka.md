@@ -84,6 +84,7 @@ output:
     inject_tracing_map: ""
     max_in_flight: 64
     ack_replicas: false
+    idempotent_producer: false
     max_msg_bytes: 1000000
     timeout: 5s
     retry_as_batch: false
@@ -478,6 +479,14 @@ Default: `64`
 ### `ack_replicas`
 
 Ensure that messages have been copied across all replicas before acknowledging receipt.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `idempotent_producer`
+
+Ensure that exactly one copy of each message is written by the kafka producer client. Set this to true only if ack_replicas is true and Kafka version is above 0.11.0.
 
 
 Type: `bool`  

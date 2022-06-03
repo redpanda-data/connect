@@ -76,6 +76,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 			output.InjectTracingSpanMappingDocs,
 			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			docs.FieldBool("ack_replicas", "Ensure that messages have been copied across all replicas before acknowledging receipt.").Advanced(),
+			docs.FieldBool("idempotent_producer", "Ensure that exactly one copy of each message is written by the kafka producer client. Set this to true only if ack_replicas is true and Kafka version is above 0.11.0.").Advanced(),
 			docs.FieldInt("max_msg_bytes", "The maximum size in bytes of messages sent to the target topic.").Advanced(),
 			docs.FieldString("timeout", "The maximum period of time to wait for message sends before abandoning the request and retrying.").Advanced(),
 			docs.FieldBool("retry_as_batch", "When enabled forces an entire batch of messages to be retried if any individual message fails on a send, otherwise only the individual messages that failed are retried. Disabling this helps to reduce message duplicates during intermittent errors, but also makes it impossible to guarantee strict ordering of messages.").Advanced(),
@@ -331,6 +332,10 @@ func (k *kafkaWriter) ConnectWithContext(ctx context.Context) error {
 		config.Producer.RequiredAcks = sarama.WaitForAll
 	} else {
 		config.Producer.RequiredAcks = sarama.WaitForLocal
+	}
+
+	if k.conf.IdempotentProducer {
+		config.Producer.Idempotent = true
 	}
 
 	var err error
