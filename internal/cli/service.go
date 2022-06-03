@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,6 +26,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	strmmgr "github.com/benthosdev/benthos/v4/internal/stream/manager"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 //------------------------------------------------------------------------------
@@ -250,6 +252,20 @@ func cmdService(
 	// here as this is only a special circumstance for very basic use cases.
 	if !streamsMode && conf.Output.Type == "stdout" {
 		logger, err = log.NewV2(os.Stderr, conf.Logger)
+	} else if conf.Logger.File != nil {
+		var writer io.Writer
+		if conf.Logger.File.Rotate {
+			writer = &lumberjack.Logger{
+				Filename:   conf.Logger.File.Path,
+				MaxSize:    10,
+				MaxAge:     conf.Logger.File.RotateMaxAge,
+				MaxBackups: 1,
+				Compress:   true,
+			}
+		} else {
+			writer, err = os.OpenFile(conf.Logger.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		}
+		logger, err = log.NewV2(writer, conf.Logger)
 	} else {
 		logger, err = log.NewV2(os.Stdout, conf.Logger)
 	}
