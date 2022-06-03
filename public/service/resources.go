@@ -78,6 +78,7 @@ func (r *Resources) HasRateLimit(name string) bool {
 	return r.mgr.ProbeRateLimit(name)
 }
 
+// AccessInput attempts to access a input resource by name.
 func (r *Resources) AccessInput(ctx context.Context, name string, fn func(in OwnedInput)) error {
 	return r.mgr.AccessInput(ctx, name, func(in input.Streamed) {
 		fn(OwnedInput{i: in})
