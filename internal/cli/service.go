@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
@@ -26,7 +27,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	strmmgr "github.com/benthosdev/benthos/v4/internal/stream/manager"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 //------------------------------------------------------------------------------
@@ -248,11 +248,7 @@ func cmdService(
 	// Logging and stats aggregation.
 	var logger log.Modular
 
-	// Note: Only log to Stderr if our output is stdout, brokers aren't counted
-	// here as this is only a special circumstance for very basic use cases.
-	if !streamsMode && conf.Output.Type == "stdout" {
-		logger, err = log.NewV2(os.Stderr, conf.Logger)
-	} else if conf.Logger.File != nil {
+	if conf.Logger.File.Path != "" {
 		var writer io.Writer
 		if conf.Logger.File.Rotate {
 			writer = &lumberjack.Logger{
@@ -263,11 +259,19 @@ func cmdService(
 				Compress:   true,
 			}
 		} else {
-			writer, err = os.OpenFile(conf.Logger.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+			writer, err = os.OpenFile(conf.Logger.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
 		}
-		logger, err = log.NewV2(writer, conf.Logger)
+		if err == nil {
+			logger, err = log.NewV2(writer, conf.Logger)
+		}
 	} else {
-		logger, err = log.NewV2(os.Stdout, conf.Logger)
+		// Note: Only log to Stderr if our output is stdout, brokers aren't counted
+		// here as this is only a special circumstance for very basic use cases.
+		if !streamsMode && conf.Output.Type == "stdout" {
+			logger, err = log.NewV2(os.Stderr, conf.Logger)
+		} else {
+			logger, err = log.NewV2(os.Stdout, conf.Logger)
+		}
 	}
 	if err != nil {
 		fmt.Printf("Failed to create logger: %v\n", err)

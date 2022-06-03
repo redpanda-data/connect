@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Field `tls.root_cas_file` added to the `pulsar` input and output.
 - The `fallback` output now adds a metadata field `fallback_error` to messages when shifted.
 - New bloblang methods `ts_round`, `ts_parse`, `ts_format`, `ts_strptime`, `ts_strftime`, `ts_unix` and `ts_unix_nano`. Most are aliases of (now deprecated) time methods with `timestamp_` prefixes.
+- Ability to write logs to a file (with optional rotation) instead of stdout.
 
 ### Fixed
 

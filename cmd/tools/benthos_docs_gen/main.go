@@ -19,6 +19,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/template"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
@@ -72,6 +73,9 @@ func main() {
 
 	// Unit test docs
 	doTestDocs(docsDir)
+
+	// Logger docs
+	doLogger(docsDir)
 
 	// Template docs
 	doTemplates(docsDir)
@@ -163,6 +167,15 @@ func doTestDocs(dir string) {
 	}
 
 	create("test docs", filepath.Join(dir, "..", "configuration", "unit_testing.md"), mdSpec)
+}
+
+func doLogger(dir string) {
+	mdSpec, err := log.DocsMarkdown()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to generate docs for logger: %v", err))
+	}
+
+	create("logger docs", filepath.Join(dir, "logger", "about.md"), mdSpec)
 }
 
 func doTemplates(dir string) {
