@@ -30,17 +30,18 @@ type ValueType string
 
 // ValueType variants.
 var (
-	ValueString  ValueType = "string"
-	ValueBytes   ValueType = "bytes"
-	ValueNumber  ValueType = "number"
-	ValueBool    ValueType = "bool"
-	ValueArray   ValueType = "array"
-	ValueObject  ValueType = "object"
-	ValueNull    ValueType = "null"
-	ValueDelete  ValueType = "delete"
-	ValueNothing ValueType = "nothing"
-	ValueQuery   ValueType = "query expression"
-	ValueUnknown ValueType = "unknown"
+	ValueString    ValueType = "string"
+	ValueBytes     ValueType = "bytes"
+	ValueNumber    ValueType = "number"
+	ValueBool      ValueType = "bool"
+	ValueTimestamp ValueType = "timestamp"
+	ValueArray     ValueType = "array"
+	ValueObject    ValueType = "object"
+	ValueNull      ValueType = "null"
+	ValueDelete    ValueType = "delete"
+	ValueNothing   ValueType = "nothing"
+	ValueQuery     ValueType = "query expression"
+	ValueUnknown   ValueType = "unknown"
 
 	// Specialised and not generally known over ValueNumber.
 	ValueInt   ValueType = "integer"
@@ -59,6 +60,8 @@ func ITypeOf(i interface{}) ValueType {
 		return ValueNumber
 	case bool:
 		return ValueBool
+	case time.Time:
+		return ValueTimestamp
 	case []interface{}:
 		return ValueArray
 	case map[string]interface{}:
@@ -177,6 +180,8 @@ func IGetString(v interface{}) (string, error) {
 		return t, nil
 	case []byte:
 		return string(t), nil
+	case time.Time:
+		return t.Format(time.RFC3339Nano), nil
 	}
 	return "", NewTypeError(v, ValueString)
 }
@@ -189,6 +194,8 @@ func IGetBytes(v interface{}) ([]byte, error) {
 		return []byte(t), nil
 	case []byte:
 		return t, nil
+	case time.Time:
+		return t.AppendFormat(nil, time.RFC3339Nano), nil
 	}
 	return nil, NewTypeError(v, ValueBytes)
 }
@@ -197,6 +204,9 @@ func IGetBytes(v interface{}) ([]byte, error) {
 // either by interpretting a numerical value as a unix timestamp, or by parsing
 // a string value as RFC3339Nano.
 func IGetTimestamp(v interface{}) (time.Time, error) {
+	if tVal, ok := v.(time.Time); ok {
+		return tVal, nil
+	}
 	switch t := ISanitize(v).(type) {
 	case int64:
 		return time.Unix(t, 0), nil
@@ -309,6 +319,8 @@ func IToBytes(i interface{}) []byte {
 			return []byte("true")
 		}
 		return []byte("false")
+	case time.Time:
+		return t.AppendFormat(nil, time.RFC3339Nano)
 	case nil:
 		return []byte(`null`)
 	}
@@ -337,6 +349,8 @@ func IToString(i interface{}) string {
 			return "true"
 		}
 		return "false"
+	case time.Time:
+		return t.Format(time.RFC3339Nano)
 	case nil:
 		return `null`
 	}

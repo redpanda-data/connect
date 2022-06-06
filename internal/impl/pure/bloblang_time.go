@@ -43,11 +43,43 @@ func init() {
 		}
 		dur := time.Duration(iDur)
 		return bloblang.TimestampMethod(func(t time.Time) (interface{}, error) {
-			return t.Round(dur).Format(time.RFC3339Nano), nil
+			return t.Round(dur), nil
 		}), nil
 	}
 
 	if err := bloblang.RegisterMethodV2("ts_round", tsRoundSpec, tsRoundCtor); err != nil {
+		panic(err)
+	}
+
+	tsTZSpec := bloblang.NewPluginSpec().
+		Beta().
+		Static().
+		Category(query.MethodCategoryTime).
+		Description(`Returns the result of converting a timestamp to a specified timezone. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The `+"[`ts_parse`](#ts_parse)"+` method can be used in order to parse different timestamp formats.`).
+		Param(bloblang.NewStringParam("tz").Description(`The timezone to change to. If set to "UTC" then the timezone will be UTC. If set to "Local" then the local timezone will be used. Otherwise, the argument is taken to be a location name corresponding to a file in the IANA Time Zone database, such as "America/New_York".`)).
+		Version("4.3.0").
+		Example("",
+			`root.created_at_utc = this.created_at.ts_tz("UTC")`,
+			[2]string{
+				`{"created_at":"2021-02-03T17:05:06+01:00"}`,
+				`{"created_at_utc":"2021-02-03T16:05:06Z"}`,
+			})
+
+	tsTZCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		timezoneStr, err := args.GetString("tz")
+		if err != nil {
+			return nil, err
+		}
+		timezone, err := time.LoadLocation(timezoneStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
+		}
+		return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
+			return target.In(timezone), nil
+		}), nil
+	}
+
+	if err := bloblang.RegisterMethodV2("ts_tz", tsTZSpec, tsTZCtor); err != nil {
 		panic(err)
 	}
 
@@ -136,7 +168,7 @@ func init() {
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description(`Attempts to parse a string as a timestamp following a specified format and outputs a string in RFC 3339 format, which can then be fed into ` + "[`ts_format`](#ts_format)" + `.
+		Description(`Attempts to parse a string as a timestamp following a specified format and outputs a timestamp, which can then be fed into methods such as ` + "[`ts_format`](#ts_format)" + `.
 
 The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the ` + "[`ts_strptime`](#ts_strptime)" + ` method.`).
 		Param(bloblang.NewStringParam("format").Description("The format of the target string."))
@@ -152,25 +184,30 @@ The input format is defined by showing how the reference time, defined to be Mon
 			},
 		)
 
-	parseTSCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-		layout, err := args.GetString("format")
-		if err != nil {
-			return nil, err
-		}
-		return bloblang.StringMethod(func(s string) (interface{}, error) {
-			ut, err := time.Parse(layout, s)
+	parseTSCtor := func(deprecated bool) bloblang.MethodConstructorV2 {
+		return func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+			layout, err := args.GetString("format")
 			if err != nil {
 				return nil, err
 			}
-			return ut.Format(time.RFC3339Nano), nil
-		}), nil
+			return bloblang.StringMethod(func(s string) (interface{}, error) {
+				ut, err := time.Parse(layout, s)
+				if err != nil {
+					return nil, err
+				}
+				if deprecated {
+					return ut.Format(time.RFC3339Nano), nil
+				}
+				return ut, nil
+			}), nil
+		}
 	}
 
-	if err := bloblang.RegisterMethodV2("ts_parse", parseTSSpec, parseTSCtor); err != nil {
+	if err := bloblang.RegisterMethodV2("ts_parse", parseTSSpec, parseTSCtor(false)); err != nil {
 		panic(err)
 	}
 
-	if err := bloblang.RegisterMethodV2("parse_timestamp", parseTSSpecDep, parseTSCtor); err != nil {
+	if err := bloblang.RegisterMethodV2("parse_timestamp", parseTSSpecDep, parseTSCtor(true)); err != nil {
 		panic(err)
 	}
 
@@ -178,7 +215,7 @@ The input format is defined by showing how the reference time, defined to be Mon
 		Category(query.MethodCategoryTime).
 		Beta().
 		Static().
-		Description("Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following RFC 3339 format, which can then be fed into [`ts_format`](#ts_format).").
+		Description("Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a timestamp, which can then be fed into [`ts_format`](#ts_format).").
 		Param(bloblang.NewStringParam("format").Description("The format of the target string."))
 
 	parseTSStrptimeSpecDep := asDeprecated(parseTSStrptimeSpec)
@@ -201,25 +238,30 @@ The input format is defined by showing how the reference time, defined to be Mon
 			},
 		)
 
-	parseTSStrptimeCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-		layout, err := args.GetString("format")
-		if err != nil {
-			return nil, err
-		}
-		return bloblang.StringMethod(func(s string) (interface{}, error) {
-			ut, err := timefmt.Parse(s, layout)
+	parseTSStrptimeCtor := func(deprecated bool) bloblang.MethodConstructorV2 {
+		return func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+			layout, err := args.GetString("format")
 			if err != nil {
 				return nil, err
 			}
-			return ut.Format(time.RFC3339Nano), nil
-		}), nil
+			return bloblang.StringMethod(func(s string) (interface{}, error) {
+				ut, err := timefmt.Parse(s, layout)
+				if err != nil {
+					return nil, err
+				}
+				if deprecated {
+					return ut.Format(time.RFC3339Nano), nil
+				}
+				return ut, nil
+			}), nil
+		}
 	}
 
-	if err := bloblang.RegisterMethodV2("ts_strptime", parseTSStrptimeSpec, parseTSStrptimeCtor); err != nil {
+	if err := bloblang.RegisterMethodV2("ts_strptime", parseTSStrptimeSpec, parseTSStrptimeCtor(false)); err != nil {
 		panic(err)
 	}
 
-	if err := bloblang.RegisterMethodV2("parse_timestamp_strptime", parseTSStrptimeSpecDep, parseTSStrptimeCtor); err != nil {
+	if err := bloblang.RegisterMethodV2("parse_timestamp_strptime", parseTSStrptimeSpecDep, parseTSStrptimeCtor(true)); err != nil {
 		panic(err)
 	}
 

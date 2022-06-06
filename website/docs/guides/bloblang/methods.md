@@ -1024,7 +1024,7 @@ root.something_at = this.created_at.ts_format("2006-Jan-02 15:04:05.999999", "UT
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Attempts to parse a string as a timestamp following a specified format and outputs a string in RFC 3339 format, which can then be fed into [`ts_format`](#ts_format).
+Attempts to parse a string as a timestamp following a specified format and outputs a timestamp, which can then be fed into methods such as [`ts_format`](#ts_format).
 
 The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the [`ts_strptime`](#ts_strptime) method.
 
@@ -1118,7 +1118,7 @@ root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")
 :::caution BETA
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 :::
-Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following RFC 3339 format, which can then be fed into [`ts_format`](#ts_format).
+Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a timestamp, which can then be fed into [`ts_format`](#ts_format).
 
 #### Parameters
 
@@ -1143,6 +1143,30 @@ root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")
 
 # In:  {"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}
 # Out: {"doc":{"timestamp":"2020-08-14T11:50:26.371Z"}}
+```
+
+### `ts_tz`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the result of converting a timestamp to a specified timezone. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+Introduced in version 4.3.0.
+
+
+#### Parameters
+
+**`tz`** &lt;string&gt; The timezone to change to. If set to "UTC" then the timezone will be UTC. If set to "Local" then the local timezone will be used. Otherwise, the argument is taken to be a location name corresponding to a file in the IANA Time Zone database, such as "America/New_York".  
+
+#### Examples
+
+
+```coffee
+root.created_at_utc = this.created_at.ts_tz("UTC")
+
+# In:  {"created_at":"2021-02-03T17:05:06+01:00"}
+# Out: {"created_at_utc":"2021-02-03T16:05:06Z"}
 ```
 
 ### `ts_unix`
@@ -2398,7 +2422,7 @@ Attempts to format a timestamp value as a unix timestamp with nanosecond precisi
 
 ### `parse_timestamp`
 
-Attempts to parse a string as a timestamp following a specified format and outputs a string in RFC 3339 format, which can then be fed into [`ts_format`](#ts_format).
+Attempts to parse a string as a timestamp following a specified format and outputs a timestamp, which can then be fed into methods such as [`ts_format`](#ts_format).
 
 The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the [`ts_strptime`](#ts_strptime) method.
 
@@ -2408,7 +2432,7 @@ The input format is defined by showing how the reference time, defined to be Mon
 
 ### `parse_timestamp_strptime`
 
-Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following RFC 3339 format, which can then be fed into [`ts_format`](#ts_format).
+Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a timestamp, which can then be fed into [`ts_format`](#ts_format).
 
 #### Parameters
 

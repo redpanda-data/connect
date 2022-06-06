@@ -20,35 +20,35 @@ func TestTimestampMethods(t *testing.T) {
 	}{
 		{
 			name:    "ts_round by hour",
-			mapping: `root = this.ts_round("1h".parse_duration())`,
+			mapping: `root = this.ts_round("1h".parse_duration()).string()`,
 			input:   "2020-08-14T05:54:23Z",
 			output:  "2020-08-14T06:00:00Z",
 		},
 		{
 			name:    "ts_round by minute",
-			mapping: `root = this.ts_round("1m".parse_duration())`,
+			mapping: `root = this.ts_round("1m".parse_duration()).string()`,
 			input:   "2020-08-14T05:54:23Z",
 			output:  "2020-08-14T05:54:00Z",
 		},
 		{
 			name:              "ts_round bad timestamp",
-			mapping:           `root = this.ts_round("1h".parse_duration())`,
+			mapping:           `root = this.ts_round("1h".parse_duration()).string()`,
 			input:             "not a timestamp",
 			execErrorContains: "parsing time \"not a timestamp\" as",
 		},
 		{
 			name:               "ts_round bad timestamp static",
-			mapping:            `root = "not a timestamp".ts_round("1h".parse_duration())`,
+			mapping:            `root = "not a timestamp".ts_round("1h".parse_duration()).string()`,
 			parseErrorContains: "parsing time \"not a timestamp\" as",
 		},
 		{
 			name:    "check ts_parse with format",
-			mapping: `root = "2020-Aug-14".ts_parse("2006-Jan-02")`,
+			mapping: `root = "2020-Aug-14".ts_parse("2006-Jan-02").string()`,
 			output:  "2020-08-14T00:00:00Z",
 		},
 		{
 			name:              "check ts_parse invalid",
-			mapping:           `root = this.ts_parse("2006-01-02T15:04:05Z07:00")`,
+			mapping:           `root = this.ts_parse("2006-01-02T15:04:05Z07:00").string()`,
 			input:             "not valid timestamp",
 			execErrorContains: `parsing time "not valid timestamp" as "2006-01-02T15:04:05Z07:00": cannot parse "not valid timestamp" as "2006"`,
 		},
@@ -69,7 +69,7 @@ func TestTimestampMethods(t *testing.T) {
 		},
 		{
 			name:    "check ts_strptime with format",
-			mapping: `root = "2020-Aug-14".ts_strptime("%Y-%b-%d")`,
+			mapping: `root = "2020-Aug-14".ts_strptime("%Y-%b-%d").string()`,
 			output:  "2020-08-14T00:00:00Z",
 		},
 		{

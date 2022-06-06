@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Timestamp Bloblang methods are now able to emit and process `time.Time` values.
+- New `ts_tz` method for switching the timezone of timestamp values.
+
 ## 4.2.0 - 2022-06-03
 
 ### Added
