@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Timestamp Bloblang methods are now able to emit and process `time.Time` values.
 - New `ts_tz` method for switching the timezone of timestamp values.
+- The `elasticsearch` output field `type` now supports interpolation functions.
 
 ## 4.2.0 - 2022-06-03
 

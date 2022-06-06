@@ -54,7 +54,7 @@ false for connections to succeed.`),
 			docs.FieldString("action", "The action to take on the document.").IsInterpolated().HasOptions("create", "index", "update", "delete").Advanced(),
 			docs.FieldString("pipeline", "An optional pipeline id to preprocess incoming documents.").IsInterpolated().Advanced(),
 			docs.FieldString("id", "The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").IsInterpolated(),
-			docs.FieldString("type", "The document mapping type. This field is required for versions of elasticsearch earlier than 6.0.0, but are invalid for versions 7.0.0 or later.").Optional(),
+			docs.FieldString("type", "The document mapping type. This field is required for versions of elasticsearch earlier than 6.0.0, but are invalid for versions 7.0.0 or later.").Optional().IsInterpolated(),
 			docs.FieldString("routing", "The routing key to use for the document.").IsInterpolated().Advanced(),
 			docs.FieldBool("sniff", "Prompts Benthos to sniff for brokers to connect to when establishing a connection.").Advanced(),
 			docs.FieldBool("healthcheck", "Whether to enable healthchecks.").Advanced(),
@@ -114,6 +114,7 @@ type Elasticsearch struct {
 	indexStr    *field.Expression
 	pipelineStr *field.Expression
 	routingStr  *field.Expression
+	typeStr     *field.Expression
 
 	client *elastic.Client
 }
@@ -143,6 +144,9 @@ func NewElasticsearchV2(conf output.ElasticsearchConfig, mgr bundle.NewManagemen
 	}
 	if e.routingStr, err = mgr.BloblEnvironment().NewField(conf.Routing); err != nil {
 		return nil, fmt.Errorf("failed to parse routing key expression: %v", err)
+	}
+	if e.typeStr, err = mgr.BloblEnvironment().NewField(conf.Type); err != nil {
+		return nil, fmt.Errorf("failed to parse type field expression: %v", err)
 	}
 
 	for _, u := range conf.URLs {
@@ -280,7 +284,7 @@ func (e *Elasticsearch) Write(msg *message.Batch) error {
 			Index:    e.indexStr.String(i, msg),
 			Pipeline: e.pipelineStr.String(i, msg),
 			Routing:  e.routingStr.String(i, msg),
-			Type:     e.conf.Type,
+			Type:     e.typeStr.String(i, msg),
 			Doc:      jObj,
 			ID:       e.idStr.String(i, msg),
 		}

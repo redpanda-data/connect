@@ -180,6 +180,7 @@ Default: `"${!count(\"elastic_ids\")}-${!timestamp_unix()}"`
 ### `type`
 
 The document mapping type. This field is required for versions of elasticsearch earlier than 6.0.0, but are invalid for versions 7.0.0 or later.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
