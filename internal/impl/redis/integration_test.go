@@ -100,6 +100,43 @@ input:
 		})
 	})
 
+	t.Run("stream-interpolated", func(t *testing.T) {
+		t.Parallel()
+		template := `
+output:
+  redis_streams:
+    url: tcp://localhost:$PORT
+    stream: ${! meta("foo")}
+    body_key: body
+    max_length: 0
+    max_in_flight: $MAX_IN_FLIGHT
+    metadata:
+      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
+    batching:
+      count: $OUTPUT_BATCH_COUNT
+
+input:
+  redis_streams:
+    url: tcp://localhost:$PORT
+    body_key: body
+    streams: [ stream-$ID ]
+    limit: 10
+    client_id: client-input-$ID
+    consumer_group: group-$ID
+`
+		suite := integration.StreamTests(
+			// integration.StreamTestOpenClose(),
+			integration.StreamTestMetadataRouting(),
+		)
+
+		suite.Run(
+			t, template,
+			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
+			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
+			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+		)
+	})
+
 	t.Run("pubsub", func(t *testing.T) {
 		t.Parallel()
 		template := `
