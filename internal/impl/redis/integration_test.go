@@ -14,6 +14,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func TestIntegrationRedis(t *testing.T) {
@@ -35,7 +36,7 @@ func TestIntegrationRedis(t *testing.T) {
 		conf := output.NewRedisStreamsConfig()
 		conf.URL = fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
 
-		r, cErr := newRedisStreamsWriter(conf, log.Noop())
+		r, cErr := newRedisStreamsWriter(conf, mock.NewManager(), log.Noop())
 		if cErr != nil {
 			return cErr
 		}
@@ -277,7 +278,7 @@ func BenchmarkIntegrationRedis(b *testing.B) {
 		conf := output.NewRedisStreamsConfig()
 		conf.URL = fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
 
-		r, cErr := newRedisStreamsWriter(conf, log.Noop())
+		r, cErr := newRedisStreamsWriter(conf, mock.NewManager(), log.Noop())
 		if cErr != nil {
 			return cErr
 		}
