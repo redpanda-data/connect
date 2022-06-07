@@ -392,7 +392,8 @@ func closeWithContext(ctx context.Context, c oldClosable) error {
 
 // NewBuffer attempts to create a new buffer component from a config.
 func (t *Type) NewBuffer(conf buffer.Config) (buffer.Streamed, error) {
-	return t.env.BufferInit(conf, t)
+	// Buffers currently never have a label
+	return t.env.BufferInit(conf, t.forLabel(""))
 }
 
 //------------------------------------------------------------------------------

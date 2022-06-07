@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - New `ts_tz` method for switching the timezone of timestamp values.
 - The `elasticsearch` output field `type` now supports interpolation functions.
 
+### Fixed
+
+- Corrected an issue where Prometheus metrics from batching at the buffer level would be skipped when combined with input/output level batching.
+
 ## 4.2.0 - 2022-06-03
 
 ### Added
