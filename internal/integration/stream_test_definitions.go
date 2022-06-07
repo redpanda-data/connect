@@ -875,7 +875,7 @@ func StreamTestOutputOnlyOverride(getFn GetMessageFunc) StreamTestDefinition {
 }
 
 // StreamTestWithMetadata checks that a message with the given metadata will be received
-func StreamTestWithMetadata(metaFieldName string, metaFieldValue string) StreamTestDefinition {
+func StreamTestWithMetadata(metaFieldName, metaFieldValue string) StreamTestDefinition {
 	return namedStreamTest(
 		"can send to redis with stream name from metadata",
 		func(t *testing.T, env *streamTestEnvironment) {
