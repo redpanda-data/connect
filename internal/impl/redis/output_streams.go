@@ -10,6 +10,7 @@ import (
 
 	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -58,7 +59,7 @@ a metadata item and the body then the body takes precedence.`),
 }
 
 func newRedisStreamsOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	w, err := newRedisStreamsWriter(conf.RedisStreams, log)
+	w, err := newRedisStreamsWriter(conf.RedisStreams, mgr, log)
 	if err != nil {
 		return nil, err
 	}
@@ -72,14 +73,15 @@ func newRedisStreamsOutput(conf output.Config, mgr bundle.NewManagement, log log
 type redisStreamsWriter struct {
 	log log.Modular
 
-	conf       output.RedisStreamsConfig
-	metaFilter *metadata.ExcludeFilter
+	conf                   output.RedisStreamsConfig
+	interpolatedStreamName *field.Expression
+	metaFilter             *metadata.ExcludeFilter
 
 	client  redis.UniversalClient
 	connMut sync.RWMutex
 }
 
-func newRedisStreamsWriter(conf output.RedisStreamsConfig, log log.Modular) (*redisStreamsWriter, error) {
+func newRedisStreamsWriter(conf output.RedisStreamsConfig, mgr bundle.NewManagement, log log.Modular) (*redisStreamsWriter, error) {
 
 	r := &redisStreamsWriter{
 		log:  log,
@@ -89,6 +91,9 @@ func newRedisStreamsWriter(conf output.RedisStreamsConfig, log log.Modular) (*re
 	var err error
 	if r.metaFilter, err = conf.Metadata.Filter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
+	}
+	if r.interpolatedStreamName, err = mgr.BloblEnvironment().NewField(conf.Stream); err != nil {
+		return nil, fmt.Errorf("failed to parse expression: %v", err)
 	}
 
 	if _, err = clientFromConfig(conf.Config); err != nil {
@@ -137,7 +142,7 @@ func (r *redisStreamsWriter) WriteWithContext(ctx context.Context, msg *message.
 	if msg.Len() == 1 {
 		if err := client.XAdd(&redis.XAddArgs{
 			ID:           "*",
-			Stream:       r.conf.Stream,
+			Stream:       r.interpolatedStreamName.String(0, msg),
 			MaxLenApprox: r.conf.MaxLenApprox,
 			Values:       partToMap(msg.Get(0)),
 		}).Err(); err != nil {
@@ -152,7 +157,7 @@ func (r *redisStreamsWriter) WriteWithContext(ctx context.Context, msg *message.
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		_ = pipe.XAdd(&redis.XAddArgs{
 			ID:           "*",
-			Stream:       r.conf.Stream,
+			Stream:       r.interpolatedStreamName.String(i, msg),
 			MaxLenApprox: r.conf.MaxLenApprox,
 			Values:       partToMap(p),
 		})
