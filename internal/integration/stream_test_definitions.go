@@ -874,9 +874,8 @@ func StreamTestOutputOnlyOverride(getFn GetMessageFunc) StreamTestDefinition {
 	)
 }
 
-// StreamTestMetadataRouting checks that a message can be routed
-// to a stream specified in the metadata
-func StreamTestMetadataRouting() StreamTestDefinition {
+// StreamTestWithMetadata checks that a message with the given metadata will be received
+func StreamTestWithMetadata(metaFieldName string, metaFieldValue string) StreamTestDefinition {
 	return namedStreamTest(
 		"can send to redis with stream name from metadata",
 		func(t *testing.T, env *streamTestEnvironment) {
@@ -888,12 +887,13 @@ func StreamTestMetadataRouting() StreamTestDefinition {
 				closeConnectors(t, input, output)
 			})
 
-			metaFieldVal := []string{"foo", "bar"}
+			messageContent := `{"foo": "bar"}`
+			metaFieldVal := []string{metaFieldName, metaFieldValue}
 
-			require.NoError(t, sendMessage(env.ctx, t, tranChan, "hello world", metaFieldVal...))
+			require.NoError(t, sendMessage(env.ctx, t, tranChan, messageContent, metaFieldVal...))
 			received := receiveMessage(env.ctx, t, input.TransactionChan(), nil)
 
-			messageMatch(t, received, "hello world")
+			messageMatch(t, received, messageContent, metaFieldVal...)
 
 			// todo: add proper assert?
 		},

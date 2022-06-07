@@ -106,7 +106,7 @@ input:
 output:
   redis_streams:
     url: tcp://localhost:$PORT
-    stream: ${! meta("foo")}
+    stream: ${! meta("routing_meta_stream_name")}
     body_key: body
     max_length: 0
     max_in_flight: $MAX_IN_FLIGHT
@@ -119,14 +119,13 @@ input:
   redis_streams:
     url: tcp://localhost:$PORT
     body_key: body
-    streams: [ stream-$ID ]
+    streams: [ expected-stream-name-foo ]
     limit: 10
     client_id: client-input-$ID
     consumer_group: group-$ID
 `
 		suite := integration.StreamTests(
-			// integration.StreamTestOpenClose(),
-			integration.StreamTestMetadataRouting(),
+			integration.StreamTestWithMetadata("routing_meta_stream_name", "expected-stream-name-foo"),
 		)
 
 		suite.Run(
