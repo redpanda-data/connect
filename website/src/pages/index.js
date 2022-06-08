@@ -128,9 +128,10 @@ pipeline:
         } else { deleted() }
 
 output:
-  pulsar:
-    url: pulsar://TODO:6650
-    topic: traffic_windows`,
+  http_client:
+    url: https://example.com/traffic_data
+    verb: POST
+    max_in_flight: 64`,
   },
   {
     label: 'Enrichments',
