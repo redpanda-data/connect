@@ -9,6 +9,12 @@
 package pure
 
 import (
+	"github.com/benthosdev/benthos/v4/internal/template"
+
 	// Import only pure packages.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
+
+func init() {
+	_ = template.InitNativeTemplates()
+}

@@ -48,5 +48,5 @@ import (
 )
 
 func init() {
-	_, _ = template.InitTemplates()
+	_ = template.InitNativeTemplates()
 }

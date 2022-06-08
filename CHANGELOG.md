@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Corrected an issue where Prometheus metrics from batching at the buffer level would be skipped when combined with input/output level batching.
+- Go API: Fixed an issue where running the CLI API without importing a component package would result in template init crashing.
 
 ## 4.2.0 - 2022-06-03
 
