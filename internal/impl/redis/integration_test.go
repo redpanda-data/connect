@@ -15,6 +15,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func TestIntegrationRedis(t *testing.T) {
@@ -53,7 +54,7 @@ func TestIntegrationRedis(t *testing.T) {
 output:
   redis_streams:
     url: tcp://localhost:$PORT
-    stream: stream-$ID
+    stream: ${! meta("routing_stream_prefix") }-stream-$ID
     body_key: body
     max_length: 0
     max_in_flight: $MAX_IN_FLIGHT
@@ -61,12 +62,14 @@ output:
       exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
     batching:
       count: $OUTPUT_BATCH_COUNT
+  processors:
+    - bloblang: meta routing_stream_prefix = "bar"
 
 input:
   redis_streams:
     url: tcp://localhost:$PORT
     body_key: body
-    streams: [ stream-$ID ]
+    streams: [ bar-stream-$ID ]
     limit: 10
     client_id: client-input-$ID
     consumer_group: group-$ID
