@@ -73,9 +73,9 @@ func newRedisStreamsOutput(conf output.Config, mgr bundle.NewManagement, log log
 type redisStreamsWriter struct {
 	log log.Modular
 
-	conf                   output.RedisStreamsConfig
-	interpolatedStreamName *field.Expression
-	metaFilter             *metadata.ExcludeFilter
+	conf       output.RedisStreamsConfig
+	stream     *field.Expression
+	metaFilter *metadata.ExcludeFilter
 
 	client  redis.UniversalClient
 	connMut sync.RWMutex
@@ -89,11 +89,11 @@ func newRedisStreamsWriter(conf output.RedisStreamsConfig, mgr bundle.NewManagem
 	}
 
 	var err error
+	if r.stream, err = mgr.BloblEnvironment().NewField(conf.Stream); err != nil {
+		return nil, fmt.Errorf("failed to parse expression: %v", err)
+	}
 	if r.metaFilter, err = conf.Metadata.Filter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
-	}
-	if r.interpolatedStreamName, err = mgr.BloblEnvironment().NewField(conf.Stream); err != nil {
-		return nil, fmt.Errorf("failed to parse expression: %v", err)
 	}
 
 	if _, err = clientFromConfig(conf.Config); err != nil {
@@ -142,7 +142,7 @@ func (r *redisStreamsWriter) WriteWithContext(ctx context.Context, msg *message.
 	if msg.Len() == 1 {
 		if err := client.XAdd(&redis.XAddArgs{
 			ID:           "*",
-			Stream:       r.interpolatedStreamName.String(0, msg),
+			Stream:       r.stream.String(0, msg),
 			MaxLenApprox: r.conf.MaxLenApprox,
 			Values:       partToMap(msg.Get(0)),
 		}).Err(); err != nil {
@@ -157,7 +157,7 @@ func (r *redisStreamsWriter) WriteWithContext(ctx context.Context, msg *message.
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		_ = pipe.XAdd(&redis.XAddArgs{
 			ID:           "*",
-			Stream:       r.interpolatedStreamName.String(i, msg),
+			Stream:       r.stream.String(i, msg),
 			MaxLenApprox: r.conf.MaxLenApprox,
 			Values:       partToMap(p),
 		})

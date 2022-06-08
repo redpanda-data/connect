@@ -894,8 +894,6 @@ func StreamTestWithMetadata(metaFieldName, metaFieldValue string) StreamTestDefi
 			received := receiveMessage(env.ctx, t, input.TransactionChan(), nil)
 
 			messageMatch(t, received, messageContent, metaFieldVal...)
-
-			// todo: add proper assert?
 		},
 	)
 }
