@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Timestamp Bloblang methods are now able to emit and process `time.Time` values.
 - New `ts_tz` method for switching the timezone of timestamp values.
 - The `elasticsearch` output field `type` now supports interpolation functions.
+- The `redis` processor has been reworked to be more generally useful, the old `operator` and `key` fields are now deprecated in favour of new `command` and `args_mapping` fields.
 
 ### Fixed
 

@@ -15,11 +15,8 @@ categories: ["Integration"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Performs actions against Redis that aren't possible using a
-[`cache`](/docs/components/processors/cache) processor. Actions are
-performed for each message of a batch, where the contents are replaced with the
-result.
+Performs actions against Redis that aren't possible using a [`cache`](/docs/components/processors/cache) processor. Actions are
+performed for each message and the message contents are replaced with the result. In order to merge the result into the original message compose this processor within a [`branch` processor](/docs/components/processors/branch).
 
 
 <Tabs defaultValue="common" values={[
@@ -34,8 +31,8 @@ result.
 label: ""
 redis:
   url: ""
-  operator: ""
-  key: ""
+  command: ""
+  args_mapping: ""
 ```
 
 </TabItem>
@@ -55,34 +52,14 @@ redis:
     root_cas: ""
     root_cas_file: ""
     client_certs: []
-  operator: ""
-  key: ""
+  command: ""
+  args_mapping: ""
   retries: 3
   retry_period: 500ms
 ```
 
 </TabItem>
 </Tabs>
-
-## Operators
-
-### `keys`
-
-Returns an array of strings containing all the keys that match the pattern specified by the `key` field.
-
-### `scard`
-
-Returns the cardinality of a set, or `0` if the key does not exist.
-
-### `sadd`
-
-Adds a new member to a set. Returns `1` if the member was added.
-
-### `incrby`
-
-Increments the number stored at `key` by the message content. If the
-key does not exist, it is set to `0` before performing the operation.
-Returns the value of `key` after the increment.
 
 ## Examples
 
@@ -93,11 +70,7 @@ Returns the value of `key` after the increment.
 
 <TabItem value="Querying Cardinality">
 
-
-If given payloads containing a metadata field `set_key` it's possible
-to query and store the cardinality of the set for each message using a
-[`branch` processor](/docs/components/processors/branch) in order to
-augment rather than replace the message contents:
+If given payloads containing a metadata field `set_key` it's possible to query and store the cardinality of the set for each message using a [`branch` processor](/docs/components/processors/branch) in order to augment rather than replace the message contents:
 
 ```yaml
 pipeline:
@@ -106,14 +79,13 @@ pipeline:
         processors:
           - redis:
               url: TODO
-              operator: scard
-              key: ${! meta("set_key") }
+              command: scard
+              args_mapping: 'root = [ meta("set_key") ]'
         result_map: 'root.cardinality = this'
 ```
 
 </TabItem>
 <TabItem value="Running Total">
-
 
 If we have JSON data containing number of friends visited during covid 19:
 
@@ -133,21 +105,17 @@ We can add a field that contains the running total number of friends visited:
 {"name":"bob","month":"apr","year":2019,"friends_visited":1,"total":4}
 ```
 
-Using the `incrby` operator:
-                
+Using the `incrby` command:
 
 ```yaml
 pipeline:
   processors:
     - branch:
-        request_map: |
-            root = this.friends_visited
-            meta name = this.name
         processors:
           - redis:
               url: TODO
-              operator: incrby
-              key: ${! meta("name") }
+              command: incrby
+              args_mapping: 'root = [ this.name, this.friends_visited ]'
         result_map: 'root.total = this'
 ```
 
@@ -158,11 +126,10 @@ pipeline:
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
+The URL of the target Redis server. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -187,16 +154,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 
 Type: `string`  
 Default: `"simple"`  
-
-```yml
-# Examples
-
-kind: simple
-
-kind: cluster
-
-kind: failover
-```
+Options: `simple`, `cluster`, `failover`.
 
 ### `master`
 
@@ -330,23 +288,42 @@ The path of a certificate key to use.
 Type: `string`  
 Default: `""`  
 
-### `operator`
+### `command`
 
-The [operator](#operators) to apply.
-
-
-Type: `string`  
-Default: `""`  
-Options: `scard`, `sadd`, `incrby`, `keys`.
-
-### `key`
-
-A key to use for the target operator.
+The command to execute.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 Default: `""`  
+Requires version 4.3.0 or newer  
+
+```yml
+# Examples
+
+command: scard
+
+command: incrby
+
+command: ${! meta("command") }
+```
+
+### `args_mapping`
+
+A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis command.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 4.3.0 or newer  
+
+```yml
+# Examples
+
+args_mapping: root = [ this.key ]
+
+args_mapping: root = [ meta("kafka_key"), this.count ]
+```
 
 ### `retries`
 
@@ -361,7 +338,7 @@ Default: `3`
 The time to wait before consecutive retry attempts.
 
 
-Type: `string`  
+Type: `int`  
 Default: `"500ms"`  
 
 

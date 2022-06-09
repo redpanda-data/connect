@@ -1,9 +1,9 @@
 package redis
 
 import (
+	"context"
 	"fmt"
 	"net/url"
-	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -13,11 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestIntegrationRedisProcessor(t *testing.T) {
@@ -71,18 +68,33 @@ func TestIntegrationRedisProcessor(t *testing.T) {
 	t.Run("testRedisIncrby", func(t *testing.T) {
 		testRedisIncrby(t, client, urlStr)
 	})
+
+	require.NoError(t, client.FlushAll().Err())
+
+	t.Run("testRedisDeprecatedKeys", func(t *testing.T) {
+		testRedisDeprecatedKeys(t, client, urlStr)
+	})
+	t.Run("testRedisDeprecatedSAdd", func(t *testing.T) {
+		testRedisDeprecatedSAdd(t, client, urlStr)
+	})
+	t.Run("testRedisDeprecatedSCard", func(t *testing.T) {
+		testRedisDeprecatedSCard(t, client, urlStr)
+	})
+	t.Run("testRedisDeprecatedIncrby", func(t *testing.T) {
+		testRedisDeprecatedIncrby(t, client, urlStr)
+	})
 }
 
 func testRedisKeys(t *testing.T, client *redis.Client, url string) {
-	conf := processor.NewRedisConfig()
-	conf.URL = url
-	conf.Operator = "keys"
-	conf.Key = "foo*"
-
-	rp, err := newRedisProc(conf, mock.NewManager())
+	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
+url: %v
+command: keys
+args_mapping: 'root = [ "foo*" ]'
+`, url), nil)
 	require.NoError(t, err)
 
-	r := processor.NewV2BatchedToV1Processor("redis", rp, metrics.Noop())
+	r, err := newRedisProcFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
 
 	for _, key := range []string{
 		"bar1", "bar2", "fooa", "foob", "baz1", "fooc",
@@ -91,17 +103,20 @@ func testRedisKeys(t *testing.T, client *redis.Client, url string) {
 		require.NoError(t, err)
 	}
 
-	msg := message.QuickBatch([][]byte{[]byte(`ignore me please`)})
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`ignore me please`)),
+	}
 
-	resMsgs, response := r.ProcessMessage(msg)
+	resMsgs, response := r.ProcessBatch(context.Background(), msg)
 	require.NoError(t, response)
 
 	require.Len(t, resMsgs, 1)
-	require.Equal(t, 1, resMsgs[0].Len())
+	require.Len(t, resMsgs[0], 1)
+	require.NoError(t, resMsgs[0][0].GetError())
 
 	exp := []string{"fooa", "foob", "fooc"}
 
-	actI, err := resMsgs[0].Get(0).JSON()
+	actI, err := resMsgs[0][0].AsStructured()
 	require.NoError(t, err)
 
 	actS, ok := actI.([]interface{})
@@ -117,48 +132,52 @@ func testRedisKeys(t *testing.T, client *redis.Client, url string) {
 }
 
 func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
-	conf := processor.NewRedisConfig()
-	conf.URL = url
-	conf.Operator = "sadd"
-	conf.Key = "${! meta(\"key\") }"
-
-	rp, err := newRedisProc(conf, mock.NewManager())
+	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
+url: %v
+command: sadd
+args_mapping: 'root = [ meta("key"), content().string() ]'
+`, url), nil)
 	require.NoError(t, err)
 
-	r := processor.NewV2BatchedToV1Processor("redis", rp, metrics.Noop())
+	r, err := newRedisProcFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
 
-	msg := message.QuickBatch([][]byte{
-		[]byte(`foo`),
-		[]byte(`bar`),
-		[]byte(`bar`),
-		[]byte(`baz`),
-		[]byte(`buz`),
-		[]byte(`bev`),
-	})
-	msg.Get(0).MetaSet("key", "foo1")
-	msg.Get(1).MetaSet("key", "foo1")
-	msg.Get(2).MetaSet("key", "foo1")
-	msg.Get(3).MetaSet("key", "foo2")
-	msg.Get(4).MetaSet("key", "foo2")
-	msg.Get(5).MetaSet("key", "foo2")
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`foo`)),
+		service.NewMessage([]byte(`bar`)),
+		service.NewMessage([]byte(`bar`)),
+		service.NewMessage([]byte(`baz`)),
+		service.NewMessage([]byte(`buz`)),
+		service.NewMessage([]byte(`bev`)),
+	}
 
-	resMsgs, response := r.ProcessMessage(msg)
+	msg[0].MetaSet("key", "foo1")
+	msg[1].MetaSet("key", "foo1")
+	msg[2].MetaSet("key", "foo1")
+	msg[3].MetaSet("key", "foo2")
+	msg[4].MetaSet("key", "foo2")
+	msg[5].MetaSet("key", "foo2")
+
+	resMsgs, response := r.ProcessBatch(context.Background(), msg)
 	require.NoError(t, response)
 
-	if len(resMsgs) != 1 {
-		t.Fatalf("Wrong resulting msgs: %v != %v", len(resMsgs), 1)
+	exp := []string{
+		`1`,
+		`1`,
+		`0`,
+		`1`,
+		`1`,
+		`1`,
 	}
 
-	exp := [][]byte{
-		[]byte(`1`),
-		[]byte(`1`),
-		[]byte(`0`),
-		[]byte(`1`),
-		[]byte(`1`),
-		[]byte(`1`),
-	}
-	if act := message.GetAllBytes(resMsgs[0]); !reflect.DeepEqual(exp, act) {
-		t.Fatalf("Wrong result: %s != %s", act, exp)
+	require.Len(t, resMsgs, 1)
+	require.Len(t, resMsgs[0], len(exp))
+
+	for i, e := range exp {
+		require.NoError(t, resMsgs[0][i].GetError())
+		act, err := resMsgs[0][i].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, e, string(act))
 	}
 
 	res, err := client.SCard("foo1").Result()
@@ -179,69 +198,261 @@ func testRedisSAdd(t *testing.T, client *redis.Client, url string) {
 
 func testRedisSCard(t *testing.T, client *redis.Client, url string) {
 	// WARNING: Relies on testRedisSAdd succeeding.
-	conf := processor.NewRedisConfig()
-	conf.URL = url
-	conf.Operator = "scard"
-	conf.Key = "${! content() }"
-
-	rp, err := newRedisProc(conf, mock.NewManager())
+	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
+url: %v
+command: scard
+args_mapping: 'root = [ content().string() ]'
+`, url), nil)
 	require.NoError(t, err)
 
-	r := processor.NewV2BatchedToV1Processor("redis", rp, metrics.Noop())
+	r, err := newRedisProcFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
 
-	msg := message.QuickBatch([][]byte{
-		[]byte(`doesntexist`),
-		[]byte(`foo1`),
-		[]byte(`foo2`),
-	})
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`doesntexist`)),
+		service.NewMessage([]byte(`foo1`)),
+		service.NewMessage([]byte(`foo2`)),
+	}
 
-	resMsgs, response := r.ProcessMessage(msg)
+	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	require.NoError(t, response)
+
+	exp := []string{
+		`0`,
+		`2`,
+		`3`,
+	}
+
+	require.Len(t, resMsgs, 1)
+	require.Len(t, resMsgs[0], len(exp))
+
+	for i, e := range exp {
+		require.NoError(t, resMsgs[0][i].GetError())
+		act, err := resMsgs[0][i].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, e, string(act))
+	}
+}
+
+func testRedisIncrby(t *testing.T, client *redis.Client, url string) {
+	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
+url: %v
+command: incrby
+args_mapping: 'root = [ "incrby", this.number() ]'
+`, url), nil)
+	require.NoError(t, err)
+
+	r, err := newRedisProcFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
+
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`2`)),
+		service.NewMessage([]byte(`1`)),
+		service.NewMessage([]byte(`5`)),
+		service.NewMessage([]byte(`-10`)),
+		service.NewMessage([]byte(`0`)),
+	}
+
+	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	require.NoError(t, response)
+
+	exp := []string{
+		`2`,
+		`3`,
+		`8`,
+		`-2`,
+		`-2`,
+	}
+
+	require.Len(t, resMsgs, 1)
+	require.Len(t, resMsgs[0], len(exp))
+
+	for i, e := range exp {
+		require.NoError(t, resMsgs[0][i].GetError())
+		act, err := resMsgs[0][i].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, e, string(act))
+	}
+}
+
+func testRedisDeprecatedKeys(t *testing.T, client *redis.Client, url string) {
+	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
+url: %v
+operator: keys
+key: foo*
+`, url), nil)
+	require.NoError(t, err)
+
+	r, err := newRedisProcFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
+
+	for _, key := range []string{
+		"bar1", "bar2", "fooa", "foob", "baz1", "fooc",
+	} {
+		_, err := client.Set(key, "hello world", 0).Result()
+		require.NoError(t, err)
+	}
+
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`ignore me please`)),
+	}
+
+	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	require.NoError(t, response)
+
+	require.Len(t, resMsgs, 1)
+	require.Equal(t, 1, len(resMsgs[0]))
+
+	exp := []string{"fooa", "foob", "fooc"}
+
+	actI, err := resMsgs[0][0].AsStructured()
+	require.NoError(t, err)
+
+	actS, ok := actI.([]interface{})
+	require.True(t, ok)
+
+	actStrs := make([]string, 0, len(actS))
+	for _, v := range actS {
+		actStrs = append(actStrs, v.(string))
+	}
+	sort.Strings(actStrs)
+
+	assert.Equal(t, exp, actStrs)
+}
+
+func testRedisDeprecatedSAdd(t *testing.T, client *redis.Client, url string) {
+	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
+url: %v
+operator: sadd
+key: "${! meta(\"key\") }"
+`, url), nil)
+	require.NoError(t, err)
+
+	r, err := newRedisProcFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
+
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`foo`)),
+		service.NewMessage([]byte(`bar`)),
+		service.NewMessage([]byte(`bar`)),
+		service.NewMessage([]byte(`baz`)),
+		service.NewMessage([]byte(`buz`)),
+		service.NewMessage([]byte(`bev`)),
+	}
+
+	msg[0].MetaSet("key", "foo1")
+	msg[1].MetaSet("key", "foo1")
+	msg[2].MetaSet("key", "foo1")
+	msg[3].MetaSet("key", "foo2")
+	msg[4].MetaSet("key", "foo2")
+	msg[5].MetaSet("key", "foo2")
+
+	resMsgs, response := r.ProcessBatch(context.Background(), msg)
 	require.NoError(t, response)
 
 	if len(resMsgs) != 1 {
 		t.Fatalf("Wrong resulting msgs: %v != %v", len(resMsgs), 1)
 	}
 
-	exp := [][]byte{
-		[]byte(`0`),
-		[]byte(`2`),
-		[]byte(`3`),
+	exp := []string{
+		`1`,
+		`1`,
+		`0`,
+		`1`,
+		`1`,
+		`1`,
 	}
-	if act := message.GetAllBytes(resMsgs[0]); !reflect.DeepEqual(exp, act) {
-		t.Fatalf("Wrong result: %s != %s", act, exp)
+	for i, e := range exp {
+		act, err := resMsgs[0][i].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, e, string(act))
+	}
+
+	res, err := client.SCard("foo1").Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := 2, int(res); exp != act {
+		t.Errorf("Wrong cardinality of set 1: %v != %v", act, exp)
+	}
+	res, err = client.SCard("foo2").Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp, act := 3, int(res); exp != act {
+		t.Errorf("Wrong cardinality of set 2: %v != %v", act, exp)
 	}
 }
 
-func testRedisIncrby(t *testing.T, client *redis.Client, url string) {
-	conf := processor.NewRedisConfig()
-	conf.URL = url
-	conf.Operator = "incrby"
-	conf.Key = "incrby"
-
-	rp, err := newRedisProc(conf, mock.NewManager())
+func testRedisDeprecatedSCard(t *testing.T, client *redis.Client, url string) {
+	// WARNING: Relies on testRedisSAdd succeeding.
+	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
+url: %v
+operator: scard
+key: "${! content() }"
+`, url), nil)
 	require.NoError(t, err)
 
-	r := processor.NewV2BatchedToV1Processor("redis", rp, metrics.Noop())
+	r, err := newRedisProcFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
 
-	msg := message.QuickBatch([][]byte{
-		[]byte(`2`),
-		[]byte(`1`),
-		[]byte(`5`),
-		[]byte(`-10`),
-		[]byte(`0`),
-	})
-	resMsgs, response := r.ProcessMessage(msg)
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`doesntexist`)),
+		service.NewMessage([]byte(`foo1`)),
+		service.NewMessage([]byte(`foo2`)),
+	}
+
+	resMsgs, response := r.ProcessBatch(context.Background(), msg)
 	require.NoError(t, response)
 
-	exp := [][]byte{
-		[]byte(`2`),
-		[]byte(`3`),
-		[]byte(`8`),
-		[]byte(`-2`),
-		[]byte(`-2`),
-	}
-	if act := message.GetAllBytes(resMsgs[0]); !reflect.DeepEqual(exp, act) {
-		t.Fatalf("Wrong result: %s != %s", act, exp)
+	if len(resMsgs) != 1 {
+		t.Fatalf("Wrong resulting msgs: %v != %v", len(resMsgs), 1)
 	}
 
+	exp := []string{
+		`0`,
+		`2`,
+		`3`,
+	}
+	for i, e := range exp {
+		act, err := resMsgs[0][i].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, e, string(act))
+	}
+}
+
+func testRedisDeprecatedIncrby(t *testing.T, client *redis.Client, url string) {
+	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
+url: %v
+operator: incrby
+key: incrby
+`, url), nil)
+	require.NoError(t, err)
+
+	r, err := newRedisProcFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
+
+	msg := service.MessageBatch{
+		service.NewMessage([]byte(`2`)),
+		service.NewMessage([]byte(`1`)),
+		service.NewMessage([]byte(`5`)),
+		service.NewMessage([]byte(`-10`)),
+		service.NewMessage([]byte(`0`)),
+	}
+
+	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	require.NoError(t, response)
+
+	exp := []string{
+		`2`,
+		`3`,
+		`8`,
+		`-2`,
+		`-2`,
+	}
+	for i, e := range exp {
+		act, err := resMsgs[0][i].AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, e, string(act))
+	}
 }
