@@ -15,22 +15,21 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	oinput "github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/input/reader"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(bundle.InputConstructorFromSimple(func(conf oinput.Config, nm bundle.NewManagement) (input.Streamed, error) {
+	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		r, err := newAWSSQSReader(conf.AWSSQS, nm.Logger())
 		if err != nil {
 			return nil, err
 		}
-		return oinput.NewAsyncReader("aws_sqs", false, r, nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("aws_sqs", false, r, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:   "aws_sqs",
 		Status: docs.StatusStable,
@@ -62,7 +61,7 @@ You can access these metadata fields using
 			docs.FieldBool("delete_message", "Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.").Advanced(),
 			docs.FieldBool("reset_visibility", "Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.").AtVersion("3.58.0").Advanced(),
 			docs.FieldInt("max_number_of_messages", "The maximum number of messages to return on one poll. Valid values: 1 to 10.").Advanced(),
-		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(oinput.NewAWSSQSConfig()),
+		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(input.NewAWSSQSConfig()),
 		Categories: []string{
 			"Services",
 			"AWS",
@@ -76,7 +75,7 @@ You can access these metadata fields using
 //------------------------------------------------------------------------------
 
 type awsSQSReader struct {
-	conf oinput.AWSSQSConfig
+	conf input.AWSSQSConfig
 
 	session *session.Session
 	sqs     *sqs.SQS
@@ -89,7 +88,7 @@ type awsSQSReader struct {
 	log log.Modular
 }
 
-func newAWSSQSReader(conf oinput.AWSSQSConfig, log log.Modular) (*awsSQSReader, error) {
+func newAWSSQSReader(conf input.AWSSQSConfig, log log.Modular) (*awsSQSReader, error) {
 	return &awsSQSReader{
 		conf:             conf,
 		log:              log,
@@ -107,7 +106,7 @@ func (a *awsSQSReader) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := a.conf.GetSession()
+	sess, err := GetSessionFromConf(a.conf.Config)
 	if err != nil {
 		return err
 	}
@@ -341,7 +340,7 @@ func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
 }
 
 // ReadWithContext attempts to read a new message from the target SQS.
-func (a *awsSQSReader) ReadWithContext(ctx context.Context) (*message.Batch, reader.AsyncAckFn, error) {
+func (a *awsSQSReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	if a.session == nil {
 		return nil, nil, component.ErrNotConnected
 	}

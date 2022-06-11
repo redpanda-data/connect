@@ -206,6 +206,14 @@ file_equals: ./foo/bar.txt
 
 Checks that the contents of a message matches the contents of a file. The path of the file should be relative to the path of the test file.
 
+### `file_json_equals`
+
+```yml
+file_json_equals: ./foo/bar.json
+```
+
+Checks that both the message and the file contents are valid JSON documents, and that they are structurally equivalent. Will ignore formatting and ordering differences. The path of the file should be relative to the path of the test file.
+
 ### `json_equals`
 
 ```yml
@@ -233,7 +241,7 @@ Checks that both the message and the condition are valid JSON documents, and tha
 
 Executing tests for a specific config can be done by pointing the subcommand `test` at either the config to be tested or its test definition, e.g. `benthos test ./config.yaml` and `benthos test ./config_benthos_test.yaml` are equivalent.
 
-In order to execute all tests of a directory simply point `test` to that directory, e.g. `benthos test ./foo` will execute all tests found in the directory `foo`. In order to walk a directory tree and execute all tests found you can use the shortcut `./...`, e.g. `benthos test ./...` will execute all tests found in the current directory, any child directories, and so on.
+The `test` subcommand also supports wildcard patterns e.g. `benthos test ./foo/*.yaml` will execute all tests within matching files. In order to walk a directory tree and execute all tests found you can use the shortcut `./...`, e.g. `benthos test ./...` will execute all tests found in the current directory, any child directories, and so on.
 
 If you want to allow components to write logs at a provided level to stdout when running the tests, you can use
 `benthos test --log <level>`. Please consult the [logger docs][logger] for further details.

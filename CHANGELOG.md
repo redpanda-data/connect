@@ -5,7 +5,58 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 4.0.0 - TBD
+### Added
+
+- Timestamp Bloblang methods are now able to emit and process `time.Time` values.
+- New `ts_tz` method for switching the timezone of timestamp values.
+- The `elasticsearch` output field `type` now supports interpolation functions.
+- The `redis` processor has been reworked to be more generally useful, the old `operator` and `key` fields are now deprecated in favour of new `command` and `args_mapping` fields.
+- Go API: Added component bundle `./public/components/aws` for all AWS components, including a `RunLambda` function.
+
+### Fixed
+
+- Corrected an issue where Prometheus metrics from batching at the buffer level would be skipped when combined with input/output level batching.
+- Go API: Fixed an issue where running the CLI API without importing a component package would result in template init crashing.
+
+## 4.2.0 - 2022-06-03
+
+### Added
+
+- Field `credentials.from_ec2_role` added to all AWS based components.
+- The `mongodb` input now supports aggregation filters by setting the new `operation` field.
+- New `gcp_cloudtrace` tracer.
+- New `slug` bloblang string method.
+- The `elasticsearch` output now supports the `create` action.
+- Field `tls.root_cas_file` added to the `pulsar` input and output.
+- The `fallback` output now adds a metadata field `fallback_error` to messages when shifted.
+- New bloblang methods `ts_round`, `ts_parse`, `ts_format`, `ts_strptime`, `ts_strftime`, `ts_unix` and `ts_unix_nano`. Most are aliases of (now deprecated) time methods with `timestamp_` prefixes.
+- Ability to write logs to a file (with optional rotation) instead of stdout.
+
+### Fixed
+
+- The default docker image no longer throws configuration errors when running streams mode without an explicit general config.
+- The field `metrics.mapping` now allows environment functions such as `hostname` and `env`.
+- Fixed a lock-up in the `amqp_0_9` output caused when messages sent with the `immediate` or `mandatory` flags were rejected.
+- Fixed a race condition upon creating dynamic streams that self-terminate, this was causing panics in cases where the stream finishes immediately.
+
+## 4.1.0 - 2022-05-11
+
+### Added
+
+- The `nats_jetstream` input now adds headers to messages as metadata.
+- Field `headers` added to the `nats_jetstream` output.
+- Field `lazy_quotes` added to the CSV input.
+
+### Fixed
+
+- Fixed an issue where resource and stream configs imported via wildcard pattern could not be live-reloaded with the watcher (`-w`) flag.
+- Bloblang comparisons between numerical values (including `match` expression patterns) no longer require coercion into explicit types.
+- Reintroduced basic metrics from the `twitter` and `discord` template based inputs.
+- Prevented a metrics label mismatch when running in streams mode with resources and `prometheus` metrics.
+- Label mismatches with the `prometheus` metric type now log errors and skip the metric without stopping the service.
+- Fixed a case where empty files consumed by the `aws_s3` input would trigger early graceful termination.
+
+## 4.0.0 - 2022-04-20
 
 This is a major version release, for more information and guidance on how to migrate please refer to [https://benthos.dev/docs/guides/migration/v4](https://www.benthos.dev/docs/guides/migration/v4).
 
@@ -15,17 +66,21 @@ This is a major version release, for more information and guidance on how to mig
 - The `nats_jetstream` input now supports pull consumers.
 - Field `max_number_of_messages` added to the `aws_sqs` input.
 - Field `file_output_path` added to the `prometheus` metrics type.
-- Unit test definitions can now specify a `label` as a `target_processors` value.
+- Unit test definitions can now specify a label as a `target_processors` value.
 - New connection settings for all sql components.
 - New experimental `snowflake_put` output.
 - New experimental `gcp_cloud_storage` cache.
 - Field `regexp_topics` added to the `kafka_franz` input.
 - The `hdfs` output `directory` field now supports interpolation functions.
+- The cli `list` subcommand now supports a `cue` format.
+- Field `jwt.headers` added to all HTTP client components.
+- Output condition `file_json_equals` added to config unit test definitions.
 
 ### Fixed
 
 - The `sftp` output no longer opens files in both read and write mode.
 - The `aws_sqs` input with `reset_visibility` set to `false` will no longer reset timeouts on pending messages during gracefully shutdown.
+- The `schema_registry_decode` processor now handles AVRO logical types correctly. Details in [#1198](https://github.com/benthosdev/benthos/pull/1198) and [#1161](https://github.com/benthosdev/benthos/issues/1161) and also in https://github.com/linkedin/goavro/issues/242.
 
 ### Changed
 
@@ -54,6 +109,7 @@ This is a major version release, for more information and guidance on how to mig
 - The `dedupe` processor now acts upon individual messages by default, and the `hash` field has been removed.
 - The `log` processor now executes for each individual message of a batch.
 - The `sleep` processor now executes for each individual message of a batch.
+- The `benthos test` subcommand no longer walks when targetting a directory, instead use triple-dot syntax (`./dir/...`) or wildcard patterns.
 - Go API: Module name has changed to `github.com/benthosdev/benthos/v4`.
 - Go API: All packages within the `lib` directory have been removed in favour of the newer [APIs within `public`](https://pkg.go.dev/github.com/benthosdev/benthos/v4/public).
 - Go API: Distributed tracing is now via the Open Telemetry client library.

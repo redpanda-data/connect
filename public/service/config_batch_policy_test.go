@@ -51,7 +51,7 @@ a:
 `, nil)
 	require.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	res := newResourcesFromManager(mgr)
@@ -98,7 +98,7 @@ a:
 `, nil)
 	require.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	res := newResourcesFromManager(mgr)

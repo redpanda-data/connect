@@ -135,11 +135,19 @@ And then run it with `make lint`.
 
 It's pretty easy to write your own custom plugins for Benthos in Go, for information check out [the API docs][godoc-url], and for inspiration there's an [example repo][plugin-repo] demonstrating a variety of plugin implementations.
 
-## CGO Builds
+## Extra Plugins
 
-By default when cgo is enabled all plugins that require linking to external libraries are compiled, this includes components such as the `zmq4` input and output.
+By default Benthos does not build with components that require linking to external libraries, such as the `zmq4` input and outputs. If you wish to build Benthos locally with these dependencies then set the build tag `x_benthos_extra`:
 
-If you attempt a build and these dependencies are not present you'll see error messages such as `ld: library not found for -lzmq`. If you wish to build without these dependencies then set `CGO_ENABLED=0` and you'll create a pure Go build instead.
+```shell
+# With go
+go install -tags "x_benthos_extra" github.com/benthosdev/benthos/v4/cmd/benthos@latest
+
+# Using make
+make TAGS=x_benthos_extra
+```
+
+Note that this tag may change or be broken out into granular tags for individual components outside of major version releases. If you attempt a build and these dependencies are not present you'll see error messages such as `ld: library not found for -lzmq`.
 
 ## Docker Builds
 

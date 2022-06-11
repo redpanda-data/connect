@@ -6,85 +6,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
-
-// Config contains configuration parameters for a batch policy.
-type Config struct {
-	ByteSize   int                `json:"byte_size" yaml:"byte_size"`
-	Count      int                `json:"count" yaml:"count"`
-	Check      string             `json:"check" yaml:"check"`
-	Period     string             `json:"period" yaml:"period"`
-	Processors []processor.Config `json:"processors" yaml:"processors"`
-}
-
-// NewConfig creates a default PolicyConfig.
-func NewConfig() Config {
-	return Config{
-		ByteSize:   0,
-		Count:      0,
-		Check:      "",
-		Period:     "",
-		Processors: []processor.Config{},
-	}
-}
-
-// IsNoop returns true if this batch policy configuration does nothing.
-func (p Config) IsNoop() bool {
-	if p.ByteSize > 0 {
-		return false
-	}
-	if p.Count > 1 {
-		return false
-	}
-	if len(p.Check) > 0 {
-		return false
-	}
-	if len(p.Period) > 0 {
-		return false
-	}
-	if len(p.Processors) > 0 {
-		return false
-	}
-	return true
-}
-
-func (p Config) isLimited() bool {
-	if p.ByteSize > 0 {
-		return true
-	}
-	if p.Count > 0 {
-		return true
-	}
-	if len(p.Period) > 0 {
-		return true
-	}
-	if len(p.Check) > 0 {
-		return true
-	}
-	return false
-}
-
-func (p Config) isHardLimited() bool {
-	if p.ByteSize > 0 {
-		return true
-	}
-	if p.Count > 0 {
-		return true
-	}
-	if len(p.Period) > 0 {
-		return true
-	}
-	return false
-}
-
-//------------------------------------------------------------------------------
 
 // Batcher implements a batching policy by buffering messages until, based on a
 // set of rules, the buffered messages are ready to be sent onwards as a batch.
@@ -109,11 +38,11 @@ type Batcher struct {
 }
 
 // New creates an empty policy with default rules.
-func New(conf Config, mgr interop.Manager) (*Batcher, error) {
-	if !conf.isLimited() {
+func New(conf batchconfig.Config, mgr bundle.NewManagement) (*Batcher, error) {
+	if !conf.IsLimited() {
 		return nil, errors.New("batch policy must have at least one active trigger")
 	}
-	if !conf.isHardLimited() {
+	if !conf.IsHardLimited() {
 		mgr.Logger().Warnln("Batch policy should have at least one of count, period or byte_size set in order to provide a hard batch ceiling.")
 	}
 	var err error
@@ -132,7 +61,7 @@ func New(conf Config, mgr interop.Manager) (*Batcher, error) {
 	var procs []iprocessor.V1
 	for i, pconf := range conf.Processors {
 		pMgr := mgr.IntoPath("processors", strconv.Itoa(i))
-		proc, err := processor.New(pconf, pMgr, pMgr.Logger(), pMgr.Metrics())
+		proc, err := pMgr.NewProcessor(pconf)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +165,7 @@ func (p *Batcher) flushAny() []*message.Batch {
 	}
 
 	if len(p.procs) > 0 {
-		resultMsgs, res := processor.ExecuteAll(p.procs, newMsg)
+		resultMsgs, res := iprocessor.ExecuteAll(p.procs, newMsg)
 		if res != nil {
 			p.log.Errorf("Batch processors resulted in error: %v, the batch has been dropped.", res)
 			return nil

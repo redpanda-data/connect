@@ -12,7 +12,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
@@ -24,7 +23,7 @@ func harmlessConf() stream.Config {
 }
 
 func TestTypeBasicOperations(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	res, err := bmanager.New(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := New(res)
@@ -83,13 +82,13 @@ func TestTypeBasicOperations(t *testing.T) {
 }
 
 func TestTypeBasicClose(t *testing.T) {
-	res, err := bmanager.NewV2(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	res, err := bmanager.New(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	mgr := New(res)
 
 	conf := harmlessConf()
-	conf.Output.Type = output.TypeNanomsg
+	conf.Output.Type = "nanomsg"
 
 	if err := mgr.Create("foo", conf); err != nil {
 		t.Fatal(err)

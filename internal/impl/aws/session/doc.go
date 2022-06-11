@@ -14,6 +14,7 @@ func FieldSpecs() docs.FieldSpecs {
 				docs.FieldString("id", "The ID of credentials to use.").HasDefault(""),
 				docs.FieldString("secret", "The secret for the credentials being used.").HasDefault(""),
 				docs.FieldString("token", "The token for the credentials being used, required when using short term credentials.").HasDefault(""),
+				docs.FieldBool("from_ec2_role", "Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).").HasDefault(false).AtVersion("4.2.0"),
 				docs.FieldString("role", "A role ARN to assume.").HasDefault(""),
 				docs.FieldString("role_external_id", "An external ID to provide when assuming a role.").HasDefault(""),
 			),

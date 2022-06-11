@@ -25,7 +25,7 @@ func (d Definition) Execute(testFilePath string, resourcesPaths []string, logger
 	var totalFailures []CaseFailure
 	for i, c := range d.Cases {
 		cleanupEnv := setEnvironment(c.Environment)
-		failures, err := c.executeFrom(dir, procsProvider)
+		failures, err := c.ExecuteFrom(dir, procsProvider)
 		if err != nil {
 			cleanupEnv()
 			return nil, fmt.Errorf("test case %v failed: %v", i, err)

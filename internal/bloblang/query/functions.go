@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"os"
 	"sync"
 	"time"
 
@@ -13,8 +12,6 @@ import (
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/segmentio/ksuid"
-
-	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 type fieldFunction struct {
@@ -298,35 +295,6 @@ root.bar = deleted()`,
 
 //------------------------------------------------------------------------------
 
-var _ = registerFunction(
-	NewFunctionSpec(
-		FunctionCategoryEnvironment, "env",
-		"Returns the value of an environment variable, or `null` if the environment variable does not exist.",
-		NewExampleSpec("",
-			`root.thing.key = env("key").or("default value")`,
-		),
-	).
-		MarkImpure().
-		Param(ParamString("name", "The name of an environment variable.")),
-	envFunction,
-)
-
-func envFunction(args *ParsedParams) (Function, error) {
-	name, err := args.FieldString("name")
-	if err != nil {
-		return nil, err
-	}
-
-	var value interface{}
-	if valueStr, exists := os.LookupEnv(name); exists {
-		value = valueStr
-	}
-
-	return NewLiteralFunction("env "+name, value), nil
-}
-
-//------------------------------------------------------------------------------
-
 var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "error",
@@ -336,11 +304,11 @@ var _ = registerSimpleFunction(
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		v := ctx.MsgBatch.Get(ctx.Index).MetaGet(message.FailFlagKey)
-		if v == "" {
-			return nil, nil
+		v := ctx.MsgBatch.Get(ctx.Index).ErrorGet()
+		if v != nil {
+			return v.Error(), nil
 		}
-		return v, nil
+		return nil, nil
 	},
 )
 
@@ -353,37 +321,9 @@ var _ = registerSimpleFunction(
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		return len(ctx.MsgBatch.Get(ctx.Index).MetaGet(message.FailFlagKey)) > 0, nil
+		return ctx.MsgBatch.Get(ctx.Index).ErrorGet() != nil, nil
 	},
 )
-
-//------------------------------------------------------------------------------
-
-var _ = registerFunction(
-	NewFunctionSpec(
-		FunctionCategoryEnvironment, "file",
-		"Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping.",
-		NewExampleSpec("",
-			`root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()`,
-			`{}`,
-			`{"doc":{"foo":"bar"}}`,
-		),
-	).Beta().MarkImpure().
-		Param(ParamString("path", "The path of the target file.")),
-	fileFunction,
-)
-
-func fileFunction(args *ParsedParams) (Function, error) {
-	path, err := args.FieldString("path")
-	if err != nil {
-		return nil, err
-	}
-	pathBytes, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return NewLiteralFunction("file "+path, pathBytes), nil
-}
 
 //------------------------------------------------------------------------------
 
@@ -436,30 +376,6 @@ func rangeFunction(args *ParsedParams) (Function, error) {
 		return r, nil
 	}, nil), nil
 }
-
-//------------------------------------------------------------------------------
-
-var _ = registerSimpleFunction(
-	NewFunctionSpec(
-		FunctionCategoryEnvironment, "hostname",
-		"Returns a string matching the hostname of the machine running Benthos.",
-		NewExampleSpec("",
-			`root.thing.host = hostname()`,
-		),
-	).MarkImpure(),
-	func(_ FunctionContext) (interface{}, error) {
-		hn, err := os.Hostname()
-		if err != nil {
-			return nil, &ErrRecoverable{
-				Recovered: "",
-				Err:       err,
-			}
-		}
-		return hn, err
-	},
-)
-
-//------------------------------------------------------------------------------
 
 var _ = registerFunction(
 	NewFunctionSpec(
@@ -693,12 +609,12 @@ func randomIntFunction(args *ParsedParams) (Function, error) {
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryEnvironment, "now",
-		"Returns the current timestamp as a string in ISO 8601 format with the local timezone. Use the method `format_timestamp` in order to change the format and timezone.",
+		"Returns the current timestamp as a string in RFC 3339 format with the local timezone. Use the method `ts_format` in order to change the format and timezone.",
 		NewExampleSpec("",
 			`root.received_at = now()`,
 		),
 		NewExampleSpec("",
-			`root.received_at = now().format_timestamp("Mon Jan 2 15:04:05 -0700 MST 2006", "UTC")`,
+			`root.received_at = now().ts_format("Mon Jan 2 15:04:05 -0700 MST 2006", "UTC")`,
 		),
 	),
 	func(args *ParsedParams) (Function, error) {

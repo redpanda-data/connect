@@ -1,5 +1,6 @@
 import React from 'react';
 import classnames from 'classnames';
+import ReactPlayer from 'react-player/youtube'
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
@@ -127,9 +128,10 @@ pipeline:
         } else { deleted() }
 
 output:
-  pulsar:
-    url: pulsar://TODO:6650
-    topic: traffic_windows`,
+  http_client:
+    url: https://example.com/traffic_data
+    verb: POST
+    max_in_flight: 64`,
   },
   {
     label: 'Enrichments',
@@ -194,6 +196,25 @@ const features = [
       </>
     ),
   },
+  /*{
+    description: (
+      <ReactPlayer
+        className={classnames('padding--lg')}
+        url='TODO'
+        controls={true}
+      />
+    ),
+  },*/
+  {
+    title: 'Create, edit and test configs visually',
+    imageUrl: 'img/Blobartist.svg',
+    description: (
+      <>
+        <p>Declarative YAML is great for seamlessly integrating with version control tools, but creating and editing large configs can become a right bother.</p>
+        <p><a target="_blank" rel="noopener noreferrer" href="https://studio.benthos.dev">Benthos Studio</a> is a visual web application that allows you to create/import configs, edit and test them, and share them with others. It's so fun you'll be making configs just for the heck of it! Loser.</p>
+      </>
+    ),
+  },
   {
     title: 'Reliable and Operationally Simple',
     imageUrl: 'img/Blobscales.svg',
@@ -204,9 +225,6 @@ const features = [
         </p>
         <p>
           It's completely stateless with no need for disk persisted state, allowing for easy deployment and liberal scaling. It also exposes <a href="/docs/components/metrics/about">metrics</a> and <a href="/docs/components/tracers/about">tracing</a> events to targets of your choice.
-        </p>
-        <p>
-          At Meltwater it's enriching over 450 million documents per day with a network of more than 20 NLP services. It sounds very interesting but rest assured, <a href="https://underthehood.meltwater.com/blog/2019/08/26/enriching-450m-docs-daily-with-a-boring-stream-processor">it's totally drab</a>.
         </p>
       </>
     ),
@@ -338,6 +356,7 @@ function Home() {
                     <a href="https://wildbit.com" className="col col--6"><img className={styles.wildbitImg} src="/img/sponsors/wildbit.svg" /></a>
                     <a href="https://www.opala.com" className="col col--6"><img className={styles.opalaImg} src="/img/sponsors/opala.svg" /></a>
                     <a href="https://numary.com" className="col col--6"><img className={styles.numaryImg} src="/img/sponsors/numary.svg" /></a>
+                    <a href="https://synadia.com" className="col col--6"><img className={styles.synadiaImg} src="/img/sponsors/synadia.svg" /></a>
                   </div>
                 </div>
               </div>

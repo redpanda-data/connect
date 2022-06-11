@@ -30,17 +30,18 @@ type ValueType string
 
 // ValueType variants.
 var (
-	ValueString  ValueType = "string"
-	ValueBytes   ValueType = "bytes"
-	ValueNumber  ValueType = "number"
-	ValueBool    ValueType = "bool"
-	ValueArray   ValueType = "array"
-	ValueObject  ValueType = "object"
-	ValueNull    ValueType = "null"
-	ValueDelete  ValueType = "delete"
-	ValueNothing ValueType = "nothing"
-	ValueQuery   ValueType = "query expression"
-	ValueUnknown ValueType = "unknown"
+	ValueString    ValueType = "string"
+	ValueBytes     ValueType = "bytes"
+	ValueNumber    ValueType = "number"
+	ValueBool      ValueType = "bool"
+	ValueTimestamp ValueType = "timestamp"
+	ValueArray     ValueType = "array"
+	ValueObject    ValueType = "object"
+	ValueNull      ValueType = "null"
+	ValueDelete    ValueType = "delete"
+	ValueNothing   ValueType = "nothing"
+	ValueQuery     ValueType = "query expression"
+	ValueUnknown   ValueType = "unknown"
 
 	// Specialised and not generally known over ValueNumber.
 	ValueInt   ValueType = "integer"
@@ -59,6 +60,8 @@ func ITypeOf(i interface{}) ValueType {
 		return ValueNumber
 	case bool:
 		return ValueBool
+	case time.Time:
+		return ValueTimestamp
 	case []interface{}:
 		return ValueArray
 	case map[string]interface{}:
@@ -177,6 +180,8 @@ func IGetString(v interface{}) (string, error) {
 		return t, nil
 	case []byte:
 		return string(t), nil
+	case time.Time:
+		return t.Format(time.RFC3339Nano), nil
 	}
 	return "", NewTypeError(v, ValueString)
 }
@@ -189,6 +194,8 @@ func IGetBytes(v interface{}) ([]byte, error) {
 		return []byte(t), nil
 	case []byte:
 		return t, nil
+	case time.Time:
+		return t.AppendFormat(nil, time.RFC3339Nano), nil
 	}
 	return nil, NewTypeError(v, ValueBytes)
 }
@@ -197,6 +204,9 @@ func IGetBytes(v interface{}) ([]byte, error) {
 // either by interpretting a numerical value as a unix timestamp, or by parsing
 // a string value as RFC3339Nano.
 func IGetTimestamp(v interface{}) (time.Time, error) {
+	if tVal, ok := v.(time.Time); ok {
+		return tVal, nil
+	}
 	switch t := ISanitize(v).(type) {
 	case int64:
 		return time.Unix(t, 0), nil
@@ -235,6 +245,23 @@ func IIsNull(i interface{}) bool {
 		return true
 	}
 	return false
+}
+
+func restrictForComparison(v interface{}) interface{} {
+	v = ISanitize(v)
+	switch t := v.(type) {
+	case int64:
+		return float64(t)
+	case uint64:
+		return float64(t)
+	case json.Number:
+		if f, err := IGetNumber(t); err == nil {
+			return f
+		}
+	case []byte:
+		return string(t)
+	}
+	return v
 }
 
 // ISanitize takes a boxed value of any type and attempts to convert it into one
@@ -281,13 +308,19 @@ func IToBytes(i interface{}) []byte {
 		return t
 	case json.Number:
 		return []byte(t.String())
-	case int64, uint64, float64:
-		return []byte(fmt.Sprintf("%v", t)) // TODO
+	case int64:
+		return strconv.AppendInt(nil, t, 10)
+	case uint64:
+		return strconv.AppendUint(nil, t, 10)
+	case float64:
+		return strconv.AppendFloat(nil, t, 'g', -1, 64)
 	case bool:
 		if t {
 			return []byte("true")
 		}
 		return []byte("false")
+	case time.Time:
+		return t.AppendFormat(nil, time.RFC3339Nano)
 	case nil:
 		return []byte(`null`)
 	}
@@ -303,8 +336,12 @@ func IToString(i interface{}) string {
 		return t
 	case []byte:
 		return string(t)
-	case int64, uint64, float64:
-		return fmt.Sprintf("%v", t) // TODO
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case uint64:
+		return strconv.FormatUint(t, 10)
+	case float64:
+		return strconv.FormatFloat(t, 'g', -1, 64)
 	case json.Number:
 		return t.String()
 	case bool:
@@ -312,6 +349,8 @@ func IToString(i interface{}) string {
 			return "true"
 		}
 		return "false"
+	case time.Time:
+		return t.Format(time.RFC3339Nano)
 	case nil:
 		return `null`
 	}
@@ -416,4 +455,66 @@ func IClone(root interface{}) interface{} {
 	return root
 }
 
-//------------------------------------------------------------------------------
+// ICompare returns true if both the left and right are equal according to one
+// of the following conditions:
+//
+// - The types exactly match and have the same value
+// - The types are both either a string or byte slice and the underlying data is
+//   the same
+// - The types are both numerical and have the same value
+// - Both types are a matching slice or map containing values matching these
+//   same conditions
+func ICompare(left, right interface{}) bool {
+	if left == nil && right == nil {
+		return true
+	}
+	switch lhs := restrictForComparison(left).(type) {
+	case string:
+		rhs, err := IGetString(right)
+		if err != nil {
+			return false
+		}
+		return lhs == rhs
+	case float64:
+		rhs, err := IGetNumber(right)
+		if err != nil {
+			return false
+		}
+		return lhs == rhs
+	case bool:
+		rhs, err := IGetBool(right)
+		if err != nil {
+			return false
+		}
+		return lhs == rhs
+	case []interface{}:
+		rhs, matches := right.([]interface{})
+		if !matches {
+			return false
+		}
+		if len(lhs) != len(rhs) {
+			return false
+		}
+		for i, vl := range lhs {
+			if !ICompare(vl, rhs[i]) {
+				return false
+			}
+		}
+		return true
+	case map[string]interface{}:
+		rhs, matches := right.(map[string]interface{})
+		if !matches {
+			return false
+		}
+		if len(lhs) != len(rhs) {
+			return false
+		}
+		for k, vl := range lhs {
+			if !ICompare(vl, rhs[k]) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}

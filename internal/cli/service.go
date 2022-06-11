@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
@@ -37,7 +39,7 @@ type stoppable interface {
 
 //------------------------------------------------------------------------------
 
-func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, overrides []string) *config.Reader {
+func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, overrides []string) (mainPath string, inferred bool, conf *config.Reader) {
 	if path == "" {
 		// Iterate default config paths
 		for _, dpath := range []string{
@@ -46,7 +48,7 @@ func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, ove
 			"/etc/benthos.yaml",
 		} {
 			if _, err := os.Stat(dpath); err == nil {
-				fmt.Fprintf(os.Stderr, "Config file not specified, reading from %v\n", dpath)
+				inferred = true
 				path = dpath
 				break
 			}
@@ -59,7 +61,7 @@ func readConfig(path string, streamsMode bool, resourcesPaths, streamsPaths, ove
 	if streamsMode {
 		opts = append(opts, config.OptSetStreamPaths(streamsPaths...))
 	}
-	return config.NewReader(path, resourcesPaths, opts...)
+	return path, inferred, config.NewReader(path, resourcesPaths, opts...)
 }
 
 //------------------------------------------------------------------------------
@@ -79,15 +81,17 @@ func initStreamsMode(
 		fmt.Fprintf(os.Stderr, "Stream configuration file read error: %v\n", err)
 		os.Exit(1)
 	}
-	if strict && len(lints) > 0 {
-		for _, lint := range lints {
-			fmt.Fprintln(os.Stderr, lint)
-		}
-		fmt.Println("Shutting down due to stream linter errors, to prevent shutdown run Benthos with --chilled")
-		os.Exit(1)
-	}
+
 	for _, lint := range lints {
-		logger.Infoln(lint)
+		if strict {
+			logger.With("lint", lint).Errorln("Config lint error")
+		} else {
+			logger.With("lint", lint).Warnln("Config lint error")
+		}
+	}
+	if strict && len(lints) > 0 {
+		logger.Errorln("Shutting down due to stream linter errors, to prevent shutdown run Benthos with --chilled")
+		os.Exit(1)
 	}
 
 	for id, conf := range streamConfs {
@@ -96,7 +100,7 @@ func initStreamsMode(
 			os.Exit(1)
 		}
 	}
-	logger.Infoln("Launching benthos in streams mode, use CTRL+C to close.")
+	logger.Infoln("Launching benthos in streams mode, use CTRL+C to close")
 
 	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf stream.Config) bool {
 		if err = streamMgr.Update(id, newStreamConf, time.Second*30); err != nil && errors.Is(err, strmmgr.ErrStreamDoesNotExist) {
@@ -106,7 +110,7 @@ func initStreamsMode(
 			logger.Errorf("Failed to update stream %v: %v", id, err)
 			return false
 		}
-		logger.Infof("Updated stream %v config from file.", id)
+		logger.Infof("Updated stream %v config from file", id)
 		return true
 	}); err != nil {
 		logger.Errorf("Failed to create stream config watcher: %v", err)
@@ -190,7 +194,7 @@ func initNormalMode(
 		logger.Errorf("Service closing due to: %v\n", err)
 		os.Exit(1)
 	}
-	logger.Infoln("Launching a benthos instance, use CTRL+C to close.")
+	logger.Infoln("Launching a benthos instance, use CTRL+C to close")
 
 	if err := confReader.SubscribeConfigChanges(func(newStreamConf stream.Config) bool {
 		if err := stoppableStream.Replace(func() (stoppable, error) {
@@ -201,7 +205,7 @@ func initNormalMode(
 			return false
 		}
 
-		logger.Infoln("Updated main config from file.")
+		logger.Infoln("Updated main config from file")
 		return true
 	}); err != nil {
 		logger.Errorf("Failed to create config file watcher: %v", err)
@@ -228,19 +232,12 @@ func cmdService(
 	streamsMode bool,
 	streamsPaths []string,
 ) int {
-	confReader := readConfig(confPath, streamsMode, resourcesPaths, streamsPaths, confOverrides)
+	mainPath, inferredMainPath, confReader := readConfig(confPath, streamsMode, resourcesPaths, streamsPaths, confOverrides)
 	conf := config.New()
 
 	lints, err := confReader.Read(&conf)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)
-		return 1
-	}
-	if strict && len(lints) > 0 {
-		for _, lint := range lints {
-			fmt.Fprintln(os.Stderr, lint)
-		}
-		fmt.Println("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
 		return 1
 	}
 
@@ -251,20 +248,54 @@ func cmdService(
 	// Logging and stats aggregation.
 	var logger log.Modular
 
-	// Note: Only log to Stderr if our output is stdout, brokers aren't counted
-	// here as this is only a special circumstance for very basic use cases.
-	if !streamsMode && conf.Output.Type == "stdout" {
-		logger, err = log.NewV2(os.Stderr, conf.Logger)
+	if conf.Logger.File.Path != "" {
+		var writer io.Writer
+		if conf.Logger.File.Rotate {
+			writer = &lumberjack.Logger{
+				Filename:   conf.Logger.File.Path,
+				MaxSize:    10,
+				MaxAge:     conf.Logger.File.RotateMaxAge,
+				MaxBackups: 1,
+				Compress:   true,
+			}
+		} else {
+			writer, err = os.OpenFile(conf.Logger.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+		}
+		if err == nil {
+			logger, err = log.NewV2(writer, conf.Logger)
+		}
 	} else {
-		logger, err = log.NewV2(os.Stdout, conf.Logger)
+		// Note: Only log to Stderr if our output is stdout, brokers aren't counted
+		// here as this is only a special circumstance for very basic use cases.
+		if !streamsMode && conf.Output.Type == "stdout" {
+			logger, err = log.NewV2(os.Stderr, conf.Logger)
+		} else {
+			logger, err = log.NewV2(os.Stdout, conf.Logger)
+		}
 	}
 	if err != nil {
 		fmt.Printf("Failed to create logger: %v\n", err)
 		return 1
 	}
 
+	if mainPath == "" {
+		logger.Infof("Running without a main config file")
+	} else if inferredMainPath {
+		logger.With("path", mainPath).Infof("Running main config from file found in a default path")
+	} else {
+		logger.With("path", mainPath).Infof("Running main config from specified file")
+	}
+
 	for _, lint := range lints {
-		logger.Infoln(lint)
+		if strict {
+			logger.With("lint", lint).Errorln("Config lint error")
+		} else {
+			logger.With("lint", lint).Warnln("Config lint error")
+		}
+	}
+	if strict && len(lints) > 0 {
+		logger.Errorln("Shutting down due to linter errors, to prevent shutdown run Benthos with --chilled")
+		return 1
 	}
 
 	// Create our metrics type.
@@ -306,7 +337,7 @@ func cmdService(
 	}
 
 	// Create resource manager.
-	manager, err := manager.NewV2(conf.ResourceConfig, httpServer, logger, stats)
+	manager, err := manager.New(conf.ResourceConfig, httpServer, logger, stats, manager.OptSetStreamsMode(streamsMode))
 	if err != nil {
 		logger.Errorf("Failed to create resource: %v\n", err)
 		return 1
@@ -348,7 +379,7 @@ func cmdService(
 			select {
 			case <-httpServerClosedChan:
 			case <-time.After(exitTimeout / 2):
-				logger.Warnln("Service failed to close HTTP server gracefully in time.")
+				logger.Warnln("Service failed to close HTTP server gracefully in time")
 			}
 		}()
 
@@ -356,7 +387,7 @@ func cmdService(
 			<-time.After(exitTimeout + time.Second)
 			logger.Warnln(
 				"Service failed to close cleanly within allocated time." +
-					" Exiting forcefully and dumping stack trace to stderr.",
+					" Exiting forcefully and dumping stack trace to stderr",
 			)
 			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 			os.Exit(1)
@@ -375,7 +406,7 @@ func cmdService(
 		if err := manager.WaitForClose(time.Until(timesOut)); err != nil {
 			logger.Warnf(
 				"Service failed to close cleanly within allocated time: %v."+
-					" Exiting forcefully and dumping stack trace to stderr.\n", err,
+					" Exiting forcefully and dumping stack trace to stderr\n", err,
 			)
 			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 			os.Exit(1)
@@ -388,15 +419,13 @@ func cmdService(
 	// Wait for termination signal
 	select {
 	case <-sigChan:
-		logger.Infoln("Received SIGTERM, the service is closing.")
+		logger.Infoln("Received SIGTERM, the service is closing")
 	case <-dataStreamClosedChan:
-		logger.Infoln("Pipeline has terminated. Shutting down the service.")
+		logger.Infoln("Pipeline has terminated. Shutting down the service")
 	case <-httpServerClosedChan:
-		logger.Infoln("HTTP Server has terminated. Shutting down the service.")
+		logger.Infoln("HTTP Server has terminated. Shutting down the service")
 	case <-optContext.Done():
-		logger.Infoln("Run context was cancelled. Shutting down the service.")
+		logger.Infoln("Run context was cancelled. Shutting down the service")
 	}
 	return 0
 }
-
-//------------------------------------------------------------------------------

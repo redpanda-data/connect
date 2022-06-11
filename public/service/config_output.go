@@ -2,12 +2,13 @@ package service
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 )
 
 // NewOutputField defines a new output field, it is then possible to extract an
@@ -37,7 +38,7 @@ func (p *ParsedConfig) FieldOutput(path ...string) (*OwnedOutput, error) {
 		return nil, err
 	}
 
-	iproc, err := p.mgr.NewOutput(conf)
+	iproc, err := p.mgr.IntoPath(path...).NewOutput(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -81,9 +82,10 @@ func (p *ParsedConfig) FieldOutputList(path ...string) ([]*OwnedOutput, error) {
 		configs = append(configs, conf)
 	}
 
+	tmpMgr := p.mgr.IntoPath(path...)
 	ins := make([]*OwnedOutput, len(configs))
 	for i, c := range configs {
-		iproc, err := p.mgr.NewOutput(c)
+		iproc, err := tmpMgr.IntoPath(strconv.Itoa(i)).NewOutput(c)
 		if err != nil {
 			return nil, fmt.Errorf("output %v: %w", i, err)
 		}

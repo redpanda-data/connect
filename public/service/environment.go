@@ -8,15 +8,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	iprocessors "github.com/benthosdev/benthos/v4/internal/component/input/processors"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	oprocessors "github.com/benthosdev/benthos/v4/internal/component/output/processors"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
@@ -33,6 +33,13 @@ type Environment struct {
 var globalEnvironment = &Environment{
 	internal:    bundle.GlobalEnvironment,
 	bloblangEnv: bloblang.GlobalEnvironment(),
+}
+
+// GlobalEnvironment returns a reference to the global environment, adding
+// plugins to this environment is the equivalent to adding plugins using global
+// Functions.
+func GlobalEnvironment() *Environment {
+	return globalEnvironment
 }
 
 // NewEnvironment creates a new environment that inherits all globally defined
@@ -156,7 +163,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
-	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
+	return e.internal.InputAdd(iprocessors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -183,7 +190,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeInput
-	return e.internal.InputAdd(bundle.InputConstructorFromSimple(func(conf input.Config, nm bundle.NewManagement) (iinput.Streamed, error) {
+	return e.internal.InputAdd(iprocessors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -215,8 +222,8 @@ func (e *Environment) RegisterOutput(name string, spec *ConfigSpec, ctor OutputC
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeOutput
-	return e.internal.OutputAdd(bundle.OutputConstructorFromSimple(
-		func(conf output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
+	return e.internal.OutputAdd(oprocessors.WrapConstructor(
+		func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 			if err != nil {
 				return nil, err
@@ -254,8 +261,8 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeOutput
-	return e.internal.OutputAdd(bundle.OutputConstructorFromSimple(
-		func(conf output.Config, nm bundle.NewManagement) (ioutput.Streamed, error) {
+	return e.internal.OutputAdd(oprocessors.WrapConstructor(
+		func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 			pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 			if err != nil {
 				return nil, err
@@ -274,7 +281,7 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 			if err != nil {
 				return nil, err
 			}
-			return output.NewBatcherFromConfig(batchPolicy.toInternal(), o, nm, nm.Logger(), nm.Metrics())
+			return batcher.NewFromConfig(batchPolicy.toInternal(), o, nm, nm.Logger(), nm.Metrics())
 		},
 	), componentSpec)
 }
@@ -300,7 +307,7 @@ func (e *Environment) RegisterProcessor(name string, spec *ConfigSpec, ctor Proc
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
-	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
+	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err
@@ -325,7 +332,7 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 	componentSpec := spec.component
 	componentSpec.Name = name
 	componentSpec.Type = docs.TypeProcessor
-	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
+	return e.internal.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.V1, error) {
 		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
 		if err != nil {
 			return nil, err

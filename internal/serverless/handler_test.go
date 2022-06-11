@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/config"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
@@ -86,7 +86,7 @@ func TestHandlerSyncBatch(t *testing.T) {
 	conf.Output.Type = ServerlessResponseType
 
 	pConf := processor.NewConfig()
-	pConf.Type = processor.TypeSelectParts
+	pConf.Type = "select_parts"
 	pConf.SelectParts.Parts = []int{0, 0, 0}
 
 	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
@@ -118,13 +118,13 @@ func TestHandlerSyncBatches(t *testing.T) {
 	conf.Output.Type = ServerlessResponseType
 
 	pConf := processor.NewConfig()
-	pConf.Type = processor.TypeSelectParts
+	pConf.Type = "select_parts"
 	pConf.SelectParts.Parts = []int{0, 0, 0}
 
 	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
 
 	pConf = processor.NewConfig()
-	pConf.Type = processor.TypeSplit
+	pConf.Type = "split"
 
 	conf.Pipeline.Processors = append(conf.Pipeline.Processors, pConf)
 

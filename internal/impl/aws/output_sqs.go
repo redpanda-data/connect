@@ -20,13 +20,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
@@ -35,7 +35,7 @@ const (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newSQSWriterFromConfig(c.AWSSQS, nm)
 	}), docs.ComponentSpec{
 		Name:    "aws_sqs",
@@ -66,7 +66,7 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(metadata.ExcludeFilterFields()...),
 			policy.FieldSpec(),
-		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewAmazonSQSConfig()),
+		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewAmazonSQSConfig()),
 		Categories: []string{
 			"Services",
 			"AWS",
@@ -77,20 +77,20 @@ allowing you to transfer data across accounts. You can find out more
 	}
 }
 
-func newSQSWriterFromConfig(conf ooutput.AmazonSQSConfig, mgr interop.Manager) (output.Streamed, error) {
+func newSQSWriterFromConfig(conf output.AmazonSQSConfig, mgr bundle.NewManagement) (output.Streamed, error) {
 	s, err := newSQSWriter(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
-	w, err := ooutput.NewAsyncWriter("aws_sqs", conf.MaxInFlight, s, mgr.Logger(), mgr.Metrics())
+	w, err := output.NewAsyncWriter("aws_sqs", conf.MaxInFlight, s, mgr.Logger(), mgr.Metrics())
 	if err != nil {
 		return w, err
 	}
-	return ooutput.NewBatcherFromConfig(conf.Batching, w, mgr, mgr.Logger(), mgr.Metrics())
+	return batcher.NewFromConfig(conf.Batching, w, mgr, mgr.Logger(), mgr.Metrics())
 }
 
 type sqsWriter struct {
-	conf ooutput.AmazonSQSConfig
+	conf output.AmazonSQSConfig
 	sqs  sqsiface.SQSAPI
 
 	backoffCtor func() backoff.BackOff
@@ -105,7 +105,7 @@ type sqsWriter struct {
 	log log.Modular
 }
 
-func newSQSWriter(conf ooutput.AmazonSQSConfig, mgr interop.Manager) (*sqsWriter, error) {
+func newSQSWriter(conf output.AmazonSQSConfig, mgr bundle.NewManagement) (*sqsWriter, error) {
 	s := &sqsWriter{
 		conf:      conf,
 		log:       mgr.Logger(),
@@ -138,7 +138,7 @@ func (a *sqsWriter) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := a.conf.GetSession()
+	sess, err := GetSessionFromConf(a.conf.SessionConfig.Config)
 	if err != nil {
 		return err
 	}

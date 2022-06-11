@@ -15,9 +15,7 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Reads files from a HDFS directory, where each discrete file will be consumed as
-a single message payload.
+Reads files from a HDFS directory, where each discrete file will be consumed as a single message payload.
 
 ```yml
 # Config fields, showing default values

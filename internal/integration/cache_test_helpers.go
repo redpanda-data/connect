@@ -198,7 +198,7 @@ func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	manager, err := manager.NewV2(s.ResourceConfig, mock.NewManager(), env.log, env.stats)
+	manager, err := manager.New(s.ResourceConfig, mock.NewManager(), env.log, env.stats)
 	require.NoError(t, err)
 
 	var c cache.V1

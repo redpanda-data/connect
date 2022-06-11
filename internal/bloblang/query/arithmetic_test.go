@@ -746,6 +746,42 @@ func TestArithmetic(t *testing.T) {
 			),
 			output: true,
 		},
+		"compare slices": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction("", []interface{}{"foo", 10}),
+					NewLiteralFunction("", []interface{}{"foo", 10}),
+				},
+				[]ArithmeticOperator{
+					ArithmeticEq,
+				},
+			),
+			output: true,
+		},
+		"compare slices different lens": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction("", []interface{}{"foo", 10, false}),
+					NewLiteralFunction("", []interface{}{"foo", 10}),
+				},
+				[]ArithmeticOperator{
+					ArithmeticEq,
+				},
+			),
+			output: false,
+		},
+		"compare slices different values": {
+			input: arithmetic(
+				[]Function{
+					NewLiteralFunction("", []interface{}{"foo", 11}),
+					NewLiteralFunction("", []interface{}{"foo", 10}),
+				},
+				[]ArithmeticOperator{
+					ArithmeticEq,
+				},
+			),
+			output: false,
+		},
 	}
 
 	for name, test := range tests {

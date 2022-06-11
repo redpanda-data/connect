@@ -15,7 +15,6 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Connects to a websocket server and continuously receives messages.
 
 
@@ -66,14 +65,13 @@ input:
       private_key_file: ""
       signing_method: ""
       claims: {}
+      headers: {}
 ```
 
 </TabItem>
 </Tabs>
 
-It is possible to configure an `open_message`, which when set to a
-non-empty string will be sent to the websocket server each time a connection is
-first established.
+It is possible to configure an `open_message`, which when set to a non-empty string will be sent to the websocket server each time a connection is first established.
 
 ## Fields
 
@@ -326,6 +324,14 @@ Default: `""`
 ### `jwt.claims`
 
 A value used to identify the claims that issued the JWT.
+
+
+Type: `object`  
+Default: `{}`  
+
+### `jwt.headers`
+
+Add optional key/value headers to the JWT.
 
 
 Type: `object`  

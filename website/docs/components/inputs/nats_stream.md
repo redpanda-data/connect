@@ -15,9 +15,7 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Subscribe to a NATS Stream subject. Joining a queue is optional and allows
-multiple clients of a subject to consume using queue semantics.
+Subscribe to a NATS Stream subject. Joining a queue is optional and allows multiple clients of a subject to consume using queue semantics.
 
 
 <Tabs defaultValue="common" values={[
@@ -74,14 +72,9 @@ input:
 </TabItem>
 </Tabs>
 
-Tracking and persisting offsets through a durable name is also optional and
-works with or without a queue. If a durable name is not provided then subjects
-are consumed from the most recently published message.
+Tracking and persisting offsets through a durable name is also optional and works with or without a queue. If a durable name is not provided then subjects are consumed from the most recently published message.
 
-When a consumer closes its connection it unsubscribes, when all consumers of a
-durable queue do this the offsets are deleted. In order to avoid this you can
-stop the consumers from unsubscribing by setting the field
-`unsubscribe_on_close` to `false`.
+When a consumer closes its connection it unsubscribes, when all consumers of a durable queue do this the offsets are deleted. In order to avoid this you can stop the consumers from unsubscribing by setting the field `unsubscribe_on_close` to `false`.
 
 ### Metadata
 
@@ -92,8 +85,7 @@ This input adds the following metadata fields to each message:
 - nats_stream_sequence
 ```
 
-You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#metadata).
+You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
 
 ### Authentication
 

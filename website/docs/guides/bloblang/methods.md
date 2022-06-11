@@ -476,6 +476,41 @@ root.the_rest = this.value.slice(0, -4)
 # Out: {"last_chunk":" bar","the_rest":"foo"}
 ```
 
+### `slug`
+
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its [docs](https://pkg.go.dev/github.com/gosimple/slug) for more information.
+
+Introduced in version 4.2.0.
+
+
+#### Parameters
+
+**`lang`** &lt;(optional) string, default `"en"`&gt;   
+
+#### Examples
+
+
+Creates a slug from an English string
+
+```coffee
+root.slug = this.value.slug()
+
+# In:  {"value":"Gopher & Benthos"}
+# Out: {"slug":"gopher-and-benthos"}
+```
+
+Creates a slug from a French string
+
+```coffee
+root.slug = this.value.slug("fr")
+
+# In:  {"value":"Gaufre & Poisson d'Eau Profonde"}
+# Out: {"slug":"gaufre-et-poisson-deau-profonde"}
+```
+
 ### `split`
 
 Split a string value into an array of strings by splitting it on a string separator.
@@ -875,118 +910,6 @@ root.new_value = this.value.round()
 
 ## Timestamp Manipulation
 
-### `format_timestamp`
-
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
-Attempts to format a timestamp value as a string according to a specified format, or ISO 8601 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
-
-#### Parameters
-
-**`format`** &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; The output format to use.  
-**`tz`** &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.  
-
-#### Examples
-
-
-```coffee
-root.something_at = (this.created_at + 300).format_timestamp()
-```
-
-An optional string argument can be used in order to specify the output format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
-
-```coffee
-root.something_at = (this.created_at + 300).format_timestamp("2006-Jan-02 15:04:05")
-```
-
-A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.
-
-```coffee
-root.something_at = this.created_at.format_timestamp(format: "2006-Jan-02 15:04:05", tz: "UTC")
-
-# In:  {"created_at":1597405526}
-# Out: {"something_at":"2020-Aug-14 11:45:26"}
-
-# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
-# Out: {"something_at":"2020-Aug-14 11:50:26"}
-```
-
-And `format_timestamp` supports up to nanosecond precision with floating point timestamp values.
-
-```coffee
-root.something_at = this.created_at.format_timestamp("2006-Jan-02 15:04:05.999999", "UTC")
-
-# In:  {"created_at":1597405526.123456}
-# Out: {"something_at":"2020-Aug-14 11:45:26.123456"}
-
-# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
-# Out: {"something_at":"2020-Aug-14 11:50:26.371"}
-```
-
-### `format_timestamp_strftime`
-
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
-Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format.
-
-#### Parameters
-
-**`format`** &lt;string&gt; The output format to use.  
-**`tz`** &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used.  
-
-#### Examples
-
-
-The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strftime](https://linux.die.net/man/3/strftime) for the list of format specifiers.
-
-```coffee
-root.something_at = (this.created_at + 300).format_timestamp_strftime("%Y-%b-%d %H:%M:%S")
-```
-
-A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.
-
-```coffee
-root.something_at = this.created_at.format_timestamp_strftime("%Y-%b-%d %H:%M:%S", "UTC")
-
-# In:  {"created_at":1597405526}
-# Out: {"something_at":"2020-Aug-14 11:45:26"}
-
-# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
-# Out: {"something_at":"2020-Aug-14 11:50:26"}
-```
-
-### `format_timestamp_unix`
-
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
-Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
-
-#### Examples
-
-
-```coffee
-root.created_at_unix = this.created_at.format_timestamp_unix()
-
-# In:  {"created_at":"2009-11-10T23:00:00Z"}
-# Out: {"created_at_unix":1257894000}
-```
-
-### `format_timestamp_unix_nano`
-
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
-Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in ISO 8601 format. The [`parse_timestamp`](#parse_timestamp) method can be used in order to parse different timestamp formats.
-
-#### Examples
-
-
-```coffee
-root.created_at_unix = this.created_at.format_timestamp_unix_nano()
-
-# In:  {"created_at":"2009-11-10T23:00:00Z"}
-# Out: {"created_at_unix":1257894000000000000}
-```
-
 ### `parse_duration`
 
 Attempts to parse a string as a duration and returns an integer of nanoseconds. A duration string is a possibly signed sequence of decimal numbers, each with an optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
@@ -1010,8 +933,9 @@ root.delay_for_s = this.delay_for.parse_duration() / 1000000000
 
 ### `parse_duration_iso8601`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Attempts to parse a string using ISO-8601 rules as a duration and returns an integer of nanoseconds. A duration string is represented by the format "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". In these representations, the "[n]" is replaced by the value for each of the date and time elements that follow the "[n]". For example, "P3Y6M4DT12H30M5S" represents a duration of "three years, six months, four days, twelve hours, thirty minutes, and five seconds". The last field of the format allows fractions with one decimal place, so "P3.5S" will return 3500000000ns. Any additional decimals will be truncated.
 
 #### Examples
@@ -1044,11 +968,65 @@ root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
 # Out: {"delay_for_s":2.5}
 ```
 
-### `parse_timestamp`
+### `ts_format`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Attempts to format a timestamp value as a string according to a specified format, or RFC 3339 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.
 
-Attempts to parse a string as a timestamp following a specified format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`. The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+The output format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the [`ts_strftime`](#ts_strftime) method.
+
+#### Parameters
+
+**`format`** &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; The output format to use.  
+**`tz`** &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.  
+
+#### Examples
+
+
+```coffee
+root.something_at = (this.created_at + 300).ts_format()
+```
+
+An optional string argument can be used in order to specify the output format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+
+```coffee
+root.something_at = (this.created_at + 300).ts_format("2006-Jan-02 15:04:05")
+```
+
+A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.
+
+```coffee
+root.something_at = this.created_at.ts_format(format: "2006-Jan-02 15:04:05", tz: "UTC")
+
+# In:  {"created_at":1597405526}
+# Out: {"something_at":"2020-Aug-14 11:45:26"}
+
+# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
+# Out: {"something_at":"2020-Aug-14 11:50:26"}
+```
+
+And `ts_format` supports up to nanosecond precision with floating point timestamp values.
+
+```coffee
+root.something_at = this.created_at.ts_format("2006-Jan-02 15:04:05.999999", "UTC")
+
+# In:  {"created_at":1597405526.123456}
+# Out: {"something_at":"2020-Aug-14 11:45:26.123456"}
+
+# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
+# Out: {"something_at":"2020-Aug-14 11:50:26.371"}
+```
+
+### `ts_parse`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Attempts to parse a string as a timestamp following a specified format and outputs a timestamp, which can then be fed into methods such as [`ts_format`](#ts_format).
+
+The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the [`ts_strptime`](#ts_strptime) method.
 
 #### Parameters
 
@@ -1058,17 +1036,89 @@ Attempts to parse a string as a timestamp following a specified format and outpu
 
 
 ```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp("2006-Jan-02")
+root.doc.timestamp = this.doc.timestamp.ts_parse("2006-Jan-02")
 
 # In:  {"doc":{"timestamp":"2020-Aug-14"}}
 # Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
 ```
 
-### `parse_timestamp_strptime`
+### `ts_round`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the result of rounding a timestamp to the nearest multiple of the argument duration (nanoseconds). The rounding behavior for halfway values is to round up. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
 
-Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a string following ISO 8601, which can then be fed into `format_timestamp`.
+Introduced in version 4.2.0.
+
+
+#### Parameters
+
+**`duration`** &lt;integer&gt; A duration measured in nanoseconds to round by.  
+
+#### Examples
+
+
+Use the method `parse_duration` to convert a duration string into an integer argument.
+
+```coffee
+root.created_at_hour = this.created_at.ts_round("1h".parse_duration())
+
+# In:  {"created_at":"2020-08-14T05:54:23Z"}
+# Out: {"created_at_hour":"2020-08-14T06:00:00Z"}
+```
+
+### `ts_strftime`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.
+
+#### Parameters
+
+**`format`** &lt;string&gt; The output format to use.  
+**`tz`** &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used.  
+
+#### Examples
+
+
+The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strftime](https://linux.die.net/man/3/strftime) for the list of format specifiers.
+
+```coffee
+root.something_at = (this.created_at + 300).ts_strftime("%Y-%b-%d %H:%M:%S")
+```
+
+A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.
+
+```coffee
+root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S", "UTC")
+
+# In:  {"created_at":1597405526}
+# Out: {"something_at":"2020-Aug-14 11:45:26"}
+
+# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
+# Out: {"something_at":"2020-Aug-14 11:50:26"}
+```
+
+As an extension provided by the underlying formatting library, [itchyny/timefmt-go](https://github.com/itchyny/timefmt-go), the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.
+
+```coffee
+root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")
+
+# In:  {"created_at":1597405526}
+# Out: {"something_at":"2020-Aug-14 11:45:26.000000"}
+
+# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
+# Out: {"something_at":"2020-Aug-14 11:50:26.371000"}
+```
+
+### `ts_strptime`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a timestamp, which can then be fed into [`ts_format`](#ts_format).
 
 #### Parameters
 
@@ -1080,10 +1130,77 @@ Attempts to parse a string as a timestamp following a specified strptime-compati
 The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with a `%` character followed by the character that determines the behaviour of the specifier. Please refer to [man 3 strptime](https://linux.die.net/man/3/strptime) for the list of format specifiers.
 
 ```coffee
-root.doc.timestamp = this.doc.timestamp.parse_timestamp_strptime("%Y-%b-%d")
+root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d")
 
 # In:  {"doc":{"timestamp":"2020-Aug-14"}}
 # Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
+```
+
+As an extension provided by the underlying formatting library, [itchyny/timefmt-go](https://github.com/itchyny/timefmt-go), the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.
+
+```coffee
+root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")
+
+# In:  {"doc":{"timestamp":"2020-Aug-14 11:50:26.371000"}}
+# Out: {"doc":{"timestamp":"2020-08-14T11:50:26.371Z"}}
+```
+
+### `ts_tz`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Returns the result of converting a timestamp to a specified timezone. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+Introduced in version 4.3.0.
+
+
+#### Parameters
+
+**`tz`** &lt;string&gt; The timezone to change to. If set to "UTC" then the timezone will be UTC. If set to "Local" then the local timezone will be used. Otherwise, the argument is taken to be a location name corresponding to a file in the IANA Time Zone database, such as "America/New_York".  
+
+#### Examples
+
+
+```coffee
+root.created_at_utc = this.created_at.ts_tz("UTC")
+
+# In:  {"created_at":"2021-02-03T17:05:06+01:00"}
+# Out: {"created_at_utc":"2021-02-03T16:05:06Z"}
+```
+
+### `ts_unix`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+#### Examples
+
+
+```coffee
+root.created_at_unix = this.created_at.ts_unix()
+
+# In:  {"created_at":"2009-11-10T23:00:00Z"}
+# Out: {"created_at_unix":1257894000}
+```
+
+### `ts_unix_nano`
+
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
+Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+#### Examples
+
+
+```coffee
+root.created_at_unix = this.created_at.ts_unix_nano()
+
+# In:  {"created_at":"2009-11-10T23:00:00Z"}
+# Out: {"created_at_unix":1257894000000000000}
 ```
 
 ## Type Coercion
@@ -1546,8 +1663,9 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")
 
 ### `json_schema`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Checks a [JSON schema](https://json-schema.org/) against a value and returns the value if it matches or throws and error if it does not.
 
 #### Parameters
@@ -1846,8 +1964,9 @@ root = this.without("inner.a","inner.c","d")
 
 ### `bloblang`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Executes an argument Bloblang mapping on the target. This method can be used in order to execute dynamic mappings. Imports and functions that interact with the environment, such as `file` and `env`, or that access message information directly, such as `content` or `json`, are not enabled for dynamic Bloblang mappings.
 
 #### Parameters
@@ -1869,8 +1988,9 @@ root.body = this.body.bloblang(this.mapping)
 
 ### `format_json`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-
+:::caution BETA
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+:::
 Serializes a target value into a pretty-printed JSON byte array (with 4 space indentation by default).
 
 #### Parameters
@@ -2006,7 +2126,6 @@ root = this.encoded.decode("base64").parse_msgpack()
 
 ### `parse_xml`
 
-BETA: This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 
 Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
 
@@ -2016,9 +2135,10 @@ Attempts to parse a string as an XML document and returns a structured result, w
 - When elements are repeated the resulting JSON value is an array.
 - If cast is true, try to cast values to numbers and booleans instead of returning strings.
 
+
 #### Parameters
 
-**`cast`** &lt;(optional) bool&gt; whether to try to cast values that are numbers and booleans to the right type. default: false  
+**`cast`** &lt;(optional) bool, default `false`&gt; whether to try to cast values that are numbers and booleans to the right type.  
 
 #### Examples
 
@@ -2184,7 +2304,10 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")
 
 ### `geoip_anonymous_ip`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the anonymous IP associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the anonymous IP associated with it.
 
 #### Parameters
 
@@ -2192,7 +2315,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_asn`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ASN associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ASN associated with it.
 
 #### Parameters
 
@@ -2200,7 +2326,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_city`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the city associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the city associated with it.
 
 #### Parameters
 
@@ -2208,7 +2337,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_connection_type`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the connection type associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the connection type associated with it.
 
 #### Parameters
 
@@ -2216,7 +2348,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_country`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the country associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the country associated with it.
 
 #### Parameters
 
@@ -2224,7 +2359,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_domain`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the domain associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the domain associated with it.
 
 #### Parameters
 
@@ -2232,7 +2370,10 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_enterprise`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the enterprise associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the enterprise associated with it.
 
 #### Parameters
 
@@ -2240,11 +2381,62 @@ EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://w
 
 ### `geoip_isp`
 
-EXPERIMENTAL: Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ISP associated with it.
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the ISP associated with it.
 
 #### Parameters
 
 **`path`** &lt;string&gt; A path to an mmdb (maxmind) file.  
+
+## Deprecated
+
+### `format_timestamp`
+
+Attempts to format a timestamp value as a string according to a specified format, or RFC 3339 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.
+
+The output format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the [`ts_strftime`](#ts_strftime) method.
+
+#### Parameters
+
+**`format`** &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; The output format to use.  
+**`tz`** &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.  
+
+### `format_timestamp_strftime`
+
+Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.
+
+#### Parameters
+
+**`format`** &lt;string&gt; The output format to use.  
+**`tz`** &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used.  
+
+### `format_timestamp_unix`
+
+Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+### `format_timestamp_unix_nano`
+
+Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The [`ts_parse`](#ts_parse) method can be used in order to parse different timestamp formats.
+
+### `parse_timestamp`
+
+Attempts to parse a string as a timestamp following a specified format and outputs a timestamp, which can then be fed into methods such as [`ts_format`](#ts_format).
+
+The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the [`ts_strptime`](#ts_strptime) method.
+
+#### Parameters
+
+**`format`** &lt;string&gt; The format of the target string.  
+
+### `parse_timestamp_strptime`
+
+Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a timestamp, which can then be fed into [`ts_format`](#ts_format).
+
+#### Parameters
+
+**`format`** &lt;string&gt; The format of the target string.  
 
 [field_paths]: /docs/configuration/field_paths
 [methods.encode]: #encode

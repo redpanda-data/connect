@@ -117,15 +117,14 @@ v                                        v           v
 // Reserve bytes for our length counter (4 * 8 = 32 bit)
 var intLen uint32 = 4
 
-// ToBytes serialises a message into a single byte array.
-func ToBytes(m *Batch) []byte {
-	lenParts := uint32(m.Len())
+// SerializeBytes returns a 2D byte-slice serialized.
+func SerializeBytes(parts [][]byte) []byte {
+	lenParts := uint32(len(parts))
 
 	l := (lenParts + 1) * intLen
-	_ = m.Iter(func(i int, p *Part) error {
-		l += uint32(len(p.Get()))
-		return nil
-	})
+	for _, p := range parts {
+		l += uint32(len(p))
+	}
 	b := make([]byte, l)
 
 	b[0] = byte(lenParts >> 24)
@@ -135,8 +134,8 @@ func ToBytes(m *Batch) []byte {
 
 	b2 := b[intLen:]
 
-	_ = m.Iter(func(i int, p *Part) error {
-		le := uint32(len(p.Get()))
+	for _, p := range parts {
+		le := uint32(len(p))
 
 		b2[0] = byte(le >> 24)
 		b2[1] = byte(le >> 16)
@@ -145,16 +144,15 @@ func ToBytes(m *Batch) []byte {
 
 		b2 = b2[intLen:]
 
-		copy(b2, p.Get())
-		b2 = b2[len(p.Get()):]
-		return nil
-	})
+		copy(b2, p)
+		b2 = b2[len(p):]
+	}
 
 	return b
 }
 
-// FromBytes deserialises a Message from a byte array.
-func FromBytes(b []byte) (*Batch, error) {
+// DeserializeBytes rebuilds a 2D byte array from a binary serialized blob.
+func DeserializeBytes(b []byte) ([][]byte, error) {
 	if len(b) < 4 {
 		return nil, ErrBadMessageBytes
 	}
@@ -166,7 +164,7 @@ func FromBytes(b []byte) (*Batch, error) {
 
 	b = b[4:]
 
-	m := QuickBatch(nil)
+	var parts [][]byte
 	for i := uint32(0); i < numParts; i++ {
 		if len(b) < 4 {
 			return nil, ErrBadMessageBytes
@@ -177,10 +175,18 @@ func FromBytes(b []byte) (*Batch, error) {
 		if uint32(len(b)) < partSize {
 			return nil, ErrBadMessageBytes
 		}
-		m.Append(NewPart(b[:partSize]))
+
+		parts = append(parts, b[:partSize])
 		b = b[partSize:]
 	}
-	return m, nil
+	return parts, nil
 }
 
-//------------------------------------------------------------------------------
+// FromBytes deserialises a Message from a byte array.
+func FromBytes(b []byte) (*Batch, error) {
+	parts, err := DeserializeBytes(b)
+	if err != nil {
+		return nil, err
+	}
+	return QuickBatch(parts), nil
+}

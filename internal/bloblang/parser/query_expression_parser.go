@@ -3,8 +3,6 @@ package parser
 import (
 	"fmt"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
@@ -51,7 +49,7 @@ func matchCaseParser(pCtx Context) Func {
 					if v == nil {
 						return false, nil
 					}
-					return cmp.Equal(*v, lit.Value), nil
+					return query.ICompare(*v, lit.Value), nil
 				}, nil)
 			} else {
 				caseFn = t

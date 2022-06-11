@@ -3,12 +3,10 @@ package tracing
 import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 )
 
 // TracedBundle modifies a provided bundle environment so that traceable
@@ -19,7 +17,7 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 	tracedEnv := b.Clone()
 
 	for _, spec := range b.InputDocs() {
-		_ = tracedEnv.InputAdd(func(conf input.Config, nm bundle.NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
+		_ = tracedEnv.InputAdd(func(conf input.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (input.Streamed, error) {
 			i, err := b.InputInit(conf, nm, pcf...)
 			if err != nil {
 				return nil, err
@@ -35,7 +33,7 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 	}
 
 	for _, spec := range b.ProcessorDocs() {
-		_ = tracedEnv.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
+		_ = tracedEnv.ProcessorAdd(func(conf processor.Config, nm bundle.NewManagement) (processor.V1, error) {
 			i, err := b.ProcessorInit(conf, nm)
 			if err != nil {
 				return nil, err
@@ -51,8 +49,8 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 	}
 
 	for _, spec := range b.OutputDocs() {
-		_ = tracedEnv.OutputAdd(func(conf output.Config, nm bundle.NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
-			pcf = output.AppendProcessorsFromConfig(conf, nm, pcf...)
+		_ = tracedEnv.OutputAdd(func(conf output.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (output.Streamed, error) {
+			pcf = processors.AppendFromConfig(conf, nm, pcf...)
 			conf.Processors = nil
 
 			o, err := b.OutputInit(conf, nm)

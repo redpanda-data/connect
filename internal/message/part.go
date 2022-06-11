@@ -23,6 +23,7 @@ type rwData struct {
 	rawBytes  []byte
 	jsonCache interface{}
 	metadata  map[string]string
+	err       error
 }
 
 // Part represents a single Benthos message.
@@ -57,6 +58,7 @@ func (p *Part) Copy() *Part {
 			rawBytes:  p.data.rawBytes,
 			metadata:  clonedMeta,
 			jsonCache: p.data.jsonCache,
+			err:       p.data.err,
 		},
 		ctx: p.ctx,
 	}
@@ -88,6 +90,7 @@ func (p *Part) DeepCopy() *Part {
 			rawBytes:  np,
 			metadata:  clonedMeta,
 			jsonCache: clonedJSON,
+			err:       p.data.err,
 		},
 		ctx: p.ctx,
 	}
@@ -121,6 +124,18 @@ func (p *Part) WithContext(ctx context.Context) *Part {
 }
 
 //------------------------------------------------------------------------------
+
+// ErrorGet returns an error associated with the message, or nil if none exists.
+func (p *Part) ErrorGet() error {
+	return p.data.err
+}
+
+// ErrorSet modifies the error associated with a message. Errors attached to
+// messages are used to indicate that processing has failed at some point in the
+// processing pipeline.
+func (p *Part) ErrorSet(err error) {
+	p.data.err = err
+}
 
 // Get returns the body of the message part.
 func (p *Part) Get() []byte {

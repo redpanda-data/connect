@@ -33,7 +33,7 @@ func init() {
 			docs.FieldString("collector_url", "The URL of a Jaeger collector to send tracing events to. If set, this will override `agent_address`.",
 				"https://jaeger-collector:14268/api/traces").HasDefault("").AtVersion("3.38.0"),
 			docs.FieldString("sampler_type", "The sampler type to use.").HasAnnotatedOptions(
-				"const", "A constant decision for all traces, either 1 or 0.",
+				"const", "Sample a percentage of traces. 1 or more means all traces are sampled, 0 means no traces are sampled and anything in between means a percentage of traces are sampled. Tuning the sampling rate is recommended for high-volume production workloads.",
 				// "probabilistic", "The sampler makes a random sampling decision with the probability of sampling equal to the value of sampler param.",
 				// "ratelimiting", "The sampler uses a leaky bucket rate limiter to ensure that traces are sampled with a certain constant rate.",
 				// "remote", "The sampler consults Jaeger agent for the appropriate sampling strategy to use in the current service.",

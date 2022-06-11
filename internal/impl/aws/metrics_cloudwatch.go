@@ -249,7 +249,7 @@ func newCloudWatch(config metrics.CloudWatchConfig, log log.Modular) (metrics.Ty
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
-	sess, err := config.GetSession()
+	sess, err := GetSessionFromConf(config.Config)
 	if err != nil {
 		return nil, err
 	}

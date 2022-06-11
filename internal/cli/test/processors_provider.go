@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,15 +11,17 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	yaml "gopkg.in/yaml.v3"
 
+	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 type cachedConfig struct {
@@ -69,7 +72,7 @@ func OptProcessorsProviderSetLogger(logger log.Modular) func(*ProcessorsProvider
 // Supports injected mocked components in the parsed config. If the JSON Pointer
 // targets a single processor config it will be constructed and returned as an
 // array of one element.
-func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]iprocessor.V1, error) {
+func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]string, mocks map[string]yaml.Node) ([]processor.V1, error) {
 	confs, err := p.getConfs(jsonPtr, environment, mocks)
 	if err != nil {
 		return nil, err
@@ -79,7 +82,7 @@ func (p *ProcessorsProvider) Provide(jsonPtr string, environment map[string]stri
 
 // ProvideBloblang attempts to parse a Bloblang mapping and returns a processor
 // slice that executes it.
-func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]iprocessor.V1, error) {
+func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]processor.V1, error) {
 	if !filepath.IsAbs(pathStr) {
 		pathStr = filepath.Join(filepath.Dir(p.targetPath), pathStr)
 	}
@@ -95,22 +98,61 @@ func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]iprocessor.V1, e
 		return nil, mapErr
 	}
 
-	return []iprocessor.V1{
-		iprocessor.NewV2BatchedToV1Processor("bloblang", processor.NewBloblangFromExecutor(exec, p.logger), metrics.Noop()),
+	return []processor.V1{
+		processor.NewV2BatchedToV1Processor("bloblang", newBloblang(exec, p.logger), metrics.Noop()),
 	}, nil
+}
+
+type bloblangProc struct {
+	exec *mapping.Executor
+	log  log.Modular
+}
+
+func newBloblang(exec *mapping.Executor, log log.Modular) processor.V2Batched {
+	return &bloblangProc{
+		exec: exec,
+		log:  log,
+	}
+}
+
+func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+	newParts := make([]*message.Part, 0, msg.Len())
+	_ = msg.Iter(func(i int, part *message.Part) error {
+		p, err := b.exec.MapPart(i, msg)
+		if err != nil {
+			p = part.Copy()
+			b.log.Errorf("%v\n", err)
+			processor.MarkErr(p, spans[i], err)
+		}
+		if p != nil {
+			newParts = append(newParts, p)
+		}
+		return nil
+	})
+	if len(newParts) == 0 {
+		return nil, nil
+	}
+
+	newMsg := message.QuickBatch(nil)
+	newMsg.SetAll(newParts)
+	return []*message.Batch{newMsg}, nil
+}
+
+func (b *bloblangProc) Close(context.Context) error {
+	return nil
 }
 
 //------------------------------------------------------------------------------
 
-func (p *ProcessorsProvider) initProcs(confs cachedConfig) ([]iprocessor.V1, error) {
-	mgr, err := manager.NewV2(confs.mgr, mock.NewManager(), p.logger, metrics.Noop())
+func (p *ProcessorsProvider) initProcs(confs cachedConfig) ([]processor.V1, error) {
+	mgr, err := manager.New(confs.mgr, mock.NewManager(), p.logger, metrics.Noop())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise resources: %v", err)
 	}
 
-	procs := make([]iprocessor.V1, len(confs.procs))
+	procs := make([]processor.V1, len(confs.procs))
 	for i, conf := range confs.procs {
-		if procs[i], err = processor.New(conf, mgr, p.logger, metrics.Noop()); err != nil {
+		if procs[i], err = mgr.NewProcessor(conf); err != nil {
 			return nil, fmt.Errorf("failed to initialise processor index '%v': %v", i, err)
 		}
 	}

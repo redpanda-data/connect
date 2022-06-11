@@ -14,8 +14,9 @@ import (
 
 // Mapping is a compiled Bloblang mapping used to rewrite metrics.
 type Mapping struct {
-	m      *mapping.Executor
-	logger log.Modular
+	m          *mapping.Executor
+	logger     log.Modular
+	staticVars map[string]interface{}
 }
 
 // NewMapping parses a Bloblang mapping and returns a metrics mapping.
@@ -23,14 +24,31 @@ func NewMapping(mapping string, logger log.Modular) (*Mapping, error) {
 	if mapping == "" {
 		return &Mapping{m: nil, logger: logger}, nil
 	}
-	m, err := bloblang.GlobalEnvironment().OnlyPure().NewMapping(mapping)
+	m, err := bloblang.GlobalEnvironment().NewMapping(mapping)
 	if err != nil {
 		if perr, ok := err.(*parser.Error); ok {
 			return nil, fmt.Errorf("%v", perr.ErrorAtPosition([]rune(mapping)))
 		}
 		return nil, err
 	}
-	return &Mapping{m, logger}, nil
+	return &Mapping{m, logger, map[string]interface{}{}}, nil
+}
+
+// WithStaticVars adds a map of key/value pairs to the static variables of the
+// metrics mapping. These are variables that will be made available to each
+// invocation of the metrics mapping.
+func (m *Mapping) WithStaticVars(kvs map[string]interface{}) *Mapping {
+	newM := *m
+
+	newM.staticVars = map[string]interface{}{}
+	for k, v := range m.staticVars {
+		newM.staticVars[k] = v
+	}
+	for k, v := range kvs {
+		newM.staticVars[k] = v
+	}
+
+	return &newM
 }
 
 func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPath string, outLabelNames, outLabelValues []string) {
@@ -50,6 +68,9 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 
 	var input interface{} = path
 	vars := map[string]interface{}{}
+	for k, v := range m.staticVars {
+		vars[k] = v
+	}
 
 	var v interface{} = query.Nothing(nil)
 	if err := m.m.ExecOnto(query.FunctionContext{

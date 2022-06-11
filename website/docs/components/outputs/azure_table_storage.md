@@ -18,7 +18,6 @@ import TabItem from '@theme/TabItem';
 :::caution BETA
 This component is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with the component is found.
 :::
-
 Stores message parts in an Azure Table Storage table.
 
 Introduced in version 3.36.0.
@@ -82,12 +81,9 @@ output:
 
 Only one authentication method is required, `storage_connection_string` or `storage_account` and `storage_access_key`. If both are set then the `storage_connection_string` is given priority.
 
-In order to set the `table_name`,  `partition_key` and `row_key`
-you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are
-calculated per message of a batch.
+In order to set the `table_name`,  `partition_key` and `row_key` you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
 
-If the `properties` are not set in the config, all the `json` fields
-are marshaled and stored in the table, which will be created if it does not exist.
+If the `properties` are not set in the config, all the `json` fields are marshaled and stored in the table, which will be created if it does not exist.
 
 The `object` and `array` fields are marshaled as strings. e.g.:
 

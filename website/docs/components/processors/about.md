@@ -40,8 +40,8 @@ output:
     - try:
         - redis:
             url: tcp://localhost:6379
-            operator: sadd
-            key: ${! json("foo") }
+            command: sadd
+            args_mapping: 'root = [ this.key, this.value ]'
         - bloblang: root = deleted()
 ```
 

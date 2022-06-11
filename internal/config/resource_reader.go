@@ -12,13 +12,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 type resourceFileInfo struct {
@@ -65,10 +65,18 @@ func resInfoFromConfig(conf *manager.ResourceConfig) resourceFileInfo {
 	return resInfo
 }
 
-func (r *Reader) readResources(conf *manager.ResourceConfig) (lints []string, err error) {
-	resourcesPaths, err := ifilepath.Globs(r.resourcePaths)
+func (r *Reader) resourcePathsExpanded() ([]string, error) {
+	resourcePaths, err := ifilepath.Globs(r.resourcePaths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve resource glob pattern: %w", err)
+	}
+	return resourcePaths, nil
+}
+
+func (r *Reader) readResources(conf *manager.ResourceConfig) (lints []string, err error) {
+	resourcesPaths, err := r.resourcePathsExpanded()
+	if err != nil {
+		return nil, err
 	}
 	for _, path := range resourcesPaths {
 		rconf := manager.NewResourceConfig()

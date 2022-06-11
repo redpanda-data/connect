@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -131,11 +130,11 @@ root."-".S = json("id")
 	require.NoError(t, err)
 	assertBatchMatches(t, expBatch, resBatch)
 
-	errStr, _ := resBatch[0][0].MetaGet(processor.FailFlagKey)
-	assert.Empty(t, errStr)
+	err = resBatch[0][0].GetError()
+	assert.NoError(t, err)
 
-	errStr, _ = resBatch[0][1].MetaGet(processor.FailFlagKey)
-	assert.Empty(t, errStr)
+	err = resBatch[0][1].GetError()
+	assert.NoError(t, err)
 
 	expected := []*dynamodb.BatchStatementRequest{
 		{
@@ -204,14 +203,15 @@ root."-".S = json("content")
 	require.NoError(t, err)
 	assertBatchMatches(t, reqBatch, resBatch)
 
-	errStr, _ := resBatch[0][1].MetaGet(processor.FailFlagKey)
-	assert.Contains(t, errStr, "it all went wrong")
+	err = resBatch[0][1].GetError()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "it all went wrong")
 
-	errStr, _ = resBatch[0][0].MetaGet(processor.FailFlagKey)
-	assert.Empty(t, errStr)
+	err = resBatch[0][0].GetError()
+	require.NoError(t, err)
 
-	errStr, _ = resBatch[0][2].MetaGet(processor.FailFlagKey)
-	assert.Empty(t, errStr)
+	err = resBatch[0][2].GetError()
+	require.NoError(t, err)
 
 	expected := [][]*dynamodb.BatchStatementRequest{
 		{

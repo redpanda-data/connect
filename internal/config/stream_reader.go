@@ -98,24 +98,20 @@ func (r *Reader) readStreamFile(dir, path string, confs map[string]stream.Config
 	return lints, nil
 }
 
-func (r *Reader) readStreamFiles(streamMap map[string]stream.Config) ([]string, error) {
+func (r *Reader) streamPathsExpanded() ([][2]string, error) {
 	streamsPaths, err := ifilepath.Globs(r.streamsPaths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve stream glob pattern: %w", err)
 	}
 
-	pathLints := []string{}
+	var paths [][2]string
 	for _, target := range streamsPaths {
 		target = filepath.Clean(target)
 
 		if info, err := os.Stat(target); err != nil {
 			return nil, err
 		} else if !info.IsDir() {
-			tmpPathLints, err := r.readStreamFile("", target, streamMap)
-			if err != nil {
-				return nil, fmt.Errorf("failed to load config '%v': %v", target, err)
-			}
-			pathLints = append(pathLints, tmpPathLints...)
+			paths = append(paths, [2]string{"", target})
 			continue
 		}
 
@@ -129,18 +125,29 @@ func (r *Reader) readStreamFiles(streamMap map[string]stream.Config) ([]string, 
 				return nil
 			}
 
-			var lints []string
-			if lints, werr = r.readStreamFile(target, path, streamMap); werr != nil {
-				return fmt.Errorf("failed to load config '%v': %v", path, werr)
-			}
-
-			pathLints = append(pathLints, lints...)
+			paths = append(paths, [2]string{target, path})
 			return nil
 		}); err != nil {
 			return nil, err
 		}
 	}
-	return pathLints, nil
+	return paths, nil
+}
+
+func (r *Reader) readStreamFiles(streamMap map[string]stream.Config) (pathLints []string, err error) {
+	var streamsPaths [][2]string
+	if streamsPaths, err = r.streamPathsExpanded(); err != nil {
+		return nil, err
+	}
+
+	for _, target := range streamsPaths {
+		tmpPathLints, err := r.readStreamFile(target[0], target[1], streamMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config '%v': %v", target, err)
+		}
+		pathLints = append(pathLints, tmpPathLints...)
+	}
+	return
 }
 
 func (r *Reader) reactStreamUpdate(mgr bundle.NewManagement, strict bool, path string) bool {

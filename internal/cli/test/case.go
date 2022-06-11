@@ -9,7 +9,6 @@ import (
 
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 // InputPart defines an input part for a test case.
@@ -129,7 +128,9 @@ type ProcProvider interface {
 	ProvideBloblang(path string) ([]iprocessor.V1, error)
 }
 
-func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFailure, err error) {
+// ExecuteFrom executes a test case from the perspective of a given directory,
+// which is used for obtaining relative condition file imports.
+func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFailure, err error) {
 	var procSet []iprocessor.V1
 	if c.TargetMapping != "" {
 		if procSet, err = provider.ProvideBloblang(c.TargetMapping); err != nil {
@@ -165,7 +166,7 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 
 	inputMsg := message.QuickBatch(nil)
 	inputMsg.SetAll(parts)
-	outputBatches, result := processor.ExecuteAll(procSet, inputMsg)
+	outputBatches, result := iprocessor.ExecuteAll(procSet, inputMsg)
 	if result != nil {
 		reportFailure(fmt.Sprintf("processors resulted in error: %v", result))
 	}
@@ -192,7 +193,7 @@ func (c *Case) executeFrom(dir string, provider ProcProvider) (failures []CaseFa
 			for _, condErr := range condErrs {
 				reportFailure(fmt.Sprintf("batch %v message %v: %v", i, i2, condErr))
 			}
-			if procErr := processor.GetFail(part); len(procErr) > 0 && len(condErrs) > 0 {
+			if procErr := part.ErrorGet(); procErr != nil && len(condErrs) > 0 {
 				reportFailure(fmt.Sprintf("batch %v message %v: %v", i, i2, red(procErr)))
 			}
 			return nil

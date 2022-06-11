@@ -15,7 +15,6 @@ categories: ["Services","GCP"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Consumes messages from a GCP Cloud Pub/Sub subscription.
 
 ```yml

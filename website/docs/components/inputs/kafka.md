@@ -15,7 +15,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Connects to Kafka brokers and consumes one or more topics.
 
 
@@ -327,7 +326,7 @@ Default: `"none"`
 
 ### `sasl.user`
 
-A `PLAIN` username. It is recommended that you use environment variables to populate this field.
+A PLAIN username. It is recommended that you use environment variables to populate this field.
 
 
 Type: `string`  
@@ -341,7 +340,7 @@ user: ${USER}
 
 ### `sasl.password`
 
-A `PLAIN` password. It is recommended that you use environment variables to populate this field.
+A PLAIN password. It is recommended that you use environment variables to populate this field.
 
 
 Type: `string`  
@@ -355,7 +354,7 @@ password: ${PASSWORD}
 
 ### `sasl.access_token`
 
-A static `OAUTHBEARER` access token
+A static OAUTHBEARER access token
 
 
 Type: `string`  
@@ -363,7 +362,7 @@ Default: `""`
 
 ### `sasl.token_cache`
 
-Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch `OAUTHBEARER` tokens from
+Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch OAUTHBEARER tokens from
 
 
 Type: `string`  

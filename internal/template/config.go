@@ -211,8 +211,12 @@ func FieldConfigSpec() docs.FieldSpecs {
 	return docs.FieldSpecs{
 		docs.FieldString("name", "The name of the field."),
 		docs.FieldString("description", "A description of the field.").HasDefault(""),
-		docs.FieldString("type", "The scalar type of the field.").HasOptions(
-			"string", "int", "float", "bool",
+		docs.FieldString("type", "The scalar type of the field.").HasAnnotatedOptions(
+			"string", "standard string type",
+			"int", "standard integer type",
+			"float", "standard float type",
+			"bool", "a boolean true/false",
+			"unknown", "allows for nesting arbitrary configuration inside of a field",
 		),
 		docs.FieldString("kind", "The kind of the field.").HasOptions(
 			"scalar", "map", "list",
@@ -220,6 +224,14 @@ func FieldConfigSpec() docs.FieldSpecs {
 		docs.FieldAnything("default", "An optional default value for the field. If a default value is not specified then a configuration without the field is considered incorrect.").Optional(),
 		docs.FieldBool("advanced", "Whether this field is considered advanced.").HasDefault(false),
 	}
+}
+
+func templateMetricsMappingDocs() docs.FieldSpec {
+	f := docs.MetricsMappingFieldSpec("metrics_mapping")
+	f.Description += `
+
+Invocations of this mapping are able to reference a variable $label in order to obtain the value of the label provided to the template config. This allows you to match labels with the root of the config.`
+	return f
 }
 
 // ConfigSpec returns a configuration spec for a template.
@@ -247,7 +259,7 @@ func ConfigSpec() docs.FieldSpecs {
 		docs.FieldBloblang(
 			"mapping", "A [Bloblang](/docs/guides/bloblang/about) mapping that translates the fields of the template into a valid Benthos configuration for the target component type.",
 		),
-		docs.MetricsMappingFieldSpec("metrics_mapping"),
+		templateMetricsMappingDocs(),
 		docs.FieldObject(
 			"tests", "Optional unit test definitions for the template that verify certain configurations produce valid configs. These tests are executed with the command `benthos template lint`.",
 		).Array().WithChildren(

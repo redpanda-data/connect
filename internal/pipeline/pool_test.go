@@ -1,4 +1,4 @@
-package pipeline
+package pipeline_test
 
 import (
 	"context"
@@ -10,10 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/pipeline"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 func TestPoolBasic(t *testing.T) {
@@ -25,7 +28,7 @@ func TestPoolBasic(t *testing.T) {
 		mockProc.dropChan <- true
 	}()
 
-	proc, err := newPoolV2(1, log.Noop(), mockProc)
+	proc, err := pipeline.NewPool(1, log.Noop(), mockProc)
 	require.NoError(t, err)
 
 	tChan, resChan := make(chan message.Transaction), make(chan error)
@@ -120,7 +123,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
-	proc, err := newPoolV2(1, log.Noop(), mockProc)
+	proc, err := pipeline.NewPool(1, log.Noop(), mockProc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,11 +196,11 @@ func TestPoolMultiThreads(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	conf := NewConfig()
+	conf := pipeline.NewConfig()
 	conf.Threads = 2
 	conf.Processors = append(conf.Processors, processor.NewConfig())
 
-	proc, err := New(conf, mock.NewManager())
+	proc, err := pipeline.New(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,11 +265,11 @@ func TestPoolMultiThreads(t *testing.T) {
 }
 
 func TestPoolMultiNaturalClose(t *testing.T) {
-	conf := NewConfig()
+	conf := pipeline.NewConfig()
 	conf.Threads = 2
 	conf.Processors = append(conf.Processors, processor.NewConfig())
 
-	proc, err := New(conf, mock.NewManager())
+	proc, err := pipeline.New(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

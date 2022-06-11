@@ -22,26 +22,26 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		dyn, err := newDynamoDBWriter(c.AWSDynamoDB, nm, nm.Logger())
 		if err != nil {
 			return nil, err
 		}
-		w, err := ooutput.NewAsyncWriter("aws_dynamodb", c.AWSDynamoDB.MaxInFlight, dyn, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("aws_dynamodb", c.AWSDynamoDB.MaxInFlight, dyn, nm.Logger(), nm.Metrics())
 		if err != nil {
 			return nil, err
 		}
-		return ooutput.NewBatcherFromConfig(c.AWSDynamoDB.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(c.AWSDynamoDB.Batching, w, nm, nm.Logger(), nm.Metrics())
 	}), docs.ComponentSpec{
 		Name:    "aws_dynamodb",
 		Version: "3.36.0",
@@ -114,7 +114,7 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldString("ttl_key", "The column key to place the TTL value within.").Advanced(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
-		).WithChildren(session.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewDynamoDBConfig()),
+		).WithChildren(session.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewDynamoDBConfig()),
 		Categories: []string{
 			"Services",
 			"AWS",
@@ -127,7 +127,7 @@ allowing you to transfer data across accounts. You can find out more
 
 type dynamoDBWriter struct {
 	client dynamodbiface.DynamoDBAPI
-	conf   ooutput.DynamoDBConfig
+	conf   output.DynamoDBConfig
 	log    log.Modular
 
 	backoffCtor func() backoff.BackOff
@@ -140,8 +140,8 @@ type dynamoDBWriter struct {
 }
 
 func newDynamoDBWriter(
-	conf ooutput.DynamoDBConfig,
-	mgr interop.Manager,
+	conf output.DynamoDBConfig,
+	mgr bundle.NewManagement,
 	log log.Modular,
 ) (*dynamoDBWriter, error) {
 	db := &dynamoDBWriter{
@@ -189,7 +189,7 @@ func (d *dynamoDBWriter) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := d.conf.GetSession()
+	sess, err := GetSessionFromConf(d.conf.SessionConfig.Config)
 	if err != nil {
 		return err
 	}

@@ -13,9 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/integration"
-
-	// Bring in legacy definition
-	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 var elasticIndex = `{
@@ -126,7 +123,7 @@ func TestIntegrationElasticsearchV7(t *testing.T) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Second * 60
 	resource, err := pool.Run("elasticsearch", "7.17.2", []string{
 		"discovery.type=single-node",
 	})

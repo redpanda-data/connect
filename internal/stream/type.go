@@ -88,12 +88,12 @@ func (t *Type) IsReady() bool {
 
 func (t *Type) start() (err error) {
 	// Constructors
-	iMgr := t.manager.IntoPath("input").(bundle.NewManagement)
+	iMgr := t.manager.IntoPath("input")
 	if t.inputLayer, err = iMgr.NewInput(t.conf.Input); err != nil {
 		return
 	}
 	if t.conf.Buffer.Type != "none" {
-		bMgr := t.manager.IntoPath("buffer").(bundle.NewManagement)
+		bMgr := t.manager.IntoPath("buffer")
 		if t.bufferLayer, err = bMgr.NewBuffer(t.conf.Buffer); err != nil {
 			return
 		}
@@ -104,7 +104,7 @@ func (t *Type) start() (err error) {
 			return
 		}
 	}
-	oMgr := t.manager.IntoPath("output").(bundle.NewManagement)
+	oMgr := t.manager.IntoPath("output")
 	if t.outputLayer, err = oMgr.NewOutput(t.conf.Output); err != nil {
 		return
 	}

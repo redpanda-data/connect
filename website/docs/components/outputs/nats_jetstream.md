@@ -37,6 +37,7 @@ output:
   nats_jetstream:
     urls: []
     subject: ""
+    headers: {}
     max_in_flight: 1024
 ```
 
@@ -50,6 +51,7 @@ output:
   nats_jetstream:
     urls: []
     subject: ""
+    headers: {}
     max_in_flight: 1024
     tls:
       enabled: false
@@ -128,6 +130,24 @@ subject: foo.bar.baz
 subject: ${! meta("kafka_topic") }
 
 subject: foo.${! json("meta.type") }
+```
+
+### `headers`
+
+Explicit message headers to add to messages.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `object`  
+Default: `{}`  
+Requires version 4.1.0 or newer  
+
+```yml
+# Examples
+
+headers:
+  Content-Type: application/json
+  Timestamp: ${!meta("Timestamp")}
 ```
 
 ### `max_in_flight`

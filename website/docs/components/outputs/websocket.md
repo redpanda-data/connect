@@ -15,7 +15,6 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Sends messages to an HTTP server via a websocket connection.
 
 
@@ -65,6 +64,7 @@ output:
       private_key_file: ""
       signing_method: ""
       claims: {}
+      headers: {}
 ```
 
 </TabItem>
@@ -307,6 +307,14 @@ Default: `""`
 ### `jwt.claims`
 
 A value used to identify the claims that issued the JWT.
+
+
+Type: `object`  
+Default: `{}`  
+
+### `jwt.headers`
+
+Add optional key/value headers to the JWT.
 
 
 Type: `object`  

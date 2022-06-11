@@ -10,60 +10,58 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/template"
 )
 
 var initNativeOnce sync.Once
 
-func initNativeTemplates() {
-	if werr := fs.WalkDir(template.NativeTemplates, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
+// InitNativeTemplates initialises any templates that were compiled into the
+// binary, these can be found in ./template/embed.go.
+func InitNativeTemplates() (err error) {
+	initNativeOnce.Do(func() {
+		err = fs.WalkDir(template.NativeTemplates, ".", func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			tBytes, err := fs.ReadFile(template.NativeTemplates, path)
+			if err != nil {
+				return err
+			}
+
+			var conf Config
+			if err = yaml.Unmarshal(tBytes, &conf); err != nil {
+				return fmt.Errorf("failed to parse template '%v': %w", path, err)
+			}
+
+			tmpl, err := conf.compile()
+			if err != nil {
+				return fmt.Errorf("failed to compile template %v: %w", path, err)
+			}
+
+			if err := registerTemplate(tmpl); err != nil {
+				return fmt.Errorf("failed to register template %v: %w", path, err)
+			}
+
 			return nil
-		}
-		tBytes, err := fs.ReadFile(template.NativeTemplates, path)
-		if err != nil {
-			return err
-		}
-
-		var conf Config
-		if err = yaml.Unmarshal(tBytes, &conf); err != nil {
-			return fmt.Errorf("failed to parse template '%v': %w", path, err)
-		}
-
-		tmpl, err := conf.compile()
-		if err != nil {
-			return fmt.Errorf("failed to compile template %v: %w", path, err)
-		}
-
-		if err := registerTemplate(tmpl); err != nil {
-			return fmt.Errorf("failed to register template %v: %w", path, err)
-		}
-
-		return nil
-	}); werr != nil {
-		panic(werr)
-	}
+		})
+	})
+	return
 }
 
 // InitTemplates parses and registers native templates, as well as templates
 // at paths provided, and returns any linting errors that occur.
 func InitTemplates(templatesPaths ...string) ([]string, error) {
-	initNativeOnce.Do(initNativeTemplates)
-
 	var lints []string
 	for _, tPath := range templatesPaths {
 		tmplConf, tLints, err := ReadConfig(tPath)
@@ -168,14 +166,16 @@ func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
 		}
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": c.Label,
+			}))
 		}
 		return nm.NewCache(conf)
 	}, tmpl.spec)
 }
 
 func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
-	return set.Add(func(c input.Config, nm bundle.NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (iinput.Streamed, error) {
+	return set.Add(func(c input.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (input.Streamed, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -190,14 +190,16 @@ func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
 		conf.Processors = append(conf.Processors, c.Processors...)
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": c.Label,
+			}))
 		}
 		return nm.NewInput(conf, pcf...)
 	}, tmpl.spec)
 }
 
 func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
-	return set.Add(func(c output.Config, nm bundle.NewManagement, pcf ...iprocessor.PipelineConstructorFunc) (ioutput.Streamed, error) {
+	return set.Add(func(c output.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (output.Streamed, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -212,14 +214,16 @@ func registerOutputTemplate(tmpl *compiled, set *bundle.OutputSet) error {
 		conf.Processors = append(c.Processors, conf.Processors...)
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": c.Label,
+			}))
 		}
 		return nm.NewOutput(conf, pcf...)
 	}, tmpl.spec)
 }
 
 func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
-	return set.Add(func(c processor.Config, nm bundle.NewManagement) (iprocessor.V1, error) {
+	return set.Add(func(c processor.Config, nm bundle.NewManagement) (processor.V1, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -231,7 +235,9 @@ func registerProcessorTemplate(tmpl *compiled, set *bundle.ProcessorSet) error {
 		}
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": c.Label,
+			}))
 		}
 		return nm.NewProcessor(conf)
 	}, tmpl.spec)
@@ -250,7 +256,9 @@ func registerRateLimitTemplate(tmpl *compiled, set *bundle.RateLimitSet) error {
 		}
 
 		if tmpl.metricsMapping != nil {
-			nm = WithMetricsMapping(nm, tmpl.metricsMapping)
+			nm = WithMetricsMapping(nm, tmpl.metricsMapping.WithStaticVars(map[string]interface{}{
+				"label": c.Label,
+			}))
 		}
 		return nm.NewRateLimit(conf)
 	}, tmpl.spec)

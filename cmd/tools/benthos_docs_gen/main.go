@@ -12,13 +12,14 @@ import (
 	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
+	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/template"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
@@ -50,7 +51,7 @@ func main() {
 	flag.StringVar(&docsDir, "dir", docsDir, "The directory to write docs to")
 	flag.Parse()
 
-	if _, err := template.InitTemplates(); err != nil {
+	if err := template.InitNativeTemplates(); err != nil {
 		panic(err)
 	}
 
@@ -72,6 +73,9 @@ func main() {
 
 	// Unit test docs
 	doTestDocs(docsDir)
+
+	// Logger docs
+	doLogger(docsDir)
 
 	// Template docs
 	doTemplates(docsDir)
@@ -163,6 +167,15 @@ func doTestDocs(dir string) {
 	}
 
 	create("test docs", filepath.Join(dir, "..", "configuration", "unit_testing.md"), mdSpec)
+}
+
+func doLogger(dir string) {
+	mdSpec, err := log.DocsMarkdown()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to generate docs for logger: %v", err))
+	}
+
+	create("logger docs", filepath.Join(dir, "logger", "about.md"), mdSpec)
 }
 
 func doTemplates(dir string) {

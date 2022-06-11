@@ -14,10 +14,11 @@ import (
 
 // JWTConfig holds the configuration parameters for an JWT exchange.
 type JWTConfig struct {
-	Enabled        bool          `json:"enabled" yaml:"enabled"`
-	Claims         jwt.MapClaims `json:"claims" yaml:"claims"`
-	SigningMethod  string        `json:"signing_method" yaml:"signing_method"`
-	PrivateKeyFile string        `json:"private_key_file" yaml:"private_key_file"`
+	Enabled        bool                   `json:"enabled" yaml:"enabled"`
+	Claims         jwt.MapClaims          `json:"claims" yaml:"claims"`
+	Headers        map[string]interface{} `json:"headers" yaml:"headers"`
+	SigningMethod  string                 `json:"signing_method" yaml:"signing_method"`
+	PrivateKeyFile string                 `json:"private_key_file" yaml:"private_key_file"`
 
 	// internal private fields
 	rsaKeyMx *sync.Mutex
@@ -30,6 +31,7 @@ func NewJWTConfig() JWTConfig {
 	return JWTConfig{
 		Enabled:        false,
 		Claims:         map[string]interface{}{},
+		Headers:        map[string]interface{}{},
 		SigningMethod:  "",
 		PrivateKeyFile: "",
 		rsaKeyMx:       &sync.Mutex{},
@@ -49,19 +51,23 @@ func (j JWTConfig) Sign(req *http.Request) error {
 		return err
 	}
 
-	var bearer *jwt.Token
+	var token *jwt.Token
 	switch j.SigningMethod {
 	case "RS256":
-		bearer = jwt.NewWithClaims(jwt.SigningMethodRS256, j.Claims)
+		token = jwt.NewWithClaims(jwt.SigningMethodRS256, j.Claims)
 	case "RS384":
-		bearer = jwt.NewWithClaims(jwt.SigningMethodRS384, j.Claims)
+		token = jwt.NewWithClaims(jwt.SigningMethodRS384, j.Claims)
 	case "RS512":
-		bearer = jwt.NewWithClaims(jwt.SigningMethodRS512, j.Claims)
+		token = jwt.NewWithClaims(jwt.SigningMethodRS512, j.Claims)
 	default:
 		return fmt.Errorf("jwt signing method %s not acepted. Try with RS256, RS384 or RS512", j.SigningMethod)
 	}
 
-	ss, err := bearer.SignedString(*j.rsaKey)
+	for name, value := range j.Headers {
+		token.Header[name] = value
+	}
+
+	ss, err := token.SignedString(*j.rsaKey)
 	if err != nil {
 		return fmt.Errorf("failed to sign jwt: %v", err)
 	}

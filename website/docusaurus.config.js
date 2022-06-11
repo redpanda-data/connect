@@ -43,6 +43,7 @@ module.exports = {
         {to: 'blog', label: 'Blog', position: 'left'},
         {to: 'videos', label: 'Videos', position: 'left'},
         {to: 'community', label: 'Community', position: 'right'},
+        {to: 'support', label: 'Support', position: 'right'},
         {to: 'https://v3.benthos.dev', label: 'Version 3 Docs', position: 'right'},
         {
           href: 'https://github.com/benthosdev/benthos/releases/latest',
@@ -62,15 +63,32 @@ module.exports = {
       style: 'dark',
       links: [
         {
-          title: 'Docs',
+          title: 'Help',
           items: [
             {
-              label: 'Getting started',
+              label: 'Support',
+              to: 'support',
+            },
+            {
+              label: 'Documentation',
               to: 'docs/guides/getting_started',
             },
             {
               label: 'Videos',
               to: 'videos',
+            },
+          ],
+        },
+        {
+          title: 'Swag',
+          items: [
+            {
+              label: 'Meet the Mascot',
+              to: 'blobfish',
+            },
+            {
+              label: 'Purchase Stickers',
+              href: 'https://www.redbubble.com/people/earzola/shop',
             },
           ],
         },
@@ -82,26 +100,24 @@ module.exports = {
               to: 'community',
             },
             {
-              label: 'GitHub',
+              label: 'See the Code',
               href: 'https://github.com/benthosdev/benthos',
             },
-          ],
-        },
-        {
-          title: 'Social',
-          items: [
             {
-              label: 'Get in touch',
-              to: 'community',
-            },
-            {
-              label: 'Mascot',
-              to: 'blobfish',
+              label: 'Sponsor the Developers',
+              href: 'https://github.com/sponsors/Jeffail',
             },
           ],
         },
       ],
       copyright: `Copyright © ${new Date().getFullYear()} Ashley Jeffs.`,
+    },
+    announcementBar: {
+      id: 'introducing_studio',
+      content: '<strong>🎨 Build your configs visually with the new <a target="_blank" rel="noopener noreferrer" href="https://studio.benthos.dev">Benthos Studio</a> (BETA) 🎨</strong>',
+      backgroundColor: 'var(--ifm-color-primary)',
+      textColor: 'var(--ifm-background-color)',
+      isCloseable: true,
     },
     algolia: {
       appId: 'WBY9Z65YR4',

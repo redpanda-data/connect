@@ -1,6 +1,8 @@
 package message
 
 import (
+	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -9,23 +11,21 @@ import (
 )
 
 func TestMessageSerialization(t *testing.T) {
-	m := QuickBatch([][]byte{
+	input := [][]byte{
 		[]byte("hello"),
 		[]byte("world"),
 		[]byte("12345"),
-	})
+	}
 
-	b := ToBytes(m)
-
-	m2, err := FromBytes(b)
+	m2, err := FromBytes(SerializeBytes(input))
 
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	if !reflect.DeepEqual(GetAllBytes(m), GetAllBytes(m2)) {
-		t.Errorf("Messages not equal: %v != %v", m, m2)
+	if !reflect.DeepEqual(input, GetAllBytes(m2)) {
+		t.Errorf("Messages not equal: %v != %v", input, m2)
 	}
 }
 
@@ -252,6 +252,32 @@ func TestMessageCopy(t *testing.T) {
 	if exp, act := "bar", m.Get(0).MetaGet("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
+}
+
+func TestMessageErrors(t *testing.T) {
+	p1 := NewPart([]byte("foo"))
+	assert.NoError(t, p1.ErrorGet())
+
+	p2 := p1.WithContext(context.Background())
+	assert.NoError(t, p2.ErrorGet())
+
+	p3 := p2.Copy()
+	assert.NoError(t, p3.ErrorGet())
+
+	p1.ErrorSet(errors.New("err1"))
+	assert.EqualError(t, p1.ErrorGet(), "err1")
+	assert.EqualError(t, p2.ErrorGet(), "err1")
+	assert.NoError(t, p3.ErrorGet())
+
+	p2.ErrorSet(errors.New("err2"))
+	assert.EqualError(t, p1.ErrorGet(), "err2")
+	assert.EqualError(t, p2.ErrorGet(), "err2")
+	assert.NoError(t, p3.ErrorGet())
+
+	p3.ErrorSet(errors.New("err3"))
+	assert.EqualError(t, p1.ErrorGet(), "err2")
+	assert.EqualError(t, p2.ErrorGet(), "err2")
+	assert.EqualError(t, p3.ErrorGet(), "err3")
 }
 
 func TestMessageDeepCopy(t *testing.T) {

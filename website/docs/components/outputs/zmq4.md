@@ -53,12 +53,17 @@ output:
 </TabItem>
 </Tabs>
 
-zmqOutput is supported but currently depends on C bindings. Since this is an annoyance when building or using Benthos it is not compiled by default.
+By default Benthos does not build with components that require linking to external libraries. If you wish to build Benthos locally with this component then set the build tag `x_benthos_extra`:
 
-There is a specific docker tag postfix `-cgo` for C builds containing ZMQ support.
+```shell
+# With go
+go install -tags "x_benthos_extra" github.com/benthosdev/benthos/v4/cmd/benthos@latest
 
-zmqOutput input supports PULL and SUB sockets only. If there is demand for other socket types then they can be added easily.
+# Using make
+make TAGS=x_benthos_extra
+```
 
+There is a specific docker tag postfix `-cgo` for C builds containing this component.
 
 ## Fields
 

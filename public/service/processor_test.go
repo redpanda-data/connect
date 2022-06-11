@@ -11,7 +11,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 type fnProcessor struct {
@@ -77,7 +76,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 	assert.Equal(t, 1, msgs[0].Len())
 	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
 	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "invalid character 'o' in literal null (expecting 'u')", processor.GetFail(msgs[0].Get(0)))
+	assert.EqualError(t, msgs[0].Get(0).ErrorGet(), "invalid character 'o' in literal null (expecting 'u')")
 }
 
 func TestProcessorAirGapOneToMany(t *testing.T) {
@@ -171,7 +170,7 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 	assert.Equal(t, 1, msgs[0].Len())
 	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
 	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "invalid character 'o' in literal null (expecting 'u')", processor.GetFail(msgs[0].Get(0)))
+	assert.EqualError(t, msgs[0].Get(0).ErrorGet(), "invalid character 'o' in literal null (expecting 'u')")
 }
 
 func TestBatchProcessorAirGapOneToMany(t *testing.T) {

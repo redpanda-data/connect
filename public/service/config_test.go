@@ -356,3 +356,34 @@ b: this is ${! json( } an invalid interp string
 	res := iConf.String(NewMessage([]byte("hello world")))
 	assert.Equal(t, "foo hello world bar", res)
 }
+
+func TestConfigInterpolatedStringMap(t *testing.T) {
+	spec := NewConfigSpec().
+		Field(NewInterpolatedStringMapField("a")).
+		Field(NewStringMapField("b"))
+
+	parsedConfig, err := spec.ParseYAML(`
+a:
+  c: foo ${! content() } bar
+  d: xyzzy ${! content() } baz
+b:
+  e: this is ${! json( } an invalid interp string
+  f: this is another invalid interp string
+`, nil)
+	require.NoError(t, err)
+
+	_, err = parsedConfig.FieldInterpolatedStringMap("b")
+	require.Error(t, err)
+
+	_, err = parsedConfig.FieldInterpolatedStringMap("g")
+	require.Error(t, err)
+
+	iConf, err := parsedConfig.FieldInterpolatedStringMap("a")
+	require.NoError(t, err)
+
+	res := iConf["c"].String(NewMessage([]byte("hello world")))
+	assert.Equal(t, "foo hello world bar", res)
+
+	res = iConf["d"].String(NewMessage([]byte("hello world")))
+	assert.Equal(t, "xyzzy hello world baz", res)
+}

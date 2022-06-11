@@ -44,7 +44,7 @@ The child input to consume from.
 
 
 Type: `input`  
-Default: `{}`  
+Default: `null`  
 
 ### `check`
 

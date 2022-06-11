@@ -5,14 +5,15 @@ import (
 	"net/http"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -30,6 +31,9 @@ type Manager struct {
 	// OnRegisterEndpoint can be set in order to intercept endpoints registered
 	// by components.
 	OnRegisterEndpoint func(path string, h http.HandlerFunc)
+
+	M metrics.Type
+	L log.Modular
 }
 
 // NewManager provides a new mock manager.
@@ -41,29 +45,86 @@ func NewManager() *Manager {
 		Outputs:    map[string]OutputWriter{},
 		Processors: map[string]Processor{},
 		Pipes:      map[string]<-chan message.Transaction{},
+		M:          metrics.Noop(),
+		L:          log.Noop(),
 	}
 }
 
 // ForStream returns the same mock manager.
-func (m *Manager) ForStream(id string) interop.Manager { return m }
+func (m *Manager) ForStream(id string) bundle.NewManagement { return m }
 
 // IntoPath returns the same mock manager.
-func (m *Manager) IntoPath(segments ...string) interop.Manager { return m }
+func (m *Manager) IntoPath(segments ...string) bundle.NewManagement { return m }
+
+// WithAddedMetrics returns the same mock manager.
+func (m *Manager) WithAddedMetrics(m2 metrics.Type) bundle.NewManagement { return m }
+
+// NewBuffer always errors on invalid type.
+func (m *Manager) NewBuffer(conf buffer.Config) (buffer.Streamed, error) {
+	return nil, component.ErrInvalidType("buffer", conf.Type)
+}
+
+// NewCache always errors on invalid type.
+func (m *Manager) NewCache(conf cache.Config) (cache.V1, error) {
+	return bundle.AllCaches.Init(conf, m)
+}
+
+// StoreCache always errors on invalid type.
+func (m *Manager) StoreCache(ctx context.Context, name string, conf cache.Config) error {
+	return component.ErrInvalidType("cache", conf.Type)
+}
+
+// NewInput always errors on invalid type.
+func (m *Manager) NewInput(conf input.Config, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
+	return bundle.AllInputs.Init(conf, m, pipelines...)
+}
+
+// StoreInput always errors on invalid type.
+func (m *Manager) StoreInput(ctx context.Context, name string, conf input.Config) error {
+	return component.ErrInvalidType("input", conf.Type)
+}
+
+// NewProcessor always errors on invalid type.
+func (m *Manager) NewProcessor(conf processor.Config) (processor.V1, error) {
+	return bundle.AllProcessors.Init(conf, m)
+}
+
+// StoreProcessor always errors on invalid type.
+func (m *Manager) StoreProcessor(ctx context.Context, name string, conf processor.Config) error {
+	return component.ErrInvalidType("processor", conf.Type)
+}
+
+// NewOutput always errors on invalid type.
+func (m *Manager) NewOutput(conf output.Config, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error) {
+	return bundle.AllOutputs.Init(conf, m, pipelines...)
+}
+
+// StoreOutput always errors on invalid type.
+func (m *Manager) StoreOutput(ctx context.Context, name string, conf output.Config) error {
+	return component.ErrInvalidType("output", conf.Type)
+}
+
+// NewRateLimit always errors on invalid type.
+func (m *Manager) NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error) {
+	return bundle.AllRateLimits.Init(conf, m)
+}
+
+// StoreRateLimit always errors on invalid type.
+func (m *Manager) StoreRateLimit(ctx context.Context, name string, conf ratelimit.Config) error {
+	return component.ErrInvalidType("rate_limit", conf.Type)
+}
 
 // Path always returns empty.
 func (m *Manager) Path() []string { return nil }
-
-// WithAddedMetrics returns the same mock manager.
-func (m *Manager) WithAddedMetrics(m2 metrics.Type) interop.Manager { return m }
 
 // Label always returns empty.
 func (m *Manager) Label() string { return "" }
 
 // Metrics returns a no-op metrics.
-func (m *Manager) Metrics() metrics.Type { return metrics.Noop() }
+func (m *Manager) Metrics() metrics.Type { return m.M }
 
 // Logger returns a no-op logger.
-func (m *Manager) Logger() log.Modular { return log.Noop() }
+func (m *Manager) Logger() log.Modular { return m.L }
 
 // RegisterEndpoint registers a server wide HTTP endpoint.
 func (m *Manager) RegisterEndpoint(path, desc string, h http.HandlerFunc) {

@@ -20,26 +20,6 @@ func TestGetAllBytes(t *testing.T) {
 	}
 }
 
-func TestSetAllMetadata(t *testing.T) {
-	m := QuickBatch([][]byte{
-		[]byte("foo"),
-		[]byte("bar"),
-		[]byte("baz"),
-	})
-	SetAllMetadata(m, map[string]string{
-		"foo": "bar",
-	})
-	if exp, act := "bar", m.Get(0).MetaGet("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-	if exp, act := "bar", m.Get(1).MetaGet("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-	if exp, act := "bar", m.Get(2).MetaGet("foo"); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-}
-
 func TestCloneGeneric(t *testing.T) {
 	var original interface{}
 	var cloned interface{}

@@ -15,7 +15,6 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Connects to a server and continuously performs requests for a single message.
 
 
@@ -76,6 +75,7 @@ input:
       private_key_file: ""
       signing_method: ""
       claims: {}
+      headers: {}
     basic_auth:
       enabled: false
       username: ""
@@ -112,8 +112,7 @@ input:
 </TabItem>
 </Tabs>
 
-The URL and header values of this type can be dynamically set using function
-interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+The URL and header values of this type can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
 
 ### Streaming
 
@@ -138,7 +137,7 @@ input:
   http_client:
     url: >-
       https://api.example.com/search?query=allmyfoos&start_time=${! (
-        (timestamp_unix()-300).format_timestamp("2006-01-02T15:04:05Z","UTC").escape_url_query()
+        (timestamp_unix()-300).ts_format("2006-01-02T15:04:05Z","UTC").escape_url_query()
       ) }${! ("&next_token="+this.meta.next_token.not_null()) | "" }
     verb: GET
     rate_limit: foo_searches
@@ -379,6 +378,14 @@ Default: `""`
 ### `jwt.claims`
 
 A value used to identify the claims that issued the JWT.
+
+
+Type: `object`  
+Default: `{}`  
+
+### `jwt.headers`
+
+Add optional key/value headers to the JWT.
 
 
 Type: `object`  

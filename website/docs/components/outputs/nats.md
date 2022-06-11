@@ -15,7 +15,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Publish to an NATS subject.
 
 
@@ -64,8 +63,7 @@ output:
 </TabItem>
 </Tabs>
 
-This output will interpolate functions within the subject field, you
-can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
+This output will interpolate functions within the subject field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ### Authentication
 

@@ -1,29 +1,24 @@
-package kafka
+package kafka_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/impl/kafka"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
-
-	// Bring in legacy definition
-	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func TestIntegrationSaramaRedpanda(t *testing.T) {
@@ -62,19 +57,19 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		outConf := writer.NewKafkaConfig()
+		outConf := output.NewKafkaConfig()
 		outConf.TargetVersion = "2.1.0"
 		outConf.Addresses = []string{"localhost:" + kafkaPortStr}
 		outConf.Topic = "pls_ignore_just_testing_connection"
-		tmpOutput, serr := writer.NewKafka(outConf, mock.NewManager(), log.Noop(), metrics.Noop())
+		tmpOutput, serr := kafka.NewKafkaWriter(outConf, mock.NewManager(), log.Noop())
 		if serr != nil {
 			return serr
 		}
 		defer tmpOutput.CloseAsync()
-		if serr := tmpOutput.Connect(); serr != nil {
+		if serr := tmpOutput.ConnectWithContext(context.Background()); serr != nil {
 			return serr
 		}
-		return tmpOutput.Write(message.QuickBatch([][]byte{
+		return tmpOutput.WriteWithContext(context.Background(), message.QuickBatch([][]byte{
 			[]byte("foo message"),
 		}))
 	}))
@@ -282,55 +277,6 @@ input:
 
 }
 
-func createKafkaTopic(address, id string, partitions int32) error {
-	topicName := fmt.Sprintf("topic-%v", id)
-
-	b := sarama.NewBroker(address)
-	defer b.Close()
-
-	if err := b.Open(sarama.NewConfig()); err != nil {
-		return err
-	}
-
-	req := &sarama.CreateTopicsRequest{
-		TopicDetails: map[string]*sarama.TopicDetail{
-			topicName: {
-				NumPartitions:     partitions,
-				ReplicationFactor: 1,
-			},
-		},
-	}
-
-	res, err := b.CreateTopics(req)
-	if err != nil {
-		return err
-	}
-	if len(res.TopicErrors) > 0 {
-		if errStr := res.TopicErrors[topicName].ErrMsg; errStr != nil {
-			return errors.New(*errStr)
-		}
-	}
-
-	var meta *sarama.MetadataResponse
-	for i := 0; i < 20; i++ {
-		meta, err = b.GetMetadata(&sarama.MetadataRequest{
-			Topics: []string{topicName},
-		})
-		if err == nil && len(meta.Topics) == 1 && len(meta.Topics[0].Partitions) == int(partitions) {
-			break
-		}
-		<-time.After(time.Millisecond * 100)
-	}
-	if err != nil {
-		return err
-	}
-	if len(meta.Topics) == 0 || len(meta.Topics[0].Partitions) != int(partitions) {
-		return fmt.Errorf("failed to create topic: %v", topicName)
-	}
-
-	return nil
-}
-
 func TestIntegrationSaramaOld(t *testing.T) {
 	integration.CheckSkip(t)
 	if runtime.GOOS == "darwin" {
@@ -395,19 +341,19 @@ func TestIntegrationSaramaOld(t *testing.T) {
 	address := fmt.Sprintf("%v:%v", hostIP, kafkaPortStr)
 
 	require.NoError(t, pool.Retry(func() error {
-		outConf := writer.NewKafkaConfig()
+		outConf := output.NewKafkaConfig()
 		outConf.TargetVersion = "2.1.0"
 		outConf.Addresses = []string{address}
 		outConf.Topic = "pls_ignore_just_testing_connection"
-		tmpOutput, serr := writer.NewKafka(outConf, mock.NewManager(), log.Noop(), metrics.Noop())
+		tmpOutput, serr := kafka.NewKafkaWriter(outConf, mock.NewManager(), log.Noop())
 		if serr != nil {
 			return serr
 		}
 		defer tmpOutput.CloseAsync()
-		if serr := tmpOutput.Connect(); serr != nil {
+		if serr := tmpOutput.ConnectWithContext(context.Background()); serr != nil {
 			return serr
 		}
-		return tmpOutput.Write(message.QuickBatch([][]byte{
+		return tmpOutput.WriteWithContext(context.Background(), message.QuickBatch([][]byte{
 			[]byte("foo message"),
 		}))
 	}))

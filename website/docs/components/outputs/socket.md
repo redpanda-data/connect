@@ -15,7 +15,6 @@ categories: ["Network"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Connects to a (tcp/udp/unix) server and sends a continuous stream of data, dividing messages according to the specified codec.
 
 ```yml

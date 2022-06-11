@@ -14,14 +14,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
+
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
 
@@ -47,19 +48,19 @@ func TestComponentExamples(t *testing.T) {
 		assert.NoError(t, dec.Decode(&sAliased), "%v:%v:%v", componentType, typeName, title)
 	}
 
-	for typeName, ctor := range input.Constructors {
-		for _, example := range ctor.Examples {
-			testComponent("input", typeName, example.Title, example.Config, ctor.Status == docs.StatusDeprecated)
+	for _, spec := range bundle.AllInputs.Docs() {
+		for _, example := range spec.Examples {
+			testComponent("input", spec.Name, example.Title, example.Config, spec.Status == docs.StatusDeprecated)
 		}
 	}
-	for typeName, ctor := range processor.Constructors {
-		for _, example := range ctor.Examples {
-			testComponent("processor", typeName, example.Title, example.Config, ctor.Status == docs.StatusDeprecated)
+	for _, spec := range bundle.AllProcessors.Docs() {
+		for _, example := range spec.Examples {
+			testComponent("processor", spec.Name, example.Title, example.Config, spec.Status == docs.StatusDeprecated)
 		}
 	}
-	for typeName, ctor := range output.Constructors {
-		for _, example := range ctor.Examples {
-			testComponent("output", typeName, example.Title, example.Config, ctor.Status == docs.StatusDeprecated)
+	for _, spec := range bundle.AllOutputs.Docs() {
+		for _, example := range spec.Examples {
+			testComponent("output", spec.Name, example.Title, example.Config, spec.Status == docs.StatusDeprecated)
 		}
 	}
 }

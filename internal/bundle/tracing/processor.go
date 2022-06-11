@@ -6,7 +6,6 @@ import (
 
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 )
 
 type tracedProcessor struct {
@@ -25,10 +24,10 @@ func traceProcessor(e *events, errCtr *uint64, p iprocessor.V1) iprocessor.V1 {
 }
 
 func (t *tracedProcessor) ProcessMessage(m *message.Batch) ([]*message.Batch, error) {
-	prevErrs := make([]string, m.Len())
+	prevErrs := make([]error, m.Len())
 	_ = m.Iter(func(i int, part *message.Part) error {
 		t.e.Add(EventConsume, string(part.Get()))
-		prevErrs[i] = processor.GetFail(part)
+		prevErrs[i] = part.ErrorGet()
 		return nil
 	})
 
@@ -36,15 +35,16 @@ func (t *tracedProcessor) ProcessMessage(m *message.Batch) ([]*message.Batch, er
 	for _, outMsg := range outMsgs {
 		_ = outMsg.Iter(func(i int, part *message.Part) error {
 			t.e.Add(EventProduce, string(part.Get()))
-			failStr := processor.GetFail(part)
-			if failStr == "" {
+			fail := part.ErrorGet()
+			if fail == nil {
 				return nil
 			}
-			if len(prevErrs) <= i || prevErrs[i] == failStr {
+			// TODO: Improve mechanism for tracking the introduction of errors?
+			if len(prevErrs) <= i || prevErrs[i] == fail {
 				return nil
 			}
 			_ = atomic.AddUint64(t.errCtr, 1)
-			t.e.Add(EventError, failStr)
+			t.e.Add(EventError, fail.Error())
 			return nil
 		})
 	}

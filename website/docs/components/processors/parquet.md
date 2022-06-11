@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-Converts batches of documents to or from [Parquet files](https://parquet.apache.org/documentation/latest/).
+Converts batches of documents to or from [Parquet files](https://parquet.apache.org/docs/).
 
 Introduced in version 3.62.0.
 
@@ -59,6 +59,12 @@ The schema must be specified as a JSON string, containing an object that describ
     }
   ]
 }
+```
+
+A schema can be derived from a source file using https://github.com/xitongsys/parquet-go/tree/master/tool/parquet-tools:
+
+```sh
+./parquet-tools -cmd schema -file foo.parquet
 ```
 
 ## Fields

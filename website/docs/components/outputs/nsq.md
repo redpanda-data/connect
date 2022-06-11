@@ -15,7 +15,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Publish to an NSQ topic.
 
 
@@ -61,9 +60,7 @@ output:
 </TabItem>
 </Tabs>
 
-The `topic` field can be dynamically set using function interpolations
-described [here](/docs/configuration/interpolation#bloblang-queries). When sending
-batched messages these interpolations are performed per message part.
+The `topic` field can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.
 
 ## Performance
 

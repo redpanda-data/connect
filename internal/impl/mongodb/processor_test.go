@@ -15,13 +15,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb"
 	"github.com/benthosdev/benthos/v4/internal/impl/mongodb/client"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/processor"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
@@ -99,7 +99,7 @@ func TestProcessorIntegration(t *testing.T) {
 
 func testMongoDBProcessorInsert(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -122,7 +122,7 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 
 	conf.MongoDB = mongoConfig
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	m, err := mongodb.NewProcessor(conf, mgr, log.Noop(), metrics.Noop())
@@ -170,7 +170,7 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 
 func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -199,7 +199,7 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_delete", "b": "bar_delete"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	conf.MongoDB = mongoConfig
@@ -229,7 +229,7 @@ func testMongoDBProcessorDeleteOne(port string, t *testing.T) {
 
 func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -260,7 +260,7 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many", "c": "c2"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	conf.MongoDB = mongoConfig
@@ -289,7 +289,7 @@ func testMongoDBProcessorDeleteMany(port string, t *testing.T) {
 
 func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -319,7 +319,7 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_replace", "b": "bar_old", "c": "c1"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	conf.MongoDB = mongoConfig
@@ -353,7 +353,7 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 
 func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -383,7 +383,7 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_update", "b": "bar_update_old", "c": "c1"})
 	assert.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	conf.MongoDB = mongoConfig
@@ -417,7 +417,7 @@ func testMongoDBProcessorUpdateOne(port string, t *testing.T) {
 
 func testMongoDBProcessorFindOne(port string, t *testing.T) {
 	conf := processor.NewConfig()
-	conf.Type = processor.TypeMongoDB
+	conf.Type = "mongodb"
 
 	c := client.Config{
 		URL:        "mongodb://localhost:" + port,
@@ -445,7 +445,7 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo", "b": "bar", "c": "baz", "answer_to_everything": 42})
 	assert.NoError(t, err)
 
-	mgr, err := manager.NewV2(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
 	require.NoError(t, err)
 
 	for _, tt := range []struct {
@@ -493,7 +493,9 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 		require.Nil(t, response)
 		require.Len(t, resMsgs, 1)
 		if tt.expectedErr != nil {
-			require.Equal(t, mongo.ErrNoDocuments.Error(), resMsgs[0].Get(0).MetaGet(message.FailFlagKey))
+			tmpErr := resMsgs[0].Get(0).ErrorGet()
+			require.Error(t, tmpErr)
+			require.Equal(t, mongo.ErrNoDocuments.Error(), tmpErr.Error())
 			continue
 		}
 

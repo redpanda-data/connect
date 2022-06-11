@@ -246,7 +246,7 @@ variables have been resolved:
 
   benthos -c ./config.yaml echo | less`[1:],
 				Action: func(c *cli.Context) error {
-					confReader := readConfig(c.String("config"), false, c.StringSlice("resources"), nil, c.StringSlice("set"))
+					_, _, confReader := readConfig(c.String("config"), false, c.StringSlice("resources"), nil, c.StringSlice("set"))
 					conf := config.New()
 					if _, err := confReader.Read(&conf); err != nil {
 						fmt.Fprintf(os.Stderr, "Configuration file read error: %v\n", err)

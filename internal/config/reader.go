@@ -264,13 +264,25 @@ func (r *Reader) BeginFileWatching(mgr bundle.NewManagement, strict bool) error 
 			return err
 		}
 	}
-	for _, p := range r.streamsPaths {
-		if err := watcher.Add(p); err != nil {
+
+	// TODO: Refresh this occasionally?
+	streamsPaths, err := r.streamPathsExpanded()
+	if err != nil {
+		return err
+	}
+	for _, p := range streamsPaths {
+		if err := watcher.Add(p[1]); err != nil {
 			_ = watcher.Close()
 			return err
 		}
 	}
-	for _, p := range r.resourcePaths {
+
+	// TODO: Refresh this occasionally?
+	resourcePaths, err := r.resourcePathsExpanded()
+	if err != nil {
+		return err
+	}
+	for _, p := range resourcePaths {
 		if err := watcher.Add(p); err != nil {
 			_ = watcher.Close()
 			return err

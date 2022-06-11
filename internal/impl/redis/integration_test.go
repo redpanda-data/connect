@@ -11,13 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
-
-	// Bring in legacy definition
-	_ "github.com/benthosdev/benthos/v4/internal/interop/legacy"
 )
 
 func TestIntegrationRedis(t *testing.T) {
@@ -36,14 +32,14 @@ func TestIntegrationRedis(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		conf := writer.NewRedisStreamsConfig()
+		conf := output.NewRedisStreamsConfig()
 		conf.URL = fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
 
-		r, cErr := writer.NewRedisStreams(conf, log.Noop(), metrics.Noop())
+		r, cErr := newRedisStreamsWriter(conf, log.Noop())
 		if cErr != nil {
 			return cErr
 		}
-		cErr = r.Connect()
+		cErr = r.ConnectWithContext(context.Background())
 
 		r.CloseAsync()
 		return cErr
@@ -242,14 +238,14 @@ func BenchmarkIntegrationRedis(b *testing.B) {
 
 	_ = resource.Expire(900)
 	require.NoError(b, pool.Retry(func() error {
-		conf := writer.NewRedisStreamsConfig()
+		conf := output.NewRedisStreamsConfig()
 		conf.URL = fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
 
-		r, cErr := writer.NewRedisStreams(conf, log.Noop(), metrics.Noop())
+		r, cErr := newRedisStreamsWriter(conf, log.Noop())
 		if cErr != nil {
 			return cErr
 		}
-		cErr = r.Connect()
+		cErr = r.ConnectWithContext(context.Background())
 
 		r.CloseAsync()
 		return cErr

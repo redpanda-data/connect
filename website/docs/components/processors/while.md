@@ -57,8 +57,7 @@ The field `max_loops`, if greater than zero, caps the number of loops for a mess
 
 If following a loop execution the number of messages in a batch is reduced to zero the loop is exited regardless of the condition result. If following a loop execution there are more than 1 message batches the query is checked against the first batch only.
 
-The functionality of this processor depends on being applied across messages
-that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
+The conditions of this processor are applied across entire message batches. You can find out more about batching [in this doc](/docs/configuration/batching).
 
 ## Fields
 

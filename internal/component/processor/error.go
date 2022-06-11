@@ -12,7 +12,7 @@ func MarkErr(part *message.Part, span *tracing.Span, err error) {
 	if err == nil {
 		return
 	}
-	part.MetaSet(message.FailFlagKey, err.Error())
+	part.ErrorSet(err)
 	if span == nil {
 		span = tracing.GetSpan(part)
 	}
@@ -23,10 +23,4 @@ func MarkErr(part *message.Part, span *tracing.Span, err error) {
 			"type", err.Error(),
 		)
 	}
-}
-
-// GetFail returns an error string for a message part if it has failed, or an
-// empty string if not.
-func GetFail(part *message.Part) string {
-	return part.MetaGet(message.FailFlagKey)
 }

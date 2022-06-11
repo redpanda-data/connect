@@ -16,18 +16,16 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
-	ooutput "github.com/benthosdev/benthos/v4/internal/old/output"
-	"github.com/benthosdev/benthos/v4/internal/old/output/writer"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(bundle.OutputConstructorFromSimple(func(c ooutput.Config, nm bundle.NewManagement) (output.Streamed, error) {
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return newSNSWriterFromConf(c.AWSSNS, nm)
 	}), docs.ComponentSpec{
 		Name:    "aws_sns",
@@ -48,7 +46,7 @@ allowing you to transfer data across accounts. You can find out more
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are sent as headers.").WithChildren(metadata.ExcludeFilterFields()...).AtVersion("3.60.0"),
 			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
-		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(ooutput.NewSNSConfig()),
+		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewSNSConfig()),
 		Categories: []string{
 			"Services",
 			"AWS",
@@ -59,20 +57,20 @@ allowing you to transfer data across accounts. You can find out more
 	}
 }
 
-func newSNSWriterFromConf(conf ooutput.SNSConfig, mgr interop.Manager) (output.Streamed, error) {
+func newSNSWriterFromConf(conf output.SNSConfig, mgr bundle.NewManagement) (output.Streamed, error) {
 	s, err := newSNSWriter(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
-	a, err := ooutput.NewAsyncWriter("aws_sns", conf.MaxInFlight, s, mgr.Logger(), mgr.Metrics())
+	a, err := output.NewAsyncWriter("aws_sns", conf.MaxInFlight, s, mgr.Logger(), mgr.Metrics())
 	if err != nil {
 		return nil, err
 	}
-	return ooutput.OnlySinglePayloads(a), nil
+	return output.OnlySinglePayloads(a), nil
 }
 
 type snsWriter struct {
-	conf ooutput.SNSConfig
+	conf output.SNSConfig
 
 	groupID    *field.Expression
 	dedupeID   *field.Expression
@@ -86,7 +84,7 @@ type snsWriter struct {
 	log log.Modular
 }
 
-func newSNSWriter(conf ooutput.SNSConfig, mgr interop.Manager) (*snsWriter, error) {
+func newSNSWriter(conf output.SNSConfig, mgr bundle.NewManagement) (*snsWriter, error) {
 	s := &snsWriter{
 		conf: conf,
 		log:  mgr.Logger(),
@@ -119,7 +117,7 @@ func (a *snsWriter) ConnectWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	sess, err := a.conf.GetSession()
+	sess, err := GetSessionFromConf(a.conf.SessionConfig.Config)
 	if err != nil {
 		return err
 	}
@@ -190,7 +188,7 @@ func (a *snsWriter) WriteWithContext(wctx context.Context, msg *message.Batch) e
 	ctx, cancel := context.WithTimeout(wctx, a.tout)
 	defer cancel()
 
-	return writer.IterateBatchedSend(msg, func(i int, p *message.Part) error {
+	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		attrs := a.getSNSAttributes(msg, i)
 		message := &sns.PublishInput{
 			TopicArn:               aws.String(a.conf.TopicArn),

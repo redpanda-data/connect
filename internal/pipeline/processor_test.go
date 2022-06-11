@@ -1,4 +1,4 @@
-package pipeline
+package pipeline_test
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
 
 var errMockProc = errors.New("this is an error from mock processor")
@@ -62,7 +63,7 @@ func TestProcessorPipeline(t *testing.T) {
 		mockProc.dropChan <- true
 	}()
 
-	proc := NewProcessor(mockProc)
+	proc := pipeline.NewProcessor(mockProc)
 
 	tChan, resChan := make(chan message.Transaction), make(chan error)
 
@@ -205,7 +206,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
-	proc := NewProcessor(mockProc)
+	proc := pipeline.NewProcessor(mockProc)
 
 	tChan, resChan := make(chan message.Transaction), make(chan error)
 
@@ -285,7 +286,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 
 	mockProc := &mockMultiMsgProcessor{N: 3}
 
-	proc := NewProcessor(mockProc)
+	proc := pipeline.NewProcessor(mockProc)
 
 	tChan, resChan := make(chan message.Transaction), make(chan error)
 

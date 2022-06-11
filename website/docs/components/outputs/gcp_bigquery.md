@@ -40,6 +40,7 @@ output:
     table: ""
     format: NEWLINE_DELIMITED_JSON
     max_in_flight: 64
+    job_labels: {}
     csv:
       header: []
       field_delimiter: ','
@@ -68,6 +69,7 @@ output:
     ignore_unknown_values: false
     max_bad_records: 0
     auto_detect: false
+    job_labels: {}
     csv:
       header: []
       field_delimiter: ','
@@ -213,6 +215,14 @@ Indicates if we should automatically infer the options and schema for CSV and JS
 
 Type: `bool`  
 Default: `false`  
+
+### `job_labels`
+
+A list of labels to add to the load job.
+
+
+Type: `object`  
+Default: `{}`  
 
 ### `csv`
 

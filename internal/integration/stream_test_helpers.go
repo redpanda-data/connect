@@ -14,17 +14,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/input"
-	"github.com/benthosdev/benthos/v4/internal/old/output"
 
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
@@ -112,7 +110,7 @@ type streamTestEnvironment struct {
 	ctx     context.Context
 	log     log.Modular
 	stats   *metrics.Namespaced
-	mgr     interop.Manager
+	mgr     bundle.NewManagement
 
 	allowDuplicateMessages bool
 
@@ -454,11 +452,11 @@ func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	assert.Empty(t, lints)
 
 	if env.mgr == nil {
-		env.mgr, err = manager.NewV2(s.ResourceConfig, nil, env.log, env.stats)
+		env.mgr, err = manager.New(s.ResourceConfig, nil, env.log, env.stats)
 		require.NoError(t, err)
 	}
 
-	input, err := input.New(s.Input, env.mgr, env.log, env.stats)
+	input, err := env.mgr.NewInput(s.Input)
 	require.NoError(t, err)
 
 	if env.sleepAfterInput > 0 {
@@ -483,11 +481,11 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	assert.Empty(t, lints)
 
 	if env.mgr == nil {
-		env.mgr, err = manager.NewV2(s.ResourceConfig, nil, env.log, env.stats)
+		env.mgr, err = manager.New(s.ResourceConfig, nil, env.log, env.stats)
 		require.NoError(t, err)
 	}
 
-	output, err := output.New(s.Output, env.mgr, env.log, env.stats)
+	output, err := env.mgr.NewOutput(s.Output)
 	require.NoError(t, err)
 
 	require.NoError(t, output.Consume(trans))

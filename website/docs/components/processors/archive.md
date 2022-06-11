@@ -15,9 +15,7 @@ categories: ["Parsing","Utility"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
-Archives all the messages of a batch into a single message according to the
-selected archive [format](#formats).
+Archives all the messages of a batch into a single message according to the selected archive format.
 
 ```yml
 # Config fields, showing default values
@@ -27,29 +25,30 @@ archive:
   path: ""
 ```
 
-Some archive formats (such as tar, zip) treat each archive item (message part)
-as a file with a path. Since message parts only contain raw data a unique path
-must be generated for each part. This can be done by using function
-interpolations on the 'path' field as described
-[here](/docs/configuration/interpolation#bloblang-queries). For types that aren't file based
-(such as binary) the file field is ignored.
+Some archive formats (such as tar, zip) treat each archive item (message part) as a file with a path. Since message parts only contain raw data a unique path must be generated for each part. This can be done by using function interpolations on the 'path' field as described [here](/docs/configuration/interpolation#bloblang-queries). For types that aren't file based (such as binary) the file field is ignored.
 
-The resulting archived message adopts the metadata of the _first_ message part
-of the batch.
+The resulting archived message adopts the metadata of the _first_ message part of the batch.
 
-The functionality of this processor depends on being applied across messages
-that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
+The functionality of this processor depends on being applied across messages that are batched. You can find out more about batching [in this doc](/docs/configuration/batching).
 
 ## Fields
 
 ### `format`
 
-The archiving [format](#formats) to apply.
+The archiving format to apply.
 
 
 Type: `string`  
-Default: `""`  
-Options: `tar`, `zip`, `binary`, `lines`, `json_array`, `concatenate`.
+
+| Option | Summary |
+|---|---|
+| `binary` | Archive messages to a [binary blob format](https://github.com/benthosdev/benthos/blob/main/internal/message/message.go#L96). |
+| `concatenate` | Join the raw contents of each message into a single binary message. |
+| `json_array` | Attempt to parse each message as a JSON document and append the result to an array, which becomes the contents of the resulting message. |
+| `lines` | Join the raw contents of each message and insert a line break between each one. |
+| `tar` | Archive messages to a unix standard tape archive. |
+| `zip` | Archive messages to a zip file. |
+
 
 ### `path`
 
@@ -68,39 +67,14 @@ path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 path: ${!meta("kafka_key")}-${!json("id")}.json
 ```
 
-## Formats
-
-### `concatenate`
-
-Join the raw contents of each message into a single binary message.
-
-### `tar`
-
-Archive messages to a unix standard tape archive.
-
-### `zip`
-
-Archive messages to a zip file.
-
-### `binary`
-
-Archive messages to a binary blob format consisting of:
-
-- Four bytes containing number of messages in the batch (in big endian)
-- For each message part:
-  + Four bytes containing the length of the message (in big endian)
-  + The content of message
-
-### `lines`
-
-Join the raw contents of each message and insert a line break between each one.
-
-### `json_array`
-
-Attempt to parse each message as a JSON document and append the result to an
-array, which becomes the contents of the resulting message.
-
 ## Examples
+
+<Tabs defaultValue="Tar Archive" values={[
+{ label: 'Tar Archive', value: 'Tar Archive', },
+]}>
+
+<TabItem value="Tar Archive">
+
 
 If we had JSON messages in a batch each of the form:
 
@@ -108,8 +82,7 @@ If we had JSON messages in a batch each of the form:
 {"doc":{"id":"foo","body":"hello world 1"}}
 ```
 
-And we wished to tar archive them, setting their filenames to their respective
-unique IDs (with the extension `.json`), our config might look like
+And we wished to tar archive them, setting their filenames to their respective unique IDs (with the extension `.json`), our config might look like
 this:
 
 ```yaml
@@ -119,4 +92,8 @@ pipeline:
         format: tar
         path: ${!json("doc.id")}.json
 ```
+
+</TabItem>
+</Tabs>
+
 

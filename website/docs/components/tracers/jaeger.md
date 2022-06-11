@@ -93,7 +93,7 @@ Default: `"const"`
 
 | Option | Summary |
 |---|---|
-| `const` | A constant decision for all traces, either 1 or 0. |
+| `const` | Sample a percentage of traces. 1 or more means all traces are sampled, 0 means no traces are sampled and anything in between means a percentage of traces are sampled. Tuning the sampling rate is recommended for high-volume production workloads. |
 
 
 ### `sampler_param`
