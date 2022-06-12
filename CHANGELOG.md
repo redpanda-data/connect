@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - The `elasticsearch` output field `type` now supports interpolation functions.
 - The `redis` processor has been reworked to be more generally useful, the old `operator` and `key` fields are now deprecated in favour of new `command` and `args_mapping` fields.
 - Go API: Added component bundle `./public/components/aws` for all AWS components, including a `RunLambda` function.
+- New `cached` processor.
 
 ### Fixed
 

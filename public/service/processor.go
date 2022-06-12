@@ -162,8 +162,12 @@ func (o *OwnedProcessor) Process(ctx context.Context, msg *Message) (MessageBatc
 }
 
 // ProcessBatch attempts to process a batch of messages, returns zero or more
-// batches of resulting messages or an error if the messages could not be
-// processed.
+// batches of resulting messages, or an error if the context is cancelled during
+// execution.
+//
+// However, for general processing errors unrelated to context cancellation the
+// error is marked against individual messages with the `SetError` method and a
+// nil error is returned by this method.
 func (o *OwnedProcessor) ProcessBatch(ctx context.Context, batch MessageBatch) ([]MessageBatch, error) {
 	outMsg := message.QuickBatch(nil)
 
@@ -207,10 +211,13 @@ func (o *OwnedProcessor) Close(ctx context.Context) error {
 	}
 }
 
-// ExecuteProcessors runs a set of batches through a series processors. If an
-// error occurs during execution, then this function terminates and returns the
-// error. It is important to note that this is unlike a regular processor chain
-// when failed message continue to be processed.
+// ExecuteProcessors runs a set of batches through a series processors. If a
+// context error occurs during execution then this function terminates and
+// returns the error.
+//
+// However, for general processing errors unrelated to context cancellation the
+// errors are marked against individual messages with the `SetError` method and
+// processing continues against subsequent processors.
 func ExecuteProcessors(ctx context.Context, processors []*OwnedProcessor, inbatches ...MessageBatch) ([]MessageBatch, error) {
 	if len(processors) == 0 {
 		return inbatches, nil
