@@ -206,3 +206,27 @@ func (o *OwnedProcessor) Close(ctx context.Context) error {
 		}
 	}
 }
+
+// ExecuteProcessors runs a set of batches through a series processors. If an
+// error occurs during execution, then this function terminates and returns the
+// error. It is important to note that this is unlike a regular processor chain
+// when failed message continue to be processed.
+func ExecuteProcessors(ctx context.Context, processors []*OwnedProcessor, inbatches ...MessageBatch) ([]MessageBatch, error) {
+	if len(processors) == 0 {
+		return inbatches, nil
+	}
+
+	proc := processors[0]
+
+	nextBatches := make([]MessageBatch, 0, len(inbatches))
+	for _, batch := range inbatches {
+		batches, err := proc.ProcessBatch(ctx, batch)
+		if err != nil {
+			return nil, err
+		}
+
+		nextBatches = append(nextBatches, batches...)
+	}
+
+	return ExecuteProcessors(ctx, processors[1:], nextBatches...)
+}
