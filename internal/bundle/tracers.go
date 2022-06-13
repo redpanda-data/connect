@@ -16,8 +16,26 @@ var AllTracers = &TracerSet{
 
 //------------------------------------------------------------------------------
 
+// TracersAdd adds a new tracers exporter to this environment by providing a
+// constructor and documentation.
+func (e *Environment) TracersAdd(constructor TracerConstructor, spec docs.ComponentSpec) error {
+	return e.tracers.Add(constructor, spec)
+}
+
+// TracersInit attempts to initialise a tracers exporter from a config.
+func (e *Environment) TracersInit(conf tracer.Config, nm NewManagement) (tracer.Type, error) {
+	return e.tracers.Init(conf, nm)
+}
+
+// TracersDocs returns a slice of tracers exporter specs.
+func (e *Environment) TracersDocs() []docs.ComponentSpec {
+	return e.tracers.Docs()
+}
+
+//------------------------------------------------------------------------------
+
 // TracerConstructor constructs an tracer component.
-type TracerConstructor func(tracer.Config) (tracer.Type, error)
+type TracerConstructor func(tracer.Config, NewManagement) (tracer.Type, error)
 
 type tracerSpec struct {
 	constructor TracerConstructor
@@ -48,12 +66,12 @@ func (s *TracerSet) Add(constructor TracerConstructor, spec docs.ComponentSpec) 
 }
 
 // Init attempts to initialise an tracer from a config.
-func (s *TracerSet) Init(conf tracer.Config) (tracer.Type, error) {
+func (s *TracerSet) Init(conf tracer.Config, nm NewManagement) (tracer.Type, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidType("tracer", conf.Type)
 	}
-	return spec.constructor(conf)
+	return spec.constructor(conf, nm)
 }
 
 // Docs returns a slice of tracer specs, which document each method.

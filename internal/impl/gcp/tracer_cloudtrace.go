@@ -46,7 +46,7 @@ type cloudTrace struct {
 }
 
 // NewCloudTrace creates new Google Cloud Trace tracer.
-func NewCloudTrace(config tracer.Config) (tracer.Type, error) {
+func NewCloudTrace(config tracer.Config, nm bundle.NewManagement) (tracer.Type, error) {
 	ct := &cloudTrace{}
 
 	sampler := tracesdk.ParentBased(tracesdk.TraceIDRatioBased(config.CloudTrace.SamplingRatio))

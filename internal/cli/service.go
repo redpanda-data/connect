@@ -25,6 +25,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	strmmgr "github.com/benthosdev/benthos/v4/internal/stream/manager"
 )
@@ -298,9 +299,16 @@ func cmdService(
 		return 1
 	}
 
+	// We use a temporary manager with just the logger initialised for metrics
+	// instantiation. Doing this means that metrics plugins will use a global
+	// environment for child plugins and bloblang mappings, which we might want
+	// to revise in future.
+	tmpMgr := mock.NewManager()
+	tmpMgr.L = logger
+
 	// Create our metrics type.
 	var stats *metrics.Namespaced
-	stats, err = bundle.AllMetrics.Init(conf.Metrics, logger)
+	stats, err = bundle.AllMetrics.Init(conf.Metrics, tmpMgr)
 	for err != nil {
 		logger.Errorf("Failed to connect to metrics aggregator: %v\n", err)
 		return 1
@@ -313,7 +321,7 @@ func cmdService(
 
 	// Create our tracer type.
 	var trac tracer.Type
-	if trac, err = bundle.AllTracers.Init(conf.Tracer); err != nil {
+	if trac, err = bundle.AllTracers.Init(conf.Tracer, tmpMgr); err != nil {
 		logger.Errorf("Failed to initialise tracer: %v\n", err)
 		return 1
 	}

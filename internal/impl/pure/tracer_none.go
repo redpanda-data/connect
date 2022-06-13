@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	_ = bundle.AllTracers.Add(func(c tracer.Config) (tracer.Type, error) {
+	_ = bundle.AllTracers.Add(func(c tracer.Config, nm bundle.NewManagement) (tracer.Type, error) {
 		return noopTracer{}, nil
 	}, docs.ComponentSpec{
 		Name:    "none",

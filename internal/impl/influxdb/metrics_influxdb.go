@@ -69,12 +69,12 @@ type influxDBMetrics struct {
 	log             log.Modular
 }
 
-func newInfluxDB(config imetrics.Config, log log.Modular) (imetrics.Type, error) {
+func newInfluxDB(config imetrics.Config, nm bundle.NewManagement) (imetrics.Type, error) {
 	i := &influxDBMetrics{
 		config:          config.InfluxDB,
 		registry:        metrics.NewRegistry(),
 		runtimeRegistry: metrics.NewRegistry(),
-		log:             log,
+		log:             nm.Logger(),
 	}
 
 	i.ctx, i.cancel = context.WithCancel(context.Background())

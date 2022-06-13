@@ -15,8 +15,8 @@ import (
 )
 
 func init() {
-	_ = bundle.AllMetrics.Add(func(conf metrics.Config, log log.Modular) (metrics.Type, error) {
-		return newLogger(conf.Logger, log)
+	_ = bundle.AllMetrics.Add(func(conf metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
+		return newLogger(conf.Logger, nm.Logger())
 	}, docs.ComponentSpec{
 		Name:    "logger",
 		Type:    docs.TypeMetrics,

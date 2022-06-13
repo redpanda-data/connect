@@ -10,11 +10,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	iprocessors "github.com/benthosdev/benthos/v4/internal/component/input/processors"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	oprocessors "github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
@@ -386,6 +388,26 @@ func (e *Environment) WalkRateLimits(fn func(name string, config *ConfigView)) {
 	}
 }
 
+// RegisterMetricsExporter attempts to register a new metrics exporter plugin by
+// providing a description of the configuration for the plugin as well as a
+// constructor for the metrics exporter itself.
+func (e *Environment) RegisterMetricsExporter(name string, spec *ConfigSpec, ctor MetricsExporterConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeMetrics
+	return e.internal.MetricsAdd(func(conf metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		if err != nil {
+			return nil, err
+		}
+		m, err := ctor(pluginConf, newReverseAirGapLogger(nm.Logger()))
+		if err != nil {
+			return nil, err
+		}
+		return newAirGapMetrics(m), nil
+	}, componentSpec)
+}
+
 // WalkMetrics executes a provided function argument for every metrics component
 // that has been registered to the environment. Note that metrics components
 // available to an environment cannot be modified
@@ -395,6 +417,31 @@ func (e *Environment) WalkMetrics(fn func(name string, config *ConfigView)) {
 			component: v,
 		})
 	}
+}
+
+// RegisterOtelTracerProvider attempts to register a new open telemetry tracer
+// provider plugin by providing a description of the configuration for the
+// plugin as well as a constructor for the metrics exporter itself. The
+// constructor will be called for each instantiation of the component within a
+// config.
+//
+// Experimental: This type signature is experimental and therefore subject to
+// change outside of major version releases.
+func (e *Environment) RegisterOtelTracerProvider(name string, spec *ConfigSpec, ctor OtelTracerProviderConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeTracer
+	return e.internal.TracersAdd(func(conf tracer.Config, nm bundle.NewManagement) (tracer.Type, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		if err != nil {
+			return nil, err
+		}
+		t, err := ctor(pluginConf)
+		if err != nil {
+			return nil, err
+		}
+		return newAirGapTracer(t), nil
+	}, componentSpec)
 }
 
 // WalkTracers executes a provided function argument for every tracer component

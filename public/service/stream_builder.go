@@ -22,10 +22,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
@@ -49,6 +51,7 @@ type StreamBuilder struct {
 	outputs    []output.Config
 	resources  manager.ResourceConfig
 	metrics    metrics.Config
+	tracer     tracer.Config
 	logger     log.Config
 
 	producerChan chan message.Transaction
@@ -70,6 +73,7 @@ func NewStreamBuilder() *StreamBuilder {
 		buffer:    buffer.NewConfig(),
 		resources: manager.NewResourceConfig(),
 		metrics:   metrics.NewConfig(),
+		tracer:    tracer.NewConfig(),
 		logger:    log.NewConfig(),
 		env:       globalEnvironment,
 	}
@@ -548,6 +552,7 @@ func (s *StreamBuilder) setFromConfig(sconf config.Type) {
 	s.resources = sconf.ResourceConfig
 	s.logger = sconf.Logger
 	s.metrics = sconf.Metrics
+	s.tracer = sconf.Tracer
 }
 
 // SetBufferYAML parses a buffer YAML configuration and sets it to the builder
@@ -590,6 +595,37 @@ func (s *StreamBuilder) SetMetricsYAML(conf string) error {
 	}
 
 	s.metrics = mconf
+	return nil
+}
+
+// SetTracerYAML parses a tracer YAML configuration and adds it to the builder
+// such that all stream components emit tracing spans through it.
+//
+// WARNING: Tracers are currently registered globally in the process, therefore
+// running multiple streams within a single process each with a tracer
+// configured will lead to unexpected behaviour. Only specify a tracer
+// configuration if your process will run a single stream.
+//
+// Eventually we intend to offer tracers specific to the stream but this is a
+// low priority task as we are assuming it's not needed. If you have a use case
+// please let us know by opening or commenting on an issue:
+// https://github.com/benthosdev/benthos/issues
+func (s *StreamBuilder) SetTracerYAML(conf string) error {
+	nconf, err := getYAMLNode([]byte(conf))
+	if err != nil {
+		return err
+	}
+
+	if err := s.lintYAMLComponent(nconf, docs.TypeTracer); err != nil {
+		return err
+	}
+
+	tconf := tracer.NewConfig()
+	if err := nconf.Decode(&tconf); err != nil {
+		return err
+	}
+
+	s.tracer = tconf
 	return nil
 }
 
@@ -702,7 +738,26 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		}
 	}
 
-	stats, err := bundle.AllMetrics.Init(s.metrics, logger)
+	// This temporary manager is a very lazy way of instantiating a manager that
+	// restricts the bloblang and component environments to custom plugins.
+	// Ideally we would break out the constructor for our general purpose
+	// manager to allow for a two-tier initialisation where we can defer
+	// resource constructors until after this metrics exporter is initialised.
+	tmpMgr, err := manager.New(
+		manager.NewResourceConfig(), mock.NewManager(), logger, metrics.Noop(),
+		manager.OptSetEnvironment(env),
+		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	tracer, err := env.TracersInit(s.tracer, tmpMgr)
+	if err != nil {
+		return nil, err
+	}
+
+	stats, err := env.MetricsInit(s.metrics, tmpMgr)
 	if err != nil {
 		return nil, err
 	}
@@ -738,7 +793,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		mgr.SetPipe(s.producerID, s.producerChan)
 	}
 
-	return newStream(conf.Config, mgr, stats, logger, func() {
+	return newStream(conf.Config, mgr, stats, tracer, logger, func() {
 		if err := s.runConsumerFunc(mgr); err != nil {
 			logger.Errorf("Failed to run func consumer: %v", err)
 		}
@@ -751,6 +806,7 @@ type builderConfig struct {
 	manager.ResourceConfig `yaml:",inline"`
 	Metrics                metrics.Config `yaml:"metrics"`
 	Logger                 *log.Config    `yaml:"logger,omitempty"`
+	Tracer                 tracer.Config  `yaml:"tracer"`
 }
 
 func (s *StreamBuilder) buildConfig() builderConfig {
@@ -783,6 +839,7 @@ func (s *StreamBuilder) buildConfig() builderConfig {
 
 	conf.ResourceConfig = s.resources
 	conf.Metrics = s.metrics
+	conf.Tracer = s.tracer
 	if s.customLogger == nil {
 		conf.Logger = &s.logger
 	}

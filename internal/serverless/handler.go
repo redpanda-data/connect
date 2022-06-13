@@ -108,15 +108,22 @@ func NewHandler(conf config.Type) (*Handler, error) {
 		return nil, fmt.Errorf("failed to create logger: %v", err)
 	}
 
+	// We use a temporary manager with just the logger initialised for metrics
+	// instantiation. Doing this means that metrics plugins will use a global
+	// environment for child plugins and bloblang mappings, which we might want
+	// to revise in future.
+	tmpMgr := mock.NewManager()
+	tmpMgr.L = logger
+
 	// Create our metrics type.
 	var stats *metrics.Namespaced
-	if stats, err = bundle.AllMetrics.Init(conf.Metrics, logger); err != nil {
+	if stats, err = bundle.AllMetrics.Init(conf.Metrics, tmpMgr); err != nil {
 		logger.Errorf("Failed to connect metrics aggregator: %v\n", err)
 		stats = metrics.NewNamespaced(metrics.Noop())
 	}
 
 	// Create our tracer type.
-	trac, err := bundle.AllTracers.Init(conf.Tracer)
+	trac, err := bundle.AllTracers.Init(conf.Tracer, tmpMgr)
 	if err != nil {
 		logger.Errorf("Failed to initialise tracer: %v\n", err)
 		trac = tracer.Noop{}

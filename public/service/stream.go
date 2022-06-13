@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -24,14 +25,16 @@ type Stream struct {
 	conf   stream.Config
 	mgr    *manager.Type
 	stats  metrics.Type
+	tracer tracer.Type
 	logger log.Modular
 }
 
-func newStream(conf stream.Config, mgr *manager.Type, stats metrics.Type, logger log.Modular, onStart func()) *Stream {
+func newStream(conf stream.Config, mgr *manager.Type, stats metrics.Type, tracer tracer.Type, logger log.Modular, onStart func()) *Stream {
 	return &Stream{
 		conf:    conf,
 		mgr:     mgr,
 		stats:   stats,
+		tracer:  tracer,
 		logger:  logger,
 		shutSig: shutdown.NewSignaller(),
 		onStart: onStart,
@@ -103,5 +106,9 @@ func (s *Stream) StopWithin(timeout time.Duration) error {
 		return err
 	}
 
-	return s.stats.Close()
+	if err := s.stats.Close(); err != nil {
+		go s.tracer.Close()
+		return err
+	}
+	return s.tracer.Close()
 }

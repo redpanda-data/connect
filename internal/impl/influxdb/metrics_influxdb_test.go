@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func TestInfluxTimers(t *testing.T) {
@@ -14,7 +14,7 @@ func TestInfluxTimers(t *testing.T) {
 	config.InfluxDB.URL = "http://localhost:8086"
 	config.InfluxDB.DB = "db0"
 
-	influx, err := newInfluxDB(config, log.Noop())
+	influx, err := newInfluxDB(config, mock.NewManager())
 	require.NoError(t, err)
 
 	i := influx.(*influxDBMetrics)
@@ -54,7 +54,7 @@ func TestInfluxCounters(t *testing.T) {
 	config.InfluxDB.URL = "http://localhost:8086"
 	config.InfluxDB.DB = "db0"
 
-	influx, err := newInfluxDB(config, log.Noop())
+	influx, err := newInfluxDB(config, mock.NewManager())
 	require.NoError(t, err)
 
 	i := influx.(*influxDBMetrics)
@@ -95,7 +95,7 @@ func TestInfluxGauge(t *testing.T) {
 	config.InfluxDB.URL = "http://localhost:8086"
 	config.InfluxDB.DB = "db0"
 
-	influx, err := newInfluxDB(config, log.Noop())
+	influx, err := newInfluxDB(config, mock.NewManager())
 	require.NoError(t, err)
 
 	i := influx.(*influxDBMetrics)
@@ -137,7 +137,7 @@ func TestInflux_makeClientDefault(t *testing.T) {
 	config.InfluxDB.URL = "http://localhost:8086"
 	config.InfluxDB.DB = "db0"
 
-	flux, err := newInfluxDB(config, log.Noop())
+	flux, err := newInfluxDB(config, mock.NewManager())
 	require.NoError(t, err)
 
 	i := flux.(*influxDBMetrics)
@@ -151,7 +151,7 @@ func TestInflux_makeClientHTTPS(t *testing.T) {
 	config.InfluxDB.URL = "https://localhost:8086"
 	config.InfluxDB.DB = "db0"
 
-	flux, err := newInfluxDB(config, log.Noop())
+	flux, err := newInfluxDB(config, mock.NewManager())
 	require.NoError(t, err)
 
 	i := flux.(*influxDBMetrics)
@@ -164,7 +164,7 @@ func TestInflux_makeClientUDP(t *testing.T) {
 	config := metrics.NewConfig()
 	config.InfluxDB.URL = "udp://localhost:8065"
 	config.InfluxDB.DB = "db0"
-	flux, err := newInfluxDB(config, log.Noop())
+	flux, err := newInfluxDB(config, mock.NewManager())
 	if err != nil {
 		t.Errorf("unexpected error %s", err)
 	}
@@ -180,7 +180,7 @@ func TestInflux_makeClientInvalid(t *testing.T) {
 	influxConfig.URL = "scheme://localhost:8065"
 	influxConfig.DB = "db0"
 	config.InfluxDB = influxConfig
-	flux, err := newInfluxDB(config, log.Noop())
+	flux, err := newInfluxDB(config, mock.NewManager())
 	if err == nil {
 		t.Errorf("expected error but did not receive one")
 	}

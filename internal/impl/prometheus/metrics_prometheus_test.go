@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func TestPrometheusNoPushGateway(t *testing.T) {
 	config := metrics.NewConfig()
 
-	p, err := newPrometheus(config, log.Noop())
+	p, err := newPrometheus(config, mock.NewManager())
 	assert.NoError(t, err)
 	assert.NotNil(t, p)
 	assert.Nil(t, p.(*prometheusMetrics).pusher)
@@ -34,7 +34,7 @@ func TestPrometheusWithPushGateway(t *testing.T) {
 	config := metrics.NewConfig()
 	config.Prometheus.PushURL = server.URL
 
-	p, err := newPrometheus(config, log.Noop())
+	p, err := newPrometheus(config, mock.NewManager())
 	assert.NoError(t, err)
 	assert.NotNil(t, p)
 	assert.NotNil(t, p.(*prometheusMetrics).pusher)
@@ -64,7 +64,7 @@ func TestPrometheusWithPushGatewayAndPushInterval(t *testing.T) {
 	config.Prometheus.PushURL = server.URL
 	config.Prometheus.PushInterval = pushInterval.String()
 
-	p, err := newPrometheus(config, log.Noop())
+	p, err := newPrometheus(config, mock.NewManager())
 	assert.NoError(t, err)
 	assert.NotNil(t, p)
 	assert.NotNil(t, p.(*prometheusMetrics).pusher)
@@ -92,7 +92,7 @@ func TestPrometheusWithPushGatewayAndPushInterval(t *testing.T) {
 func getTestProm(t *testing.T) (metrics.Type, http.HandlerFunc) {
 	t.Helper()
 
-	prom, err := newPrometheus(metrics.NewConfig(), log.Noop())
+	prom, err := newPrometheus(metrics.NewConfig(), mock.NewManager())
 	require.NoError(t, err)
 
 	return prom, prom.HandlerFunc()
@@ -149,7 +149,7 @@ func TestPrometheusHistMetrics(t *testing.T) {
 	conf := metrics.NewConfig()
 	conf.Prometheus.UseHistogramTiming = true
 
-	nm, err := newPrometheus(conf, log.Noop())
+	nm, err := newPrometheus(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	applyTestMetrics(nm)
@@ -173,7 +173,7 @@ func TestPrometheusWithFileOutputPath(t *testing.T) {
 
 	defer os.Remove(config.Prometheus.FileOutputPath)
 
-	p, err := newPrometheus(config, log.Noop())
+	p, err := newPrometheus(config, mock.NewManager())
 	applyTestMetrics(p)
 
 	assert.NoError(t, err)

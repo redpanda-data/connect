@@ -5,15 +5,63 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 )
+
+func TestOtelTracingPlugin(t *testing.T) {
+	env := service.NewEnvironment()
+	confSpec := service.NewConfigSpec().Field(service.NewStringField("foo"))
+
+	var testValue string
+
+	require.NoError(t, env.RegisterOtelTracerProvider(
+		"meow", confSpec,
+		func(conf *service.ParsedConfig) (trace.TracerProvider, error) {
+			testStr, err := conf.FieldString("foo")
+			if err != nil {
+				return nil, err
+			}
+			testValue = testStr
+			return trace.NewNoopTracerProvider(), nil
+		}))
+
+	builder := env.NewStreamBuilder()
+	require.NoError(t, builder.SetYAML(`
+input:
+  label: fooinput
+  generate:
+    count: 2
+    interval: 1ns
+    mapping: 'root.id = uuid_v4()'
+
+output:
+  label: foooutput
+  drop: {}
+
+tracer:
+  meow:
+    foo: foo value from config
+`))
+
+	strm, err := builder.Build()
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
+	require.NoError(t, strm.Run(ctx))
+
+	assert.Equal(t, "foo value from config", testValue)
+}
 
 func TestTracing(t *testing.T) {
 	u, err := uuid.NewV4()

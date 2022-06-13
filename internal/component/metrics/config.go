@@ -20,6 +20,7 @@ type Config struct {
 	Prometheus    PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Statsd        StatsdConfig     `json:"statsd" yaml:"statsd"`
 	Logger        LoggerConfig     `json:"logger" yaml:"logger"`
+	Plugin        interface{}      `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.
@@ -34,6 +35,7 @@ func NewConfig() Config {
 		Prometheus:    NewPrometheusConfig(),
 		Statsd:        NewStatsdConfig(),
 		Logger:        NewLoggerConfig(),
+		Plugin:        nil,
 	}
 }
 
@@ -50,8 +52,19 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("line %v: %v", value.Line, err)
 	}
 
-	if aliased.Type, _, err = docs.GetInferenceCandidateFromYAML(docs.DeprecatedProvider, docs.TypeMetrics, value); err != nil {
+	var spec docs.ComponentSpec
+	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(docs.DeprecatedProvider, docs.TypeMetrics, value); err != nil {
 		return fmt.Errorf("line %v: %w", value.Line, err)
+	}
+
+	if spec.Plugin {
+		pluginNode, err := docs.GetPluginConfigYAML(aliased.Type, value)
+		if err != nil {
+			return fmt.Errorf("line %v: %v", value.Line, err)
+		}
+		aliased.Plugin = &pluginNode
+	} else {
+		aliased.Plugin = nil
 	}
 
 	*conf = Config(aliased)

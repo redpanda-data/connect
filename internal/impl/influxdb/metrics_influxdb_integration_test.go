@@ -14,7 +14,7 @@ import (
 	"github.com/ory/dockertest/v3"
 
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func TestInfluxIntegration(t *testing.T) {
@@ -84,7 +84,7 @@ func TestInfluxIntegration(t *testing.T) {
 	config.Tags = map[string]string{"hostname": "localhost"}
 	globalConfig.InfluxDB = config
 
-	flux, err := newInfluxDB(globalConfig, log.Noop())
+	flux, err := newInfluxDB(globalConfig, mock.NewManager())
 	if err != nil {
 		t.Fatalf("problem creating to InfluxDB: %s", err)
 	}

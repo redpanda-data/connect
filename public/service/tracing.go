@@ -1,10 +1,39 @@
 package service
 
 import (
+	"context"
 	"sync/atomic"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
 )
+
+type airGapTracer struct {
+	tp trace.TracerProvider
+}
+
+func newAirGapTracer(tp trace.TracerProvider) *airGapTracer {
+	otel.SetTracerProvider(tp)
+
+	// TODO: I'm so confused, these APIs are a nightmare.
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	return &airGapTracer{tp: tp}
+}
+
+func (t *airGapTracer) Close() error {
+	if shutter, ok := t.tp.(interface {
+		Shutdown(ctx context.Context) error
+	}); ok {
+		return shutter.Shutdown(context.Background())
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
 
 // TracingEventType describes the type of tracing event a component might
 // experience during a config run.

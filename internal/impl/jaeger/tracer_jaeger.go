@@ -53,7 +53,7 @@ type Jaeger struct {
 }
 
 // NewJaeger creates and returns a new Jaeger object.
-func NewJaeger(config tracer.Config) (tracer.Type, error) {
+func NewJaeger(config tracer.Config, nm bundle.NewManagement) (tracer.Type, error) {
 	j := &Jaeger{}
 
 	var sampler tracesdk.Sampler
