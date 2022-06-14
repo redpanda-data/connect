@@ -108,6 +108,7 @@ input:
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
     checkpoint_limit: 100
+		commit_period: "1s"
 `
 
 	suite := integration.StreamTests(
