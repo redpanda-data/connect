@@ -2,11 +2,11 @@ package lang
 
 import (
 	"fmt"
-	"github.com/bxcodec/faker/v3"
-	"github.com/gosimple/slug"
 	"strings"
 
 	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/bxcodec/faker/v3"
+	"github.com/gosimple/slug"
 )
 
 func init() {
