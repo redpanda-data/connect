@@ -101,6 +101,7 @@ output:
       include_patterns: [ .* ]
     batching:
       count: $OUTPUT_BATCH_COUNT
+		timeout: "5s"
 
 input:
   kafka_franz:
