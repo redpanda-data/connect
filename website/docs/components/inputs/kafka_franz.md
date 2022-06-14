@@ -54,6 +54,8 @@ input:
     regexp_topics: false
     consumer_group: ""
     checkpoint_limit: 1024
+    commit_period: 5s
+    start_from_oldest: true
     tls:
       enabled: false
       skip_cert_verify: false
@@ -141,6 +143,22 @@ Determines how many messages of the same partition can be processed in parallel 
 
 Type: `int`  
 Default: `1024`  
+
+### `commit_period`
+
+The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.
+
+
+Type: `string`  
+Default: `"5s"`  
+
+### `start_from_oldest`
+
+If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `tls`
 
