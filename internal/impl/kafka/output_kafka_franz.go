@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -51,6 +52,10 @@ This output is new and experimental, and the existing ` + "`kafka`" + ` input is
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of batches to be sending in parallel at any given time.").
 			Default(10)).
+		Field(service.NewDurationField("timeout").
+			Description("The maximum period of time to wait for message sends before abandoning the request and retrying").
+			Default("10s").
+			Advanced()).
 		Field(service.NewBatchPolicyField("batching")).
 		Field(service.NewStringField("max_message_bytes").
 			Description("The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.").
@@ -100,6 +105,7 @@ type franzKafkaWriter struct {
 	saslConfs        []sasl.Mechanism
 	metaFilter       *service.MetadataFilter
 	partitioner      kgo.Partitioner
+	timeout          time.Duration
 	produceMaxBytes  int32
 	compressionPrefs []kgo.CompressionCodec
 
@@ -132,6 +138,10 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		if f.key, err = conf.FieldInterpolatedString("key"); err != nil {
 			return nil, err
 		}
+	}
+
+	if f.timeout, err = conf.FieldDuration("timeout"); err != nil {
+		return nil, err
 	}
 
 	maxBytesStr, err := conf.FieldString("max_message_bytes")
@@ -219,6 +229,7 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 		kgo.SASL(f.saslConfs...),
 		kgo.AllowAutoTopicCreation(), // TODO: Configure this
 		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
+		kgo.ProduceRequestTimeout(f.timeout),
 		kgo.WithLogger(&kgoLogger{f.log}),
 	}
 	if f.tlsConf != nil {
