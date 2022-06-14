@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFakeFunction(t *testing.T) {
+func TestFakeFunction_Email(t *testing.T) {
 	e, err := query.InitFunctionHelper("fake", "email")
 	require.Nil(t, err)
 

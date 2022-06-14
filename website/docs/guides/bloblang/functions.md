@@ -78,6 +78,260 @@ root.new_nums = this.nums.map_each(num -> if num < 10 { deleted() } else { num -
 # Out: {"new_nums":[1,7]}
 ```
 
+### `fake`
+
+:::caution EXPERIMENTAL
+This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Takes in a string that maps to a faker function and returns the result from that faker function. Returns an error if the given string doesn't match a supported faker function
+
+#### Parameters
+
+**`function`** &lt;string&gt; The name of the function to use to generate the value.  
+
+#### Examples
+
+
+Generates a random latitude float value
+
+```coffee
+root.latitude = fake("latitude")
+```
+
+Generates a random longitude float value
+
+```coffee
+root.longitude = fake("longitude")
+```
+
+Generates a unix time value
+
+```coffee
+root.unix_time = fake("unix_time")
+```
+
+Generates a date in format YYYY-MM-DD
+
+```coffee
+root.date = fake("date")
+```
+
+Generates a time in the format 00:00:00
+
+```coffee
+root.time = fake("time_string")
+```
+
+Returns a random month name
+
+```coffee
+root.month = fake("month_name")
+```
+
+Returns a year value in string format
+
+```coffee
+root.year = fake("year_string")
+```
+
+Returns a random day of week string (ex: Sunday)
+
+```coffee
+root.day = fake("day_of_week")
+```
+
+Returns a day of month value (ex: 20)
+
+```coffee
+root.day = fake("day_of_month")
+```
+
+Returns a timestamp in the format YYYY-MM-DD hh:mm:ss
+
+```coffee
+root.timestamp = fake("timestamp")
+```
+
+Returns a random century value (ex: IV)
+
+```coffee
+root.century = fake("century")
+```
+
+Returns a random timezone (ex: Asia/Jakarta)
+
+```coffee
+root.timezone = fake("timezone")
+```
+
+Returns either AM or PM
+
+```coffee
+root.time_period = fake("time_period")
+```
+
+Generates a string in email address format.
+
+```coffee
+root.email = fake("email")
+```
+
+Generates a string in mac address format.
+
+```coffee
+root.mac_address = fake("mac_address")
+```
+
+Generates a string in domain format (ex: xyz.com)
+
+```coffee
+root.domain = fake("domain_name")
+```
+
+Generates a string in URL format (ex: https://www.xyz.com/abc
+
+```coffee
+root.url = fake("url")
+```
+
+Generates a username string (ex: lVxELHS)
+
+```coffee
+root.username = fake("username")
+```
+
+Generates an IPv4 address
+
+```coffee
+root.ip = fake("ipv4")
+```
+
+Generates an IPv6 address
+
+```coffee
+root.ip = fake("ipv6")
+```
+
+Generates a password string
+
+```coffee
+root.password = fake("password")
+```
+
+Generates a lorem ipsum word
+
+```coffee
+root.word = fake("word")
+```
+
+Generates a lorem ipsum sentence
+
+```coffee
+root.sentence = fake("sentence")
+```
+
+Generates a lorem ipsum paragraph
+
+```coffee
+root.paragraph = fake("paragraph")
+```
+
+Generates a CC type (ex: Visa)
+
+```coffee
+root.cc_type = fake("cc_type")
+```
+
+Generates a CC number
+
+```coffee
+root.cc_number = fake("cc_number")
+```
+
+Generates a currency string (ex: USD)
+
+```coffee
+root.currency = fake("currency")
+```
+
+Generates an amount with a currency label (ex: USD 123.45)
+
+```coffee
+root.currency_value = fake("amount_with_currency")
+```
+
+Generates a male title (ex: Mr.)
+
+```coffee
+root.title = fake("title_male")
+```
+
+Generates a female title (ex: Mrs.)
+
+```coffee
+root.title = fake("title_female")
+```
+
+Generates a first name
+
+```coffee
+root.first_name = fake("first_name")
+```
+
+Generates a male first name
+
+```coffee
+root.first_name = fake("first_name_male")
+```
+
+Generates a female first name
+
+```coffee
+root.first_name = fake("first_name_female")
+```
+
+Generates a last name
+
+```coffee
+root.last_name = fake("last_name")
+```
+
+Generates a full name with title
+
+```coffee
+root.name = fake("name")
+```
+
+Generates a phone number in format '000-000-0000'
+
+```coffee
+root.phone_number = fake("phone_number")
+```
+
+Generates a toll free phone number in format '(000) 000-000000'
+
+```coffee
+root.phone_number = fake("toll_free_phone_number")
+```
+
+Generates an E164 phone number in the format '+000000000000
+
+```coffee
+root.phone_number = fake("e164_phone_number")
+```
+
+Generates a hypenated UUID
+
+```coffee
+root.uuid = fake("uuid_hyphenated")
+```
+
+generates an unhyphenated UUID
+
+```coffee
+root.uuid = fake("uuid_digit")
+```
+
 ### `ksuid`
 
 Generates a new ksuid each time it is invoked and prints a string representation.

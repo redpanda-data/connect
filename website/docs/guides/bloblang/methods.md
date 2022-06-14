@@ -233,25 +233,6 @@ root.escaped = this.value.escape_url_query()
 # Out: {"escaped":"foo+%26+bar"}
 ```
 
-### `fake`
-
-:::caution EXPERIMENTAL
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
-:::
-Uses the values in the structure to map to functions in the faker library. If value doesn't match a faker method, it remains unchanged.
-
-Introduced in version 4.2.0.
-
-
-#### Examples
-
-
-Replaces any strings in 'this' that map to faker functions with generated strings
-
-```coffee
-root.result = this.fake()
-```
-
 ### `filepath_join`
 
 Joins an array of path elements into a single file path. The separator depends on the operating system of the machine.
