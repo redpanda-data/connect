@@ -65,6 +65,7 @@ output:
       include_prefixes: []
       include_patterns: []
     max_in_flight: 10
+    timeout: 10s
     batching:
       count: 0
       byte_size: 0
@@ -199,6 +200,14 @@ The maximum number of batches to be sending in parallel at any given time.
 
 Type: `int`  
 Default: `10`  
+
+### `timeout`
+
+The maximum period of time to wait for message sends before abandoning the request and retrying
+
+
+Type: `string`  
+Default: `"10s"`  
 
 ### `batching`
 
