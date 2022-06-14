@@ -97,11 +97,11 @@ output:
     seed_brokers: [ localhost:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
+    timeout: "5s"
     metadata:
       include_patterns: [ .* ]
     batching:
       count: $OUTPUT_BATCH_COUNT
-		timeout: "5s"
 
 input:
   kafka_franz:
