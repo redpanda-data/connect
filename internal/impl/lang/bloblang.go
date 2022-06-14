@@ -158,7 +158,7 @@ func init() {
 			}
 
 			return func() (interface{}, error) {
-				return GetFakeValue(functionKey), nil
+				return GetFakeValue(functionKey)
 			}, nil
 		},
 	); err != nil {
