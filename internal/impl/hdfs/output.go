@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
@@ -23,9 +22,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newHDFSOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newHDFSOutput), docs.ComponentSpec{
 		Name:        "hdfs",
 		Summary:     `Sends message parts as files to a HDFS directory.`,
 		Description: output.Description(true, false, `Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`),
@@ -49,16 +46,16 @@ func init() {
 	}
 }
 
-func newHDFSOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	h, err := newHDFSWriter(conf.HDFS, mgr, log)
+func newHDFSOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	h, err := newHDFSWriter(conf.HDFS, mgr)
 	if err != nil {
 		return nil, err
 	}
-	w, err := output.NewAsyncWriter("hdfs", conf.HDFS.MaxInFlight, h, log, stats)
+	w, err := output.NewAsyncWriter("hdfs", conf.HDFS.MaxInFlight, h, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return batcher.NewFromConfig(conf.HDFS.Batching, output.OnlySinglePayloads(w), mgr, log, stats)
+	return batcher.NewFromConfig(conf.HDFS.Batching, output.OnlySinglePayloads(w), mgr)
 }
 
 type hdfsWriter struct {
@@ -70,7 +67,7 @@ type hdfsWriter struct {
 	log    log.Modular
 }
 
-func newHDFSWriter(conf output.HDFSConfig, mgr bundle.NewManagement, log log.Modular) (*hdfsWriter, error) {
+func newHDFSWriter(conf output.HDFSConfig, mgr bundle.NewManagement) (*hdfsWriter, error) {
 	path, err := mgr.BloblEnvironment().NewField(conf.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path expression: %v", err)
@@ -83,7 +80,7 @@ func newHDFSWriter(conf output.HDFSConfig, mgr bundle.NewManagement, log log.Mod
 		conf:      conf,
 		directory: directory,
 		path:      path,
-		log:       log,
+		log:       mgr.Logger(),
 	}, nil
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
@@ -69,8 +69,8 @@ type airGapProcessor struct {
 	p Processor
 }
 
-func newAirGapProcessor(typeStr string, p Processor, stats metrics.Type) processor.V1 {
-	return processor.NewV2ToV1Processor(typeStr, &airGapProcessor{p}, stats)
+func newAirGapProcessor(typeStr string, p Processor, mgr bundle.NewManagement) processor.V1 {
+	return processor.NewV2ToV1Processor(typeStr, &airGapProcessor{p}, mgr)
 }
 
 func (a *airGapProcessor) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
@@ -96,8 +96,8 @@ type airGapBatchProcessor struct {
 	p BatchProcessor
 }
 
-func newAirGapBatchProcessor(typeStr string, p BatchProcessor, stats metrics.Type) processor.V1 {
-	return processor.NewV2BatchedToV1Processor(typeStr, &airGapBatchProcessor{p}, stats)
+func newAirGapBatchProcessor(typeStr string, p BatchProcessor, mgr bundle.NewManagement) processor.V1 {
+	return processor.NewV2BatchedToV1Processor(typeStr, &airGapBatchProcessor{p}, mgr)
 }
 
 func (a *airGapBatchProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch *message.Batch) ([]*message.Batch, error) {

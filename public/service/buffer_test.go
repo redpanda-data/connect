@@ -10,8 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -79,7 +78,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	tChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	b := buffer.NewStream("meow", newAirGapBatchBuffer(newMemoryBuffer(int(total))), log.Noop(), metrics.Noop())
+	b := buffer.NewStream("meow", newAirGapBatchBuffer(newMemoryBuffer(int(total))), mock.NewManager())
 	require.NoError(t, b.Consume(tChan))
 
 	var i uint8
@@ -211,7 +210,7 @@ func TestStreamBufferClosing(t *testing.T) {
 	tChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	b := buffer.NewStream("meow", newAirGapBatchBuffer(newMemoryBuffer(int(total))), log.Noop(), metrics.Noop())
+	b := buffer.NewStream("meow", newAirGapBatchBuffer(newMemoryBuffer(int(total))), mock.NewManager())
 	require.NoError(t, b.Consume(tChan))
 
 	var i uint8

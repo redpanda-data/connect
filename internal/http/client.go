@@ -492,7 +492,7 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Batch) (res *http.Response, err error) {
 	var spans []*tracing.Span
 	if sendMsg != nil {
-		spans = tracing.CreateChildSpans("http_request", sendMsg)
+		spans = tracing.CreateChildSpans(h.mgr.Tracer(), "http_request", sendMsg)
 		defer func() {
 			for _, s := range spans {
 				s.Finish()

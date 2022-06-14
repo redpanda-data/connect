@@ -12,11 +12,9 @@ import (
 	"github.com/olivere/elastic/v7"
 	"github.com/ory/dockertest/v3"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/elasticsearch"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -140,7 +138,7 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 	conf.Backoff.MaxElapsedTime = "1s"
 	conf.Sniff = false
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +190,7 @@ func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing
 	conf.Backoff.MaxElapsedTime = "1s"
 	conf.Sniff = false
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +260,7 @@ func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.
 	conf.Backoff.MaxInterval = "1s"
 	conf.Sniff = false
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +293,7 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 	conf.Type = "_doc"
 	conf.Sniff = false
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,7 +355,7 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 	conf.Type = "_doc"
 	conf.Sniff = false
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +419,7 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 	conf.Sniff = false
 	conf.Type = "_doc"
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -486,7 +484,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 	conf.Sniff = false
 	conf.Type = "_doc"
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -579,7 +577,7 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 	conf.Sniff = false
 	conf.Type = "_doc"
 
-	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	m, err := elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -639,7 +637,7 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 	conf.Index = "test_conn_index"
 	conf.ID = "bar-id"
 
-	m, err = elasticsearch.NewElasticsearchV2(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	m, err = elasticsearch.NewElasticsearchV2(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

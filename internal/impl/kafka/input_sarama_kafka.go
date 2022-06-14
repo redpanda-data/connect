@@ -128,7 +128,7 @@ func newKafkaInput(conf input.Config, mgr bundle.NewManagement, log log.Modular,
 			return nil, err
 		}
 	}
-	return input.NewAsyncReader("kafka", false, input.NewAsyncPreserver(rdr), log, stats)
+	return input.NewAsyncReader("kafka", false, input.NewAsyncPreserver(rdr), mgr)
 }
 
 //------------------------------------------------------------------------------

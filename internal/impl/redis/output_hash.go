@@ -12,7 +12,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -22,9 +21,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newRedisHashOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newRedisHashOutput), docs.ComponentSpec{
 		Name:    "redis_hash",
 		Summary: `Sets Redis hash objects using the HMSET command.`,
 		Description: output.Description(true, false, `
@@ -80,12 +77,12 @@ Where latter stages will overwrite matching field names of a former stage.`),
 	}
 }
 
-func newRedisHashOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	rhash, err := newRedisHashWriter(conf.RedisHash, mgr, log)
+func newRedisHashOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	rhash, err := newRedisHashWriter(conf.RedisHash, mgr)
 	if err != nil {
 		return nil, err
 	}
-	a, err := output.NewAsyncWriter("redis_hash", conf.RedisHash.MaxInFlight, rhash, log, stats)
+	a, err := output.NewAsyncWriter("redis_hash", conf.RedisHash.MaxInFlight, rhash, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -104,9 +101,9 @@ type redisHashWriter struct {
 	connMut sync.RWMutex
 }
 
-func newRedisHashWriter(conf output.RedisHashConfig, mgr bundle.NewManagement, log log.Modular) (*redisHashWriter, error) {
+func newRedisHashWriter(conf output.RedisHashConfig, mgr bundle.NewManagement) (*redisHashWriter, error) {
 	r := &redisHashWriter{
-		log:    log,
+		log:    mgr.Logger(),
 		conf:   conf,
 		fields: map[string]*field.Expression{},
 	}

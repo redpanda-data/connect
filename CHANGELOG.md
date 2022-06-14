@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Go API: Added component bundle `./public/components/aws` for all AWS components, including a `RunLambda` function.
 - New `cached` processor.
 - Go API: New APIs for registering both metrics exporters and open telemetry tracer plugins.
+- Go API: The stream builder API now supports configuring a tracer, and tracer configuration is now isolated to the stream being executed.
 
 ### Fixed
 

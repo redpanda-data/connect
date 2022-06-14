@@ -119,7 +119,7 @@ func newBroker(conf output.Config, mgr bundle.NewManagement, pipelines ...proces
 		if err != nil {
 			return nil, err
 		}
-		if b, err = batcher.NewFromConfig(conf.Broker.Batching, b, mgr, mgr.Logger(), mgr.Metrics()); err != nil {
+		if b, err = batcher.NewFromConfig(conf.Broker.Batching, b, mgr); err != nil {
 			return nil, err
 		}
 		return b, nil
@@ -180,7 +180,7 @@ func newBroker(conf output.Config, mgr bundle.NewManagement, pipelines ...proces
 		if err != nil {
 			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 		}
-		b = batcher.New(policy, b, mgr.Logger(), mgr.Metrics())
+		b = batcher.New(policy, b, mgr)
 	}
 	return b, err
 }

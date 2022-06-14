@@ -7,8 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -17,7 +15,7 @@ import (
 func TestInprocDryRun(t *testing.T) {
 	t.Parallel()
 
-	mgr, err := manager.New(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	if err != nil {
 		t.Fatal(err)
 	}

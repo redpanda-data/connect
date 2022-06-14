@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -21,9 +20,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newRedisStreamsInput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllInputs.Add(processors.WrapConstructor(newRedisStreamsInput), docs.ComponentSpec{
 		Name: "redis_streams",
 		Summary: `
 Pulls messages from Redis (v5.0+) streams with the XREADGROUP command. The
@@ -52,14 +49,14 @@ as metadata fields.`,
 	}
 }
 
-func newRedisStreamsInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func newRedisStreamsInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
 	var c input.Async
 	var err error
-	if c, err = newRedisStreamsReader(conf.RedisStreams, log); err != nil {
+	if c, err = newRedisStreamsReader(conf.RedisStreams, mgr.Logger()); err != nil {
 		return nil, err
 	}
 	c = input.NewAsyncPreserver(c)
-	return input.NewAsyncReader("redis_streams", true, c, log, stats)
+	return input.NewAsyncReader("redis_streams", true, c, mgr)
 }
 
 type pendingRedisStreamMsg struct {

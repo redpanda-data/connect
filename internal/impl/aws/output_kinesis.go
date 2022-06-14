@@ -33,15 +33,15 @@ const (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		kin, err := newKinesisWriter(c.AWSKinesis, nm, nm.Logger())
+		kin, err := newKinesisWriter(c.AWSKinesis, nm)
 		if err != nil {
 			return nil, err
 		}
-		w, err := output.NewAsyncWriter("aws_kinesis", c.AWSKinesis.MaxInFlight, kin, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("aws_kinesis", c.AWSKinesis.MaxInFlight, kin, nm)
 		if err != nil {
 			return w, err
 		}
-		return batcher.NewFromConfig(c.AWSKinesis.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(c.AWSKinesis.Batching, w, nm)
 	}), docs.ComponentSpec{
 		Name:    "aws_kinesis",
 		Version: "3.36.0",
@@ -90,18 +90,14 @@ type kinesisWriter struct {
 	log log.Modular
 }
 
-func newKinesisWriter(
-	conf output.KinesisConfig,
-	mgr bundle.NewManagement,
-	log log.Modular,
-) (*kinesisWriter, error) {
+func newKinesisWriter(conf output.KinesisConfig, mgr bundle.NewManagement) (*kinesisWriter, error) {
 	if conf.PartitionKey == "" {
 		return nil, errors.New("partition key must not be empty")
 	}
 
 	k := kinesisWriter{
 		conf:       conf,
-		log:        log,
+		log:        mgr.Logger(),
 		streamName: aws.String(conf.Stream),
 	}
 	var err error

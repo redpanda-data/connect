@@ -27,7 +27,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		w, err := output.NewAsyncWriter("amqp_1", c.AMQP1.MaxInFlight, a, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("amqp_1", c.AMQP1.MaxInFlight, a, nm)
 		if err != nil {
 			return nil, err
 		}

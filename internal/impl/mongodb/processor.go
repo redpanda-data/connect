@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
@@ -30,11 +31,11 @@ import (
 
 func init() {
 	err := bundle.AllProcessors.Add(func(c processor.Config, nm bundle.NewManagement) (processor.V1, error) {
-		v2Proc, err := NewProcessor(c, nm, nm.Logger(), nm.Metrics())
+		v2Proc, err := NewProcessor(c, nm)
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("", v2Proc, nm.Metrics()), nil
+		return processor.NewV2BatchedToV1Processor("", v2Proc, nm), nil
 	}, docs.ComponentSpec{
 		Name:       "mongodb",
 		Type:       docs.TypeProcessor,
@@ -97,9 +98,10 @@ func init() {
 // Processor stores or retrieves data from a mongo db for each message of a
 // batch
 type Processor struct {
-	conf  processor.MongoDBConfig
-	log   log.Modular
-	stats metrics.Type
+	conf   processor.MongoDBConfig
+	log    log.Modular
+	stats  metrics.Type
+	tracer trace.TracerProvider
 
 	client                       *mongo.Client
 	collection                   *field.Expression
@@ -115,9 +117,7 @@ type Processor struct {
 }
 
 // NewProcessor returns a MongoDB processor.
-func NewProcessor(
-	conf processor.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type,
-) (processor.V2Batched, error) {
+func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2Batched, error) {
 	// TODO: V4 Remove this after V4 lands and #972 is fixed
 	operation := client.NewOperation(conf.MongoDB.Operation)
 	if operation == client.OperationInvalid {
@@ -125,9 +125,10 @@ func NewProcessor(
 	}
 
 	m := &Processor{
-		conf:  conf.MongoDB,
-		log:   log,
-		stats: stats,
+		conf:   conf.MongoDB,
+		log:    mgr.Logger(),
+		stats:  mgr.Metrics(),
+		tracer: mgr.Tracer(),
 
 		operation: operation,
 
@@ -232,7 +233,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 	newBatch := batch.Copy()
 
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
-	processor.IteratePartsWithSpanV2("mongodb", nil, newBatch, func(i int, s *tracing.Span, p *message.Part) error {
+	processor.IteratePartsWithSpanV2(m.tracer, "mongodb", nil, newBatch, func(i int, s *tracing.Span, p *message.Part) error {
 		var err error
 		var filterVal, documentVal *message.Part
 		var upsertVal, filterValWanted, documentValWanted bool

@@ -16,7 +16,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("select_parts", p, mgr.Metrics()), nil
+		return processor.NewV2BatchedToV1Processor("select_parts", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "select_parts",
 		Categories: []string{

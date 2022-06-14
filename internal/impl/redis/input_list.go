@@ -12,7 +12,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -20,9 +19,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newRedisListInput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllInputs.Add(processors.WrapConstructor(newRedisListInput), docs.ComponentSpec{
 		Name: "redis_list",
 		Summary: `
 Pops messages from the beginning of a Redis list using the BLPop command.`,
@@ -39,12 +36,12 @@ Pops messages from the beginning of a Redis list using the BLPop command.`,
 	}
 }
 
-func newRedisListInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-	r, err := newRedisListReader(conf.RedisList, log)
+func newRedisListInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
+	r, err := newRedisListReader(conf.RedisList, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("redis_list", true, input.NewAsyncPreserver(r), log, stats)
+	return input.NewAsyncReader("redis_list", true, input.NewAsyncPreserver(r), mgr)
 }
 
 type redisListReader struct {

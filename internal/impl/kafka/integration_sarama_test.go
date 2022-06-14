@@ -16,7 +16,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/kafka"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -61,7 +60,7 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 		outConf.TargetVersion = "2.1.0"
 		outConf.Addresses = []string{"localhost:" + kafkaPortStr}
 		outConf.Topic = "pls_ignore_just_testing_connection"
-		tmpOutput, serr := kafka.NewKafkaWriter(outConf, mock.NewManager(), log.Noop())
+		tmpOutput, serr := kafka.NewKafkaWriter(outConf, mock.NewManager())
 		if serr != nil {
 			return serr
 		}
@@ -345,7 +344,7 @@ func TestIntegrationSaramaOld(t *testing.T) {
 		outConf.TargetVersion = "2.1.0"
 		outConf.Addresses = []string{address}
 		outConf.Topic = "pls_ignore_just_testing_connection"
-		tmpOutput, serr := kafka.NewKafkaWriter(outConf, mock.NewManager(), log.Noop())
+		tmpOutput, serr := kafka.NewKafkaWriter(outConf, mock.NewManager())
 		if serr != nil {
 			return serr
 		}

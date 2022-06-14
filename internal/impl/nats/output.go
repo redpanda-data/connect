@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -24,9 +23,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newNATSOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newNATSOutput), docs.ComponentSpec{
 		Name:    "nats",
 		Summary: `Publish to an NATS subject.`,
 		Description: output.Description(true, false, `
@@ -60,12 +57,12 @@ This output will interpolate functions within the subject field, you can find a 
 	}
 }
 
-func newNATSOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	w, err := newNATSWriter(conf.NATS, mgr, log)
+func newNATSOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	w, err := newNATSWriter(conf.NATS, mgr, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
-	return output.NewAsyncWriter("nats", conf.NATS.MaxInFlight, w, log, stats)
+	return output.NewAsyncWriter("nats", conf.NATS.MaxInFlight, w, mgr)
 }
 
 type natsWriter struct {

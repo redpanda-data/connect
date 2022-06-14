@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -190,7 +192,8 @@ pipeline:
 // a subset of request messages, and mapping results from those requests back
 // into the original message batch.
 type Branch struct {
-	log log.Modular
+	log    log.Modular
+	tracer trace.TracerProvider
 
 	requestMap *mapping.Executor
 	resultMap  *mapping.Executor
@@ -223,6 +226,7 @@ func newBranch(conf processor.BranchConfig, mgr bundle.NewManagement) (*Branch, 
 	b := &Branch{
 		children: children,
 		log:      mgr.Logger(),
+		tracer:   mgr.Tracer(),
 
 		mReceived:      stats.GetCounter("processor_received"),
 		mBatchReceived: stats.GetCounter("processor_batch_received"),
@@ -310,7 +314,7 @@ func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 	b.mBatchReceived.Incr(1)
 	startedAt := time.Now()
 
-	branchMsg, propSpans := tracing.WithChildSpans("branch", msg.Copy())
+	branchMsg, propSpans := tracing.WithChildSpans(b.tracer, "branch", msg.Copy())
 	defer func() {
 		for _, s := range propSpans {
 			s.Finish()

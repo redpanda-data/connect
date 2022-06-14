@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
@@ -24,9 +23,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newRedisPubSubOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newRedisPubSubOutput), docs.ComponentSpec{
 		Name: "redis_pubsub",
 		Summary: `
 Publishes messages through the Redis PubSub model. It is not possible to
@@ -48,16 +45,16 @@ can find a list of functions [here](/docs/configuration/interpolation#bloblang-q
 	}
 }
 
-func newRedisPubSubOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	w, err := newRedisPubSubWriter(conf.RedisPubSub, mgr, log)
+func newRedisPubSubOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	w, err := newRedisPubSubWriter(conf.RedisPubSub, mgr)
 	if err != nil {
 		return nil, err
 	}
-	a, err := output.NewAsyncWriter("redis_pubsub", conf.RedisPubSub.MaxInFlight, w, log, stats)
+	a, err := output.NewAsyncWriter("redis_pubsub", conf.RedisPubSub.MaxInFlight, w, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return batcher.NewFromConfig(conf.RedisPubSub.Batching, a, mgr, log, stats)
+	return batcher.NewFromConfig(conf.RedisPubSub.Batching, a, mgr)
 }
 
 type redisPubSubWriter struct {
@@ -70,9 +67,9 @@ type redisPubSubWriter struct {
 	connMut sync.RWMutex
 }
 
-func newRedisPubSubWriter(conf output.RedisPubSubConfig, mgr bundle.NewManagement, log log.Modular) (*redisPubSubWriter, error) {
+func newRedisPubSubWriter(conf output.RedisPubSubConfig, mgr bundle.NewManagement) (*redisPubSubWriter, error) {
 	r := &redisPubSubWriter{
-		log:  log,
+		log:  mgr.Logger(),
 		conf: conf,
 	}
 	var err error

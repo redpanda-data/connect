@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 )
 
@@ -51,7 +49,7 @@ a:
 `, nil)
 	require.NoError(t, err)
 
-	mgr, err := manager.New(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	res := newResourcesFromManager(mgr)
@@ -98,7 +96,7 @@ a:
 `, nil)
 	require.NoError(t, err)
 
-	mgr, err := manager.New(manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	res := newResourcesFromManager(mgr)

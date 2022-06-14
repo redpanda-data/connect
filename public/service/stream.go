@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -25,11 +26,11 @@ type Stream struct {
 	conf   stream.Config
 	mgr    *manager.Type
 	stats  metrics.Type
-	tracer tracer.Type
+	tracer trace.TracerProvider
 	logger log.Modular
 }
 
-func newStream(conf stream.Config, mgr *manager.Type, stats metrics.Type, tracer tracer.Type, logger log.Modular, onStart func()) *Stream {
+func newStream(conf stream.Config, mgr *manager.Type, stats metrics.Type, tracer trace.TracerProvider, logger log.Modular, onStart func()) *Stream {
 	return &Stream{
 		conf:    conf,
 		mgr:     mgr,
@@ -106,9 +107,20 @@ func (s *Stream) StopWithin(timeout time.Duration) error {
 		return err
 	}
 
+	closeTracer := func() error {
+		if shutter, ok := s.tracer.(interface {
+			Shutdown(context.Context) error
+		}); ok {
+			return shutter.Shutdown(context.Background())
+		}
+		return nil
+	}
+
 	if err := s.stats.Close(); err != nil {
-		go s.tracer.Close()
+		go func() {
+			_ = closeTracer()
+		}()
 		return err
 	}
-	return s.tracer.Close()
+	return closeTracer()
 }

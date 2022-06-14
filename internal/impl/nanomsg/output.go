@@ -14,7 +14,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -26,9 +25,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newNanomsgOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newNanomsgOutput), docs.ComponentSpec{
 		Name:        "nanomsg",
 		Summary:     `Send messages over a Nanomsg socket.`,
 		Description: output.Description(true, false, `Currently only PUSH and PUB sockets are supported.`),
@@ -48,12 +45,12 @@ func init() {
 	}
 }
 
-func newNanomsgOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	s, err := newNanomsgWriter(conf.Nanomsg, log)
+func newNanomsgOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	s, err := newNanomsgWriter(conf.Nanomsg, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
-	a, err := output.NewAsyncWriter("nanomsg", conf.Nanomsg.MaxInFlight, s, log, stats)
+	a, err := output.NewAsyncWriter("nanomsg", conf.Nanomsg.MaxInFlight, s, mgr)
 	if err != nil {
 		return nil, err
 	}

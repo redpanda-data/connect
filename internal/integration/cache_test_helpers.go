@@ -19,7 +19,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 // CacheTestConfigVars exposes some variables injected into template configs for
@@ -198,7 +197,7 @@ func initCache(t *testing.T, env *cacheTestEnvironment) cache.V1 {
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	manager, err := manager.New(s.ResourceConfig, mock.NewManager(), env.log, env.stats)
+	manager, err := manager.New(s.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
 	require.NoError(t, err)
 
 	var c cache.V1

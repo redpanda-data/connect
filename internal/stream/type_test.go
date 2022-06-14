@@ -7,11 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
@@ -24,7 +21,7 @@ func TestTypeConstruction(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = "nanomsg"
 
-	newMgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, newMgr)
@@ -32,9 +29,7 @@ func TestTypeConstruction(t *testing.T) {
 
 	assert.NoError(t, strm.Stop(time.Minute))
 
-	newStats := metrics.Noop()
-	newLogger := log.Noop()
-	newMgr, err = manager.New(manager.NewResourceConfig(), mock.NewManager(), newLogger, newStats)
+	newMgr, err = manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	strm, err = stream.New(conf, newMgr)
@@ -49,7 +44,7 @@ func TestTypeCloseGracefully(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = "http_server"
 
-	newMgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, newMgr)
@@ -75,7 +70,7 @@ func TestTypeCloseOrdered(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = "http_server"
 
-	newMgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, newMgr)
@@ -101,7 +96,7 @@ func TestTypeCloseUnordered(t *testing.T) {
 	conf.Buffer.Type = "memory"
 	conf.Output.Type = "http_server"
 
-	newMgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	strm, err := stream.New(conf, newMgr)

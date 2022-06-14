@@ -10,14 +10,11 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -61,7 +58,7 @@ test_cache_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, cacheConfStr, string(cacheConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewCache(cacheConf)
@@ -98,7 +95,7 @@ test_cache_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, cacheConfStr, string(cacheConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewCache(cacheConf)
@@ -140,7 +137,7 @@ test_input_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewInput(inConf)
@@ -177,7 +174,7 @@ test_input_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewInput(inConf)
@@ -218,7 +215,7 @@ test_output_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
@@ -255,7 +252,7 @@ test_output_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
@@ -299,7 +296,7 @@ test_batch_output_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
@@ -336,7 +333,7 @@ test_batch_output_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewOutput(inConf)
@@ -376,7 +373,7 @@ test_processor_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
@@ -412,7 +409,7 @@ test_processor_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
@@ -452,7 +449,7 @@ test_batch_processor_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
@@ -488,7 +485,7 @@ test_batch_processor_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewProcessor(inConf)
@@ -528,7 +525,7 @@ test_rate_limit_plugin_with_config:
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewRateLimit(inConf)
@@ -564,7 +561,7 @@ test_rate_limit_plugin_without_config: null
 	require.NoError(t, err)
 	assert.Equal(t, inConfStr, string(outConfOutBytes))
 
-	mgr, err := manager.New(manager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
 	_, err = mgr.NewRateLimit(inConf)

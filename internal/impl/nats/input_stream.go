@@ -17,7 +17,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -26,9 +25,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newNATSStreamInput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllInputs.Add(processors.WrapConstructor(newNATSStreamInput), docs.ComponentSpec{
 		Name:    "nats_stream",
 		Summary: `Subscribe to a NATS Stream subject. Joining a queue is optional and allows multiple clients of a subject to consume using queue semantics.`,
 		Description: `
@@ -76,13 +73,13 @@ You can access these metadata fields using [function interpolation](/docs/config
 	}
 }
 
-func newNATSStreamInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func newNATSStreamInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
 	var c input.Async
 	var err error
-	if c, err = newNATSStreamReader(conf.NATSStream, log); err != nil {
+	if c, err = newNATSStreamReader(conf.NATSStream, mgr.Logger()); err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nats_stream", true, c, log, stats)
+	return input.NewAsyncReader("nats_stream", true, c, mgr)
 }
 
 type natsStreamReader struct {

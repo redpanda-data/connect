@@ -33,32 +33,23 @@ type Impl struct {
 
 // NewFromConfig creates a new output preceded by a batching mechanism that
 // enforces a given batching policy configuration.
-func NewFromConfig(
-	conf batchconfig.Config,
-	child output.Streamed, mgr bundle.NewManagement,
-	log log.Modular,
-	stats metrics.Type,
-) (output.Streamed, error) {
+func NewFromConfig(conf batchconfig.Config, child output.Streamed, mgr bundle.NewManagement) (output.Streamed, error) {
 	if !conf.IsNoop() {
 		policy, err := policy.New(conf, mgr.IntoPath("batching"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to construct batch policy: %v", err)
 		}
-		child = New(policy, child, log, stats)
+		child = New(policy, child, mgr)
 	}
 	return child, nil
 }
 
 // New creates a new output preceded by a batching mechanism that enforces a
 // given batching policy.
-func New(
-	batcher *policy.Batcher,
-	child output.Streamed, log log.Modular,
-	stats metrics.Type,
-) output.Streamed {
+func New(batcher *policy.Batcher, child output.Streamed, mgr bundle.NewManagement) output.Streamed {
 	m := Impl{
-		stats:       stats,
-		log:         log,
+		stats:       mgr.Metrics(),
+		log:         mgr.Logger(),
 		child:       child,
 		batcher:     batcher,
 		messagesOut: make(chan message.Transaction),

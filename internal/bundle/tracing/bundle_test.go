@@ -10,12 +10,9 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/bundle/tracing"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
 	"github.com/stretchr/testify/assert"
@@ -36,9 +33,6 @@ func TestBundleInputTracing(t *testing.T) {
 
 	mgr, err := manager.New(
 		manager.NewResourceConfig(),
-		mock.NewManager(),
-		log.Noop(),
-		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -85,9 +79,6 @@ func TestBundleOutputTracing(t *testing.T) {
 
 	mgr, err := manager.New(
 		manager.NewResourceConfig(),
-		mock.NewManager(),
-		log.Noop(),
-		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -146,9 +137,6 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 
 	mgr, err := manager.New(
 		manager.NewResourceConfig(),
-		mock.NewManager(),
-		log.Noop(),
-		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)
@@ -223,9 +211,6 @@ root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 
 	mgr, err := manager.New(
 		manager.NewResourceConfig(),
-		mock.NewManager(),
-		log.Noop(),
-		metrics.Noop(),
 		manager.OptSetEnvironment(tenv),
 	)
 	require.NoError(t, err)

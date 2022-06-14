@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
@@ -67,6 +69,15 @@ func (r *Resources) Logger() *Logger {
 // Metrics returns a mechanism for creating custom metrics.
 func (r *Resources) Metrics() *Metrics {
 	return newReverseAirGapMetrics(r.mgr.Metrics())
+}
+
+// OtelTracer returns an open telemetry tracer provider that can be used to
+// create new tracers.
+//
+// Experimental: This type signature is experimental and therefore subject to
+// change outside of major version releases.
+func (r *Resources) OtelTracer() trace.TracerProvider {
+	return r.mgr.Tracer()
 }
 
 // AccessCache attempts to access a cache resource by name. This action can

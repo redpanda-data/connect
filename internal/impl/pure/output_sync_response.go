@@ -14,7 +14,7 @@ import (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return output.NewAsyncWriter("sync_response", 1, SyncResponseWriter{}, nm.Logger(), nm.Metrics())
+		return output.NewAsyncWriter("sync_response", 1, SyncResponseWriter{}, nm)
 	}), docs.ComponentSpec{
 		Name: "sync_response",
 		Summary: `

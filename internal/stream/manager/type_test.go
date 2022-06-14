@@ -8,10 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
@@ -23,7 +20,7 @@ func harmlessConf() stream.Config {
 }
 
 func TestTypeBasicOperations(t *testing.T) {
-	res, err := bmanager.New(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	res, err := bmanager.New(bmanager.NewResourceConfig())
 	require.NoError(t, err)
 
 	mgr := New(res)
@@ -82,7 +79,7 @@ func TestTypeBasicOperations(t *testing.T) {
 }
 
 func TestTypeBasicClose(t *testing.T) {
-	res, err := bmanager.New(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	res, err := bmanager.New(bmanager.NewResourceConfig())
 	require.NoError(t, err)
 
 	mgr := New(res)

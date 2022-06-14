@@ -3,18 +3,17 @@ package tracer
 import (
 	"fmt"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-// Type is an interface implemented by all tracer types.
-type Type interface {
-	// Close stops and cleans up the tracers resources.
-	Close() error
+func init() {
+	// TODO: I'm so confused, these APIs are a nightmare.
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 }
-
-//------------------------------------------------------------------------------
 
 // Config is the all encompassing configuration struct for all tracer types.
 type Config struct {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
@@ -52,8 +53,9 @@ type AsyncWriter struct {
 
 	injectTracingMap *mapping.Executor
 
-	log   log.Modular
-	stats metrics.Type
+	log    log.Modular
+	stats  metrics.Type
+	tracer trace.TracerProvider
 
 	transactions <-chan message.Transaction
 
@@ -61,13 +63,14 @@ type AsyncWriter struct {
 }
 
 // NewAsyncWriter creates a Streamed implementation around an AsyncSink.
-func NewAsyncWriter(typeStr string, maxInflight int, w AsyncSink, log log.Modular, stats metrics.Type) (Streamed, error) {
+func NewAsyncWriter(typeStr string, maxInflight int, w AsyncSink, mgr component.Observability) (Streamed, error) {
 	aWriter := &AsyncWriter{
 		typeStr:      typeStr,
 		maxInflight:  maxInflight,
 		writer:       w,
-		log:          log,
-		stats:        stats,
+		log:          mgr.Logger(),
+		stats:        mgr.Metrics(),
+		tracer:       mgr.Tracer(),
 		transactions: nil,
 		shutSig:      shutdown.NewSignaller(),
 	}
@@ -248,7 +251,7 @@ func (w *AsyncWriter) loop() {
 			}
 
 			w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
-			spans := tracing.CreateChildSpans("output_"+w.typeStr, ts.Payload)
+			spans := tracing.CreateChildSpans(w.tracer, "output_"+w.typeStr, ts.Payload)
 			ts.Payload = w.injectSpans(ts.Payload, spans)
 
 			latency, err := w.latencyMeasuringWrite(ts.Payload)

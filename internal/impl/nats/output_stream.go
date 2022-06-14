@@ -14,7 +14,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -25,9 +24,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newNATSStreamOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newNATSStreamOutput), docs.ComponentSpec{
 		Name:        "nats_stream",
 		Summary:     `Publish to a NATS Stream subject.`,
 		Description: output.Description(true, false, auth.Description()),
@@ -54,12 +51,12 @@ func init() {
 	}
 }
 
-func newNATSStreamOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	w, err := newNATSStreamWriter(conf.NATSStream, log)
+func newNATSStreamOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	w, err := newNATSStreamWriter(conf.NATSStream, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
-	a, err := output.NewAsyncWriter("nats_stream", conf.NATSStream.MaxInFlight, w, log, stats)
+	a, err := output.NewAsyncWriter("nats_stream", conf.NATSStream.MaxInFlight, w, mgr)
 	if err != nil {
 		return nil, err
 	}

@@ -23,7 +23,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("log", p, mgr.Metrics()), nil
+		return processor.NewV2BatchedToV1Processor("log", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "log",
 		Categories: []string{

@@ -12,7 +12,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
@@ -24,9 +23,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newRedisStreamsOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newRedisStreamsOutput), docs.ComponentSpec{
 		Name: "redis_streams",
 		Summary: `
 Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't
@@ -57,16 +54,16 @@ a metadata item and the body then the body takes precedence.`),
 	}
 }
 
-func newRedisStreamsOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	w, err := newRedisStreamsWriter(conf.RedisStreams, log)
+func newRedisStreamsOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	w, err := newRedisStreamsWriter(conf.RedisStreams, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
-	a, err := output.NewAsyncWriter("redis_streams", conf.RedisStreams.MaxInFlight, w, log, stats)
+	a, err := output.NewAsyncWriter("redis_streams", conf.RedisStreams.MaxInFlight, w, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return batcher.NewFromConfig(conf.RedisStreams.Batching, a, mgr, log, stats)
+	return batcher.NewFromConfig(conf.RedisStreams.Batching, a, mgr)
 }
 
 type redisStreamsWriter struct {

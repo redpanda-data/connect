@@ -29,7 +29,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		a, err := output.NewAsyncWriter("mqtt", conf.MQTT.MaxInFlight, w, nm.Logger(), nm.Metrics())
+		a, err := output.NewAsyncWriter("mqtt", conf.MQTT.MaxInFlight, w, nm)
 		if err != nil {
 			return nil, err
 		}

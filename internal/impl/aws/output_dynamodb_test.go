@@ -13,7 +13,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -40,7 +39,7 @@ func TestDynamoDBHappy(t *testing.T) {
 	}
 	conf.Table = "FooTable"
 
-	db, err := newDynamoDBWriter(conf, mock.NewManager(), log.Noop())
+	db, err := newDynamoDBWriter(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	var request map[string][]*dynamodb.WriteRequest
@@ -104,7 +103,7 @@ func TestDynamoDBSadToGood(t *testing.T) {
 	conf.Backoff.MaxElapsedTime = "100ms"
 	conf.Table = "FooTable"
 
-	db, err := newDynamoDBWriter(conf, mock.NewManager(), log.Noop())
+	db, err := newDynamoDBWriter(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	var batchRequest []*dynamodb.WriteRequest
@@ -203,7 +202,7 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 	}
 	conf.Table = "FooTable"
 
-	db, err := newDynamoDBWriter(conf, mock.NewManager(), log.Noop())
+	db, err := newDynamoDBWriter(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	var requests [][]*dynamodb.WriteRequest
@@ -301,7 +300,7 @@ func TestDynamoDBSad(t *testing.T) {
 	}
 	conf.Table = "FooTable"
 
-	db, err := newDynamoDBWriter(conf, mock.NewManager(), log.Noop())
+	db, err := newDynamoDBWriter(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	var batchRequest []*dynamodb.WriteRequest
@@ -411,7 +410,7 @@ func TestDynamoDBSadBatch(t *testing.T) {
 	}
 	conf.Table = "FooTable"
 
-	db, err := newDynamoDBWriter(conf, mock.NewManager(), log.Noop())
+	db, err := newDynamoDBWriter(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	var requests [][]*dynamodb.WriteRequest

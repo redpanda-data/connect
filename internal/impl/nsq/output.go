@@ -14,7 +14,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -24,9 +23,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newNSQOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newNSQOutput), docs.ComponentSpec{
 		Name:        "nsq",
 		Summary:     `Publish to an NSQ topic.`,
 		Description: output.Description(true, false, `The `+"`topic`"+` field can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.`),
@@ -46,12 +43,12 @@ func init() {
 	}
 }
 
-func newNSQOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	w, err := newNSQWriter(conf.NSQ, mgr, log)
+func newNSQOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	w, err := newNSQWriter(conf.NSQ, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return output.NewAsyncWriter("nsq", conf.NSQ.MaxInFlight, w, log, stats)
+	return output.NewAsyncWriter("nsq", conf.NSQ.MaxInFlight, w, mgr)
 }
 
 type nsqWriter struct {
@@ -66,9 +63,9 @@ type nsqWriter struct {
 	conf output.NSQConfig
 }
 
-func newNSQWriter(conf output.NSQConfig, mgr bundle.NewManagement, log log.Modular) (*nsqWriter, error) {
+func newNSQWriter(conf output.NSQConfig, mgr bundle.NewManagement) (*nsqWriter, error) {
 	n := nsqWriter{
-		log:  log,
+		log:  mgr.Logger(),
 		conf: conf,
 	}
 	var err error

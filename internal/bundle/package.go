@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"regexp"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
@@ -41,6 +43,7 @@ type NewManagement interface {
 
 	Metrics() metrics.Type
 	Logger() log.Modular
+	Tracer() trace.TracerProvider
 	BloblEnvironment() *bloblang.Environment
 
 	RegisterEndpoint(path, desc string, h http.HandlerFunc)

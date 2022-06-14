@@ -18,7 +18,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
@@ -32,9 +31,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newKafkaOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newKafkaOutput), docs.ComponentSpec{
 		Name:    "kafka",
 		Summary: `The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.`,
 		Description: output.Description(true, true, `
@@ -90,12 +87,12 @@ Unfortunately this error message will appear for a wide range of connection prob
 	}
 }
 
-func newKafkaOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	k, err := NewKafkaWriter(conf.Kafka, mgr, log)
+func newKafkaOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	k, err := NewKafkaWriter(conf.Kafka, mgr)
 	if err != nil {
 		return nil, err
 	}
-	w, err := output.NewAsyncWriter("kafka", conf.Kafka.MaxInFlight, k, log, stats)
+	w, err := output.NewAsyncWriter("kafka", conf.Kafka.MaxInFlight, k, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +110,7 @@ func newKafkaOutput(conf output.Config, mgr bundle.NewManagement, log log.Modula
 		aw.SetInjectTracingMap(injectTracingMap)
 	}
 
-	return batcher.NewFromConfig(conf.Kafka.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.Kafka.Batching, w, mgr)
 }
 
 type kafkaWriter struct {
@@ -144,7 +141,7 @@ type kafkaWriter struct {
 }
 
 // NewKafkaWriter returns a kafka writer.
-func NewKafkaWriter(conf output.KafkaConfig, mgr bundle.NewManagement, log log.Modular) (output.AsyncSink, error) {
+func NewKafkaWriter(conf output.KafkaConfig, mgr bundle.NewManagement) (output.AsyncSink, error) {
 	compression, err := strToCompressionCodec(conf.Compression)
 	if err != nil {
 		return nil, err
@@ -162,7 +159,7 @@ func NewKafkaWriter(conf output.KafkaConfig, mgr bundle.NewManagement, log log.M
 	}
 
 	k := kafkaWriter{
-		log: log,
+		log: mgr.Logger(),
 		mgr: mgr,
 
 		conf:          conf,

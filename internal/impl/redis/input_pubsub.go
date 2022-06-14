@@ -11,7 +11,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/redis/old"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -19,9 +18,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newRedisPubSubInput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllInputs.Add(processors.WrapConstructor(newRedisPubSubInput), docs.ComponentSpec{
 		Name: "redis_pubsub",
 		Summary: `
 Consume from a Redis publish/subscribe channel using either the SUBSCRIBE or
@@ -50,12 +47,12 @@ verbatim.`,
 	}
 }
 
-func newRedisPubSubInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-	r, err := newRedisPubSubReader(conf.RedisPubSub, log)
+func newRedisPubSubInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
+	r, err := newRedisPubSubReader(conf.RedisPubSub, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("redis_pubsub", true, input.NewAsyncPreserver(r), log, stats)
+	return input.NewAsyncReader("redis_pubsub", true, input.NewAsyncPreserver(r), mgr)
 }
 
 type redisPubSubReader struct {

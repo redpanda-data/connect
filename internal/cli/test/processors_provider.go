@@ -13,7 +13,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -99,7 +98,7 @@ func (p *ProcessorsProvider) ProvideBloblang(pathStr string) ([]processor.V1, er
 	}
 
 	return []processor.V1{
-		processor.NewV2BatchedToV1Processor("bloblang", newBloblang(exec, p.logger), metrics.Noop()),
+		processor.NewV2BatchedToV1Processor("bloblang", newBloblang(exec, p.logger), mock.NewManager()),
 	}, nil
 }
 
@@ -145,7 +144,7 @@ func (b *bloblangProc) Close(context.Context) error {
 //------------------------------------------------------------------------------
 
 func (p *ProcessorsProvider) initProcs(confs cachedConfig) ([]processor.V1, error) {
-	mgr, err := manager.New(confs.mgr, mock.NewManager(), p.logger, metrics.Noop())
+	mgr, err := manager.New(confs.mgr, manager.OptSetLogger(p.logger))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialise resources: %v", err)
 	}

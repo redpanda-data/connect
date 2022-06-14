@@ -31,9 +31,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-		return NewElasticsearch(conf, mgr, mgr.Logger(), mgr.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(NewElasticsearch), docs.ComponentSpec{
 		Name: "elasticsearch",
 		Summary: `
 Publishes messages into an Elasticsearch index. If the index does not exist then
@@ -81,18 +79,16 @@ false for connections to succeed.`),
 }
 
 // NewElasticsearch creates a new Elasticsearch output type.
-func NewElasticsearch(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	elasticWriter, err := NewElasticsearchV2(conf.Elasticsearch, mgr, log, stats)
+func NewElasticsearch(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	elasticWriter, err := NewElasticsearchV2(conf.Elasticsearch, mgr)
 	if err != nil {
 		return nil, err
 	}
-	w, err := output.NewAsyncWriter(
-		"elasticsearch", conf.Elasticsearch.MaxInFlight, elasticWriter, log, stats,
-	)
+	w, err := output.NewAsyncWriter("elasticsearch", conf.Elasticsearch.MaxInFlight, elasticWriter, mgr)
 	if err != nil {
 		return w, err
 	}
-	return batcher.NewFromConfig(conf.Elasticsearch.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.Elasticsearch.Batching, w, mgr)
 }
 
 // Elasticsearch is a writer type that writes messages into elasticsearch.
@@ -120,10 +116,10 @@ type Elasticsearch struct {
 }
 
 // NewElasticsearchV2 creates a new Elasticsearch writer type.
-func NewElasticsearchV2(conf output.ElasticsearchConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
+func NewElasticsearchV2(conf output.ElasticsearchConfig, mgr bundle.NewManagement) (*Elasticsearch, error) {
 	e := Elasticsearch{
-		log:         log,
-		stats:       stats,
+		log:         mgr.Logger(),
+		stats:       mgr.Metrics(),
 		conf:        conf,
 		sniff:       conf.Sniff,
 		healthcheck: conf.Healthcheck,

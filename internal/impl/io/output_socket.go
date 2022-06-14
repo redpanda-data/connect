@@ -45,7 +45,7 @@ func newSocketOutput(conf output.Config, mgr bundle.NewManagement, log log.Modul
 	if err != nil {
 		return nil, err
 	}
-	return output.NewAsyncWriter("socket", 1, t, log, stats)
+	return output.NewAsyncWriter("socket", 1, t, mgr)
 }
 
 type socketWriter struct {
