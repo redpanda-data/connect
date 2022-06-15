@@ -64,7 +64,11 @@ This input adds the following metadata fields to each message:
 			Default(1024).
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField)
+		Field(saslField).
+		Field(service.NewBoolField("debug_to_trace_logs").
+			Description("Whether to emit kafka-franz debug level logs only when the log level is set to TRACE").
+			Default(false).
+			Advanced())
 }
 
 func init() {
@@ -90,13 +94,14 @@ type msgWithAckFn struct {
 }
 
 type franzKafkaReader struct {
-	seedBrokers     []string
-	topics          []string
-	consumerGroup   string
-	tlsConf         *tls.Config
-	saslConfs       []sasl.Mechanism
-	checkpointLimit int
-	regexPattern    bool
+	seedBrokers      []string
+	topics           []string
+	consumerGroup    string
+	tlsConf          *tls.Config
+	saslConfs        []sasl.Mechanism
+	checkpointLimit  int
+	regexPattern     bool
+	debugToTraceLogs bool
 
 	msgChan atomic.Value
 	log     *service.Logger
@@ -154,6 +159,10 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 		f.tlsConf = tlsConf
 	}
 	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
+		return nil, err
+	}
+
+	if f.debugToTraceLogs, err = conf.FieldBool("debug_to_trace_logs"); err != nil {
 		return nil, err
 	}
 
@@ -299,7 +308,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			checkpoints.removeTopicPartitions(m)
 		}),
 		kgo.AutoCommitMarks(),
-		kgo.WithLogger(&kgoLogger{f.log}),
+		kgo.WithLogger(&kgoLogger{l: f.log, debugToTrace: f.debugToTraceLogs}),
 	}
 
 	if f.tlsConf != nil {

@@ -63,7 +63,11 @@ This output is new and experimental, and the existing ` + "`kafka`" + ` input is
 			Optional().
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField)
+		Field(saslField).
+		Field(service.NewBoolField("debug_to_trace_logs").
+			Description("Whether to emit kafka-franz debug level logs only when the log level is set to TRACE").
+			Default(false).
+			Advanced())
 }
 
 func init() {
@@ -102,6 +106,7 @@ type franzKafkaWriter struct {
 	partitioner      kgo.Partitioner
 	produceMaxBytes  int32
 	compressionPrefs []kgo.CompressionCodec
+	debugToTraceLogs bool
 
 	client *kgo.Client
 
@@ -204,6 +209,10 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		return nil, err
 	}
 
+	if f.debugToTraceLogs, err = conf.FieldBool("debug_to_trace_logs"); err != nil {
+		return nil, err
+	}
+
 	return &f, nil
 }
 
@@ -219,7 +228,7 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 		kgo.SASL(f.saslConfs...),
 		kgo.AllowAutoTopicCreation(), // TODO: Configure this
 		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
-		kgo.WithLogger(&kgoLogger{f.log}),
+		kgo.WithLogger(&kgoLogger{l: f.log, debugToTrace: f.debugToTraceLogs}),
 	}
 	if f.tlsConf != nil {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))

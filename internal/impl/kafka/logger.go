@@ -7,7 +7,8 @@ import (
 )
 
 type kgoLogger struct {
-	l *service.Logger
+	l            *service.Logger
+	debugToTrace bool
 }
 
 func (k *kgoLogger) Level() kgo.LogLevel {
@@ -28,6 +29,10 @@ func (k *kgoLogger) Log(level kgo.LogLevel, msg string, keyvals ...interface{}) 
 	case kgo.LogLevelInfo:
 		tmpL.Info(msg)
 	case kgo.LogLevelDebug:
-		tmpL.Debug(msg)
+		if k.debugToTrace {
+			tmpL.Trace(msg)
+		} else {
+			tmpL.Debug(msg)
+		}
 	}
 }
