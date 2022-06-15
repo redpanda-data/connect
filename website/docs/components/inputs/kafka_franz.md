@@ -62,6 +62,7 @@ input:
       root_cas_file: ""
       client_certs: []
     sasl: []
+    debug_to_trace_logs: false
 ```
 
 </TabItem>
@@ -317,5 +318,13 @@ Key/value pairs to add to OAUTHBEARER authentication requests.
 
 
 Type: `object`  
+
+### `debug_to_trace_logs`
+
+Whether to emit kafka-franz debug level logs only when the log level is set to TRACE
+
+
+Type: `bool`  
+Default: `false`  
 
 
