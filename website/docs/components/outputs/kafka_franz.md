@@ -81,6 +81,14 @@ output:
       root_cas_file: ""
       client_certs: []
     sasl: []
+    credentials:
+      profile: ""
+      id: ""
+      secret: ""
+      token: ""
+      from_ec2_role: false
+      role: ""
+      role_external_id: ""
 ```
 
 </TabItem>
@@ -459,6 +467,7 @@ Type: `string`
 
 | Option | Summary |
 |---|---|
+| `AWS_MSK_IAM` | AWS IAM based authentication as specified by the 'aws-msk-iam-auth' java library. |
 | `OAUTHBEARER` | OAuth Bearer based authentication. |
 | `PLAIN` | Plain text authentication. |
 | `SCRAM-SHA-256` | SCRAM based authentication as specified in RFC5802. |
@@ -495,5 +504,69 @@ Key/value pairs to add to OAUTHBEARER authentication requests.
 
 
 Type: `object`  
+
+### `credentials`
+
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws).
+
+
+Type: `object`  
+
+### `credentials.profile`
+
+A profile from `~/.aws/credentials` to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `credentials.id`
+
+The ID of credentials to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `credentials.secret`
+
+The secret for the credentials being used.
+
+
+Type: `string`  
+Default: `""`  
+
+### `credentials.token`
+
+The token for the credentials being used, required when using short term credentials.
+
+
+Type: `string`  
+Default: `""`  
+
+### `credentials.from_ec2_role`
+
+Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.2.0 or newer  
+
+### `credentials.role`
+
+A role ARN to assume.
+
+
+Type: `string`  
+Default: `""`  
+
+### `credentials.role_external_id`
+
+An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
 
 
