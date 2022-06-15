@@ -11,6 +11,10 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+func SessionFields() []*service.ConfigField {
+	return sessionFields()
+}
+
 func sessionFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField("region").
@@ -46,6 +50,10 @@ func sessionFields() []*service.ConfigField {
 			Advanced().
 			Description("Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws)."),
 	}
+}
+
+func GetSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*session.Session, error) {
+	return getSession(parsedConf, opts...)
 }
 
 func getSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*session.Session, error) {
