@@ -41,6 +41,7 @@ This output is new and experimental, and the existing ` + "`kafka`" + ` input is
 		Field(service.NewInterpolatedStringField("key").
 			Description("An optional key to populate for each message.").Optional()).
 		Field(service.NewStringAnnotatedEnumField("partitioner", map[string]string{
+			"murmur2_hash": "Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on.",
 			"round_robin":  "Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions.",
 			"least_backup": "Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch.",
 		}).
@@ -188,6 +189,8 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 			return nil, err
 		}
 		switch partStr {
+		case "murmur2_hash":
+			f.partitioner = kgo.StickyKeyPartitioner(nil)
 		case "round_robin":
 			f.partitioner = kgo.RoundRobinPartitioner()
 		case "least_backup":
