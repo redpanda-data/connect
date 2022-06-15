@@ -117,7 +117,7 @@ output:
 				).AtVersion("3.53.0"),
 			docs.FieldString("content_encoding", "An optional content encoding to set for each object.").IsInterpolated().Advanced(),
 			docs.FieldInt("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of message batches to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPCloudStorageConfig()),
 	})

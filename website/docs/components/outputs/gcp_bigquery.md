@@ -168,7 +168,7 @@ Options: `NEWLINE_DELIMITED_JSON`, `CSV`.
 
 ### `max_in_flight`
 
-The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of message batches to have in flight at a given time. Increase this to improve throughput.
 
 
 Type: `int`  
