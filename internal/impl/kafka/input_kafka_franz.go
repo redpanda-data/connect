@@ -15,6 +15,7 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/benthosdev/benthos/v4/internal/checkpoint"
+	sess "github.com/benthosdev/benthos/v4/internal/impl/aws"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -64,7 +65,9 @@ This input adds the following metadata fields to each message:
 			Default(1024).
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField)
+		Field(saslField).
+		Field(sess.SessionFields()[2])
+
 }
 
 func init() {
