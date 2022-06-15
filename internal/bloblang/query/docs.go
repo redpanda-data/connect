@@ -46,6 +46,7 @@ var (
 	FunctionCategoryEnvironment = "Environment"
 	FunctionCategoryDeprecated  = "Deprecated"
 	FunctionCategoryPlugin      = "Plugin"
+	FunctionCategoryFakeData    = "Fake Data Generation"
 )
 
 // FunctionSpec describes a Bloblang function.

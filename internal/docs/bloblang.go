@@ -194,6 +194,7 @@ func BloblangFunctionsMarkdown() ([]byte, error) {
 		query.FunctionCategoryGeneral,
 		query.FunctionCategoryMessage,
 		query.FunctionCategoryEnvironment,
+		query.FunctionCategoryFakeData,
 		query.FunctionCategoryDeprecated,
 	} {
 		functions := functionCategory{
