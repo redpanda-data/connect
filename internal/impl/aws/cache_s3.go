@@ -39,7 +39,7 @@ func s3CacheConfig() *service.ConfigSpec {
 		Field(service.NewBackOffField("retries", false, retriesDefaults).
 			Advanced())
 
-	for _, f := range sessionFields() {
+	for _, f := range SessionFields() {
 		spec = spec.Field(f)
 	}
 	return spec
@@ -75,7 +75,7 @@ func newS3CacheFromConfig(conf *service.ParsedConfig) (*s3Cache, error) {
 		return nil, err
 	}
 
-	sess, err := getSession(conf, func(c *aws.Config) {
+	sess, err := GetSession(conf, func(c *aws.Config) {
 		c.S3ForcePathStyle = aws.Bool(forcePathStyleURLs)
 	})
 	if err != nil {

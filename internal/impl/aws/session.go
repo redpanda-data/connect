@@ -12,10 +12,6 @@ import (
 )
 
 func SessionFields() []*service.ConfigField {
-	return sessionFields()
-}
-
-func sessionFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField("region").
 			Description("The AWS region to target.").
@@ -53,10 +49,6 @@ func sessionFields() []*service.ConfigField {
 }
 
 func GetSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*session.Session, error) {
-	return getSession(parsedConf, opts...)
-}
-
-func getSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*session.Session, error) {
 	awsConf := aws.NewConfig()
 
 	if region, _ := parsedConf.FieldString("region"); region != "" {

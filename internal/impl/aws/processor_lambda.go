@@ -81,7 +81,7 @@ pipeline:
 			Default("").
 			Advanced())
 
-	for _, f := range sessionFields() {
+	for _, f := range SessionFields() {
 		config = config.Field(f)
 	}
 
@@ -97,7 +97,7 @@ pipeline:
 	err := service.RegisterBatchProcessor(
 		"aws_lambda", config,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			sess, err := getSession(conf)
+			sess, err := GetSession(conf)
 			if err != nil {
 				return nil, err
 			}
