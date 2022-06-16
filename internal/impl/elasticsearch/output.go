@@ -3,6 +3,7 @@ package elasticsearch
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/olivere/elastic/v7"
-	aws "github.com/olivere/elastic/v7/aws/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
@@ -22,13 +22,22 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
-	baws "github.com/benthosdev/benthos/v4/internal/impl/aws"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 	itls "github.com/benthosdev/benthos/v4/internal/tls"
 )
+
+func notImportedAWSOptFn(conf output.ElasticsearchConfig) ([]elastic.ClientOptionFunc, error) {
+	if !conf.AWS.Enabled {
+		return nil, nil
+	}
+	return nil, errors.New("unable to configure AWS authentication as this binary does not import components/aws")
+}
+
+// AWSOptFn is populated with the child `aws` package when imported.
+var AWSOptFn func(conf output.ElasticsearchConfig) ([]elastic.ClientOptionFunc, error) = notImportedAWSOptFn
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(NewElasticsearch), docs.ComponentSpec{
@@ -213,14 +222,11 @@ func (e *Elasticsearch) Connect() error {
 		}))
 	}
 
-	if e.conf.AWS.Enabled {
-		tsess, err := baws.GetSessionFromConf(e.conf.AWS.Config)
-		if err != nil {
-			return err
-		}
-		signingClient := aws.NewV4SigningClient(tsess.Config.Credentials, e.conf.AWS.Region)
-		opts = append(opts, elastic.SetHttpClient(signingClient))
+	awsOpts, err := AWSOptFn(e.conf)
+	if err != nil {
+		return err
 	}
+	opts = append(opts, awsOpts...)
 
 	if e.conf.GzipCompression {
 		opts = append(opts, elastic.SetGzip(true))
