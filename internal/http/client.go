@@ -315,6 +315,9 @@ func (h *Client) CreateRequest(sendMsg, refMsg *message.Batch) (req *http.Reques
 		body = buf
 	} else if sendMsg != nil && sendMsg.Len() == 1 {
 		if msgBytes := sendMsg.Get(0).Get(); len(msgBytes) > 0 {
+			if _, exists := h.headers["Content-Type"]; !exists {
+				overrideContentType = "application/octet-stream"
+			}
 			body = bytes.NewBuffer(msgBytes)
 		}
 	} else if sendMsg != nil && sendMsg.Len() > 1 {

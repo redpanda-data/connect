@@ -32,8 +32,7 @@ input:
   http_client:
     url: ""
     verb: GET
-    headers:
-      Content-Type: application/octet-stream
+    headers: {}
     rate_limit: ""
     timeout: 5s
     payload: ""
@@ -53,8 +52,7 @@ input:
   http_client:
     url: ""
     verb: GET
-    headers:
-      Content-Type: application/octet-stream
+    headers: {}
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -193,7 +191,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `object`  
-Default: `{"Content-Type":"application/octet-stream"}`  
+Default: `{}`  
 
 ```yml
 # Examples
