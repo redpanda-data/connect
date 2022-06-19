@@ -11,7 +11,8 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func sessionFields() []*service.ConfigField {
+// SessionFields defines a re-usable set of config fields for an AWS session
+func SessionFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField("region").
 			Description("The AWS region to target.").
@@ -48,7 +49,8 @@ func sessionFields() []*service.ConfigField {
 	}
 }
 
-func getSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*session.Session, error) {
+// GetSession attempts to create an AWS session based on the parsedConfig
+func GetSession(parsedConf *service.ParsedConfig, opts ...func(*aws.Config)) (*session.Session, error) {
 	awsConf := aws.NewConfig()
 
 	if region, _ := parsedConf.FieldString("region"); region != "" {

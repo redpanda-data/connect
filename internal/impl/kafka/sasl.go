@@ -9,10 +9,12 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	sess "github.com/benthosdev/benthos/v4/internal/impl/aws"
 	ksasl "github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
 	"github.com/benthosdev/benthos/v4/public/service"
 
 	"github.com/twmb/franz-go/pkg/sasl"
+	kaws "github.com/twmb/franz-go/pkg/sasl/aws"
 	"github.com/twmb/franz-go/pkg/sasl/oauth"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
@@ -24,6 +26,7 @@ var saslField = service.NewObjectListField("sasl",
 		"OAUTHBEARER":   "OAuth Bearer based authentication.",
 		"SCRAM-SHA-256": "SCRAM based authentication as specified in RFC5802.",
 		"SCRAM-SHA-512": "SCRAM based authentication as specified in RFC5802.",
+		"AWS_MSK_IAM":   "AWS IAM based authentication as specified by the 'aws-msk-iam-auth' java library.",
 	}).
 		Description("The SASL mechanism to use."),
 	service.NewStringField("username").
@@ -74,6 +77,8 @@ func saslMechanismsFromConfig(c *service.ParsedConfig) ([]sasl.Mechanism, error)
 				mechanisms[i], err = scram256SaslFromConfig(mConf)
 			case "SCRAM-SHA-512":
 				mechanisms[i], err = scram512SaslFromConfig(mConf)
+			case "AWS_MSK_IAM":
+				mechanisms[i], err = awsMskSaslFromConfig(c)
 			default:
 				err = fmt.Errorf("unknown mechanism: %v", mechStr)
 			}
@@ -155,6 +160,27 @@ func scram512SaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 		return scram.Auth{
 			User: username,
 			Pass: password,
+		}, nil
+	}), nil
+}
+
+func awsMskSaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
+
+	awsSession, err := sess.GetSession(c)
+	if err != nil {
+		return nil, err
+	}
+
+	creds := awsSession.Config.Credentials
+	return kaws.ManagedStreamingIAM(func(ctx context.Context) (kaws.Auth, error) {
+		val, err := creds.GetWithContext(ctx)
+		if err != nil {
+			return kaws.Auth{}, err
+		}
+		return kaws.Auth{
+			AccessKey:    val.AccessKeyID,
+			SecretKey:    val.SecretAccessKey,
+			SessionToken: val.SessionToken,
 		}, nil
 	}), nil
 }

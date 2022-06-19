@@ -53,7 +53,7 @@ Strong read consistency can be enabled using the ` + "`consistent_read`" + ` con
 		Field(service.NewBackOffField("retries", false, retriesDefaults).
 			Advanced())
 
-	for _, f := range sessionFields() {
+	for _, f := range SessionFields() {
 		spec = spec.Field(f)
 	}
 	return spec
@@ -111,7 +111,7 @@ func newDynamodbCacheFromConfig(conf *service.ParsedConfig) (*dynamodbCache, err
 		}
 		ttlKey = &ttlKeyTmp
 	}
-	sess, err := getSession(conf)
+	sess, err := GetSession(conf)
 	if err != nil {
 		return nil, err
 	}

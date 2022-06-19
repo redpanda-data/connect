@@ -40,14 +40,14 @@ pipeline:
 `,
 		)
 
-	for _, f := range sessionFields() {
+	for _, f := range SessionFields() {
 		config = config.Field(f)
 	}
 
 	err := service.RegisterBatchProcessor(
 		"aws_dynamodb_partiql", config,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			sess, err := getSession(conf)
+			sess, err := GetSession(conf)
 			if err != nil {
 				return nil, err
 			}
