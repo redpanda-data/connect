@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func createCertificates() ([]byte, []byte) {
+func CreateCertificates() (certPem, keyPem []byte) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		panic(err)
@@ -37,22 +37,22 @@ func createCertificates() ([]byte, []byte) {
 		log.Fatal("Certificate cannot be created.", err.Error())
 	}
 
-	certPem := pem.EncodeToMemory(&pem.Block{
+	certPem = pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: cert,
 	})
 
-	keyPem := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: priv})
+	keyPem = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: priv})
 
 	return certPem, keyPem
 }
 
-func createCertificatesWithEncryptedKey(password string) ([]byte, []byte) {
+func CreateCertificatesWithEncryptedKey(password string) (certPem, keyPem []byte) {
 
-	certPem, keyPem := createCertificates()
+	certPem, keyPem = CreateCertificates()
 	decodedKey, _ := pem.Decode(keyPem)
 
-	// Encrypt using 3DES and password.
+	//nolint:staticcheck // SA1019 Disable linting for deprecated  x509.EncryptPEMBlock call
 	block, err := x509.EncryptPEMBlock(rand.Reader, decodedKey.Type, decodedKey.Bytes, []byte(password), x509.PEMCipher3DES)
 	if err != nil {
 		panic(err)
@@ -64,14 +64,14 @@ func createCertificatesWithEncryptedKey(password string) ([]byte, []byte) {
 }
 
 func TestCertificateFileWithEncryptedKey(t *testing.T) {
-	cert, key := createCertificatesWithEncryptedKey("benthos")
+	cert, key := CreateCertificatesWithEncryptedKey("benthos")
 
 	fCert, _ := os.CreateTemp("", "cert.pem")
-	fCert.Write(cert)
+	_, _ = fCert.Write(cert)
 	defer fCert.Close()
 
 	fKey, _ := os.CreateTemp("", "key.pem")
-	fKey.Write(key)
+	_, _ = fKey.Write(key)
 	defer fKey.Close()
 
 	c := ClientCertConfig{
@@ -88,7 +88,7 @@ func TestCertificateFileWithEncryptedKey(t *testing.T) {
 
 func TestCertificateWithEncryptedKey(t *testing.T) {
 
-	cert, key := createCertificatesWithEncryptedKey("benthos")
+	cert, key := CreateCertificatesWithEncryptedKey("benthos")
 
 	c := ClientCertConfig{
 		Key:      string(key),
@@ -104,14 +104,14 @@ func TestCertificateWithEncryptedKey(t *testing.T) {
 }
 
 func TestCertificateFileWithEncryptedKeyAndWrongPassword(t *testing.T) {
-	cert, key := createCertificatesWithEncryptedKey("benthos")
+	cert, key := CreateCertificatesWithEncryptedKey("benthos")
 
 	fCert, _ := os.CreateTemp("", "cert.pem")
-	fCert.Write(cert)
+	_, _ = fCert.Write(cert)
 	defer fCert.Close()
 
 	fKey, _ := os.CreateTemp("", "key.pem")
-	fKey.Write(key)
+	_, _ = fKey.Write(key)
 	defer fKey.Close()
 
 	c := ClientCertConfig{
@@ -128,7 +128,7 @@ func TestCertificateFileWithEncryptedKeyAndWrongPassword(t *testing.T) {
 
 func TestEncryptedKeyWithWrongPassword(t *testing.T) {
 
-	cert, key := createCertificatesWithEncryptedKey("benthos")
+	cert, key := CreateCertificatesWithEncryptedKey("benthos")
 
 	c := ClientCertConfig{
 		Key:      string(key),
@@ -143,14 +143,14 @@ func TestEncryptedKeyWithWrongPassword(t *testing.T) {
 }
 
 func TestCertificateFileWithNoEncryption(t *testing.T) {
-	cert, key := createCertificates()
+	cert, key := CreateCertificates()
 
 	fCert, _ := os.CreateTemp("", "cert.pem")
-	fCert.Write(cert)
+	_, _ = fCert.Write(cert)
 	defer fCert.Close()
 
 	fKey, _ := os.CreateTemp("", "key.pem")
-	fKey.Write(key)
+	_, _ = fKey.Write(key)
 	defer fKey.Close()
 
 	c := ClientCertConfig{
@@ -165,7 +165,7 @@ func TestCertificateFileWithNoEncryption(t *testing.T) {
 }
 func TestCertificateWithNoEncryption(t *testing.T) {
 
-	cert, key := createCertificates()
+	cert, key := CreateCertificates()
 
 	c := ClientCertConfig{
 		Key:  string(key),

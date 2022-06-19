@@ -121,20 +121,20 @@ func (c *Config) Get() (*tls.Config, error) {
 	return tlsConf, nil
 }
 
-func loadKeyPair(cert []byte, key []byte, password string) (tls.Certificate, error) {
+func loadKeyPair(cert, key []byte, password string) (tls.Certificate, error) {
 	keyPem, _ := pem.Decode(key)
+	//nolint:staticcheck // SA1019 Disable linting for deprecated  x509.IsEncryptedPEMBlock call
 	encrypted := x509.IsEncryptedPEMBlock(keyPem)
 
 	if encrypted {
 		if password == "" {
 			return tls.Certificate{}, errors.New("missing password for encrypted private key")
-		} else {
-			decryptedKey, err := decryptKey(keyPem, password)
-			if err != nil {
-				return tls.Certificate{}, err
-			}
-			return tls.X509KeyPair(cert, decryptedKey)
 		}
+		decryptedKey, err := decryptKey(keyPem, password)
+		if err != nil {
+			return tls.Certificate{}, err
+		}
+		return tls.X509KeyPair(cert, decryptedKey)
 	}
 	return tls.X509KeyPair(cert, key)
 }
@@ -175,6 +175,7 @@ func (c *ClientCertConfig) Load() (tls.Certificate, error) {
 }
 
 func decryptKey(key *pem.Block, password string) ([]byte, error) {
+	//nolint:staticcheck // SA1019 Disable linting for deprecated  x509.DecryptPEMBlock call
 	decryptedKey, err := x509.DecryptPEMBlock(key, []byte(password))
 	if err != nil {
 		return nil, errors.New("wrong password provided for key")
