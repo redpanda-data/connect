@@ -8,6 +8,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
@@ -108,4 +109,11 @@ func (r *Resources) AccessRateLimit(ctx context.Context, name string, fn func(r 
 // initialisation as it is defensive against ordering.
 func (r *Resources) HasRateLimit(name string) bool {
 	return r.mgr.ProbeRateLimit(name)
+}
+
+// AccessInput attempts to access a input resource by name.
+func (r *Resources) AccessInput(ctx context.Context, name string, fn func(in OwnedInput)) error {
+	return r.mgr.AccessInput(ctx, name, func(in input.Streamed) {
+		fn(OwnedInput{i: in})
+	})
 }
