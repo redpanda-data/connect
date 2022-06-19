@@ -14,6 +14,8 @@ type Environment struct {
 	outputs    *OutputSet
 	processors *ProcessorSet
 	rateLimits *RateLimitSet
+	metrics    *MetricsSet
+	tracers    *TracerSet
 }
 
 // NewEnvironment creates an empty environment.
@@ -25,6 +27,8 @@ func NewEnvironment() *Environment {
 		outputs:    &OutputSet{},
 		processors: &ProcessorSet{},
 		rateLimits: &RateLimitSet{},
+		metrics:    &MetricsSet{},
+		tracers:    &TracerSet{},
 	}
 }
 
@@ -50,6 +54,12 @@ func (e *Environment) Clone() *Environment {
 	for _, v := range e.rateLimits.specs {
 		_ = newEnv.rateLimits.Add(v.constructor, v.spec)
 	}
+	for _, v := range e.metrics.specs {
+		_ = newEnv.metrics.Add(v.constructor, v.spec)
+	}
+	for _, v := range e.tracers.specs {
+		_ = newEnv.tracers.Add(v.constructor, v.spec)
+	}
 	return newEnv
 }
 
@@ -71,6 +81,10 @@ func (e *Environment) GetDocs(name string, ctype docs.Type) (docs.ComponentSpec,
 		spec, ok = e.processors.DocsFor(name)
 	case docs.TypeRateLimit:
 		spec, ok = e.rateLimits.DocsFor(name)
+	case docs.TypeMetrics:
+		spec, ok = e.metrics.DocsFor(name)
+	case docs.TypeTracer:
+		spec, ok = e.tracers.DocsFor(name)
 	default:
 		return docs.DeprecatedProvider.GetDocs(name, ctype)
 	}
@@ -86,4 +100,6 @@ var GlobalEnvironment = &Environment{
 	outputs:    AllOutputs,
 	processors: AllProcessors,
 	rateLimits: AllRateLimits,
+	metrics:    AllMetrics,
+	tracers:    AllTracers,
 }

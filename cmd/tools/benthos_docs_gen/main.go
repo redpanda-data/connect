@@ -51,7 +51,7 @@ func main() {
 	flag.StringVar(&docsDir, "dir", docsDir, "The directory to write docs to")
 	flag.Parse()
 
-	if _, err := template.InitTemplates(); err != nil {
+	if err := template.InitNativeTemplates(); err != nil {
 		panic(err)
 	}
 

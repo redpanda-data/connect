@@ -9,8 +9,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
@@ -27,8 +25,7 @@ type AsyncReader struct {
 	typeStr string
 	reader  Async
 
-	stats metrics.Type
-	log   log.Modular
+	mgr component.Observability
 
 	transactions chan message.Transaction
 	shutSig      *shutdown.Signaller
@@ -39,8 +36,7 @@ func NewAsyncReader(
 	typeStr string,
 	allowSkipAcks bool,
 	r Async,
-	log log.Modular,
-	stats metrics.Type,
+	mgr component.Observability,
 ) (Streamed, error) {
 	boff := backoff.NewExponentialBackOff()
 	boff.InitialInterval = time.Millisecond * 100
@@ -52,8 +48,7 @@ func NewAsyncReader(
 		allowSkipAcks: allowSkipAcks,
 		typeStr:       typeStr,
 		reader:        r,
-		log:           log,
-		stats:         stats,
+		mgr:           mgr,
 		transactions:  make(chan message.Transaction),
 		shutSig:       shutdown.NewSignaller(),
 	}
@@ -67,11 +62,11 @@ func NewAsyncReader(
 func (r *AsyncReader) loop() {
 	// Metrics paths
 	var (
-		mRcvd       = r.stats.GetCounter("input_received")
-		mConn       = r.stats.GetCounter("input_connection_up")
-		mFailedConn = r.stats.GetCounter("input_connection_failed")
-		mLostConn   = r.stats.GetCounter("input_connection_lost")
-		mLatency    = r.stats.GetTimer("input_latency_ns")
+		mRcvd       = r.mgr.Metrics().GetCounter("input_received")
+		mConn       = r.mgr.Metrics().GetCounter("input_connection_up")
+		mFailedConn = r.mgr.Metrics().GetCounter("input_connection_failed")
+		mLostConn   = r.mgr.Metrics().GetCounter("input_connection_lost")
+		mLatency    = r.mgr.Metrics().GetTimer("input_latency_ns")
 	)
 
 	defer func() {
@@ -93,9 +88,9 @@ func (r *AsyncReader) loop() {
 
 	pendingAcks := sync.WaitGroup{}
 	defer func() {
-		r.log.Debugln("Waiting for pending acks to resolve before shutting down.")
+		r.mgr.Logger().Debugln("Waiting for pending acks to resolve before shutting down.")
 		pendingAcks.Wait()
-		r.log.Debugln("Pending acks resolved.")
+		r.mgr.Logger().Debugln("Pending acks resolved.")
 	}()
 
 	initConnection := func() bool {
@@ -106,7 +101,7 @@ func (r *AsyncReader) loop() {
 				if r.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
 					return false
 				}
-				r.log.Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
+				r.mgr.Logger().Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
 				mFailedConn.Incr(1)
 				select {
 				case <-time.After(r.connBackoff.NextBackOff()):
@@ -150,7 +145,7 @@ func (r *AsyncReader) loop() {
 
 		if err != nil || msg == nil {
 			if err != nil && err != component.ErrTimeout && err != component.ErrNotConnected {
-				r.log.Errorf("Failed to read message: %v\n", err)
+				r.mgr.Logger().Errorf("Failed to read message: %v\n", err)
 			}
 			select {
 			case <-time.After(r.connBackoff.NextBackOff()):
@@ -161,13 +156,13 @@ func (r *AsyncReader) loop() {
 		} else {
 			r.connBackoff.Reset()
 			mRcvd.Incr(int64(msg.Len()))
-			r.log.Tracef("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
+			r.mgr.Logger().Tracef("Consumed %v messages from '%v'.\n", msg.Len(), r.typeStr)
 		}
 
 		startedAt := time.Now()
 
 		resChan := make(chan error)
-		tracing.InitSpans("input_"+r.typeStr, msg)
+		tracing.InitSpans(r.mgr.Tracer(), "input_"+r.typeStr, msg)
 		select {
 		case r.transactions <- message.NewTransaction(msg, resChan):
 		case <-r.shutSig.CloseAtLeisureChan():
@@ -199,7 +194,7 @@ func (r *AsyncReader) loop() {
 
 			ackCtx, ackDone := r.shutSig.CloseNowCtx(context.Background())
 			if err = aFn(ackCtx, res); err != nil {
-				r.log.Errorf("Failed to acknowledge message: %v\n", err)
+				r.mgr.Logger().Errorf("Failed to acknowledge message: %v\n", err)
 			}
 			ackDone()
 		}(msg, ackFn, resChan)

@@ -28,7 +28,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		a, err := output.NewAsyncWriter("sftp", conf.SFTP.MaxInFlight, sftp, nm.Logger(), nm.Metrics())
+		a, err := output.NewAsyncWriter("sftp", conf.SFTP.MaxInFlight, sftp, nm)
 		if err != nil {
 			return nil, err
 		}

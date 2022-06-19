@@ -162,6 +162,52 @@ func (a *airGapBatchWriter) WaitForClose(tout time.Duration) error {
 
 //------------------------------------------------------------------------------
 
+// ResourceOutput provides access to an output resource.
+type ResourceOutput struct {
+	o ioutput.Sync
+}
+
+func newResourceOutput(o ioutput.Sync) *ResourceOutput {
+	return &ResourceOutput{o: o}
+}
+
+// Write a message to the output, or return an error either if delivery is not
+// possible or the context is cancelled.
+func (o *ResourceOutput) Write(ctx context.Context, m *Message) error {
+	payload := message.QuickBatch(nil)
+	payload.Append(m.part)
+	return o.writeMsg(ctx, payload)
+}
+
+// WriteBatch attempts to write a message batch to the output, and returns an
+// error either if delivery is not possible or the context is cancelled.
+func (o *ResourceOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
+	payload := message.QuickBatch(nil)
+	for _, m := range b {
+		payload.Append(m.part)
+	}
+	return o.writeMsg(ctx, payload)
+}
+
+func (o *ResourceOutput) writeMsg(ctx context.Context, payload *message.Batch) error {
+	var wg sync.WaitGroup
+	var ackErr error
+	wg.Add(1)
+
+	if err := o.o.WriteTransaction(ctx, message.NewTransactionFunc(payload, func(ctx context.Context, err error) error {
+		ackErr = err
+		wg.Done()
+		return nil
+	})); err != nil {
+		return err
+	}
+
+	wg.Wait()
+	return ackErr
+}
+
+//------------------------------------------------------------------------------
+
 // OwnedOutput provides direct ownership of an output extracted from a plugin
 // config. Connectivity of the output is handled internally, and so the owner
 // of this type should only be concerned with writing messages and eventually

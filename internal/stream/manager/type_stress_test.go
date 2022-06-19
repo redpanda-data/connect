@@ -9,10 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	bmanager "github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	"github.com/benthosdev/benthos/v4/internal/stream/manager"
 
@@ -23,7 +20,7 @@ import (
 func TestTypeUnderStress(t *testing.T) {
 	t.Skip("Skipping long running stress test")
 
-	res, err := bmanager.New(bmanager.NewResourceConfig(), mock.NewManager(), log.Noop(), metrics.Noop())
+	res, err := bmanager.New(bmanager.NewResourceConfig())
 	require.NoError(t, err)
 
 	mgr := manager.New(res)

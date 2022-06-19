@@ -24,7 +24,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("while", p, mgr.Metrics()), nil
+		return processor.NewV2BatchedToV1Processor("while", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "while",
 		Categories: []string{

@@ -51,7 +51,7 @@ func TestHTTPBasic(t *testing.T) {
 	nTestLoops := 100
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
 	require.NoError(t, err)
 
 	conf := input.NewConfig()
@@ -229,7 +229,7 @@ func TestHTTPServerLifecycle(t *testing.T) {
 		_ = apiImpl.Shutdown(context.Background())
 	}()
 
-	mgr, err := manager.New(manager.NewResourceConfig(), apiImpl, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(apiImpl))
 	require.NoError(t, err)
 
 	conf := input.NewConfig()
@@ -294,7 +294,7 @@ func TestHTTPServerMetadata(t *testing.T) {
 	defer done()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
 	require.NoError(t, err)
 
 	conf := input.NewConfig()
@@ -357,7 +357,7 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 	defer done()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
 	require.NoError(t, err)
 
 	conf := input.NewConfig()
@@ -422,7 +422,7 @@ func TestHTTPBadRequests(t *testing.T) {
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,7 +456,7 @@ func TestHTTPTimeout(t *testing.T) {
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -508,7 +508,7 @@ rate_limit_resources:
       interval: 60s
 `), &mgrConf))
 
-	mgr, err := manager.New(mgrConf, reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(mgrConf, manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -573,7 +573,7 @@ func TestHTTPServerWebsockets(t *testing.T) {
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 
-	mgr, err := manager.New(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -666,7 +666,7 @@ rate_limit_resources:
       interval: 60s
 `), &mgrConf))
 
-	mgr, err := manager.New(mgrConf, reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(mgrConf, manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -745,7 +745,7 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -892,7 +892,7 @@ func TestHTTPSyncResponseMultipart(t *testing.T) {
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
 	require.NoError(t, err)
 
 	conf := input.NewConfig()
@@ -965,7 +965,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
-	mgr, err := manager.New(manager.NewResourceConfig(), reg, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
 	if err != nil {
 		t.Fatal(err)
 	}

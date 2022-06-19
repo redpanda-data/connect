@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/pure"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -152,7 +151,7 @@ func TestCacheBasic(t *testing.T) {
 
 	mgrConf.ResourceCaches = append(mgrConf.ResourceCaches, fooCache)
 
-	mgr, err := manager.New(mgrConf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(mgrConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +201,7 @@ func TestCacheBatches(t *testing.T) {
 
 	mgrConf.ResourceCaches = append(mgrConf.ResourceCaches, fooCache)
 
-	mgr, err := manager.New(mgrConf, nil, log.Noop(), metrics.Noop())
+	mgr, err := manager.New(mgrConf)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -30,11 +30,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader(
-			"gcp_cloud_storage", true,
-			input.NewAsyncPreserver(r),
-			nm.Logger(), nm.Metrics(),
-		)
+		return input.NewAsyncReader("gcp_cloud_storage", true, input.NewAsyncPreserver(r), nm)
 	}), docs.ComponentSpec{
 		Name:       "gcp_cloud_storage",
 		Type:       docs.TypeInput,

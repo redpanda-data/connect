@@ -165,10 +165,10 @@ type prometheusMetrics struct {
 	mut sync.Mutex
 }
 
-func newPrometheus(config metrics.Config, log log.Modular) (metrics.Type, error) {
+func newPrometheus(config metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
 	promConf := config.Prometheus
 	p := &prometheusMetrics{
-		log:                log,
+		log:                nm.Logger(),
 		running:            1,
 		closedChan:         make(chan struct{}),
 		useHistogramTiming: promConf.UseHistogramTiming,

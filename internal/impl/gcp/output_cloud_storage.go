@@ -25,16 +25,16 @@ import (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		g, err := newGCPCloudStorageOutput(nm, c.GCPCloudStorage, nm.Logger(), nm.Metrics())
+		g, err := newGCPCloudStorageOutput(nm, c.GCPCloudStorage)
 		if err != nil {
 			return nil, err
 		}
-		w, err := output.NewAsyncWriter("gcp_cloud_storage", c.GCPCloudStorage.MaxInFlight, g, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("gcp_cloud_storage", c.GCPCloudStorage.MaxInFlight, g, nm)
 		if err != nil {
 			return nil, err
 		}
 		w = output.OnlySinglePayloads(w)
-		return batcher.NewFromConfig(c.GCPCloudStorage.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(c.GCPCloudStorage.Batching, w, nm)
 	}), docs.ComponentSpec{
 		Name:       "gcp_cloud_storage",
 		Type:       docs.TypeOutput,
@@ -117,7 +117,7 @@ output:
 				).AtVersion("3.53.0"),
 			docs.FieldString("content_encoding", "An optional content encoding to set for each object.").IsInterpolated().Advanced(),
 			docs.FieldInt("chunk_size", "An optional chunk size which controls the maximum number of bytes of the object that the Writer will attempt to send to the server in a single request. If ChunkSize is set to zero, chunking will be disabled.").Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of message batches to have in flight at a given time. Increase this to improve throughput."),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewGCPCloudStorageConfig()),
 	})
@@ -146,13 +146,11 @@ type gcpCloudStorageOutput struct {
 func newGCPCloudStorageOutput(
 	mgr bundle.NewManagement,
 	conf output.GCPCloudStorageConfig,
-	log log.Modular,
-	stats metrics.Type,
 ) (*gcpCloudStorageOutput, error) {
 	g := &gcpCloudStorageOutput{
 		conf:  conf,
-		log:   log,
-		stats: stats,
+		log:   mgr.Logger(),
+		stats: mgr.Metrics(),
 	}
 
 	bEnv := mgr.BloblEnvironment()

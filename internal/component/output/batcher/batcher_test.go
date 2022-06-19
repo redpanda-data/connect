@@ -15,9 +15,7 @@ import (
 	batchInternal "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -34,7 +32,7 @@ func TestBatcherEarlyTermination(t *testing.T) {
 
 	out := &mock.OutputChanneled{}
 
-	b := batcher.New(batchPol, out, log.Noop(), metrics.Noop())
+	b := batcher.New(batchPol, out, mock.NewManager())
 	require.NoError(t, b.Consume(tInChan))
 
 	require.Error(t, b.WaitForClose(time.Millisecond*100))
@@ -59,7 +57,7 @@ func TestBatcherBasic(t *testing.T) {
 
 	out := &mock.OutputChanneled{}
 
-	b := batcher.New(batchPol, out, log.Noop(), metrics.Noop())
+	b := batcher.New(batchPol, out, mock.NewManager())
 	require.NoError(t, b.Consume(tInChan))
 
 	tOutChan := out.TChan
@@ -195,7 +193,7 @@ func TestBatcherBatchError(t *testing.T) {
 
 	out := &mock.OutputChanneled{}
 
-	b := batcher.New(batchPol, out, log.Noop(), metrics.Noop())
+	b := batcher.New(batchPol, out, mock.NewManager())
 	require.NoError(t, b.Consume(tInChan))
 
 	tOutChan := out.TChan
@@ -276,7 +274,7 @@ func TestBatcherTimed(t *testing.T) {
 
 	out := &mock.OutputChanneled{}
 
-	b := batcher.New(batchPol, out, log.Noop(), metrics.Noop())
+	b := batcher.New(batchPol, out, mock.NewManager())
 	if err := b.Consume(tInChan); err != nil {
 		t.Fatal(err)
 	}

@@ -12,9 +12,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 )
 
@@ -257,7 +255,7 @@ func (c *ConfigSpec) ParseYAML(yamlStr string, env *Environment) (*ParsedConfig,
 	}
 
 	mgr, err := manager.New(
-		manager.NewResourceConfig(), nil, log.Noop(), metrics.Noop(),
+		manager.NewResourceConfig(),
 		manager.OptSetEnvironment(env.internal),
 		manager.OptSetBloblangEnvironment(env.getBloblangParserEnv()),
 	)

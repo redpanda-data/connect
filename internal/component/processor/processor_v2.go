@@ -45,6 +45,7 @@ type v2ToV1Processor struct {
 	typeStr string
 	p       V2
 	sig     *shutdown.Signaller
+	mgr     component.Observability
 
 	mReceived      metrics.StatCounter
 	mBatchReceived metrics.StatCounter
@@ -55,16 +56,16 @@ type v2ToV1Processor struct {
 }
 
 // NewV2ToV1Processor wraps a processor.V2 with a struct that implements V1.
-func NewV2ToV1Processor(typeStr string, p V2, stats metrics.Type) V1 {
+func NewV2ToV1Processor(typeStr string, p V2, mgr component.Observability) V1 {
 	return &v2ToV1Processor{
-		typeStr: typeStr, p: p, sig: shutdown.NewSignaller(),
+		typeStr: typeStr, p: p, sig: shutdown.NewSignaller(), mgr: mgr,
 
-		mReceived:      stats.GetCounter("processor_received"),
-		mBatchReceived: stats.GetCounter("processor_batch_received"),
-		mSent:          stats.GetCounter("processor_sent"),
-		mBatchSent:     stats.GetCounter("processor_batch_sent"),
-		mError:         stats.GetCounter("processor_error"),
-		mLatency:       stats.GetTimer("processor_latency_ns"),
+		mReceived:      mgr.Metrics().GetCounter("processor_received"),
+		mBatchReceived: mgr.Metrics().GetCounter("processor_batch_received"),
+		mSent:          mgr.Metrics().GetCounter("processor_sent"),
+		mBatchSent:     mgr.Metrics().GetCounter("processor_batch_sent"),
+		mError:         mgr.Metrics().GetCounter("processor_error"),
+		mLatency:       mgr.Metrics().GetTimer("processor_latency_ns"),
 	}
 }
 
@@ -77,7 +78,7 @@ func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, 
 	newParts := make([]*message.Part, 0, msg.Len())
 
 	_ = msg.Iter(func(i int, part *message.Part) error {
-		span := tracing.CreateChildSpan(a.typeStr, part)
+		span := tracing.CreateChildSpan(a.mgr.Tracer(), a.typeStr, part)
 
 		nextParts, err := a.p.Process(context.Background(), part)
 		if err != nil {
@@ -131,6 +132,7 @@ type v2BatchedToV1Processor struct {
 	typeStr string
 	p       V2Batched
 	sig     *shutdown.Signaller
+	mgr     component.Observability
 
 	mReceived      metrics.StatCounter
 	mBatchReceived metrics.StatCounter
@@ -142,16 +144,16 @@ type v2BatchedToV1Processor struct {
 
 // NewV2BatchedToV1Processor wraps a processor.V2Batched with a struct that
 // implements types.Processor.
-func NewV2BatchedToV1Processor(typeStr string, p V2Batched, stats metrics.Type) V1 {
+func NewV2BatchedToV1Processor(typeStr string, p V2Batched, mgr component.Observability) V1 {
 	return &v2BatchedToV1Processor{
-		typeStr: typeStr, p: p, sig: shutdown.NewSignaller(),
+		typeStr: typeStr, p: p, sig: shutdown.NewSignaller(), mgr: mgr,
 
-		mReceived:      stats.GetCounter("processor_received"),
-		mBatchReceived: stats.GetCounter("processor_batch_received"),
-		mSent:          stats.GetCounter("processor_sent"),
-		mBatchSent:     stats.GetCounter("processor_batch_sent"),
-		mError:         stats.GetCounter("processor_error"),
-		mLatency:       stats.GetTimer("processor_latency_ns"),
+		mReceived:      mgr.Metrics().GetCounter("processor_received"),
+		mBatchReceived: mgr.Metrics().GetCounter("processor_batch_received"),
+		mSent:          mgr.Metrics().GetCounter("processor_sent"),
+		mBatchSent:     mgr.Metrics().GetCounter("processor_batch_sent"),
+		mError:         mgr.Metrics().GetCounter("processor_error"),
+		mLatency:       mgr.Metrics().GetTimer("processor_latency_ns"),
 	}
 }
 
@@ -160,7 +162,7 @@ func (a *v2BatchedToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.
 	a.mBatchReceived.Incr(1)
 
 	tStarted := time.Now()
-	spans := tracing.CreateChildSpans(a.typeStr, msg)
+	spans := tracing.CreateChildSpans(a.mgr.Tracer(), a.typeStr, msg)
 
 	outputBatches, err := a.p.ProcessBatch(context.Background(), spans, msg)
 	if err != nil {

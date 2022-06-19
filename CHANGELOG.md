@@ -10,10 +10,18 @@ All notable changes to this project will be documented in this file.
 - Timestamp Bloblang methods are now able to emit and process `time.Time` values.
 - New `ts_tz` method for switching the timezone of timestamp values.
 - The `elasticsearch` output field `type` now supports interpolation functions.
+- The `redis` processor has been reworked to be more generally useful, the old `operator` and `key` fields are now deprecated in favour of new `command` and `args_mapping` fields.
+- Go API: Added component bundle `./public/components/aws` for all AWS components, including a `RunLambda` function.
+- New `cached` processor.
+- Go API: New APIs for registering both metrics exporters and open telemetry tracer plugins.
+- Go API: The stream builder API now supports configuring a tracer, and tracer configuration is now isolated to the stream being executed.
+- Go API: Plugin components can now access input and output resources.
 
 ### Fixed
 
 - Corrected an issue where Prometheus metrics from batching at the buffer level would be skipped when combined with input/output level batching.
+- Go API: Fixed an issue where running the CLI API without importing a component package would result in template init crashing.
+- The `http` processor and `http_client` input and output no longer have default headers as part of their configuration. A `Content-Type` header will be added to requests with a default value of `application/octet-stream` when a message body is being sent and the configuration has not added one explicitly.
 
 ## 4.2.0 - 2022-06-03
 

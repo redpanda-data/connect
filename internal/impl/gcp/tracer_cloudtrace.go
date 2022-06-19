@@ -1,27 +1,22 @@
 package gcp
 
 import (
-	"context"
 	"fmt"
 	"time"
 
 	gcptrace "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 var _ gcptrace.Exporter
-
-//------------------------------------------------------------------------------
 
 func init() {
 	_ = bundle.AllTracers.Add(NewCloudTrace, docs.ComponentSpec{
@@ -41,14 +36,8 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-type cloudTrace struct {
-	prov *tracesdk.TracerProvider
-}
-
 // NewCloudTrace creates new Google Cloud Trace tracer.
-func NewCloudTrace(config tracer.Config) (tracer.Type, error) {
-	ct := &cloudTrace{}
-
+func NewCloudTrace(config tracer.Config, nm bundle.NewManagement) (trace.TracerProvider, error) {
 	sampler := tracesdk.ParentBased(tracesdk.TraceIDRatioBased(config.CloudTrace.SamplingRatio))
 
 	exp, err := gcptrace.New(gcptrace.WithProjectID(config.CloudTrace.Project))
@@ -70,40 +59,9 @@ func NewCloudTrace(config tracer.Config) (tracer.Type, error) {
 		batchOpts = append(batchOpts, tracesdk.WithBatchTimeout(flushInterval))
 	}
 
-	tp := tracesdk.NewTracerProvider(
+	return tracesdk.NewTracerProvider(
 		tracesdk.WithBatcher(exp, batchOpts...),
 		tracesdk.WithResource(resource.NewWithAttributes(semconv.SchemaURL, attrs...)),
 		tracesdk.WithSampler(sampler),
-	)
-
-	// TODO: I'm so confused, these APIs are a nightmare.
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	otel.SetTracerProvider(tp)
-
-	ct.prov = tp
-
-	return ct, nil
-}
-
-//------------------------------------------------------------------------------
-
-// Close stops the tracer.
-func (ct *cloudTrace) Close() error {
-	prov := ct.prov
-	if prov == nil {
-		return nil
-	}
-
-	sig := shutdown.NewSignaller()
-	ctx, cancel := sig.CloseAtLeisureCtx(context.Background())
-	defer cancel()
-
-	if err := ct.prov.Shutdown(ctx); err != nil {
-		return fmt.Errorf("failed to shutdown trace provider: %w", err)
-	}
-
-	ct.prov = nil
-
-	return nil
+	), nil
 }

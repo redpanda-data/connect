@@ -15,6 +15,10 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+:::danger TEMPORARILY REMOVED
+Unfortunately due to issues with the client library the pulsar components have been removed until further notice. It is still possible to create custom benthos builds with them included. For more information follow https://github.com/benthosdev/benthos/issues/1184
+:::
+
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::

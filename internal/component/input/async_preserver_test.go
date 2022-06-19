@@ -1,4 +1,4 @@
-package input
+package input_test
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -30,7 +31,7 @@ func TestAsyncPreserverClose(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	exp := errors.New("foo error")
 
@@ -79,7 +80,7 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 	readerImpl.msgsToSnd = []*message.Batch{
 		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -168,7 +169,7 @@ func TestAsyncPreserverCloseThenAck(t *testing.T) {
 	readerImpl.msgsToSnd = []*message.Batch{
 		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -244,7 +245,7 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 	readerImpl.msgsToSnd = []*message.Batch{
 		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -337,7 +338,7 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 	readerImpl.msgsToSnd = []*message.Batch{
 		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -422,7 +423,7 @@ func TestAsyncPreserverHappy(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	expParts := [][]byte{
 		[]byte("foo"),
@@ -466,7 +467,7 @@ func TestAsyncPreserverErrorProp(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	expErr := errors.New("foo")
 
@@ -510,7 +511,7 @@ func TestAsyncPreserverErrorBackoff(t *testing.T) {
 	t.Parallel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	go func() {
 		select {
@@ -566,7 +567,7 @@ func TestAsyncPreserverBatchError(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	go func() {
 		select {
@@ -629,7 +630,7 @@ func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	go func() {
 		select {
@@ -701,7 +702,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	sendMsg := func(content string) {
 		readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch(
@@ -749,7 +750,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	}
 
 	// Read the primed message.
-	var aFn2 AsyncAckFn
+	var aFn2 input.AsyncAckFn
 	msg, aFn2, err = pres.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -803,7 +804,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	pres := NewAsyncPreserver(readerImpl)
+	pres := input.NewAsyncPreserver(readerImpl)
 
 	sendMsg := func(content string) {
 		readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch(
@@ -829,7 +830,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 		"msg 3",
 	}
 
-	ackFns := []AsyncAckFn{}
+	ackFns := []input.AsyncAckFn{}
 	for _, exp := range messages {
 		go sendMsg(exp)
 		msg, aFn, err := pres.ReadWithContext(ctx)
@@ -846,7 +847,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 	for _, aFn := range ackFns {
 		_ = aFn(ctx, errors.New("failed again"))
 	}
-	ackFns = []AsyncAckFn{}
+	ackFns = []input.AsyncAckFn{}
 
 	for _, exp := range messages {
 		msg, aFn, err := pres.ReadWithContext(ctx)

@@ -48,7 +48,7 @@ func newWebsocketInput(conf input.Config, mgr bundle.NewManagement, log log.Modu
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("websocket", true, input.NewAsyncPreserver(ws), log, stats)
+	return input.NewAsyncReader("websocket", true, input.NewAsyncPreserver(ws), mgr)
 }
 
 type websocketReader struct {

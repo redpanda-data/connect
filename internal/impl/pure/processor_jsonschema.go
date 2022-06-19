@@ -21,7 +21,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("json_schema", p, mgr.Metrics()), nil
+		return processor.NewV2ToV1Processor("json_schema", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "json_schema",
 		Categories: []string{

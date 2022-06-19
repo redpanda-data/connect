@@ -20,7 +20,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		w, err := output.NewAsyncWriter("stdout", 1, f, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("stdout", 1, f, nm)
 		if err != nil {
 			return nil, err
 		}

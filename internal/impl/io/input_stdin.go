@@ -22,11 +22,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader(
-			"stdin", true,
-			input.NewAsyncCutOff(input.NewAsyncPreserver(rdr)),
-			nm.Logger(), nm.Metrics(),
-		)
+		return input.NewAsyncReader("stdin", true, input.NewAsyncCutOff(input.NewAsyncPreserver(rdr)), nm)
 	}), docs.ComponentSpec{
 		Name:    "stdin",
 		Summary: `Consumes data piped to stdin as line delimited messages.`,

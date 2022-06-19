@@ -15,7 +15,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -23,9 +22,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newNSQInput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllInputs.Add(processors.WrapConstructor(newNSQInput), docs.ComponentSpec{
 		Name:    "nsq",
 		Summary: `Subscribe to an NSQ instance topic and channel.`,
 		Config: docs.FieldComponent().WithChildren(
@@ -46,13 +43,13 @@ func init() {
 	}
 }
 
-func newNSQInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
+func newNSQInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
 	var n input.Async
 	var err error
-	if n, err = newNSQReader(conf.NSQ, log); err != nil {
+	if n, err = newNSQReader(conf.NSQ, mgr.Logger()); err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nsq", true, n, log, stats)
+	return input.NewAsyncReader("nsq", true, n, mgr)
 }
 
 type nsqReader struct {

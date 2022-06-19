@@ -31,7 +31,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("awk", p, mgr.Metrics()), nil
+		return processor.NewV2ToV1Processor("awk", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "awk",
 		Categories: []string{

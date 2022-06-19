@@ -2,9 +2,14 @@ package service
 
 import (
 	"context"
+	"time"
+
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
@@ -19,14 +24,35 @@ func newResourcesFromManager(nm bundle.NewManagement) *Resources {
 }
 
 // MockResources returns an instantiation of a resources struct that provides
-// valid but ineffective methods and observability components. This is useful
-// for testing components that interact with a resources type but do not
-// explicitly need it for testing purposes.
-func MockResources() *Resources {
-	// This is quite naughty, if we encounter a case where an empty resource
-	// config like this could actually return an error then we'd need to change
-	// this.
-	return newResourcesFromManager(mock.NewManager())
+// valid but ineffective methods and observability components. It is possible to
+// instantiate this with mocked (in-memory) cache and rate limit types for
+// testing purposed.
+func MockResources(opts ...MockResourcesOptFn) *Resources {
+	m := mock.NewManager()
+	for _, o := range opts {
+		o(m)
+	}
+	return newResourcesFromManager(m)
+}
+
+// MockResourcesOptFn provides a func based optional argument to MockResources.
+type MockResourcesOptFn func(*mock.Manager)
+
+// MockResourcesOptAddCache instantiates the resources type with a mock cache
+// with a given name. Cached items are held in memory.
+func MockResourcesOptAddCache(name string) MockResourcesOptFn {
+	return func(m *mock.Manager) {
+		m.Caches[name] = map[string]mock.CacheItem{}
+	}
+}
+
+// MockResourcesOptAddRateLimit instantiates the resources type with a mock rate
+// limit with a given name, the provided closure will be called for each
+// invocation of the rate limit.
+func MockResourcesOptAddRateLimit(name string, fn func(context.Context) (time.Duration, error)) MockResourcesOptFn {
+	return func(m *mock.Manager) {
+		m.RateLimits[name] = mock.RateLimit(fn)
+	}
 }
 
 // Label returns a label that identifies the component instantiation. This could
@@ -47,6 +73,15 @@ func (r *Resources) Metrics() *Metrics {
 	return newReverseAirGapMetrics(r.mgr.Metrics())
 }
 
+// OtelTracer returns an open telemetry tracer provider that can be used to
+// create new tracers.
+//
+// Experimental: This type signature is experimental and therefore subject to
+// change outside of major version releases.
+func (r *Resources) OtelTracer() trace.TracerProvider {
+	return r.mgr.Tracer()
+}
+
 // AccessCache attempts to access a cache resource by name. This action can
 // block if CRUD operations are being actively performed on the resource.
 func (r *Resources) AccessCache(ctx context.Context, name string, fn func(c Cache)) error {
@@ -60,6 +95,35 @@ func (r *Resources) AccessCache(ctx context.Context, name string, fn func(c Cach
 // defensive against ordering.
 func (r *Resources) HasCache(name string) bool {
 	return r.mgr.ProbeCache(name)
+}
+
+// AccessInput attempts to access a input resource by name.
+func (r *Resources) AccessInput(ctx context.Context, name string, fn func(i *ResourceInput)) error {
+	return r.mgr.AccessInput(ctx, name, func(in input.Streamed) {
+		fn(newResourceInput(in))
+	})
+}
+
+// HasInput confirms whether an input with a given name has been registered as a
+// resource. This method is useful during component initialisation as it is
+// defensive against ordering.
+func (r *Resources) HasInput(name string) bool {
+	return r.mgr.ProbeInput(name)
+}
+
+// AccessOutput attempts to access an output resource by name. This action can
+// block if CRUD operations are being actively performed on the resource.
+func (r *Resources) AccessOutput(ctx context.Context, name string, fn func(o *ResourceOutput)) error {
+	return r.mgr.AccessOutput(ctx, name, func(o output.Sync) {
+		fn(newResourceOutput(o))
+	})
+}
+
+// HasOutput confirms whether an output with a given name has been registered as
+// a resource. This method is useful during component initialisation as it is
+// defensive against ordering.
+func (r *Resources) HasOutput(name string) bool {
+	return r.mgr.ProbeOutput(name)
 }
 
 // AccessRateLimit attempts to access a rate limit resource by name. This action

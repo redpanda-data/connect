@@ -19,7 +19,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -95,8 +94,7 @@ func TestKinesisIntegration(t *testing.T) {
 }
 
 func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Kinesis) {
-	log := log.Noop()
-	r, err := newKinesisWriter(c, mock.NewManager(), log)
+	r, err := newKinesisWriter(c, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

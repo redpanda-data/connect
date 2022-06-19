@@ -22,7 +22,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("cache", p, mgr.Metrics()), nil
+		return processor.NewV2BatchedToV1Processor("cache", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "cache",
 		Categories: []string{
@@ -31,6 +31,8 @@ func init() {
 		Summary: `
 Performs operations against a [cache resource](/docs/components/caches/about) for each message, allowing you to store or retrieve data within message payloads.`,
 		Description: `
+For use cases where you wish to cache the result of processors consider using the ` + "[`cached` processor](/docs/components/processors/cached)" + ` instead.
+
 This processor will interpolate functions within the ` + "`key` and `value`" + ` fields individually for each message. This allows you to specify dynamic keys and values based on the contents of the message payloads and metadata. You can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("resource", "The [`cache` resource](/docs/components/caches/about) to target with this processor."),

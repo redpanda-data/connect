@@ -31,7 +31,7 @@ func init() {
 		if a, err = newAMQP09Reader(c.AMQP09, nm.Logger()); err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("amqp_0_9", true, a, nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("amqp_0_9", true, a, nm)
 	}), docs.ComponentSpec{
 		Name: "amqp_0_9",
 		Summary: `

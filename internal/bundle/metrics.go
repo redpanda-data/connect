@@ -7,7 +7,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 // AllMetrics is a set containing every single metrics that has been imported.
@@ -17,8 +16,26 @@ var AllMetrics = &MetricsSet{
 
 //------------------------------------------------------------------------------
 
+// MetricsAdd adds a new metrics exporter to this environment by providing a
+// constructor and documentation.
+func (e *Environment) MetricsAdd(constructor MetricConstructor, spec docs.ComponentSpec) error {
+	return e.metrics.Add(constructor, spec)
+}
+
+// MetricsInit attempts to initialise a metrics exporter from a config.
+func (e *Environment) MetricsInit(conf metrics.Config, nm NewManagement) (*metrics.Namespaced, error) {
+	return e.metrics.Init(conf, nm)
+}
+
+// MetricsDocs returns a slice of metrics exporter specs.
+func (e *Environment) MetricsDocs() []docs.ComponentSpec {
+	return e.metrics.Docs()
+}
+
+//------------------------------------------------------------------------------
+
 // MetricConstructor constructs an metrics component.
-type MetricConstructor func(conf metrics.Config, log log.Modular) (metrics.Type, error)
+type MetricConstructor func(conf metrics.Config, nm NewManagement) (metrics.Type, error)
 
 type metricsSpec struct {
 	constructor MetricConstructor
@@ -50,20 +67,20 @@ func (s *MetricsSet) Add(constructor MetricConstructor, spec docs.ComponentSpec)
 }
 
 // Init attempts to initialise an metrics from a config.
-func (s *MetricsSet) Init(conf metrics.Config, log log.Modular) (*metrics.Namespaced, error) {
+func (s *MetricsSet) Init(conf metrics.Config, nm NewManagement) (*metrics.Namespaced, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidType("metric", conf.Type)
 	}
 
-	m, err := spec.constructor(conf, log)
+	m, err := spec.constructor(conf, nm)
 	if err != nil {
 		return nil, err
 	}
 
 	ns := metrics.NewNamespaced(m)
 	if conf.Mapping != "" {
-		mmap, err := metrics.NewMapping(conf.Mapping, log)
+		mmap, err := metrics.NewMapping(conf.Mapping, nm.Logger())
 		if err != nil {
 			return nil, err
 		}

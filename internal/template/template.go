@@ -23,44 +23,45 @@ import (
 
 var initNativeOnce sync.Once
 
-func initNativeTemplates() {
-	if werr := fs.WalkDir(template.NativeTemplates, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
+// InitNativeTemplates initialises any templates that were compiled into the
+// binary, these can be found in ./template/embed.go.
+func InitNativeTemplates() (err error) {
+	initNativeOnce.Do(func() {
+		err = fs.WalkDir(template.NativeTemplates, ".", func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			tBytes, err := fs.ReadFile(template.NativeTemplates, path)
+			if err != nil {
+				return err
+			}
+
+			var conf Config
+			if err = yaml.Unmarshal(tBytes, &conf); err != nil {
+				return fmt.Errorf("failed to parse template '%v': %w", path, err)
+			}
+
+			tmpl, err := conf.compile()
+			if err != nil {
+				return fmt.Errorf("failed to compile template %v: %w", path, err)
+			}
+
+			if err := registerTemplate(tmpl); err != nil {
+				return fmt.Errorf("failed to register template %v: %w", path, err)
+			}
+
 			return nil
-		}
-		tBytes, err := fs.ReadFile(template.NativeTemplates, path)
-		if err != nil {
-			return err
-		}
-
-		var conf Config
-		if err = yaml.Unmarshal(tBytes, &conf); err != nil {
-			return fmt.Errorf("failed to parse template '%v': %w", path, err)
-		}
-
-		tmpl, err := conf.compile()
-		if err != nil {
-			return fmt.Errorf("failed to compile template %v: %w", path, err)
-		}
-
-		if err := registerTemplate(tmpl); err != nil {
-			return fmt.Errorf("failed to register template %v: %w", path, err)
-		}
-
-		return nil
-	}); werr != nil {
-		panic(werr)
-	}
+		})
+	})
+	return
 }
 
 // InitTemplates parses and registers native templates, as well as templates
 // at paths provided, and returns any linting errors that occur.
 func InitTemplates(templatesPaths ...string) ([]string, error) {
-	initNativeOnce.Do(initNativeTemplates)
-
 	var lints []string
 	for _, tPath := range templatesPaths {
 		tmplConf, tLints, err := ReadConfig(tPath)

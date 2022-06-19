@@ -53,6 +53,8 @@ cache:
 </TabItem>
 </Tabs>
 
+For use cases where you wish to cache the result of processors consider using the [`cached` processor](/docs/components/processors/cached) instead.
+
 This processor will interpolate functions within the `key` and `value` fields individually for each message. This allows you to specify dynamic keys and values based on the contents of the message payloads and metadata. You can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).
 
 ## Examples

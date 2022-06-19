@@ -23,7 +23,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return output.NewAsyncWriter("subprocess", 1, s, nm.Logger(), nm.Metrics())
+		return output.NewAsyncWriter("subprocess", 1, s, nm)
 	}), docs.ComponentSpec{
 		Name:   "subprocess",
 		Status: docs.StatusBeta,

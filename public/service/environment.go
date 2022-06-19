@@ -4,17 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"go.opentelemetry.io/otel/trace"
+
 	ibloblang "github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	iprocessors "github.com/benthosdev/benthos/v4/internal/component/input/processors"
+	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	oprocessors "github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
@@ -106,7 +110,7 @@ func (e *Environment) RegisterBatchBuffer(name string, spec *ConfigSpec, ctor Ba
 		if err != nil {
 			return nil, err
 		}
-		return buffer.NewStream(conf.Type, newAirGapBatchBuffer(b), nm.Logger(), nm.Metrics()), nil
+		return buffer.NewStream(conf.Type, newAirGapBatchBuffer(b), nm), nil
 	}, componentSpec)
 }
 
@@ -173,7 +177,7 @@ func (e *Environment) RegisterInput(name string, spec *ConfigSpec, ctor InputCon
 			return nil, err
 		}
 		rdr := newAirGapReader(i)
-		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader(conf.Type, false, rdr, nm)
 	}), componentSpec)
 }
 
@@ -200,7 +204,7 @@ func (e *Environment) RegisterBatchInput(name string, spec *ConfigSpec, ctor Bat
 			return nil, err
 		}
 		rdr := newAirGapBatchReader(i)
-		return input.NewAsyncReader(conf.Type, false, rdr, nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader(conf.Type, false, rdr, nm)
 	}), componentSpec)
 }
 
@@ -236,7 +240,7 @@ func (e *Environment) RegisterOutput(name string, spec *ConfigSpec, ctor OutputC
 				return nil, fmt.Errorf("invalid maxInFlight parameter: %v", maxInFlight)
 			}
 			w := newAirGapWriter(op)
-			o, err := output.NewAsyncWriter(conf.Type, maxInFlight, w, nm.Logger(), nm.Metrics())
+			o, err := output.NewAsyncWriter(conf.Type, maxInFlight, w, nm)
 			if err != nil {
 				return nil, err
 			}
@@ -277,11 +281,11 @@ func (e *Environment) RegisterBatchOutput(name string, spec *ConfigSpec, ctor Ba
 			}
 
 			w := newAirGapBatchWriter(op)
-			o, err := output.NewAsyncWriter(conf.Type, maxInFlight, w, nm.Logger(), nm.Metrics())
+			o, err := output.NewAsyncWriter(conf.Type, maxInFlight, w, nm)
 			if err != nil {
 				return nil, err
 			}
-			return batcher.NewFromConfig(batchPolicy.toInternal(), o, nm, nm.Logger(), nm.Metrics())
+			return batcher.NewFromConfig(batchPolicy.toInternal(), o, nm)
 		},
 	), componentSpec)
 }
@@ -316,7 +320,7 @@ func (e *Environment) RegisterProcessor(name string, spec *ConfigSpec, ctor Proc
 		if err != nil {
 			return nil, err
 		}
-		return newAirGapProcessor(conf.Type, r, nm.Metrics()), nil
+		return newAirGapProcessor(conf.Type, r, nm), nil
 	}, componentSpec)
 }
 
@@ -341,7 +345,7 @@ func (e *Environment) RegisterBatchProcessor(name string, spec *ConfigSpec, ctor
 		if err != nil {
 			return nil, err
 		}
-		return newAirGapBatchProcessor(conf.Type, r, nm.Metrics()), nil
+		return newAirGapBatchProcessor(conf.Type, r, nm), nil
 	}, componentSpec)
 }
 
@@ -386,6 +390,26 @@ func (e *Environment) WalkRateLimits(fn func(name string, config *ConfigView)) {
 	}
 }
 
+// RegisterMetricsExporter attempts to register a new metrics exporter plugin by
+// providing a description of the configuration for the plugin as well as a
+// constructor for the metrics exporter itself.
+func (e *Environment) RegisterMetricsExporter(name string, spec *ConfigSpec, ctor MetricsExporterConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeMetrics
+	return e.internal.MetricsAdd(func(conf metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		if err != nil {
+			return nil, err
+		}
+		m, err := ctor(pluginConf, newReverseAirGapLogger(nm.Logger()))
+		if err != nil {
+			return nil, err
+		}
+		return newAirGapMetrics(m), nil
+	}, componentSpec)
+}
+
 // WalkMetrics executes a provided function argument for every metrics component
 // that has been registered to the environment. Note that metrics components
 // available to an environment cannot be modified
@@ -395,6 +419,31 @@ func (e *Environment) WalkMetrics(fn func(name string, config *ConfigView)) {
 			component: v,
 		})
 	}
+}
+
+// RegisterOtelTracerProvider attempts to register a new open telemetry tracer
+// provider plugin by providing a description of the configuration for the
+// plugin as well as a constructor for the metrics exporter itself. The
+// constructor will be called for each instantiation of the component within a
+// config.
+//
+// Experimental: This type signature is experimental and therefore subject to
+// change outside of major version releases.
+func (e *Environment) RegisterOtelTracerProvider(name string, spec *ConfigSpec, ctor OtelTracerProviderConstructor) error {
+	componentSpec := spec.component
+	componentSpec.Name = name
+	componentSpec.Type = docs.TypeTracer
+	return e.internal.TracersAdd(func(conf tracer.Config, nm bundle.NewManagement) (trace.TracerProvider, error) {
+		pluginConf, err := extractConfig(nm, spec, name, conf.Plugin, conf)
+		if err != nil {
+			return nil, err
+		}
+		t, err := ctor(pluginConf)
+		if err != nil {
+			return nil, err
+		}
+		return t, nil
+	}, componentSpec)
 }
 
 // WalkTracers executes a provided function argument for every tracer component

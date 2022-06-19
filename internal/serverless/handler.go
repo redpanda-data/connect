@@ -7,11 +7,12 @@ import (
 	"os"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
-	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
@@ -108,22 +109,29 @@ func NewHandler(conf config.Type) (*Handler, error) {
 		return nil, fmt.Errorf("failed to create logger: %v", err)
 	}
 
+	// We use a temporary manager with just the logger initialised for metrics
+	// instantiation. Doing this means that metrics plugins will use a global
+	// environment for child plugins and bloblang mappings, which we might want
+	// to revise in future.
+	tmpMgr := mock.NewManager()
+	tmpMgr.L = logger
+
 	// Create our metrics type.
 	var stats *metrics.Namespaced
-	if stats, err = bundle.AllMetrics.Init(conf.Metrics, logger); err != nil {
+	if stats, err = bundle.AllMetrics.Init(conf.Metrics, tmpMgr); err != nil {
 		logger.Errorf("Failed to connect metrics aggregator: %v\n", err)
 		stats = metrics.NewNamespaced(metrics.Noop())
 	}
 
 	// Create our tracer type.
-	trac, err := bundle.AllTracers.Init(conf.Tracer)
+	trac, err := bundle.AllTracers.Init(conf.Tracer, tmpMgr)
 	if err != nil {
 		logger.Errorf("Failed to initialise tracer: %v\n", err)
-		trac = tracer.Noop{}
+		trac = trace.NewNoopTracerProvider()
 	}
 
 	// Create resource manager.
-	manager, err := manager.New(conf.ResourceConfig, mock.NewManager(), logger, stats)
+	manager, err := manager.New(conf.ResourceConfig, manager.OptSetLogger(logger), manager.OptSetMetrics(stats), manager.OptSetTracer(trac))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %v", err)
 	}
@@ -171,7 +179,13 @@ func NewHandler(conf config.Type) (*Handler, error) {
 				return fmt.Errorf("failed to cleanly close resources: %v", err)
 			}
 
-			trac.Close()
+			defer func() {
+				if shutter, ok := trac.(interface {
+					Shutdown(context.Context) error
+				}); ok {
+					_ = shutter.Shutdown(context.Background())
+				}
+			}()
 
 			if sCloseErr := stats.Close(); sCloseErr != nil {
 				logger.Errorf("Failed to cleanly close metrics aggregator: %v\n", sCloseErr)

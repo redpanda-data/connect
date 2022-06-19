@@ -14,7 +14,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -23,9 +22,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newNATSInput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllInputs.Add(processors.WrapConstructor(newNATSInput), docs.ComponentSpec{
 		Name:    "nats",
 		Summary: `Subscribe to a NATS subject.`,
 		Description: `
@@ -63,12 +60,12 @@ You can access these metadata fields using [function interpolation](/docs/config
 	}
 }
 
-func newNATSInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-	n, err := newNATSReader(conf.NATS, log)
+func newNATSInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
+	n, err := newNATSReader(conf.NATS, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nats", true, input.NewAsyncPreserver(n), log, stats)
+	return input.NewAsyncReader("nats", true, input.NewAsyncPreserver(n), mgr)
 }
 
 type natsReader struct {

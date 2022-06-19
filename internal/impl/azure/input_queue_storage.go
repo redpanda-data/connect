@@ -25,7 +25,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("azure_queue_storage", false, r, nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("azure_queue_storage", false, r, nm)
 	}), docs.ComponentSpec{
 		Name:    "azure_queue_storage",
 		Status:  docs.StatusBeta,

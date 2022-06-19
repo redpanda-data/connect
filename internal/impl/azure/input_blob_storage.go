@@ -32,7 +32,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("azure_blob_storage", true, input.NewAsyncPreserver(r), nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("azure_blob_storage", true, input.NewAsyncPreserver(r), nm)
 	}), docs.ComponentSpec{
 		Name:    "azure_blob_storage",
 		Status:  docs.StatusBeta,

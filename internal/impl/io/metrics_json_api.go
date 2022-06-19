@@ -31,11 +31,11 @@ type jsonAPIMetrics struct {
 	timestamp time.Time
 }
 
-func newJSONAPI(config metrics.Config, log log.Modular) (metrics.Type, error) {
+func newJSONAPI(config metrics.Config, nm bundle.NewManagement) (metrics.Type, error) {
 	t := &jsonAPIMetrics{
 		local:     metrics.NewLocal(),
 		timestamp: time.Now(),
-		log:       log,
+		log:       nm.Logger(),
 	}
 	return t, nil
 }

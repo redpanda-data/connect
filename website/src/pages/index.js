@@ -128,9 +128,10 @@ pipeline:
         } else { deleted() }
 
 output:
-  pulsar:
-    url: pulsar://TODO:6650
-    topic: traffic_windows`,
+  http_client:
+    url: https://example.com/traffic_data
+    verb: POST
+    max_in_flight: 64`,
   },
   {
     label: 'Enrichments',
@@ -195,15 +196,15 @@ const features = [
       </>
     ),
   },
-  /*{
+  {
     description: (
       <ReactPlayer
-        className={classnames('padding--lg')}
-        url='TODO'
+        className={classnames('col col-6 padding--lg')}
+        url='https://youtu.be/WT90ePOzSWY'
         controls={true}
       />
     ),
-  },*/
+  },
   {
     title: 'Create, edit and test configs visually',
     imageUrl: 'img/Blobartist.svg',
@@ -247,7 +248,7 @@ const features = [
 function Feature({imageUrl, title, description}) {
   const imgUrl = useBaseUrl(imageUrl);
   return (
-    <div className={classnames('col col--6', styles.feature)}>
+    <div className={classnames('col col--6')}>
       {imgUrl && (
         <div className="text--center">
           <img className={classnames('padding-vert--md', styles.featureImage)} src={imgUrl} alt={title} />
@@ -355,6 +356,7 @@ function Home() {
                     <a href="https://wildbit.com" className="col col--6"><img className={styles.wildbitImg} src="/img/sponsors/wildbit.svg" /></a>
                     <a href="https://www.opala.com" className="col col--6"><img className={styles.opalaImg} src="/img/sponsors/opala.svg" /></a>
                     <a href="https://numary.com" className="col col--6"><img className={styles.numaryImg} src="/img/sponsors/numary.svg" /></a>
+                    <a href="https://synadia.com" className="col col--6"><img className={styles.synadiaImg} src="/img/sponsors/synadia.svg" /></a>
                   </div>
                 </div>
               </div>

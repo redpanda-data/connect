@@ -33,11 +33,11 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		w, err := output.NewAsyncWriter("aws_s3", c.AWSS3.MaxInFlight, sthree, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("aws_s3", c.AWSS3.MaxInFlight, sthree, nm)
 		if err != nil {
 			return nil, err
 		}
-		return batcher.NewFromConfig(c.AWSS3.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(c.AWSS3.Batching, w, nm)
 	}), docs.ComponentSpec{
 		Name:    "aws_s3",
 		Version: "3.36.0",

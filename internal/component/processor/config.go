@@ -43,7 +43,6 @@ type Config struct {
 	ParseLog     ParseLogConfig     `json:"parse_log" yaml:"parse_log"`
 	Protobuf     ProtobufConfig     `json:"protobuf" yaml:"protobuf"`
 	RateLimit    RateLimitConfig    `json:"rate_limit" yaml:"rate_limit"`
-	Redis        RedisConfig        `json:"redis" yaml:"redis"`
 	Resource     string             `json:"resource" yaml:"resource"`
 	SelectParts  SelectPartsConfig  `json:"select_parts" yaml:"select_parts"`
 	Sleep        SleepConfig        `json:"sleep" yaml:"sleep"`
@@ -92,7 +91,6 @@ func NewConfig() Config {
 		ParseLog:     NewParseLogConfig(),
 		Protobuf:     NewProtobufConfig(),
 		RateLimit:    NewRateLimitConfig(),
-		Redis:        NewRedisConfig(),
 		Resource:     "",
 		SelectParts:  NewSelectPartsConfig(),
 		Sleep:        NewSleepConfig(),

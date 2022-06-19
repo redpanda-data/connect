@@ -15,7 +15,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
@@ -25,9 +24,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newAzureTableStorageOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newAzureTableStorageOutput), docs.ComponentSpec{
 		Name:    "azure_table_storage",
 		Status:  docs.StatusBeta,
 		Version: "3.36.0",
@@ -108,16 +105,16 @@ properties:
 	}
 }
 
-func newAzureTableStorageOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	tableStorage, err := newAzureTableStorageWriter(conf.AzureTableStorage, mgr, log)
+func newAzureTableStorageOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	tableStorage, err := newAzureTableStorageWriter(conf.AzureTableStorage, mgr)
 	if err != nil {
 		return nil, err
 	}
-	w, err := output.NewAsyncWriter("azure_table_storage", conf.AzureTableStorage.MaxInFlight, tableStorage, log, stats)
+	w, err := output.NewAsyncWriter("azure_table_storage", conf.AzureTableStorage.MaxInFlight, tableStorage, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return batcher.NewFromConfig(conf.AzureTableStorage.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.AzureTableStorage.Batching, w, mgr)
 }
 
 type azureTableStorageWriter struct {
@@ -131,7 +128,7 @@ type azureTableStorageWriter struct {
 	log          log.Modular
 }
 
-func newAzureTableStorageWriter(conf output.AzureTableStorageConfig, mgr bundle.NewManagement, log log.Modular) (*azureTableStorageWriter, error) {
+func newAzureTableStorageWriter(conf output.AzureTableStorageConfig, mgr bundle.NewManagement) (*azureTableStorageWriter, error) {
 	var timeout time.Duration
 	var err error
 	if tout := conf.Timeout; len(tout) > 0 {
@@ -165,7 +162,7 @@ func newAzureTableStorageWriter(conf output.AzureTableStorageConfig, mgr bundle.
 	}
 	a := &azureTableStorageWriter{
 		conf:    conf,
-		log:     log,
+		log:     mgr.Logger(),
 		timeout: timeout,
 		client:  client,
 	}

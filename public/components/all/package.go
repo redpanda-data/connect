@@ -15,6 +15,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/confluent"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/dgraph"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/elasticsearch"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/elasticsearch/aws"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/gcp"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/hdfs"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/influxdb"
@@ -48,5 +49,5 @@ import (
 )
 
 func init() {
-	_, _ = template.InitTemplates()
+	_ = template.InitNativeTemplates()
 }

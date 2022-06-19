@@ -65,7 +65,7 @@ func init() {
 			return nil, err
 		}
 
-		return input.NewAsyncReader("csv", true, input.NewAsyncPreserver(rdr), nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("csv", true, input.NewAsyncPreserver(rdr), nm)
 	}), docs.ComponentSpec{
 		Name:    "csv",
 		Status:  docs.StatusStable,

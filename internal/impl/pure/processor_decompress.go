@@ -26,7 +26,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("decompress", p, mgr.Metrics()), nil
+		return processor.NewV2ToV1Processor("decompress", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "decompress",
 		Categories: []string{

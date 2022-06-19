@@ -161,7 +161,7 @@ For the CSV format when the field `+"`csv.header`"+` is specified a header row w
 			Description("The format of each incoming message.").
 			Default(string(bigquery.JSON))).
 		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
+			Description("The maximum number of message batches to have in flight at a given time. Increase this to improve throughput.").
 			Default(64)). // TODO: Tune this default
 		Field(service.NewStringEnumField("write_disposition",
 			string(bigquery.WriteAppend), string(bigquery.WriteEmpty), string(bigquery.WriteTruncate)).

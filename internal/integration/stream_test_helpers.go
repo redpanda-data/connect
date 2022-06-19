@@ -452,7 +452,7 @@ func initInput(t testing.TB, env *streamTestEnvironment) iinput.Streamed {
 	assert.Empty(t, lints)
 
 	if env.mgr == nil {
-		env.mgr, err = manager.New(s.ResourceConfig, nil, env.log, env.stats)
+		env.mgr, err = manager.New(s.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
 		require.NoError(t, err)
 	}
 
@@ -481,7 +481,7 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	assert.Empty(t, lints)
 
 	if env.mgr == nil {
-		env.mgr, err = manager.New(s.ResourceConfig, nil, env.log, env.stats)
+		env.mgr, err = manager.New(s.ResourceConfig, manager.OptSetLogger(env.log), manager.OptSetMetrics(env.stats))
 		require.NoError(t, err)
 	}
 

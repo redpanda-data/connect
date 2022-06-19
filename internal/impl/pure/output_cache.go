@@ -21,7 +21,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return output.NewAsyncWriter("cache", c.Cache.MaxInFlight, ca, nm.Logger(), nm.Metrics())
+		return output.NewAsyncWriter("cache", c.Cache.MaxInFlight, ca, nm)
 	}), docs.ComponentSpec{
 		Name:    "cache",
 		Summary: `Stores each message in a [cache](/docs/components/caches/about).`,

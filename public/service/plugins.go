@@ -1,5 +1,7 @@
 package service
 
+import "go.opentelemetry.io/otel/trace"
+
 // BatchBufferConstructor is a func that's provided a configuration type and
 // access to a service manager and must return an instantiation of a buffer
 // based on the config, or an error.
@@ -147,4 +149,37 @@ type RateLimitConstructor func(conf *ParsedConfig, mgr *Resources) (RateLimit, e
 // instantiation of the component within a config.
 func RegisterRateLimit(name string, spec *ConfigSpec, ctor RateLimitConstructor) error {
 	return globalEnvironment.RegisterRateLimit(name, spec, ctor)
+}
+
+// MetricsExporterConstructor is a func that's provided a configuration type and
+// access to a service manager and must return an instantiation of a metrics
+// exporter based on the config, or an error.
+type MetricsExporterConstructor func(conf *ParsedConfig, log *Logger) (MetricsExporter, error)
+
+// RegisterMetricsExporter attempts to register a new metrics exporter plugin by
+// providing a description of the configuration for the plugin as well as a
+// constructor for the metrics exporter itself. The constructor will be called
+// for each instantiation of the component within a config.
+func RegisterMetricsExporter(name string, spec *ConfigSpec, ctor MetricsExporterConstructor) error {
+	return globalEnvironment.RegisterMetricsExporter(name, spec, ctor)
+}
+
+// OtelTracerProviderConstructor is a func that's provided a configuration type
+// and access to a service manager and must return an instantiation of an open
+// telemetry tracer provider.
+//
+// Experimental: This type signature is experimental and therefore subject to
+// change outside of major version releases.
+type OtelTracerProviderConstructor func(conf *ParsedConfig) (trace.TracerProvider, error)
+
+// RegisterOtelTracerProvider attempts to register a new open telemetry tracer
+// provider plugin by providing a description of the configuration for the
+// plugin as well as a constructor for the metrics exporter itself. The
+// constructor will be called for each instantiation of the component within a
+// config.
+//
+// Experimental: This type signature is experimental and therefore subject to
+// change outside of major version releases.
+func RegisterOtelTracerProvider(name string, spec *ConfigSpec, ctor OtelTracerProviderConstructor) error {
+	return globalEnvironment.RegisterOtelTracerProvider(name, spec, ctor)
 }

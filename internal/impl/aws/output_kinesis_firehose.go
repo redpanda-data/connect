@@ -30,11 +30,11 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		w, err := output.NewAsyncWriter("aws_kinesis_firehose", c.AWSKinesisFirehose.MaxInFlight, kin, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("aws_kinesis_firehose", c.AWSKinesisFirehose.MaxInFlight, kin, nm)
 		if err != nil {
 			return w, err
 		}
-		return batcher.NewFromConfig(c.AWSKinesisFirehose.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(c.AWSKinesisFirehose.Batching, w, nm)
 	}), docs.ComponentSpec{
 		Name:    "aws_kinesis_firehose",
 		Version: "3.36.0",

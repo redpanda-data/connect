@@ -54,7 +54,7 @@ func newHDFSInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, 
 	if conf.HDFS.Directory == "" {
 		return nil, errors.New("invalid directory (cannot be empty)")
 	}
-	return input.NewAsyncReader("hdfs", true, input.NewAsyncPreserver(newHDFSReader(conf.HDFS, log)), log, stats)
+	return input.NewAsyncReader("hdfs", true, input.NewAsyncPreserver(newHDFSReader(conf.HDFS, log)), mgr)
 }
 
 type hdfsReader struct {

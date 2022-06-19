@@ -14,17 +14,18 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	strmmgr "github.com/benthosdev/benthos/v4/internal/stream/manager"
 )
@@ -298,9 +299,16 @@ func cmdService(
 		return 1
 	}
 
+	// We use a temporary manager with just the logger initialised for metrics
+	// instantiation. Doing this means that metrics plugins will use a global
+	// environment for child plugins and bloblang mappings, which we might want
+	// to revise in future.
+	tmpMgr := mock.NewManager()
+	tmpMgr.L = logger
+
 	// Create our metrics type.
 	var stats *metrics.Namespaced
-	stats, err = bundle.AllMetrics.Init(conf.Metrics, logger)
+	stats, err = bundle.AllMetrics.Init(conf.Metrics, tmpMgr)
 	for err != nil {
 		logger.Errorf("Failed to connect to metrics aggregator: %v\n", err)
 		return 1
@@ -312,12 +320,18 @@ func cmdService(
 	}()
 
 	// Create our tracer type.
-	var trac tracer.Type
-	if trac, err = bundle.AllTracers.Init(conf.Tracer); err != nil {
+	var trac trace.TracerProvider
+	if trac, err = bundle.AllTracers.Init(conf.Tracer, tmpMgr); err != nil {
 		logger.Errorf("Failed to initialise tracer: %v\n", err)
 		return 1
 	}
-	defer trac.Close()
+	defer func() {
+		if shutter, ok := trac.(interface {
+			Shutdown(context.Context) error
+		}); ok {
+			_ = shutter.Shutdown(context.Background())
+		}
+	}()
 
 	// Create HTTP API with a sanitised service config.
 	var sanitNode yaml.Node
@@ -337,7 +351,14 @@ func cmdService(
 	}
 
 	// Create resource manager.
-	manager, err := manager.New(conf.ResourceConfig, httpServer, logger, stats, manager.OptSetStreamsMode(streamsMode))
+	manager, err := manager.New(
+		conf.ResourceConfig,
+		manager.OptSetAPIReg(httpServer),
+		manager.OptSetLogger(logger),
+		manager.OptSetMetrics(stats),
+		manager.OptSetTracer(trac),
+		manager.OptSetStreamsMode(streamsMode),
+	)
 	if err != nil {
 		logger.Errorf("Failed to create resource: %v\n", err)
 		return 1
