@@ -1320,7 +1320,7 @@ root.id = this.id.string()
 
 ### `type`
 
-Returns the type of a value as a string, providing one of the following values: `string`, `bytes`, `number`, `bool`, `array`, `object` or `null`.
+Returns the type of a value as a string, providing one of the following values: `string`, `bytes`, `number`, `bool`, `timestamp`, `array`, `object` or `null`.
 
 #### Examples
 
@@ -1331,6 +1331,42 @@ root.foo_type = this.foo.type()
 
 # In:  {"bar":10,"foo":"is a string"}
 # Out: {"bar_type":"number","foo_type":"string"}
+```
+
+```coffee
+root.type = this.type()
+
+# In:  "foobar"
+# Out: {"type":"string"}
+
+# In:  666
+# Out: {"type":"number"}
+
+# In:  false
+# Out: {"type":"bool"}
+
+# In:  ["foo", "bar"]
+# Out: {"type":"array"}
+
+# In:  {"foo": "bar"}
+# Out: {"type":"object"}
+
+# In:  null
+# Out: {"type":"null"}
+```
+
+```coffee
+root.type = content().type()
+
+# In:  foobar
+# Out: {"type":"bytes"}
+```
+
+```coffee
+root.type = this.ts_parse("2006-01-02").type()
+
+# In:  "2022-06-06"
+# Out: {"type":"timestamp"}
 ```
 
 ## Object & Array Manipulation
