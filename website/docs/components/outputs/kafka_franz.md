@@ -434,6 +434,14 @@ The path of a certificate key to use.
 Type: `string`  
 Default: `""`  
 
+### `tls.client_certs[].password`
+
+A plant text password to decrypt the private key.
+
+
+Type: `string`  
+Default: `""`  
+
 ### `sasl`
 
 Specify one or more methods of SASL authentication. SASL is tried in order; if the broker supports the first mechanism, all connections will use that mechanism. If the first mechanism fails, the client will pick the first supported mechanism. If the broker does not support any client mechanisms, connections will fail.

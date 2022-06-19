@@ -385,6 +385,14 @@ The path of a certificate key to use.
 Type: `string`  
 Default: `""`  
 
+### `tls.client_certs[].password`
+
+A plant text password to decrypt the private key.
+
+
+Type: `string`  
+Default: `""`  
+
 ### `max_in_flight`
 
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
