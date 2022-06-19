@@ -211,6 +211,44 @@ func (a *airGapBatchReader) WaitForClose(tout time.Duration) error {
 
 //------------------------------------------------------------------------------
 
+// ResourceInput provides access to an input resource.
+type ResourceInput struct {
+	i input.Streamed
+}
+
+func newResourceInput(i input.Streamed) *ResourceInput {
+	return &ResourceInput{i: i}
+}
+
+// ReadBatch attempts to read a message batch from the input, along with a
+// function to be called once the entire batch can be either acked (successfully
+// sent or intentionally filtered) or nacked (failed to be processed or
+// dispatched to the output).
+//
+// If this method returns ErrEndOfInput then that indicates that the input has
+// finished and will no longer yield new messages.
+func (r *ResourceInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, error) {
+	var tran message.Transaction
+	var open bool
+	select {
+	case tran, open = <-r.i.TransactionChan():
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+	if !open {
+		return nil, nil, ErrEndOfInput
+	}
+
+	var b MessageBatch
+	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
+		b = append(b, newMessageFromPart(part))
+		return nil
+	})
+	return b, tran.Ack, nil
+}
+
+//------------------------------------------------------------------------------
+
 // OwnedInput provides direct ownership of an input extracted from a plugin
 // config. Connectivity of the input is handled internally, and so the consumer
 // of this type should only be concerned with reading messages and eventually
@@ -219,7 +257,7 @@ type OwnedInput struct {
 	i input.Streamed
 }
 
-// ReadBatch attemps to read a message batch from the input, along with a
+// ReadBatch attempts to read a message batch from the input, along with a
 // function to be called once the entire batch can be either acked (successfully
 // sent or intentionally filtered) or nacked (failed to be processed or
 // dispatched to the output).
@@ -260,5 +298,4 @@ func (o *OwnedInput) Close(ctx context.Context) error {
 		default:
 		}
 	}
-
 }
