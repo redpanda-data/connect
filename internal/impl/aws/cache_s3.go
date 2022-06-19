@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/cenkalti/backoff/v4"
 
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -39,7 +40,7 @@ func s3CacheConfig() *service.ConfigSpec {
 		Field(service.NewBackOffField("retries", false, retriesDefaults).
 			Advanced())
 
-	for _, f := range SessionFields() {
+	for _, f := range config.SessionFields() {
 		spec = spec.Field(f)
 	}
 	return spec

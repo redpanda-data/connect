@@ -9,12 +9,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/mitchellh/mapstructure"
 
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	config := service.NewConfigSpec().
+	conf := service.NewConfigSpec().
 		Summary("Executes a PartiQL expression against a DynamoDB table for each message.").
 		Description("Both writes or reads are supported, when the query is a read the contents of the message will be replaced with the result. This processor is more efficient when messages are pre-batched as the whole batch will be executed in a single call.").
 		Categories("Integration").
@@ -40,12 +41,12 @@ pipeline:
 `,
 		)
 
-	for _, f := range SessionFields() {
-		config = config.Field(f)
+	for _, f := range config.SessionFields() {
+		conf = conf.Field(f)
 	}
 
 	err := service.RegisterBatchProcessor(
-		"aws_dynamodb_partiql", config,
+		"aws_dynamodb_partiql", conf,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			sess, err := GetSession(conf)
 			if err != nil {

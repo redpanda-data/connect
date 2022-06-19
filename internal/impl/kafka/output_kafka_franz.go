@@ -12,7 +12,6 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
 
-	sess "github.com/benthosdev/benthos/v4/internal/impl/aws"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -70,8 +69,7 @@ This output is new and experimental, and the existing ` + "`kafka`" + ` input is
 			Optional().
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField).
-		Field(sess.SessionFields()[2])
+		Field(saslField())
 }
 
 func init() {

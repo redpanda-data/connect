@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - Go API: The stream builder API now supports configuring a tracer, and tracer configuration is now isolated to the stream being executed.
 - Go API: Plugin components can now access input and output resources.
 - The `redis_streams` output field `stream` field now supports interpolation functions.
+- The `kafka_franz` input and outputs now support `AWS_MSK_IAM` as a SASL mechanism.
 
 ### Fixed
 

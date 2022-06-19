@@ -11,11 +11,12 @@ import (
 	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/aws/aws-sdk-go/service/lambda/lambdaiface"
 
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	config := service.NewConfigSpec().
+	conf := service.NewConfigSpec().
 		Stable().
 		Summary("Invokes an AWS lambda for each message. The contents of the message is the payload of the request, and the result of the invocation will become the new contents of the message.").
 		Description(`The `+"`rate_limit`"+` field can be used to specify a rate limit [resource](/docs/components/rate_limits/about) to cap the rate of requests across parallel components service wide.
@@ -81,21 +82,21 @@ pipeline:
 			Default("").
 			Advanced())
 
-	for _, f := range SessionFields() {
-		config = config.Field(f)
+	for _, f := range config.SessionFields() {
+		conf = conf.Field(f)
 	}
 
-	config = config.Field(service.NewDurationField("timeout").
+	conf = conf.Field(service.NewDurationField("timeout").
 		Description("The maximum period of time to wait before abandoning an invocation.").
 		Default("5s").
 		Advanced())
-	config = config.Field(service.NewIntField("retries").
+	conf = conf.Field(service.NewIntField("retries").
 		Description("The maximum number of retry attempts for each message.").
 		Default(3).
 		Advanced())
 
 	err := service.RegisterBatchProcessor(
-		"aws_lambda", config,
+		"aws_lambda", conf,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			sess, err := GetSession(conf)
 			if err != nil {

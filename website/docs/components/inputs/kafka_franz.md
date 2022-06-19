@@ -64,14 +64,6 @@ input:
       root_cas_file: ""
       client_certs: []
     sasl: []
-    credentials:
-      profile: ""
-      id: ""
-      secret: ""
-      token: ""
-      from_ec2_role: false
-      role: ""
-      role_external_id: ""
 ```
 
 </TabItem>
@@ -345,14 +337,37 @@ Key/value pairs to add to OAUTHBEARER authentication requests.
 
 Type: `object`  
 
-### `credentials`
+### `sasl[].aws`
+
+Contains AWS specific fields for when the `mechanism` is set to `AWS_MSK_IAM`.
+
+
+Type: `object`  
+
+### `sasl[].aws.region`
+
+The AWS region to target.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.endpoint`
+
+Allows you to specify a custom endpoint for the AWS API.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials`
 
 Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws).
 
 
 Type: `object`  
 
-### `credentials.profile`
+### `sasl[].aws.credentials.profile`
 
 A profile from `~/.aws/credentials` to use.
 
@@ -360,7 +375,7 @@ A profile from `~/.aws/credentials` to use.
 Type: `string`  
 Default: `""`  
 
-### `credentials.id`
+### `sasl[].aws.credentials.id`
 
 The ID of credentials to use.
 
@@ -368,7 +383,7 @@ The ID of credentials to use.
 Type: `string`  
 Default: `""`  
 
-### `credentials.secret`
+### `sasl[].aws.credentials.secret`
 
 The secret for the credentials being used.
 
@@ -376,7 +391,7 @@ The secret for the credentials being used.
 Type: `string`  
 Default: `""`  
 
-### `credentials.token`
+### `sasl[].aws.credentials.token`
 
 The token for the credentials being used, required when using short term credentials.
 
@@ -384,7 +399,7 @@ The token for the credentials being used, required when using short term credent
 Type: `string`  
 Default: `""`  
 
-### `credentials.from_ec2_role`
+### `sasl[].aws.credentials.from_ec2_role`
 
 Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).
 
@@ -393,7 +408,7 @@ Type: `bool`
 Default: `false`  
 Requires version 4.2.0 or newer  
 
-### `credentials.role`
+### `sasl[].aws.credentials.role`
 
 A role ARN to assume.
 
@@ -401,7 +416,7 @@ A role ARN to assume.
 Type: `string`  
 Default: `""`  
 
-### `credentials.role_external_id`
+### `sasl[].aws.credentials.role_external_id`
 
 An external ID to provide when assuming a role.
 
