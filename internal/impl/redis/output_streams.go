@@ -80,7 +80,7 @@ type redisStreamsWriter struct {
 
 func newRedisStreamsWriter(conf output.RedisStreamsConfig, mgr bundle.NewManagement) (*redisStreamsWriter, error) {
 	r := &redisStreamsWriter{
-    log:  mgr.Logger(),
+		log:  mgr.Logger(),
 		conf: conf,
 	}
 
