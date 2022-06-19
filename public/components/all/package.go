@@ -35,6 +35,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/parquet"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/prometheus"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pusher"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/redis"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/sftp"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/snowflake"
