@@ -3,6 +3,7 @@ package tls
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"os"
 )
@@ -24,8 +25,10 @@ enabled: true
 client_certs:
   - cert_file: ./example.pem
     key_file: ./example.key
+		password: foobar
   - cert: foo
     key: bar
+		password: foobar
 ` + "```" + ``
 
 //------------------------------------------------------------------------------
@@ -36,6 +39,7 @@ type ClientCertConfig struct {
 	KeyFile  string `json:"key_file" yaml:"key_file"`
 	Cert     string `json:"cert" yaml:"cert"`
 	Key      string `json:"key" yaml:"key"`
+	Password string `json:"password" yaml:"password"`
 }
 
 // Config contains configuration params for TLS.
@@ -117,9 +121,28 @@ func (c *Config) Get() (*tls.Config, error) {
 	return tlsConf, nil
 }
 
+func loadKeyPair(cert []byte, key []byte, password string) (tls.Certificate, error) {
+	keyPem, _ := pem.Decode(key)
+	encrypted := x509.IsEncryptedPEMBlock(keyPem)
+
+	if encrypted {
+		if password == "" {
+			return tls.Certificate{}, errors.New("missing password for encrypted private key")
+		} else {
+			decryptedKey, err := decryptKey(keyPem, password)
+			if err != nil {
+				return tls.Certificate{}, err
+			}
+			return tls.X509KeyPair(cert, decryptedKey)
+		}
+	}
+	return tls.X509KeyPair(cert, key)
+}
+
 // Load returns a TLS certificate, based on either file paths in the
 // config or the raw certs as strings.
 func (c *ClientCertConfig) Load() (tls.Certificate, error) {
+
 	if c.CertFile != "" || c.KeyFile != "" {
 		if c.CertFile == "" {
 			return tls.Certificate{}, errors.New("missing cert_file field in client certificate config")
@@ -127,15 +150,38 @@ func (c *ClientCertConfig) Load() (tls.Certificate, error) {
 		if c.KeyFile == "" {
 			return tls.Certificate{}, errors.New("missing key_file field in client certificate config")
 		}
-		return tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
+
+		cert, err := os.ReadFile(c.CertFile)
+		if err != nil {
+			return tls.Certificate{}, err
+		}
+
+		key, err := os.ReadFile(c.KeyFile)
+		if err != nil {
+			return tls.Certificate{}, err
+		}
+
+		return loadKeyPair(cert, key, c.Password)
 	}
+
 	if c.Cert == "" {
 		return tls.Certificate{}, errors.New("missing cert field in client certificate config")
 	}
 	if c.Key == "" {
 		return tls.Certificate{}, errors.New("missing key field in client certificate config")
 	}
-	return tls.X509KeyPair([]byte(c.Cert), []byte(c.Key))
+
+	return loadKeyPair([]byte(c.Cert), []byte(c.Key), c.Password)
+}
+
+func decryptKey(key *pem.Block, password string) ([]byte, error) {
+	decryptedKey, err := x509.DecryptPEMBlock(key, []byte(password))
+	if err != nil {
+		return nil, errors.New("wrong password provided for key")
+	}
+
+	decyptedKey := pem.EncodeToMemory(&pem.Block{Type: key.Type, Bytes: decryptedKey})
+	return decyptedKey, nil
 }
 
 //------------------------------------------------------------------------------
