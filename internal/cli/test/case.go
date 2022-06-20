@@ -152,12 +152,12 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 		})
 	}
 
-	// append old batch to new batch array
+	// append old batch to new batch array.
 	if len(c.InputBatch) > 0 {
 		c.InputBatches = append(c.InputBatches, c.InputBatch)
 	}
 
-	var outputBatches []*message.Batch
+	var inputMsg []*message.Batch
 
 	for _, inputBatch := range c.InputBatches {
 		parts := make([]*message.Part, len(inputBatch))
@@ -174,15 +174,14 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 			parts[i] = part
 		}
 
-		inputMsg := message.QuickBatch(nil)
-		inputMsg.SetAll(parts)
-		currentBatches, result := iprocessor.ExecuteAll(procSet, inputMsg)
-		if result != nil {
-			reportFailure(fmt.Sprintf("processors resulted in error: %v", result))
-		}
-		if len(currentBatches) > 0 {
-			outputBatches = append(outputBatches, currentBatches...)
-		}
+		currentBatch := message.QuickBatch(nil)
+		currentBatch.SetAll(parts)
+		inputMsg = append(inputMsg, currentBatch)
+	}
+
+	outputBatches, result := iprocessor.ExecuteAll(procSet, inputMsg...)
+	if result != nil {
+		reportFailure(fmt.Sprintf("processors resulted in error: %v", result))
 	}
 
 	if lExp, lAct := len(c.OutputBatches), len(outputBatches); lAct < lExp {
@@ -191,7 +190,7 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 
 	for i, v := range outputBatches {
 		if len(c.OutputBatches) <= i {
-			reportFailure(fmt.Sprintf("unexpected batch[%d]: %s", i, message.GetAllBytes(v)))
+			reportFailure(fmt.Sprintf("unexpected batch: %s", message.GetAllBytes(v)))
 			continue
 		}
 		expectedBatch := c.OutputBatches[i]
