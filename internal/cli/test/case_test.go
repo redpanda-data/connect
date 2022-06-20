@@ -117,6 +117,22 @@ output_batches:
 `,
 		},
 		{
+			name: "positive 5",
+			conf: `
+name: positive 5
+input_batches:
+-
+  - content: foo
+-
+  - content: bar
+output_batches:
+-
+  - content_equals: "foo"
+-
+  - content_equals: "bar"
+`,
+		},
+		{
 			name: "negative 1",
 			conf: `
 name: negative 1

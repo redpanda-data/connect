@@ -68,7 +68,8 @@ type Case struct {
 	TargetProcessors string               `yaml:"target_processors"`
 	TargetMapping    string               `yaml:"target_mapping"`
 	Mocks            map[string]yaml.Node `yaml:"mocks"`
-	InputBatch       []InputPart          `yaml:"input_batch"`
+	InputBatch       []InputPart          `yaml:"input_batch"` // Deprecated: use input_batches instead.
+	InputBatches     [][]InputPart        `yaml:"input_batches"`
 	OutputBatches    [][]ConditionsMap    `yaml:"output_batches"`
 
 	line int
@@ -89,6 +90,7 @@ func NewCase() Case {
 		TargetMapping:    "",
 		Mocks:            map[string]yaml.Node{},
 		InputBatch:       []InputPart{},
+		InputBatches:     [][]InputPart{},
 		OutputBatches:    [][]ConditionsMap{},
 	}
 }
@@ -150,25 +152,37 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 		})
 	}
 
-	parts := make([]*message.Part, len(c.InputBatch))
-	for i, v := range c.InputBatch {
-		var content string
-		if content, err = v.getContent(dir); err != nil {
-			err = fmt.Errorf("failed to create mock input %v: %w", i, err)
-			return
-		}
-		part := message.NewPart([]byte(content))
-		for k, v := range v.Metadata {
-			part.MetaSet(k, v)
-		}
-		parts[i] = part
+	// append old batch to new batch array
+	if len(c.InputBatch) > 0 {
+		c.InputBatches = append(c.InputBatches, c.InputBatch)
 	}
 
-	inputMsg := message.QuickBatch(nil)
-	inputMsg.SetAll(parts)
-	outputBatches, result := iprocessor.ExecuteAll(procSet, inputMsg)
-	if result != nil {
-		reportFailure(fmt.Sprintf("processors resulted in error: %v", result))
+	var outputBatches []*message.Batch
+
+	for _, inputBatch := range c.InputBatches {
+		parts := make([]*message.Part, len(inputBatch))
+		for i, v := range inputBatch {
+			var content string
+			if content, err = v.getContent(dir); err != nil {
+				err = fmt.Errorf("failed to create mock input %v: %w", i, err)
+				return
+			}
+			part := message.NewPart([]byte(content))
+			for k, v := range v.Metadata {
+				part.MetaSet(k, v)
+			}
+			parts[i] = part
+		}
+
+		inputMsg := message.QuickBatch(nil)
+		inputMsg.SetAll(parts)
+		currentBatches, result := iprocessor.ExecuteAll(procSet, inputMsg)
+		if result != nil {
+			reportFailure(fmt.Sprintf("processors resulted in error: %v", result))
+		}
+		if len(currentBatches) > 0 {
+			outputBatches = append(outputBatches, currentBatches...)
+		}
 	}
 
 	if lExp, lAct := len(c.OutputBatches), len(outputBatches); lAct < lExp {
@@ -177,7 +191,7 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 
 	for i, v := range outputBatches {
 		if len(c.OutputBatches) <= i {
-			reportFailure(fmt.Sprintf("unexpected batch: %s", message.GetAllBytes(v)))
+			reportFailure(fmt.Sprintf("unexpected batch[%d]: %s", i, message.GetAllBytes(v)))
 			continue
 		}
 		expectedBatch := c.OutputBatches[i]
