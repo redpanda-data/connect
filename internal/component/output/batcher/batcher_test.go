@@ -179,6 +179,82 @@ func TestBatcherBasic(t *testing.T) {
 	wg.Wait()
 }
 
+func TestBatcherMaxInFlight(t *testing.T) {
+	timeOutCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	tInChan := make(chan message.Transaction)
+
+	policyConf := batchconfig.NewConfig()
+	policyConf.Count = 2
+	batchPol, err := policy.New(policyConf, mock.NewManager())
+	require.NoError(t, err)
+
+	out := &mock.OutputChanneled{}
+
+	b := batcher.New(batchPol, out, mock.NewManager())
+	require.NoError(t, b.Consume(tInChan))
+
+	tOutChan := out.TChan
+	resChanOne, resChanTwo := make(chan error), make(chan error)
+
+	select {
+	case tInChan <- message.NewTransaction(message.QuickBatch([][]byte{
+		[]byte("hello world 1"),
+		[]byte("hello world 2"),
+		[]byte("hello world 3"),
+		[]byte("hello world 4"),
+	}), resChanOne):
+	case <-timeOutCtx.Done():
+		t.Fatal("timed out")
+	}
+
+	var tranOne message.Transaction
+	select {
+	case tranOne = <-tOutChan:
+	case <-timeOutCtx.Done():
+		t.Fatal("timed out")
+	}
+
+	select {
+	case tInChan <- message.NewTransaction(message.QuickBatch([][]byte{
+		[]byte("hello world 5"),
+		[]byte("hello world 6"),
+		[]byte("hello world 7"),
+		[]byte("hello world 8"),
+	}), resChanTwo):
+	case <-timeOutCtx.Done():
+		t.Fatal("timed out")
+	}
+
+	var tranTwo message.Transaction
+	select {
+	case tranTwo = <-tOutChan:
+	case <-timeOutCtx.Done():
+		t.Fatal("timed out")
+	}
+
+	require.NoError(t, tranOne.Ack(timeOutCtx, nil))
+	require.NoError(t, tranTwo.Ack(timeOutCtx, nil))
+
+	select {
+	case err := <-resChanOne:
+		require.NoError(t, err)
+	case <-timeOutCtx.Done():
+		t.Fatal("timed out")
+	}
+
+	select {
+	case err := <-resChanTwo:
+		require.NoError(t, err)
+	case <-timeOutCtx.Done():
+		t.Fatal("timed out")
+	}
+
+	b.CloseAsync()
+	require.NoError(t, b.WaitForClose(time.Second*5))
+}
+
 func TestBatcherBatchError(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
