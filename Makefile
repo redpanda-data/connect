@@ -1,15 +1,15 @@
 .PHONY: all serverless deps docker docker-cgo clean docs test test-race test-integration fmt lint install deploy-docs
 
-TAGS =
+TAGS ?=
 
-INSTALL_DIR        = $(GOPATH)/bin
-WEBSITE_DIR        = ./website
-DEST_DIR           = ./target
+INSTALL_DIR        ?= $(GOPATH)/bin
+WEBSITE_DIR        ?= ./website
+DEST_DIR           ?= ./target
 PATHINSTBIN        = $(DEST_DIR)/bin
 PATHINSTTOOLS      = $(DEST_DIR)/tools
 PATHINSTSERVERLESS = $(DEST_DIR)/serverless
 PATHINSTDOCKER     = $(DEST_DIR)/docker
-DOCKER_IMAGE 	   ?= jeffail/benthos
+DOCKER_IMAGE       ?= jeffail/benthos
 
 VERSION   := $(shell git describe --tags || echo "v0.0.0")
 VER_CUT   := $(shell echo $(VERSION) | cut -c2-)
@@ -22,9 +22,9 @@ DATE      := $(shell date +"%Y-%m-%dT%H:%M:%SZ")
 VER_FLAGS = -X github.com/benthosdev/benthos/v4/internal/cli.Version=$(VERSION) \
 	-X github.com/benthosdev/benthos/v4/internal/cli.DateBuilt=$(DATE)
 
-LD_FLAGS   = -w -s
-GO_FLAGS   =
-DOCS_FLAGS =
+LD_FLAGS   ?= -w -s
+GO_FLAGS   ?=
+DOCS_FLAGS ?=
 
 APPS = benthos
 all: $(APPS)
