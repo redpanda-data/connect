@@ -62,7 +62,7 @@ func newSNSWriterFromConf(conf output.SNSConfig, mgr bundle.NewManagement) (outp
 	if err != nil {
 		return nil, err
 	}
-	a, err := output.NewAsyncWriter("aws_sns", conf.MaxInFlight, s, mgr.Logger(), mgr.Metrics())
+	a, err := output.NewAsyncWriter("aws_sns", conf.MaxInFlight, s, mgr)
 	if err != nil {
 		return nil, err
 	}

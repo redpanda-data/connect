@@ -26,7 +26,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("file", true, input.NewAsyncPreserver(rdr), nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("file", true, input.NewAsyncPreserver(rdr), nm)
 	}), docs.ComponentSpec{
 		Name: "file",
 		Summary: `

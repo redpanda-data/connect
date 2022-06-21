@@ -63,12 +63,16 @@ This input adds the following metadata fields to each message:
 			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
 			Default(1024).
 			Advanced()).
+		Field(service.NewDurationField("commit_period").
+			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
+			Default("5s").
+			Advanced()).
+		Field(service.NewBoolField("start_from_oldest").
+			Description("If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.").
+			Default(true).
+			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField).
-		Field(service.NewBoolField("debug_to_trace_logs").
-			Description("Whether to emit kafka-franz debug level logs only when the log level is set to TRACE").
-			Default(false).
-			Advanced())
+		Field(saslField())
 }
 
 func init() {
@@ -94,14 +98,15 @@ type msgWithAckFn struct {
 }
 
 type franzKafkaReader struct {
-	seedBrokers      []string
-	topics           []string
-	consumerGroup    string
-	tlsConf          *tls.Config
-	saslConfs        []sasl.Mechanism
-	checkpointLimit  int
-	regexPattern     bool
-	debugToTraceLogs bool
+	seedBrokers     []string
+	topics          []string
+	consumerGroup   string
+	tlsConf         *tls.Config
+	saslConfs       []sasl.Mechanism
+	checkpointLimit int
+	startFromOldest bool
+	commitPeriod    time.Duration
+	regexPattern    bool
 
 	msgChan atomic.Value
 	log     *service.Logger
@@ -151,6 +156,14 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 		return nil, err
 	}
 
+	if f.startFromOldest, err = conf.FieldBool("start_from_oldest"); err != nil {
+		return nil, err
+	}
+
+	if f.commitPeriod, err = conf.FieldDuration("commit_period"); err != nil {
+		return nil, err
+	}
+
 	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
 	if err != nil {
 		return nil, err
@@ -159,10 +172,6 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 		f.tlsConf = tlsConf
 	}
 	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
-		return nil, err
-	}
-
-	if f.debugToTraceLogs, err = conf.FieldBool("debug_to_trace_logs"); err != nil {
 		return nil, err
 	}
 
@@ -272,10 +281,18 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 
 	checkpoints := newCheckpointTracker()
 
+	var initialOffset kgo.Offset
+	if f.startFromOldest {
+		initialOffset = kgo.NewOffset().AtStart()
+	} else {
+		initialOffset = kgo.NewOffset().AtEnd()
+	}
+
 	clientOpts := []kgo.Opt{
 		kgo.SeedBrokers(f.seedBrokers...),
 		kgo.ConsumerGroup(f.consumerGroup),
 		kgo.ConsumeTopics(f.topics...),
+		kgo.ConsumeResetOffset(initialOffset),
 		kgo.SASL(f.saslConfs...),
 		kgo.OnPartitionsRevoked(func(rctx context.Context, c *kgo.Client, m map[string][]int32) {
 			// Note: this is a best attempt, there's a chance of duplicates if
@@ -308,7 +325,8 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			checkpoints.removeTopicPartitions(m)
 		}),
 		kgo.AutoCommitMarks(),
-		kgo.WithLogger(&kgoLogger{l: f.log, debugToTrace: f.debugToTraceLogs}),
+		kgo.AutoCommitInterval(f.commitPeriod),
+		kgo.WithLogger(&kgoLogger{f.log}),
 	}
 
 	if f.tlsConf != nil {

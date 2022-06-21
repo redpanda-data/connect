@@ -14,11 +14,17 @@ All notable changes to this project will be documented in this file.
 - Go API: Added component bundle `./public/components/aws` for all AWS components, including a `RunLambda` function.
 - New `cached` processor.
 - Go API: New APIs for registering both metrics exporters and open telemetry tracer plugins.
+- Go API: The stream builder API now supports configuring a tracer, and tracer configuration is now isolated to the stream being executed.
+- Go API: Plugin components can now access input and output resources.
+- The `redis_streams` output field `stream` field now supports interpolation functions.
+- The `kafka_franz` input and outputs now support `AWS_MSK_IAM` as a SASL mechanism.
+- New `pusher` output.
 
 ### Fixed
 
 - Corrected an issue where Prometheus metrics from batching at the buffer level would be skipped when combined with input/output level batching.
 - Go API: Fixed an issue where running the CLI API without importing a component package would result in template init crashing.
+- The `http` processor and `http_client` input and output no longer have default headers as part of their configuration. A `Content-Type` header will be added to requests with a default value of `application/octet-stream` when a message body is being sent and the configuration has not added one explicitly.
 
 ## 4.2.0 - 2022-06-03
 

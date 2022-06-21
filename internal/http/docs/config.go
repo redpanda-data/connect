@@ -30,11 +30,9 @@ type Config struct {
 // NewConfig creates a new Config with default values.
 func NewConfig() Config {
 	return Config{
-		URL:  "",
-		Verb: "POST",
-		Headers: map[string]string{
-			"Content-Type": "application/octet-stream",
-		},
+		URL:             "",
+		Verb:            "POST",
+		Headers:         map[string]string{},
 		ExtractMetadata: metadata.NewIncludeFilterConfig(),
 		RateLimit:       "",
 		Timeout:         "5s",

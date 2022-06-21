@@ -13,8 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -70,7 +69,7 @@ func TestNotBatchedSingleMessages(t *testing.T) {
 	}
 
 	w := &mockNBWriter{t: t}
-	out, err := NewAsyncWriter("foo", 1, w, log.Noop(), metrics.Noop())
+	out, err := NewAsyncWriter("foo", 1, w, component.NoopObservability())
 	require.NoError(t, err)
 
 	nbOut := OnlySinglePayloads(out)
@@ -109,7 +108,7 @@ func TestShutdown(t *testing.T) {
 	}
 
 	w := &mockNBWriter{t: t, closeChan: make(chan error)}
-	out, err := NewAsyncWriter("foo", 1, w, log.Noop(), metrics.Noop())
+	out, err := NewAsyncWriter("foo", 1, w, component.NoopObservability())
 	require.NoError(t, err)
 
 	nbOut := OnlySinglePayloads(out)
@@ -157,7 +156,7 @@ func TestNotBatchedBreakOutMessages(t *testing.T) {
 	}
 
 	w := &mockNBWriter{t: t}
-	out, err := NewAsyncWriter("foo", 1, w, log.Noop(), metrics.Noop())
+	out, err := NewAsyncWriter("foo", 1, w, component.NoopObservability())
 	require.NoError(t, err)
 
 	nbOut := OnlySinglePayloads(out)
@@ -198,7 +197,7 @@ func TestNotBatchedBreakOutMessagesErrors(t *testing.T) {
 	}
 
 	w := &mockNBWriter{t: t, errorOn: []string{"foo1", "foo3"}}
-	out, err := NewAsyncWriter("foo", 1, w, log.Noop(), metrics.Noop())
+	out, err := NewAsyncWriter("foo", 1, w, component.NoopObservability())
 	require.NoError(t, err)
 
 	nbOut := OnlySinglePayloads(out)
@@ -255,7 +254,7 @@ func TestNotBatchedBreakOutMessagesErrorsAsync(t *testing.T) {
 	}
 
 	w := &mockNBWriter{t: t, errorOn: []string{"foo1", "foo3"}}
-	out, err := NewAsyncWriter("foo", 5, w, log.Noop(), metrics.Noop())
+	out, err := NewAsyncWriter("foo", 5, w, component.NoopObservability())
 	require.NoError(t, err)
 
 	nbOut := OnlySinglePayloads(out)

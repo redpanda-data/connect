@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -29,7 +29,7 @@ func (p *fnProcessor) Close(ctx context.Context) error {
 
 func TestProcessorAirGapShutdown(t *testing.T) {
 	rp := &fnProcessor{}
-	agrp := newAirGapProcessor("foo", rp, metrics.Noop())
+	agrp := newAirGapProcessor("foo", rp, mock.NewManager())
 
 	err := agrp.WaitForClose(time.Millisecond * 5)
 	assert.EqualError(t, err, "action timed out")
@@ -50,7 +50,7 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 			m.SetBytes([]byte("changed"))
 			return MessageBatch{m}, nil
 		},
-	}, metrics.Noop())
+	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
@@ -67,7 +67,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 			_, err := m.AsStructured()
 			return nil, err
 		},
-	}, metrics.Noop())
+	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
 	msgs, res := agrp.ProcessMessage(msg)
@@ -92,7 +92,7 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 			third.SetBytes([]byte("changed 3"))
 			return MessageBatch{m, second, third}, nil
 		},
-	}, metrics.Noop())
+	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
@@ -123,7 +123,7 @@ func (p *fnBatchProcessor) Close(ctx context.Context) error {
 
 func TestBatchProcessorAirGapShutdown(t *testing.T) {
 	rp := &fnBatchProcessor{}
-	agrp := newAirGapBatchProcessor("foo", rp, metrics.Noop())
+	agrp := newAirGapBatchProcessor("foo", rp, mock.NewManager())
 
 	err := agrp.WaitForClose(time.Millisecond * 5)
 	assert.EqualError(t, err, "action timed out")
@@ -144,7 +144,7 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 			msgs[0].SetBytes([]byte("changed"))
 			return []MessageBatch{{msgs[0]}}, nil
 		},
-	}, metrics.Noop())
+	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)
@@ -161,7 +161,7 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 			_, err := msgs[0].AsStructured()
 			return nil, err
 		},
-	}, metrics.Noop())
+	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
 	msgs, res := agrp.ProcessMessage(msg)
@@ -186,7 +186,7 @@ func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 			third.SetBytes([]byte("changed 3"))
 			return []MessageBatch{{msgs[0], second}, {third}}, nil
 		},
-	}, metrics.Noop())
+	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
 	msgs, res := agrp.ProcessMessage(msg)

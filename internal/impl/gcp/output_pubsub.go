@@ -73,7 +73,7 @@ func newGCPPubSubOutput(conf output.Config, mgr bundle.NewManagement, log log.Mo
 	if err != nil {
 		return nil, err
 	}
-	w, err := output.NewAsyncWriter("gcp_pubsub", conf.GCPPubSub.MaxInFlight, a, log, stats)
+	w, err := output.NewAsyncWriter("gcp_pubsub", conf.GCPPubSub.MaxInFlight, a, mgr)
 	if err != nil {
 		return nil, err
 	}

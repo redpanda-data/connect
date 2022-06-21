@@ -26,7 +26,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		w, err := output.NewAsyncWriter("file", 1, f, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("file", 1, f, nm)
 		if err != nil {
 			return nil, err
 		}

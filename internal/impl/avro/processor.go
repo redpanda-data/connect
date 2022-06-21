@@ -22,7 +22,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2ToV1Processor("avro", p, mgr.Metrics()), nil
+		return processor.NewV2ToV1Processor("avro", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "avro",
 		Categories: []string{

@@ -9,8 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -23,7 +22,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	tChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	b := NewStream("meow", newMemoryBuffer(int(total)), log.Noop(), metrics.Noop())
+	b := NewStream("meow", newMemoryBuffer(int(total)), component.NoopObservability())
 	require.NoError(t, b.Consume(tChan))
 
 	var i uint8
@@ -156,7 +155,7 @@ func TestStreamBufferClosing(t *testing.T) {
 	tChan := make(chan message.Transaction)
 	resChan := make(chan error)
 
-	b := NewStream("meow", newMemoryBuffer(int(total)), log.Noop(), metrics.Noop())
+	b := NewStream("meow", newMemoryBuffer(int(total)), component.NoopObservability())
 	require.NoError(t, b.Consume(tChan))
 
 	var i uint8
@@ -247,7 +246,7 @@ func TestStreamReadErrors(t *testing.T) {
 	errBuf.readErrs <- errors.New("first error")
 	errBuf.readErrs <- errors.New("second error")
 
-	b := NewStream("meow", errBuf, log.Noop(), metrics.Noop())
+	b := NewStream("meow", errBuf, component.NoopObservability())
 	require.NoError(t, b.Consume(tChan))
 
 	var tran message.Transaction

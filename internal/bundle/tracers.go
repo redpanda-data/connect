@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -23,7 +25,7 @@ func (e *Environment) TracersAdd(constructor TracerConstructor, spec docs.Compon
 }
 
 // TracersInit attempts to initialise a tracers exporter from a config.
-func (e *Environment) TracersInit(conf tracer.Config, nm NewManagement) (tracer.Type, error) {
+func (e *Environment) TracersInit(conf tracer.Config, nm NewManagement) (trace.TracerProvider, error) {
 	return e.tracers.Init(conf, nm)
 }
 
@@ -35,7 +37,7 @@ func (e *Environment) TracersDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // TracerConstructor constructs an tracer component.
-type TracerConstructor func(tracer.Config, NewManagement) (tracer.Type, error)
+type TracerConstructor func(tracer.Config, NewManagement) (trace.TracerProvider, error)
 
 type tracerSpec struct {
 	constructor TracerConstructor
@@ -66,7 +68,7 @@ func (s *TracerSet) Add(constructor TracerConstructor, spec docs.ComponentSpec) 
 }
 
 // Init attempts to initialise an tracer from a config.
-func (s *TracerSet) Init(conf tracer.Config, nm NewManagement) (tracer.Type, error) {
+func (s *TracerSet) Init(conf tracer.Config, nm NewManagement) (trace.TracerProvider, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidType("tracer", conf.Type)

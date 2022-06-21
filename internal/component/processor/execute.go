@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
@@ -112,12 +114,13 @@ func ExecuteCatchAll(procs []V1, msgs ...*message.Batch) ([]*message.Batch, erro
 // along with a tracing span for that part. If an error is returned the part is
 // flagged as failed and the span has the error logged.
 func IteratePartsWithSpanV2(
+	tracer trace.TracerProvider,
 	operationName string, parts []int, msg *message.Batch,
 	iter func(int, *tracing.Span, *message.Part) error,
 ) {
 	exec := func(i int) {
 		part := msg.Get(i)
-		span := tracing.CreateChildSpan(operationName, part)
+		span := tracing.CreateChildSpan(tracer, operationName, part)
 
 		if err := iter(i, span, part); err != nil {
 			part.ErrorSet(err)

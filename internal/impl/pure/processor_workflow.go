@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -268,7 +269,8 @@ processor_resources:
 // payload mapped from the original, and after processing attempts to overlay
 // the results back onto the original payloads according to more mappings.
 type Workflow struct {
-	log log.Modular
+	log    log.Modular
+	tracer trace.TracerProvider
 
 	children  *workflowBranchMap
 	allStages map[string]struct{}
@@ -287,7 +289,9 @@ type Workflow struct {
 func NewWorkflow(conf processor.WorkflowConfig, mgr bundle.NewManagement) (*Workflow, error) {
 	stats := mgr.Metrics()
 	w := &Workflow{
-		log:       mgr.Logger(),
+		log:    mgr.Logger(),
+		tracer: mgr.Tracer(),
+
 		metaPath:  nil,
 		allStages: map[string]struct{}{},
 
@@ -477,7 +481,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 		return nil
 	})
 
-	propMsg, _ := tracing.WithChildSpans("workflow", payload)
+	propMsg, _ := tracing.WithChildSpans(w.tracer, "workflow", payload)
 
 	records := make([]*resultTracker, payload.Len())
 	for i := range records {
@@ -492,7 +496,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 		wg.Add(len(layer))
 		for i, eid := range layer {
 			go func(id string, index int) {
-				branchMsg, branchSpans := tracing.WithChildSpans(id, propMsg.Copy())
+				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, id, propMsg.Copy())
 
 				branchParts := make([]*message.Part, branchMsg.Len())
 				_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {

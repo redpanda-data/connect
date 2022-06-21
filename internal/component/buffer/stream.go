@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -51,6 +53,7 @@ type ReaderWriter interface {
 type Stream struct {
 	stats   metrics.Type
 	log     log.Modular
+	tracer  trace.TracerProvider
 	typeStr string
 
 	buffer ReaderWriter
@@ -65,11 +68,12 @@ type Stream struct {
 }
 
 // NewStream creates a new Producer/Consumer around a buffer.
-func NewStream(typeStr string, buffer ReaderWriter, log log.Modular, stats metrics.Type) Streamed {
+func NewStream(typeStr string, buffer ReaderWriter, mgr component.Observability) Streamed {
 	m := Stream{
 		typeStr:     typeStr,
-		stats:       stats,
-		log:         log,
+		stats:       mgr.Metrics(),
+		log:         mgr.Logger(),
+		tracer:      mgr.Tracer(),
 		buffer:      buffer,
 		shutSig:     shutdown.NewSignaller(),
 		messagesOut: make(chan message.Transaction),
@@ -124,7 +128,7 @@ func (m *Stream) inputLoop() {
 		}
 
 		batchLen := tr.Payload.Len()
-		err := m.buffer.Write(closeAtLeisureCtx, tracing.WithSiblingSpans(m.typeStr, tr.Payload), ackFunc)
+		err := m.buffer.Write(closeAtLeisureCtx, tracing.WithSiblingSpans(m.tracer, m.typeStr, tr.Payload), ackFunc)
 		if err == nil {
 			mReceivedCount.Incr(int64(batchLen))
 			mReceivedBatchCount.Incr(1)
@@ -170,7 +174,7 @@ func (m *Stream) outputLoop() {
 		}
 
 		// It's possible that the buffer wiped our previous root span.
-		tracing.InitSpans(m.typeStr, msg)
+		tracing.InitSpans(m.tracer, m.typeStr, msg)
 
 		batchLen := msg.Len()
 

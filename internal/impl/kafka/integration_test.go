@@ -97,6 +97,7 @@ output:
     seed_brokers: [ localhost:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
+    timeout: "5s"
     metadata:
       include_patterns: [ .* ]
     batching:
@@ -108,6 +109,7 @@ input:
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
     checkpoint_limit: 100
+    commit_period: "1s"
 `
 
 	suite := integration.StreamTests(

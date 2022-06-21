@@ -9,6 +9,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
 	ksasl "github.com/benthosdev/benthos/v4/internal/impl/kafka/sasl"
 	"github.com/benthosdev/benthos/v4/public/service"
 
@@ -18,38 +19,51 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
 
-var saslField = service.NewObjectListField("sasl",
-	service.NewStringAnnotatedEnumField("mechanism", map[string]string{
-		"PLAIN":         "Plain text authentication.",
-		"OAUTHBEARER":   "OAuth Bearer based authentication.",
-		"SCRAM-SHA-256": "SCRAM based authentication as specified in RFC5802.",
-		"SCRAM-SHA-512": "SCRAM based authentication as specified in RFC5802.",
-	}).
-		Description("The SASL mechanism to use."),
-	service.NewStringField("username").
-		Description("A username to provide for PLAIN or SCRAM-* authentication.").
-		Default(""),
-	service.NewStringField("password").
-		Description("A password to provide for PLAIN or SCRAM-* authentication.").
-		Default(""),
-	service.NewStringField("token").
-		Description("The token to use for a single session's OAUTHBEARER authentication.").
-		Default(""),
-	service.NewStringMapField("extensions").
-		Description("Key/value pairs to add to OAUTHBEARER authentication requests.").
-		Optional(),
-).
-	Description("Specify one or more methods of SASL authentication. SASL is tried in order; if the broker supports the first mechanism, all connections will use that mechanism. If the first mechanism fails, the client will pick the first supported mechanism. If the broker does not support any client mechanisms, connections will fail.").
-	Advanced().Optional().
-	Example(
-		[]interface{}{
-			map[string]interface{}{
-				"mechanism": "SCRAM-SHA-512",
-				"username":  "foo",
-				"password":  "bar",
+func notImportedAWSFn(c *service.ParsedConfig) (sasl.Mechanism, error) {
+	return nil, errors.New("unable to configure AWS SASL as this binary does not import components/aws")
+}
+
+// AWSSASLFromConfigFn is populated with the child `aws` package when imported.
+var AWSSASLFromConfigFn func(c *service.ParsedConfig) (sasl.Mechanism, error) = notImportedAWSFn
+
+func saslField() *service.ConfigField {
+	return service.NewObjectListField("sasl",
+		service.NewStringAnnotatedEnumField("mechanism", map[string]string{
+			"PLAIN":         "Plain text authentication.",
+			"OAUTHBEARER":   "OAuth Bearer based authentication.",
+			"SCRAM-SHA-256": "SCRAM based authentication as specified in RFC5802.",
+			"SCRAM-SHA-512": "SCRAM based authentication as specified in RFC5802.",
+			"AWS_MSK_IAM":   "AWS IAM based authentication as specified by the 'aws-msk-iam-auth' java library.",
+		}).
+			Description("The SASL mechanism to use."),
+		service.NewStringField("username").
+			Description("A username to provide for PLAIN or SCRAM-* authentication.").
+			Default(""),
+		service.NewStringField("password").
+			Description("A password to provide for PLAIN or SCRAM-* authentication.").
+			Default(""),
+		service.NewStringField("token").
+			Description("The token to use for a single session's OAUTHBEARER authentication.").
+			Default(""),
+		service.NewStringMapField("extensions").
+			Description("Key/value pairs to add to OAUTHBEARER authentication requests.").
+			Optional(),
+		service.NewObjectField("aws", config.SessionFields()...).
+			Description("Contains AWS specific fields for when the `mechanism` is set to `AWS_MSK_IAM`.").
+			Optional(),
+	).
+		Description("Specify one or more methods of SASL authentication. SASL is tried in order; if the broker supports the first mechanism, all connections will use that mechanism. If the first mechanism fails, the client will pick the first supported mechanism. If the broker does not support any client mechanisms, connections will fail.").
+		Advanced().Optional().
+		Example(
+			[]interface{}{
+				map[string]interface{}{
+					"mechanism": "SCRAM-SHA-512",
+					"username":  "foo",
+					"password":  "bar",
+				},
 			},
-		},
-	)
+		)
+}
 
 func saslMechanismsFromConfig(c *service.ParsedConfig) ([]sasl.Mechanism, error) {
 	if !c.Contains("sasl") {
@@ -74,6 +88,8 @@ func saslMechanismsFromConfig(c *service.ParsedConfig) ([]sasl.Mechanism, error)
 				mechanisms[i], err = scram256SaslFromConfig(mConf)
 			case "SCRAM-SHA-512":
 				mechanisms[i], err = scram512SaslFromConfig(mConf)
+			case "AWS_MSK_IAM":
+				mechanisms[i], err = AWSSASLFromConfigFn(mConf)
 			default:
 				err = fmt.Errorf("unknown mechanism: %v", mechStr)
 			}

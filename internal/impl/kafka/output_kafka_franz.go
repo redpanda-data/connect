@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -40,6 +41,7 @@ This output is new and experimental, and the existing ` + "`kafka`" + ` input is
 		Field(service.NewInterpolatedStringField("key").
 			Description("An optional key to populate for each message.").Optional()).
 		Field(service.NewStringAnnotatedEnumField("partitioner", map[string]string{
+			"murmur2_hash": "Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on.",
 			"round_robin":  "Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions.",
 			"least_backup": "Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch.",
 		}).
@@ -51,6 +53,10 @@ This output is new and experimental, and the existing ` + "`kafka`" + ` input is
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of batches to be sending in parallel at any given time.").
 			Default(10)).
+		Field(service.NewDurationField("timeout").
+			Description("The maximum period of time to wait for message sends before abandoning the request and retrying").
+			Default("10s").
+			Advanced()).
 		Field(service.NewBatchPolicyField("batching")).
 		Field(service.NewStringField("max_message_bytes").
 			Description("The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.").
@@ -63,11 +69,7 @@ This output is new and experimental, and the existing ` + "`kafka`" + ` input is
 			Optional().
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField).
-		Field(service.NewBoolField("debug_to_trace_logs").
-			Description("Whether to emit kafka-franz debug level logs only when the log level is set to TRACE").
-			Default(false).
-			Advanced())
+		Field(saslField())
 }
 
 func init() {
@@ -104,9 +106,9 @@ type franzKafkaWriter struct {
 	saslConfs        []sasl.Mechanism
 	metaFilter       *service.MetadataFilter
 	partitioner      kgo.Partitioner
+	timeout          time.Duration
 	produceMaxBytes  int32
 	compressionPrefs []kgo.CompressionCodec
-	debugToTraceLogs bool
 
 	client *kgo.Client
 
@@ -137,6 +139,10 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		if f.key, err = conf.FieldInterpolatedString("key"); err != nil {
 			return nil, err
 		}
+	}
+
+	if f.timeout, err = conf.FieldDuration("timeout"); err != nil {
+		return nil, err
 	}
 
 	maxBytesStr, err := conf.FieldString("max_message_bytes")
@@ -183,6 +189,8 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 			return nil, err
 		}
 		switch partStr {
+		case "murmur2_hash":
+			f.partitioner = kgo.StickyKeyPartitioner(nil)
 		case "round_robin":
 			f.partitioner = kgo.RoundRobinPartitioner()
 		case "least_backup":
@@ -209,10 +217,6 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		return nil, err
 	}
 
-	if f.debugToTraceLogs, err = conf.FieldBool("debug_to_trace_logs"); err != nil {
-		return nil, err
-	}
-
 	return &f, nil
 }
 
@@ -228,7 +232,8 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 		kgo.SASL(f.saslConfs...),
 		kgo.AllowAutoTopicCreation(), // TODO: Configure this
 		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
-		kgo.WithLogger(&kgoLogger{l: f.log, debugToTrace: f.debugToTraceLogs}),
+		kgo.ProduceRequestTimeout(f.timeout),
+		kgo.WithLogger(&kgoLogger{f.log}),
 	}
 	if f.tlsConf != nil {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))

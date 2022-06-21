@@ -18,7 +18,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("catch", p, mgr.Metrics()), nil
+		return processor.NewV2BatchedToV1Processor("catch", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "catch",
 		Categories: []string{

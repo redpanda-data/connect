@@ -10,9 +10,9 @@ import (
 
 	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
@@ -24,9 +24,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newRedisStreamsOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newRedisStreamsOutput), docs.ComponentSpec{
 		Name: "redis_streams",
 		Summary: `
 Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't
@@ -41,7 +39,7 @@ key to be set to the body of the message. All metadata fields of the message
 will also be set as key/value pairs, if there is a key collision between
 a metadata item and the body then the body takes precedence.`),
 		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
-			docs.FieldString("stream", "The stream to add messages to."),
+			docs.FieldString("stream", "The stream to add messages to.").IsInterpolated(),
 			docs.FieldString("body_key", "A key to set the raw body of the message to."),
 			docs.FieldInt("max_length", "When greater than zero enforces a rough cap on the length of the target stream."),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
@@ -57,36 +55,39 @@ a metadata item and the body then the body takes precedence.`),
 	}
 }
 
-func newRedisStreamsOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	w, err := newRedisStreamsWriter(conf.RedisStreams, log)
+func newRedisStreamsOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	w, err := newRedisStreamsWriter(conf.RedisStreams, mgr)
 	if err != nil {
 		return nil, err
 	}
-	a, err := output.NewAsyncWriter("redis_streams", conf.RedisStreams.MaxInFlight, w, log, stats)
+	a, err := output.NewAsyncWriter("redis_streams", conf.RedisStreams.MaxInFlight, w, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return batcher.NewFromConfig(conf.RedisStreams.Batching, a, mgr, log, stats)
+	return batcher.NewFromConfig(conf.RedisStreams.Batching, a, mgr)
 }
 
 type redisStreamsWriter struct {
 	log log.Modular
 
 	conf       output.RedisStreamsConfig
+	stream     *field.Expression
 	metaFilter *metadata.ExcludeFilter
 
 	client  redis.UniversalClient
 	connMut sync.RWMutex
 }
 
-func newRedisStreamsWriter(conf output.RedisStreamsConfig, log log.Modular) (*redisStreamsWriter, error) {
-
+func newRedisStreamsWriter(conf output.RedisStreamsConfig, mgr bundle.NewManagement) (*redisStreamsWriter, error) {
 	r := &redisStreamsWriter{
-		log:  log,
+		log:  mgr.Logger(),
 		conf: conf,
 	}
 
 	var err error
+	if r.stream, err = mgr.BloblEnvironment().NewField(conf.Stream); err != nil {
+		return nil, fmt.Errorf("failed to parse expression: %v", err)
+	}
 	if r.metaFilter, err = conf.Metadata.Filter(); err != nil {
 		return nil, fmt.Errorf("failed to construct metadata filter: %w", err)
 	}
@@ -137,7 +138,7 @@ func (r *redisStreamsWriter) WriteWithContext(ctx context.Context, msg *message.
 	if msg.Len() == 1 {
 		if err := client.XAdd(&redis.XAddArgs{
 			ID:           "*",
-			Stream:       r.conf.Stream,
+			Stream:       r.stream.String(0, msg),
 			MaxLenApprox: r.conf.MaxLenApprox,
 			Values:       partToMap(msg.Get(0)),
 		}).Err(); err != nil {
@@ -152,7 +153,7 @@ func (r *redisStreamsWriter) WriteWithContext(ctx context.Context, msg *message.
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		_ = pipe.XAdd(&redis.XAddArgs{
 			ID:           "*",
-			Stream:       r.conf.Stream,
+			Stream:       r.stream.String(i, msg),
 			MaxLenApprox: r.conf.MaxLenApprox,
 			Values:       partToMap(p),
 		})

@@ -17,9 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
@@ -53,7 +51,7 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 	conf.HTTPClient.BatchAsMultipart = true
 	conf.HTTPClient.URL = ts.URL + "/testpost"
 
-	h, err := newHTTPClientOutput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientOutput(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	tChan := make(chan message.Transaction)
@@ -109,7 +107,7 @@ func TestHTTPClientMultipartDisabled(t *testing.T) {
 	conf.HTTPClient.BatchAsMultipart = false
 	conf.HTTPClient.MaxInFlight = 1
 
-	h, err := newHTTPClientOutput(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientOutput(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	tChan := make(chan message.Transaction)
@@ -163,7 +161,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	conf.Retry = "1ms"
 	conf.NumRetries = 3
 
-	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +202,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	conf := output.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +256,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 	conf.URL = ts.URL + "/testpost"
 	conf.PropagateResponse = true
 
-	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +304,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 	conf.PropagateResponse = true
 	conf.ExtractMetadata.IncludePatterns = []string{".*"}
 
-	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +380,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 	conf := output.NewHTTPClientConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +471,7 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 			ContentType:        "text/plain",
 			Body:               "PART-B"},
 	}
-	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -556,7 +554,7 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 			ContentType:        "text/plain",
 			Body:               "PART-B"},
 	}
-	h, err := newHTTPClientWriter(conf, mock.NewManager(), log.Noop(), metrics.Noop())
+	h, err := newHTTPClientWriter(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

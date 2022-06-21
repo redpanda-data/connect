@@ -6,9 +6,9 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
@@ -24,8 +24,7 @@ var ExtractTracingSpanMappingDocs = docs.FieldBloblang(
 // spans from the consumed message using a Bloblang mapping.
 type Reader struct {
 	inputName string
-
-	log log.Modular
+	mgr       component.Observability
 
 	mapping *mapping.Executor
 	rdr     input.Async
@@ -38,7 +37,7 @@ func NewReader(inputName, mapping string, rdr input.Async, mgr bundle.NewManagem
 	if err != nil {
 		return nil, err
 	}
-	return &Reader{inputName, mgr.Logger(), exe, rdr}, nil
+	return &Reader{inputName, mgr, exe, rdr}, nil
 }
 
 // ConnectWithContext attempts to establish a connection to the source, if
@@ -60,24 +59,24 @@ func (s *Reader) ReadWithContext(ctx context.Context) (*message.Batch, input.Asy
 
 	spanPart, err := s.mapping.MapPart(0, m)
 	if err != nil {
-		s.log.Errorf("Mapping failed for tracing span: %v", err)
+		s.mgr.Logger().Errorf("Mapping failed for tracing span: %v", err)
 		return m, afn, nil
 	}
 
 	structured, err := spanPart.JSON()
 	if err != nil {
-		s.log.Errorf("Mapping failed for tracing span: %v", err)
+		s.mgr.Logger().Errorf("Mapping failed for tracing span: %v", err)
 		return m, afn, nil
 	}
 
 	spanMap, ok := structured.(map[string]interface{})
 	if !ok {
-		s.log.Errorf("Mapping failed for tracing span, expected an object, got: %T", structured)
+		s.mgr.Logger().Errorf("Mapping failed for tracing span, expected an object, got: %T", structured)
 		return m, afn, nil
 	}
 
-	if err := tracing.InitSpansFromParentTextMap("input_"+s.inputName, spanMap, m); err != nil {
-		s.log.Errorf("Extraction of parent tracing span failed: %v", err)
+	if err := tracing.InitSpansFromParentTextMap(s.mgr.Tracer(), "input_"+s.inputName, spanMap, m); err != nil {
+		s.mgr.Logger().Errorf("Extraction of parent tracing span failed: %v", err)
 	}
 	return m, afn, nil
 }

@@ -7,7 +7,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
@@ -20,9 +19,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newHTTPClientOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newHTTPClientOutput), docs.ComponentSpec{
 		Name:    "http_client",
 		Summary: `Sends messages to an HTTP server.`,
 		Description: output.Description(true, true, `
@@ -57,19 +54,19 @@ It's possible to propagate the response from each HTTP request back to the input
 	}
 }
 
-func newHTTPClientOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	h, err := newHTTPClientWriter(conf.HTTPClient, mgr, log, stats)
+func newHTTPClientOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	h, err := newHTTPClientWriter(conf.HTTPClient, mgr)
 	if err != nil {
 		return nil, err
 	}
-	w, err := output.NewAsyncWriter("http_client", conf.HTTPClient.MaxInFlight, h, log, stats)
+	w, err := output.NewAsyncWriter("http_client", conf.HTTPClient.MaxInFlight, h, mgr)
 	if err != nil {
 		return w, err
 	}
 	if !conf.HTTPClient.BatchAsMultipart {
 		w = output.OnlySinglePayloads(w)
 	}
-	return batcher.NewFromConfig(conf.HTTPClient.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.HTTPClient.Batching, w, mgr)
 }
 
 type httpClientWriter struct {
@@ -81,9 +78,9 @@ type httpClientWriter struct {
 	closeChan chan struct{}
 }
 
-func newHTTPClientWriter(conf output.HTTPClientConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (*httpClientWriter, error) {
+func newHTTPClientWriter(conf output.HTTPClientConfig, mgr bundle.NewManagement) (*httpClientWriter, error) {
 	h := httpClientWriter{
-		log:       log,
+		log:       mgr.Logger(),
 		conf:      conf,
 		closeChan: make(chan struct{}),
 	}
@@ -91,7 +88,7 @@ func newHTTPClientWriter(conf output.HTTPClientConfig, mgr bundle.NewManagement,
 	opts := []func(*http.Client){
 		http.OptSetLogger(h.log),
 		http.OptSetManager(mgr),
-		http.OptSetStats(stats),
+		http.OptSetStats(mgr.Metrics()),
 	}
 
 	if len(conf.Multipart) > 0 {

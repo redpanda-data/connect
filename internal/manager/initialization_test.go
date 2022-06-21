@@ -13,12 +13,10 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
 func TestInitialization(t *testing.T) {
@@ -64,7 +62,7 @@ func TestInitialization(t *testing.T) {
 		Name: "testratelimit",
 	}))
 
-	mgr, err := New(NewResourceConfig(), nil, log.Noop(), metrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
+	mgr, err := New(NewResourceConfig(), OptSetEnvironment(env))
 	require.NoError(t, err)
 
 	bConf := buffer.NewConfig()
@@ -157,7 +155,7 @@ func TestInitializationOrdering(t *testing.T) {
 	resConf.ResourceProcessors = append(resConf.ResourceProcessors, procConf)
 	resConf.ResourceRateLimits = append(resConf.ResourceRateLimits, rlConf)
 
-	_, err := New(resConf, nil, log.Noop(), metrics.NewNamespaced(metrics.Noop()), OptSetEnvironment(env))
+	_, err := New(resConf, OptSetEnvironment(env))
 	require.NoError(t, err)
 
 	wg.Wait()

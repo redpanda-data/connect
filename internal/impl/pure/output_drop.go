@@ -14,7 +14,7 @@ import (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return output.NewAsyncWriter("drop", 1, newDropWriter(c.Drop, nm.Logger()), nm.Logger(), nm.Metrics())
+		return output.NewAsyncWriter("drop", 1, newDropWriter(c.Drop, nm.Logger()), nm)
 	}), docs.ComponentSpec{
 		Name:       "drop",
 		Summary:    `Drops all messages.`,

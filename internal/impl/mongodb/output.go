@@ -32,7 +32,7 @@ import (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return NewOutput(c.MongoDB, nm, nm.Logger(), nm.Metrics())
+		return NewOutput(c.MongoDB, nm)
 	}), docs.ComponentSpec{
 		Name:        "mongodb",
 		Type:        docs.TypeOutput,
@@ -89,16 +89,16 @@ func init() {
 //------------------------------------------------------------------------------
 
 // NewOutput creates a new MongoDB output type.
-func NewOutput(conf output.MongoDBConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	m, err := NewWriter(mgr, conf, log, stats)
+func NewOutput(conf output.MongoDBConfig, mgr bundle.NewManagement) (output.Streamed, error) {
+	m, err := NewWriter(mgr, conf, mgr.Logger(), mgr.Metrics())
 	if err != nil {
 		return nil, err
 	}
 	var w output.Streamed
-	if w, err = output.NewAsyncWriter("mongodb", conf.MaxInFlight, m, log, stats); err != nil {
+	if w, err = output.NewAsyncWriter("mongodb", conf.MaxInFlight, m, mgr); err != nil {
 		return w, err
 	}
-	return batcher.NewFromConfig(conf.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.Batching, w, mgr)
 }
 
 // NewWriter creates a new MongoDB writer.Type.

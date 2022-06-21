@@ -280,6 +280,7 @@ Default: `""`
 ### `stream`
 
 The stream to add messages to.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  

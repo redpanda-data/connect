@@ -33,15 +33,15 @@ import (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		dyn, err := newDynamoDBWriter(c.AWSDynamoDB, nm, nm.Logger())
+		dyn, err := newDynamoDBWriter(c.AWSDynamoDB, nm)
 		if err != nil {
 			return nil, err
 		}
-		w, err := output.NewAsyncWriter("aws_dynamodb", c.AWSDynamoDB.MaxInFlight, dyn, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("aws_dynamodb", c.AWSDynamoDB.MaxInFlight, dyn, nm)
 		if err != nil {
 			return nil, err
 		}
-		return batcher.NewFromConfig(c.AWSDynamoDB.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(c.AWSDynamoDB.Batching, w, nm)
 	}), docs.ComponentSpec{
 		Name:    "aws_dynamodb",
 		Version: "3.36.0",
@@ -139,14 +139,10 @@ type dynamoDBWriter struct {
 	jsonMapColumns map[string]string
 }
 
-func newDynamoDBWriter(
-	conf output.DynamoDBConfig,
-	mgr bundle.NewManagement,
-	log log.Modular,
-) (*dynamoDBWriter, error) {
+func newDynamoDBWriter(conf output.DynamoDBConfig, mgr bundle.NewManagement) (*dynamoDBWriter, error) {
 	db := &dynamoDBWriter{
 		conf:           conf,
-		log:            log,
+		log:            mgr.Logger(),
 		table:          aws.String(conf.Table),
 		strColumns:     map[string]*field.Expression{},
 		jsonMapColumns: map[string]string{},

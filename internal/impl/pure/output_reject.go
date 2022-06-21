@@ -20,7 +20,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return output.NewAsyncWriter("reject", 1, f, nm.Logger(), nm.Metrics())
+		return output.NewAsyncWriter("reject", 1, f, nm)
 	}), docs.ComponentSpec{
 		Name:   "reject",
 		Status: docs.StatusStable,

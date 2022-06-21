@@ -54,6 +54,8 @@ input:
     regexp_topics: false
     consumer_group: ""
     checkpoint_limit: 1024
+    commit_period: 5s
+    start_from_oldest: true
     tls:
       enabled: false
       skip_cert_verify: false
@@ -62,7 +64,6 @@ input:
       root_cas_file: ""
       client_certs: []
     sasl: []
-    debug_to_trace_logs: false
 ```
 
 </TabItem>
@@ -142,6 +143,22 @@ Determines how many messages of the same partition can be processed in parallel 
 
 Type: `int`  
 Default: `1024`  
+
+### `commit_period`
+
+The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.
+
+
+Type: `string`  
+Default: `"5s"`  
+
+### `start_from_oldest`
+
+If an offset is not found for a topic partition, determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `tls`
 
@@ -282,6 +299,7 @@ Type: `string`
 
 | Option | Summary |
 |---|---|
+| `AWS_MSK_IAM` | AWS IAM based authentication as specified by the 'aws-msk-iam-auth' java library. |
 | `OAUTHBEARER` | OAuth Bearer based authentication. |
 | `PLAIN` | Plain text authentication. |
 | `SCRAM-SHA-256` | SCRAM based authentication as specified in RFC5802. |
@@ -319,12 +337,91 @@ Key/value pairs to add to OAUTHBEARER authentication requests.
 
 Type: `object`  
 
-### `debug_to_trace_logs`
+### `sasl[].aws`
 
-Whether to emit kafka-franz debug level logs only when the log level is set to TRACE
+Contains AWS specific fields for when the `mechanism` is set to `AWS_MSK_IAM`.
+
+
+Type: `object`  
+
+### `sasl[].aws.region`
+
+The AWS region to target.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.endpoint`
+
+Allows you to specify a custom endpoint for the AWS API.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials`
+
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws).
+
+
+Type: `object`  
+
+### `sasl[].aws.credentials.profile`
+
+A profile from `~/.aws/credentials` to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials.id`
+
+The ID of credentials to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials.secret`
+
+The secret for the credentials being used.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials.token`
+
+The token for the credentials being used, required when using short term credentials.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials.from_ec2_role`
+
+Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).
 
 
 Type: `bool`  
 Default: `false`  
+Requires version 4.2.0 or newer  
+
+### `sasl[].aws.credentials.role`
+
+A role ARN to assume.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials.role_external_id`
+
+An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
 
 

@@ -31,15 +31,15 @@ import (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		c, err := newCassandraWriter(conf.Cassandra, nm, nm.Logger(), nm.Metrics())
+		c, err := newCassandraWriter(conf.Cassandra, nm)
 		if err != nil {
 			return nil, err
 		}
-		w, err := output.NewAsyncWriter("cassandra", conf.Cassandra.MaxInFlight, c, nm.Logger(), nm.Metrics())
+		w, err := output.NewAsyncWriter("cassandra", conf.Cassandra.MaxInFlight, c, nm)
 		if err != nil {
 			return nil, err
 		}
-		return batcher.NewFromConfig(conf.Cassandra.Batching, w, nm, nm.Logger(), nm.Metrics())
+		return batcher.NewFromConfig(conf.Cassandra.Batching, w, nm)
 	}), docs.ComponentSpec{
 		Name:   "cassandra",
 		Status: docs.StatusBeta,
@@ -148,10 +148,10 @@ type cassandraWriter struct {
 	argsMapping *mapping.Executor
 }
 
-func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (*cassandraWriter, error) {
+func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (*cassandraWriter, error) {
 	c := cassandraWriter{
-		log:   log,
-		stats: stats,
+		log:   mgr.Logger(),
+		stats: mgr.Metrics(),
 		conf:  conf,
 	}
 

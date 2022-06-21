@@ -27,7 +27,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
@@ -600,16 +599,6 @@ func (s *StreamBuilder) SetMetricsYAML(conf string) error {
 
 // SetTracerYAML parses a tracer YAML configuration and adds it to the builder
 // such that all stream components emit tracing spans through it.
-//
-// WARNING: Tracers are currently registered globally in the process, therefore
-// running multiple streams within a single process each with a tracer
-// configured will lead to unexpected behaviour. Only specify a tracer
-// configuration if your process will run a single stream.
-//
-// Eventually we intend to offer tracers specific to the stream but this is a
-// low priority task as we are assuming it's not needed. If you have a use case
-// please let us know by opening or commenting on an issue:
-// https://github.com/benthosdev/benthos/issues
 func (s *StreamBuilder) SetTracerYAML(conf string) error {
 	nconf, err := getYAMLNode([]byte(conf))
 	if err != nil {
@@ -744,7 +733,8 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 	// manager to allow for a two-tier initialisation where we can defer
 	// resource constructors until after this metrics exporter is initialised.
 	tmpMgr, err := manager.New(
-		manager.NewResourceConfig(), mock.NewManager(), logger, metrics.Noop(),
+		manager.NewResourceConfig(),
+		manager.OptSetLogger(logger),
 		manager.OptSetEnvironment(env),
 		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
 	)
@@ -781,7 +771,11 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 	}
 
 	mgr, err := manager.New(
-		conf.ResourceConfig, apiMut, logger, stats,
+		conf.ResourceConfig,
+		manager.OptSetAPIReg(apiMut),
+		manager.OptSetLogger(logger),
+		manager.OptSetMetrics(stats),
+		manager.OptSetTracer(tracer),
 		manager.OptSetEnvironment(env),
 		manager.OptSetBloblangEnvironment(s.env.getBloblangParserEnv()),
 	)

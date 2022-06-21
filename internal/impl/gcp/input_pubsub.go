@@ -62,7 +62,7 @@ func newGCPPubSubInput(conf input.Config, mgr bundle.NewManagement, log log.Modu
 	if c, err = newGCPPubSubReader(conf.GCPPubSub, log, stats); err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("gcp_pubsub", true, c, log, stats)
+	return input.NewAsyncReader("gcp_pubsub", true, c, mgr)
 }
 
 type gcpPubSubReader struct {

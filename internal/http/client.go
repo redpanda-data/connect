@@ -315,6 +315,9 @@ func (h *Client) CreateRequest(sendMsg, refMsg *message.Batch) (req *http.Reques
 		body = buf
 	} else if sendMsg != nil && sendMsg.Len() == 1 {
 		if msgBytes := sendMsg.Get(0).Get(); len(msgBytes) > 0 {
+			if _, exists := h.headers["Content-Type"]; !exists {
+				overrideContentType = "application/octet-stream"
+			}
 			body = bytes.NewBuffer(msgBytes)
 		}
 	} else if sendMsg != nil && sendMsg.Len() > 1 {
@@ -492,7 +495,7 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Batch) (res *http.Response, err error) {
 	var spans []*tracing.Span
 	if sendMsg != nil {
-		spans = tracing.CreateChildSpans("http_request", sendMsg)
+		spans = tracing.CreateChildSpans(h.mgr.Tracer(), "http_request", sendMsg)
 		defer func() {
 			for _, s := range spans {
 				s.Finish()

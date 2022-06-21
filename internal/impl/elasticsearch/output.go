@@ -3,6 +3,7 @@ package elasticsearch
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/olivere/elastic/v7"
-	aws "github.com/olivere/elastic/v7/aws/v4"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
@@ -22,7 +22,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
-	baws "github.com/benthosdev/benthos/v4/internal/impl/aws"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -30,10 +29,18 @@ import (
 	itls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
+func notImportedAWSOptFn(conf output.ElasticsearchConfig) ([]elastic.ClientOptionFunc, error) {
+	if !conf.AWS.Enabled {
+		return nil, nil
+	}
+	return nil, errors.New("unable to configure AWS authentication as this binary does not import components/aws")
+}
+
+// AWSOptFn is populated with the child `aws` package when imported.
+var AWSOptFn func(conf output.ElasticsearchConfig) ([]elastic.ClientOptionFunc, error) = notImportedAWSOptFn
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-		return NewElasticsearch(conf, mgr, mgr.Logger(), mgr.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(NewElasticsearch), docs.ComponentSpec{
 		Name: "elasticsearch",
 		Summary: `
 Publishes messages into an Elasticsearch index. If the index does not exist then
@@ -81,18 +88,16 @@ false for connections to succeed.`),
 }
 
 // NewElasticsearch creates a new Elasticsearch output type.
-func NewElasticsearch(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	elasticWriter, err := NewElasticsearchV2(conf.Elasticsearch, mgr, log, stats)
+func NewElasticsearch(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	elasticWriter, err := NewElasticsearchV2(conf.Elasticsearch, mgr)
 	if err != nil {
 		return nil, err
 	}
-	w, err := output.NewAsyncWriter(
-		"elasticsearch", conf.Elasticsearch.MaxInFlight, elasticWriter, log, stats,
-	)
+	w, err := output.NewAsyncWriter("elasticsearch", conf.Elasticsearch.MaxInFlight, elasticWriter, mgr)
 	if err != nil {
 		return w, err
 	}
-	return batcher.NewFromConfig(conf.Elasticsearch.Batching, w, mgr, log, stats)
+	return batcher.NewFromConfig(conf.Elasticsearch.Batching, w, mgr)
 }
 
 // Elasticsearch is a writer type that writes messages into elasticsearch.
@@ -120,10 +125,10 @@ type Elasticsearch struct {
 }
 
 // NewElasticsearchV2 creates a new Elasticsearch writer type.
-func NewElasticsearchV2(conf output.ElasticsearchConfig, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (*Elasticsearch, error) {
+func NewElasticsearchV2(conf output.ElasticsearchConfig, mgr bundle.NewManagement) (*Elasticsearch, error) {
 	e := Elasticsearch{
-		log:         log,
-		stats:       stats,
+		log:         mgr.Logger(),
+		stats:       mgr.Metrics(),
 		conf:        conf,
 		sniff:       conf.Sniff,
 		healthcheck: conf.Healthcheck,
@@ -217,14 +222,11 @@ func (e *Elasticsearch) Connect() error {
 		}))
 	}
 
-	if e.conf.AWS.Enabled {
-		tsess, err := baws.GetSessionFromConf(e.conf.AWS.Config)
-		if err != nil {
-			return err
-		}
-		signingClient := aws.NewV4SigningClient(tsess.Config.Credentials, e.conf.AWS.Region)
-		opts = append(opts, elastic.SetHttpClient(signingClient))
+	awsOpts, err := AWSOptFn(e.conf)
+	if err != nil {
+		return err
 	}
+	opts = append(opts, awsOpts...)
 
 	if e.conf.GzipCompression {
 		opts = append(opts, elastic.SetGzip(true))

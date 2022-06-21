@@ -19,7 +19,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return processor.NewV2BatchedToV1Processor("group_by_value", p, mgr.Metrics()), nil
+		return processor.NewV2BatchedToV1Processor("group_by_value", p, mgr), nil
 	}, docs.ComponentSpec{
 		Name: "group_by_value",
 		Categories: []string{

@@ -13,7 +13,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
@@ -24,9 +23,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newRedisListOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newRedisListOutput), docs.ComponentSpec{
 		Name: "redis_list",
 		Summary: `
 Pushes messages onto the end of a Redis list (which is created if it doesn't
@@ -52,16 +49,16 @@ you to create a unique key for each message.`),
 	}
 }
 
-func newRedisListOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	w, err := newRedisListWriter(conf.RedisList, mgr, log)
+func newRedisListOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	w, err := newRedisListWriter(conf.RedisList, mgr)
 	if err != nil {
 		return nil, err
 	}
-	a, err := output.NewAsyncWriter("redis_list", conf.RedisList.MaxInFlight, w, log, stats)
+	a, err := output.NewAsyncWriter("redis_list", conf.RedisList.MaxInFlight, w, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return batcher.NewFromConfig(conf.RedisList.Batching, a, mgr, log, stats)
+	return batcher.NewFromConfig(conf.RedisList.Batching, a, mgr)
 }
 
 type redisListWriter struct {
@@ -75,9 +72,9 @@ type redisListWriter struct {
 	connMut sync.RWMutex
 }
 
-func newRedisListWriter(conf output.RedisListConfig, mgr bundle.NewManagement, log log.Modular) (*redisListWriter, error) {
+func newRedisListWriter(conf output.RedisListConfig, mgr bundle.NewManagement) (*redisListWriter, error) {
 	r := &redisListWriter{
-		log:  log,
+		log:  mgr.Logger(),
 		conf: conf,
 	}
 

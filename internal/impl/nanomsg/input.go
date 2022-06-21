@@ -18,7 +18,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -28,9 +27,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		return newNanomsgInput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllInputs.Add(processors.WrapConstructor(newNanomsgInput), docs.ComponentSpec{
 		Name:        "nanomsg",
 		Summary:     `Consumes messages via Nanomsg sockets (scalability protocols).`,
 		Description: `Currently only PULL and SUB sockets are supported.`,
@@ -50,12 +47,12 @@ func init() {
 	}
 }
 
-func newNanomsgInput(conf input.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (input.Streamed, error) {
-	s, err := newNanomsgReader(conf.Nanomsg, log)
+func newNanomsgInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
+	s, err := newNanomsgReader(conf.Nanomsg, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
-	return input.NewAsyncReader("nanomsg", true, input.NewAsyncPreserver(s), log, stats)
+	return input.NewAsyncReader("nanomsg", true, input.NewAsyncPreserver(s), mgr)
 }
 
 type nanomsgReader struct {

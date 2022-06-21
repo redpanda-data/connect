@@ -89,7 +89,7 @@ func newAzureBlobStorageOutput(conf output.Config, mgr bundle.NewManagement, log
 	if err != nil {
 		return nil, err
 	}
-	a, err := output.NewAsyncWriter("azure_blob_storage", conf.AzureBlobStorage.MaxInFlight, blobStorage, log, stats)
+	a, err := output.NewAsyncWriter("azure_blob_storage", conf.AzureBlobStorage.MaxInFlight, blobStorage, mgr)
 	if err != nil {
 		return nil, err
 	}

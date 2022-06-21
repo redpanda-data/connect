@@ -5,6 +5,7 @@ input:
   kafka:
     addresses: [ localhost:9092 ]
     topics: [ b_results ]
+    consumer_group: benthos-tracing-test
     client_id: c_client
     extract_tracing_map: 'root = meta()'
 

@@ -4,8 +4,12 @@ import (
 	"context"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/cache"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
@@ -69,6 +73,15 @@ func (r *Resources) Metrics() *Metrics {
 	return newReverseAirGapMetrics(r.mgr.Metrics())
 }
 
+// OtelTracer returns an open telemetry tracer provider that can be used to
+// create new tracers.
+//
+// Experimental: This type signature is experimental and therefore subject to
+// change outside of major version releases.
+func (r *Resources) OtelTracer() trace.TracerProvider {
+	return r.mgr.Tracer()
+}
+
 // AccessCache attempts to access a cache resource by name. This action can
 // block if CRUD operations are being actively performed on the resource.
 func (r *Resources) AccessCache(ctx context.Context, name string, fn func(c Cache)) error {
@@ -82,6 +95,35 @@ func (r *Resources) AccessCache(ctx context.Context, name string, fn func(c Cach
 // defensive against ordering.
 func (r *Resources) HasCache(name string) bool {
 	return r.mgr.ProbeCache(name)
+}
+
+// AccessInput attempts to access a input resource by name.
+func (r *Resources) AccessInput(ctx context.Context, name string, fn func(i *ResourceInput)) error {
+	return r.mgr.AccessInput(ctx, name, func(in input.Streamed) {
+		fn(newResourceInput(in))
+	})
+}
+
+// HasInput confirms whether an input with a given name has been registered as a
+// resource. This method is useful during component initialisation as it is
+// defensive against ordering.
+func (r *Resources) HasInput(name string) bool {
+	return r.mgr.ProbeInput(name)
+}
+
+// AccessOutput attempts to access an output resource by name. This action can
+// block if CRUD operations are being actively performed on the resource.
+func (r *Resources) AccessOutput(ctx context.Context, name string, fn func(o *ResourceOutput)) error {
+	return r.mgr.AccessOutput(ctx, name, func(o output.Sync) {
+		fn(newResourceOutput(o))
+	})
+}
+
+// HasOutput confirms whether an output with a given name has been registered as
+// a resource. This method is useful during component initialisation as it is
+// defensive against ordering.
+func (r *Resources) HasOutput(name string) bool {
+	return r.mgr.ProbeOutput(name)
 }
 
 // AccessRateLimit attempts to access a rate limit resource by name. This action

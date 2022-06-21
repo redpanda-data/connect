@@ -65,6 +65,7 @@ output:
       include_prefixes: []
       include_patterns: []
     max_in_flight: 10
+    timeout: 10s
     batching:
       count: 0
       byte_size: 0
@@ -81,7 +82,6 @@ output:
       root_cas_file: ""
       client_certs: []
     sasl: []
-    debug_to_trace_logs: false
 ```
 
 </TabItem>
@@ -145,6 +145,7 @@ Type: `string`
 | Option | Summary |
 |---|---|
 | `least_backup` | Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch. |
+| `murmur2_hash` | Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on. |
 | `round_robin` | Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions. |
 
 
@@ -200,6 +201,14 @@ The maximum number of batches to be sending in parallel at any given time.
 
 Type: `int`  
 Default: `10`  
+
+### `timeout`
+
+The maximum period of time to wait for message sends before abandoning the request and retrying
+
+
+Type: `string`  
+Default: `"10s"`  
 
 ### `batching`
 
@@ -460,6 +469,7 @@ Type: `string`
 
 | Option | Summary |
 |---|---|
+| `AWS_MSK_IAM` | AWS IAM based authentication as specified by the 'aws-msk-iam-auth' java library. |
 | `OAUTHBEARER` | OAuth Bearer based authentication. |
 | `PLAIN` | Plain text authentication. |
 | `SCRAM-SHA-256` | SCRAM based authentication as specified in RFC5802. |
@@ -497,12 +507,91 @@ Key/value pairs to add to OAUTHBEARER authentication requests.
 
 Type: `object`  
 
-### `debug_to_trace_logs`
+### `sasl[].aws`
 
-Whether to emit kafka-franz debug level logs only when the log level is set to TRACE
+Contains AWS specific fields for when the `mechanism` is set to `AWS_MSK_IAM`.
+
+
+Type: `object`  
+
+### `sasl[].aws.region`
+
+The AWS region to target.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.endpoint`
+
+Allows you to specify a custom endpoint for the AWS API.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials`
+
+Optional manual configuration of AWS credentials to use. More information can be found [in this document](/docs/guides/cloud/aws).
+
+
+Type: `object`  
+
+### `sasl[].aws.credentials.profile`
+
+A profile from `~/.aws/credentials` to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials.id`
+
+The ID of credentials to use.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials.secret`
+
+The secret for the credentials being used.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials.token`
+
+The token for the credentials being used, required when using short term credentials.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials.from_ec2_role`
+
+Use the credentials of a host EC2 machine configured to assume [an IAM role associated with the instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html).
 
 
 Type: `bool`  
 Default: `false`  
+Requires version 4.2.0 or newer  
+
+### `sasl[].aws.credentials.role`
+
+A role ARN to assume.
+
+
+Type: `string`  
+Default: `""`  
+
+### `sasl[].aws.credentials.role_external_id`
+
+An external ID to provide when assuming a role.
+
+
+Type: `string`  
+Default: `""`  
 
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -34,6 +36,7 @@ type Manager struct {
 
 	M metrics.Type
 	L log.Modular
+	T trace.TracerProvider
 }
 
 // NewManager provides a new mock manager.
@@ -47,6 +50,7 @@ func NewManager() *Manager {
 		Pipes:      map[string]<-chan message.Transaction{},
 		M:          metrics.Noop(),
 		L:          log.Noop(),
+		T:          trace.NewNoopTracerProvider(),
 	}
 }
 
@@ -125,6 +129,9 @@ func (m *Manager) Metrics() metrics.Type { return m.M }
 
 // Logger returns a no-op logger.
 func (m *Manager) Logger() log.Modular { return m.L }
+
+// Tracer returns a no-op tracer.
+func (m *Manager) Tracer() trace.TracerProvider { return m.T }
 
 // RegisterEndpoint registers a server wide HTTP endpoint.
 func (m *Manager) RegisterEndpoint(path, desc string, h http.HandlerFunc) {

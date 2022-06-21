@@ -82,11 +82,11 @@ func newSQSWriterFromConfig(conf output.AmazonSQSConfig, mgr bundle.NewManagemen
 	if err != nil {
 		return nil, err
 	}
-	w, err := output.NewAsyncWriter("aws_sqs", conf.MaxInFlight, s, mgr.Logger(), mgr.Metrics())
+	w, err := output.NewAsyncWriter("aws_sqs", conf.MaxInFlight, s, mgr)
 	if err != nil {
 		return w, err
 	}
-	return batcher.NewFromConfig(conf.Batching, w, mgr, mgr.Logger(), mgr.Metrics())
+	return batcher.NewFromConfig(conf.Batching, w, mgr)
 }
 
 type sqsWriter struct {

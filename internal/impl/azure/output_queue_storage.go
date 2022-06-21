@@ -10,7 +10,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
@@ -21,9 +20,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newAzureQueueStorageOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newAzureQueueStorageOutput), docs.ComponentSpec{
 		Name:    "azure_queue_storage",
 		Status:  docs.StatusBeta,
 		Version: "3.36.0",
@@ -55,16 +52,16 @@ In order to set the `+"`queue_name`"+` you can use function interpolations descr
 	}
 }
 
-func newAzureQueueStorageOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	s, err := newAzureQueueStorageWriter(conf.AzureQueueStorage, mgr, log)
+func newAzureQueueStorageOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	s, err := newAzureQueueStorageWriter(conf.AzureQueueStorage, mgr)
 	if err != nil {
 		return nil, err
 	}
-	w, err := output.NewAsyncWriter("azure_queue_storage", conf.AzureQueueStorage.MaxInFlight, s, log, stats)
+	w, err := output.NewAsyncWriter("azure_queue_storage", conf.AzureQueueStorage.MaxInFlight, s, mgr)
 	if err != nil {
 		return nil, err
 	}
-	return batcher.NewFromConfig(conf.AzureQueueStorage.Batching, output.OnlySinglePayloads(w), mgr, log, stats)
+	return batcher.NewFromConfig(conf.AzureQueueStorage.Batching, output.OnlySinglePayloads(w), mgr)
 }
 
 type azureQueueStorageWriter struct {
@@ -77,14 +74,14 @@ type azureQueueStorageWriter struct {
 	log log.Modular
 }
 
-func newAzureQueueStorageWriter(conf output.AzureQueueStorageConfig, mgr bundle.NewManagement, log log.Modular) (*azureQueueStorageWriter, error) {
+func newAzureQueueStorageWriter(conf output.AzureQueueStorageConfig, mgr bundle.NewManagement) (*azureQueueStorageWriter, error) {
 	serviceURL, err := shared.GetQueueServiceURL(conf.StorageAccount, conf.StorageAccessKey, conf.StorageConnectionString)
 	if err != nil {
 		return nil, err
 	}
 	s := &azureQueueStorageWriter{
 		conf:       conf,
-		log:        log,
+		log:        mgr.Logger(),
 		serviceURL: serviceURL,
 	}
 

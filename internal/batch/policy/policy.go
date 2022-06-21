@@ -92,7 +92,11 @@ func New(conf batchconfig.Config, mgr bundle.NewManagement) (*Batcher, error) {
 // Add a new message part to this batch policy. Returns true if this part
 // triggers the conditions of the policy.
 func (p *Batcher) Add(part *message.Part) bool {
-	p.sizeTally += len(part.Get())
+	if p.byteSize > 0 {
+		// This calculation (serialisation into bytes) is potentially expensive
+		// so we only do it when there's a byte size based trigger.
+		p.sizeTally += len(part.Get())
+	}
 	p.parts = append(p.parts, part)
 
 	if !p.triggered && p.count > 0 && len(p.parts) >= p.count {

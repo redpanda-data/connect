@@ -34,7 +34,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return input.NewAsyncReader("aws_kinesis", false, input.NewAsyncPreserver(rdr), nm.Logger(), nm.Metrics())
+		return input.NewAsyncReader("aws_kinesis", false, input.NewAsyncPreserver(rdr), nm)
 	}), docs.ComponentSpec{
 		Name:    "aws_kinesis",
 		Status:  docs.StatusStable,

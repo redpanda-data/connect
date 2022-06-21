@@ -32,8 +32,7 @@ output:
   http_client:
     url: ""
     verb: POST
-    headers:
-      Content-Type: application/octet-stream
+    headers: {}
     rate_limit: ""
     timeout: 5s
     max_in_flight: 64
@@ -54,8 +53,7 @@ output:
   http_client:
     url: ""
     verb: POST
-    headers:
-      Content-Type: application/octet-stream
+    headers: {}
     metadata:
       include_prefixes: []
       include_patterns: []
@@ -172,7 +170,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `object`  
-Default: `{"Content-Type":"application/octet-stream"}`  
+Default: `{}`  
 
 ```yml
 # Examples

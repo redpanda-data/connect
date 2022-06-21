@@ -1,4 +1,4 @@
-package input
+package input_test
 
 import (
 	"context"
@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -60,7 +60,7 @@ func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 	return cerr
 }
 
-func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
+func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	select {
 	case <-ctx.Done():
 		return nil, nil, component.ErrTimeout
@@ -114,7 +114,7 @@ type asyncReaderCantConnect struct{}
 func (r asyncReaderCantConnect) ConnectWithContext(ctx context.Context) error {
 	return component.ErrNotConnected
 }
-func (r asyncReaderCantConnect) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
+func (r asyncReaderCantConnect) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	return nil, nil, component.ErrNotConnected
 }
 func (r asyncReaderCantConnect) CloseAsync() {}
@@ -123,10 +123,7 @@ func (r asyncReaderCantConnect) WaitForClose(time.Duration) error {
 }
 
 func TestAsyncReaderCantConnect(t *testing.T) {
-	r, err := NewAsyncReader(
-		"foo", true, asyncReaderCantConnect{},
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, asyncReaderCantConnect{}, mock.NewManager())
 	if err != nil {
 		t.Error(err)
 		return
@@ -149,7 +146,7 @@ func (r *asyncReaderCantRead) ConnectWithContext(ctx context.Context) error {
 	r.connected++
 	return nil
 }
-func (r *asyncReaderCantRead) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
+func (r *asyncReaderCantRead) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	return nil, nil, component.ErrNotConnected
 }
 func (r *asyncReaderCantRead) CloseAsync() {}
@@ -160,10 +157,7 @@ func (r *asyncReaderCantRead) WaitForClose(time.Duration) error {
 func TestAsyncReaderCantRead(t *testing.T) {
 	readerImpl := &asyncReaderCantRead{}
 
-	r, err := NewAsyncReader(
-		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	if err != nil {
 		t.Error(err)
 		return
@@ -185,10 +179,7 @@ func TestAsyncReaderCantRead(t *testing.T) {
 func TestAsyncReaderTypeClosedOnConn(t *testing.T) {
 	readerImpl := newMockAsyncReader()
 
-	r, err := NewAsyncReader(
-		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	if err != nil {
 		t.Error(err)
 		return
@@ -209,10 +200,7 @@ func TestAsyncReaderTypeClosedOnConn(t *testing.T) {
 func TestAsyncReaderTypeClosedOnReconn(t *testing.T) {
 	readerImpl := newMockAsyncReader()
 
-	r, err := NewAsyncReader(
-		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	if err != nil {
 		t.Error(err)
 		return
@@ -241,10 +229,7 @@ func TestAsyncReaderTypeClosedOnReconn(t *testing.T) {
 func TestAsyncReaderTypeClosedOnReread(t *testing.T) {
 	readerImpl := newMockAsyncReader()
 
-	r, err := NewAsyncReader(
-		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,10 +266,7 @@ func TestAsyncReaderCanReconnect(t *testing.T) {
 
 	readerImpl := newMockAsyncReader()
 
-	r, err := NewAsyncReader(
-		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	if err != nil {
 		t.Error(err)
 		return
@@ -347,10 +329,7 @@ func TestAsyncReaderFailsReconnect(t *testing.T) {
 
 	readerImpl := newMockAsyncReader()
 
-	r, err := NewAsyncReader(
-		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	if err != nil {
 		t.Error(err)
 		return
@@ -413,10 +392,7 @@ func TestAsyncReaderFailsReconnect(t *testing.T) {
 func TestAsyncReaderCloseDuringReconnect(t *testing.T) {
 	readerImpl := newMockAsyncReader()
 
-	r, err := NewAsyncReader(
-		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,10 +435,7 @@ func TestAsyncReaderHappyPath(t *testing.T) {
 	readerImpl := newMockAsyncReader()
 	readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch(exp)}
 
-	r, err := NewAsyncReader(
-		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -524,7 +497,7 @@ func TestAsyncReaderCloseWithPendingAcks(t *testing.T) {
 	readerImpl := newMockAsyncReader()
 	readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch(exp)}
 
-	r, err := NewAsyncReader("foo", true, readerImpl, log.Noop(), metrics.Noop())
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	require.NoError(t, err)
 
 	select {
@@ -589,10 +562,7 @@ func TestAsyncReaderSadPath(t *testing.T) {
 	readerImpl := newMockAsyncReader()
 	readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch(exp)}
 
-	r, err := NewAsyncReader(
-		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -662,10 +632,7 @@ func TestAsyncReaderParallel(t *testing.T) {
 		readerImpl.msgsToSnd = append(readerImpl.msgsToSnd, message.QuickBatch([][]byte{[]byte(str)}))
 	}
 
-	r, err := NewAsyncReader(
-		"foo", true, readerImpl,
-		log.Noop(), metrics.Noop(),
-	)
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -762,7 +729,7 @@ func (r *mockStaticReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (r *mockStaticReader) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
+func (r *mockStaticReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
 	nextMsg := message.QuickBatch([][]byte{r.d})
 	return nextMsg, func(ctx context.Context, res error) error {
 		return nil
@@ -784,7 +751,7 @@ func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
 		d: []byte(`root = "hello world"`),
 	}
 
-	r, err := NewAsyncReader("foo", true, readerImpl, log.Noop(), metrics.Noop())
+	r, err := input.NewAsyncReader("foo", true, readerImpl, mock.NewManager())
 	require.NoError(b, err)
 
 	b.Cleanup(func() {

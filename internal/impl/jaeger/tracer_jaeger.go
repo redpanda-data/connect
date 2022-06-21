@@ -1,26 +1,22 @@
 package jaeger
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/jaeger"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
-
-//------------------------------------------------------------------------------
 
 func init() {
 	_ = bundle.AllTracers.Add(NewJaeger, docs.ComponentSpec{
@@ -47,15 +43,8 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// Jaeger is a tracer with the capability to push spans to a Jaeger instance.
-type Jaeger struct {
-	prov *tracesdk.TracerProvider
-}
-
 // NewJaeger creates and returns a new Jaeger object.
-func NewJaeger(config tracer.Config, nm bundle.NewManagement) (tracer.Type, error) {
-	j := &Jaeger{}
-
+func NewJaeger(config tracer.Config, nm bundle.NewManagement) (trace.TracerProvider, error) {
 	var sampler tracesdk.Sampler
 	if sType := config.Jaeger.SamplerType; len(sType) > 0 {
 		// TODO: https://github.com/open-telemetry/opentelemetry-go-contrib/pull/936
@@ -112,28 +101,9 @@ func NewJaeger(config tracer.Config, nm bundle.NewManagement) (tracer.Type, erro
 		batchOpts = append(batchOpts, tracesdk.WithBatchTimeout(flushInterval))
 	}
 
-	tp := tracesdk.NewTracerProvider(
+	return tracesdk.NewTracerProvider(
 		tracesdk.WithBatcher(exp, batchOpts...),
 		tracesdk.WithResource(resource.NewWithAttributes(semconv.SchemaURL, attrs...)),
 		tracesdk.WithSampler(sampler),
-	)
-
-	otel.SetTracerProvider(tp)
-
-	// TODO: I'm so confused, these APIs are a nightmare.
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	j.prov = tp
-	return j, nil
-}
-
-//------------------------------------------------------------------------------
-
-// Close stops the tracer.
-func (j *Jaeger) Close() error {
-	if j.prov != nil {
-		_ = j.prov.Shutdown(context.Background())
-		j.prov = nil
-	}
-	return nil
+	), nil
 }

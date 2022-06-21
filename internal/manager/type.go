@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/benthosdev/benthos/v4/internal/bloblang"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -21,6 +23,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -75,6 +78,7 @@ type Type struct {
 
 	logger log.Modular
 	stats  *metrics.Namespaced
+	tracer trace.TracerProvider
 
 	pipes    map[string]<-chan message.Transaction
 	pipeLock *sync.RWMutex
@@ -82,6 +86,38 @@ type Type struct {
 
 // OptFunc is an opt setting for a manager type.
 type OptFunc func(*Type)
+
+// OptSetAPIReg sets the multiplexer used by components of this manager for
+// registering their own HTTP endpoints.
+func OptSetAPIReg(r APIReg) OptFunc {
+	return func(t *Type) {
+		t.apiReg = r
+	}
+}
+
+// OptSetLogger sets the logger from which the manager emits log events for
+// components.
+func OptSetLogger(logger log.Modular) OptFunc {
+	return func(t *Type) {
+		t.logger = logger
+	}
+}
+
+// OptSetMetrics sets the metrics exporter from which the manager creates
+// metrics for components.
+func OptSetMetrics(stats *metrics.Namespaced) OptFunc {
+	return func(t *Type) {
+		t.stats = stats
+	}
+}
+
+// OptSetTracer sets the tracer provider from which the manager creates tracing
+// spans.
+func OptSetTracer(tracer trace.TracerProvider) OptFunc {
+	return func(t *Type) {
+		t.tracer = tracer
+	}
+}
 
 // OptSetEnvironment determines the environment from which the manager
 // initializes components and resources. This option is for internal use only.
@@ -111,9 +147,9 @@ func OptSetStreamsMode(b bool) OptFunc {
 
 // New returns an instance of manager.Type, which can be shared amongst
 // components and logical threads of a Benthos service.
-func New(conf ResourceConfig, apiReg APIReg, log log.Modular, stats *metrics.Namespaced, opts ...OptFunc) (*Type, error) {
+func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
 	t := &Type{
-		apiReg: apiReg,
+		apiReg: mock.NewManager(),
 
 		inputs:       map[string]*inputWrapper{},
 		caches:       map[string]cache.V1{},
@@ -126,8 +162,9 @@ func New(conf ResourceConfig, apiReg APIReg, log log.Modular, stats *metrics.Nam
 		env:      bundle.GlobalEnvironment,
 		bloblEnv: bloblang.GlobalEnvironment(),
 
-		logger: log,
-		stats:  stats,
+		logger: log.Noop(),
+		stats:  metrics.Noop(),
+		tracer: trace.NewNoopTracerProvider(),
 
 		pipes:    map[string]<-chan message.Transaction{},
 		pipeLock: &sync.RWMutex{},
@@ -346,6 +383,11 @@ func (t *Type) Metrics() metrics.Type {
 // Logger returns a logger preset with the current component context.
 func (t *Type) Logger() log.Modular {
 	return t.logger
+}
+
+// Tracer returns a tracer provider with the current component context.
+func (t *Type) Tracer() trace.TracerProvider {
+	return t.tracer
 }
 
 // Environment returns a bundle environment used by the manager. This is for
