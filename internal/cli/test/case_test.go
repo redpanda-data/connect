@@ -64,6 +64,14 @@ func TestCase(t *testing.T) {
 	}
 	provider["/input/broker/inputs/1/processors"] = []processor.V1{proc}
 
+	procConf = processor.NewConfig()
+	procConf.Type = "bloblang"
+	procConf.Bloblang = `root = if batch_index() == 0 { count("batch_id") }`
+	if proc, err = mock.NewManager().NewProcessor(procConf); err != nil {
+		t.Fatal(err)
+	}
+	provider["/input/broker/inputs/2/processors"] = []processor.V1{proc}
+
 	type testCase struct {
 		name     string
 		conf     string
@@ -133,6 +141,25 @@ output_batches:
 `,
 		},
 		{
+			name: "batch id 1",
+			conf: `
+name: batch id 1
+target_processors: /input/broker/inputs/2/processors
+input_batches:
+-
+  - content: foo
+-
+  - content: foo
+  - content: bar
+output_batches:
+-
+  - content_equals: "1"
+-
+  - content_equals: "2"
+  - content_equals: "bar"
+`,
+		},
+		{
 			name: "negative 1",
 			conf: `
 name: negative 1
@@ -196,6 +223,31 @@ output_batches:
 					Name:     "negative batches count 1",
 					TestLine: 2,
 					Reason:   "wrong batch count, expected 2, got 1",
+				},
+			},
+		},
+		{
+			name: "unexpected batch 1",
+			conf: `
+name: unexpected batch 1
+input_batches:
+-
+  - content: foo bar
+-
+  - content: foo bar
+-
+  - content: foo bar
+output_batches:
+-
+  - content_equals: "foo bar"
+-
+  - content_equals: "foo bar"
+`,
+			expected: []test.CaseFailure{
+				{
+					Name:     "unexpected batch 1",
+					TestLine: 2,
+					Reason:   "unexpected batch: [foo bar]",
 				},
 			},
 		},
