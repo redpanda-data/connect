@@ -21,9 +21,16 @@ tests:
         - content: '2'
         - content: '3'
         - content: '4'
+        - content: '3'
+        - content: '3'
+        - content: '3'
       -
         - content: '4'
+        - content: '1'
+        - content: '1'
         - content: '3'
+        - content: '4'
+        - content: '4'
         - content: '2'
         - content: '1'
     output_batches:
@@ -34,6 +41,6 @@ tests:
         - content_equals: 4
       -
         - content_equals: 4
+        - content_equals: 1
         - content_equals: 3
         - content_equals: 2
-        - content_equals: 1

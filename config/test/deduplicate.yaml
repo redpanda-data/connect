@@ -17,9 +17,16 @@ tests:
         - content: '2'
         - content: '3'
         - content: '4'
+        - content: '3'
+        - content: '3'
+        - content: '3'
       -
         - content: '4'
+        - content: '1'
+        - content: '1'
         - content: '3'
+        - content: '4'
+        - content: '4'
         - content: '2'
         - content: '1'
     output_batches:
