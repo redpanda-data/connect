@@ -82,6 +82,22 @@ It is also possible to target processors in a separate file by prefixing the tar
 			docs.FieldString("metadata", "A map of metadata key/values to add to the input message.").Map().Optional(),
 		),
 		docs.FieldObject(
+			"input_batches", "",
+		).ArrayOfArrays().Optional().WithChildren(
+			docs.FieldString("content", "The raw content of the input message.").HasDefault(""),
+			docs.FieldAnything(`json_content`, "Sets the raw content of the message to a JSON document matching the structure of the value.", map[string]interface{}{
+				"foo": "foo value",
+				"bar": []interface{}{"element1", 10},
+			},
+			).Optional(),
+			docs.FieldString(
+				`file_content`,
+				"Sets the raw content of the message by reading a file. The path of the file should be relative to the path of the test file.",
+				"./foo/bar.txt",
+			).Optional(),
+			docs.FieldString("metadata", "A map of metadata key/values to add to the input message.").Map().Optional(),
+		),
+		docs.FieldObject(
 			"output_batches", "",
 		).ArrayOfArrays().Optional().WithChildren(
 			docs.FieldString("content", "The raw content of the input message.").HasDefault(""),

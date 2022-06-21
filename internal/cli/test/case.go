@@ -68,7 +68,7 @@ type Case struct {
 	TargetProcessors string               `yaml:"target_processors"`
 	TargetMapping    string               `yaml:"target_mapping"`
 	Mocks            map[string]yaml.Node `yaml:"mocks"`
-	InputBatch       []InputPart          `yaml:"input_batch"` // Deprecated: use input_batches instead.
+	InputBatch       []InputPart          `yaml:"input_batch"`
 	InputBatches     [][]InputPart        `yaml:"input_batches"`
 	OutputBatches    [][]ConditionsMap    `yaml:"output_batches"`
 
