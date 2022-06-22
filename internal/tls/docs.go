@@ -44,9 +44,9 @@ func FieldSpec() docs.FieldSpec {
 		).Array().WithChildren(
 			docs.FieldString("cert", "A plain text certificate to use.").HasDefault(""),
 			docs.FieldString("key", "A plain text certificate key to use.").HasDefault(""),
-			docs.FieldString("cert_file", "The path to a certificate to use.").HasDefault(""),
+			docs.FieldString("cert_file", "The path of a certificate to use.").HasDefault(""),
 			docs.FieldString("key_file", "The path of a certificate key to use.").HasDefault(""),
-			docs.FieldString("password", "A plant text password to decrypt the private key.").HasDefault(""),
+			docs.FieldString("password", "A plain text password for when the private key is a password encrypted PEM block according to RFC 1423. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.", "foo", "${KEY_PASSWORD}").HasDefault(""),
 		),
 	).Advanced()
 }

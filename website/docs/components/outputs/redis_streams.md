@@ -263,7 +263,7 @@ Default: `""`
 
 ### `tls.client_certs[].cert_file`
 
-The path to a certificate to use.
+The path of a certificate to use.
 
 
 Type: `string`  
@@ -279,11 +279,19 @@ Default: `""`
 
 ### `tls.client_certs[].password`
 
-A plant text password to decrypt the private key.
+A plain text password for when the private key is a password encrypted PEM block according to RFC 1423. Warning: Since it does not authenticate the ciphertext, it is vulnerable to padding oracle attacks that can let an attacker recover the plaintext.
 
 
 Type: `string`  
 Default: `""`  
+
+```yml
+# Examples
+
+password: foo
+
+password: ${KEY_PASSWORD}
+```
 
 ### `stream`
 
