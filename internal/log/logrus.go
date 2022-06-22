@@ -102,6 +102,7 @@ func NewV2(stream io.Writer, config Config) (Modular, error) {
 		logger.SetFormatter(&logrus.TextFormatter{
 			DisableTimestamp: !config.AddTimeStamp,
 			QuoteEmptyFields: true,
+			FullTimestamp:    config.AddTimeStamp,
 		})
 	default:
 		return nil, fmt.Errorf("log format '%v' not recognized", config.Format)
