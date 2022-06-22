@@ -69,6 +69,7 @@ type Case struct {
 	TargetMapping    string               `yaml:"target_mapping"`
 	Mocks            map[string]yaml.Node `yaml:"mocks"`
 	InputBatch       []InputPart          `yaml:"input_batch"`
+	InputBatches     [][]InputPart        `yaml:"input_batches"`
 	OutputBatches    [][]ConditionsMap    `yaml:"output_batches"`
 
 	line int
@@ -89,6 +90,7 @@ func NewCase() Case {
 		TargetMapping:    "",
 		Mocks:            map[string]yaml.Node{},
 		InputBatch:       []InputPart{},
+		InputBatches:     [][]InputPart{},
 		OutputBatches:    [][]ConditionsMap{},
 	}
 }
@@ -150,23 +152,34 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 		})
 	}
 
-	parts := make([]*message.Part, len(c.InputBatch))
-	for i, v := range c.InputBatch {
-		var content string
-		if content, err = v.getContent(dir); err != nil {
-			err = fmt.Errorf("failed to create mock input %v: %w", i, err)
-			return
-		}
-		part := message.NewPart([]byte(content))
-		for k, v := range v.Metadata {
-			part.MetaSet(k, v)
-		}
-		parts[i] = part
+	// append old batch to new batch array.
+	if len(c.InputBatch) > 0 {
+		c.InputBatches = append(c.InputBatches, c.InputBatch)
 	}
 
-	inputMsg := message.QuickBatch(nil)
-	inputMsg.SetAll(parts)
-	outputBatches, result := iprocessor.ExecuteAll(procSet, inputMsg)
+	var inputMsg []*message.Batch
+
+	for _, inputBatch := range c.InputBatches {
+		parts := make([]*message.Part, len(inputBatch))
+		for i, v := range inputBatch {
+			var content string
+			if content, err = v.getContent(dir); err != nil {
+				err = fmt.Errorf("failed to create mock input %v: %w", i, err)
+				return
+			}
+			part := message.NewPart([]byte(content))
+			for k, v := range v.Metadata {
+				part.MetaSet(k, v)
+			}
+			parts[i] = part
+		}
+
+		currentBatch := message.QuickBatch(nil)
+		currentBatch.SetAll(parts)
+		inputMsg = append(inputMsg, currentBatch)
+	}
+
+	outputBatches, result := iprocessor.ExecuteAll(procSet, inputMsg...)
 	if result != nil {
 		reportFailure(fmt.Sprintf("processors resulted in error: %v", result))
 	}

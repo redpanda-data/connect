@@ -425,6 +425,58 @@ A map of metadata key/values to add to the input message.
 
 Type: map of `string`  
 
+### `tests[].input_batches`
+
+Sorry! This field is missing documentation.
+
+
+Type: `object`  
+
+### `tests[].input_batches[][].content`
+
+The raw content of the input message.
+
+
+Type: `string`  
+Default: `""`  
+
+### `tests[].input_batches[][].json_content`
+
+Sets the raw content of the message to a JSON document matching the structure of the value.
+
+
+Type: `unknown`  
+
+```yml
+# Examples
+
+json_content:
+  bar:
+    - element1
+    - 10
+  foo: foo value
+```
+
+### `tests[].input_batches[][].file_content`
+
+Sets the raw content of the message by reading a file. The path of the file should be relative to the path of the test file.
+
+
+Type: `string`  
+
+```yml
+# Examples
+
+file_content: ./foo/bar.txt
+```
+
+### `tests[].input_batches[][].metadata`
+
+A map of metadata key/values to add to the input message.
+
+
+Type: map of `string`  
+
 ### `tests[].output_batches`
 
 Sorry! This field is missing documentation.
