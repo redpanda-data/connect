@@ -545,6 +545,14 @@ The path of a certificate key to use.
 Type: `string`  
 Default: `""`  
 
+### `tls.client_certs[].password`
+
+A plant text password to decrypt the private key.
+
+
+Type: `string`  
+Default: `""`  
+
 ### `extract_headers`
 
 Specify which response headers should be added to resulting messages as metadata. Header keys are lowercased before matching, so ensure that your patterns target lowercased versions of the header keys that you expect.

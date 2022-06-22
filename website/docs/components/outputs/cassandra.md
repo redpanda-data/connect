@@ -285,6 +285,14 @@ The path of a certificate key to use.
 Type: `string`  
 Default: `""`  
 
+### `tls.client_certs[].password`
+
+A plant text password to decrypt the private key.
+
+
+Type: `string`  
+Default: `""`  
+
 ### `password_authenticator`
 
 An object containing the username and password.

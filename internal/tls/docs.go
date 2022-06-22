@@ -46,6 +46,7 @@ func FieldSpec() docs.FieldSpec {
 			docs.FieldString("key", "A plain text certificate key to use.").HasDefault(""),
 			docs.FieldString("cert_file", "The path to a certificate to use.").HasDefault(""),
 			docs.FieldString("key_file", "The path of a certificate key to use.").HasDefault(""),
+			docs.FieldString("password", "A plant text password to decrypt the private key.").HasDefault(""),
 		),
 	).Advanced()
 }
