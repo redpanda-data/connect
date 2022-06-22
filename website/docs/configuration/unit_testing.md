@@ -375,7 +375,7 @@ mocks:
 
 ### `tests[].input_batch`
 
-Sorry! This field is missing documentation.
+Define a batch of messages to feed into your test, specify either an `input_batch` or a series of `input_batches`.
 
 
 Type: list of `object`  
@@ -427,7 +427,7 @@ Type: map of `string`
 
 ### `tests[].input_batches`
 
-Sorry! This field is missing documentation.
+Define a series of batches of messages to feed into your test, specify either an `input_batch` or a series of `input_batches`.
 
 
 Type: `object`  

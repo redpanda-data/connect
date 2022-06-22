@@ -66,7 +66,7 @@ It is also possible to target processors in a separate file by prefixing the tar
 			},
 		).Map().Optional(),
 		docs.FieldObject(
-			"input_batch", "",
+			"input_batch", "Define a batch of messages to feed into your test, specify either an `input_batch` or a series of `input_batches`.",
 		).Array().Optional().WithChildren(
 			docs.FieldString("content", "The raw content of the input message.").HasDefault(""),
 			docs.FieldAnything(`json_content`, "Sets the raw content of the message to a JSON document matching the structure of the value.", map[string]interface{}{
@@ -82,7 +82,7 @@ It is also possible to target processors in a separate file by prefixing the tar
 			docs.FieldString("metadata", "A map of metadata key/values to add to the input message.").Map().Optional(),
 		),
 		docs.FieldObject(
-			"input_batches", "",
+			"input_batches", "Define a series of batches of messages to feed into your test, specify either an `input_batch` or a series of `input_batches`.",
 		).ArrayOfArrays().Optional().WithChildren(
 			docs.FieldString("content", "The raw content of the input message.").HasDefault(""),
 			docs.FieldAnything(`json_content`, "Sets the raw content of the message to a JSON document matching the structure of the value.", map[string]interface{}{

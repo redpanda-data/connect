@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - The `redis_streams` output field `stream` field now supports interpolation functions.
 - The `kafka_franz` input and outputs now support `AWS_MSK_IAM` as a SASL mechanism.
 - New `pusher` output.
+- Field `input_batches` added to config unit tests for injecting a series of message batches.
 
 ### Fixed
 
