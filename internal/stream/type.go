@@ -52,7 +52,7 @@ func New(conf Config, mgr bundle.NewManagement, opts ...func(*Type)) (*Type, err
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte("input not connected\n"))
 		}
-		if !t.outputLayer.Connected() {
+		if !t.outputLayer.Connected() && connected {
 			connected = false
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte("output not connected\n"))
