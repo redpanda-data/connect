@@ -20,7 +20,7 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Output for publishing messages to Pusher API (https://pusher.com)
 
-Introduced in version 4.2.1.
+Introduced in version 4.3.0.
 
 
 <Tabs defaultValue="common" values={[

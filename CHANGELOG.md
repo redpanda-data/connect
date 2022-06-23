@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.3.0 - 2022-06-23
+
 ### Added
 
 - Timestamp Bloblang methods are now able to emit and process `time.Time` values.
