@@ -420,7 +420,7 @@ root.received_at = timestamp_unix_nano()
 :::caution EXPERIMENTAL
 This function is experimental and therefore breaking changes could be made to it outside of major version releases.
 :::
-Takes in a string that maps to a [faker](https://github.com/bxcodec/faker) function and returns the result from that faker function. Returns an error if the given string doesn't match a supported faker function
+Takes in a string that maps to a [faker](https://github.com/bxcodec/faker) function and returns the result from that faker function. Returns an error if the given string doesn't match a supported faker function. Supported functions: `latitude`, `longitude`, `unix_time`, `date`, `time_string`, `month_name`, `year_string`, `day_of_week`, `day_of_month`, `timestamp`, `century`, `timezone`, `time_period`, `email`, `mac_address`, `domain_name`, `url`, `username`, `ipv4`, `ipv6`, `password`, `jwt`, `word`, `sentence`, `paragraph`, `cc_type`, `cc_number`, `currency`, `amount_with_currency`, `title_male`, `title_female`, `first_name`, `first_name_male`, `first_name_female`, `last_name`, `name`, `gender`, `chinese_first_name`, `chinese_last_name`, `chinese_name`, `phone_number`, `toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the [faker](https://github.com/bxcodec/faker) docs for details on these functions.
 
 #### Parameters
 
@@ -429,82 +429,10 @@ Takes in a string that maps to a [faker](https://github.com/bxcodec/faker) funct
 #### Examples
 
 
-Generates a random latitude float value
-
-```coffee
-root.latitude = fake("latitude")
-```
-
-Generates a random longitude float value
-
-```coffee
-root.longitude = fake("longitude")
-```
-
-Generates a unix time value
-
-```coffee
-root.unix_time = fake("unix_time")
-```
-
-Generates a date in format YYYY-MM-DD
-
-```coffee
-root.date = fake("date")
-```
-
 Generates a time in the format 00:00:00
 
 ```coffee
 root.time = fake("time_string")
-```
-
-Returns a random month name
-
-```coffee
-root.month = fake("month_name")
-```
-
-Returns a year value in string format
-
-```coffee
-root.year = fake("year_string")
-```
-
-Returns a random day of week string (ex: Sunday)
-
-```coffee
-root.day = fake("day_of_week")
-```
-
-Returns a day of month value (ex: 20)
-
-```coffee
-root.day = fake("day_of_month")
-```
-
-Returns a timestamp in the format YYYY-MM-DD hh:mm:ss
-
-```coffee
-root.timestamp = fake("timestamp")
-```
-
-Returns a random century value (ex: IV)
-
-```coffee
-root.century = fake("century")
-```
-
-Returns a random timezone (ex: Asia/Jakarta)
-
-```coffee
-root.timezone = fake("timezone")
-```
-
-Returns either AM or PM
-
-```coffee
-root.time_period = fake("time_period")
 ```
 
 Generates a string in email address format.
@@ -513,190 +441,16 @@ Generates a string in email address format.
 root.email = fake("email")
 ```
 
-Generates a string in mac address format.
-
-```coffee
-root.mac_address = fake("mac_address")
-```
-
-Generates a string in domain format (ex: xyz.com)
-
-```coffee
-root.domain = fake("domain_name")
-```
-
-Generates a string in URL format (ex: https://www.xyz.com/abc
-
-```coffee
-root.url = fake("url")
-```
-
-Generates a username string (ex: lVxELHS)
-
-```coffee
-root.username = fake("username")
-```
-
-Generates an IPv4 address
-
-```coffee
-root.ip = fake("ipv4")
-```
-
-Generates an IPv6 address
-
-```coffee
-root.ip = fake("ipv6")
-```
-
-Generates a password string
-
-```coffee
-root.password = fake("password")
-```
-
 Generates a JWT token
 
 ```coffee
 root.jwt = fake("jwt")
 ```
 
-Generates a lorem ipsum word
-
-```coffee
-root.word = fake("word")
-```
-
-Generates a lorem ipsum sentence
-
-```coffee
-root.sentence = fake("sentence")
-```
-
-Generates a lorem ipsum paragraph
-
-```coffee
-root.paragraph = fake("paragraph")
-```
-
-Generates a CC type (ex: Visa)
-
-```coffee
-root.cc_type = fake("cc_type")
-```
-
-Generates a CC number
-
-```coffee
-root.cc_number = fake("cc_number")
-```
-
-Generates a currency string (ex: USD)
-
-```coffee
-root.currency = fake("currency")
-```
-
-Generates an amount with a currency label (ex: USD 123.45)
-
-```coffee
-root.currency_value = fake("amount_with_currency")
-```
-
-Generates a male title (ex: Mr.)
-
-```coffee
-root.title = fake("title_male")
-```
-
-Generates a female title (ex: Mrs.)
-
-```coffee
-root.title = fake("title_female")
-```
-
-Generates a first name
-
-```coffee
-root.first_name = fake("first_name")
-```
-
-Generates a male first name
-
-```coffee
-root.first_name = fake("first_name_male")
-```
-
-Generates a female first name
-
-```coffee
-root.first_name = fake("first_name_female")
-```
-
-Generates a last name
-
-```coffee
-root.last_name = fake("last_name")
-```
-
-Generates a full name with title
-
-```coffee
-root.name = fake("name")
-```
-
-Returns one of the following: 'Male', 'Female', 'Prefer to skip'
-
-```coffee
-root.gender = fake("gender")
-```
-
-Generates a Chinese first name
-
-```coffee
-root.first_name = fake("chinese_first_name")
-```
-
-Generates a Chinese last name
-
-```coffee
-root.last_name = fake("chinese_last_name")
-```
-
-Generates a Chinese full name
-
-```coffee
-root.name = fake("chinese_name")
-```
-
-Generates a phone number in format '000-000-0000'
-
-```coffee
-root.phone_number = fake("phone_number")
-```
-
-Generates a toll free phone number in format '(000) 000-000000'
-
-```coffee
-root.phone_number = fake("toll_free_phone_number")
-```
-
-Generates an E164 phone number in the format '+000000000000
-
-```coffee
-root.phone_number = fake("e164_phone_number")
-```
-
 Generates a hypenated UUID
 
 ```coffee
 root.uuid = fake("uuid_hyphenated")
-```
-
-generates an unhyphenated UUID
-
-```coffee
-root.uuid = fake("uuid_digit")
 ```
 
 [error_handling]: /docs/configuration/error_handling

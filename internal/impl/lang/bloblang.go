@@ -51,114 +51,22 @@ func init() {
 		Experimental().
 		Category(query.FunctionCategoryFakeData).
 		Description("Takes in a string that maps to a [faker](https://github.com/bxcodec/faker) function and returns the result from that faker function. "+
-			"Returns an error if the given string doesn't match a supported faker function").
+			"Returns an error if the given string doesn't match a supported faker function. Supported functions: `latitude`, `longitude`, `unix_time`, "+
+			"`date`, `time_string`, `month_name`, `year_string`, `day_of_week`, `day_of_month`, `timestamp`, `century`, `timezone`, `time_period`, "+
+			"`email`, `mac_address`, `domain_name`, `url`, `username`, `ipv4`, `ipv6`, `password`, `jwt`, `word`, `sentence`, `paragraph`, "+
+			"`cc_type`, `cc_number`, `currency`, `amount_with_currency`, `title_male`, `title_female`, `first_name`, `first_name_male`, "+
+			"`first_name_female`, `last_name`, `name`, `gender`, `chinese_first_name`, `chinese_last_name`, `chinese_name`, `phone_number`, "+
+			"`toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the [faker](https://github.com/bxcodec/faker) docs "+
+			"for details on these functions.").
 		Param(bloblang.NewStringParam("function").Description("The name of the function to use to generate the value.").Default("")).
-
-		// Location functions
-		Example("Generates a random latitude float value",
-			`root.latitude = fake("latitude")`).
-		Example("Generates a random longitude float value",
-			`root.longitude = fake("longitude")`).
-
-		// Date time functions
-		Example("Generates a unix time value",
-			`root.unix_time = fake("unix_time")`).
-		Example("Generates a date in format YYYY-MM-DD",
-			`root.date = fake("date")`).
 		Example("Generates a time in the format 00:00:00",
 			`root.time = fake("time_string")`).
-		Example("Returns a random month name",
-			`root.month = fake("month_name")`).
-		Example("Returns a year value in string format",
-			`root.year = fake("year_string")`).
-		Example("Returns a random day of week string (ex: Sunday)",
-			`root.day = fake("day_of_week")`).
-		Example("Returns a day of month value (ex: 20)",
-			`root.day = fake("day_of_month")`).
-		Example("Returns a timestamp in the format YYYY-MM-DD hh:mm:ss",
-			`root.timestamp = fake("timestamp")`).
-		Example("Returns a random century value (ex: IV)",
-			`root.century = fake("century")`).
-		Example("Returns a random timezone (ex: Asia/Jakarta)",
-			`root.timezone = fake("timezone")`).
-		Example("Returns either AM or PM",
-			`root.time_period = fake("time_period")`).
-
-		// Internet functions
 		Example("Generates a string in email address format.",
 			`root.email = fake("email")`).
-		Example("Generates a string in mac address format.",
-			`root.mac_address = fake("mac_address")`).
-		Example("Generates a string in domain format (ex: xyz.com)",
-			`root.domain = fake("domain_name")`).
-		Example("Generates a string in URL format (ex: https://www.xyz.com/abc",
-			`root.url = fake("url")`).
-		Example("Generates a username string (ex: lVxELHS)",
-			`root.username = fake("username")`).
-		Example("Generates an IPv4 address",
-			`root.ip = fake("ipv4")`).
-		Example("Generates an IPv6 address",
-			`root.ip = fake("ipv6")`).
-		Example("Generates a password string",
-			`root.password = fake("password")`).
 		Example("Generates a JWT token",
 			`root.jwt = fake("jwt")`).
-
-		// Words and sentences functions
-		Example("Generates a lorem ipsum word",
-			`root.word = fake("word")`).
-		Example("Generates a lorem ipsum sentence",
-			`root.sentence = fake("sentence")`).
-		Example("Generates a lorem ipsum paragraph",
-			`root.paragraph = fake("paragraph")`).
-
-		// Payment functions
-		Example("Generates a CC type (ex: Visa)",
-			`root.cc_type = fake("cc_type")`).
-		Example("Generates a CC number",
-			`root.cc_number = fake("cc_number")`).
-		Example("Generates a currency string (ex: USD)",
-			`root.currency = fake("currency")`).
-		Example("Generates an amount with a currency label (ex: USD 123.45)",
-			`root.currency_value = fake("amount_with_currency")`).
-
-		// Person functions
-		Example("Generates a male title (ex: Mr.)",
-			`root.title = fake("title_male")`).
-		Example("Generates a female title (ex: Mrs.)",
-			`root.title = fake("title_female")`).
-		Example("Generates a first name",
-			`root.first_name = fake("first_name")`).
-		Example("Generates a male first name",
-			`root.first_name = fake("first_name_male")`).
-		Example("Generates a female first name",
-			`root.first_name = fake("first_name_female")`).
-		Example("Generates a last name",
-			`root.last_name = fake("last_name")`).
-		Example("Generates a full name with title",
-			`root.name = fake("name")`).
-		Example("Returns one of the following: 'Male', 'Female', 'Prefer to skip'",
-			`root.gender = fake("gender")`).
-		Example("Generates a Chinese first name",
-			`root.first_name = fake("chinese_first_name")`).
-		Example("Generates a Chinese last name",
-			`root.last_name = fake("chinese_last_name")`).
-		Example("Generates a Chinese full name",
-			`root.name = fake("chinese_name")`).
-
-		// Phone functions
-		Example("Generates a phone number in format '000-000-0000'",
-			`root.phone_number = fake("phone_number")`).
-		Example("Generates a toll free phone number in format '(000) 000-000000'",
-			`root.phone_number = fake("toll_free_phone_number")`).
-		Example("Generates an E164 phone number in the format '+000000000000",
-			`root.phone_number = fake("e164_phone_number")`).
-
-		// UUID functions
 		Example("Generates a hypenated UUID",
-			`root.uuid = fake("uuid_hyphenated")`).
-		Example("generates an unhyphenated UUID",
-			`root.uuid = fake("uuid_digit")`)
+			`root.uuid = fake("uuid_hyphenated")`)
 
 	if err := bloblang.RegisterFunctionV2(
 		"fake", fakerSpec,
