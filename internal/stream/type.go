@@ -46,19 +46,20 @@ func New(conf Config, mgr bundle.NewManagement, opts ...func(*Type)) (*Type, err
 	}
 
 	healthCheck := func(w http.ResponseWriter, r *http.Request) {
-		connected := true
-		if !t.inputLayer.Connected() {
-			connected = false
-			w.WriteHeader(http.StatusServiceUnavailable)
+		inputConnected := t.inputLayer.Connected()
+		outputConnected := t.outputLayer.Connected()
+
+		if inputConnected && outputConnected {
+			_, _ = w.Write([]byte("OK"))
+			return
+		}
+
+		w.WriteHeader(http.StatusServiceUnavailable)
+		if !inputConnected {
 			_, _ = w.Write([]byte("input not connected\n"))
 		}
-		if !t.outputLayer.Connected() && connected {
-			connected = false
-			w.WriteHeader(http.StatusServiceUnavailable)
+		if !outputConnected {
 			_, _ = w.Write([]byte("output not connected\n"))
-		}
-		if connected {
-			_, _ = w.Write([]byte("OK"))
 		}
 	}
 	t.manager.RegisterEndpoint(

@@ -178,5 +178,5 @@ func TestHealthCheck(t *testing.T) {
 
 	assert.NoError(t, strm.StopUnordered(time.Minute))
 
-	validateHealthCheckResponse(t, mockAPIReg.server.URL, "input not connected\n")
+	validateHealthCheckResponse(t, mockAPIReg.server.URL, "input not connected\noutput not connected\n")
 }
