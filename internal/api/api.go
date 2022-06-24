@@ -107,6 +107,10 @@ func New(
 		}
 	}
 
+	if err := conf.BasicAuth.Validate(); err != nil {
+		return nil, err
+	}
+
 	t := &Type{
 		conf:      conf,
 		endpoints: map[string]string{},

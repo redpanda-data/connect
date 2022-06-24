@@ -39,8 +39,11 @@ http:
     enabled: false
     allowed_origins: []
   basic_auth:
+    enabled: false
     username: ""
-    password: ""
+    password_hash: ""
+    algorithm: "sha256"
+    salt: ""
 ```
 
 </TabItem>
@@ -57,7 +60,9 @@ If the certificate is signed by a certificate authority, the `cert_file` should 
 
 ## Enabling BasicAuth
 
-By default Benthos does not do any sort of authentication. Set `basic_auth.username` and `basic_auth.password` to enforce Basic authentication on all endpoints.
+By default Benthos does not do any sort of authentication. Set `basic_auth.username` and `basic_auth.password_hash` to enforce Basic authentication on all endpoints. The `algorithm` can be one of `md5`, `sha256`, `bcrypt`, or `scrypt`. When using `scrypt` a `salt` is required.
+
+Both `password_hash` and `salt` should be base64 encoded.
 
 ## Endpoints
 

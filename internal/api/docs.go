@@ -19,6 +19,13 @@ func Spec() docs.FieldSpecs {
 		docs.FieldString("cert_file", "An optional certificate file for enabling TLS.").Advanced().HasDefault(""),
 		docs.FieldString("key_file", "An optional key file for enabling TLS.").Advanced().HasDefault(""),
 		httpdocs.ServerCORSFieldSpec(),
-		httpdocs.BasicAuthFieldSpec(),
+		docs.FieldObject("basic_auth", "Allows you to specify basic authentication.").WithChildren(
+			docs.FieldBool("enabled", "Whether to use basic authentication in requests.").HasDefault(false),
+			docs.FieldString("username", "Username required to authenticate.").HasDefault(""),
+			docs.FieldString("password_hash", "Hashed password required to authenticate. (base64 encoded)").HasDefault(""),
+			docs.FieldString("realm", "realm of the protection space.").HasDefault("restricted"),
+			docs.FieldString("algorithm", "Encryption algorithm used to generate password_hash.", "md5", "sha256", "bcrypt", "scrypt").HasDefault("sha256"),
+			docs.FieldString("salt", "Salt for scrypt algorithm. (base64 encoded)").HasDefault(""),
+		).Advanced(),
 	}
 }
