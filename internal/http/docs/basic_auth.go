@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	SCRYPT_N      = 32768
-	SCRYPT_r      = 8
-	SCRYPT_p      = 1
-	SCRYPT_KeyLen = 32
+	scryptN      = 32768
+	scryptR      = 8
+	scryptP      = 1
+	scryptKeyLen = 32
 )
 
 // BasicAuth contains the configuration fields for the HTTP BasicAuth
@@ -92,7 +92,7 @@ func (b BasicAuth) WrapHandler(next http.HandlerFunc) http.HandlerFunc {
 					return
 				}
 
-				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s", charset="UTF-8"`, b.Realm))
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm=%q, charset="UTF-8"`, b.Realm))
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -130,10 +130,10 @@ func (b BasicAuth) compareHashAndPassword(hashedPassword, password []byte) bool 
 	switch b.Algorithm {
 	case "md5":
 		v := md5.Sum(password)
-		return (subtle.ConstantTimeCompare(hashedPassword[:], v[:]) == 1)
+		return (subtle.ConstantTimeCompare(hashedPassword, v[:]) == 1)
 	case "sha256":
 		v := sha256.Sum256(password)
-		return (subtle.ConstantTimeCompare(hashedPassword[:], v[:]) == 1)
+		return (subtle.ConstantTimeCompare(hashedPassword, v[:]) == 1)
 	case "bcrypt":
 		if err := bcrypt.CompareHashAndPassword(hashedPassword, password); err != nil {
 			return false
@@ -145,11 +145,11 @@ func (b BasicAuth) compareHashAndPassword(hashedPassword, password []byte) bool 
 			return false
 		}
 
-		v, err := scrypt.Key(password, salt, SCRYPT_N, SCRYPT_r, SCRYPT_p, SCRYPT_KeyLen)
+		v, err := scrypt.Key(password, salt, scryptN, scryptR, scryptP, scryptKeyLen)
 		if err != nil {
 			return false
 		}
-		return (subtle.ConstantTimeCompare(hashedPassword[:], v[:]) == 1)
+		return (subtle.ConstantTimeCompare(hashedPassword, v) == 1)
 	default:
 		return false
 	}
