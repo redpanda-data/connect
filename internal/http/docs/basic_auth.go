@@ -78,28 +78,26 @@ func (b BasicAuth) WrapHandler(next http.HandlerFunc) http.HandlerFunc {
 		return next
 	}
 
-	return func(next http.HandlerFunc, auth BasicAuth) http.HandlerFunc {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			user, pass, ok := r.BasicAuth()
-			if !ok {
-				user = ""
-				pass = ""
-			}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok := r.BasicAuth()
+		if !ok {
+			user = ""
+			pass = ""
+		}
 
-			if ok, err := auth.matches(user, pass); !ok || err != nil {
-				if err != nil {
-					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-					return
-				}
-
-				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm=%q, charset="UTF-8"`, b.Realm))
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		if ok, err := b.matches(user, pass); !ok || err != nil {
+			if err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}
 
-			next.ServeHTTP(w, r)
-		})
-	}(next, b)
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm=%q, charset="UTF-8"`, b.Realm))
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // BasicAuthFieldSpec returns the spec for an HTTP BasicAuth component
