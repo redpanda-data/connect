@@ -58,7 +58,7 @@ false for connections to succeed.`),
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("urls", "A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.", []string{"http://localhost:9200"}).Array(),
 			docs.FieldString("index", "The index to place messages.").IsInterpolated(),
-			docs.FieldString("action", "The action to take on the document.").IsInterpolated().HasOptions("create", "index", "update", "delete").Advanced(),
+			docs.FieldString("action", "The action to take on the document.").IsInterpolated().HasOptions("create", "index", "update", "upsert", "delete").Advanced(),
 			docs.FieldString("pipeline", "An optional pipeline id to preprocess incoming documents.").IsInterpolated().Advanced(),
 			docs.FieldString("id", "The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").IsInterpolated(),
 			docs.FieldString("type", "The document mapping type. This field is required for versions of elasticsearch earlier than 6.0.0, but are invalid for versions 7.0.0 or later.").Optional().IsInterpolated(),
@@ -373,6 +373,17 @@ func (e *Elasticsearch) buildBulkableRequest(p *pendingBulkIndex) (elastic.Bulka
 			Index(p.Index).
 			Routing(p.Routing).
 			Id(p.ID).
+			Doc(p.Doc)
+		if p.Type != "" {
+			r = r.Type(p.Type)
+		}
+		return r, nil
+	case "upsert":
+		r := elastic.NewBulkUpdateRequest().
+			Index(p.Index).
+			Routing(p.Routing).
+			Id(p.ID).
+			DocAsUpsert(true).
 			Doc(p.Doc)
 		if p.Type != "" {
 			r = r.Type(p.Type)
