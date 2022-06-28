@@ -28,6 +28,7 @@ type Config struct {
 	CertFile       string              `json:"cert_file" yaml:"cert_file"`
 	KeyFile        string              `json:"key_file" yaml:"key_file"`
 	CORS           httpdocs.ServerCORS `json:"cors" yaml:"cors"`
+	BasicAuth      httpdocs.BasicAuth  `json:"basic_auth" yaml:"basic_auth"`
 }
 
 // NewConfig creates a new API config with default values.
@@ -40,6 +41,7 @@ func NewConfig() Config {
 		CertFile:       "",
 		KeyFile:        "",
 		CORS:           httpdocs.NewServerCORS(),
+		BasicAuth:      httpdocs.NewBasicAuth(),
 	}
 }
 
@@ -103,6 +105,10 @@ func New(
 		if conf.CertFile == "" || conf.KeyFile == "" {
 			return nil, errors.New("both cert_file and key_file must be specified, or neither")
 		}
+	}
+
+	if err := conf.BasicAuth.Validate(); err != nil {
+		return nil, err
 	}
 
 	t := &Type{
@@ -247,12 +253,13 @@ func (t *Type) RegisterEndpoint(path, desc string, handlerFunc http.HandlerFunc)
 	defer t.handlersMut.Unlock()
 
 	if _, exists := t.handlers[path]; !exists {
-		wrapHandler := func(w http.ResponseWriter, r *http.Request) {
+		wrapHandler := t.conf.BasicAuth.WrapHandler(func(w http.ResponseWriter, r *http.Request) {
 			t.handlersMut.RLock()
 			h := t.handlers[path]
 			t.handlersMut.RUnlock()
 			h(w, r)
-		}
+		})
+
 		t.mux.HandleFunc(path, wrapHandler)
 		t.mux.HandleFunc(t.conf.RootPath+path, wrapHandler)
 	}
