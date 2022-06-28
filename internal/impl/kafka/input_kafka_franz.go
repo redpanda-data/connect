@@ -73,7 +73,6 @@ This input adds the following metadata fields to each message:
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
 		Field(saslField())
-
 }
 
 func init() {

@@ -17,6 +17,22 @@ func newReverseAirGapLogger(l log.Modular) *Logger {
 	return &Logger{l}
 }
 
+// Tracef logs a trace message using fmt.Sprintf when args are specified.
+func (l *Logger) Tracef(template string, args ...interface{}) {
+	if l == nil {
+		return
+	}
+	l.m.Tracef(template, args...)
+}
+
+// Trace logs a trace message.
+func (l *Logger) Trace(message string) {
+	if l == nil {
+		return
+	}
+	l.m.Traceln(message)
+}
+
 // Debugf logs a debug message using fmt.Sprintf when args are specified.
 func (l *Logger) Debugf(template string, args ...interface{}) {
 	if l == nil {
