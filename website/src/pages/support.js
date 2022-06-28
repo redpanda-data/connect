@@ -48,7 +48,7 @@ function Support() {
             <div className="row margin-bottom--lg">
               <div className="col col--9 col--offset-1">
                 <p>
-Benthos has a helpful and conveniently global community so if you have quick questions, are in the market for ideas, or just want to make some friends, it's worth trying your luck with our <a href="#community-support">community spaces</a>. However, for organisations that want quicker action, guaranteed attention or some one-on-one consulting time there are some <a href="#paid-support">paid services available</a> that are worth considering.
+Benthos has a helpful and conveniently global community so if you have quick questions, are in the market for ideas, or just want to make some friends, it's worth trying your luck with our <a href="#community-support">community spaces</a>. However, for organisations that want quicker action, guaranteed attention or some one-on-one consulting time there are some <a href="#paid-services">paid services available</a> that are worth considering.
                 </p>
               </div>
             </div>
@@ -103,6 +103,11 @@ Benthos has a helpful and conveniently global community so if you have quick que
                 <p>This especially applies to configuration files you're showing us, please try and reduce them down into specifically the components you're asking about.</p>
                 <h3>Reproduce Your Issue</h3>
                 <p>It's common for users to point out an issue they're seemingly having with Benthos and it then turns out to be an unrelated issue with cached builds, configs not being saved, docker images not being pulled fresh, etc. These encounters may sound rare but anecdotally they occur more often in our support channels than actual bugs, and we've spent considerable measures of time trying to reproduce issues that don't exist (yet). By attempting to isolate and reproduce issues yourself you can significantly reduce the burden on us.</p>
+                <h3>Provide Context</h3>
+                <p>Things that a typical community member cannot do include mind-reading, assuming control of your PC (I hope) and time travelling into the past in order to obtain context of the problem on your behalf. In order to work around these limitations please make sure that when you are asking us for help regarding a problem you've had that at the very least you are able to give us any error messages/logs that were emitted by Benthos when it happened.</p>
+                <h3>Never Direct Message</h3>
+                <p>Unless you are explicitly instructed to do so please never direct message maintainers or community members for support. If you aren't receiving responses in a public support channel it is because they currently do not have time to address your issue, please be patient or consider a <a href="#paid-services">paid support option instead</a>. Direct messages only serve to add extra pressure on volunteers, and answering questions via direct messages denies other users the opportunity to read the answer themselves.</p>
+                <p>If there is sensitive information within your question that you do not want to expose publicly then please take the time to scrub that information from the material you are sharing.</p>
               </div>
             </div>
           </div>

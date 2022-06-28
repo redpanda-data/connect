@@ -55,7 +55,7 @@ Set the minimum severity level for emitting logs.
 
 
 Type: `string`  
-Default: `&#34;INFO&#34;`  
+Default: `"INFO"`  
 Options: `OFF`, `FATAL`, `ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`, `ALL`, `NONE`.
 
 ### `format`
@@ -64,7 +64,7 @@ Set the format of emitted logs.
 
 
 Type: `string`  
-Default: `&#34;logfmt&#34;`  
+Default: `"logfmt"`  
 Options: `json`, `logfmt`.
 
 ### `add_timestamp`
@@ -81,7 +81,7 @@ A map of key/value pairs to add to each structured log.
 
 
 Type: map of `string`  
-Default: `{&#34;@service&#34;:&#34;benthos&#34;}`  
+Default: `{"@service":"benthos"}`  
 
 ### `file`
 
@@ -96,7 +96,7 @@ The file path to write logs to, if the file does not exist it will be created. L
 
 
 Type: `string`  
-Default: `&#34;&#34;`  
+Default: `""`  
 
 ### `file.rotate`
 

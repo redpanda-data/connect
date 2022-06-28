@@ -2,7 +2,7 @@ package log
 
 import (
 	"bytes"
-	"html/template"
+	"text/template"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
 

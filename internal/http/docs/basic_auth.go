@@ -102,13 +102,13 @@ func (b BasicAuth) WrapHandler(next http.HandlerFunc) http.HandlerFunc {
 
 // BasicAuthFieldSpec returns the spec for an HTTP BasicAuth component
 func BasicAuthFieldSpec() docs.FieldSpec {
-	return docs.FieldObject("basic_auth", "Require HTTP Basic Auth for the HTTP server.").WithChildren(
-		docs.FieldBool("enabled", "Enable Basic Auth").HasDefault(false),
+	return docs.FieldObject("basic_auth", "Allows you to enforce and customise basic authentication for requests to the HTTP server.").WithChildren(
+		docs.FieldBool("enabled", "Enable basic authentication").HasDefault(false),
 		docs.FieldString("realm", "Custom realm name").HasDefault("restricted"),
-		docs.FieldString("username", "Basic Auth Username").HasDefault(""),
-		docs.FieldString("password_hash", "Basic Auth Password Hash").HasDefault(""),
-		docs.FieldString("algorithm", "Which hasing algorithm was used to hash the password").HasDefault("sha256"),
-		docs.FieldString("salt", "Salt for scrypt hasing algorithm").HasDefault(""),
+		docs.FieldString("username", "Username required to authenticate.").HasDefault(""),
+		docs.FieldString("password_hash", "Hashed password required to authenticate. (base64 encoded)").HasDefault(""),
+		docs.FieldString("algorithm", "Encryption algorithm used to generate `password_hash`.", "md5", "sha256", "bcrypt", "scrypt").HasDefault("sha256"),
+		docs.FieldString("salt", "Salt for scrypt algorithm. (base64 encoded)").HasDefault(""),
 	).Advanced()
 }
 

@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	tdocs "github.com/benthosdev/benthos/v4/internal/cli/test/docs"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
@@ -73,6 +74,9 @@ func main() {
 
 	// Unit test docs
 	doTestDocs(docsDir)
+
+	// HTTP docs
+	doHTTP(docsDir)
 
 	// Logger docs
 	doLogger(docsDir)
@@ -167,6 +171,15 @@ func doTestDocs(dir string) {
 	}
 
 	create("test docs", filepath.Join(dir, "..", "configuration", "unit_testing.md"), mdSpec)
+}
+
+func doHTTP(dir string) {
+	mdSpec, err := api.DocsMarkdown()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to generate docs for http: %v", err))
+	}
+
+	create("http docs", filepath.Join(dir, "http", "about.md"), mdSpec)
 }
 
 func doLogger(dir string) {

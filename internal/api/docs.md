@@ -13,13 +13,18 @@ When Benthos runs it kicks off an HTTP server that provides a few generally usef
 
 The configuration for this server lives under the `http` namespace, with the following default values:
 
-
+{{if eq .CommonConfig .AdvancedConfig -}}
+```yaml
+# Config fields, showing default values
+{{.CommonConfig -}}
+```
+{{else}}
 import Tabs from '@theme/Tabs';
 
-<Tabs defaultValue="common" values={[
+<Tabs defaultValue="common" values={{`{[
   { label: 'Common', value: 'common', },
   { label: 'Advanced', value: 'advanced', },
-]}>
+]}`}}>
 
 import TabItem from '@theme/TabItem';
 
@@ -27,12 +32,7 @@ import TabItem from '@theme/TabItem';
 
 ```yaml
 # Common config fields, showing default values
-
-http:
-  address: 0.0.0.0:4195
-  enabled: true
-  root_path: /benthos
-  debug_endpoints: false
+{{.CommonConfig -}}
 ```
 
 </TabItem>
@@ -40,27 +40,13 @@ http:
 
 ```yaml
 # All config fields, showing default values
-
-http:
-  address: 0.0.0.0:4195
-  enabled: true
-  root_path: /benthos
-  debug_endpoints: false
-  cert_file: ""
-  key_file: ""
-  cors:
-    enabled: false
-    allowed_origins: []
-  basic_auth:
-    enabled: false
-    username: ""
-    password_hash: ""
-    algorithm: "sha256"
-    salt: ""
+{{.AdvancedConfig -}}
 ```
 
 </TabItem>
 </Tabs>
+{{end -}}
+
 The field `enabled` can be set to `false` in order to disable the server.
 
 The field `root_path` specifies a general prefix for all endpoints, this can help isolate the service endpoints when using a reverse proxy with other shared services. All endpoints will still be registered at the root as well as behind the prefix, e.g. with a `root_path` set to `/foo` the endpoint `/version` will be accessible from both `/version` and `/foo/version`.
@@ -111,144 +97,7 @@ The field `debug_endpoints` when set to `true` prompts Benthos to register a few
 
 The schema of the `http` section is as follows:
 
-### `enabled`
-
-Whether to enable to HTTP server.
-
-
-Type: `bool`  
-Default: `true`  
-
-### `address`
-
-The address to bind to.
-
-
-Type: `string`  
-Default: `"0.0.0.0:4195"`  
-
-### `root_path`
-
-Specifies a general prefix for all endpoints, this can help isolate the service endpoints when using a reverse proxy with other shared services. All endpoints will still be registered at the root as well as behind the prefix, e.g. with a root_path set to `/foo` the endpoint `/version` will be accessible from both `/version` and `/foo/version`.
-
-
-Type: `string`  
-Default: `"/benthos"`  
-
-### `debug_endpoints`
-
-Whether to register a few extra endpoints that can be useful for debugging performance or behavioral problems.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `cert_file`
-
-An optional certificate file for enabling TLS.
-
-
-Type: `string`  
-Default: `""`  
-
-### `key_file`
-
-An optional key file for enabling TLS.
-
-
-Type: `string`  
-Default: `""`  
-
-### `cors`
-
-Adds Cross-Origin Resource Sharing headers.
-
-
-Type: `object`  
-Requires version 3.63.0 or newer  
-
-### `cors.enabled`
-
-Whether to allow CORS requests.
-
-
-Type: `bool`  
-Default: `false`  
-
-### `cors.allowed_origins`
-
-An explicit list of origins that are allowed for CORS requests.
-
-
-Type: list of `string`  
-Default: `[]`  
-
-### `basic_auth`
-
-Allows you to enforce and customise basic authentication for requests to the HTTP server.
-
-
-Type: `object`  
-
-### `basic_auth.enabled`
-
-Enable basic authentication
-
-
-Type: `bool`  
-Default: `false`  
-
-### `basic_auth.realm`
-
-Custom realm name
-
-
-Type: `string`  
-Default: `"restricted"`  
-
-### `basic_auth.username`
-
-Username required to authenticate.
-
-
-Type: `string`  
-Default: `""`  
-
-### `basic_auth.password_hash`
-
-Hashed password required to authenticate. (base64 encoded)
-
-
-Type: `string`  
-Default: `""`  
-
-### `basic_auth.algorithm`
-
-Encryption algorithm used to generate `password_hash`.
-
-
-Type: `string`  
-Default: `"sha256"`  
-
-```yml
-# Examples
-
-algorithm: md5
-
-algorithm: sha256
-
-algorithm: bcrypt
-
-algorithm: scrypt
-```
-
-### `basic_auth.salt`
-
-Salt for scrypt algorithm. (base64 encoded)
-
-
-Type: `string`  
-Default: `""`  
+{{template "field_docs" . -}}
 
 [inputs.http_server]: /docs/components/inputs/http_server
 [outputs.http_server]: /docs/components/outputs/http_server
