@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - The service-wide `http` config now supports basic authentication.
+- The `elasticsearch` output now supports upsert operations.
 
 ## 4.3.0 - 2022-06-23
 
