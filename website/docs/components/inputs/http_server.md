@@ -109,11 +109,21 @@ This input adds the following metadata fields to each message:
 - http_server_user_agent
 - http_server_request_path
 - http_server_verb
+- http_server_remote_ip
 - All headers (only first values are taken)
 - All query parameters
 - All path parameters
 - All cookies
 ```
+
+If server is configured to work with HTTPS, the following fields added:
+
+``` text
+- http_server_tls_version
+- http_server_tls_subject
+- http_server_tls_cipher_suite
+```
+
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
 
