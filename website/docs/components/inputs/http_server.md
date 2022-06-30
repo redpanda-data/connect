@@ -115,16 +115,12 @@ This input adds the following metadata fields to each message:
 - All path parameters
 - All cookies
 ```
-
-If server is configured to work with HTTPS, the following fields added:
-
+If HTTPS is enabled, the following fields are added as well:
 ``` text
 - http_server_tls_version
 - http_server_tls_subject
 - http_server_tls_cipher_suite
 ```
-
-
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).
 
 ## Fields
