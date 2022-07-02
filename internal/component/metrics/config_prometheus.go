@@ -1,6 +1,3 @@
-//go:build !wasm
-// +build !wasm
-
 package metrics
 
 // PrometheusConfig is config for the Prometheus metrics type.
