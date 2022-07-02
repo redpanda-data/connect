@@ -348,6 +348,7 @@ func TestHTTPServerMetadata(t *testing.T) {
 	assert.Equal(t, dummyPath, part.MetaGet("http_server_request_path"))
 	assert.Equal(t, "POST", part.MetaGet("http_server_verb"))
 	assert.Regexp(t, "^Go-http-client/", part.MetaGet("http_server_user_agent"))
+	assert.Equal(t, "127.0.0.1", part.MetaGet("http_server_remote_ip"))
 	// Make sure query params are set in the metadata
 	assert.Contains(t, "bar", part.MetaGet("foo"))
 }

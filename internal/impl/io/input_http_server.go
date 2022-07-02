@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -81,12 +82,18 @@ This input adds the following metadata fields to each message:
 - http_server_user_agent
 - http_server_request_path
 - http_server_verb
+- http_server_remote_ip
 - All headers (only first values are taken)
 - All query parameters
 - All path parameters
 - All cookies
 ` + "```" + `
-
+If HTTPS is enabled, the following fields are added as well:
+` + "``` text" + `
+- http_server_tls_version
+- http_server_tls_subject
+- http_server_tls_cipher_suite
+` + "```" + `
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#metadata).`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("address", "An alternative address to host from. If left empty the service wide address is used."),
@@ -285,6 +292,25 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (*message.B
 		p.MetaSet("http_server_user_agent", r.UserAgent())
 		p.MetaSet("http_server_request_path", r.URL.Path)
 		p.MetaSet("http_server_verb", r.Method)
+		p.MetaSet("http_server_remote_ip", strings.Split(r.RemoteAddr, ":")[0])
+		if r.TLS != nil {
+			var tlsVersion string
+			switch r.TLS.Version {
+			case tls.VersionTLS10:
+				tlsVersion = "TLSv1.0"
+			case tls.VersionTLS11:
+				tlsVersion = "TLSv1.1"
+			case tls.VersionTLS12:
+				tlsVersion = "TLSv1.2"
+			case tls.VersionTLS13:
+				tlsVersion = "TLSv1.3"
+			}
+			p.MetaSet("http_server_tls_version", tlsVersion)
+			if len(r.TLS.VerifiedChains) > 0 && len(r.TLS.VerifiedChains[0]) > 0 {
+				p.MetaSet("http_server_tls_subject", r.TLS.VerifiedChains[0][0].Subject.String())
+			}
+			p.MetaSet("http_server_tls_cipher_suite", tls.CipherSuiteName(r.TLS.CipherSuite))
+		}
 		for k, v := range r.Header {
 			if len(v) > 0 {
 				p.MetaSet(k, v[0])
