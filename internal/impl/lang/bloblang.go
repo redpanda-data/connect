@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/bxcodec/faker/v3"
 	"github.com/gosimple/slug"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
 func init() {
@@ -59,13 +60,13 @@ func init() {
 			"`toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the [faker](https://github.com/bxcodec/faker) docs "+
 			"for details on these functions.").
 		Param(bloblang.NewStringParam("function").Description("The name of the function to use to generate the value.").Default("")).
-		Example("Generates a time in the format 00:00:00",
+		Example("Use `time_string` to generate a time in the format `00:00:00`:",
 			`root.time = fake("time_string")`).
-		Example("Generates a string in email address format.",
+		Example("Use `email` to generate a string in email address format:",
 			`root.email = fake("email")`).
-		Example("Generates a JWT token",
+		Example("Use `jwt` to generate a JWT token:",
 			`root.jwt = fake("jwt")`).
-		Example("Generates a hypenated UUID",
+		Example("Use `uuid_hyphenated` to generate a hypenated UUID:",
 			`root.uuid = fake("uuid_hyphenated")`)
 
 	if err := bloblang.RegisterFunctionV2(

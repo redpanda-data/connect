@@ -3,9 +3,10 @@ package lang
 import (
 	"testing"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 )
 
 func TestFakeFunction_Invalid(t *testing.T) {

@@ -429,25 +429,25 @@ Takes in a string that maps to a [faker](https://github.com/bxcodec/faker) funct
 #### Examples
 
 
-Generates a time in the format 00:00:00
+Use `time_string` to generate a time in the format `00:00:00`:
 
 ```coffee
 root.time = fake("time_string")
 ```
 
-Generates a string in email address format.
+Use `email` to generate a string in email address format:
 
 ```coffee
 root.email = fake("email")
 ```
 
-Generates a JWT token
+Use `jwt` to generate a JWT token:
 
 ```coffee
 root.jwt = fake("jwt")
 ```
 
-Generates a hypenated UUID
+Use `uuid_hyphenated` to generate a hypenated UUID:
 
 ```coffee
 root.uuid = fake("uuid_hyphenated")
