@@ -33,6 +33,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.9.1 // indirect
 	github.com/benhoyt/goawk v1.17.1
 	github.com/bradfitz/gomemcache v0.0.0-20220106215444-fb4bf637b56d
+	github.com/bxcodec/faker/v3 v3.8.0
 	github.com/cenkalti/backoff/v4 v4.1.2
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/clbanning/mxj/v2 v2.5.5
