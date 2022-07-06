@@ -222,7 +222,8 @@ Either run Benthos as a stream processor or choose a command:
 				_ = cli.ShowAppHelp(c)
 				os.Exit(1)
 			}
-			os.Exit(cmdService(
+
+			code := cmdService(
 				c.String("config"),
 				c.StringSlice("resources"),
 				c.StringSlice("set"),
@@ -232,7 +233,12 @@ Either run Benthos as a stream processor or choose a command:
 				false,
 				false,
 				nil,
-			))
+			)
+
+			if code != 0 {
+				os.Exit(code)
+			}
+
 			return nil
 		},
 		Commands: []*cli.Command{
