@@ -259,7 +259,6 @@ Enables SASL authentication.
 
 
 Type: `object`  
-Default: `{}`  
 
 ### `sasl.mechanism`
 

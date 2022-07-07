@@ -140,7 +140,6 @@ then the declaration passively verifies that they match the target fields.
 
 
 Type: `object`  
-Default: `{}`  
 
 ### `queue_declare.enabled`
 
@@ -156,7 +155,7 @@ Whether the declared queue is durable.
 
 
 Type: `bool`  
-Default: `false`  
+Default: `true`  
 
 ### `bindings_declare`
 

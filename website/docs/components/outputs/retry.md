@@ -33,7 +33,7 @@ elapsed time fields are non-zero, either is reached.
 output:
   label: ""
   retry:
-    output: {}
+    output: null
 ```
 
 </TabItem>
@@ -49,7 +49,7 @@ output:
       initial_interval: 500ms
       max_interval: 3s
       max_elapsed_time: 0s
-    output: {}
+    output: null
 ```
 
 </TabItem>
@@ -90,7 +90,7 @@ The initial period to wait between retry attempts.
 
 
 Type: `string`  
-Default: `"100ms"`  
+Default: `"500ms"`  
 
 ### `backoff.max_interval`
 
@@ -98,7 +98,7 @@ The maximum period to wait between retry attempts.
 
 
 Type: `string`  
-Default: `"1s"`  
+Default: `"3s"`  
 
 ### `backoff.max_elapsed_time`
 

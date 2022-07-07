@@ -58,7 +58,7 @@ var labelField = FieldString(
 	}
 	ctx.LabelsToLine[l] = line
 	return nil
-})
+}).HasDefault("")
 
 // ReservedFieldsByType returns a map of fields for a specific type.
 func ReservedFieldsByType(t Type) map[string]FieldSpec {

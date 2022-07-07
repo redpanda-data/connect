@@ -14,11 +14,6 @@ type RetryConfig struct {
 
 // NewRetryConfig creates a new RetryConfig with default values.
 func NewRetryConfig() RetryConfig {
-	rConf := retries.NewConfig()
-	rConf.MaxRetries = 0
-	rConf.Backoff.InitialInterval = "100ms"
-	rConf.Backoff.MaxInterval = "1s"
-	rConf.Backoff.MaxElapsedTime = "0s"
 	return RetryConfig{
 		Output: nil,
 		Config: retries.NewConfig(),

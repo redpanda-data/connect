@@ -259,7 +259,6 @@ Enables SASL authentication.
 
 
 Type: `object`  
-Default: `{}`  
 
 ### `sasl.mechanism`
 
@@ -309,7 +308,6 @@ Specify criteria for which metadata values are attached to messages as headers.
 
 
 Type: `object`  
-Default: `{}`  
 
 ### `metadata.exclude_prefixes`
 

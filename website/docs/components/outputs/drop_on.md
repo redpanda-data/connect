@@ -24,7 +24,7 @@ output:
   drop_on:
     error: false
     back_pressure: ""
-    output: {}
+    output: null
 ```
 
 Regular Benthos outputs will apply back pressure when downstream services aren't accessible, and Benthos retries (or nacks) all messages that fail to be delivered. However, in some circumstances, or for certain output types, we instead might want to relax these mechanisms, which is when this output becomes useful.

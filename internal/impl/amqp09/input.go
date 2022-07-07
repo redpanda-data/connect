@@ -84,8 +84,8 @@ Allows you to passively declare the target queue. If the queue already exists
 then the declaration passively verifies that they match the target fields.`,
 			).WithChildren(
 				docs.FieldBool("enabled", "Whether to enable queue declaration.").HasDefault(false),
-				docs.FieldBool("durable", "Whether the declared queue is durable.").HasDefault(false),
-			).Advanced().HasDefault(map[string]interface{}{}),
+				docs.FieldBool("durable", "Whether the declared queue is durable.").HasDefault(true),
+			).Advanced(),
 			docs.FieldObject("bindings_declare",
 				"Allows you to passively declare bindings for the target queue.",
 				[]interface{}{

@@ -23,7 +23,7 @@ Reads messages from a child input until a consumed message passes a [Bloblang qu
 input:
   label: ""
   read_until:
-    input: {}
+    input: null
     check: ""
     restart_input: false
 ```

@@ -43,8 +43,8 @@ use the ` + "[`fallback`](/docs/components/outputs/fallback)" + ` output type.`,
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldInt("max_retries", "The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.").HasDefault(0).Advanced(),
 			docs.FieldObject("backoff", "Control time intervals between retry attempts.").WithChildren(
-				docs.FieldString("initial_interval", "The initial period to wait between retry attempts.").HasDefault("100ms"),
-				docs.FieldString("max_interval", "The maximum period to wait between retry attempts.").HasDefault("1s"),
+				docs.FieldString("initial_interval", "The initial period to wait between retry attempts.").HasDefault("500ms"),
+				docs.FieldString("max_interval", "The maximum period to wait between retry attempts.").HasDefault("3s"),
 				docs.FieldString("max_elapsed_time", "The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.").HasDefault("0s"),
 			).Advanced(),
 			docs.FieldOutput("output", "A child output."),

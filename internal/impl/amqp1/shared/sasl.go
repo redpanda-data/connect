@@ -42,7 +42,7 @@ func SASLFieldSpec() docs.FieldSpec {
 		).HasDefault("none"),
 		docs.FieldString("user", "A SASL plain text username. It is recommended that you use environment variables to populate this field.", "${USER}").HasDefault(""),
 		docs.FieldString("password", "A SASL plain text password. It is recommended that you use environment variables to populate this field.", "${PASSWORD}").HasDefault(""),
-	).Advanced().HasDefault(map[string]interface{}{})
+	).Advanced()
 }
 
 // ToOptFns renders the sasl.Config options into amqp.ConnOption fns.

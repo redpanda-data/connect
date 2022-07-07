@@ -51,8 +51,7 @@ Message metadata is added to each AMQP message as string annotations. In order t
 			itls.FieldSpec(),
 			shared.SASLFieldSpec(),
 			docs.FieldObject("metadata", "Specify criteria for which metadata values are attached to messages as headers.").
-				WithChildren(metadata.ExcludeFilterFields()...).
-				HasDefault(map[string]interface{}{}),
+				WithChildren(metadata.ExcludeFilterFields()...),
 		),
 		Categories: []string{
 			"Services",
