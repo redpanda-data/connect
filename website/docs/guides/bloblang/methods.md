@@ -2160,6 +2160,25 @@ root = this.encoded.decode("base64").parse_msgpack()
 # Out: {"foo":"bar"}
 ```
 
+### `parse_parquet`
+
+Decodes a [Parquet file](https://parquet.apache.org/docs/) into an array of objects, one for each row within the file.
+
+#### Parameters
+
+**`byte_array_as_string`** &lt;bool, default `false`&gt; Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices. Enabling this field makes serialising the data as JSON more intuitive as `[]byte` values are serialised as base64 encoded strings by default.  
+
+#### Examples
+
+
+```coffee
+root = content().parse_parquet()
+```
+
+```coffee
+root = content().parse_parquet(byte_array_as_string: true)
+```
+
 ### `parse_xml`
 
 

@@ -1,7 +1,7 @@
 ---
 title: parquet
 type: processor
-status: experimental
+status: deprecated
 categories: ["Parsing"]
 ---
 
@@ -15,8 +15,8 @@ categories: ["Parsing"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-:::caution EXPERIMENTAL
-This component is experimental and therefore subject to change or removal outside of major version releases.
+:::warning DEPRECATED
+This component is deprecated and will be removed in the next major version release. Please consider moving onto [alternative components](#alternatives).
 :::
 Converts batches of documents to or from [Parquet files](https://parquet.apache.org/docs/).
 
@@ -31,6 +31,10 @@ parquet:
   schema_file: ""
   schema: ""
 ```
+
+### Alternatives
+
+This processor is now deprecated, it's recommended that you use the new [`parquet_decode`](/docs/components/processors/parquet_decode) and [`parquet_encode`](/docs/components/processors/parquet_encode) processors as they provide a number of advantages, the most important of which is better error messages for when schemas are mismatched or files could not be consumed.
 
 ### Troubleshooting
 
@@ -93,7 +97,7 @@ Options: `uncompressed`, `snappy`, `gzip`, `lz4`, `zstd`.
 
 ### `schema_file`
 
-A file path containing a schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified.
+A file path containing a schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified when creating Parquet files via the `from_json` operator.
 
 
 Type: `string`  
@@ -106,7 +110,7 @@ schema_file: schemas/foo.json
 
 ### `schema`
 
-A schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified.
+A schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified when creating Parquet files via the `from_json` operator.
 
 
 Type: `string`  
@@ -123,41 +127,5 @@ schema: |-
     ]
   }
 ```
-
-## Examples
-
-<Tabs defaultValue="Batching Output Files" values={[
-{ label: 'Batching Output Files', value: 'Batching Output Files', },
-]}>
-
-<TabItem value="Batching Output Files">
-
-Parquet is often used to write batches of documents to a file store.
-
-```yaml
-output:
-  broker:
-    outputs:
-      - file:
-          path: ./stuff-${! uuid_v4() }.parquet
-          codec: all-bytes
-    batching:
-      count: 100
-      period: 30s
-      processors:
-        - parquet:
-            operator: from_json
-            schema: |-
-              {
-                "Tag": "name=root, repetitiontype=REQUIRED",
-                "Fields": [
-                  {"Tag":"name=name,inname=NameIn,type=BYTE_ARRAY,convertedtype=UTF8, repetitiontype=REQUIRED"},
-                  {"Tag":"name=age,inname=Age,type=INT32,repetitiontype=REQUIRED"}
-                ]
-              }
-```
-
-</TabItem>
-</Tabs>
 
 

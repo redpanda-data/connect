@@ -784,6 +784,12 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}
 			return nil, err
 		}
 		return b, nil
+	case FieldTypeUnknown:
+		var i interface{}
+		if err := node.Decode(&i); err != nil {
+			return nil, err
+		}
+		return i, nil
 	case FieldTypeObject:
 		return f.Children.YAMLToMap(node, conf)
 	}

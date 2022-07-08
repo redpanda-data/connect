@@ -2,7 +2,6 @@ package parquet
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
@@ -16,13 +15,17 @@ import (
 
 func parquetProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		// Stable(). TODO
+		Deprecated().
 		Categories("Parsing").
 		Summary("Converts batches of documents to or from [Parquet files](https://parquet.apache.org/docs/).").
 		Description(`
+### Alternatives
+
+This processor is now deprecated, it's recommended that you use the new ` + "[`parquet_decode`](/docs/components/processors/parquet_decode) and [`parquet_encode`](/docs/components/processors/parquet_encode)" + ` processors as they provide a number of advantages, the most important of which is better error messages for when schemas are mismatched or files could not be consumed.
+
 ### Troubleshooting
 
-This processor is experimental and the error messages that it provides are often vague and unhelpful. An error message of the form `+"`interface {} is nil, not <value type>`"+` implies that a field of the given type was expected but not found in the processed message when writing parquet files.
+This processor is experimental and the error messages that it provides are often vague and unhelpful. An error message of the form ` + "`interface {} is nil, not <value type>`" + ` implies that a field of the given type was expected but not found in the processed message when writing parquet files.
 
 Unfortunately the name of the field will sometimes be missing from the error, in which case it's worth double checking the schema you provided to make sure that there are no typos in the field names, and if that doesn't reveal the issue it can help to mark fields as OPTIONAL in the schema and gradually change them back to REQUIRED until the error returns.
 
@@ -30,7 +33,7 @@ Unfortunately the name of the field will sometimes be missing from the error, in
 
 The schema must be specified as a JSON string, containing an object that describes the fields expected at the root of each document. Each field can itself have more fields defined, allowing for nested structures:
 
-`+"```json"+`
+` + "```json" + `
 {
   "Tag": "name=root, repetitiontype=REQUIRED",
   "Fields": [
@@ -47,13 +50,13 @@ The schema must be specified as a JSON string, containing an object that describ
     }
   ]
 }
-`+"```"+`
+` + "```" + `
 
 A schema can be derived from a source file using https://github.com/xitongsys/parquet-go/tree/master/tool/parquet-tools:
 
-`+"```sh"+`
+` + "```sh" + `
 ./parquet-tools -cmd schema -file foo.parquet
-`+"```"+``).
+` + "```" + ``).
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{
 			"to_json":   "Expand a file into one or more JSON messages.",
 			"from_json": "Compress a batch of JSON documents into a file.",
@@ -63,11 +66,11 @@ A schema can be derived from a source file using https://github.com/xitongsys/pa
 			Description("The type of compression to use when writing parquet files, this field is ignored when consuming parquet files.").
 			Default("snappy")).
 		Field(service.NewStringField("schema_file").
-			Description("A file path containing a schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified.").
+			Description("A file path containing a schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified when creating Parquet files via the `from_json` operator.").
 			Optional().
 			Example(`schemas/foo.json`)).
 		Field(service.NewStringField("schema").
-			Description("A schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified.").
+			Description("A schema used to describe the parquet files being generated or consumed, the format of the schema is a JSON document detailing the tag and fields of documents. The schema can be found at: https://pkg.go.dev/github.com/xitongsys/parquet-go#readme-json. Either a `schema_file` or `schema` field must be specified when creating Parquet files via the `from_json` operator.").
 			Optional().
 			Example(`{
   "Tag": "name=root, repetitiontype=REQUIRED",
@@ -76,31 +79,10 @@ A schema can be derived from a source file using https://github.com/xitongsys/pa
     {"Tag":"name=age,inname=Age,type=INT32,repetitiontype=REQUIRED"}
   ]
 }`)).
-		Example(
-			"Batching Output Files",
-			"Parquet is often used to write batches of documents to a file store.",
-			`
-output:
-  broker:
-    outputs:
-      - file:
-          path: ./stuff-${! uuid_v4() }.parquet
-          codec: all-bytes
-    batching:
-      count: 100
-      period: 30s
-      processors:
-        - parquet:
-            operator: from_json
-            schema: |-
-              {
-                "Tag": "name=root, repetitiontype=REQUIRED",
-                "Fields": [
-                  {"Tag":"name=name,inname=NameIn,type=BYTE_ARRAY,convertedtype=UTF8, repetitiontype=REQUIRED"},
-                  {"Tag":"name=age,inname=Age,type=INT32,repetitiontype=REQUIRED"}
-                ]
-              }
-`).
+		LintRule(`
+root = if this.operator == "from_json" && (this.schema | this.schema_file | "") == "" {
+	"a schema or schema_file must be specified when the operator is set to from_json"
+}`).
 		Version("3.62.0")
 }
 
@@ -159,9 +141,6 @@ func newParquetProcessorFromConfig(conf *service.ParsedConfig, logger *service.L
 			rawSchema = string(rawSchemaBytes)
 		}
 	}
-	if rawSchema == "" {
-		return nil, errors.New("either a raw `schema` or a non-empty `schema_file` must be specified")
-	}
 
 	cCodec, err := conf.FieldString("compression")
 	if err != nil {
@@ -171,16 +150,16 @@ func newParquetProcessorFromConfig(conf *service.ParsedConfig, logger *service.L
 }
 
 type parquetProcessor struct {
-	schema   string
+	schema   *string
 	operator func(context.Context, service.MessageBatch) ([]service.MessageBatch, error)
 	logger   *service.Logger
 	cCodec   parquet.CompressionCodec
 }
 
 func newParquetProcessor(operator, compressionCodec, schemaStr string, logger *service.Logger) (*parquetProcessor, error) {
-	s := &parquetProcessor{
-		schema: schemaStr,
-		logger: logger,
+	s := &parquetProcessor{logger: logger}
+	if schemaStr != "" {
+		s.schema = &schemaStr
 	}
 	switch operator {
 	case "from_json":
@@ -215,7 +194,11 @@ func (s *parquetProcessor) processBatchReader(ctx context.Context, batch service
 
 		buf := buffer.NewBufferFileFromBytes(mBytes)
 
-		pr, err := reader.NewParquetReader(buf, s.schema, 1)
+		var schema interface{}
+		if s.schema != nil {
+			schema = *s.schema
+		}
+		pr, err := reader.NewParquetReader(buf, schema, 1)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create parquet reader: %w", err)
 		}
@@ -247,7 +230,7 @@ func (s *parquetProcessor) processBatchWriter(ctx context.Context, batch service
 
 	buf := buffer.NewBufferFile()
 
-	pw, err := writer.NewJSONWriter(s.schema, buf, 1)
+	pw, err := writer.NewJSONWriter(*s.schema, buf, 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create parquet writer: %w", err)
 	}

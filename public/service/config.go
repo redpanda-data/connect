@@ -22,6 +22,23 @@ type ConfigField struct {
 	field docs.FieldSpec
 }
 
+// NewAnyField describes a new config field that can assume any value type
+// without triggering a config parse or linting error.
+func NewAnyField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldAnything(name, ""),
+	}
+}
+
+// NewAnyListField describes a new config field consisting of a list of values
+// that can assume any value type without triggering a config parse or linting
+// error.
+func NewAnyListField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldAnything(name, "").Array(),
+	}
+}
+
 // NewStringField describes a new string type config field.
 func NewStringField(name string) *ConfigField {
 	return &ConfigField{
@@ -507,6 +524,39 @@ func (p *ParsedConfig) fullDotPath(path ...string) string {
 func (p *ParsedConfig) Contains(path ...string) bool {
 	gObj := gabs.Wrap(p.generic).S(p.hiddenPath...)
 	return gObj.Exists(path...)
+}
+
+// FieldAny accesses a field from the parsed config by its name that can assume
+// any value type. If the field is not found an error is returned.
+func (p *ParsedConfig) FieldAny(path ...string) (interface{}, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return "", fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	return v, nil
+}
+
+// FieldAnyList accesses a field that is a list of any value types from the
+// parsed config by its name and returns the value as an array of *ParsedConfig
+// types, where each one represents an object or value in the list. Returns an
+// error if the field is not found, or is not a list of values.
+func (p *ParsedConfig) FieldAnyList(path ...string) ([]*ParsedConfig, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iList, ok := v.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.fullDotPath(path...), v)
+	}
+	sList := make([]*ParsedConfig, len(iList))
+	for i, ev := range iList {
+		sList[i] = &ParsedConfig{
+			mgr:     p.mgr,
+			generic: ev,
+		}
+	}
+	return sList, nil
 }
 
 // FieldString accesses a string field from the parsed config by its name. If

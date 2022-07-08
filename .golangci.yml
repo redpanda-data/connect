@@ -35,25 +35,27 @@ linters:
   disable-all: true
   enable:
     # Default linters reported by `golangci-lint help linters` in v1.41.1
+    # Disabled for Go 1.18
+    # - gosimple
+    # - staticcheck
+    # - structcheck
+    # - unused
     - deadcode
     - errcheck
-    - gosimple
     - govet
     - ineffassign
-    - staticcheck
-    - structcheck
     - typecheck
-    - unused
     - varcheck
     # Extra linters:
+    # Disabled for Go 1.18
+    # - stylecheck
+    # - wastedassign
     - gofmt
     - goimports
     - gocritic
     - revive
-    - stylecheck
     - unconvert
     - durationcheck
-    - wastedassign
     - depguard
     # - bodyclose
     # - gosec

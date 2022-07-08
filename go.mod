@@ -72,7 +72,6 @@ require (
 	github.com/itchyny/timefmt-go v0.1.3
 	github.com/jhump/protoreflect v1.10.1
 	github.com/jmespath/go-jmespath v0.4.0
-	github.com/klauspost/compress v1.15.1 // indirect
 	github.com/lib/pq v1.10.4
 	github.com/linkedin/goavro/v2 v2.11.1
 	github.com/matoous/go-nanoid/v2 v2.0.0
@@ -102,6 +101,7 @@ require (
 	github.com/rickb777/date v1.17.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/segmentio/ksuid v1.0.4
+	github.com/segmentio/parquet-go v0.0.0-20220630161706-7691e3e37eea
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smira/go-statsd v1.3.2
 	github.com/snowflakedb/gosnowflake v1.6.6
