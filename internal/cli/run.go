@@ -223,7 +223,7 @@ Either run Benthos as a stream processor or choose a command:
 				os.Exit(1)
 			}
 
-			code := cmdService(
+			if code := cmdService(
 				c.String("config"),
 				c.StringSlice("resources"),
 				c.StringSlice("set"),
@@ -233,12 +233,9 @@ Either run Benthos as a stream processor or choose a command:
 				false,
 				false,
 				nil,
-			)
-
-			if code != 0 {
+			); code != 0 {
 				os.Exit(code)
 			}
-
 			return nil
 		},
 		Commands: []*cli.Command{
