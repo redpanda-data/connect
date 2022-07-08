@@ -52,7 +52,7 @@ When messages leave the catch block their fail flags are cleared. This processor
 is useful for when it's possible to recover failed messages, or when special
 actions (such as logging/metrics) are required before dropping them.
 
-More information about error handing can be found [here](/docs/configuration/error_handling).`,
+More information about error handling can be found [here](/docs/configuration/error_handling).`,
 		Config: docs.FieldProcessor("", "").Array().
 			LinterFunc(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
 				childProcs, ok := value.([]interface{})
