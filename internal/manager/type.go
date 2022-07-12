@@ -55,6 +55,10 @@ type Type struct {
 	// added as a label to logs and metrics.
 	stream string
 
+	// Opt that determines whether HTTP endpoints registered from within a
+	// stream should be prefixed with the stream name.
+	namespaceStreamEndpoints bool
+
 	// Keeps track of the full configuration path of the component that holds
 	// the manager. This value is used only in observability and therefore it
 	// is acceptable that this does not fully represent reality.
@@ -92,6 +96,14 @@ type OptFunc func(*Type)
 func OptSetAPIReg(r APIReg) OptFunc {
 	return func(t *Type) {
 		t.apiReg = r
+	}
+}
+
+// OptSetStreamHTTPNamespacing determines whether HTTP endpoints registered from
+// within a stream should be prefixed with the stream name.
+func OptSetStreamHTTPNamespacing(enabled bool) OptFunc {
+	return func(t *Type) {
+		t.namespaceStreamEndpoints = enabled
 	}
 }
 
@@ -149,7 +161,8 @@ func OptSetStreamsMode(b bool) OptFunc {
 // components and logical threads of a Benthos service.
 func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
 	t := &Type{
-		apiReg: mock.NewManager(),
+		apiReg:                   mock.NewManager(),
+		namespaceStreamEndpoints: true,
 
 		inputs:       map[string]*inputWrapper{},
 		caches:       map[string]cache.V1{},
@@ -330,7 +343,7 @@ func (t *Type) WithAddedMetrics(m metrics.Type) bundle.NewManagement {
 
 // RegisterEndpoint registers a server wide HTTP endpoint.
 func (t *Type) RegisterEndpoint(apiPath, desc string, h http.HandlerFunc) {
-	if len(t.stream) > 0 {
+	if len(t.stream) > 0 && t.namespaceStreamEndpoints {
 		apiPath = path.Join("/", t.stream, apiPath)
 	}
 	if t.apiReg != nil {

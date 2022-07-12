@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New `fake` bloblang function.
 - New `parquet_encode` and `parquet_decode` processors.
 - New `parse_parquet` bloblang method.
+- CLI flag `--prefix-stream-endpoints` added for disabling streams mode API prefixing.
 
 ## 4.3.0 - 2022-06-23
 

@@ -232,6 +232,7 @@ Either run Benthos as a stream processor or choose a command:
 				c.Bool("watcher"),
 				false,
 				false,
+				false,
 				nil,
 			); code != 0 {
 				os.Exit(code)
@@ -301,6 +302,11 @@ https://benthos.dev/docs/guides/streams_mode/about`[1:],
 						Value: false,
 						Usage: "Disable the HTTP API for streams mode",
 					},
+					&cli.BoolFlag{
+						Name:  "prefix-stream-endpoints",
+						Value: true,
+						Usage: "Whether HTTP endpoints registered by stream configs should be prefixed with the stream ID",
+					},
 				},
 				Action: func(c *cli.Context) error {
 					os.Exit(cmdService(
@@ -311,6 +317,7 @@ https://benthos.dev/docs/guides/streams_mode/about`[1:],
 						!c.Bool("chilled"),
 						c.Bool("watcher"),
 						!c.Bool("no-api"),
+						c.Bool("prefix-stream-endpoints"),
 						true,
 						c.Args().Slice(),
 					))

@@ -30,8 +30,6 @@ import (
 	strmmgr "github.com/benthosdev/benthos/v4/internal/stream/manager"
 )
 
-//------------------------------------------------------------------------------
-
 var testSuffix = "_benthos_test"
 
 type stoppable interface {
@@ -229,7 +227,7 @@ func cmdService(
 	resourcesPaths []string,
 	confOverrides []string,
 	overrideLogLevel string,
-	strict, watching, enableStreamsAPI bool,
+	strict, watching, enableStreamsAPI, namespaceStreamEndpoints bool,
 	streamsMode bool,
 	streamsPaths []string,
 ) int {
@@ -354,6 +352,7 @@ func cmdService(
 	manager, err := manager.New(
 		conf.ResourceConfig,
 		manager.OptSetAPIReg(httpServer),
+		manager.OptSetStreamHTTPNamespacing(namespaceStreamEndpoints),
 		manager.OptSetLogger(logger),
 		manager.OptSetMetrics(stats),
 		manager.OptSetTracer(trac),
