@@ -7,7 +7,7 @@ import ReactPlayer from 'react-player/youtube'
 
 function Videos() {
   const context = useDocusaurusContext();
-  const {siteConfig = {}} = context;
+  const siteConfig = context.siteConfig;
   return (
     <Layout
       title={`${siteConfig.title} Videos`}

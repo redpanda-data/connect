@@ -245,7 +245,13 @@ const features = [
   },
 ];
 
-function Feature({imageUrl, title, description}) {
+interface FeatureArgs {
+  imageUrl?: string;
+  title?: string;
+  description: JSX.Element;
+};
+
+function Feature({imageUrl, title, description}: FeatureArgs) {
   const imgUrl = useBaseUrl(imageUrl);
   return (
     <div className={classnames('col col--6')}>
@@ -262,12 +268,11 @@ function Feature({imageUrl, title, description}) {
 
 function Home() {
   const context = useDocusaurusContext();
-  const {siteConfig = {}} = context;
+  const siteConfig = context.siteConfig;
   return (
     <Layout
       title={`${siteConfig.title}`}
-      description="Fancy stream processing made operationally mundane"
-      keywords={["benthos","stream processor","data engineering","ETL","ELT","event processor","go","golang"]}>
+      description="Fancy stream processing made operationally mundane">
       <header className={classnames('hero', styles.heroBanner)}>
         <div className="container">
           <div className="row">

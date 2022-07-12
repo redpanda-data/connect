@@ -30,7 +30,10 @@ module.exports = {
       defaultMode: 'light',
     },
     image: 'img/og_img.png',
-    metadata: [{name: 'twitter:card', content: 'summary'}],
+    metadata: [
+      {name: 'keywords', content: 'benthos, stream processor, data engineering, ETL, ELT, event processor, go, golang'},
+      {name: 'twitter:card', content: 'summary'},
+    ],
     navbar: {
       title: 'Benthos',
       logo: {
