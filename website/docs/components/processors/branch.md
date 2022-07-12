@@ -114,10 +114,10 @@ result_map: |-
 result_map: root.raw_result = content().string()
 
 result_map: |-
-  root.enrichments.foo = if errored() {
-  	throw(error())
+  root.enrichments.foo = if meta("request_failed") != null {
+    throw(meta("request_failed"))
   } else {
-  	this
+    this
   }
 ```
 

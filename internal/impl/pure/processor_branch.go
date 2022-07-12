@@ -47,10 +47,10 @@ root.foo_result = this`,
 root.bar.body = this.body
 root.bar.id = this.user.id`,
 		`root.raw_result = content().string()`,
-		`root.enrichments.foo = if errored() {
-	throw(error())
+		`root.enrichments.foo = if meta("request_failed") != null {
+  throw(meta("request_failed"))
 } else {
-	this
+  this
 }`,
 	).HasDefault(""),
 }
