@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New `parquet_encode` and `parquet_decode` processors.
 - New `parse_parquet` bloblang method.
 - CLI flag `--prefix-stream-endpoints` added for disabling streams mode API prefixing.
+- Field `timestamp_name` added to the logger config.
 
 ## 4.3.0 - 2022-06-23
 

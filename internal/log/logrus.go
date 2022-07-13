@@ -11,11 +11,12 @@ import (
 
 // Config holds configuration options for a logger object.
 type Config struct {
-	LogLevel     string            `json:"level" yaml:"level"`
-	Format       string            `json:"format" yaml:"format"`
-	AddTimeStamp bool              `json:"add_timestamp" yaml:"add_timestamp"`
-	StaticFields map[string]string `json:"static_fields" yaml:"static_fields"`
-	File         File              `json:"file" yaml:"file"`
+	LogLevel      string            `json:"level" yaml:"level"`
+	Format        string            `json:"format" yaml:"format"`
+	AddTimeStamp  bool              `json:"add_timestamp" yaml:"add_timestamp"`
+	TimestampName string            `json:"timestamp_name" yaml:"timestamp_name"`
+	StaticFields  map[string]string `json:"static_fields" yaml:"static_fields"`
+	File          File              `json:"file" yaml:"file"`
 }
 
 // File contains configuration for file based logging.
@@ -28,9 +29,10 @@ type File struct {
 // NewConfig returns a config struct with the default values for each field.
 func NewConfig() Config {
 	return Config{
-		LogLevel:     "INFO",
-		Format:       "logfmt",
-		AddTimeStamp: false,
+		LogLevel:      "INFO",
+		Format:        "logfmt",
+		AddTimeStamp:  false,
+		TimestampName: "time",
 		StaticFields: map[string]string{
 			"@service": "benthos",
 		},
@@ -97,12 +99,18 @@ func NewV2(stream io.Writer, config Config) (Modular, error) {
 	case "json":
 		logger.SetFormatter(&logrus.JSONFormatter{
 			DisableTimestamp: !config.AddTimeStamp,
+			FieldMap: logrus.FieldMap{
+				logrus.FieldKeyTime: config.TimestampName,
+			},
 		})
 	case "logfmt":
 		logger.SetFormatter(&logrus.TextFormatter{
 			DisableTimestamp: !config.AddTimeStamp,
 			QuoteEmptyFields: true,
 			FullTimestamp:    config.AddTimeStamp,
+			FieldMap: logrus.FieldMap{
+				logrus.FieldKeyTime: config.TimestampName,
+			},
 		})
 	default:
 		return nil, fmt.Errorf("log format '%v' not recognized", config.Format)

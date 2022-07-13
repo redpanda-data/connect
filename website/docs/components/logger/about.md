@@ -75,6 +75,14 @@ Whether to include timestamps in logs.
 Type: `bool`  
 Default: `false`  
 
+### `timestamp_name`
+
+The name of the timestamp field added to logs when `add_timestamp` is set to `true` and the `format` is `json`.
+
+
+Type: `string`  
+Default: `"time"`  
+
 ### `static_fields`
 
 A map of key/value pairs to add to each structured log.
