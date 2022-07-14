@@ -6,16 +6,15 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import styles from './index.module.css';
-import CodeSnippet from "@site/src/theme/CodeSnippet";
+import CodeBlock from "@theme/CodeBlock";
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 const installs = [
   {
     label: 'Curl',
-    lang: 'bash',
-    copyBit: `curl -Lsf https://sh.benthos.dev | bash`,
-    config: `# Install
+    language: 'bash',
+    children: `# Install
 curl -Lsf https://sh.benthos.dev | bash
 
 # Make a config
@@ -26,9 +25,8 @@ benthos -c ./config.yaml`
   },
   {
     label: 'Homebrew',
-    lang: 'bash',
-    copyBit: `brew install benthos`,
-    config: `# Install
+    language: 'bash',
+    children: `# Install
 brew install benthos
 
 # Make a config
@@ -39,9 +37,8 @@ benthos -c ./config.yaml`
   },
   {
     label: 'Docker',
-    lang: 'bash',
-    copyBit: `docker pull jeffail/benthos`,
-    config: `# Pull
+    language: 'bash',
+    children: `# Pull
 docker pull jeffail/benthos
 
 # Make a config
@@ -56,7 +53,8 @@ const snippets = [
   {
     label: 'Mapping',
     further: '/docs/guides/bloblang/about',
-    config: `input:
+    language: 'yaml',
+    children: `input:
   gcp_pubsub:
     project: foo
     subscription: bar
@@ -77,7 +75,8 @@ output:
   {
     label: 'Multiplexing',
     further: '/docs/components/outputs/about#multiplexing-outputs',
-    config: `input:
+    language: 'yaml',
+    children: `input:
   kafka:
     addresses: [ TODO ]
     topics: [ foo, bar ]
@@ -101,7 +100,8 @@ output:
   {
     label: 'Windowing',
     further: '/docs/configuration/windowed_processing',
-    config: `input:
+    language: 'yaml',
+    children: `input:
   nats_jetstream:
     urls: [ nats://TODO:4222 ]
     queue: myqueue
@@ -136,7 +136,8 @@ output:
   {
     label: 'Enrichments',
     further: '/cookbooks/enrichments',
-    config: `input:
+    language: 'yaml',
+    children: `input:
   mqtt:
     urls: [ tcp://TODO:1883 ]
     topics: [ foo ]
@@ -310,7 +311,7 @@ function Home() {
                 })}>
                   {installs.map((props, idx) => (
                     <TabItem key={idx} value={props.label}>
-                      <CodeSnippet {...props}></CodeSnippet>
+                      <CodeBlock {...props}/>
                     </TabItem>
                   ))}
                 </Tabs>
@@ -324,7 +325,14 @@ function Home() {
                     })}>
                       {snippets.map((props, idx) => (
                         <TabItem key={idx} value={props.label}>
-                          <CodeSnippet className={styles.configSnippet} {...props}></CodeSnippet>
+                          <div style={{position: 'relative'}}>
+                            <CodeBlock {...props}/>
+                            {props.further && <Link
+                              className={classnames(styles.furtherButton, 'button button--outline button--primary')}
+                              to={props.further}>
+                              Read about
+                            </Link>}
+                          </div>
                         </TabItem>
                       ))}
                     </Tabs>
