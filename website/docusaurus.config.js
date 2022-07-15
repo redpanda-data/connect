@@ -151,8 +151,17 @@ module.exports = {
   ],
   plugins: [
     path.resolve(__dirname, './src/plugins/analytics'),
-    path.resolve(__dirname, './src/plugins/cookbooks'),
-    path.resolve(__dirname, './src/plugins/redirects'),
+    [
+      require.resolve("./src/plugins/cookbooks/compiled/index"),
+      {
+        path: 'cookbooks',
+        routeBasePath: 'cookbooks',
+        include: ['*.md', '*.mdx'],
+        exclude: [],
+        guideListComponent: '@theme/CookbookListPage',
+        guidePostComponent: '@theme/CookbookPage',
+      },
+    ],
   ],
 };
 

@@ -1,5 +1,5 @@
 ---
-id: discord-bot
+slug: discord-bot
 title: Create a Discord Bot
 description: Learn how to use Benthos to create a vanity chat bot.
 ---

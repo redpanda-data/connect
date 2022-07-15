@@ -6,15 +6,17 @@
     "node": ">=14.18.3"
   },
   "scripts": {
+    "prestart": "sh build_plugins.sh",
     "start": "docusaurus start",
+    "prebuild": "sh build_plugins.sh",
     "build": "docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy"
   },
   "dependencies": {
     "@algolia/client-search": "^4.12.1",
-    "@docusaurus/core": "^2.0.0-beta.20",
-    "@docusaurus/preset-classic": "^2.0.0-beta.20",
+    "@docusaurus/core": "^2.0.0-rc.1",
+    "@docusaurus/preset-classic": "^2.0.0-rc.1",
     "@types/react": "^17.0.38",
     "classnames": "^2.2.6",
     "prism-react-renderer": "^1.2.1",
@@ -37,7 +39,8 @@
     ]
   },
   "devDependencies": {
-    "@docusaurus/module-type-aliases": "^2.0.0-beta.22",
-    "@tsconfig/docusaurus": "^1.0.6"
+    "@docusaurus/module-type-aliases": "^2.0.0-rc.1",
+    "@tsconfig/docusaurus": "^1.0.6",
+    "@types/fs-extra": "^9.0.13"
   }
 }

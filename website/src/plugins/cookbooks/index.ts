@@ -5,80 +5,95 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-const path = require('path');
-const {normalizeUrl, docuHash, aliasedSitePath} = require('@docusaurus/utils');
-
-const {generateCookbookPosts} = require('./cookbookUtils');
-
-const DEFAULT_OPTIONS = {
-  path: 'cookbooks', // Path to data on filesystem, relative to site dir.
-  routeBasePath: 'cookbooks', // URL Route.
-  include: ['*.md', '*.mdx'], // Extensions to include.
-  guideListComponent: '@theme/CookbookListPage',
-  guidePostComponent: '@theme/CookbookPage',
-  remarkPlugins: [],
-  rehypePlugins: [],
-  truncateMarker: /<!--\s*(truncate)\s*-->/, // string or regex
-};
-
-const {
+import path from 'path';
+import logger from '@docusaurus/logger';
+import {
+  normalizeUrl,
+  docuHash,
+  aliasedSitePath,
+  posixPath,
+  addTrailingPathSeparator,
+  getContentPathList,
   DEFAULT_PLUGIN_ID,
-} = require('@docusaurus/utils');
+} from '@docusaurus/utils';
+import {
+  generateCookbookPosts,
+  getSourceToPermalink,
+} from './cookbookUtils';
+import type {LoadContext, Plugin} from '@docusaurus/types';
 
-module.exports = pluginContentCookbook;
+import type {
+  PluginOptions,
+  CookbookContent,
+  CookbookContentPaths,
+  CookbookMarkdownLoaderOptions,
+} from './types';
 
-function pluginContentCookbook(context, opts) {
-  const options = {...DEFAULT_OPTIONS, ...opts};
-  const {siteDir, siteConfig, generatedFilesDir} = context;
-  const contentPath = path.resolve(siteDir, options.path);
+export default async function pluginContentCookbook(
+  context: LoadContext,
+  options: PluginOptions,
+): Promise<Plugin<CookbookContent>> {
+  const {
+    siteDir,
+    siteConfig,
+    generatedFilesDir,
+  } = context;
+  const {onBrokenMarkdownLinks, baseUrl} = siteConfig;
+
+  const contentPaths: CookbookContentPaths = {
+    contentPath: path.resolve(siteDir, options.path),
+    contentPathLocalized: path.resolve(siteDir, options.path),
+  };
+  const pluginId = options.id ?? DEFAULT_PLUGIN_ID;
 
   const pluginDataDirRoot = path.join(
     generatedFilesDir,
     'cookbooks',
   );
-  const dataDir = path.join(pluginDataDirRoot, options.id || DEFAULT_PLUGIN_ID);
+  const dataDir = path.join(pluginDataDirRoot, pluginId);
+  const aliasedSource = (source: string) =>
+    `~cookbooks/${posixPath(path.relative(pluginDataDirRoot, source))}`;
 
   return {
     name: 'cookbooks',
 
     getPathsToWatch() {
-      const {include = []} = options;
-      const globPattern = include.map(pattern => `${contentPath}/${pattern}`);
-      return [...globPattern];
+      const {include} = options;
+      const contentMarkdownGlobs = getContentPathList(contentPaths).flatMap(
+        (contentPath) => include.map((pattern) => `${contentPath}/${pattern}`),
+      );
+
+      return [...contentMarkdownGlobs].filter(
+        Boolean,
+      ) as string[];
     },
 
     // Fetches guide contents and returns metadata for the necessary routes.
     async loadContent() {
-      const guidePosts = await generateCookbookPosts(contentPath, context, options);
-      if (!guidePosts.length) {
-        return null;
-      }
-
+      const guidePosts = await generateCookbookPosts(contentPaths, context, options);
       return {
-        guidePosts,
+        cookbookPosts: guidePosts,
       };
     },
 
-    async contentLoaded({content, actions}) {
-      if (!content) {
-        return;
-      }
-
+    async contentLoaded({content: cookbookContents, actions}) {
       const {
+        routeBasePath,
         guideListComponent,
         guidePostComponent,
       } = options;
 
-      const aliasedSource = (source) =>
+      const aliasedSource = (source: string) =>
         `~cookbooks/${path.relative(pluginDataDirRoot, source)}`;
+
       const {addRoute, createData} = actions;
       const {
-        guidePosts,
-      } = content;
+        cookbookPosts,
+      } = cookbookContents;
 
       // Create routes for guide entries.
       await Promise.all(
-        guidePosts.map(async guidePost => {
+        cookbookPosts.map(async guidePost => {
           const {metadata} = guidePost;
           await createData(
             // Note that this created data path must be in sync with metadataPath provided to mdx-loader
@@ -97,10 +112,6 @@ function pluginContentCookbook(context, opts) {
         }),
       );
 
-      const {routeBasePath} = options;
-      const {
-        siteConfig: {baseUrl = ''},
-      } = context;
       const basePageUrl = normalizeUrl([baseUrl, routeBasePath]);
 
       const listPageMetadataPath = await createData(
@@ -108,8 +119,8 @@ function pluginContentCookbook(context, opts) {
         JSON.stringify({}, null, 2),
       );
 
-      let basePageItems = guidePosts.map(guidePost => {
-        const {metadata} = guidePost;
+      let basePageItems = cookbookPosts.map(cookbookPost => {
+        const {metadata} = cookbookPost;
         // To tell routes.js this is an import and not a nested object to recurse.
         return {
           content: {
@@ -133,12 +144,27 @@ function pluginContentCookbook(context, opts) {
       });
     },
 
-    configureWebpack(
-      _config,
-      isServer,
-      {getJSLoader},
-    ) {
-      const {rehypePlugins, remarkPlugins, truncateMarker} = options;
+    configureWebpack(_config, isServer, {getJSLoader}, content) {
+      const {
+        rehypePlugins,
+        remarkPlugins,
+      } = options;
+
+      const markdownLoaderOptions: CookbookMarkdownLoaderOptions = {
+        siteDir,
+        contentPaths,
+        sourceToPermalink: getSourceToPermalink(content.cookbookPosts),
+        onBrokenMarkdownLink: (brokenMarkdownLink) => {
+          if (onBrokenMarkdownLinks === 'ignore') {
+            return;
+          }
+          logger.report(
+            onBrokenMarkdownLinks,
+          )`Blog markdown link couldn't be resolved: (url=${brokenMarkdownLink.link}) in path=${brokenMarkdownLink.filePath}`;
+        },
+      };
+
+      const contentDirs = getContentPathList(contentPaths);
       return {
         resolve: {
           alias: {
@@ -149,7 +175,7 @@ function pluginContentCookbook(context, opts) {
           rules: [
             {
               test: /(\.mdx?)$/,
-              include: [contentPath],
+              include: contentDirs.map(addTrailingPathSeparator),
               use: [
                 getJSLoader({isServer}),
                 {
@@ -161,7 +187,9 @@ function pluginContentCookbook(context, opts) {
                       path.resolve(siteDir, dir),
                     ),
                     // Note that metadataPath must be the same/ in-sync as the path from createData for each MDX
-                    metadataPath: (mdxPath) => {
+                    metadataPath: (mdxPath: string) => {
+                      // Note that metadataPath must be the same/in-sync as
+                      // the path from createData for each MDX.
                       const aliasedPath = aliasedSitePath(mdxPath, siteDir);
                       return path.join(
                         dataDir,
@@ -172,9 +200,7 @@ function pluginContentCookbook(context, opts) {
                 },
                 {
                   loader: path.resolve(__dirname, './markdownLoader.js'),
-                  options: {
-                    truncateMarker,
-                  },
+                  options: markdownLoaderOptions,
                 },
               ].filter(Boolean),
             },

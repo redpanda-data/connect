@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "outDir": "compiled",
+    "esModuleInterop": true,
+  },
+  "include": ["index.ts","markdownLoader.ts"]
+}
