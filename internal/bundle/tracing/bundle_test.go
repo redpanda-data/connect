@@ -198,6 +198,95 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 	}
 }
 
+func TestBundleOutputWithBatchProcessorsTracing(t *testing.T) {
+	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
+
+	dropConfig := output.NewConfig()
+	dropConfig.Label = "foo"
+	dropConfig.Type = "drop"
+
+	outConfig := output.NewConfig()
+	outConfig.Type = "broker"
+	outConfig.Broker.Outputs = append(outConfig.Broker.Outputs, dropConfig)
+	outConfig.Broker.Batching.Count = 2
+
+	blobConf := processor.NewConfig()
+	blobConf.Type = "bloblang"
+	blobConf.Bloblang = "root = content().uppercase()"
+	outConfig.Broker.Batching.Processors = append(outConfig.Broker.Batching.Processors, blobConf)
+
+	mgr, err := manager.New(
+		manager.NewResourceConfig(),
+		manager.OptSetEnvironment(tenv),
+	)
+	require.NoError(t, err)
+
+	out, err := mgr.NewOutput(outConfig)
+	require.NoError(t, err)
+
+	tranChan := make(chan message.Transaction)
+	require.NoError(t, out.Consume(tranChan))
+
+	for i := 0; i < 5; i++ {
+		resChan := make(chan error)
+		tran := message.NewTransaction(message.QuickBatch([][]byte{
+			[]byte("hello world " + strconv.Itoa(i*2)),
+			[]byte("hello world " + strconv.Itoa(i*2+1)),
+		}), resChan)
+		select {
+		case tranChan <- tran:
+			select {
+			case <-resChan:
+			case <-time.After(time.Second):
+				t.Fatal("timed out", i)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out")
+		}
+	}
+
+	out.CloseAsync()
+	require.NoError(t, out.WaitForClose(time.Second))
+
+	assert.Equal(t, 0, int(summary.Input))
+	assert.Equal(t, 0, int(summary.ProcessorErrors))
+	assert.Equal(t, 20, int(summary.Output))
+
+	outEvents := summary.OutputEvents()
+	require.Contains(t, outEvents, "foo")
+
+	outputEvents := outEvents["foo"]
+	require.Len(t, outputEvents, 10)
+
+	for i, e := range outputEvents {
+		assert.Equal(t, tracing.EventConsume, e.Type)
+		assert.Equal(t, "HELLO WORLD "+strconv.Itoa(i), e.Content)
+	}
+
+	procEvents := summary.ProcessorEvents()
+	require.Contains(t, procEvents, "root.batching.processors.0")
+
+	processorEvents := procEvents["root.batching.processors.0"]
+	require.Len(t, processorEvents, 20)
+
+	for i := 0; i < len(processorEvents); i += 4 {
+		consumeEventA := processorEvents[i]
+		consumeEventB := processorEvents[i+1]
+		produceEventA := processorEvents[i+2]
+		produceEventB := processorEvents[i+3]
+
+		assert.Equal(t, tracing.EventConsume, consumeEventA.Type)
+		assert.Equal(t, tracing.EventConsume, consumeEventB.Type)
+		assert.Equal(t, tracing.EventProduce, produceEventA.Type)
+		assert.Equal(t, tracing.EventProduce, produceEventB.Type)
+
+		assert.Equal(t, "hello world "+strconv.Itoa(i/2), consumeEventA.Content, i)
+		assert.Equal(t, "hello world "+strconv.Itoa(i/2+1), consumeEventB.Content, i)
+		assert.Equal(t, "HELLO WORLD "+strconv.Itoa(i/2), produceEventA.Content, i)
+		assert.Equal(t, "HELLO WORLD "+strconv.Itoa(i/2+1), produceEventB.Content, i)
+	}
+}
+
 func TestBundleProcessorTracing(t *testing.T) {
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
