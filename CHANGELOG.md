@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.4.0 - 2022-07-18
+
 ### Added
 
 - The service-wide `http` config now supports basic authentication.
