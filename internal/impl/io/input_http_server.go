@@ -185,7 +185,7 @@ func newHTTPServerInput(conf input.Config, mgr bundle.NewManagement) (input.Stre
 		return nil, errors.New("must provide at least one allowed verb")
 	}
 
-	mRcvd := mgr.Metrics().GetCounterVec("input_received", "endpoint")
+	mRcvd := mgr.Metrics().GetCounter("input_received")
 	h := httpServerInput{
 		shutSig:         shutdown.NewSignaller(),
 		conf:            conf.HTTPServer,
@@ -200,8 +200,8 @@ func newHTTPServerInput(conf input.Config, mgr bundle.NewManagement) (input.Stre
 		allowedVerbs: verbs,
 
 		mLatency:  mgr.Metrics().GetTimer("input_latency_ns"),
-		mWSRcvd:   mRcvd.With("websocket"),
-		mPostRcvd: mRcvd.With("post"),
+		mWSRcvd:   mRcvd,
+		mPostRcvd: mRcvd,
 	}
 
 	if h.responseStatus, err = mgr.BloblEnvironment().NewField(h.conf.Response.Status); err != nil {

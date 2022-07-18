@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Fixed an issue where an `http_server` input or output would fail to register prometheus metrics when combined with other inputs/outputs.
+
 ## 4.4.0 - 2022-07-18
 
 ### Added

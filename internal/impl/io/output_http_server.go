@@ -115,10 +115,10 @@ func newHTTPServerOutput(conf output.Config, mgr bundle.NewManagement, log log.M
 		return nil, errors.New("must provide at least one allowed verb")
 	}
 
-	mSent := stats.GetCounterVec("output_sent", "endpoint")
-	mBatchSent := stats.GetCounterVec("output_batch_sent", "endpoint")
-	mLatency := stats.GetTimerVec("output_latency_ns", "endpoint")
-	mError := stats.GetCounterVec("output_error", "endpoint")
+	mSent := stats.GetCounter("output_sent")
+	mBatchSent := stats.GetCounter("output_batch_sent")
+	mLatency := stats.GetTimer("output_latency_ns")
+	mError := stats.GetCounter("output_error")
 
 	h := httpServerOutput{
 		shutSig: shutdown.NewSignaller(),
@@ -129,17 +129,17 @@ func newHTTPServerOutput(conf output.Config, mgr bundle.NewManagement, log log.M
 
 		allowedVerbs: verbs,
 
-		mGetSent:      mSent.With("get"),
-		mGetBatchSent: mBatchSent.With("get"),
+		mGetSent:      mSent,
+		mGetBatchSent: mBatchSent,
 
-		mWSSent:      mSent.With("websocket"),
-		mWSBatchSent: mBatchSent.With("websocket"),
-		mWSError:     mError.With("websocket"),
-		mWSLatency:   mLatency.With("websocket"),
+		mWSSent:      mSent,
+		mWSBatchSent: mBatchSent,
+		mWSError:     mError,
+		mWSLatency:   mLatency,
 
-		mStreamSent:      mSent.With("stream"),
-		mStreamBatchSent: mBatchSent.With("stream"),
-		mStreamError:     mError.With("stream"),
+		mStreamSent:      mSent,
+		mStreamBatchSent: mBatchSent,
+		mStreamError:     mError,
 	}
 
 	if tout := conf.HTTPServer.Timeout; len(tout) > 0 {
