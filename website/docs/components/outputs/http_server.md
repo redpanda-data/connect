@@ -69,6 +69,8 @@ Three endpoints will be registered at the paths specified by the fields `path`, 
 
 When messages are batched the `path` endpoint encodes the batch according to [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). This behaviour can be overridden by [archiving your batches](/docs/configuration/batching#post-batch-processing).
 
+Please note, messages are considered delivered as soon as the data is written to the client. There is no concept of at least once delivery on this output.
+
 ## Fields
 
 ### `address`
