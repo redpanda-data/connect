@@ -197,8 +197,10 @@ func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2
 	}
 
 	var timeout time.Duration
-	if timeout, err = time.ParseDuration(conf.MongoDB.WriteConcern.WTimeout); err != nil {
-		return nil, fmt.Errorf("failed to parse wtimeout string: %v", err)
+	if len(conf.MongoDB.WriteConcern.WTimeout) > 0 {
+		if timeout, err = time.ParseDuration(conf.MongoDB.WriteConcern.WTimeout); err != nil {
+			return nil, fmt.Errorf("failed to parse wtimeout string: %v", err)
+		}
 	}
 
 	writeConcern := writeconcern.New(

@@ -171,8 +171,10 @@ func NewWriter(
 		return nil, fmt.Errorf("mongodb upsert not allowed for '%s' operation", db.operation)
 	}
 
-	if db.wcTimeout, err = time.ParseDuration(conf.WriteConcern.WTimeout); err != nil {
-		return nil, fmt.Errorf("failed to parse write concern wtimeout string: %v", err)
+	if len(conf.WriteConcern.WTimeout) > 0 {
+		if db.wcTimeout, err = time.ParseDuration(conf.WriteConcern.WTimeout); err != nil {
+			return nil, fmt.Errorf("failed to parse write concern wtimeout string: %v", err)
+		}
 	}
 	if db.collection, err = mgr.BloblEnvironment().NewField(conf.MongoConfig.Collection); err != nil {
 		return nil, fmt.Errorf("failed to parse collection expression: %v", err)

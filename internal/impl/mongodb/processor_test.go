@@ -111,7 +111,7 @@ func testMongoDBProcessorInsert(port string, t *testing.T) {
 		WriteConcern: client.WriteConcern{
 			W:        "1",
 			J:        false,
-			WTimeout: "100s",
+			WTimeout: "",
 		},
 		Operation:   "insert-one",
 		DocumentMap: "root.a = this.foo\nroot.b = this.bar",
@@ -301,7 +301,7 @@ func testMongoDBProcessorReplaceOne(port string, t *testing.T) {
 		WriteConcern: client.WriteConcern{
 			W:        "1",
 			J:        false,
-			WTimeout: "100s",
+			WTimeout: "",
 		},
 		Operation:   "replace-one",
 		DocumentMap: "root.a = this.foo\nroot.b = this.bar",
