@@ -37,7 +37,7 @@ function Support() {
               <small>(That was just a metaphor - lemons not provided)</small>
             </div>
             <div className={classnames('col col--5')}>
-              <img className={styles.heroImg} src="img/blobheart.svg" />
+              <img className={styles.heroImg} src="/img/blobheart.svg" />
             </div>
           </div>
         </div>
