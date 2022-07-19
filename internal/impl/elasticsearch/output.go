@@ -37,7 +37,7 @@ func notImportedAWSOptFn(conf output.ElasticsearchConfig) ([]elastic.ClientOptio
 }
 
 // AWSOptFn is populated with the child `aws` package when imported.
-var AWSOptFn func(conf output.ElasticsearchConfig) ([]elastic.ClientOptionFunc, error) = notImportedAWSOptFn
+var AWSOptFn = notImportedAWSOptFn
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(NewElasticsearch), docs.ComponentSpec{

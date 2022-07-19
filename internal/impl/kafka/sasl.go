@@ -24,7 +24,7 @@ func notImportedAWSFn(c *service.ParsedConfig) (sasl.Mechanism, error) {
 }
 
 // AWSSASLFromConfigFn is populated with the child `aws` package when imported.
-var AWSSASLFromConfigFn func(c *service.ParsedConfig) (sasl.Mechanism, error) = notImportedAWSFn
+var AWSSASLFromConfigFn = notImportedAWSFn
 
 func saslField() *service.ConfigField {
 	return service.NewObjectListField("sasl",
