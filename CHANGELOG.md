@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.4.1 - 2022-07-19
+
 ### Fixed
 
 - Fixed an issue where an `http_server` input or output would fail to register prometheus metrics when combined with other inputs/outputs.
+- Fixed an issue where the `jaeger` tracer was incapable of sending traces to agents outside of the default port.
 
 ## 4.4.0 - 2022-07-18
 
