@@ -2,7 +2,7 @@ package jaeger
 
 import (
 	"fmt"
-	"net/url"
+	"net"
 	"strings"
 	"time"
 
@@ -67,16 +67,11 @@ func NewJaeger(config tracer.Config, nm bundle.NewManagement) (trace.TracerProvi
 	if config.Jaeger.CollectorURL != "" {
 		epOpt = jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.Jaeger.CollectorURL))
 	} else {
-		agentURL, err := url.Parse(config.Jaeger.AgentAddress)
+		agentOpts, err := getAgentOpts(config.Jaeger.AgentAddress)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse jaeger agent address: %w", err)
+			return nil, err
 		}
-		agentOpts := []jaeger.AgentEndpointOption{
-			jaeger.WithAgentHost(agentURL.Host),
-		}
-		if p := agentURL.Port(); p != "" {
-			agentOpts = append(agentOpts, jaeger.WithAgentPort(agentURL.Port()))
-		}
+
 		epOpt = jaeger.WithAgentEndpoint(agentOpts...)
 	}
 
@@ -106,4 +101,19 @@ func NewJaeger(config tracer.Config, nm bundle.NewManagement) (trace.TracerProvi
 		tracesdk.WithResource(resource.NewWithAttributes(semconv.SchemaURL, attrs...)),
 		tracesdk.WithSampler(sampler),
 	), nil
+}
+
+func getAgentOpts(agentAddress string) ([]jaeger.AgentEndpointOption, error) {
+	var agentOpts []jaeger.AgentEndpointOption
+	if strings.Contains(agentAddress, ":") {
+		agentHost, agentPort, err := net.SplitHostPort(agentAddress)
+		if err != nil {
+			return agentOpts, err
+		}
+		agentOpts = append(agentOpts, jaeger.WithAgentHost(agentHost), jaeger.WithAgentPort(agentPort))
+	} else {
+		agentOpts = append(agentOpts, jaeger.WithAgentHost(agentAddress))
+	}
+
+	return agentOpts, nil
 }
