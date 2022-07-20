@@ -76,7 +76,7 @@ require (
 	github.com/linkedin/goavro/v2 v2.11.1
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/mattn/go-colorable v0.1.12 // indirect
-	github.com/microcosm-cc/bluemonday v1.0.17
+	github.com/microcosm-cc/bluemonday v1.0.19
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6 // indirect
 	github.com/nats-io/nats-server/v2 v2.8.4 // indirect
