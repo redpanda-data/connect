@@ -14,6 +14,7 @@ type Config struct {
 	LogLevel      string            `json:"level" yaml:"level"`
 	Format        string            `json:"format" yaml:"format"`
 	AddTimeStamp  bool              `json:"add_timestamp" yaml:"add_timestamp"`
+	MessageName   string            `json:"message_name" yaml:"message_name"`
 	TimestampName string            `json:"timestamp_name" yaml:"timestamp_name"`
 	StaticFields  map[string]string `json:"static_fields" yaml:"static_fields"`
 	File          File              `json:"file" yaml:"file"`
@@ -33,6 +34,7 @@ func NewConfig() Config {
 		Format:        "logfmt",
 		AddTimeStamp:  false,
 		TimestampName: "time",
+		MessageName:   "msg",
 		StaticFields: map[string]string{
 			"@service": "benthos",
 		},
@@ -101,6 +103,7 @@ func NewV2(stream io.Writer, config Config) (Modular, error) {
 			DisableTimestamp: !config.AddTimeStamp,
 			FieldMap: logrus.FieldMap{
 				logrus.FieldKeyTime: config.TimestampName,
+				logrus.FieldKeyMsg:  config.MessageName,
 			},
 		})
 	case "logfmt":
@@ -110,6 +113,7 @@ func NewV2(stream io.Writer, config Config) (Modular, error) {
 			FullTimestamp:    config.AddTimeStamp,
 			FieldMap: logrus.FieldMap{
 				logrus.FieldKeyTime: config.TimestampName,
+				logrus.FieldKeyMsg:  config.MessageName,
 			},
 		})
 	default:

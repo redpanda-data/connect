@@ -83,6 +83,14 @@ The name of the timestamp field added to logs when `add_timestamp` is set to `tr
 Type: `string`  
 Default: `"time"`  
 
+### `message_name`
+
+The name of the message field added to logs when the logger is invoked.
+
+
+Type: `string`  
+Default: `"msg"`  
+
 ### `static_fields`
 
 A map of key/value pairs to add to each structured log.
