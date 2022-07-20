@@ -1,9 +1,5 @@
 package input
 
-import (
-	"cloud.google.com/go/pubsub"
-)
-
 // GCPPubSubConfig contains configuration values for the input type.
 type GCPPubSubConfig struct {
 	ProjectID              string `json:"project" yaml:"project"`
@@ -18,8 +14,8 @@ func NewGCPPubSubConfig() GCPPubSubConfig {
 	return GCPPubSubConfig{
 		ProjectID:              "",
 		SubscriptionID:         "",
-		MaxOutstandingMessages: pubsub.DefaultReceiveSettings.MaxOutstandingMessages,
-		MaxOutstandingBytes:    pubsub.DefaultReceiveSettings.MaxOutstandingBytes,
+		MaxOutstandingMessages: 1000, // pubsub.DefaultReceiveSettings.MaxOutstandingMessages
+		MaxOutstandingBytes:    1e9,  // pubsub.DefaultReceiveSettings.MaxOutstandingBytes (1G)
 		Sync:                   false,
 	}
 }
