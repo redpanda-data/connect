@@ -59,7 +59,11 @@ If the certificate is signed by a certificate authority, the `cert_file` should 
 
 ## Enabling Basic Authentication
 
-By default Benthos does not do any sort of authentication for the service-wide HTTP server. However, it's possible to configure basic authentication with the [`basic_auth`](##basic_auth) field.
+By default Benthos does not do any sort of authentication for the service-wide HTTP server. However, it's possible to configure basic authentication with the [`basic_auth`](#basic_auth) field. Passwords configured must be hashed according to the specified algorithm and base64 encoded, for some hashing algorithms you can do this using Benthos itself:
+
+```sh
+echo mynewpassword | benthos blobl 'root = content().hash("sha256").encode("base64")'
+```
 
 ## Endpoints
 
