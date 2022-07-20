@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `mongodb` processor and output default `write_concern.w_timeout` empty value no longer causes configuration issues.
+- Field `message_name` added to the logger config.
 
 ## 4.4.1 - 2022-07-19
 
