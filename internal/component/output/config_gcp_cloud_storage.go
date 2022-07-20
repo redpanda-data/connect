@@ -1,8 +1,6 @@
 package output
 
 import (
-	"google.golang.org/api/googleapi"
-
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
 )
 
@@ -40,7 +38,7 @@ func NewGCPCloudStorageConfig() GCPCloudStorageConfig {
 		Path:            `${!count("files")}-${!timestamp_unix_nano()}.txt`,
 		ContentType:     "application/octet-stream",
 		ContentEncoding: "",
-		ChunkSize:       googleapi.DefaultUploadChunkSize,
+		ChunkSize:       16 * 1024 * 1024, // googleapi.DefaultUploadChunkSize
 		MaxInFlight:     64,
 		Batching:        batchconfig.NewConfig(),
 		CollisionMode:   GCPCloudStorageOverwriteCollisionMode,

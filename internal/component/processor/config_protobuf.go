@@ -1,9 +1,5 @@
 package processor
 
-// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
-
-// nolint:staticcheck // Ignore SA1019 deprecation warning until we can switch to "google.golang.org/protobuf/types/dynamicpb"
-
 // ProtobufConfig contains configuration fields for the Protobuf processor.
 type ProtobufConfig struct {
 	Operator    string   `json:"operator" yaml:"operator"`
