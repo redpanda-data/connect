@@ -147,7 +147,7 @@ func (a *amqp1Reader) ConnectWithContext(ctx context.Context) error {
 		lockRenewAddressPrefix: randomString(15),
 	}
 
-	opts, err := a.conf.SASL.ToOptFns()
+	opts, err := saslToOptFns(a.conf.SASL)
 	if err != nil {
 		return err
 	}

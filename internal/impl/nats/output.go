@@ -119,7 +119,7 @@ func (n *natsWriter) ConnectWithContext(ctx context.Context) error {
 		opts = append(opts, nats.Secure(n.tlsConf))
 	}
 
-	opts = append(opts, auth.GetOptions(n.conf.Auth)...)
+	opts = append(opts, authConfToOptions(n.conf.Auth)...)
 
 	if n.natsConn, err = nats.Connect(n.urls, opts...); err != nil {
 		return err

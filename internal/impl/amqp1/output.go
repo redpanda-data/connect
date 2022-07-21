@@ -113,7 +113,7 @@ func (a *amqp1Writer) ConnectWithContext(ctx context.Context) error {
 		err     error
 	)
 
-	opts, err := a.conf.SASL.ToOptFns()
+	opts, err := saslToOptFns(a.conf.SASL)
 	if err != nil {
 		return err
 	}

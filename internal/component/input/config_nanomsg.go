@@ -1,10 +1,5 @@
 package input
 
-import (
-	// Import all transport types
-	_ "go.nanomsg.org/mangos/v3/transport/all"
-)
-
 // NanomsgConfig contains configuration fields for the nanomsg input type.
 type NanomsgConfig struct {
 	URLs        []string `json:"urls" yaml:"urls"`

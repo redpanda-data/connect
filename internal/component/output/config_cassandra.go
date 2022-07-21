@@ -1,8 +1,6 @@
 package output
 
 import (
-	"github.com/gocql/gocql"
-
 	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
@@ -51,7 +49,7 @@ func NewCassandraConfig() CassandraConfig {
 		DisableInitialHostLookup: false,
 		Query:                    "",
 		ArgsMapping:              "",
-		Consistency:              gocql.Quorum.String(),
+		Consistency:              "QUORUM",
 		Timeout:                  "600ms",
 		Config:                   rConf,
 		MaxInFlight:              64,
