@@ -6,7 +6,7 @@
 // outside of major version releases. This means we may choose to remove certain
 // plugins if we determine that their dependencies are likely to interfere with
 // the goals of this package.
-package pure
+package io
 
 import (
 	// Import only io packages.
