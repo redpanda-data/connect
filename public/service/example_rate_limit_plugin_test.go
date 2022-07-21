@@ -8,8 +8,9 @@ import (
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
-	// Import all standard Benthos components
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	// Import only pure Benthos components, switch with `components/all` for all
+	// standard components
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 type RandomRateLimit struct {

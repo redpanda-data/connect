@@ -18,7 +18,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 var _ bundle.NewManagement = &manager.Type{}
@@ -288,11 +288,13 @@ func TestManagerProcessorListErrors(t *testing.T) {
 
 func TestManagerInputList(t *testing.T) {
 	cFoo := input.NewConfig()
-	cFoo.Type = "http_server"
+	cFoo.Type = "generate"
+	cFoo.Generate.Mapping = "root = {}"
 	cFoo.Label = "foo"
 
 	cBar := input.NewConfig()
-	cBar.Type = "http_server"
+	cBar.Type = "generate"
+	cBar.Generate.Mapping = "root = {}"
 	cBar.Label = "bar"
 
 	conf := manager.NewResourceConfig()
@@ -334,11 +336,11 @@ func TestManagerInputListErrors(t *testing.T) {
 
 func TestManagerOutputList(t *testing.T) {
 	cFoo := output.NewConfig()
-	cFoo.Type = "http_server"
+	cFoo.Type = "drop"
 	cFoo.Label = "foo"
 
 	cBar := output.NewConfig()
-	cBar.Type = "http_server"
+	cBar.Type = "drop"
 	cBar.Label = "bar"
 
 	conf := manager.NewResourceConfig()

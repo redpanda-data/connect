@@ -12,7 +12,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func TestAPIEnableCORS(t *testing.T) {

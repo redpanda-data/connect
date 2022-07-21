@@ -14,7 +14,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func TestOtelTracingPlugin(t *testing.T) {

@@ -31,7 +31,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 type apiRegGorillaMutWrapper struct {

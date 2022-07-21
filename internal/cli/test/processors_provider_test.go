@@ -13,7 +13,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func initTestFiles(t *testing.T, files map[string]string) (string, error) {

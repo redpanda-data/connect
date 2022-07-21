@@ -14,7 +14,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/prometheus"
 )
 
 func getTestProm(t *testing.T) (metrics.Type, http.HandlerFunc) {

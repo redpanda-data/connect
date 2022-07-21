@@ -13,7 +13,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 type fooReader struct {

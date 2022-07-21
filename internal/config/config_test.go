@@ -10,24 +10,24 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/config"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func TestSetOverridesOnNothing(t *testing.T) {
 	conf := config.New()
 	rdr := config.NewReader("", nil, config.OptAddOverrides(
-		"input.type=kafka",
-		"input.kafka.addresses=foobarbaz.com",
-		"output.type=amqp_0_9",
+		"input.type=generate",
+		"input.generate.mapping=this.foo",
+		"output.type=drop",
 	))
 
 	lints, err := rdr.Read(&conf)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	assert.Equal(t, "kafka", conf.Input.Type)
-	assert.Equal(t, "foobarbaz.com", conf.Input.Kafka.Addresses[0])
-	assert.Equal(t, "amqp_0_9", conf.Output.Type)
+	assert.Equal(t, "generate", conf.Input.Type)
+	assert.Equal(t, "this.foo", conf.Input.Generate.Mapping)
+	assert.Equal(t, "drop", conf.Output.Type)
 }
 
 func TestSetOverrideErrors(t *testing.T) {
@@ -73,32 +73,28 @@ func TestSetOverridesOfFile(t *testing.T) {
 	fullPath := filepath.Join(dir, "main.yaml")
 	require.NoError(t, os.WriteFile(fullPath, []byte(`
 input:
-  kafka:
-    addresses: [ foobar.com, barbaz.com ]
-    topics: [ meow1, meow2 ]
+  generate:
+    count: 10
+    mapping: 'root = "meow"'
 `), 0o644))
 
 	conf := config.New()
 	rdr := config.NewReader(fullPath, nil, config.OptAddOverrides(
-		"input.kafka.addresses.0=nope1.com",
-		"input.kafka.addresses.1=nope2.com",
-		"input.kafka.topics=justthis",
-		"output.type=kafka",
-		"output.kafka.addresses=nope3.com",
-		"output.kafka.topic=foobar",
+		"input.generate.count=5",
+		"input.generate.interval=10s",
+		"output.type=drop",
 	))
 
 	lints, err := rdr.Read(&conf)
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	assert.Equal(t, "kafka", conf.Input.Type)
-	assert.Equal(t, []string{"nope1.com", "nope2.com"}, conf.Input.Kafka.Addresses)
-	assert.Equal(t, []string{"justthis"}, conf.Input.Kafka.Topics)
+	assert.Equal(t, "generate", conf.Input.Type)
+	assert.Equal(t, `root = "meow"`, conf.Input.Generate.Mapping)
+	assert.Equal(t, `10s`, conf.Input.Generate.Interval)
+	assert.Equal(t, 5, conf.Input.Generate.Count)
 
-	assert.Equal(t, "kafka", conf.Output.Type)
-	assert.Equal(t, []string{"nope3.com"}, conf.Output.Kafka.Addresses)
-	assert.Equal(t, "foobar", conf.Output.Kafka.Topic)
+	assert.Equal(t, "drop", conf.Output.Type)
 }
 
 func TestResources(t *testing.T) {
@@ -107,9 +103,9 @@ func TestResources(t *testing.T) {
 	fullPath := filepath.Join(dir, "main.yaml")
 	require.NoError(t, os.WriteFile(fullPath, []byte(`
 input:
-  kafka:
-    addresses: [ foobar.com, barbaz.com ]
-    topics: [ meow1, meow2 ]
+  generate:
+    count: 5
+    mapping: 'root = "meow"'
 `), 0o644))
 
 	resourceOnePath := filepath.Join(dir, "res1.yaml")
@@ -144,9 +140,8 @@ tests:
 	require.NoError(t, err)
 	assert.Empty(t, lints)
 
-	assert.Equal(t, "kafka", conf.Input.Type)
-	assert.Equal(t, []string{"foobar.com", "barbaz.com"}, conf.Input.Kafka.Addresses)
-	assert.Equal(t, []string{"meow1", "meow2"}, conf.Input.Kafka.Topics)
+	assert.Equal(t, "generate", conf.Input.Type)
+	assert.Equal(t, `root = "meow"`, conf.Input.Generate.Mapping)
 
 	require.Len(t, conf.ResourceCaches, 2)
 
@@ -164,9 +159,9 @@ func TestLints(t *testing.T) {
 	require.NoError(t, os.WriteFile(fullPath, []byte(`
 input:
   meow1: not this
-  kafka:
-    addresses: [ foobar.com, barbaz.com ]
-    topics: [ meow1, meow2 ]
+  generate:
+    count: 5
+    mapping: 'root = "meow"'
 `), 0o644))
 
 	resourceOnePath := filepath.Join(dir, "res1.yaml")
@@ -197,9 +192,8 @@ cache_resources:
 	assert.Contains(t, lints[1], "/res1.yaml: line 5: field meow2 ")
 	assert.Contains(t, lints[2], "/res2.yaml: line 5: field meow3 ")
 
-	assert.Equal(t, "kafka", conf.Input.Type)
-	assert.Equal(t, []string{"foobar.com", "barbaz.com"}, conf.Input.Kafka.Addresses)
-	assert.Equal(t, []string{"meow1", "meow2"}, conf.Input.Kafka.Topics)
+	assert.Equal(t, "generate", conf.Input.Type)
+	assert.Equal(t, `root = "meow"`, conf.Input.Generate.Mapping)
 
 	require.Len(t, conf.ResourceCaches, 2)
 

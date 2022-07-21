@@ -25,7 +25,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	"github.com/benthosdev/benthos/v4/internal/stream/manager"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func router(m *manager.Type) *mux.Router {
@@ -160,11 +161,17 @@ func TestTypeAPIBadMethods(t *testing.T) {
 	}
 }
 
-func harmlessConf() stream.Config {
-	c := stream.NewConfig()
-	c.Input.Type = "http_server"
-	c.Output.Type = "http_server"
-	return c
+func harmlessConf() interface{} {
+	return map[string]interface{}{
+		"input": map[string]interface{}{
+			"generate": map[string]interface{}{
+				"mapping": "root = deleted()",
+			},
+		},
+		"output": map[string]interface{}{
+			"drop": map[string]interface{}{},
+		},
+	}
 }
 
 func TestTypeAPIBasicOperations(t *testing.T) {
@@ -174,8 +181,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	mgr := manager.New(res)
 
 	r := router(mgr)
-	conf, err := harmlessConf().Sanitised()
-	require.NoError(t, err)
+	conf := harmlessConf()
 
 	request := genRequest("PUT", "/streams/foo", conf)
 	response := httptest.NewRecorder()
@@ -210,14 +216,12 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	info := parseGetBody(t, response.Body)
 	assert.True(t, info.Active)
 
-	assert.Equal(t, conf, info.Config)
+	assert.Equal(t, "root = deleted()", gabs.Wrap(info.Config).S("input", "generate", "mapping").Data())
 
 	newConf := harmlessConf()
-	newConf.Buffer.Type = "memory"
-	newConfSanit, err := newConf.Sanitised()
-	require.NoError(t, err)
+	_, _ = gabs.Wrap(newConf).Set("memory", "buffer", "type")
 
-	request = genRequest("PUT", "/streams/foo", newConfSanit)
+	request = genRequest("PUT", "/streams/foo", newConf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
@@ -230,7 +234,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	info = parseGetBody(t, response.Body)
 	assert.True(t, info.Active)
 
-	assert.Equal(t, newConfSanit, info.Config)
+	assert.Equal(t, map[string]interface{}{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
 
 	request = genRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -242,7 +246,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusNotFound, response.Code, response.Body.String())
 
-	testVar := "__TEST_INPUT_TYPE"
+	testVar := "__TEST_INPUT_MAPPING"
 	originalEnv, orignalSet := os.LookupEnv(testVar)
 	defer func() {
 		_ = os.Unsetenv(testVar)
@@ -250,11 +254,18 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 			_ = os.Setenv(testVar, originalEnv)
 		}
 	}()
-	_ = os.Setenv(testVar, "http_server")
-	newConf = harmlessConf()
-	newConf.Input.Type = "${__TEST_INPUT_TYPE}"
+	_ = os.Setenv(testVar, `root.meow = 5`)
 
-	request = genRequest("POST", "/streams/fooEnv?chilled=true", newConf)
+	request = genRequest("POST", "/streams/fooEnv?chilled=true", map[string]interface{}{
+		"input": map[string]interface{}{
+			"generate": map[string]interface{}{
+				"mapping": "${__TEST_INPUT_MAPPING}",
+			},
+		},
+		"output": map[string]interface{}{
+			"type": "drop",
+		},
+	})
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
@@ -265,14 +276,9 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	info = parseGetBody(t, response.Body)
-	// replace the env var with the expected value in the struct
-	// because we will be comparing it to the rendered version.
-	newConf.Input.Type = "http_server"
-	sanitNewConf, err := newConf.Sanitised()
-	require.NoError(t, err)
 
 	assert.True(t, info.Active)
-	assert.Equal(t, sanitNewConf, info.Config)
+	assert.Equal(t, `root.meow = 5`, gabs.Wrap(info.Config).S("input", "generate", "mapping").Data())
 
 	request = genRequest("DELETE", "/streams/fooEnv", conf)
 	response = httptest.NewRecorder()
@@ -299,14 +305,12 @@ func TestTypeAPIPatch(t *testing.T) {
 	request = genRequest("POST", "/streams/foo?chilled=true", conf)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected result: %v != %v", act, exp)
-	}
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	patchConf := map[string]interface{}{
 		"input": map[string]interface{}{
-			"http_server": map[string]interface{}{
-				"path": "/foobarbaz",
+			"generate": map[string]interface{}{
+				"interval": "2s",
 			},
 		},
 	}
@@ -317,8 +321,7 @@ func TestTypeAPIPatch(t *testing.T) {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
-	conf.Input.HTTPServer.Path = "/foobarbaz"
-	request = genRequest("GET", "/streams/foo", conf)
+	request = genRequest("GET", "/streams/foo", nil)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	if exp, act := http.StatusOK, response.Code; exp != act {
@@ -329,7 +332,7 @@ func TestTypeAPIPatch(t *testing.T) {
 		t.Fatal("Stream not active")
 	}
 
-	assert.Equal(t, conf.Input.HTTPServer.Path, gabs.Wrap(info.Config).S("input", "http_server", "path").Data())
+	assert.Equal(t, "2s", gabs.Wrap(info.Config).S("input", "generate", "interval").Data())
 }
 
 func TestTypeAPIBasicOperationsYAML(t *testing.T) {
@@ -371,15 +374,12 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code)
 
-	sanitConf, err := conf.Sanitised()
-	require.NoError(t, err)
-
 	info := parseGetBody(t, response.Body)
 	require.True(t, info.Active)
-	assert.Equal(t, sanitConf, info.Config)
+	assert.Equal(t, "root = deleted()", gabs.Wrap(info.Config).S("input", "generate", "mapping").Data())
 
 	newConf := harmlessConf()
-	newConf.Buffer.Type = "memory"
+	_, _ = gabs.Wrap(newConf).Set("memory", "buffer", "type")
 
 	request = genYAMLRequest("PUT", "/streams/foo?chilled=true", newConf)
 	response = httptest.NewRecorder()
@@ -391,12 +391,9 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusOK, response.Code)
 
-	sanitNewConf, err := newConf.Sanitised()
-	require.NoError(t, err)
-
 	info = parseGetBody(t, response.Body)
 	require.True(t, info.Active)
-	assert.Equal(t, sanitNewConf, info.Config)
+	assert.Equal(t, map[string]interface{}{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
 
 	request = genYAMLRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -428,7 +425,12 @@ func TestTypeAPIList(t *testing.T) {
 		t.Errorf("Wrong list response: %v != %v", act, exp)
 	}
 
-	if err := mgr.Create("foo", harmlessConf()); err != nil {
+	conf := stream.NewConfig()
+	conf.Input.Type = "generate"
+	conf.Input.Generate.Mapping = "root = deleted()"
+	conf.Output.Type = "drop"
+
+	if err := mgr.Create("foo", conf); err != nil {
 		t.Fatal(err)
 	}
 
@@ -452,8 +454,13 @@ func TestTypeAPISetStreams(t *testing.T) {
 
 	r := router(mgr)
 
-	require.NoError(t, mgr.Create("foo", harmlessConf()))
-	require.NoError(t, mgr.Create("bar", harmlessConf()))
+	origConf := stream.NewConfig()
+	origConf.Input.Type = "generate"
+	origConf.Input.Generate.Mapping = "root = deleted()"
+	origConf.Output.Type = "drop"
+
+	require.NoError(t, mgr.Create("foo", origConf))
+	require.NoError(t, mgr.Create("bar", origConf))
 
 	request := genRequest("GET", "/streams", nil)
 	response := httptest.NewRecorder()
@@ -465,16 +472,16 @@ func TestTypeAPISetStreams(t *testing.T) {
 	assert.True(t, info["bar"].Active)
 
 	barConf := harmlessConf()
-	barConf.Input.HTTPServer.Path = "BAR_ONE"
+	_, _ = gabs.Wrap(barConf).Set("root = this.BAR_ONE", "input", "generate", "mapping")
 	bar2Conf := harmlessConf()
-	bar2Conf.Input.HTTPServer.Path = "BAR_TWO"
+	_, _ = gabs.Wrap(bar2Conf).Set("root = this.BAR_TWO", "input", "generate", "mapping")
 	bazConf := harmlessConf()
-	bazConf.Input.HTTPServer.Path = "BAZ_ONE"
+	_, _ = gabs.Wrap(bazConf).Set("root = this.BAZ_ONE", "input", "generate", "mapping")
 
 	streamsBody := map[string]interface{}{}
-	streamsBody["bar"], _ = barConf.Sanitised()
-	streamsBody["bar2"], _ = bar2Conf.Sanitised()
-	streamsBody["baz"], _ = bazConf.Sanitised()
+	streamsBody["bar"] = barConf
+	streamsBody["bar2"] = bar2Conf
+	streamsBody["baz"] = bazConf
 
 	request = genRequest("POST", "/streams", streamsBody)
 	response = httptest.NewRecorder()
@@ -497,7 +504,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	conf := parseGetBody(t, response.Body)
-	assert.Equal(t, "BAR_ONE", gabs.Wrap(conf.Config).S("input", "http_server", "path").Data())
+	assert.Equal(t, "root = this.BAR_ONE", gabs.Wrap(conf.Config).S("input", "generate", "mapping").Data())
 
 	request = genRequest("GET", "/streams/bar2", nil)
 	response = httptest.NewRecorder()
@@ -505,7 +512,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	conf = parseGetBody(t, response.Body)
-	assert.Equal(t, "BAR_TWO", gabs.Wrap(conf.Config).S("input", "http_server", "path").Data())
+	assert.Equal(t, "root = this.BAR_TWO", gabs.Wrap(conf.Config).S("input", "generate", "mapping").Data())
 
 	request = genRequest("GET", "/streams/baz", nil)
 	response = httptest.NewRecorder()
@@ -513,7 +520,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
 	conf = parseGetBody(t, response.Body)
-	assert.Equal(t, "BAZ_ONE", gabs.Wrap(conf.Config).S("input", "http_server", "path").Data())
+	assert.Equal(t, "root = this.BAZ_ONE", gabs.Wrap(conf.Config).S("input", "generate", "mapping").Data())
 }
 
 func TestTypeAPIStreamsDefaultConf(t *testing.T) {
@@ -527,10 +534,12 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 	body := []byte(`{
 	"foo": {
 		"input": {
-			"nanomsg": {}
+			"generate": {
+				"mapping": "root = deleted()"
+			}
 		},
 		"output": {
-			"nanomsg": {}
+			"drop": {}
 		}
 	}
 }`)
@@ -545,7 +554,7 @@ func TestTypeAPIStreamsDefaultConf(t *testing.T) {
 	status, err := mgr.Read("foo")
 	require.NoError(t, err)
 
-	assert.Equal(t, status.Config().Input.Nanomsg.PollTimeout, "5s")
+	assert.Equal(t, status.Config().Input.Generate.Interval, "1s")
 }
 
 func TestTypeAPIStreamsLinting(t *testing.T) {
@@ -559,20 +568,24 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 	body := []byte(`{
 	"foo": {
 		"input": {
-			"nanomsg": {}
+			"generate": {
+				"mapping": "root = deleted()"
+			}
 		},
 		"output": {
-			"type":"nanomsg",
-			"file": {}
+			"type":"drop",
+			"inproc": "meow"
 		}
 	},
 	"bar": {
 		"input": {
-			"type":"nanomsg",
-			"file": {}
+			"generate": {
+				"mapping": "root = deleted()"
+			},
+			"type": "inproc"
 		},
 		"output": {
-			"nanomsg": {}
+			"drop": {}
 		}
 	}
 }`)
@@ -584,7 +597,7 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
 
-	expLints := `{"lint_errors":["stream 'bar': line 14: field file is invalid when the component type is nanomsg (input)","stream 'foo': line 8: field file is invalid when the component type is nanomsg (output)"]}`
+	expLints := `{"lint_errors":["stream 'bar': line 15: field generate is invalid when the component type is inproc (input)","stream 'foo': line 10: field inproc is invalid when the component type is drop (output)"]}`
 	assert.Equal(t, expLints, response.Body.String())
 
 	request, err = http.NewRequest("POST", "/streams?chilled=true", bytes.NewReader(body))
@@ -605,10 +618,12 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 
 	body := []byte(`{
 	"input": {
-		"nanomsg": {}
+		"generate": {
+			"mapping": "root = deleted()"
+		}
 	},
 	"output": {
-		"nanomsg": {}
+		"drop": {}
 	}
 }`)
 
@@ -622,7 +637,7 @@ func TestTypeAPIDefaultConf(t *testing.T) {
 	status, err := mgr.Read("foo")
 	require.NoError(t, err)
 
-	assert.Equal(t, status.Config().Input.Nanomsg.PollTimeout, "5s")
+	assert.Equal(t, status.Config().Input.Generate.Interval, "1s")
 }
 
 func TestTypeAPILinting(t *testing.T) {
@@ -635,11 +650,13 @@ func TestTypeAPILinting(t *testing.T) {
 
 	body := []byte(`{
 	"input": {
-		"type":"nanomsg",
-		"file": {}
+		"generate": {
+			"mapping": "root = deleted()"
+		}
 	},
 	"output": {
-		"nanomsg": {}
+		"type":"drop",
+		"inproc": "meow"
 	},
 	"cache_resources": [
 		{"label":"not_interested","memory":{}}
@@ -653,7 +670,7 @@ func TestTypeAPILinting(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
 
-	expLints := `{"lint_errors":["line 4: field file is invalid when the component type is nanomsg (input)","line 9: field cache_resources not recognised"]}`
+	expLints := `{"lint_errors":["line 9: field inproc is invalid when the component type is drop (output)","line 11: field cache_resources not recognised"]}`
 	assert.Equal(t, expLints, response.Body.String())
 
 	request, err = http.NewRequest("POST", "/streams/foo?chilled=true", bytes.NewReader(body))
@@ -685,8 +702,8 @@ func TestResourceAPILinting(t *testing.T) {
 		{
 			name:  "input bad",
 			ctype: "input",
-			config: `http_server:
-  path: /foo/bar
+			config: `generate:
+  mapping: root = deleted()
   nope: nah`,
 			lints: []string{
 				"line 3: field nope not recognised",
@@ -695,11 +712,12 @@ func TestResourceAPILinting(t *testing.T) {
 		{
 			name:  "output bad",
 			ctype: "output",
-			config: `http_server:
-  path: /foo/bar
+			config: `retry:
+  output:
+    drop: {}
   nope: nah`,
 			lints: []string{
-				"line 3: field nope not recognised",
+				"line 4: field nope not recognised",
 			},
 		},
 		{
@@ -770,7 +788,12 @@ func TestTypeAPIGetStats(t *testing.T) {
 
 	r := router(smgr)
 
-	err = smgr.Create("foo", harmlessConf())
+	origConf := stream.NewConfig()
+	origConf.Input.Type = "generate"
+	origConf.Input.Generate.Mapping = "root = deleted()"
+	origConf.Output.Type = "drop"
+
+	err = smgr.Create("foo", origConf)
 	require.NoError(t, err)
 
 	<-time.After(time.Millisecond * 100)

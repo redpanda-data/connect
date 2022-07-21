@@ -1,4 +1,4 @@
-package template_test
+package main_test
 
 import (
 	"os"
@@ -13,7 +13,7 @@ import (
 )
 
 func TestTemplateTesting(t *testing.T) {
-	testTemplatesDir := "../../template/test"
+	testTemplatesDir := "../../../template/test"
 	files, err := os.ReadDir(testTemplatesDir)
 	require.NoError(t, err)
 

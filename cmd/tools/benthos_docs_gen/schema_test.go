@@ -1,4 +1,4 @@
-package config_test
+package main
 
 import (
 	"bytes"
@@ -110,6 +110,7 @@ func TestConfigTags(t *testing.T) {
 	checkedTypes := map[string]struct{}{}
 	CheckTagsOfType(v, checkedTypes, t)
 }
+
 func walkSpecWithConfig(t *testing.T, prefix string, spec docs.FieldSpec, conf interface{}) {
 	t.Helper()
 

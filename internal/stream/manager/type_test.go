@@ -14,8 +14,9 @@ import (
 
 func harmlessConf() stream.Config {
 	c := stream.NewConfig()
-	c.Input.Type = "http_server"
-	c.Output.Type = "http_server"
+	c.Input.Type = "generate"
+	c.Input.Generate.Mapping = "root = deleted()"
+	c.Output.Type = "drop"
 	return c
 }
 
@@ -85,8 +86,6 @@ func TestTypeBasicClose(t *testing.T) {
 	mgr := New(res)
 
 	conf := harmlessConf()
-	conf.Output.Type = "nanomsg"
-
 	if err := mgr.Create("foo", conf); err != nil {
 		t.Fatal(err)
 	}

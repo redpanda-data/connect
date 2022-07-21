@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -12,9 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func TestMetricsNil(t *testing.T) {
@@ -26,13 +22,7 @@ func TestMetricsNil(t *testing.T) {
 }
 
 func TestMetricsNoLabels(t *testing.T) {
-	conf := metrics.NewConfig()
-	conf.Type = "prometheus"
-	conf.Prometheus.UseHistogramTiming = true
-
-	stats, err := bundle.AllMetrics.Init(conf, mock.NewManager())
-	require.NoError(t, err)
-
+	stats := metrics.NewLocal()
 	nm := newReverseAirGapMetrics(stats)
 
 	ctr := nm.NewCounter("counterone")
@@ -45,26 +35,16 @@ func TestMetricsNoLabels(t *testing.T) {
 	tmr := nm.NewTimer("timerone")
 	tmr.Timing(13)
 
-	req := httptest.NewRequest("GET", "http://example.com/foo", nil)
-	w := httptest.NewRecorder()
-	stats.HandlerFunc()(w, req)
+	assert.Equal(t, map[string]int64{
+		"counterone": 21,
+		"gaugeone":   12,
+	}, stats.GetCounters())
 
-	body, err := io.ReadAll(w.Result().Body)
-	require.NoError(t, err)
-
-	assert.Contains(t, string(body), "counterone 21")
-	assert.Contains(t, string(body), "gaugeone 12")
-	assert.Contains(t, string(body), "timerone_sum 1.3e-08")
+	assert.Equal(t, int64(13), stats.GetTimings()["timerone"].Max())
 }
 
 func TestMetricsWithLabels(t *testing.T) {
-	conf := metrics.NewConfig()
-	conf.Type = "prometheus"
-	conf.Prometheus.UseHistogramTiming = true
-
-	stats, err := bundle.AllMetrics.Init(conf, mock.NewManager())
-	require.NoError(t, err)
-
+	stats := metrics.NewLocal()
 	nm := newReverseAirGapMetrics(stats)
 
 	ctr := nm.NewCounter("countertwo", "label1")
@@ -77,17 +57,13 @@ func TestMetricsWithLabels(t *testing.T) {
 	tmr := nm.NewTimer("timertwo", "label3", "label4")
 	tmr.Timing(13, "value4", "value5")
 
-	req := httptest.NewRequest("GET", "http://example.com/foo", nil)
-	w := httptest.NewRecorder()
-	stats.HandlerFunc()(w, req)
+	assert.Equal(t, map[string]int64{
+		`countertwo{label1="value1"}`: 10,
+		`countertwo{label1="value2"}`: 11,
+		`gaugetwo{label2="value3"}`:   12,
+	}, stats.GetCounters())
 
-	body, err := io.ReadAll(w.Result().Body)
-	require.NoError(t, err)
-
-	assert.Contains(t, string(body), "countertwo{label1=\"value1\"} 10")
-	assert.Contains(t, string(body), "countertwo{label1=\"value2\"} 11")
-	assert.Contains(t, string(body), "gaugetwo{label2=\"value3\"} 12")
-	assert.Contains(t, string(body), "timertwo_sum{label3=\"value4\",label4=\"value5\"} 1.3e-08")
+	assert.Equal(t, int64(13), stats.GetTimings()[`timertwo{label3="value4",label4="value5"}`].Max())
 }
 
 //------------------------------------------------------------------------------

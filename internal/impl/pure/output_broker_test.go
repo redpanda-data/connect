@@ -1,4 +1,4 @@
-package pure
+package pure_test
 
 import (
 	"os"
@@ -11,6 +11,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
 )
 
 func TestFanOutBroker(t *testing.T) {

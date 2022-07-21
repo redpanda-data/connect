@@ -17,7 +17,8 @@ import (
 
 	"github.com/benthosdev/benthos/v4/public/service"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/io"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func TestStreamBuilderDefault(t *testing.T) {
@@ -41,7 +42,7 @@ func TestStreamBuilderDefault(t *testing.T) {
 		`logger:
     level: INFO`,
 		`metrics:
-    prometheus:`,
+    none:`,
 	}
 
 	for _, str := range exp {
@@ -166,8 +167,8 @@ func TestStreamBuilderEnvVarInterpolation(t *testing.T) {
 
 	b := service.NewStreamBuilder()
 	require.NoError(t, b.AddInputYAML(`
-kafka:
-  topics: [ ${BENTHOS_TEST_ONE} ]
+generate:
+  mapping: 'root = "${BENTHOS_TEST_ONE}"'
 `))
 
 	require.NoError(t, b.SetLoggerYAML(`level: ${BENTHOS_TEST_TWO}`))
@@ -176,8 +177,7 @@ kafka:
 	require.NoError(t, err)
 
 	exp := []string{
-		` topics:
-            - foo`,
+		` mapping: root = "foo"`,
 		`level: bar`,
 	}
 
@@ -188,8 +188,8 @@ kafka:
 	b = service.NewStreamBuilder()
 	require.NoError(t, b.SetYAML(`
 input:
-  kafka:
-    topics: [ ${BENTHOS_TEST_ONE} ]
+  generate:
+    mapping: 'root = "${BENTHOS_TEST_ONE}"'
 logger:
   level: ${BENTHOS_TEST_TWO}
 `))
@@ -385,13 +385,13 @@ func TestStreamBuilderSetYAML(t *testing.T) {
 	b.SetThreads(10)
 	require.NoError(t, b.AddCacheYAML(`label: foocache
 type: memory`))
-	require.NoError(t, b.AddInputYAML(`type: kafka`))
-	require.NoError(t, b.AddOutputYAML(`type: nats`))
+	require.NoError(t, b.AddInputYAML(`type: generate`))
+	require.NoError(t, b.AddOutputYAML(`type: drop`))
 	require.NoError(t, b.AddProcessorYAML(`type: bloblang`))
 	require.NoError(t, b.AddProcessorYAML(`type: jmespath`))
 	require.NoError(t, b.AddRateLimitYAML(`label: foorl
 type: local`))
-	require.NoError(t, b.SetMetricsYAML(`type: prometheus`))
+	require.NoError(t, b.SetMetricsYAML(`type: none`))
 	require.NoError(t, b.SetLoggerYAML(`level: DEBUG`))
 	require.NoError(t, b.SetBufferYAML(`type: memory`))
 
@@ -401,7 +401,7 @@ type: local`))
 	exp := []string{
 		`input:
     label: ""
-    kafka:`,
+    generate:`,
 		`buffer:
     memory: {}`,
 		`pipeline:
@@ -416,9 +416,9 @@ type: local`))
             query: ""`,
 		`output:
     label: ""
-    nats:`,
+    drop:`,
 		`metrics:
-    prometheus:`,
+    none:`,
 		`cache_resources:
     - label: foocache
       memory:`,
@@ -452,11 +452,12 @@ processor_resources:
 
 input_resources:
   - label: fooinput
-    type: kafka
+    generate:
+      mapping: 'root = "meow"'
 
 output_resources:
   - label: foooutput
-    type: nats
+    type: drop
 `))
 
 	act, err := b.AsYAML()
@@ -476,10 +477,10 @@ output_resources:
       jmespath:`,
 		`input_resources:
     - label: fooinput
-      kafka:`,
+      generate:`,
 		`output_resources:
     - label: foooutput
-      nats:`,
+      drop:`,
 	}
 
 	for _, str := range exp {
@@ -490,10 +491,24 @@ output_resources:
 func TestStreamBuilderSetYAMLBrokers(t *testing.T) {
 	b := service.NewStreamBuilder()
 	b.SetThreads(10)
-	require.NoError(t, b.AddInputYAML(`type: kafka`))
-	require.NoError(t, b.AddInputYAML(`type: amqp_0_9`))
-	require.NoError(t, b.AddOutputYAML(`type: nats`))
-	require.NoError(t, b.AddOutputYAML(`type: file`))
+	require.NoError(t, b.AddInputYAML(`
+label: foo
+generate:
+  mapping: root = deleted()
+`))
+	require.NoError(t, b.AddInputYAML(`
+label: bar
+generate:
+  mapping: root = deleted()
+`))
+	require.NoError(t, b.AddOutputYAML(`
+label: baz
+drop: {}
+`))
+	require.NoError(t, b.AddOutputYAML(`
+label: buz
+drop: {}
+`))
 
 	act, err := b.AsYAML()
 	require.NoError(t, err)
@@ -504,20 +519,20 @@ func TestStreamBuilderSetYAMLBrokers(t *testing.T) {
     broker:
         copies: 1
         inputs:`,
-		`            - label: ""
-              kafka:`,
-		`            - label: ""
-              amqp_0_9:`,
+		`            - label: foo
+              generate:`,
+		`            - label: bar
+              generate:`,
 		`output:
     label: ""
     broker:
         copies: 1
         pattern: fan_out
         outputs:`,
-		`            - label: ""
-              nats:`,
-		`            - label: ""
-              file:`,
+		`            - label: baz
+              drop:`,
+		`            - label: buz
+              drop:`,
 	}
 
 	for _, str := range exp {
@@ -544,7 +559,7 @@ func TestStreamBuilderYAMLErrors(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unable to infer")
 
-	err = b.SetYAML(`input: { kafka: { not_a_field: nope } }`)
+	err = b.SetYAML(`input: { generate: { not_a_field: nope } }`)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "field not_a_field not recognised")
 
@@ -552,7 +567,7 @@ func TestStreamBuilderYAMLErrors(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unable to infer")
 
-	err = b.AddInputYAML(`kafka: { not_a_field: nah }`)
+	err = b.AddInputYAML(`generate: { not_a_field: nah }`)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "field not_a_field not recognised")
 
@@ -593,11 +608,11 @@ func TestStreamBuilderSetFields(t *testing.T) {
 			name: "unknown field error",
 			input: `
 input:
-  kafka:
-    topics: [ foo, bar ]
+  generate:
+    mapping: 'root = deleted()'
 `,
 			args: []interface{}{
-				"input.kafka.unknown_field", "baz",
+				"input.generate.unknown_field", "baz",
 			},
 			errContains: "field not recognised",
 		},
@@ -605,8 +620,8 @@ input:
 			name: "create lint error",
 			input: `
 input:
-  kafka:
-    topics: [ foo, bar ]
+  generate:
+    mapping: 'root = deleted()'
 `,
 			args: []interface{}{
 				"input.label", "foo",
@@ -615,53 +630,53 @@ input:
 			errContains: "collides with a previously",
 		},
 		{
-			name: "set kafka input topics",
+			name: "set file paths",
 			input: `
 input:
-  kafka:
-    topics: [ foo, bar ]
+  file:
+    paths: [ foo, bar ]
 `,
 			args: []interface{}{
-				"input.kafka.topics.1", "baz",
+				"input.file.paths.1", "baz",
 			},
 			output: `
 input:
-  kafka:
-    topics: [ foo, baz ]
+  file:
+    paths: [ foo, baz ]
 `,
 		},
 		{
-			name: "append kafka input topics",
+			name: "append file paths",
 			input: `
 input:
-  kafka:
-    topics: [ foo, bar ]
+  file:
+    paths: [ foo, bar ]
 `,
 			args: []interface{}{
-				"input.kafka.topics.-", "baz",
-				"input.kafka.topics.-", "buz",
-				"input.kafka.topics.-", "bev",
+				"input.file.paths.-", "baz",
+				"input.file.paths.-", "buz",
+				"input.file.paths.-", "bev",
 			},
 			output: `
 input:
-  kafka:
-    topics: [ foo, bar, baz, buz, bev ]
+  file:
+    paths: [ foo, bar, baz, buz, bev ]
 `,
 		},
 		{
 			name: "add a processor",
 			input: `
 input:
-  kafka:
-    topics: [ foo, bar ]
+  generate:
+    mapping: 'root = deleted()'
 `,
 			args: []interface{}{
 				"pipeline.processors.-.bloblang", `root = "meow"`,
 			},
 			output: `
 input:
-  kafka:
-    topics: [ foo, bar ]
+  generate:
+    mapping: 'root = deleted()'
 pipeline:
   processors:
     - bloblang: 'root = "meow"'
@@ -700,7 +715,8 @@ func TestStreamBuilderSetCoreYAML(t *testing.T) {
 	b.SetThreads(10)
 	require.NoError(t, b.SetYAML(`
 input:
-  kafka: {}
+  generate:
+    mapping: 'root = deleted()'
 
 pipeline:
   threads: 5
@@ -709,7 +725,7 @@ pipeline:
     - type: jmespath
 
 output:
-  nats: {}
+  drop: {}
 `))
 
 	act, err := b.AsYAML()
@@ -718,7 +734,7 @@ output:
 	exp := []string{
 		`input:
     label: ""
-    kafka:`,
+    generate:`,
 		`buffer:
     none: {}`,
 		`pipeline:
@@ -733,7 +749,7 @@ output:
             query: ""`,
 		`output:
     label: ""
-    nats:`,
+    drop:`,
 	}
 
 	for _, str := range exp {
@@ -744,12 +760,13 @@ output:
 func TestStreamBuilderDisabledLinting(t *testing.T) {
 	lintingErrorConfig := `
 input:
-  kafka: {}
+  generate:
+    mapping: 'root = deleted()'
   meow: ignore this field
 
 output:
-  nats:
-    another: linting error
+  another: linting error
+  drop: {}
 `
 	b := service.NewStreamBuilder()
 	require.Error(t, b.SetYAML(lintingErrorConfig))

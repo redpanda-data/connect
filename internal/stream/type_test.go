@@ -15,15 +15,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/manager"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func TestTypeConstruction(t *testing.T) {
 	conf := stream.NewConfig()
-	conf.Input.Type = "nanomsg"
-	conf.Input.Nanomsg.PollTimeout = "100ms"
+	conf.Input.Type = "generate"
+	conf.Input.Generate.Mapping = "root = {}"
 	conf.Buffer.Type = "memory"
-	conf.Output.Type = "nanomsg"
+	conf.Output.Type = "drop"
 
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
@@ -44,9 +44,10 @@ func TestTypeConstruction(t *testing.T) {
 
 func TestTypeCloseGracefully(t *testing.T) {
 	conf := stream.NewConfig()
-	conf.Input.Type = "http_server"
+	conf.Input.Type = "generate"
+	conf.Input.Generate.Mapping = "root = {}"
 	conf.Buffer.Type = "memory"
-	conf.Output.Type = "http_server"
+	conf.Output.Type = "drop"
 
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
@@ -70,9 +71,10 @@ func TestTypeCloseGracefully(t *testing.T) {
 
 func TestTypeCloseOrdered(t *testing.T) {
 	conf := stream.NewConfig()
-	conf.Input.Type = "http_server"
+	conf.Input.Type = "generate"
+	conf.Input.Generate.Mapping = "root = {}"
 	conf.Buffer.Type = "memory"
-	conf.Output.Type = "http_server"
+	conf.Output.Type = "drop"
 
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
@@ -96,9 +98,10 @@ func TestTypeCloseOrdered(t *testing.T) {
 
 func TestTypeCloseUnordered(t *testing.T) {
 	conf := stream.NewConfig()
-	conf.Input.Type = "http_server"
+	conf.Input.Type = "generate"
+	conf.Input.Generate.Mapping = "root = {}"
 	conf.Buffer.Type = "memory"
-	conf.Output.Type = "http_server"
+	conf.Output.Type = "drop"
 
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
@@ -152,7 +155,8 @@ func validateHealthCheckResponse(t *testing.T, serverURL, expectedResponse strin
 
 func TestHealthCheck(t *testing.T) {
 	conf := stream.NewConfig()
-	conf.Input.Type = "http_client"
+	conf.Input.Type = "generate"
+	conf.Input.Generate.Mapping = "root = {}"
 	conf.Output.Type = "drop"
 
 	mockAPIReg := newMockAPIReg()

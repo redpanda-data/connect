@@ -5,9 +5,12 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func TestOutBrokerConfigDefaults(t *testing.T) {
@@ -16,17 +19,25 @@ func TestOutBrokerConfigDefaults(t *testing.T) {
 		"broker": {
 			"outputs": [
 				{
-					"type": "http_client",
-					"http_client": {
-						"url": "address:1",
-						"timeout": "1ms"
+					"type": "retry",
+					"retry": {
+						"backoff": {
+							"initial_interval": "900ms"
+						},
+						"output": {
+							"drop": {}
+						}
 					}
 				},
 				{
-					"type": "http_client",
-					"http_client": {
-						"url": "address:2",
-						"retry_period": "2ms"
+					"type": "retry",
+					"retry": {
+						"backoff": {
+							"max_interval": "2s"
+						},
+						"output": {
+							"drop": {}
+						}
 					}
 				}
 			]
@@ -41,36 +52,13 @@ func TestOutBrokerConfigDefaults(t *testing.T) {
 
 	outputConfs := conf.Broker.Outputs
 
-	if exp, actual := 2, len(outputConfs); exp != actual {
-		t.Errorf("unexpected number of output configs: %v != %v", exp, actual)
-		return
-	}
+	require.Len(t, outputConfs, 2)
+	assert.Equal(t, "retry", outputConfs[0].Type)
+	assert.Equal(t, "retry", outputConfs[1].Type)
 
-	if exp, actual := "http_client", outputConfs[0].Type; exp != actual {
-		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
-	}
-	if exp, actual := "http_client", outputConfs[1].Type; exp != actual {
-		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
-	}
+	assert.Equal(t, "900ms", outputConfs[0].Retry.Backoff.InitialInterval)
+	assert.Equal(t, "3s", outputConfs[0].Retry.Backoff.MaxInterval)
 
-	if exp, actual := "address:1", outputConfs[0].HTTPClient.URL; exp != actual {
-		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
-	}
-	if exp, actual := "address:2", outputConfs[1].HTTPClient.URL; exp != actual {
-		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
-	}
-
-	if exp, actual := "1ms", outputConfs[0].HTTPClient.Timeout; exp != actual {
-		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
-	}
-	if exp, actual := "5s", outputConfs[1].HTTPClient.Timeout; exp != actual {
-		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
-	}
-
-	if exp, actual := "1s", outputConfs[0].HTTPClient.Retry; exp != actual {
-		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
-	}
-	if exp, actual := "2ms", outputConfs[1].HTTPClient.Retry; exp != actual {
-		t.Errorf("Unexpected value from config: %v != %v", exp, actual)
-	}
+	assert.Equal(t, "500ms", outputConfs[1].Retry.Backoff.InitialInterval)
+	assert.Equal(t, "2s", outputConfs[1].Retry.Backoff.MaxInterval)
 }

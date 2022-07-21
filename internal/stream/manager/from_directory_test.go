@@ -1,16 +1,16 @@
-package manager
+package manager_test
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
-	"sort"
 	"testing"
 
-	yaml "gopkg.in/yaml.v3"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/stream"
+	"github.com/benthosdev/benthos/v4/internal/stream/manager"
+
+	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 
 func TestFromDirectory(t *testing.T) {
@@ -24,57 +24,23 @@ func TestFromDirectory(t *testing.T) {
 	fooPath := filepath.Join(testDir, "foo.json")
 	barPath := filepath.Join(barDir, "test.yaml")
 
-	fooConf := stream.NewConfig()
-	fooConf.Input.Type = "generate"
-
-	barConf := stream.NewConfig()
-	barConf.Input.Type = "nanomsg"
-
-	expConfs := map[string]stream.Config{
-		"foo":      fooConf,
-		"bar_test": barConf,
-	}
-
-	var fooBytes []byte
-	var err error
-	if fooBytes, err = json.Marshal(fooConf); err != nil {
-		t.Fatal(err)
-	}
-	var barBytes []byte
-	if barBytes, err = yaml.Marshal(barConf); err != nil {
-		t.Fatal(err)
-	}
-
-	if err = os.WriteFile(fooPath, fooBytes, 0o666); err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(barPath, barBytes, 0o666); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(fooPath, []byte(`{"input":{"generate":{"mapping":"root = {}"}}}`), 0o666))
+	require.NoError(t, os.WriteFile(barPath, []byte(`
+input:
+  inproc: meow
+`), 0o666))
 
 	var actConfs map[string]stream.Config
-	if actConfs, err = LoadStreamConfigsFromDirectory(true, testDir); err != nil {
-		t.Fatal(err)
-	}
+	actConfs, err := manager.LoadStreamConfigsFromDirectory(true, testDir)
+	require.NoError(t, err)
 
-	var actKeys, expKeys []string
-	for id := range actConfs {
-		actKeys = append(actKeys, id)
-	}
-	sort.Strings(actKeys)
-	for id := range expConfs {
-		expKeys = append(expKeys, id)
-	}
-	sort.Strings(expKeys)
-
-	if !reflect.DeepEqual(actKeys, expKeys) {
-		t.Errorf("Wrong keys in loaded set: %v != %v", actKeys, expKeys)
-	}
+	require.Contains(t, actConfs, "foo")
+	require.Contains(t, actConfs, "bar_test")
 
 	if exp, act := "generate", actConfs["foo"].Input.Type; exp != act {
 		t.Errorf("Wrong value in loaded set: %v != %v", act, exp)
 	}
-	if exp, act := "nanomsg", actConfs["bar_test"].Input.Type; exp != act {
+	if exp, act := "inproc", actConfs["bar_test"].Input.Type; exp != act {
 		t.Errorf("Wrong value in loaded set: %v != %v", act, exp)
 	}
 }

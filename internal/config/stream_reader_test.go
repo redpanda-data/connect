@@ -11,7 +11,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/config"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 func TestStreamsLints(t *testing.T) {
@@ -21,9 +21,9 @@ func TestStreamsLints(t *testing.T) {
 	require.NoError(t, os.WriteFile(streamOnePath, []byte(`
 input:
   meow1: not this
-  kafka:
-    addresses: [ foobar.com, barbaz.com ]
-    topics: [ meow1, meow2 ]
+  generate:
+    count: 10
+    mapping: 'root = "meow"'
 `), 0o644))
 
 	streamTwoPath := filepath.Join(dir, "second.yaml")
@@ -55,9 +55,8 @@ cache_resources:
 
 	require.Len(t, streamConfs, 2)
 
-	assert.Equal(t, "kafka", streamConfs["first"].Input.Type)
-	assert.Equal(t, []string{"foobar.com", "barbaz.com"}, streamConfs["first"].Input.Kafka.Addresses)
-	assert.Equal(t, []string{"meow1", "meow2"}, streamConfs["first"].Input.Kafka.Topics)
+	assert.Equal(t, "generate", streamConfs["first"].Input.Type)
+	assert.Equal(t, `root = "meow"`, streamConfs["first"].Input.Generate.Mapping)
 }
 
 func TestStreamsDirectoryWalk(t *testing.T) {

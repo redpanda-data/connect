@@ -23,9 +23,9 @@ func newDummyReader(confFilePath string) *Reader {
 func TestReaderFileWatching(t *testing.T) {
 	dummyConfig := []byte(`
 input:
-  kafka: {}
+  generate: {}
 output:
-  aws_s3: {}
+  drop: {}
 `)
 
 	confDir := t.TempDir()
@@ -59,16 +59,16 @@ output:
 		require.FailNow(t, "Expected a config change to be triggered")
 	}
 
-	assert.Equal(t, "kafka", updatedConf.Input.Type)
-	assert.Equal(t, "aws_s3", updatedConf.Output.Type)
+	assert.Equal(t, "generate", updatedConf.Input.Type)
+	assert.Equal(t, "drop", updatedConf.Output.Type)
 }
 
 func TestReaderFileWatchingSymlinkReplace(t *testing.T) {
 	dummyConfig := []byte(`
 input:
-  kafka: {}
+  generate: {}
 output:
-  aws_s3: {}
+  drop: {}
 `)
 
 	rootDir := t.TempDir()
@@ -122,6 +122,6 @@ output:
 		require.FailNow(t, "Expected a config change to be triggered")
 	}
 
-	assert.Equal(t, "kafka", updatedConf.Input.Type)
-	assert.Equal(t, "aws_s3", updatedConf.Output.Type)
+	assert.Equal(t, "generate", updatedConf.Input.Type)
+	assert.Equal(t, "drop", updatedConf.Output.Type)
 }

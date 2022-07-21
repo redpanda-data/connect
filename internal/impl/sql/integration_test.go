@@ -20,7 +20,7 @@ import (
 	isql "github.com/benthosdev/benthos/v4/internal/impl/sql"
 	"github.com/benthosdev/benthos/v4/public/service"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/all"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
 type testFn func(t *testing.T, driver, dsn, table string)
