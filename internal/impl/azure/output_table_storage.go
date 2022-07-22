@@ -237,7 +237,7 @@ func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg *mes
 func (a *azureTableStorageWriter) execBatch(writeReqs map[string]map[string][]*aztables.EDMEntity) error {
 	for tn, pks := range writeReqs {
 		table := a.client.NewClient(tn)
-		_, err := table.Create(context.Background(), nil)
+		_, err := table.CreateTable(context.Background(), nil)
 		if !tableExists(err) {
 			return err
 		}
@@ -297,17 +297,17 @@ func (a *azureTableStorageWriter) addToBatch(batch []aztables.TransactionAction,
 	var err error
 	switch strings.ToUpper(insertType) {
 	case "ADD":
-		batch, err = appendFunc(batch, aztables.Add, entity)
+		batch, err = appendFunc(batch, aztables.TransactionTypeAdd, entity)
 	case "INSERT", "INSERT_MERGE", "INSERTMERGE":
-		batch, err = appendFunc(batch, aztables.InsertMerge, entity)
+		batch, err = appendFunc(batch, aztables.TransactionTypeInsertMerge, entity)
 	case "INSERT_REPLACE", "INSERTREPLACE":
-		batch, err = appendFunc(batch, aztables.InsertReplace, entity)
+		batch, err = appendFunc(batch, aztables.TransactionTypeInsertReplace, entity)
 	case "UPDATE", "UPDATE_MERGE", "UPDATEMERGE":
-		batch, err = appendFunc(batch, aztables.UpdateMerge, entity)
+		batch, err = appendFunc(batch, aztables.TransactionTypeUpdateMerge, entity)
 	case "UPDATE_REPLACE", "UPDATEREPLACE":
-		batch, err = appendFunc(batch, aztables.UpdateReplace, entity)
+		batch, err = appendFunc(batch, aztables.TransactionTypeUpdateReplace, entity)
 	case "DELETE":
-		batch, err = appendFunc(batch, aztables.Delete, entity)
+		batch, err = appendFunc(batch, aztables.TransactionTypeDelete, entity)
 	default:
 		return batch, fmt.Errorf("invalid insert type")
 	}
