@@ -237,7 +237,7 @@ func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg *mes
 func (a *azureTableStorageWriter) execBatch(writeReqs map[string]map[string][]*aztables.EDMEntity) error {
 	for tn, pks := range writeReqs {
 		table := a.client.NewClient(tn)
-		_, err := table.CreateTable(context.Background(), nil)
+		_, err := table.Create(context.Background(), nil)
 		if !tableExists(err) {
 			return err
 		}

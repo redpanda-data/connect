@@ -8,8 +8,9 @@ require (
 	cuelang.org/go v0.4.2
 	github.com/AthenZ/athenz v1.10.43 // indirect
 	github.com/Azure/azure-sdk-for-go v61.1.0+incompatible
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.23.0
-	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v0.7.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.22.0
+	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v0.6.0
+	github.com/Azure/azure-sdk-for-go/sdk/internal v0.9.2 // indirect
 	github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd
 	github.com/Azure/go-amqp v0.17.0
 	github.com/Azure/go-autorest/autorest v0.11.23
@@ -126,7 +127,7 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0
 	golang.org/x/crypto v0.0.0-20220511200225-c6db032c6c88
-	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
+	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.7
