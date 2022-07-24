@@ -198,7 +198,7 @@ func (a *amqp1Writer) WriteWithContext(ctx context.Context, msg *message.Batch) 
 		})
 		err := s.Send(ctx, m)
 		if err != nil {
-			if err == amqp.ErrTimeout {
+			if err == amqp.ErrTimeout || ctx.Err() != nil {
 				err = component.ErrTimeout
 			} else {
 				if dErr, isDetachError := err.(*amqp.DetachError); isDetachError && dErr.RemoteError != nil {

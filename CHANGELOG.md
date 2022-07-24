@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - The `mongodb` processor and output default `write_concern.w_timeout` empty value no longer causes configuration issues.
 - Field `message_name` added to the logger config.
+- The `amqp_1` input and output should no longer spam logs with timeout errors during graceful termination.
 
 ## 4.4.1 - 2022-07-19
 

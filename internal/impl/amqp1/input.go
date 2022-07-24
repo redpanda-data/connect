@@ -224,7 +224,7 @@ func (a *amqp1Reader) ReadWithContext(ctx context.Context) (*message.Batch, inpu
 	// Receive next message
 	amqpMsg, err := conn.receiver.Receive(ctx)
 	if err != nil {
-		if err == amqp.ErrTimeout {
+		if err == amqp.ErrTimeout || ctx.Err() != nil {
 			err = component.ErrTimeout
 		} else {
 			if dErr, isDetachError := err.(*amqp.DetachError); isDetachError && dErr.RemoteError != nil {
