@@ -9,7 +9,8 @@ require (
 	github.com/AthenZ/athenz v1.10.43 // indirect
 	github.com/Azure/azure-sdk-for-go v61.1.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.22.0
-	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v0.5.0
+	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v0.6.0
+	github.com/Azure/azure-sdk-for-go/sdk/internal v0.9.2 // indirect
 	github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd
 	github.com/Azure/go-amqp v0.17.0
 	github.com/Azure/go-autorest/autorest v0.11.23
@@ -54,7 +55,6 @@ require (
 	github.com/gocql/gocql v0.0.0-20211222173705-d73e6b1002a7
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/golang-jwt/jwt v3.2.2+incompatible
-	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
@@ -126,8 +126,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.6.2
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0
-	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
-	golang.org/x/net v0.0.0-20220325170049-de3da57026de
+	golang.org/x/crypto v0.0.0-20220511200225-c6db032c6c88
+	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.7
