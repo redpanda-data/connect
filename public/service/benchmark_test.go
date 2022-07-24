@@ -15,9 +15,14 @@ import (
 )
 
 func BenchmarkStreamPipelines(b *testing.B) {
-	for name, confFn := range map[string]func(int) string{
-		"basic pipeline": func(iterations int) string {
-			return fmt.Sprintf(`
+	for _, test := range []struct {
+		name   string
+		confFn func(iterations int) string
+	}{
+		{
+			name: "basic pipeline",
+			confFn: func(iterations int) string {
+				return fmt.Sprintf(`
 input:
   generate:
     count: %v
@@ -28,19 +33,23 @@ input:
 output:
   drop: {}
 `, iterations)
+			},
 		},
-		"basic pipeline batched": func(iterations int) string {
-			batchCount := 20
-			messageCount := iterations / batchCount
-			if messageCount <= 0 {
-				messageCount = 1
-			}
-			return fmt.Sprintf(`
+		{
+			name: "basic pipeline batched",
+			confFn: func(iterations int) string {
+				batchCount := 20
+				messageCount := iterations / batchCount
+				if messageCount <= 0 {
+					messageCount = 1
+				}
+				return fmt.Sprintf(`
 input:
   generate:
     count: %v
     interval: ""
     mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
       root = range(0, %v).map_each({"id": uuid_v4()})
   processors:
    - unarchive:
@@ -49,14 +58,18 @@ input:
 output:
   drop: {}
 `, messageCount, batchCount)
+			},
 		},
-		"basic mapping": func(iterations int) string {
-			return fmt.Sprintf(`
+		{
+			name: "basic mapping",
+			confFn: func(iterations int) string {
+				return fmt.Sprintf(`
 input:
   generate:
     count: %v
     interval: ""
     mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
       root.id = uuid_v4()
       root.name = fake("name")
       root.mobile = fake("phone_number")
@@ -74,14 +87,18 @@ pipeline:
 output:
   drop: {}
 `, iterations)
+			},
 		},
-		"basic multiplexing": func(iterations int) string {
-			return fmt.Sprintf(`
+		{
+			name: "basic multiplexing",
+			confFn: func(iterations int) string {
+				return fmt.Sprintf(`
 input:
   generate:
     count: %v
     interval: ""
     mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
       root.id = uuid_v4()
 
 output:
@@ -99,14 +116,18 @@ output:
       - output:
           drop: {}
 `, iterations)
+			},
 		},
-		"basic switch processor": func(iterations int) string {
-			return fmt.Sprintf(`
+		{
+			name: "basic switch processor",
+			confFn: func(iterations int) string {
+				return fmt.Sprintf(`
 input:
   generate:
     count: %v
     interval: ""
     mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
       root.id = uuid_v4()
 
 pipeline:
@@ -125,35 +146,43 @@ pipeline:
 output:
   drop: {}
 `, iterations)
+			},
 		},
-		"convoluted data generation": func(iterations int) string {
-			return fmt.Sprintf(`
+		{
+			name: "convoluted data generation",
+			confFn: func(iterations int) string {
+				return fmt.Sprintf(`
 input:
   generate:
     count: %v
     interval: ""
     mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
       root.id = uuid_v4()
       root.name = fake("name")
       root.mobile = fake("phone_number")
       root.site = fake("url")
       root.email = fake("email")
       root.friends = range(0, (random_int() %% 10) + 1).map_each(fake("name"))
-      root.meows = range(0, (random_int() %% 10) + 1).map_each({
+      root.meows = range(0, (random_int() %% 10) + 1).fold({}, item -> item.tally.merge({
         nanoid(): fake("name")
-      }).fold({}, item -> item.tally.merge(item.value))
+      }))
 
 output:
   drop: {}
 `, iterations)
+			},
 		},
-		"large data mapping": func(iterations int) string {
-			return fmt.Sprintf(`
+		{
+			name: "large data mapping",
+			confFn: func(iterations int) string {
+				return fmt.Sprintf(`
 input:
   generate:
     count: %v
     interval: ""
     mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
       root.id = uuid_v4()
       root.name = fake("name")
       root.mobile = fake("phone_number")
@@ -179,12 +208,13 @@ pipeline:
 output:
   drop: {}
 `, iterations)
+			},
 		},
 	} {
-		confFn := confFn
-		b.Run(name, func(b *testing.B) {
+		test := test
+		b.Run(test.name, func(b *testing.B) {
 			builder := service.NewStreamBuilder()
-			require.NoError(b, builder.SetYAML(confFn(b.N)))
+			require.NoError(b, builder.SetYAML(test.confFn(b.N)))
 			require.NoError(b, builder.SetLoggerYAML(`level: none`))
 
 			strm, err := builder.Build()
@@ -192,6 +222,9 @@ output:
 
 			ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 			defer done()
+
+			b.ReportAllocs()
+			b.ResetTimer()
 
 			require.NoError(b, strm.Run(ctx))
 		})
