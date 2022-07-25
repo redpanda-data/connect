@@ -66,6 +66,7 @@ output:
     persistent: false
     mandatory: false
     immediate: false
+    timeout: ""
     tls:
       enabled: false
       skip_cert_verify: false
@@ -262,6 +263,14 @@ Whether to set the immediate flag on published messages. When set if there are n
 
 Type: `bool`  
 Default: `false`  
+
+### `timeout`
+
+The maximum period to wait before abandoning it and reattempting. If not set, wait indefinitely.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls`
 
