@@ -96,7 +96,7 @@ require (
 	github.com/prometheus/common v0.32.1
 	github.com/pusher/pusher-http-go v4.0.1+incompatible
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc
-	github.com/rabbitmq/amqp091-go v1.3.4
+	github.com/rabbitmq/amqp091-go v1.4.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/rickb777/date v1.17.0
 	github.com/robfig/cron/v3 v3.0.1

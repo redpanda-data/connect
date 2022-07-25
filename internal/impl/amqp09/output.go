@@ -258,7 +258,8 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 			return nil
 		})
 
-		conf, err := amqpChan.PublishWithDeferredConfirm(
+		conf, err := amqpChan.PublishWithDeferredConfirmWithContext(
+			ctx,
 			a.conf.Exchange,  // publish to an exchange
 			bindingKey,       // routing to 0 or more queues
 			a.conf.Mandatory, // mandatory
