@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +19,8 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	goccy "github.com/goccy/go-json"
+	goavro "github.com/linkedin/goavro/v2"
 )
 
 // ReaderDocs is a static field documentation for input codecs.
@@ -26,6 +29,8 @@ var ReaderDocs = docs.FieldString(
 ).HasAnnotatedOptions(
 	"auto", "EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the `gzip/tar` codec. Defaults to all-bytes.",
 	"all-bytes", "Consume the entire file as a single binary message.",
+	"avro-ocf", "EXPERIMENTAL: Consume the file by individual datum converted to JSON using native Go json encoder",
+	"avro-ocf:goccy", "EXPERIMENTAL: Consume the file by individual datum converted to JSON using `github.com/goccy/go-json` json encoder",
 	"chunker:x", "Consume the file in chunks of a given number of bytes.",
 	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
 	"csv:x", "Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `\"csv:\\t\"` would consume a tab delimited file.",
@@ -208,6 +213,10 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return &allBytesReader{r, fn, false}, nil
 		}, true, nil
+	case "avro-ocf":
+		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+			return newAvroOCFReader(conf, true, r, fn)
+		}, true, nil
 	case "lines":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 			return newLinesReader(conf, r, fn)
@@ -218,6 +227,19 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		}, true, nil
 	case "tar":
 		return newTarReader, true, nil
+	}
+	if strings.HasPrefix(codec, "avro-ocf:") {
+		jsonEncoder := strings.TrimPrefix(codec, "avro-ocf:")
+		switch jsonEncoder {
+		case "goccy":
+			return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+				return newAvroOCFReader(conf, false, r, fn)
+			}, true, nil
+		default:
+			return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+				return newAvroOCFReader(conf, true, r, fn)
+			}, true, nil
+		}
 	}
 	if strings.HasPrefix(codec, "delim:") {
 		by := strings.TrimPrefix(codec, "delim:")
@@ -286,6 +308,8 @@ func autoCodec(conf ReaderConfig) ReaderConstructor {
 	return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
 		codec := "all-bytes"
 		switch filepath.Ext(path) {
+		case ".avro":
+			codec = "avro-ocf"
 		case ".csv":
 			codec = "csv"
 		case ".csv.gz", ".csv.gzip":
@@ -339,7 +363,105 @@ func (a *allBytesReader) Close(ctx context.Context) error {
 }
 
 //------------------------------------------------------------------------------
+type avroOCFReader struct {
+	buf               *goavro.OCFReader
+	r                 io.ReadCloser
+	avroCodec         *goavro.Codec
+	nativeJSONEncoder bool
+	sourceAck         ReaderAckFn
 
+	mut      sync.Mutex
+	finished bool
+	pending  int32
+}
+
+func newAvroOCFReader(conf ReaderConfig, nativeJSONEncoder bool, r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
+	br := bufio.NewReader(r)
+	ocf, err := goavro.NewOCFReader(br)
+	if err != nil {
+		return nil, err
+	}
+	avroSchema := ocf.Codec()
+
+	return &avroOCFReader{
+		buf:               ocf,
+		r:                 r,
+		nativeJSONEncoder: nativeJSONEncoder,
+		avroCodec:         avroSchema,
+		sourceAck:         ackOnce(ackFn),
+	}, nil
+
+}
+
+func (a *avroOCFReader) ack(ctx context.Context, err error) error {
+	a.mut.Lock()
+	a.pending--
+	doAck := a.pending == 0 && a.finished
+	a.mut.Unlock()
+
+	if err != nil {
+		return a.sourceAck(ctx, err)
+	}
+	if doAck {
+		return a.sourceAck(ctx, nil)
+	}
+	return nil
+}
+
+func (a *avroOCFReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
+	scanned := a.buf.Scan()
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if scanned {
+		datum, err := a.buf.Read()
+		if err != nil {
+			return nil, nil, err
+		}
+		if a.nativeJSONEncoder == false {
+			jsonBytes, err := goccy.Marshal(datum)
+			if err != nil {
+				return nil, nil, err
+			}
+			a.pending++
+			bytesCopy := make([]byte, len(jsonBytes))
+			copy(bytesCopy, jsonBytes)
+			return []*message.Part{message.NewPart(bytesCopy)}, a.ack, nil
+		} else {
+			jsonBytes, err := json.Marshal(datum)
+			if err != nil {
+				return nil, nil, err
+			}
+			a.pending++
+			bytesCopy := make([]byte, len(jsonBytes))
+			copy(bytesCopy, jsonBytes)
+			return []*message.Part{message.NewPart(bytesCopy)}, a.ack, nil
+		}
+	}
+	err := a.buf.Err()
+	if err == nil {
+		err = io.EOF
+		a.finished = true
+	} else {
+		_ = a.sourceAck(ctx, err)
+	}
+	return nil, nil, err
+}
+
+func (a *avroOCFReader) Close(ctx context.Context) error {
+	a.mut.Lock()
+	defer a.mut.Unlock()
+
+	if !a.finished {
+		_ = a.sourceAck(ctx, errors.New("service shutting down"))
+	}
+	if a.pending == 0 {
+		_ = a.sourceAck(ctx, nil)
+	}
+	return a.r.Close()
+}
+
+//------------------------------------------------------------------------------
 type linesReader struct {
 	buf       *bufio.Scanner
 	r         io.ReadCloser
