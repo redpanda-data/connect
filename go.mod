@@ -52,7 +52,6 @@ require (
 	github.com/go-redis/redis/v7 v7.4.1
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/go-stack/stack v1.8.1 // indirect
-	github.com/goccy/go-json v0.9.10 // indirect
 	github.com/gocql/gocql v0.0.0-20211222173705-d73e6b1002a7
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/golang-jwt/jwt v3.2.2+incompatible
