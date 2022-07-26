@@ -50,7 +50,7 @@ type NewManagement interface {
 
 	NewBuffer(conf buffer.Config) (buffer.Streamed, error)
 	NewCache(conf cache.Config) (cache.V1, error)
-	NewInput(conf input.Config, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error)
+	NewInput(conf input.Config) (input.Streamed, error)
 	NewProcessor(conf processor.Config) (processor.V1, error)
 	NewOutput(conf output.Config, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error)
 	NewRateLimit(conf ratelimit.Config) (ratelimit.V1, error)

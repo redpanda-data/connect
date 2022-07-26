@@ -17,8 +17,8 @@ func TracedBundle(b *bundle.Environment) (*bundle.Environment, *Summary) {
 	tracedEnv := b.Clone()
 
 	for _, spec := range b.InputDocs() {
-		_ = tracedEnv.InputAdd(func(conf input.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (input.Streamed, error) {
-			i, err := b.InputInit(conf, nm, pcf...)
+		_ = tracedEnv.InputAdd(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
+			i, err := b.InputInit(conf, nm)
 			if err != nil {
 				return nil, err
 			}

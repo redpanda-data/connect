@@ -175,7 +175,7 @@ func registerCacheTemplate(tmpl *compiled, set *bundle.CacheSet) error {
 }
 
 func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
-	return set.Add(func(c input.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (input.Streamed, error) {
+	return set.Add(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		newNode, err := tmpl.ExpandToNode(c.Plugin.(*yaml.Node))
 		if err != nil {
 			return nil, err
@@ -194,7 +194,7 @@ func registerInputTemplate(tmpl *compiled, set *bundle.InputSet) error {
 				"label": c.Label,
 			}))
 		}
-		return nm.NewInput(conf, pcf...)
+		return nm.NewInput(conf)
 	}, tmpl.spec)
 }
 

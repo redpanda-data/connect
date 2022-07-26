@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 - Field `message_name` added to the logger config.
 - The `amqp_1` input and output should no longer spam logs with timeout errors during graceful termination.
 
+### Changed
+
+- The `broker` input no longer applies processors before batching as this was unintentional behaviour and counter to documentation. Users that rely on this behaviour are advised to place their pre-batching processors at the level of the child inputs of the broker.
+- The `broker` output no longer applies processors after batching as this was unintentional behaviour and counter to documentation. Users that rely on this behaviour are advised to place their post-batching processors at the level of the child outputs of the broker.
+
 ## 4.4.1 - 2022-07-19
 
 ### Fixed

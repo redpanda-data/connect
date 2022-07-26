@@ -1,4 +1,4 @@
-package io
+package io_test
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	bmock "github.com/benthosdev/benthos/v4/internal/manager/mock"
+	"github.com/benthosdev/benthos/v4/public/service"
 
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
@@ -76,4 +77,79 @@ generate:
 
 	i.CloseAsync()
 	require.NoError(t, i.WaitForClose(time.Second))
+}
+
+func TestBrokerConfigs(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		config string
+		output map[string]struct{}
+	}{
+		{
+			name: "simple inputs",
+			config: `
+dynamic:
+  inputs:
+    foo:
+      generate:
+        count: 1
+        interval: ""
+        mapping: 'root = "hello world 1"'
+    bar:
+      generate:
+        count: 1
+        interval: ""
+        mapping: 'root = "hello world 2"'
+`,
+			output: map[string]struct{}{
+				"hello world 1": {},
+				"hello world 2": {},
+			},
+		},
+		{
+			name: "input processors",
+			config: `
+dynamic:
+  inputs:
+    foo:
+      generate:
+        count: 1
+        interval: ""
+        mapping: 'root = "hello world 1"'
+      processors:
+        - bloblang: 'root = content().uppercase()'
+processors:
+  - bloblang: 'root = "meow " + content().string()'
+`,
+			output: map[string]struct{}{
+				"meow HELLO WORLD 1": {},
+			},
+		},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			builder := service.NewEnvironment().NewStreamBuilder()
+			require.NoError(t, builder.AddInputYAML(test.config))
+			require.NoError(t, builder.SetLoggerYAML(`level: none`))
+
+			tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+			defer done()
+
+			outputMsgs := map[string]struct{}{}
+			require.NoError(t, builder.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
+				mBytes, _ := msg.AsBytes()
+				outputMsgs[string(mBytes)] = struct{}{}
+				if len(outputMsgs) == len(test.output) {
+					done()
+				}
+				return nil
+			}))
+
+			strm, err := builder.Build()
+			require.NoError(t, err)
+
+			require.EqualError(t, strm.Run(tCtx), "context canceled")
+			assert.Equal(t, test.output, outputMsgs)
+		})
+	}
 }

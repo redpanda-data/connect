@@ -10,14 +10,13 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(newFallback, docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newFallback), docs.ComponentSpec{
 		Name:    "fallback",
 		Version: "3.58.0",
 		Summary: `
@@ -80,11 +79,8 @@ However, depending on the output and the error returned it is sometimes not poss
 
 //------------------------------------------------------------------------------
 
-func newFallback(conf output.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error) {
-	pipelines = processors.AppendFromConfig(conf, mgr, pipelines...)
-
+func newFallback(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
 	outputConfs := conf.Fallback
-
 	if len(outputConfs) == 0 {
 		return nil, ErrBrokerNoOutputs
 	}
@@ -102,7 +98,7 @@ func newFallback(conf output.Config, mgr bundle.NewManagement, pipelines ...proc
 	if t, err = newFallbackBroker(outputs); err != nil {
 		return nil, err
 	}
-	return output.WrapWithPipelines(t, pipelines...)
+	return t, nil
 }
 
 type fallbackBroker struct {

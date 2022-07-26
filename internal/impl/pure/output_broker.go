@@ -10,7 +10,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
@@ -21,7 +20,7 @@ var (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(newBroker, docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newBroker), docs.ComponentSpec{
 		Name: "broker",
 		Summary: `
 Allows you to route messages to multiple child outputs using a range of
@@ -104,18 +103,15 @@ outputs.`,
 
 //------------------------------------------------------------------------------
 
-func newBroker(conf output.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (output.Streamed, error) {
-	pipelines = processors.AppendFromConfig(conf, mgr, pipelines...)
-
+func newBroker(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
 	outputConfs := conf.Broker.Outputs
-
 	lOutputs := len(outputConfs) * conf.Broker.Copies
 
 	if lOutputs <= 0 {
 		return nil, ErrBrokerNoOutputs
 	}
 	if lOutputs == 1 {
-		b, err := mgr.NewOutput(outputConfs[0], pipelines...)
+		b, err := mgr.NewOutput(outputConfs[0])
 		if err != nil {
 			return nil, err
 		}
@@ -127,11 +123,6 @@ func newBroker(conf output.Config, mgr bundle.NewManagement, pipelines ...proces
 
 	outputs := make([]output.Streamed, lOutputs)
 
-	_, isThreaded := map[string]struct{}{
-		"round_robin": {},
-		"greedy":      {},
-	}[conf.Broker.Pattern]
-
 	_, isRetryWrapped := map[string]struct{}{
 		"fan_out":            {},
 		"fan_out_sequential": {},
@@ -140,12 +131,8 @@ func newBroker(conf output.Config, mgr bundle.NewManagement, pipelines ...proces
 	var err error
 	for j := 0; j < conf.Broker.Copies; j++ {
 		for i, oConf := range outputConfs {
-			var pipes []processor.PipelineConstructorFunc
-			if isThreaded {
-				pipes = pipelines
-			}
 			oMgr := mgr.IntoPath("broker", "outputs", strconv.Itoa(i))
-			tmpOut, err := oMgr.NewOutput(oConf, pipes...)
+			tmpOut, err := oMgr.NewOutput(oConf)
 			if err != nil {
 				return nil, err
 			}
@@ -170,9 +157,6 @@ func newBroker(conf output.Config, mgr bundle.NewManagement, pipelines ...proces
 		b, err = newGreedyOutputBroker(outputs)
 	default:
 		return nil, fmt.Errorf("broker pattern was not recognised: %v", conf.Broker.Pattern)
-	}
-	if err == nil && !isThreaded {
-		b, err = output.WrapWithPipelines(b, pipelines...)
 	}
 
 	if !conf.Broker.Batching.IsNoop() {

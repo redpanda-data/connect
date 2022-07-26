@@ -293,7 +293,7 @@ func (s *StreamBuilder) AddProcessorYAML(conf string) error {
 // return an error.
 func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
 	if s.consumerFunc != nil {
-		return errors.New("unable to add multiple producer funcs to a stream builder")
+		return errors.New("unable to add multiple consumer funcs to a stream builder")
 	}
 
 	uuid, err := uuid.NewV4()
@@ -336,7 +336,7 @@ func (s *StreamBuilder) AddConsumerFunc(fn MessageHandlerFunc) error {
 // message contents.
 func (s *StreamBuilder) AddBatchConsumerFunc(fn MessageBatchHandlerFunc) error {
 	if s.consumerFunc != nil {
-		return errors.New("unable to add multiple producer funcs to a stream builder")
+		return errors.New("unable to add multiple consumer funcs to a stream builder")
 	}
 
 	uuid, err := uuid.NewV4()

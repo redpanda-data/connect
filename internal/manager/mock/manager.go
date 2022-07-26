@@ -79,8 +79,8 @@ func (m *Manager) StoreCache(ctx context.Context, name string, conf cache.Config
 }
 
 // NewInput always errors on invalid type.
-func (m *Manager) NewInput(conf input.Config, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
-	return bundle.AllInputs.Init(conf, m, pipelines...)
+func (m *Manager) NewInput(conf input.Config) (input.Streamed, error) {
+	return bundle.AllInputs.Init(conf, m)
 }
 
 // StoreInput always errors on invalid type.

@@ -6,7 +6,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
@@ -24,12 +23,8 @@ func (e *Environment) InputAdd(constructor InputConstructor, spec docs.Component
 }
 
 // InputInit attempts to initialise an input from a config.
-func (e *Environment) InputInit(
-	conf input.Config,
-	mgr NewManagement,
-	pipelines ...iprocessor.PipelineConstructorFunc,
-) (input.Streamed, error) {
-	return e.inputs.Init(conf, mgr, pipelines...)
+func (e *Environment) InputInit(conf input.Config, mgr NewManagement) (input.Streamed, error) {
+	return e.inputs.Init(conf, mgr)
 }
 
 // InputDocs returns a slice of input specs, which document each method.
@@ -40,7 +35,7 @@ func (e *Environment) InputDocs() []docs.ComponentSpec {
 //------------------------------------------------------------------------------
 
 // InputConstructor constructs an input component.
-type InputConstructor func(input.Config, NewManagement, ...iprocessor.PipelineConstructorFunc) (input.Streamed, error)
+type InputConstructor func(input.Config, NewManagement) (input.Streamed, error)
 
 type inputSpec struct {
 	constructor InputConstructor
@@ -70,12 +65,12 @@ func (s *InputSet) Add(constructor InputConstructor, spec docs.ComponentSpec) er
 }
 
 // Init attempts to initialise an input from a config.
-func (s *InputSet) Init(conf input.Config, mgr NewManagement, pipelines ...iprocessor.PipelineConstructorFunc) (input.Streamed, error) {
+func (s *InputSet) Init(conf input.Config, mgr NewManagement) (input.Streamed, error) {
 	spec, exists := s.specs[conf.Type]
 	if !exists {
 		return nil, component.ErrInvalidType("input", conf.Type)
 	}
-	c, err := spec.constructor(conf, mgr, pipelines...)
+	c, err := spec.constructor(conf, mgr)
 	err = wrapComponentErr(mgr, "input", err)
 	return c, err
 }

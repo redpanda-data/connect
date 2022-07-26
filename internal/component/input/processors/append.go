@@ -34,12 +34,12 @@ func AppendFromConfig(conf input.Config, mgr bundle.NewManagement, pipelines ...
 // WrapConstructor provides a way to define an input constructor without
 // manually initializing processors of the config.
 func WrapConstructor(fn func(input.Config, bundle.NewManagement) (input.Streamed, error)) bundle.InputConstructor {
-	return func(c input.Config, nm bundle.NewManagement, pcf ...processor.PipelineConstructorFunc) (input.Streamed, error) {
+	return func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		i, err := fn(c, nm)
 		if err != nil {
 			return nil, err
 		}
-		pcf = AppendFromConfig(c, nm, pcf...)
+		pcf := AppendFromConfig(c, nm)
 		return input.WrapWithPipelines(i, pcf...)
 	}
 }

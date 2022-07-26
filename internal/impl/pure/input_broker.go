@@ -10,7 +10,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
@@ -20,7 +19,7 @@ var (
 )
 
 func init() {
-	err := bundle.AllInputs.Add(newBrokerInput, docs.ComponentSpec{
+	err := bundle.AllInputs.Add(processors.WrapConstructor(newBrokerInput), docs.ComponentSpec{
 		Name: "broker",
 		Summary: `
 Allows you to combine multiple inputs into a single stream of data, where each input will be read in parallel.`,
@@ -87,11 +86,8 @@ child nodes processors.`,
 	}
 }
 
-func newBrokerInput(conf input.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
-	pipelines = processors.AppendFromConfig(conf, mgr, pipelines...)
-
+func newBrokerInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
 	lInputs := len(conf.Broker.Inputs) * conf.Broker.Copies
-
 	if lInputs <= 0 {
 		return nil, ErrBrokerNoInputs
 	}
@@ -99,7 +95,7 @@ func newBrokerInput(conf input.Config, mgr bundle.NewManagement, pipelines ...pr
 	var err error
 	var b input.Streamed
 	if lInputs == 1 {
-		if b, err = mgr.NewInput(conf.Broker.Inputs[0], pipelines...); err != nil {
+		if b, err = mgr.NewInput(conf.Broker.Inputs[0]); err != nil {
 			return nil, err
 		}
 	} else {
@@ -108,7 +104,7 @@ func newBrokerInput(conf input.Config, mgr bundle.NewManagement, pipelines ...pr
 		for j := 0; j < conf.Broker.Copies; j++ {
 			for i, iConf := range conf.Broker.Inputs {
 				iMgr := mgr.IntoPath("broker", "inputs", strconv.Itoa(i))
-				inputs[len(conf.Broker.Inputs)*j+i], err = iMgr.NewInput(iConf, pipelines...)
+				inputs[len(conf.Broker.Inputs)*j+i], err = iMgr.NewInput(iConf)
 				if err != nil {
 					return nil, err
 				}

@@ -539,8 +539,8 @@ func (t *Type) AccessInput(ctx context.Context, name string, fn func(input.Strea
 }
 
 // NewInput attempts to create a new input component from a config.
-func (t *Type) NewInput(conf input.Config, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
-	return t.env.InputInit(conf, t.forLabel(conf.Label), pipelines...)
+func (t *Type) NewInput(conf input.Config) (input.Streamed, error) {
+	return t.env.InputInit(conf, t.forLabel(conf.Label))
 }
 
 // StoreInput attempts to store a new input resource. If an existing resource

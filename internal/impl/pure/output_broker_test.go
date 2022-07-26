@@ -1,10 +1,15 @@
 package pure_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -13,6 +18,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestFanOutBroker(t *testing.T) {
@@ -268,5 +274,137 @@ func TestGreedyBroker(t *testing.T) {
 		if act := string(fileBytes); exp[0] != act && exp[1] != act {
 			t.Errorf("Wrong contents for file '%v': %v != (%v || %v)", k, act, exp[0], exp[1])
 		}
+	}
+}
+
+type mockOutput struct {
+	outputs map[string]struct{}
+	mut     sync.Mutex
+}
+
+func (m *mockOutput) Connect(context.Context) error {
+	return nil
+}
+
+func (m *mockOutput) Write(ctx context.Context, msg *service.Message) error {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	mBytes, err := msg.AsBytes()
+	m.outputs[string(mBytes)] = struct{}{}
+	return err
+}
+
+func (m *mockOutput) Close(context.Context) error {
+	return nil
+}
+
+func TestOutputBrokerConfigs(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		inputConfig  string
+		outputConfig string
+		output       map[string]struct{}
+	}{
+		{
+			name: "simple inputs",
+			inputConfig: `
+generate:
+  count: 1
+  interval: ""
+  mapping: 'root = "hello world 1"'
+`,
+			outputConfig: `
+broker:
+  outputs:
+    - testmeow: {}
+      processors:
+        - bloblang: '"first " + content()'
+    - testmeow: {}
+      processors:
+        - bloblang: '"second " + content()'
+`,
+			output: map[string]struct{}{
+				"first hello world 1":  {},
+				"second hello world 1": {},
+			},
+		},
+		{
+			name: "single input nested processors",
+			inputConfig: `
+generate:
+  count: 1
+  interval: ""
+  mapping: 'root = "hello world 1"'
+`,
+			outputConfig: `
+broker:
+  outputs:
+    - testmeow: {}
+      processors:
+        - bloblang: 'root = content().uppercase()'
+processors:
+  - bloblang: 'root = "outter: " + content()'
+`,
+			output: map[string]struct{}{
+				"OUTTER: HELLO WORLD 1": {},
+			},
+		},
+		{
+			name: "single input nested and batched processors",
+			inputConfig: `
+generate:
+  count: 3
+  interval: ""
+  mapping: 'root = "hello world 1"'
+`,
+			outputConfig: `
+processors:
+  - bloblang: 'root = "outter: " + content()'
+
+broker:
+  batching:
+    count: 3
+    processors:
+      - archive:
+          format: lines
+
+  outputs:
+    - testmeow: {}
+      processors:
+        - bloblang: 'root = "inner: " + content()'
+`,
+			output: map[string]struct{}{
+				"inner: outter: hello world 1\noutter: hello world 1\noutter: hello world 1": {},
+			},
+		},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			mOut := &mockOutput{
+				outputs: map[string]struct{}{},
+			}
+
+			env := service.NewEnvironment()
+			env.RegisterOutput("testmeow", service.NewConfigSpec(),
+				func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
+					maxInFlight = 1
+					out = mOut
+					return
+				})
+
+			builder := env.NewStreamBuilder()
+			require.NoError(t, builder.AddInputYAML(test.inputConfig))
+			require.NoError(t, builder.AddOutputYAML(test.outputConfig))
+			require.NoError(t, builder.SetLoggerYAML(`level: none`))
+
+			strm, err := builder.Build()
+			require.NoError(t, err)
+
+			tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+			defer done()
+
+			require.NoError(t, strm.Run(tCtx))
+			assert.Equal(t, test.output, mOut.outputs)
+		})
 	}
 }

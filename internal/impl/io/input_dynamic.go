@@ -11,15 +11,11 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
-	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
 func init() {
-	err := bundle.AllInputs.Add(func(conf input.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
-		pipelines = processors.AppendFromConfig(conf, mgr, pipelines...)
-		return newDynamicInput(conf, mgr, pipelines...)
-	}, docs.ComponentSpec{
+	err := bundle.AllInputs.Add(processors.WrapConstructor(newDynamicInput), docs.ComponentSpec{
 		Name: "dynamic",
 		Summary: `
 A special broker type where the inputs are identified by unique labels and can
@@ -45,13 +41,13 @@ already exists it will be changed.`,
 	}
 }
 
-func newDynamicInput(conf input.Config, mgr bundle.NewManagement, pipelines ...processor.PipelineConstructorFunc) (input.Streamed, error) {
+func newDynamicInput(conf input.Config, mgr bundle.NewManagement) (input.Streamed, error) {
 	dynAPI := api.NewDynamic()
 
 	inputs := map[string]input.Streamed{}
 	for k, v := range conf.Dynamic.Inputs {
 		iMgr := mgr.IntoPath("dynamic", "inputs", k)
-		newInput, err := iMgr.NewInput(v, pipelines...)
+		newInput, err := iMgr.NewInput(v)
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +95,7 @@ func newDynamicInput(conf input.Config, mgr bundle.NewManagement, pipelines ...p
 			return err
 		}
 		iMgr := mgr.IntoPath("dynamic", "inputs", id)
-		newInput, err := iMgr.NewInput(newConf, pipelines...)
+		newInput, err := iMgr.NewInput(newConf)
 		if err != nil {
 			return err
 		}
