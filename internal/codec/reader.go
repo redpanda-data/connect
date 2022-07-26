@@ -7,7 +7,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,7 +18,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	goccy "github.com/goccy/go-json"
+	"github.com/benthosdev/benthos/v4/public/service"
 	goavro "github.com/linkedin/goavro/v2"
 )
 
@@ -29,8 +28,7 @@ var ReaderDocs = docs.FieldString(
 ).HasAnnotatedOptions(
 	"auto", "EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the `gzip/tar` codec. Defaults to all-bytes.",
 	"all-bytes", "Consume the entire file as a single binary message.",
-	"avro-ocf", "EXPERIMENTAL: Consume the file by individual datum converted to JSON using native Go json encoder",
-	"avro-ocf:goccy", "EXPERIMENTAL: Consume the file by individual datum converted to JSON using `github.com/goccy/go-json` json encoder",
+	"avro-ocf:marshaler=x", "EXPERIMENTAL: Consume the file by individual datum. Marshaler options: `goavro`, `json`. Use `goavro` if OCF contains logical types.",
 	"chunker:x", "Consume the file in chunks of a given number of bytes.",
 	"csv", "Consume structured rows as comma separated values, the first row must be a header row.",
 	"csv:x", "Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `\"csv:\\t\"` would consume a tab delimited file.",
@@ -215,7 +213,7 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 		}, true, nil
 	case "avro-ocf":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
-			return newAvroOCFReader(conf, true, r, fn)
+			return newAvroOCFReader(conf, "goavro", r, fn)
 		}, true, nil
 	case "lines":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
@@ -228,19 +226,23 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 	case "tar":
 		return newTarReader, true, nil
 	}
+
 	if strings.HasPrefix(codec, "avro-ocf:") {
 		jsonEncoder := strings.TrimPrefix(codec, "avro-ocf:")
 		switch jsonEncoder {
-		case "goccy":
+		case "marshaler=json":
 			return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
-				return newAvroOCFReader(conf, false, r, fn)
+				return newAvroOCFReader(conf, "json", r, fn)
+			}, true, nil
+		case "marshaler=goavro":
+			return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
+				return newAvroOCFReader(conf, "goavro", r, fn)
 			}, true, nil
 		default:
-			return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
-				return newAvroOCFReader(conf, true, r, fn)
-			}, true, nil
+			return nil, false, errors.New("avro-ocf codec requires a non-empty marshaler")
 		}
 	}
+
 	if strings.HasPrefix(codec, "delim:") {
 		by := strings.TrimPrefix(codec, "delim:")
 		if by == "" {
@@ -364,33 +366,71 @@ func (a *allBytesReader) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 type avroOCFReader struct {
-	buf               *goavro.OCFReader
-	r                 io.ReadCloser
-	avroCodec         *goavro.Codec
-	nativeJSONEncoder bool
-	sourceAck         ReaderAckFn
+	ocf          *goavro.OCFReader
+	r            io.ReadCloser
+	avroCodec    *goavro.Codec
+	decoder      avroDecoder
+	logicalTypes bool
+	marshaler    string
+	sourceAck    ReaderAckFn
 
 	mut      sync.Mutex
 	finished bool
 	pending  int32
 }
 
-func newAvroOCFReader(conf ReaderConfig, nativeJSONEncoder bool, r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
+type avroDecoder func(*avroOCFReader) (*message.Part, error)
+
+func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackFn ReaderAckFn) (Reader, error) {
 	br := bufio.NewReader(r)
 	ocf, err := goavro.NewOCFReader(br)
 	if err != nil {
 		return nil, err
 	}
-	avroSchema := ocf.Codec()
+
+	decoder := func(a *avroOCFReader) (*message.Part, error) {
+		datum, err := a.ocf.Read()
+		if err != nil {
+			return nil, err
+		}
+		a.pending++
+		m := service.NewMessage(nil)
+		if a.logicalTypes == false {
+			m.SetStructured(datum)
+			mp, err := m.AsBytes()
+			if err != nil {
+				return nil, err
+			}
+			part := message.NewPart(mp)
+			return part, nil
+		} else {
+			jb, err := a.avroCodec.TextualFromNative(nil, datum)
+			if err != nil {
+				return nil, err
+			}
+			m.SetBytes(jb)
+			mp, err := m.AsBytes()
+			part := message.NewPart(mp)
+			return part, nil
+		}
+	}
+
+	var logicalTypes bool
+	switch marshaler {
+	case "json":
+		logicalTypes = false
+	case "goavro":
+		logicalTypes = true
+	}
 
 	return &avroOCFReader{
-		buf:               ocf,
-		r:                 r,
-		nativeJSONEncoder: nativeJSONEncoder,
-		avroCodec:         avroSchema,
-		sourceAck:         ackOnce(ackFn),
+		ocf:          ocf,
+		r:            r,
+		logicalTypes: logicalTypes,
+		decoder:      decoder,
+		avroCodec:    ocf.Codec(),
+		sourceAck:    ackOnce(ackFn),
 	}, nil
-
 }
 
 func (a *avroOCFReader) ack(ctx context.Context, err error) error {
@@ -409,36 +449,18 @@ func (a *avroOCFReader) ack(ctx context.Context, err error) error {
 }
 
 func (a *avroOCFReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, error) {
-	scanned := a.buf.Scan()
+	scanned := a.ocf.Scan()
 	a.mut.Lock()
 	defer a.mut.Unlock()
 
 	if scanned {
-		datum, err := a.buf.Read()
+		part, err := a.decoder(a)
 		if err != nil {
 			return nil, nil, err
 		}
-		if a.nativeJSONEncoder == false {
-			jsonBytes, err := goccy.Marshal(datum)
-			if err != nil {
-				return nil, nil, err
-			}
-			a.pending++
-			bytesCopy := make([]byte, len(jsonBytes))
-			copy(bytesCopy, jsonBytes)
-			return []*message.Part{message.NewPart(bytesCopy)}, a.ack, nil
-		} else {
-			jsonBytes, err := json.Marshal(datum)
-			if err != nil {
-				return nil, nil, err
-			}
-			a.pending++
-			bytesCopy := make([]byte, len(jsonBytes))
-			copy(bytesCopy, jsonBytes)
-			return []*message.Part{message.NewPart(bytesCopy)}, a.ack, nil
-		}
+		return []*message.Part{part}, a.ack, nil
 	}
-	err := a.buf.Err()
+	err := a.ocf.Err()
 	if err == nil {
 		err = io.EOF
 		a.finished = true
