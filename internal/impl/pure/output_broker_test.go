@@ -385,12 +385,12 @@ broker:
 			}
 
 			env := service.NewEnvironment()
-			env.RegisterOutput("testmeow", service.NewConfigSpec(),
+			require.NoError(t, env.RegisterOutput("testmeow", service.NewConfigSpec(),
 				func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
 					maxInFlight = 1
 					out = mOut
 					return
-				})
+				}))
 
 			builder := env.NewStreamBuilder()
 			require.NoError(t, builder.AddInputYAML(test.inputConfig))
