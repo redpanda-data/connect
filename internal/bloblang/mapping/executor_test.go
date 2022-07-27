@@ -487,6 +487,13 @@ func TestQueries(t *testing.T) {
 			input:  []part{{Content: `{"bar":false}`}},
 			output: false,
 		},
+		"json query deleted message": {
+			mapping: NewExecutor("", nil, nil,
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("delete", query.Delete(nil))),
+			),
+			input: []part{{Content: `{"bar":{"is":"an object"}}`}},
+			err:   errors.New("query mapping resulted in deleted message, expected a boolean value"),
+		},
 		"simple json query bad type": {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment(), query.NewFieldFunction("bar")),

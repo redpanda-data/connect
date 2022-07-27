@@ -105,6 +105,9 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if newPart == nil {
+		return false, errors.New("query mapping resulted in deleted message, expected a boolean value")
+	}
 	newValue, err := newPart.JSON()
 	if err != nil {
 		return false, err
