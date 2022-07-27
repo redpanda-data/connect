@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `message_name` added to the logger config.
 - The `amqp_1` input and output should no longer spam logs with timeout errors during graceful termination.
 - Fixed a potential crash when the `contains` bloblang method was used to compare complex types.
+- Fixed an issue where the `kafka_franz` input or output wouldn't use TLS connections without custom certificate configuration.
 
 ### Changed
 

@@ -41,17 +41,22 @@ func NewConfig() Config {
 
 //------------------------------------------------------------------------------
 
-// Get returns a valid *tls.Config based on the configuration values of Config.
-// If none of the config fields are set then a nil config is returned.
-func (c *Config) Get() (*tls.Config, error) {
+func defaultTLSConfig() *tls.Config {
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+}
+
+// GetNonToggled returns a valid *tls.Config based on the configuration values
+// of Config. If none of the config fields are set then a nil config is
+// returned.
+func (c *Config) GetNonToggled() (*tls.Config, error) {
 	var tlsConf *tls.Config
 	initConf := func() {
 		if tlsConf != nil {
 			return
 		}
-		tlsConf = &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		}
+		tlsConf = defaultTLSConfig()
 	}
 
 	if len(c.RootCAs) > 0 && len(c.RootCAsFile) > 0 {
@@ -94,6 +99,22 @@ func (c *Config) Get() (*tls.Config, error) {
 	}
 
 	return tlsConf, nil
+}
+
+// Get returns a valid *tls.Config based on the configuration values of Config,
+// or nil if tls is not enabled.
+func (c *Config) Get() (*tls.Config, error) {
+	if !c.Enabled {
+		return nil, nil
+	}
+	tConf, err := c.GetNonToggled()
+	if err != nil {
+		return nil, err
+	}
+	if tConf == nil {
+		tConf = defaultTLSConfig()
+	}
+	return tConf, nil
 }
 
 func loadKeyPair(cert, key []byte, password string) (tls.Certificate, error) {

@@ -43,7 +43,7 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
 		},
 		Cmd: []string{
-			"redpanda", "start", "--smp 1", "--overprovisioned",
+			"redpanda", "start", "--smp 1", "--overprovisioned", "",
 			"--kafka-addr 0.0.0.0:9092",
 			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
 		},
@@ -55,22 +55,9 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 	})
 
 	_ = resource.Expire(900)
+
 	require.NoError(t, pool.Retry(func() error {
-		outConf := output.NewKafkaConfig()
-		outConf.TargetVersion = "2.1.0"
-		outConf.Addresses = []string{"localhost:" + kafkaPortStr}
-		outConf.Topic = "pls_ignore_just_testing_connection"
-		tmpOutput, serr := kafka.NewKafkaWriter(outConf, mock.NewManager())
-		if serr != nil {
-			return serr
-		}
-		defer tmpOutput.CloseAsync()
-		if serr := tmpOutput.ConnectWithContext(context.Background()); serr != nil {
-			return serr
-		}
-		return tmpOutput.WriteWithContext(context.Background(), message.QuickBatch([][]byte{
-			[]byte("foo message"),
-		}))
+		return createKafkaTopic("localhost:"+kafkaPortStr, "pls_ignore_just_testing_connection", 1)
 	}))
 
 	template := `
@@ -135,6 +122,7 @@ input:
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
 					vars.Var4 = "group" + testID
+					require.NoError(t, createKafkaTopic("localhost:"+kafkaPortStr, testID, 1))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptVarTwo("1"),
