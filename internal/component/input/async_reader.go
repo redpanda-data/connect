@@ -161,7 +161,7 @@ func (r *AsyncReader) loop() {
 
 		startedAt := time.Now()
 
-		resChan := make(chan error)
+		resChan := make(chan error, 1)
 		tracing.InitSpans(r.mgr.Tracer(), "input_"+r.typeStr, msg)
 		select {
 		case r.transactions <- message.NewTransaction(msg, resChan):
@@ -178,17 +178,14 @@ func (r *AsyncReader) loop() {
 			defer pendingAcks.Done()
 
 			var res error
-			var open bool
 			select {
-			case res, open = <-rChan:
+			case res = <-rChan:
 			case <-r.shutSig.CloseNowChan():
 				// Even if the pipeline is terminating we still want to attempt
 				// to propagate an acknowledgement from in-transit messages.
 				return
 			}
-			if !open {
-				return
-			}
+
 			mLatency.Timing(time.Since(startedAt).Nanoseconds())
 			tracing.FinishSpans(m)
 
