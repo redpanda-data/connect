@@ -210,7 +210,7 @@ var _ = registerSimpleMethod(
 			return nil, err
 		}
 		compareFn := func(compareLeft interface{}) bool {
-			return compareRight == compareLeft
+			return ICompare(compareRight, compareLeft)
 		}
 		if compareRightNum, err := IGetNumber(compareRight); err == nil {
 			compareFn = func(compareLeft interface{}) bool {

@@ -100,6 +100,29 @@ func TestMethodImmutability(t *testing.T) {
 				"baz": "buz",
 			},
 		},
+
+		{
+			name:   "contains object positive",
+			method: "contains",
+			target: []interface{}{
+				map[string]interface{}{"foo": "bar"},
+			},
+			args: []interface{}{
+				map[string]interface{}{"foo": "bar"},
+			},
+			exp: true,
+		},
+		{
+			name:   "contains object negative",
+			method: "contains",
+			target: []interface{}{
+				map[string]interface{}{"foo": "bar"},
+			},
+			args: []interface{}{
+				map[string]interface{}{"baz": "buz"},
+			},
+			exp: false,
+		},
 	}
 
 	for _, test := range testCases {
