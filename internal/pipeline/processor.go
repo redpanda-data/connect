@@ -89,7 +89,7 @@ func (p *Processor) loop() {
 
 // dispatchMessages attempts to send a multiple messages results of processors
 // over the shared messages channel. This send is retried until success.
-func (p *Processor) dispatchMessages(ctx context.Context, msgs []*message.Batch, ackFn func(context.Context, error) error) {
+func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, ackFn func(context.Context, error) error) {
 	throt := throttle.New(throttle.OptCloseChan(p.shutSig.CloseAtLeisureChan()))
 
 	pending := msgs
@@ -97,12 +97,12 @@ func (p *Processor) dispatchMessages(ctx context.Context, msgs []*message.Batch,
 		wg := sync.WaitGroup{}
 		wg.Add(len(pending))
 
-		var newPending []*message.Batch
+		var newPending []message.Batch
 		var newPendingMut sync.Mutex
 
 		for _, b := range pending {
 			b := b
-			transac := message.NewTransactionFunc(b, func(ctx context.Context, err error) error {
+			transac := message.NewTransactionFunc(b.ShallowCopy(), func(ctx context.Context, err error) error {
 				if err != nil {
 					newPendingMut.Lock()
 					newPending = append(newPending, b)

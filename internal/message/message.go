@@ -1,87 +1,71 @@
 package message
 
 // Batch represents zero or more messages.
-type Batch struct {
-	parts []*Part
-}
+type Batch []*Part
 
 // QuickBatch initializes a new message batch from a 2D byte slice, the slice
 // can be nil, in which case the batch will start empty.
-func QuickBatch(bslice [][]byte) *Batch {
+func QuickBatch(bslice [][]byte) Batch {
 	parts := make([]*Part, len(bslice))
 	for i, v := range bslice {
 		parts[i] = NewPart(v)
 	}
-	return &Batch{
-		parts: parts,
-	}
+	return parts
 }
 
 //------------------------------------------------------------------------------
 
-// Copy creates a new shallow copy of the message. Parts can be re-arranged in
-// the new copy and JSON parts can be get/set without impacting other message
-// copies. However, it is still unsafe to edit the raw content of message parts.
-func (m *Batch) Copy() *Batch {
-	parts := make([]*Part, len(m.parts))
-	for i, v := range m.parts {
-		parts[i] = v.Copy()
+// Len returns the length of the batch.
+func (m Batch) Len() int {
+	return len(m)
+}
+
+// ShallowCopy creates a new shallow copy of the message. Parts can be
+// re-arranged in the new copy and JSON parts can be get/set without impacting
+// other message copies.
+func (m Batch) ShallowCopy() Batch {
+	parts := make([]*Part, len(m))
+	for i, v := range m {
+		parts[i] = v.ShallowCopy()
 	}
-	return &Batch{
-		parts: parts,
-	}
+	return parts
 }
 
 // DeepCopy creates a new deep copy of the message. This can be considered an
 // entirely new object that is safe to use anywhere.
-func (m *Batch) DeepCopy() *Batch {
-	parts := make([]*Part, len(m.parts))
-	for i, v := range m.parts {
+func (m Batch) DeepCopy() Batch {
+	parts := make([]*Part, len(m))
+	for i, v := range m {
 		parts[i] = v.DeepCopy()
 	}
-	return &Batch{
-		parts: parts,
-	}
+	return parts
 }
 
 //------------------------------------------------------------------------------
 
 // Get returns a message part at a particular index, indexes can be negative.
-func (m *Batch) Get(index int) *Part {
-	if index < 0 {
-		index = len(m.parts) + index
-	}
-	if index < 0 || index >= len(m.parts) {
+func (m Batch) Get(index int) *Part {
+	if len(m) == 0 {
 		return NewPart(nil)
 	}
-	if m.parts[index] == nil {
-		m.parts[index] = NewPart(nil)
+	if index < 0 {
+		index = len(m) + index
 	}
-	return m.parts[index]
-}
-
-// SetAll changes the entire set of message parts.
-func (m *Batch) SetAll(parts []*Part) {
-	m.parts = parts
-}
-
-// Append adds a new message part to the message.
-func (m *Batch) Append(b ...*Part) int {
-	m.parts = append(m.parts, b...)
-	return len(m.parts) - 1
-}
-
-// Len returns the length of the message in parts.
-func (m *Batch) Len() int {
-	return len(m.parts)
+	if index < 0 || index >= len(m) {
+		return NewPart(nil)
+	}
+	if m[index] == nil {
+		m[index] = NewPart(nil)
+	}
+	return m[index]
 }
 
 // Iter will iterate all parts of the message, calling f for each.
-func (m *Batch) Iter(f func(i int, p *Part) error) error {
-	for i, p := range m.parts {
+func (m Batch) Iter(f func(i int, p *Part) error) error {
+	for i, p := range m {
 		if p == nil {
 			p = NewPart(nil)
-			m.parts[i] = p
+			m[i] = p
 		}
 		if err := f(i, p); err != nil {
 			return err
@@ -183,7 +167,7 @@ func DeserializeBytes(b []byte) ([][]byte, error) {
 }
 
 // FromBytes deserialises a Message from a byte array.
-func FromBytes(b []byte) (*Batch, error) {
+func FromBytes(b []byte) (Batch, error) {
 	parts, err := DeserializeBytes(b)
 	if err != nil {
 		return nil, err

@@ -446,12 +446,10 @@ func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
 }
 
 // ProcessMessage applies workflow stages to each part of a message type.
-func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
+func (w *Workflow) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
 	w.mReceived.Incr(int64(msg.Len()))
 	w.mBatchReceived.Incr(1)
 	startedAt := time.Now()
-
-	payload := msg.DeepCopy()
 
 	// Prevent resourced branches from being updated mid-flow.
 	dag, children, unlock, err := w.children.Lock()
@@ -459,21 +457,20 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 		w.mError.Incr(1)
 		w.log.Errorf("Failed to establish workflow: %v\n", err)
 
-		_ = payload.Iter(func(i int, p *message.Part) error {
+		_ = msg.Iter(func(i int, p *message.Part) error {
 			p.ErrorSet(err)
 			return nil
 		})
-		w.mSent.Incr(int64(payload.Len()))
+		w.mSent.Incr(int64(msg.Len()))
 		w.mBatchSent.Incr(1)
-		return []*message.Batch{payload}, nil
+		return []message.Batch{msg}, nil
 	}
 	defer unlock()
 
 	skipOnMeta := make([]map[string]struct{}, msg.Len())
-	_ = payload.Iter(func(i int, p *message.Part) error {
-		p.Get()
-		_ = p.MetaIter(func(k, v string) error { return nil })
-		if jObj, err := p.JSON(); err == nil {
+	_ = msg.Iter(func(i int, p *message.Part) error {
+		// TODO: Do we want to evaluate bytes here? And metadata?
+		if jObj, err := p.AsStructured(); err == nil {
 			skipOnMeta[i] = w.skipFromMeta(jObj)
 		} else {
 			skipOnMeta[i] = map[string]struct{}{}
@@ -481,9 +478,9 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 		return nil
 	})
 
-	propMsg, _ := tracing.WithChildSpans(w.tracer, "workflow", payload)
+	propMsg, _ := tracing.WithChildSpans(w.tracer, "workflow", msg)
 
-	records := make([]*resultTracker, payload.Len())
+	records := make([]*resultTracker, msg.Len())
 	for i := range records {
 		records[i] = trackerFromTree(dag)
 	}
@@ -496,7 +493,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 		wg.Add(len(layer))
 		for i, eid := range layer {
 			go func(id string, index int) {
-				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, id, propMsg.Copy())
+				branchMsg, branchSpans := tracing.WithChildSpans(w.tracer, id, propMsg.ShallowCopy())
 
 				branchParts := make([]*message.Part, branchMsg.Len())
 				_ = branchMsg.Iter(func(partIndex int, part *message.Part) error {
@@ -531,7 +528,7 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 			var failed []branchMapError
 			err := errors[i]
 			if err == nil {
-				failed, err = children[id].overlayResult(payload, results[i])
+				failed, err = children[id].overlayResult(msg, results[i])
 			}
 			if err != nil {
 				w.mError.Incr(1)
@@ -549,8 +546,8 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 
 	// Finally, set the meta records of each document.
 	if len(w.metaPath) > 0 {
-		_ = payload.Iter(func(i int, p *message.Part) error {
-			pJSON, err := p.JSON()
+		_ = msg.Iter(func(i int, p *message.Part) error {
+			pJSON, err := p.AsStructuredMut()
 			if err != nil {
 				w.mError.Incr(1)
 				w.log.Errorf("Failed to parse message for meta update: %v\n", err)
@@ -566,11 +563,11 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 			}
 			_, _ = gObj.Set(current, w.metaPath...)
 
-			p.SetJSON(gObj.Data())
+			p.SetStructuredMut(gObj.Data())
 			return nil
 		})
 	} else {
-		_ = payload.Iter(func(i int, p *message.Part) error {
+		_ = msg.Iter(func(i int, p *message.Part) error {
 			if lf := len(records[i].failed); lf > 0 {
 				failed := make([]string, 0, lf)
 				for k := range records[i].failed {
@@ -585,10 +582,10 @@ func (w *Workflow) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) 
 
 	tracing.FinishSpans(propMsg)
 
-	w.mSent.Incr(int64(payload.Len()))
+	w.mSent.Incr(int64(msg.Len()))
 	w.mBatchSent.Incr(1)
 	w.mLatency.Timing(time.Since(startedAt).Nanoseconds())
-	return []*message.Batch{payload}, nil
+	return []message.Batch{msg}, nil
 }
 
 // CloseAsync shuts down the processor and stops processing requests.

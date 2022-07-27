@@ -106,7 +106,7 @@ func (n *nsqWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (n *nsqWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (n *nsqWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	n.connMut.RLock()
 	prod := n.producer
 	n.connMut.RUnlock()
@@ -116,7 +116,7 @@ func (n *nsqWriter) WriteWithContext(ctx context.Context, msg *message.Batch) er
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		return prod.Publish(n.topicStr.String(i, msg), p.Get())
+		return prod.Publish(n.topicStr.String(i, msg), p.AsBytes())
 	})
 }
 

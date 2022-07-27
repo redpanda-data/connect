@@ -35,7 +35,7 @@ func OnlySinglePayloads(out Streamed) Streamed {
 
 //------------------------------------------------------------------------------
 
-func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
+func (n *notBatchedOutput) breakMessageOut(msg message.Batch) error {
 	var wg sync.WaitGroup
 
 	var batchErr *batch.Error
@@ -55,8 +55,7 @@ func (n *notBatchedOutput) breakMessageOut(msg *message.Batch) error {
 		index := i
 
 		tmpResChan := make(chan error, 1)
-		tmpMsg := message.QuickBatch(nil)
-		tmpMsg.Append(p)
+		tmpMsg := message.Batch{p}
 
 		select {
 		case n.outChan <- message.NewTransaction(tmpMsg, tmpResChan):

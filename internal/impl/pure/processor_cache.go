@@ -251,9 +251,8 @@ func cacheOperatorFromString(operator string) (cacheOperator, error) {
 
 //------------------------------------------------------------------------------
 
-func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
-	resMsg := msg.Copy()
-	_ = resMsg.Iter(func(index int, part *message.Part) error {
+func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+	_ = msg.Iter(func(index int, part *message.Part) error {
 		key := c.key.String(index, msg)
 		value := c.value.Bytes(index, msg)
 
@@ -287,12 +286,12 @@ func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 		}
 
 		if useResult {
-			part.Set(result)
+			part.SetBytes(result)
 		}
 		return nil
 	})
 
-	return []*message.Batch{resMsg}, nil
+	return []message.Batch{msg}, nil
 }
 
 func (c *cacheProc) Close(ctx context.Context) error {

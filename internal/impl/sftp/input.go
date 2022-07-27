@@ -216,7 +216,7 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (s *sftpReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (s *sftpReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	s.scannerMut.Lock()
 	defer s.scannerMut.Unlock()
 
@@ -254,9 +254,8 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (*message.Batch, input
 	for _, part := range parts {
 		part.MetaSet("sftp_path", s.currentPath)
 	}
-	msg := message.QuickBatch(nil)
-	msg.Append(parts...)
 
+	msg := message.Batch(parts)
 	return msg, func(ctx context.Context, res error) error {
 		return codecAckFn(ctx, res)
 	}, nil

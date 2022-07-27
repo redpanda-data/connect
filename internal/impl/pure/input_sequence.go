@@ -175,14 +175,14 @@ type joinedMessage struct {
 	fields   *gabs.Container
 }
 
-func (j *joinedMessage) ToMsg() *message.Batch {
+func (j *joinedMessage) ToMsg() message.Batch {
 	part := message.NewPart(nil)
-	part.SetJSON(j.fields)
+	jCopy, _ := message.CopyJSON(j.fields)
+	part.SetStructuredMut(jCopy)
 	for k, v := range j.metadata {
 		part.MetaSet(k, v)
 	}
-	msg := message.QuickBatch(nil)
-	msg.Append(part)
+	msg := message.Batch{part}
 	return msg
 }
 
@@ -226,14 +226,14 @@ type messageJoiner struct {
 	flushOnLast      bool
 }
 
-func (m *messageJoiner) Add(msg *message.Batch, lastInSequence bool, fn func(msg *message.Batch)) {
+func (m *messageJoiner) Add(msg message.Batch, lastInSequence bool, fn func(msg message.Batch)) {
 	if m.messages == nil {
 		m.messages = map[string]*joinedMessage{}
 	}
 
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		var incomingObj map[string]interface{}
-		if jData, err := p.JSON(); err == nil {
+		if jData, err := p.AsStructuredMut(); err == nil {
 			incomingObj, _ = jData.(map[string]interface{})
 		}
 		if incomingObj == nil {
@@ -269,7 +269,7 @@ func (m *messageJoiner) Add(msg *message.Batch, lastInSequence bool, fn func(msg
 			m.messages[id] = jObj
 
 			if m.flushOnLast && lastInSequence {
-				fn(jObj.ToMsg().DeepCopy())
+				fn(jObj.ToMsg())
 			}
 			return nil
 		}
@@ -283,7 +283,7 @@ func (m *messageJoiner) Add(msg *message.Batch, lastInSequence bool, fn func(msg
 		})
 
 		if m.flushOnLast && lastInSequence {
-			fn(jObj.ToMsg().DeepCopy())
+			fn(jObj.ToMsg())
 		}
 		return nil
 	})
@@ -293,7 +293,7 @@ func (m *messageJoiner) GetIteration() (int, bool) {
 	return m.currentIteration, m.currentIteration == (m.totalIterations - 1)
 }
 
-func (m *messageJoiner) Empty(fn func(*message.Batch)) bool {
+func (m *messageJoiner) Empty(fn func(message.Batch)) bool {
 	for k, v := range m.messages {
 		if !m.flushOnLast {
 			msg := v.ToMsg()
@@ -442,7 +442,7 @@ func (r *sequenceInput) resetTargets() {
 	r.targetMut.Unlock()
 }
 
-func (r *sequenceInput) dispatchJoinedMessage(wg *sync.WaitGroup, msg *message.Batch) {
+func (r *sequenceInput) dispatchJoinedMessage(wg *sync.WaitGroup, msg message.Batch) {
 	resChan := make(chan error)
 	tran := message.NewTransaction(msg, resChan)
 	select {
@@ -523,7 +523,7 @@ runLoop:
 				// Wait for pending transactions before adding more.
 				shardJoinWG.Wait()
 
-				lastIteration := r.joiner.Empty(func(msg *message.Batch) {
+				lastIteration := r.joiner.Empty(func(msg message.Batch) {
 					r.dispatchJoinedMessage(&shardJoinWG, msg)
 				})
 				shardJoinWG.Wait()
@@ -553,7 +553,7 @@ runLoop:
 		}
 
 		if r.joiner != nil {
-			r.joiner.Add(tran.Payload.DeepCopy(), finalInSequence, func(msg *message.Batch) {
+			r.joiner.Add(tran.Payload, finalInSequence, func(msg message.Batch) {
 				r.dispatchJoinedMessage(&shardJoinWG, msg)
 			})
 			if err := tran.Ack(shutNowCtx, nil); err != nil && shutNowCtx.Err() != nil {

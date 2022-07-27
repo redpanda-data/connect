@@ -171,7 +171,7 @@ func (r *AsyncReader) loop() {
 
 		pendingAcks.Add(1)
 		go func(
-			m *message.Batch,
+			m message.Batch,
 			aFn AsyncAckFn,
 			rChan chan error,
 		) {

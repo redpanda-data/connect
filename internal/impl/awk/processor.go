@@ -626,7 +626,6 @@ func flattenForAWK(path string, data interface{}) map[string]string {
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	part := msg.Copy()
 	var mutableJSONPart interface{}
 
 	customFuncs := make(map[string]interface{}, len(a.functions))
@@ -638,13 +637,13 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 
 	// Function overrides
 	customFuncs["metadata_get"] = func(k string) string {
-		return part.MetaGet(k)
+		return msg.MetaGet(k)
 	}
 	customFuncs["metadata_set"] = func(k, v string) {
-		part.MetaSet(k, v)
+		msg.MetaSet(k, v)
 	}
 	customFuncs["json_get"] = func(path string) (string, error) {
-		jsonPart, err := part.JSON()
+		jsonPart, err := msg.AsStructured()
 		if err != nil {
 			return "", fmt.Errorf("failed to parse message into json: %v", err)
 		}
@@ -662,10 +661,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 		var err error
 		jsonPart := mutableJSONPart
 		if jsonPart == nil {
-			if jsonPart, err = part.JSON(); err == nil {
-				jsonPart, err = message.CopyJSON(jsonPart)
-			}
-			if err == nil {
+			if jsonPart, err = msg.AsStructuredMut(); err == nil {
 				mutableJSONPart = jsonPart
 			}
 		}
@@ -681,7 +677,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 			return 0, err
 		}
 		_, _ = gPart.SetP(v, path)
-		part.SetJSON(gPart.Data())
+		msg.SetStructuredMut(gPart.Data())
 		return 0, nil
 	}
 	customFuncs["json_set"] = func(path, v string) (int, error) {
@@ -702,7 +698,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 			return 0, err
 		}
 		_ = gPart.ArrayAppendP(v, path)
-		part.SetJSON(gPart.Data())
+		msg.SetStructuredMut(gPart.Data())
 		return 0, nil
 	}
 	customFuncs["json_append"] = func(path, v string) (int, error) {
@@ -723,7 +719,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 			return 0, err
 		}
 		_ = gObj.DeleteP(path)
-		part.SetJSON(gObj.Data())
+		msg.SetStructuredMut(gObj.Data())
 		return 0, nil
 	}
 	customFuncs["json_length"] = func(path string) (int, error) {
@@ -776,7 +772,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 	}
 
 	if a.codec == "json" {
-		jsonPart, err := part.JSON()
+		jsonPart, err := msg.AsStructured()
 		if err != nil {
 			a.log.Errorf("Failed to parse part into json: %v\n", err)
 			return nil, err
@@ -787,13 +783,13 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 		}
 		config.Stdin = bytes.NewReader([]byte(" "))
 	} else if a.codec == "text" {
-		config.Stdin = bytes.NewReader(part.Get())
+		config.Stdin = bytes.NewReader(msg.AsBytes())
 	} else {
 		config.Stdin = bytes.NewReader([]byte(" "))
 	}
 
 	if a.codec != "none" {
-		_ = part.MetaIter(func(k, v string) error {
+		_ = msg.MetaIter(func(k, v string) error {
 			config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
 			return nil
 		})
@@ -827,10 +823,10 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 		if resMsgBytes[len(resMsgBytes)-1] == '\n' {
 			resMsgBytes = resMsgBytes[:len(resMsgBytes)-1]
 		}
-		part.Set(resMsgBytes)
+		msg.SetBytes(resMsgBytes)
 	}
 
-	return []*message.Part{part}, nil
+	return []*message.Part{msg}, nil
 }
 
 func (a *awkProc) Close(context.Context) error {

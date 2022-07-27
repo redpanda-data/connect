@@ -23,10 +23,10 @@ func traceProcessor(e *events, errCtr *uint64, p iprocessor.V1) iprocessor.V1 {
 	return t
 }
 
-func (t *tracedProcessor) ProcessMessage(m *message.Batch) ([]*message.Batch, error) {
+func (t *tracedProcessor) ProcessMessage(m message.Batch) ([]message.Batch, error) {
 	prevErrs := make([]error, m.Len())
 	_ = m.Iter(func(i int, part *message.Part) error {
-		t.e.Add(EventConsume, string(part.Get()))
+		t.e.Add(EventConsume, string(part.AsBytes()))
 		prevErrs[i] = part.ErrorGet()
 		return nil
 	})
@@ -34,7 +34,7 @@ func (t *tracedProcessor) ProcessMessage(m *message.Batch) ([]*message.Batch, er
 	outMsgs, res := t.wrapped.ProcessMessage(m)
 	for _, outMsg := range outMsgs {
 		_ = outMsg.Iter(func(i int, part *message.Part) error {
-			t.e.Add(EventProduce, string(part.Get()))
+			t.e.Add(EventProduce, string(part.AsBytes()))
 			fail := part.ErrorGet()
 			if fail == nil {
 				return nil

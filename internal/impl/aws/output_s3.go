@@ -263,7 +263,7 @@ func (a *amazonS3Writer) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (a *amazonS3Writer) WriteWithContext(wctx context.Context, msg *message.Batch) error {
+func (a *amazonS3Writer) WriteWithContext(wctx context.Context, msg message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}
@@ -304,7 +304,7 @@ func (a *amazonS3Writer) WriteWithContext(wctx context.Context, msg *message.Bat
 		uploadInput := &s3manager.UploadInput{
 			Bucket:                  &a.conf.Bucket,
 			Key:                     aws.String(a.path.String(i, msg)),
-			Body:                    bytes.NewReader(p.Get()),
+			Body:                    bytes.NewReader(p.AsBytes()),
 			ContentType:             aws.String(a.contentType.String(i, msg)),
 			ContentEncoding:         contentEncoding,
 			CacheControl:            cacheControl,

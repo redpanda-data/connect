@@ -45,7 +45,7 @@ func TestHTTPClientRetries(t *testing.T) {
 	if msgs[0].Len() != 1 {
 		t.Fatal("Wrong count of error message parts")
 	}
-	if exp, act := "test", string(msgs[0].Get(0).Get()); exp != act {
+	if exp, act := "test", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong message contents: %v != %v", act, exp)
 	}
 	assert.Error(t, msgs[0].Get(0).ErrorGet())
@@ -298,13 +298,13 @@ func TestHTTPClientSerial(t *testing.T) {
 	require.Len(t, msgs, 1)
 	require.Equal(t, 5, msgs[0].Len())
 
-	assert.Equal(t, "foobar foo", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "bar", string(msgs[0].Get(1).Get()))
+	assert.Equal(t, "foobar foo", string(msgs[0].Get(0).AsBytes()))
+	assert.Equal(t, "bar", string(msgs[0].Get(1).AsBytes()))
 	require.Error(t, msgs[0].Get(1).ErrorGet())
 	assert.Contains(t, msgs[0].Get(1).ErrorGet().Error(), "request returned unexpected response code")
-	assert.Equal(t, "foobar baz", string(msgs[0].Get(2).Get()))
-	assert.Equal(t, "foobar qux", string(msgs[0].Get(3).Get()))
-	assert.Equal(t, "foobar quz", string(msgs[0].Get(4).Get()))
+	assert.Equal(t, "foobar baz", string(msgs[0].Get(2).AsBytes()))
+	assert.Equal(t, "foobar qux", string(msgs[0].Get(3).AsBytes()))
+	assert.Equal(t, "foobar quz", string(msgs[0].Get(4).AsBytes()))
 }
 
 func TestHTTPClientParallel(t *testing.T) {
@@ -392,7 +392,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 	if expC, actC := 5, msgs[0].Len(); actC != expC {
 		t.Fatalf("Wrong result count: %v != %v", actC, expC)
 	}
-	if exp, act := "baz", string(msgs[0].Get(2).Get()); act != exp {
+	if exp, act := "baz", string(msgs[0].Get(2).AsBytes()); act != exp {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	assert.Error(t, msgs[0].Get(2).ErrorGet())
@@ -400,7 +400,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 	for _, i := range []int{0, 1, 3, 4} {
-		if exp, act := "foobar", string(msgs[0].Get(i).Get()); act != exp {
+		if exp, act := "foobar", string(msgs[0].Get(i).AsBytes()); act != exp {
 			t.Errorf("Wrong result: %v != %v", act, exp)
 		}
 		assert.NoError(t, msgs[0].Get(i).ErrorGet())

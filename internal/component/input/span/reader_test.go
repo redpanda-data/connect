@@ -15,7 +15,7 @@ import (
 
 type fnReader struct {
 	connectWithContext func(ctx context.Context) error
-	readWithContext    func(ctx context.Context) (*message.Batch, input.AsyncAckFn, error)
+	readWithContext    func(ctx context.Context) (message.Batch, input.AsyncAckFn, error)
 	closeAsync         func()
 	waitForClose       func(timeout time.Duration) error
 }
@@ -24,7 +24,7 @@ func (f *fnReader) ConnectWithContext(ctx context.Context) error {
 	return f.connectWithContext(ctx)
 }
 
-func (f *fnReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (f *fnReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	return f.readWithContext(ctx)
 }
 
@@ -74,7 +74,7 @@ func TestSpanReader(t *testing.T) {
 					connCalled = true
 					return nil
 				},
-				readWithContext: func(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+				readWithContext: func(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 					m := message.QuickBatch([][]byte{
 						[]byte(test.contents),
 					})
@@ -97,7 +97,7 @@ func TestSpanReader(t *testing.T) {
 			res, _, err := r.ReadWithContext(context.Background())
 			require.NoError(t, err)
 			assert.Equal(t, 1, res.Len())
-			assert.Equal(t, test.contents, string(res.Get(0).Get()))
+			assert.Equal(t, test.contents, string(res.Get(0).AsBytes()))
 
 			r.CloseAsync()
 			assert.Nil(t, r.WaitForClose(time.Second))

@@ -122,18 +122,17 @@ func (h *httpClientWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (h *httpClientWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (h *httpClientWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	resultMsg, err := h.client.Send(ctx, msg, msg)
 	if err == nil && h.conf.PropagateResponse {
-		msgCopy := msg.Copy()
 		parts := make([]*message.Part, resultMsg.Len())
 		_ = resultMsg.Iter(func(i int, p *message.Part) error {
-			if i < msgCopy.Len() {
-				parts[i] = msgCopy.Get(i)
+			if i < msg.Len() {
+				parts[i] = msg.Get(i)
 			} else {
-				parts[i] = msgCopy.Get(0)
+				parts[i] = msg.Get(0).ShallowCopy()
 			}
-			parts[i].Set(p.Get())
+			parts[i].SetBytes(p.AsBytes())
 
 			_ = p.MetaIter(func(k, v string) error {
 				parts[i].MetaSet(k, v)
@@ -142,8 +141,7 @@ func (h *httpClientWriter) WriteWithContext(ctx context.Context, msg *message.Ba
 
 			return nil
 		})
-		msgCopy.SetAll(parts)
-		if err := transaction.SetAsResponse(msgCopy); err != nil {
+		if err := transaction.SetAsResponse(parts); err != nil {
 			h.log.Warnf("Unable to propagate response to input: %v", err)
 		}
 	}

@@ -497,7 +497,7 @@ func testMongoDBProcessorFindOne(port string, t *testing.T) {
 		}
 
 		jdopts := jsondiff.DefaultJSONOptions()
-		diff, explanation := jsondiff.Compare(resMsgs[0].Get(0).Get(), []byte(tt.expected), &jdopts)
+		diff, explanation := jsondiff.Compare(resMsgs[0].Get(0).AsBytes(), []byte(tt.expected), &jdopts)
 		assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
 	}
 }

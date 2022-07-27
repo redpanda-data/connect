@@ -136,7 +136,7 @@ func (s *subprocessWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *subprocessWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (s *subprocessWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	s.cmdMut.Lock()
 	defer s.cmdMut.Unlock()
 	if s.stdin == nil {
@@ -144,7 +144,7 @@ func (s *subprocessWriter) WriteWithContext(ctx context.Context, msg *message.Ba
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		return s.codec(s.stdin, p.Get())
+		return s.codec(s.stdin, p.AsBytes())
 	})
 }
 

@@ -80,7 +80,7 @@ func (w *rejectWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *rejectWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (w *rejectWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	errStr := w.errExpr.String(0, msg)
 	return errors.New(errStr)
 }

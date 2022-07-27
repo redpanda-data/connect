@@ -95,7 +95,7 @@ func (p *Batcher) Add(part *message.Part) bool {
 	if p.byteSize > 0 {
 		// This calculation (serialisation into bytes) is potentially expensive
 		// so we only do it when there's a byte size based trigger.
-		p.sizeTally += len(part.Get())
+		p.sizeTally += len(part.AsBytes())
 	}
 	p.parts = append(p.parts, part)
 
@@ -110,9 +110,7 @@ func (p *Batcher) Add(part *message.Part) bool {
 		p.log.Traceln("Batching based on byte_size")
 	}
 	if p.check != nil && !p.triggered {
-		tmpMsg := message.QuickBatch(nil)
-		tmpMsg.SetAll(p.parts)
-
+		tmpMsg := message.Batch(p.parts)
 		test, err := p.check.QueryPart(tmpMsg.Len()-1, tmpMsg)
 		if err != nil {
 			test = false
@@ -129,35 +127,31 @@ func (p *Batcher) Add(part *message.Part) bool {
 
 // Flush clears all messages stored by this batch policy. Returns nil if the
 // policy is currently empty.
-func (p *Batcher) Flush() *message.Batch {
-	var newMsg *message.Batch
+func (p *Batcher) Flush() message.Batch {
+	var newMsg message.Batch
 
 	resultMsgs := p.flushAny()
 	if len(resultMsgs) == 1 {
 		newMsg = resultMsgs[0]
 	} else if len(resultMsgs) > 1 {
-		newMsg = message.QuickBatch(nil)
-		var parts []*message.Part
 		for _, m := range resultMsgs {
 			_ = m.Iter(func(_ int, p *message.Part) error {
-				parts = append(parts, p)
+				newMsg = append(newMsg, p)
 				return nil
 			})
 		}
-		newMsg.SetAll(parts)
 	}
 	return newMsg
 }
 
-func (p *Batcher) flushAny() []*message.Batch {
-	var newMsg *message.Batch
+func (p *Batcher) flushAny() []message.Batch {
+	var newMsg message.Batch
 	if len(p.parts) > 0 {
 		if !p.triggered && p.period > 0 && time.Since(p.lastBatch) > p.period {
 			p.mPeriodBatch.Incr(1)
 			p.log.Traceln("Batching based on period")
 		}
-		newMsg = message.QuickBatch(nil)
-		newMsg.Append(p.parts...)
+		newMsg = message.Batch(p.parts)
 	}
 	p.parts = nil
 	p.sizeTally = 0
@@ -177,7 +171,7 @@ func (p *Batcher) flushAny() []*message.Batch {
 		return resultMsgs
 	}
 
-	return []*message.Batch{newMsg}
+	return []message.Batch{newMsg}
 }
 
 // Count returns the number of currently buffered message parts within this

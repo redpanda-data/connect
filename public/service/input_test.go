@@ -102,7 +102,7 @@ func TestInputAirGapHappy(t *testing.T) {
 	outMsg, outAckFn, err := agi.ReadWithContext(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, 1, outMsg.Len())
-	assert.Equal(t, "hello world", string(outMsg.Get(0).Get()))
+	assert.Equal(t, "hello world", string(outMsg.Get(0).AsBytes()))
 
 	assert.NoError(t, outAckFn(context.Background(), errors.New("foobar")))
 	assert.EqualError(t, ackErr, "foobar")
@@ -200,9 +200,9 @@ func TestBatchInputAirGapHappy(t *testing.T) {
 	outMsg, outAckFn, err := agi.ReadWithContext(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, 3, outMsg.Len())
-	assert.Equal(t, "hello world", string(outMsg.Get(0).Get()))
-	assert.Equal(t, "this is a test message", string(outMsg.Get(1).Get()))
-	assert.Equal(t, "and it will work", string(outMsg.Get(2).Get()))
+	assert.Equal(t, "hello world", string(outMsg.Get(0).AsBytes()))
+	assert.Equal(t, "this is a test message", string(outMsg.Get(1).AsBytes()))
+	assert.Equal(t, "and it will work", string(outMsg.Get(2).AsBytes()))
 
 	assert.NoError(t, outAckFn(context.Background(), errors.New("foobar")))
 	assert.EqualError(t, ackErr, "foobar")

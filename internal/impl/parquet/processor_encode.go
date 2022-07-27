@@ -225,7 +225,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service
 		return nil, err
 	}
 
-	outMsg := batch[0].Copy()
+	outMsg := batch[0]
 	outMsg.SetBytes(buf.Bytes())
 	return []service.MessageBatch{{outMsg}}, nil
 }

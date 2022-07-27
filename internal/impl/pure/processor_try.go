@@ -97,12 +97,10 @@ func newTryProc(conf []processor.Config, mgr bundle.NewManagement) (*tryProc, er
 	}, nil
 }
 
-func (p *tryProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
-	resultMsgs := make([]*message.Batch, msg.Len())
+func (p *tryProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+	resultMsgs := make([]message.Batch, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		tmpMsg := message.QuickBatch(nil)
-		tmpMsg.SetAll([]*message.Part{p})
-		resultMsgs[i] = tmpMsg
+		resultMsgs[i] = message.Batch{p}
 		return nil
 	})
 
@@ -114,7 +112,7 @@ func (p *tryProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *mess
 	resMsg := message.QuickBatch(nil)
 	for _, m := range resultMsgs {
 		_ = m.Iter(func(i int, p *message.Part) error {
-			resMsg.Append(p)
+			resMsg = append(resMsg, p)
 			return nil
 		})
 	}
@@ -122,7 +120,7 @@ func (p *tryProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *mess
 		return nil, res
 	}
 
-	resMsgs := [1]*message.Batch{resMsg}
+	resMsgs := [1]message.Batch{resMsg}
 	return resMsgs[:], nil
 }
 

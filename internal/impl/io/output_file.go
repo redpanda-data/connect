@@ -97,7 +97,7 @@ func (w *fileWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *fileWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (w *fileWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	err := output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		path := filepath.Clean(w.path.String(i, msg))
 

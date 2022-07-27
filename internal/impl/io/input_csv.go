@@ -263,7 +263,7 @@ func (r *csvReader) readNext(reader *csv.Reader) ([]string, error) {
 	return records, nil
 }
 
-func (r *csvReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (r *csvReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	r.mut.Lock()
 	scanner := r.scanner
 	headers := r.headers
@@ -314,8 +314,8 @@ func (r *csvReader) ReadWithContext(ctx context.Context) (*message.Batch, input.
 			structured = obj
 		}
 
-		part.SetJSON(structured)
-		msg.Append(part)
+		part.SetStructuredMut(structured)
+		msg = append(msg, part)
 	}
 
 	return msg, func(context.Context, error) error { return nil }, nil

@@ -29,10 +29,10 @@ type ReaderWriter interface {
 	// the message is preserved until the returned AckFunc is called. Some
 	// temporal buffer implementations such as windowers will ignore the ack
 	// func.
-	Read(context.Context) (*message.Batch, AckFunc, error)
+	Read(context.Context) (message.Batch, AckFunc, error)
 
 	// Write a new message batch to the stack.
-	Write(context.Context, *message.Batch, AckFunc) error
+	Write(context.Context, message.Batch, AckFunc) error
 
 	// EndOfInput indicates to the buffer that the input has ended and that once
 	// the buffer is depleted it should return component.ErrTypeClosed from Read in

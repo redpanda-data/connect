@@ -144,12 +144,12 @@ func newBloblang(conf string, mgr bundle.NewManagement) (processor.V2Batched, er
 	}, nil
 }
 
-func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	newParts := make([]*message.Part, 0, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		p, err := b.exec.MapPart(i, msg)
 		if err != nil {
-			p = part.Copy()
+			p = part
 			b.log.Errorf("%v\n", err)
 			processor.MarkErr(p, spans[i], err)
 		}
@@ -161,10 +161,7 @@ func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 	if len(newParts) == 0 {
 		return nil, nil
 	}
-
-	newMsg := message.QuickBatch(nil)
-	newMsg.SetAll(newParts)
-	return []*message.Batch{newMsg}, nil
+	return []message.Batch{newParts}, nil
 }
 
 func (b *bloblangProc) Close(context.Context) error {

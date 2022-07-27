@@ -175,7 +175,7 @@ func (a *amqp1Writer) disconnect(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-func (a *amqp1Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *amqp1Writer) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	var s *amqp.Sender
 	a.connLock.RLock()
 	if a.sender != nil {
@@ -188,7 +188,7 @@ func (a *amqp1Writer) WriteWithContext(ctx context.Context, msg *message.Batch) 
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		m := amqp.NewMessage(p.Get())
+		m := amqp.NewMessage(p.AsBytes())
 		_ = a.metaFilter.Iter(p, func(k, v string) error {
 			if m.Annotations == nil {
 				m.Annotations = amqp.Annotations{}

@@ -181,7 +181,7 @@ func (m *memoryBuffer) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 		for len(m.batches) > 0 && !batchReady {
 			outSize += m.batches[0].size
 			for _, msg := range m.batches[0].b {
-				batchReady = m.batcher.Add(msg)
+				batchReady = m.batcher.Add(msg.Copy())
 			}
 			batchSources = append(batchSources, m.batches[0])
 
@@ -224,6 +224,8 @@ func (m *memoryBuffer) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 
 // PushMessage adds a new message to the stack. Returns the backlog in bytes.
 func (m *memoryBuffer) WriteBatch(ctx context.Context, msgBatch service.MessageBatch, aFn service.AckFunc) error {
+	// Deep copy before acknowledging in order to avoid vague ownership
+	msgBatch = msgBatch.DeepCopy()
 	if err := aFn(ctx, nil); err != nil {
 		return err
 	}
@@ -256,7 +258,7 @@ func (m *memoryBuffer) WriteBatch(ctx context.Context, msgBatch service.MessageB
 	}
 
 	m.batches = append(m.batches, measuredBatch{
-		b:    msgBatch.Copy(),
+		b:    msgBatch,
 		size: extraBytes,
 	})
 	m.bytes += extraBytes

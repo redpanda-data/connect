@@ -188,7 +188,7 @@ func (b *generateReader) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext a new bloblang generated message.
-func (b *generateReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (b *generateReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	batchSize := b.batchSize
 	if b.limited {
 		if b.remaining <= 0 {
@@ -214,9 +214,9 @@ func (b *generateReader) ReadWithContext(ctx context.Context) (*message.Batch, i
 	}
 	b.firstIsFree = false
 
-	msg := message.QuickBatch(nil)
+	batch := make(message.Batch, 0, batchSize)
 	for i := 0; i < batchSize; i++ {
-		p, err := b.exec.MapPart(0, message.QuickBatch(nil))
+		p, err := b.exec.MapPart(0, batch)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -224,13 +224,13 @@ func (b *generateReader) ReadWithContext(ctx context.Context) (*message.Batch, i
 			if b.limited {
 				b.remaining--
 			}
-			msg.Append(p)
+			batch = append(batch, p)
 		}
 	}
-	if msg.Len() == 0 {
+	if len(batch) == 0 {
 		return nil, nil, component.ErrTimeout
 	}
-	return msg, func(context.Context, error) error { return nil }, nil
+	return batch, func(context.Context, error) error { return nil }, nil
 }
 
 // CloseAsync shuts down the bloblang reader.

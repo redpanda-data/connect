@@ -266,7 +266,7 @@ func (s *sqlSelectInput) Read(ctx context.Context) (*service.Message, service.Ac
 	}
 
 	msg := service.NewMessage(nil)
-	msg.SetStructured(obj)
+	msg.SetStructuredMut(obj)
 	return msg, func(ctx context.Context, err error) error {
 		// Nacks are handled by AutoRetryNacks because we don't have an explicit
 		// ack mechanism right now.

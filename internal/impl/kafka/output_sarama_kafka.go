@@ -341,7 +341,7 @@ func (k *kafkaWriter) ConnectWithContext(ctx context.Context) error {
 
 // WriteWithContext will attempt to write a message to Kafka, wait for
 // acknowledgement, and returns an error if applicable.
-func (k *kafkaWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (k *kafkaWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	k.connMut.RLock()
 	producer := k.producer
 	k.connMut.RUnlock()
@@ -359,7 +359,7 @@ func (k *kafkaWriter) WriteWithContext(ctx context.Context, msg *message.Batch) 
 		key := k.key.Bytes(i, msg)
 		nextMsg := &sarama.ProducerMessage{
 			Topic:    k.topic.String(i, msg),
-			Value:    sarama.ByteEncoder(p.Get()),
+			Value:    sarama.ByteEncoder(p.AsBytes()),
 			Headers:  append(k.buildSystemHeaders(p), userDefinedHeaders...),
 			Metadata: i, // Store the original index for later reference.
 		}

@@ -233,7 +233,7 @@ func (a *amqp09Writer) disconnect() error {
 	return nil
 }
 
-func (a *amqp09Writer) WriteWithContext(wctx context.Context, msg *message.Batch) error {
+func (a *amqp09Writer) WriteWithContext(wctx context.Context, msg message.Batch) error {
 	a.connLock.RLock()
 	conn := a.conn
 	amqpChan := a.amqpChan
@@ -289,7 +289,7 @@ func (a *amqp09Writer) WriteWithContext(wctx context.Context, msg *message.Batch
 				Headers:         headers,
 				ContentType:     contentType,
 				ContentEncoding: contentEncoding,
-				Body:            p.Get(),
+				Body:            p.AsBytes(),
 				DeliveryMode:    a.deliveryMode, // 1=non-persistent, 2=persistent
 				Priority:        priority,       // 0-9
 				Type:            msgType,

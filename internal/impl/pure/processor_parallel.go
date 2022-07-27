@@ -62,12 +62,10 @@ func newParallel(conf processor.ParallelConfig, mgr bundle.NewManagement) (proce
 	}, nil
 }
 
-func (p *parallelProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
-	resultMsgs := make([]*message.Batch, msg.Len())
+func (p *parallelProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+	resultMsgs := make([]message.Batch, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		tmpMsg := message.QuickBatch(nil)
-		tmpMsg.SetAll([]*message.Part{p})
-		resultMsgs[i] = tmpMsg
+		resultMsgs[i] = message.Batch{p}
 		return nil
 	})
 
@@ -92,7 +90,7 @@ func (p *parallelProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 						return nil
 					})
 				}
-				resultMsgs[index].SetAll(resultParts)
+				resultMsgs[index] = resultParts
 			}
 			wg.Done()
 		}()
@@ -106,12 +104,12 @@ func (p *parallelProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 	resMsg := message.QuickBatch(nil)
 	for _, m := range resultMsgs {
 		_ = m.Iter(func(i int, p *message.Part) error {
-			resMsg.Append(p)
+			resMsg = append(resMsg, p)
 			return nil
 		})
 	}
 
-	return []*message.Batch{resMsg}, nil
+	return []message.Batch{resMsg}, nil
 }
 
 func (p *parallelProc) Close(ctx context.Context) error {

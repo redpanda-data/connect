@@ -133,14 +133,14 @@ func (w *websocketWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *websocketWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (w *websocketWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	client := w.getWS()
 	if client == nil {
 		return component.ErrNotConnected
 	}
 
 	err := msg.Iter(func(i int, p *message.Part) error {
-		return client.WriteMessage(websocket.BinaryMessage, p.Get())
+		return client.WriteMessage(websocket.BinaryMessage, p.AsBytes())
 	})
 	if err != nil {
 		w.lock.Lock()

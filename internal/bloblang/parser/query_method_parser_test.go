@@ -462,7 +462,7 @@ func TestMethodParser(t *testing.T) {
 						part.MetaSet(k, v)
 					}
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 
 			e, perr := tryParseQuery(test.input)
@@ -508,7 +508,7 @@ func TestMethodErrors(t *testing.T) {
 						part.MetaSet(k, v)
 					}
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 
 			e, perr := tryParseQuery(test.input)
@@ -609,7 +609,7 @@ func TestMethodMaps(t *testing.T) {
 						part.MetaSet(k, v)
 					}
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 
 			e, perr := tryParseQuery(test.input)

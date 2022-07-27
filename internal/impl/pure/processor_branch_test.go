@@ -225,10 +225,10 @@ func TestBranchBasic(t *testing.T) {
 				if m.err != nil {
 					part.ErrorSet(m.err)
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 
-			outMsgs, res := proc.ProcessMessage(msg)
+			outMsgs, res := proc.ProcessMessage(msg.ShallowCopy())
 
 			require.Nil(t, res)
 			require.Len(t, outMsgs, 1)
@@ -236,7 +236,7 @@ func TestBranchBasic(t *testing.T) {
 			assert.Equal(t, len(test.output), outMsgs[0].Len())
 			for i, out := range test.output {
 				comparePart := mockMsg{
-					content: string(outMsgs[0].Get(i).Get()),
+					content: string(outMsgs[0].Get(i).AsBytes()),
 					meta:    map[string]string{},
 				}
 
@@ -258,11 +258,11 @@ func TestBranchBasic(t *testing.T) {
 
 			// Ensure nothing changed
 			for i, m := range test.input {
-				doc, err := msg.Get(i).JSON()
+				doc, err := msg.Get(i).AsStructuredMut()
 				if err == nil {
-					msg.Get(i).SetJSON(doc)
+					msg.Get(i).SetStructured(doc)
 				}
-				assert.Equal(t, m.content, string(msg.Get(i).Get()))
+				assert.Equal(t, m.content, string(msg.Get(i).AsBytes()))
 			}
 
 			proc.CloseAsync()

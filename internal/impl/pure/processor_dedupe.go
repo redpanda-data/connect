@@ -105,7 +105,7 @@ func newDedupe(conf processor.DedupeConfig, mgr bundle.NewManagement) (*dedupePr
 
 //------------------------------------------------------------------------------
 
-func (d *dedupeProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch *message.Batch) ([]*message.Batch, error) {
+func (d *dedupeProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
 	newBatch := message.QuickBatch(nil)
 	_ = batch.Iter(func(i int, p *message.Part) error {
 		key := d.key.String(i, batch)
@@ -133,19 +133,17 @@ func (d *dedupeProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, ba
 				)
 				return nil
 			}
-
-			p = p.Copy()
 			processor.MarkErr(p, spans[i], err)
 		}
 
-		newBatch.Append(p)
+		newBatch = append(newBatch, p)
 		return nil
 	})
 
 	if newBatch.Len() == 0 {
 		return nil, nil
 	}
-	return []*message.Batch{newBatch}, nil
+	return []message.Batch{newBatch}, nil
 }
 
 func (d *dedupeProc) Close(context.Context) error {

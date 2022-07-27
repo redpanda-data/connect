@@ -133,7 +133,7 @@ func (l *logProcessor) levelToLogFn(level string) (func(logger log.Modular, msg 
 	return nil, fmt.Errorf("log level not recognised: %v", level)
 }
 
-func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	_ = msg.Iter(func(i int, _ *message.Part) error {
 		targetLog := l.logger
 		if l.fieldsMapping != nil {
@@ -143,7 +143,7 @@ func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 				Index:    i,
 				MsgBatch: msg,
 			}.WithValueFunc(func() *interface{} {
-				jObj, err := msg.Get(i).JSON()
+				jObj, err := msg.Get(i).AsStructured()
 				if err != nil {
 					return nil
 				}
@@ -184,7 +184,7 @@ func (l *logProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 		return nil
 	})
 
-	return []*message.Batch{msg}, nil
+	return []message.Batch{msg}, nil
 }
 
 func (l *logProcessor) Close(ctx context.Context) error {

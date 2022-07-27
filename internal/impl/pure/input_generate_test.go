@@ -31,13 +31,13 @@ func TestBloblangInterval(t *testing.T) {
 	m, _, err := b.ReadWithContext(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, m.Len())
-	assert.Equal(t, "hello world", string(m.Get(0).Get()))
+	assert.Equal(t, "hello world", string(m.Get(0).AsBytes()))
 
 	// Second takes 50ms.
 	m, _, err = b.ReadWithContext(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, m.Len())
-	assert.Equal(t, "hello world", string(m.Get(0).Get()))
+	assert.Equal(t, "hello world", string(m.Get(0).AsBytes()))
 
 	// Third takes another 50ms and therefore times out.
 	_, _, err = b.ReadWithContext(ctx)
@@ -76,7 +76,7 @@ func TestBloblangCron(t *testing.T) {
 	m, _, err := b.ReadWithContext(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, m.Len())
-	assert.Equal(t, "hello world", string(m.Get(0).Get()))
+	assert.Equal(t, "hello world", string(m.Get(0).AsBytes()))
 
 	// Second takes another 1s and therefore times out.
 	_, _, err = b.ReadWithContext(ctx)
@@ -105,7 +105,7 @@ func TestBloblangMapping(t *testing.T) {
 		m, _, err := b.ReadWithContext(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 1, m.Len())
-		assert.Equal(t, fmt.Sprintf(`{"id":%v}`, i+1), string(m.Get(0).Get()))
+		assert.Equal(t, fmt.Sprintf(`{"id":%v}`, i+1), string(m.Get(0).AsBytes()))
 	}
 }
 
@@ -128,7 +128,7 @@ func TestBloblangRemaining(t *testing.T) {
 		m, _, err := b.ReadWithContext(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 1, m.Len())
-		assert.Equal(t, "foobar", string(m.Get(0).Get()))
+		assert.Equal(t, "foobar", string(m.Get(0).AsBytes()))
 	}
 
 	_, _, err = b.ReadWithContext(ctx)
@@ -164,9 +164,9 @@ func TestBloblangRemainingBatched(t *testing.T) {
 			require.Equal(t, 1, m.Len())
 		} else {
 			require.Equal(t, 2, m.Len())
-			assert.Equal(t, "foobar", string(m.Get(1).Get()))
+			assert.Equal(t, "foobar", string(m[1].AsBytes()))
 		}
-		assert.Equal(t, "foobar", string(m.Get(0).Get()))
+		assert.Equal(t, "foobar", string(m[0].AsBytes()))
 	}
 
 	_, _, err = b.ReadWithContext(ctx)
@@ -197,7 +197,7 @@ func TestBloblangUnbounded(t *testing.T) {
 		m, _, err := b.ReadWithContext(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 1, m.Len())
-		assert.Equal(t, "foobar", string(m.Get(0).Get()))
+		assert.Equal(t, "foobar", string(m.Get(0).AsBytes()))
 	}
 
 	b.CloseAsync()
@@ -222,7 +222,7 @@ func TestBloblangUnboundedEmpty(t *testing.T) {
 		m, _, err := b.ReadWithContext(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 1, m.Len())
-		assert.Equal(t, "foobar", string(m.Get(0).Get()))
+		assert.Equal(t, "foobar", string(m.Get(0).AsBytes()))
 	}
 
 	b.CloseAsync()

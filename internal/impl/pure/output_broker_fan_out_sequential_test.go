@@ -48,8 +48,8 @@ func TestBasicFanOutSequential(t *testing.T) {
 		for j := 0; j < nOutputs; j++ {
 			select {
 			case ts := <-mockOutputs[j].TChan:
-				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+				if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 				}
 				go func() {
 					require.NoError(t, ts.Ack(tCtx, nil))

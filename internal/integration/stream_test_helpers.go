@@ -522,9 +522,7 @@ func sendMessage(
 	for i := 0; i < len(metadata); i += 2 {
 		p.MetaSet(metadata[i], metadata[i+1])
 	}
-	msg := message.QuickBatch(nil)
-	msg.Append(p)
-
+	msg := message.Batch{p}
 	resChan := make(chan error)
 
 	select {
@@ -552,7 +550,7 @@ func sendBatch(
 
 	msg := message.QuickBatch(nil)
 	for _, payload := range content {
-		msg.Append(message.NewPart([]byte(payload)))
+		msg = append(msg, message.NewPart([]byte(payload)))
 	}
 
 	resChan := make(chan error)
@@ -607,7 +605,7 @@ func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan mess
 func messageMatch(t testing.TB, p *message.Part, content string, metadata ...string) {
 	t.Helper()
 
-	assert.Equal(t, content, string(p.Get()))
+	assert.Equal(t, content, string(p.AsBytes()))
 
 	allMetadata := map[string]string{}
 	_ = p.MetaIter(func(k, v string) error {
@@ -623,17 +621,17 @@ func messageMatch(t testing.TB, p *message.Part, content string, metadata ...str
 func messageInSet(t testing.TB, pop, allowDupes bool, p *message.Part, set map[string][]string) {
 	t.Helper()
 
-	metadata, exists := set[string(p.Get())]
+	metadata, exists := set[string(p.AsBytes())]
 	if allowDupes && !exists {
 		return
 	}
-	require.True(t, exists, "in set: %v, set: %v", string(p.Get()), set)
+	require.True(t, exists, "in set: %v, set: %v", string(p.AsBytes()), set)
 
 	for i := 0; i < len(metadata); i += 2 {
 		assert.Equal(t, metadata[i+1], p.MetaGet(metadata[i]))
 	}
 
 	if pop {
-		delete(set, string(p.Get()))
+		delete(set, string(p.AsBytes()))
 	}
 }

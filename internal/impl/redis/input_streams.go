@@ -60,7 +60,7 @@ func newRedisStreamsInput(conf input.Config, mgr bundle.NewManagement) (input.St
 }
 
 type pendingRedisStreamMsg struct {
-	payload *message.Batch
+	payload message.Batch
 	stream  string
 	id      string
 }
@@ -313,7 +313,7 @@ func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
 				stream:  strRes.Stream,
 				id:      xmsg.ID,
 			}
-			nextMsg.payload.Append(part)
+			nextMsg.payload = append(nextMsg.payload, part)
 			if msg.payload == nil {
 				msg = nextMsg
 			} else {
@@ -329,7 +329,7 @@ func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
 	return msg, nil
 }
 
-func (r *redisStreamsReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (r *redisStreamsReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msg, err := r.read()
 	if err != nil {
 		if err == component.ErrTimeout {

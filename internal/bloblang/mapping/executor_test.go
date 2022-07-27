@@ -245,7 +245,7 @@ func TestAssignments(t *testing.T) {
 				for k, v := range p.Meta {
 					part.MetaSet(k, v)
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 
 			resPart, err := test.mapping.MapPart(test.index, msg)
@@ -262,7 +262,7 @@ func TestAssignments(t *testing.T) {
 				}
 
 				newPart := part{
-					Content: string(resPart.Get()),
+					Content: string(resPart.AsBytes()),
 					Meta:    map[string]string{},
 				}
 				_ = resPart.MetaIter(func(k, v string) error {
@@ -527,7 +527,7 @@ func TestQueries(t *testing.T) {
 				for k, v := range p.Meta {
 					part.MetaSet(k, v)
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 
 			res, err := test.mapping.QueryPart(test.index, msg)

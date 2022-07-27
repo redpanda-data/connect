@@ -185,7 +185,7 @@ func (t *fallbackBroker) loop() {
 			if err == nil || len(t.outputTSChans) <= i {
 				return tran.Ack(ctx, err)
 			}
-			newPayload := tran.Payload.Copy()
+			newPayload := tran.Payload.ShallowCopy()
 			_ = newPayload.Iter(func(i int, p *message.Part) error {
 				p.MetaSet("fallback_error", err.Error())
 				return nil
@@ -199,7 +199,7 @@ func (t *fallbackBroker) loop() {
 		}
 
 		select {
-		case t.outputTSChans[i] <- message.NewTransactionFunc(tran.Payload, ackFn):
+		case t.outputTSChans[i] <- message.NewTransactionFunc(tran.Payload.ShallowCopy(), ackFn):
 		case <-t.shutSig.CloseAtLeisureChan():
 			return
 		}

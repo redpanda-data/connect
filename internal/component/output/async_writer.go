@@ -31,7 +31,7 @@ type AsyncSink interface {
 	// WriteWithContext should block until either the message is sent (and
 	// acknowledged) to a sink, or a transport specific error has occurred, or
 	// the Type is closed.
-	WriteWithContext(ctx context.Context, msg *message.Batch) error
+	WriteWithContext(ctx context.Context, msg message.Batch) error
 
 	// CloseAsync triggers the shut down of this component but should not block
 	// the calling goroutine.
@@ -94,7 +94,7 @@ func (w *AsyncWriter) SetNoCancel() {
 
 //------------------------------------------------------------------------------
 
-func (w *AsyncWriter) latencyMeasuringWrite(msg *message.Batch) (latencyNs int64, err error) {
+func (w *AsyncWriter) latencyMeasuringWrite(msg message.Batch) (latencyNs int64, err error) {
 	t0 := time.Now()
 	var ctx context.Context
 	if w.noCancel {
@@ -109,16 +109,12 @@ func (w *AsyncWriter) latencyMeasuringWrite(msg *message.Batch) (latencyNs int64
 	return latencyNs, err
 }
 
-func (w *AsyncWriter) injectSpans(msg *message.Batch, spans []*tracing.Span) *message.Batch {
+func (w *AsyncWriter) injectSpans(msg message.Batch, spans []*tracing.Span) {
 	if w.injectTracingMap == nil || msg.Len() > len(spans) {
-		return msg
+		return
 	}
 
-	parts := make([]*message.Part, msg.Len())
-
 	for i := 0; i < msg.Len(); i++ {
-		parts[i] = msg.Get(i).Copy()
-
 		spanMapGeneric, err := spans[i].TextMap()
 		if err != nil {
 			w.log.Warnf("Failed to inject span: %v", err)
@@ -126,20 +122,15 @@ func (w *AsyncWriter) injectSpans(msg *message.Batch, spans []*tracing.Span) *me
 		}
 
 		spanPart := message.NewPart(nil)
-		spanPart.SetJSON(spanMapGeneric)
+		spanPart.SetStructuredMut(spanMapGeneric)
 
-		spanMsg := message.QuickBatch(nil)
-		spanMsg.Append(spanPart)
-
-		if parts[i], err = w.injectTracingMap.MapOnto(parts[i], i, spanMsg); err != nil {
+		spanMsg := message.Batch{spanPart}
+		if tmpMsg, err := w.injectTracingMap.MapOnto(msg.Get(i), i, spanMsg); err != nil {
 			w.log.Warnf("Failed to inject span: %v", err)
-			parts[i] = msg.Get(i)
+		} else {
+			msg[i] = tmpMsg
 		}
 	}
-
-	newMsg := message.QuickBatch(nil)
-	newMsg.SetAll(parts)
-	return newMsg
 }
 
 // loop is an internal loop that brokers incoming messages to output pipe.
@@ -202,7 +193,7 @@ func (w *AsyncWriter) loop() {
 	wg.Add(w.maxInflight)
 
 	connectMut := sync.Mutex{}
-	connectLoop := func(msg *message.Batch) (latency int64, err error) {
+	connectLoop := func(msg message.Batch) (latency int64, err error) {
 		atomic.StoreInt32(&w.isConnected, 0)
 
 		connectMut.Lock()
@@ -252,7 +243,7 @@ func (w *AsyncWriter) loop() {
 
 			w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
 			spans := tracing.CreateChildSpans(w.tracer, "output_"+w.typeStr, ts.Payload)
-			ts.Payload = w.injectSpans(ts.Payload, spans)
+			w.injectSpans(ts.Payload, spans)
 
 			latency, err := w.latencyMeasuringWrite(ts.Payload)
 

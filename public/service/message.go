@@ -22,8 +22,7 @@ type MessageBatchHandlerFunc func(context.Context, MessageBatch) error
 // pipeline. It is safe to mutate the message via Set methods, but the
 // underlying byte data should not be edited directly.
 type Message struct {
-	part       *message.Part
-	partCopied bool
+	part *message.Part
 }
 
 // MessageBatch describes a collection of one or more messages.
@@ -39,38 +38,55 @@ func (b MessageBatch) Copy() MessageBatch {
 	return bCopy
 }
 
+// DeepCopy creates a new slice of the same messages, which can be modified
+// without changing the contents of the original batch and are unchanged from
+// deep mutations performed on the source message.
+//
+// This is required in situations where a component wishes to retain a copy of a
+// message batch beyond the boundaries of a process or write command. This is
+// specifically required for buffer implementations that operate by keeping a
+// reference to the message.
+func (b MessageBatch) DeepCopy() MessageBatch {
+	bCopy := make(MessageBatch, len(b))
+	for i, m := range b {
+		bCopy[i] = m.DeepCopy()
+	}
+	return bCopy
+}
+
 // NewMessage creates a new message with an initial raw bytes content. The
 // initial content can be nil, which is recommended if you intend to set it with
 // structured contents.
 func NewMessage(content []byte) *Message {
 	return &Message{
-		part:       message.NewPart(content),
-		partCopied: true,
+		part: message.NewPart(content),
 	}
 }
 
 func newMessageFromPart(part *message.Part) *Message {
-	return &Message{part, false}
+	return &Message{part}
 }
 
 // Copy creates a shallow copy of a message that is safe to mutate with Set
 // methods without mutating the original. Both messages will share a context,
 // and therefore a tracing ID, if one has been associated with them.
-//
-// Note that this does not perform a deep copy of the byte or structured
-// contents of the message, and therefore it is not safe to perform inline
-// mutations on those values without copying them.
 func (m *Message) Copy() *Message {
 	return &Message{
-		part:       m.part.Copy(),
-		partCopied: true,
+		part: m.part.ShallowCopy(),
 	}
 }
 
-func (m *Message) ensureCopied() {
-	if !m.partCopied {
-		m.part = m.part.Copy()
-		m.partCopied = true
+// DeepCopy creates a deep copy of a message and its contents that is safe to
+// mutate with Set methods without mutating the original, and mutations on the
+// inner (deep) contents of the source message will not mutate the copy.
+//
+// This is required in situations where a component wishes to retain a copy of a
+// message beyond the boundaries of a process or write command. This is
+// specifically required for buffer implementations that operate by keeping a
+// reference to the message.
+func (m *Message) DeepCopy() *Message {
+	return &Message{
+		part: m.part.DeepCopy(),
 	}
 }
 
@@ -83,8 +99,7 @@ func (m *Message) Context() context.Context {
 // WithContext returns a new message with a provided context associated with it.
 func (m *Message) WithContext(ctx context.Context) *Message {
 	return &Message{
-		part:       message.WithContext(ctx, m.part),
-		partCopied: m.partCopied,
+		part: message.WithContext(ctx, m.part),
 	}
 }
 
@@ -95,7 +110,7 @@ func (m *Message) WithContext(ctx context.Context) *Message {
 // It is NOT safe to mutate the contents of the returned slice.
 func (m *Message) AsBytes() ([]byte, error) {
 	// TODO: Escalate errors in marshalling once we're able.
-	return m.part.Get(), nil
+	return m.part.AsBytes(), nil
 }
 
 // AsStructured returns the underlying structured contents of a message or, if
@@ -106,7 +121,7 @@ func (m *Message) AsBytes() ([]byte, error) {
 // reference type (slice or map). In order to safely mutate the structured
 // contents of a message use AsStructuredMut.
 func (m *Message) AsStructured() (interface{}, error) {
-	return m.part.JSON()
+	return m.part.AsStructured()
 }
 
 // AsStructuredMut returns the underlying structured contents of a message or,
@@ -117,18 +132,16 @@ func (m *Message) AsStructured() (interface{}, error) {
 // reference type (slice or map), as the structured contents will be lazily deep
 // cloned if it is still owned by an upstream component.
 func (m *Message) AsStructuredMut() (interface{}, error) {
-	// TODO: Use refactored APIs to determine if the contents are owned.
-	v, err := m.part.JSON()
+	v, err := m.part.AsStructuredMut()
 	if err != nil {
 		return nil, err
 	}
-	return message.CopyJSON(v)
+	return v, nil
 }
 
 // SetBytes sets the underlying contents of the message as a byte slice.
 func (m *Message) SetBytes(b []byte) {
-	m.ensureCopied()
-	m.part.Set(b)
+	m.part.SetBytes(b)
 }
 
 // SetStructured sets the underlying contents of the message as a structured
@@ -137,16 +150,31 @@ func (m *Message) SetBytes(b []byte) {
 // through the hierarchy, this ensures that other processors are able to work
 // with the contents and that they can be JSON marshalled when coerced into a
 // byte array.
+//
+// The provided structure is considered read-only, which means subsequent
+// processors will need to fully clone the structure in order to perform
+// mutations on the data.
 func (m *Message) SetStructured(i interface{}) {
-	m.ensureCopied()
-	m.part.SetJSON(i)
+	m.part.SetStructured(i)
+}
+
+// SetStructuredMut sets the underlying contents of the message as a structured
+// type. This structured value should be a scalar Go type, or either a
+// map[string]interface{} or []interface{} containing the same types all the way
+// through the hierarchy, this ensures that other processors are able to work
+// with the contents and that they can be JSON marshalled when coerced into a
+// byte array.
+//
+// The provided structure is considered mutable, which means subsequent
+// processors might mutate the structure without performing a deep copy.
+func (m *Message) SetStructuredMut(i interface{}) {
+	m.part.SetStructuredMut(i)
 }
 
 // SetError marks the message as having failed a processing step and adds the
 // error to it as context. Messages marked with errors can be handled using a
 // range of methods outlined in https://www.benthos.dev/docs/configuration/error_handling.
 func (m *Message) SetError(err error) {
-	m.ensureCopied()
 	m.part.ErrorSet(err)
 }
 
@@ -167,7 +195,6 @@ func (m *Message) MetaGet(key string) (string, bool) {
 // MetaSet sets the value of a metadata key. If the value is an empty string the
 // metadata key is deleted.
 func (m *Message) MetaSet(key, value string) {
-	m.ensureCopied()
 	if value == "" {
 		m.part.MetaDelete(key)
 	} else {
@@ -177,7 +204,6 @@ func (m *Message) MetaSet(key, value string) {
 
 // MetaDelete removes a key from the message metadata.
 func (m *Message) MetaDelete(key string) {
-	m.ensureCopied()
 	m.part.MetaDelete(key)
 }
 
@@ -199,8 +225,7 @@ func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
 		Unwrap() *mapping.Executor
 	}).Unwrap()
 
-	msg := message.QuickBatch(nil)
-	msg.Append(m.part)
+	msg := message.Batch{m.part}
 
 	res, err := uw.MapPart(0, msg)
 	if err != nil {
@@ -224,9 +249,9 @@ func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Messa
 		Unwrap() *mapping.Executor
 	}).Unwrap()
 
-	msg := message.QuickBatch(nil)
-	for _, m := range b {
-		msg.Append(m.part)
+	msg := make(message.Batch, len(b))
+	for i, m := range b {
+		msg[i] = m.part
 	}
 
 	res, err := uw.MapPart(index, msg)
@@ -246,9 +271,9 @@ func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Messa
 // across message batches, and is a more powerful way to interpolate strings
 // than the standard .String method.
 func (b MessageBatch) InterpolatedString(index int, i *InterpolatedString) string {
-	msg := message.QuickBatch(nil)
-	for _, m := range b {
-		msg.Append(m.part)
+	msg := make(message.Batch, len(b))
+	for i, m := range b {
+		msg[i] = m.part
 	}
 	return i.expr.String(index, msg)
 }
@@ -260,9 +285,9 @@ func (b MessageBatch) InterpolatedString(index int, i *InterpolatedString) strin
 // across message batches, and is a more powerful way to interpolate strings
 // than the standard .String method.
 func (b MessageBatch) InterpolatedBytes(index int, i *InterpolatedString) []byte {
-	msg := message.QuickBatch(nil)
-	for _, m := range b {
-		msg.Append(m.part)
+	msg := make(message.Batch, len(b))
+	for i, m := range b {
+		msg[i] = m.part
 	}
 	return i.expr.Bytes(index, msg)
 }

@@ -105,7 +105,7 @@ func (c *CacheWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (c *CacheWriter) writeMulti(ctx context.Context, msg *message.Batch) error {
+func (c *CacheWriter) writeMulti(ctx context.Context, msg message.Batch) error {
 	var err error
 	if cerr := c.mgr.AccessCache(ctx, c.conf.Target, func(ac cache.V1) {
 		items := map[string]cache.TTLItem{}
@@ -120,7 +120,7 @@ func (c *CacheWriter) writeMulti(ctx context.Context, msg *message.Batch) error 
 				ttl = &t
 			}
 			items[c.key.String(i, msg)] = cache.TTLItem{
-				Value: p.Get(),
+				Value: p.AsBytes(),
 				TTL:   ttl,
 			}
 			return nil
@@ -135,7 +135,7 @@ func (c *CacheWriter) writeMulti(ctx context.Context, msg *message.Batch) error 
 }
 
 // WriteWithContext attempts to store a message within a cache.
-func (c *CacheWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (c *CacheWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	if msg.Len() > 1 {
 		return c.writeMulti(ctx, msg)
 	}
@@ -151,7 +151,7 @@ func (c *CacheWriter) WriteWithContext(ctx context.Context, msg *message.Batch) 
 			}
 			ttl = &t
 		}
-		err = cache.Set(ctx, c.key.String(0, msg), msg.Get(0).Get(), ttl)
+		err = cache.Set(ctx, c.key.String(0, msg), msg.Get(0).AsBytes(), ttl)
 	}); cerr != nil {
 		err = cerr
 	}

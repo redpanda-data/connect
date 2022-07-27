@@ -2,9 +2,12 @@ package pure
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/Jeffail/gabs/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -28,6 +31,18 @@ func TestRetryConfigErrs(t *testing.T) {
 
 	if _, err := bundle.AllOutputs.Init(conf, mock.NewManager()); err == nil {
 		t.Error("Expected error from bad initial period")
+	}
+}
+
+func assertEqualMsg(t testing.TB, left, right message.Batch) {
+	t.Helper()
+
+	require.Equal(t, left.Len(), right.Len())
+	for i := 0; i < left.Len(); i++ {
+		pLeft, pRight := left.Get(i), right.Get(i)
+
+		leftBytes, rightBytes := pLeft.AsBytes(), pRight.AsBytes()
+		assert.Equal(t, string(leftBytes), string(rightBytes))
 	}
 }
 
@@ -77,9 +92,7 @@ func TestRetryBasic(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	if tran.Payload != testMsg {
-		t.Error("Wrong payload returned")
-	}
+	assertEqualMsg(t, tran.Payload, testMsg)
 	require.NoError(t, tran.Ack(ctx, nil))
 
 	select {
@@ -147,9 +160,7 @@ func TestRetrySadPath(t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		if tran.Payload != testMsg {
-			t.Error("Wrong payload returned")
-		}
+		assertEqualMsg(t, tran.Payload, testMsg)
 		require.NoError(t, tran.Ack(ctx, component.ErrFailedSend))
 	}
 
@@ -161,9 +172,7 @@ func TestRetrySadPath(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	if tran.Payload != testMsg {
-		t.Error("Wrong payload returned")
-	}
+	assertEqualMsg(t, tran.Payload, testMsg)
 	require.NoError(t, tran.Ack(ctx, nil))
 
 	select {
@@ -199,7 +208,7 @@ func expectFromRetry(
 	for len(responses) > 0 {
 		select {
 		case tran := <-tChan:
-			act := string(tran.Payload.Get(0).Get())
+			act := string(tran.Payload.Get(0).AsBytes())
 			if _, exists := responses[act]; exists {
 				delete(responses, act)
 			} else {
@@ -305,4 +314,86 @@ func TestRetryParallel(t *testing.T) {
 
 	output.CloseAsync()
 	require.NoError(t, output.WaitForClose(time.Second*30))
+}
+
+func TestRetryMutations(t *testing.T) {
+	mockOutput := &mock.OutputChanneled{}
+
+	conf := output.NewConfig()
+	conf.Type = "retry"
+
+	childConf := output.NewConfig()
+	conf.Retry.Output = &childConf
+	conf.Retry.Backoff.InitialInterval = "10us"
+	conf.Retry.Backoff.MaxInterval = "10us"
+
+	output, err := bundle.AllOutputs.Init(conf, mock.NewManager())
+	require.NoError(t, err)
+
+	ret, ok := output.(*indefiniteRetry)
+	require.True(t, ok)
+
+	ret.wrapped = mockOutput
+
+	readChan := make(chan message.Transaction)
+	require.NoError(t, ret.Consume(readChan))
+
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	defer done()
+
+	inMsg := message.NewPart(nil)
+	inMsg.SetStructuredMut(map[string]interface{}{
+		"hello": "world",
+	})
+
+	inBatch := message.Batch{inMsg}
+	select {
+	case readChan <- message.NewTransactionFunc(inBatch, func(ctx context.Context, err error) error {
+		inStruct, err := inMsg.AsStructuredMut()
+		require.NoError(t, err)
+
+		assert.Equal(t, map[string]interface{}{
+			"hello": "world",
+		}, inStruct)
+
+		_, err = gabs.Wrap(inStruct).Set("quack", "moo")
+		require.NoError(t, err)
+		return nil
+	}):
+	case <-time.After(time.Second):
+		t.Errorf("Timed out waiting for broker send")
+		return
+	}
+
+	testMockOutput := func(mockOutput *mock.OutputChanneled, ackErr error) {
+		var ts message.Transaction
+		select {
+		case ts = <-mockOutput.TChan:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out waiting for broker propagate")
+		}
+
+		outStruct, err := ts.Payload.Get(0).AsStructuredMut()
+		require.NoError(t, err)
+		assert.Equal(t, map[string]interface{}{
+			"hello": "world",
+		}, outStruct)
+
+		_, err = gabs.Wrap(outStruct).Set("woof", "meow")
+		require.NoError(t, err)
+		require.NoError(t, ts.Ack(tCtx, ackErr))
+	}
+
+	testMockOutput(mockOutput, errors.New("test err"))
+	testMockOutput(mockOutput, nil)
+
+	output.CloseAsync()
+	require.NoError(t, output.WaitForClose(time.Second*5))
+
+	inStruct, err := inMsg.AsStructured()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{
+		"hello": "world",
+		"moo":   "quack",
+	}, inStruct)
 }

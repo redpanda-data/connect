@@ -21,7 +21,7 @@ type awsKinesisRecordBatcher struct {
 	batchPolicy  *policy.Batcher
 	checkpointer *checkpoint.Capped
 
-	flushedMessage *message.Batch
+	flushedMessage message.Batch
 
 	batchedSequence string
 
@@ -59,7 +59,7 @@ func (a *awsKinesisRecordBatcher) AddRecord(r *kinesis.Record) bool {
 		// Upstream shouldn't really be adding records if a prior flush was
 		// unsuccessful. However, we can still accommodate this by appending it
 		// to the flushed message.
-		a.flushedMessage.Append(p)
+		a.flushedMessage = append(a.flushedMessage, p)
 		return true
 	}
 	return a.batchPolicy.Add(p)

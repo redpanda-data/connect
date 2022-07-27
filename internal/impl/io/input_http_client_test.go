@@ -69,7 +69,7 @@ func TestHTTPClientGET(t *testing.T) {
 			if exp, act := 1, tr.Payload.Len(); exp != act {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
-			if exp, act := expPart, string(tr.Payload.Get(0).Get()); exp != act {
+			if exp, act := expPart, string(tr.Payload.Get(0).AsBytes()); exp != act {
 				t.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
@@ -119,7 +119,7 @@ func TestHTTPClientPagination(t *testing.T) {
 		case tr, open = <-h.TransactionChan():
 			require.True(t, open)
 			require.Equal(t, 1, tr.Payload.Len())
-			assert.Equal(t, exp, string(tr.Payload.Get(0).Get()))
+			assert.Equal(t, exp, string(tr.Payload.Get(0).AsBytes()))
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
@@ -304,7 +304,7 @@ func TestHTTPClientPOST(t *testing.T) {
 			if exp, act := 1, ts.Payload.Len(); exp != act {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
-			if exp, act := expPart, string(ts.Payload.Get(0).Get()); exp != act {
+			if exp, act := expPart, string(ts.Payload.Get(0).AsBytes()); exp != act {
 				t.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		case <-time.After(time.Second):
@@ -378,13 +378,13 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 		if exp, act := 3, tr.Payload.Len(); exp != act {
 			t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 		}
-		if exp, act := "hello", string(tr.Payload.Get(0).Get()); exp != act {
+		if exp, act := "hello", string(tr.Payload.Get(0).AsBytes()); exp != act {
 			t.Errorf("Wrong part: %v != %v", act, exp)
 		}
-		if exp, act := "http", string(tr.Payload.Get(1).Get()); exp != act {
+		if exp, act := "http", string(tr.Payload.Get(1).AsBytes()); exp != act {
 			t.Errorf("Wrong part: %v != %v", act, exp)
 		}
-		if exp, act := "world", string(tr.Payload.Get(2).Get()); exp != act {
+		if exp, act := "world", string(tr.Payload.Get(2).AsBytes()); exp != act {
 			t.Errorf("Wrong part: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -485,7 +485,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
 			for i, part := range test {
-				if exp, act := part, string(ts.Payload.Get(i).Get()); exp != act {
+				if exp, act := part, string(ts.Payload.Get(i).AsBytes()); exp != act {
 					t.Errorf("Wrong part: %v != %v", act, exp)
 				}
 			}
@@ -580,7 +580,7 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 				t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 			}
 			for i, part := range test {
-				if exp, act := part, string(ts.Payload.Get(i).Get()); exp != act {
+				if exp, act := part, string(ts.Payload.Get(i).AsBytes()); exp != act {
 					t.Errorf("Wrong part: %v != %v", act, exp)
 				}
 			}
@@ -647,7 +647,7 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 					t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 				}
 				for j, part := range testMsg {
-					if exp, act := part, string(ts.Payload.Get(j).Get()); exp != act {
+					if exp, act := part, string(ts.Payload.Get(j).AsBytes()); exp != act {
 						t.Errorf("Wrong part: %v != %v", act, exp)
 					}
 				}
@@ -707,7 +707,7 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 				if exp, act := 1, ts.Payload.Len(); exp != act {
 					t.Fatalf("Wrong count of parts: %v != %v", act, exp)
 				}
-				if exp, act := testMsg, string(ts.Payload.Get(0).Get()); exp != act {
+				if exp, act := testMsg, string(ts.Payload.Get(0).AsBytes()); exp != act {
 					t.Errorf("Wrong part: %v != %v", act, exp)
 				}
 			case <-time.After(time.Second):
@@ -776,7 +776,7 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 			case ts, open = <-h.TransactionChan():
 				require.True(t, open)
 				require.Equal(t, 1, ts.Payload.Len())
-				assert.Equal(t, testMsg, string(ts.Payload.Get(0).Get()))
+				assert.Equal(t, testMsg, string(ts.Payload.Get(0).AsBytes()))
 			case <-time.After(time.Second):
 				t.Errorf("Action timed out")
 			}
@@ -851,7 +851,7 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 			b.Fatalf("Wrong count of parts: %v != %v", act, exp)
 		}
 		for i, part := range parts {
-			if exp, act := part, string(ts.Payload.Get(i).Get()); exp != act {
+			if exp, act := part, string(ts.Payload.Get(i).AsBytes()); exp != act {
 				b.Errorf("Wrong part: %v != %v", act, exp)
 			}
 		}

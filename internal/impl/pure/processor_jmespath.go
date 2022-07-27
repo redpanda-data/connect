@@ -129,9 +129,7 @@ func clearNumbers(v interface{}) (interface{}, bool) {
 }
 
 func (p *jmespathProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	newMsg := msg.Copy()
-
-	jsonPart, err := newMsg.JSON()
+	jsonPart, err := msg.AsStructuredMut()
 	if err != nil {
 		p.log.Debugf("Failed to parse part into json: %v\n", err)
 		return nil, err
@@ -146,8 +144,8 @@ func (p *jmespathProc) Process(ctx context.Context, msg *message.Part) ([]*messa
 		return nil, err
 	}
 
-	newMsg.SetJSON(result)
-	return []*message.Part{newMsg}, nil
+	msg.SetStructuredMut(result)
+	return []*message.Part{msg}, nil
 }
 
 func (p *jmespathProc) Close(context.Context) error {

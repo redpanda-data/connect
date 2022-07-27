@@ -24,8 +24,8 @@ func init() {
 
 type noopProcessor struct{}
 
-func (c *noopProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	msgs := [1]*message.Batch{msg}
+func (c *noopProcessor) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+	msgs := [1]message.Batch{msg}
 	return msgs[:], nil
 }
 

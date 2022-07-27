@@ -62,10 +62,10 @@ func TestWebsocketBasic(t *testing.T) {
 	}
 
 	for _, exp := range expMsgs {
-		var actMsg *message.Batch
+		var actMsg message.Batch
 		if actMsg, _, err = m.ReadWithContext(ctx); err != nil {
 			t.Error(err)
-		} else if act := string(actMsg.Get(0).Get()); act != exp {
+		} else if act := string(actMsg.Get(0).AsBytes()); act != exp {
 			t.Errorf("Wrong result: %v != %v", act, exp)
 		}
 	}
@@ -130,10 +130,10 @@ func TestWebsocketOpenMsg(t *testing.T) {
 	}
 
 	for _, exp := range expMsgs {
-		var actMsg *message.Batch
+		var actMsg message.Batch
 		if actMsg, _, err = m.ReadWithContext(ctx); err != nil {
 			t.Error(err)
-		} else if act := string(actMsg.Get(0).Get()); act != exp {
+		} else if act := string(actMsg.Get(0).AsBytes()); act != exp {
 			t.Errorf("Wrong result: %v != %v", act, exp)
 		}
 	}

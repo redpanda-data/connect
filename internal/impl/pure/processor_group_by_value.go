@@ -79,13 +79,13 @@ func newGroupByValue(conf processor.GroupByValueConfig, mgr bundle.NewManagement
 	}, nil
 }
 
-func (g *groupByValueProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch *message.Batch) ([]*message.Batch, error) {
+func (g *groupByValueProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
 	if batch.Len() == 0 {
 		return nil, nil
 	}
 
 	groupKeys := []string{}
-	groupMap := map[string]*message.Batch{}
+	groupMap := map[string]message.Batch{}
 
 	_ = batch.Iter(func(i int, p *message.Part) error {
 		v := g.value.String(i, batch)
@@ -95,18 +95,16 @@ func (g *groupByValueProc) ProcessBatch(ctx context.Context, spans []*tracing.Sp
 		)
 		spans[i].SetTag("group", v)
 		if group, exists := groupMap[v]; exists {
-			group.Append(p)
+			groupMap[v] = append(group, p)
 		} else {
 			g.log.Tracef("New group formed: %v\n", v)
 			groupKeys = append(groupKeys, v)
-			newMsg := message.QuickBatch(nil)
-			newMsg.Append(p)
-			groupMap[v] = newMsg
+			groupMap[v] = message.Batch{p}
 		}
 		return nil
 	})
 
-	msgs := []*message.Batch{}
+	msgs := []message.Batch{}
 	for _, key := range groupKeys {
 		msgs = append(msgs, groupMap[key])
 	}

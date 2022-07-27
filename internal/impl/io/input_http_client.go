@@ -103,8 +103,8 @@ type httpClientInput struct {
 	conf input.HTTPClientConfig
 
 	client       *http.Client
-	payload      *message.Batch
-	prevResponse *message.Batch
+	payload      message.Batch
+	prevResponse message.Batch
 
 	codecCtor codec.ReaderConstructor
 
@@ -178,8 +178,7 @@ func (h *httpClientInput) ConnectWithContext(ctx context.Context) (err error) {
 			p.MetaSet(strings.ToLower(k), values[0])
 		}
 	}
-	h.prevResponse = message.QuickBatch(nil)
-	h.prevResponse.Append(p)
+	h.prevResponse = message.Batch{p}
 
 	if h.codec, err = h.codecCtor("", res.Body, func(ctx context.Context, err error) error {
 		return nil
@@ -190,14 +189,14 @@ func (h *httpClientInput) ConnectWithContext(ctx context.Context) (err error) {
 	return nil
 }
 
-func (h *httpClientInput) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (h *httpClientInput) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	if h.conf.Stream.Enabled {
 		return h.readStreamed(ctx)
 	}
 	return h.readNotStreamed(ctx)
 }
 
-func (h *httpClientInput) readStreamed(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (h *httpClientInput) readStreamed(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	h.codecMut.Lock()
 	defer h.codecMut.Unlock()
 
@@ -224,9 +223,7 @@ func (h *httpClientInput) readStreamed(ctx context.Context) (*message.Batch, inp
 		return nil, nil, err
 	}
 
-	msg := message.QuickBatch(nil)
-	msg.Append(parts...)
-
+	msg := message.Batch(parts)
 	if msg.Len() == 1 && msg.Get(0).IsEmpty() && h.conf.DropEmptyBodies {
 		_ = codecAckFn(ctx, nil)
 		return nil, nil, component.ErrTimeout
@@ -244,21 +241,21 @@ func (h *httpClientInput) readStreamed(ctx context.Context) (*message.Batch, inp
 
 	resParts := make([]*message.Part, 0, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		part := message.NewPart(p.Get())
+		part := message.NewPart(p.AsBytes())
 		for k, v := range meta {
 			part.MetaSet(k, v)
 		}
 		resParts = append(resParts, part)
 		return nil
 	})
-	h.prevResponse.SetAll(resParts)
+	h.prevResponse = message.Batch(resParts)
 
 	return msg, func(rctx context.Context, res error) error {
 		return codecAckFn(rctx, res)
 	}, nil
 }
 
-func (h *httpClientInput) readNotStreamed(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (h *httpClientInput) readNotStreamed(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msg, err := h.client.Send(ctx, h.payload, h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
@@ -275,7 +272,7 @@ func (h *httpClientInput) readNotStreamed(ctx context.Context) (*message.Batch, 
 	}
 
 	h.prevResponse = msg
-	return msg.Copy(), func(context.Context, error) error {
+	return msg.ShallowCopy(), func(context.Context, error) error {
 		return nil
 	}, nil
 }

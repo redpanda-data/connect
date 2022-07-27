@@ -212,7 +212,7 @@ func (a *amqp1Reader) disconnect(ctx context.Context) error {
 	return nil
 }
 
-func (a *amqp1Reader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (a *amqp1Reader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	a.m.RLock()
 	conn := a.conn
 	a.m.RUnlock()
@@ -238,10 +238,7 @@ func (a *amqp1Reader) ReadWithContext(ctx context.Context) (*message.Batch, inpu
 		return nil, nil, err
 	}
 
-	msg := message.QuickBatch(nil)
-
 	part := message.NewPart(amqpMsg.GetData())
-
 	if amqpMsg.Properties != nil {
 		amqpSetMetadata(part, "amqp_content_type", amqpMsg.Properties.ContentType)
 		amqpSetMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
@@ -257,14 +254,12 @@ func (a *amqp1Reader) ReadWithContext(ctx context.Context) (*message.Batch, inpu
 		}
 	}
 
-	msg.Append(part)
-
 	var done chan struct{}
 	if a.conf.AzureRenewLock {
 		done = a.startRenewJob(amqpMsg)
 	}
 
-	return msg, func(ctx context.Context, res error) error {
+	return message.Batch{part}, func(ctx context.Context, res error) error {
 		if done != nil {
 			close(done)
 			done = nil

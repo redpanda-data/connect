@@ -105,7 +105,7 @@ func (r *redisListWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (r *redisListWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (r *redisListWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
@@ -116,7 +116,7 @@ func (r *redisListWriter) WriteWithContext(ctx context.Context, msg *message.Bat
 
 	if msg.Len() == 1 {
 		key := r.keyStr.String(0, msg)
-		if err := client.RPush(key, msg.Get(0).Get()).Err(); err != nil {
+		if err := client.RPush(key, msg.Get(0).AsBytes()).Err(); err != nil {
 			_ = r.disconnect()
 			r.log.Errorf("Error from redis: %v\n", err)
 			return component.ErrNotConnected
@@ -127,7 +127,7 @@ func (r *redisListWriter) WriteWithContext(ctx context.Context, msg *message.Bat
 	pipe := client.Pipeline()
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		key := r.keyStr.String(0, msg)
-		_ = pipe.RPush(key, p.Get())
+		_ = pipe.RPush(key, p.AsBytes())
 		return nil
 	})
 	cmders, err := pipe.Exec()

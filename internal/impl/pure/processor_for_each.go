@@ -60,12 +60,10 @@ func newForEach(conf []processor.Config, mgr bundle.NewManagement) (*forEachProc
 	return &forEachProc{children: children}, nil
 }
 
-func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
-	individualMsgs := make([]*message.Batch, msg.Len())
+func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+	individualMsgs := make([]message.Batch, msg.Len())
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		tmpMsg := message.QuickBatch(nil)
-		tmpMsg.SetAll([]*message.Part{p})
-		individualMsgs[i] = tmpMsg
+		individualMsgs[i] = message.Batch{p}
 		return nil
 	})
 
@@ -77,7 +75,7 @@ func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 		}
 		for _, m := range resultMsgs {
 			_ = m.Iter(func(i int, p *message.Part) error {
-				resMsg.Append(p)
+				resMsg = append(resMsg, p)
 				return nil
 			})
 		}
@@ -86,7 +84,7 @@ func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 	if resMsg.Len() == 0 {
 		return nil, nil
 	}
-	return []*message.Batch{resMsg}, nil
+	return []message.Batch{resMsg}, nil
 }
 
 func (p *forEachProc) Close(ctx context.Context) error {

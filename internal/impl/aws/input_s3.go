@@ -594,9 +594,8 @@ func (a *awsS3Reader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func s3MsgFromParts(p *s3PendingObject, parts []*message.Part) *message.Batch {
-	msg := message.QuickBatch(nil)
-	msg.Append(parts...)
+func s3MsgFromParts(p *s3PendingObject, parts []*message.Part) message.Batch {
+	msg := message.Batch(parts)
 	_ = msg.Iter(func(_ int, part *message.Part) error {
 		part.MetaSet("s3_key", p.target.key)
 		part.MetaSet("s3_bucket", p.target.bucket)
@@ -670,7 +669,7 @@ func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, er
 }
 
 // ReadWithContext attempts to read a new message from the target S3 bucket.
-func (a *awsS3Reader) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn input.AsyncAckFn, err error) {
+func (a *awsS3Reader) ReadWithContext(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 	if a.session == nil {

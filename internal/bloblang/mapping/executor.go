@@ -108,7 +108,7 @@ func (e *Executor) QueryPart(index int, msg Message) (bool, error) {
 	if newPart == nil {
 		return false, errors.New("query mapping resulted in deleted message, expected a boolean value")
 	}
-	newValue, err := newPart.JSON()
+	newValue, err := newPart.AsStructured()
 	if err != nil {
 		return false, err
 	}
@@ -142,7 +142,7 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 
 	lazyValue := func() *interface{} {
 		if valuePtr == nil && parseErr == nil {
-			if jObj, err := reference.Get(index).JSON(); err == nil {
+			if jObj, err := reference.Get(index).AsStructured(); err == nil {
 				valuePtr = &jObj
 			} else {
 				if errors.Is(err, message.ErrMessagePartNotExist) {
@@ -159,10 +159,10 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 	var newValue interface{} = query.Nothing(nil)
 
 	if appendTo == nil {
-		newPart = reference.Get(index).Copy()
+		newPart = reference.Get(index).ShallowCopy()
 	} else {
 		newPart = appendTo
-		if appendObj, err := appendTo.JSON(); err == nil {
+		if appendObj, err := appendTo.AsStructuredMut(); err == nil {
 			newValue = appendObj
 		}
 	}
@@ -219,11 +219,11 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 	default:
 		switch t := newValue.(type) {
 		case string:
-			newPart.Set([]byte(t))
+			newPart.SetBytes([]byte(t))
 		case []byte:
-			newPart.Set(t)
+			newPart.SetBytes(t)
 		default:
-			newPart.SetJSON(newValue)
+			newPart.SetStructuredMut(newValue)
 		}
 	}
 	return newPart, nil

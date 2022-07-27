@@ -278,9 +278,8 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 	return object, nil
 }
 
-func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*message.Part) *message.Batch {
-	msg := message.QuickBatch(nil)
-	msg.Append(parts...)
+func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*message.Part) message.Batch {
+	msg := message.Batch(parts)
 	_ = msg.Iter(func(_ int, part *message.Part) error {
 		part.MetaSet("gcs_key", p.target.key)
 		part.MetaSet("gcs_bucket", p.obj.Bucket)
@@ -300,7 +299,7 @@ func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*messa
 
 // ReadWithContext attempts to read a new message from the target Google Cloud
 // Storage bucket.
-func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn input.AsyncAckFn, err error) {
+func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
 	g.objectMut.Lock()
 	defer g.objectMut.Unlock()
 

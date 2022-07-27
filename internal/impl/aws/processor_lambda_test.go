@@ -86,7 +86,7 @@ func TestLambdaMutations(t *testing.T) {
 		service.NewMessage([]byte("baz")),
 	}
 
-	outBatches, err := p.ProcessBatch(bCtx, inBatch)
+	outBatches, err := p.ProcessBatch(bCtx, inBatch.Copy())
 	require.NoError(t, err)
 
 	require.Len(t, outBatches, 1)
@@ -110,7 +110,7 @@ func TestLambdaMutations(t *testing.T) {
 	p, err = newLambdaProc(mock, true, "foofn", 3, "", time.Second, service.MockResources())
 	require.NoError(t, err)
 
-	outBatches, err = p.ProcessBatch(bCtx, inBatch)
+	outBatches, err = p.ProcessBatch(bCtx, inBatch.Copy())
 	require.NoError(t, err)
 
 	require.Len(t, outBatches, 1)

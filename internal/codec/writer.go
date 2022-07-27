@@ -79,7 +79,7 @@ type allBytesWriter struct {
 }
 
 func (a *allBytesWriter) Write(ctx context.Context, msg *message.Part) error {
-	_, err := a.o.Write(msg.Get())
+	_, err := a.o.Write(msg.AsBytes())
 	return err
 }
 
@@ -102,7 +102,7 @@ func newLinesWriter(w io.WriteCloser) (Writer, error) {
 }
 
 func (l *linesWriter) Write(ctx context.Context, p *message.Part) error {
-	partBytes := p.Get()
+	partBytes := p.AsBytes()
 	if _, err := l.w.Write(partBytes); err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func newCustomDelimWriter(w io.WriteCloser, delim string) (Writer, error) {
 }
 
 func (d *customDelimWriter) Write(ctx context.Context, p *message.Part) error {
-	partBytes := p.Get()
+	partBytes := p.AsBytes()
 	if _, err := d.w.Write(partBytes); err != nil {
 		return err
 	}

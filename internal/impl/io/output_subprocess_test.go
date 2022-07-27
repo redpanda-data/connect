@@ -21,8 +21,7 @@ import (
 func sendMsg(t *testing.T, msg string, tChan chan message.Transaction) {
 	t.Helper()
 
-	m := message.QuickBatch(nil)
-	m.Append(message.NewPart([]byte(msg)))
+	m := message.Batch{message.NewPart([]byte(msg))}
 
 	resChan := make(chan error)
 

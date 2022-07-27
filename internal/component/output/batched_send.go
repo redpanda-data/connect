@@ -29,7 +29,7 @@ func sendErrIsFatal(err error) bool {
 //
 // However, if a fatal error is returned such as a connection loss or shut down
 // then it is returned immediately.
-func IterateBatchedSend(msg *message.Batch, fn func(int, *message.Part) error) error {
+func IterateBatchedSend(msg message.Batch, fn func(int, *message.Part) error) error {
 	if msg.Len() == 1 {
 		return fn(0, msg.Get(0))
 	}

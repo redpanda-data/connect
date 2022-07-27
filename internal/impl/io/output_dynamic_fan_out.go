@@ -273,7 +273,7 @@ func (d *dynamicFanOutOutputBroker) loop() {
 
 			for _, output := range d.outputs {
 				select {
-				case output.tsChan <- message.NewTransactionFunc(ts.Payload.Copy(), func(ctx context.Context, err error) error {
+				case output.tsChan <- message.NewTransactionFunc(ts.Payload.ShallowCopy(), func(ctx context.Context, err error) error {
 					if atomic.AddInt64(&pendingResponses, -1) == 0 || err != nil {
 						atomic.StoreInt64(&pendingResponses, 0)
 						ackErr := ts.Ack(ctx, err)

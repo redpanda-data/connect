@@ -41,7 +41,7 @@ func TestTaggingErrorsSinglePart(t *testing.T) {
 	assert.Equal(t, errTest1, tran.resFromError(batchErr))
 
 	// Add tran part to new message and create batch error with error on non-tran part
-	newMsg.Append(tran.Message().Get(0))
+	newMsg = append(newMsg, tran.Message().Get(0))
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
@@ -86,14 +86,14 @@ func TestTaggingErrorsMultiplePart(t *testing.T) {
 
 	// Add tran part to new message, still returning general error due to
 	// missing part
-	newMsg.Append(tran.Message().Get(0))
+	newMsg = append(newMsg, tran.Message().Get(0))
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
 	assert.Equal(t, errTest1, tran.resFromError(batchErr))
 
 	// Add next tran part to new message, and return ack now
-	newMsg.Append(tran.Message().Get(1))
+	newMsg = append(newMsg, tran.Message().Get(1))
 	batchErr = batch.NewError(newMsg, errTest1)
 	batchErr.Failed(0, errTest2)
 
@@ -122,8 +122,7 @@ func TestTaggingErrorsNestedOverlap(t *testing.T) {
 	tranOne := NewTracked(msg, nil)
 
 	msgTwo := message.QuickBatch(nil)
-	msgTwo.Append(tranOne.Message().Get(1))
-	msgTwo.Append(tranOne.Message().Get(0))
+	msgTwo = append(msgTwo, tranOne.Message().Get(1), tranOne.Message().Get(0))
 	tranTwo := NewTracked(msgTwo, nil)
 
 	// No error
@@ -164,9 +163,10 @@ func TestTaggingErrorsNestedSerial(t *testing.T) {
 	tranOne := NewTracked(msgOne, nil)
 	tranTwo := NewTracked(msgTwo, nil)
 
-	msg := message.QuickBatch(nil)
-	msg.Append(tranOne.Message().Get(0))
-	msg.Append(tranTwo.Message().Get(0))
+	msg := message.Batch{
+		tranOne.Message().Get(0),
+		tranTwo.Message().Get(0),
+	}
 
 	// No error
 	assert.Equal(t, nil, tranOne.resFromError(nil))

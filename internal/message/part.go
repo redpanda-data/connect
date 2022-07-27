@@ -1,11 +1,7 @@
 package message
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
-	"io"
 	"os"
 )
 
@@ -19,80 +15,35 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-type rwData struct {
-	rawBytes  []byte
-	jsonCache interface{}
-	metadata  map[string]string
-	err       error
-}
-
 // Part represents a single Benthos message.
 type Part struct {
-	data *rwData
+	data *messageData
 	ctx  context.Context
 }
 
 // NewPart initializes a new message part.
 func NewPart(data []byte) *Part {
 	return &Part{
-		data: &rwData{
-			rawBytes: data,
-		},
-		ctx: context.Background(),
+		data: newMessageBytes(data),
+		ctx:  context.Background(),
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// Copy creates a shallow copy of the message part.
-func (p *Part) Copy() *Part {
-	var clonedMeta map[string]string
-	if p.data.metadata != nil {
-		clonedMeta = make(map[string]string, len(p.data.metadata))
-		for k, v := range p.data.metadata {
-			clonedMeta[k] = v
-		}
-	}
+// ShallowCopy creates a shallow copy of the message part.
+func (p *Part) ShallowCopy() *Part {
 	return &Part{
-		data: &rwData{
-			rawBytes:  p.data.rawBytes,
-			metadata:  clonedMeta,
-			jsonCache: p.data.jsonCache,
-			err:       p.data.err,
-		},
-		ctx: p.ctx,
+		data: p.data.ShallowCopy(),
+		ctx:  p.ctx,
 	}
 }
 
 // DeepCopy creates a new deep copy of the message part.
 func (p *Part) DeepCopy() *Part {
-	var clonedMeta map[string]string
-	if p.data.metadata != nil {
-		clonedMeta = make(map[string]string, len(p.data.metadata))
-		for k, v := range p.data.metadata {
-			clonedMeta[k] = v
-		}
-	}
-	var clonedJSON interface{}
-	if p.data.jsonCache != nil {
-		var err error
-		if clonedJSON, err = cloneGeneric(p.data.jsonCache); err != nil {
-			clonedJSON = nil
-		}
-	}
-	var np []byte
-	if p.data != nil {
-		np = make([]byte, len(p.data.rawBytes))
-		copy(np, p.data.rawBytes)
-	}
 	return &Part{
-		data: &rwData{
-			rawBytes:  np,
-			metadata:  clonedMeta,
-			jsonCache: clonedJSON,
-			err:       p.data.err,
-		},
-		ctx: p.ctx,
+		data: p.data.DeepCopy(),
+		ctx:  p.ctx,
 	}
 }
 
@@ -127,130 +78,81 @@ func (p *Part) WithContext(ctx context.Context) *Part {
 
 // ErrorGet returns an error associated with the message, or nil if none exists.
 func (p *Part) ErrorGet() error {
-	return p.data.err
+	return p.data.ErrorGet()
 }
 
 // ErrorSet modifies the error associated with a message. Errors attached to
 // messages are used to indicate that processing has failed at some point in the
 // processing pipeline.
 func (p *Part) ErrorSet(err error) {
-	p.data.err = err
+	p.data.ErrorSet(err)
 }
 
-// Get returns the body of the message part.
-func (p *Part) Get() []byte {
-	if len(p.data.rawBytes) == 0 && p.data.jsonCache != nil {
-		var buf bytes.Buffer
-		enc := json.NewEncoder(&buf)
-		enc.SetEscapeHTML(false)
-		err := enc.Encode(p.data.jsonCache)
-		if err != nil {
-			return nil
-		}
-		if buf.Len() > 1 {
-			p.data.rawBytes = buf.Bytes()[:buf.Len()-1]
-		}
-	}
-	return p.data.rawBytes
+// AsBytes returns the body of the message part.
+func (p *Part) AsBytes() []byte {
+	return p.data.AsBytes()
 }
 
-// JSON attempts to parse the message part as a JSON document and returns the
-// result.
-func (p *Part) JSON() (interface{}, error) {
-	if p.data.jsonCache != nil {
-		return p.data.jsonCache, nil
-	}
-	if p.data.rawBytes == nil {
-		return nil, ErrMessagePartNotExist
-	}
-
-	dec := json.NewDecoder(bytes.NewReader(p.data.rawBytes))
-	if useNumber {
-		dec.UseNumber()
-	}
-
-	err := dec.Decode(&p.data.jsonCache)
-	if err != nil {
-		return nil, err
-	}
-
-	var dummy json.RawMessage
-	if err = dec.Decode(&dummy); err == io.EOF {
-		return p.data.jsonCache, nil
-	}
-
-	p.data.jsonCache = nil
-	if err = dec.Decode(&dummy); err == nil || err == io.EOF {
-		err = errors.New("message contains multiple valid documents")
-	}
-	return nil, err
+// AsStructuredMut returns the structured format of the message if already set,
+// or attempts to parse the raw bytes as a JSON document if not. The returned
+// structure is mutable and therefore safe to mutate directly.
+func (p *Part) AsStructuredMut() (interface{}, error) {
+	return p.data.AsStructuredMut()
 }
 
-// Set the value of the message part.
-func (p *Part) Set(data []byte) *Part {
-	p.data.rawBytes = data
-	p.data.jsonCache = nil
+// AsStructured returns the structured format of the message if already set, or
+// attempts to parse the raw bytes as a JSON document if not. The returned
+// structure should be considered read-only and therefore not be mutated.
+func (p *Part) AsStructured() (interface{}, error) {
+	return p.data.AsStructured()
+}
+
+// SetBytes the value of the message part as a raw byte slice.
+func (p *Part) SetBytes(data []byte) *Part {
+	p.data.SetBytes(data)
 	return p
 }
 
-// SetJSON attempts to marshal a JSON document into a byte slice and stores the
-// result as the contents of the message part.
-func (p *Part) SetJSON(jObj interface{}) {
-	p.data.rawBytes = nil
-	if jObj == nil {
-		p.data.rawBytes = []byte(`null`)
-	}
-	p.data.jsonCache = jObj
+// SetStructuredMut sets the value of the message to a structured value, this
+// value is mutable and subsequent mutations will be performed directly on the
+// provided data.
+func (p *Part) SetStructuredMut(jObj interface{}) {
+	p.data.SetStructuredMut(jObj)
+}
+
+// SetStructured sets the value of the message to a structured value, this
+// value is read-only and subsequent mutations will require cloning of the
+// entire data structure.
+func (p *Part) SetStructured(jObj interface{}) {
+	p.data.SetStructured(jObj)
 }
 
 //------------------------------------------------------------------------------
 
 // MetaGet returns a metadata value if a key exists, otherwise an empty string.
 func (p *Part) MetaGet(key string) string {
-	if p.data.metadata == nil {
-		return ""
-	}
-	return p.data.metadata[key]
+	v, _ := p.data.MetaGet(key)
+	return v
 }
 
 // MetaSet sets the value of a metadata key.
 func (p *Part) MetaSet(key, value string) {
-	if p.data.metadata == nil {
-		p.data.metadata = map[string]string{
-			key: value,
-		}
-		return
-	}
-	p.data.metadata[key] = value
+	p.data.MetaSet(key, value)
 }
 
 // MetaDelete removes the value of a metadata key.
 func (p *Part) MetaDelete(key string) {
-	if p.data.metadata == nil {
-		return
-	}
-	delete(p.data.metadata, key)
+	p.data.MetaDelete(key)
 }
 
 // MetaIter iterates each metadata key/value pair.
 func (p *Part) MetaIter(f func(k, v string) error) error {
-	if p.data.metadata == nil {
-		// Warning: If we remove this we need to compensate with a way to force
-		// initialisation
-		p.data.metadata = map[string]string{}
-		return nil
-	}
-	for ak, av := range p.data.metadata {
-		if err := f(ak, av); err != nil {
-			return err
-		}
-	}
-	return nil
+	return p.data.MetaIter(f)
 }
 
 //------------------------------------------------------------------------------
 
 // IsEmpty returns true if the message part is empty.
 func (p *Part) IsEmpty() bool {
-	return len(p.data.rawBytes) == 0 && p.data.jsonCache == nil
+	return p.data.IsEmpty()
 }

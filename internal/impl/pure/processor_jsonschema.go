@@ -134,7 +134,7 @@ func newJSONSchema(conf processor.JSONSchemaConfig, mgr bundle.NewManagement) (p
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (s *jsonSchemaProc) Process(ctx context.Context, part *message.Part) ([]*message.Part, error) {
-	jsonPart, err := part.JSON()
+	jsonPart, err := part.AsStructured()
 	if err != nil {
 		s.log.Debugf("Failed to parse part into json: %v", err)
 		return nil, err

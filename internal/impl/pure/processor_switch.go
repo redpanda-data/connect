@@ -158,7 +158,7 @@ func SwitchReorderFromGroup(group *message.SortGroup, parts []*message.Part) {
 	})
 }
 
-func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	var result []*message.Part
 	var remaining []*message.Part
 	var carryOver []*message.Part
@@ -176,8 +176,7 @@ func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *m
 		// Form a message to test against, consisting of fallen through messages
 		// from prior cases plus remaining messages that haven't passed a case
 		// yet.
-		testMsg := message.QuickBatch(nil)
-		testMsg.Append(remaining...)
+		testMsg := message.Batch(remaining)
 
 		for j, p := range remaining {
 			test := switchCase.check == nil
@@ -201,8 +200,7 @@ func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *m
 		remaining = failed
 
 		if len(passed) > 0 {
-			execMsg := message.QuickBatch(nil)
-			execMsg.SetAll(passed)
+			execMsg := message.Batch(passed)
 
 			msgs, res := processor.ExecuteAll(switchCase.processors, execMsg)
 			if res != nil {
@@ -227,14 +225,12 @@ func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *m
 		SwitchReorderFromGroup(sortGroup, result)
 	}
 
-	resMsg := message.QuickBatch(nil)
-	resMsg.SetAll(result)
-
+	resMsg := message.Batch(result)
 	if resMsg.Len() == 0 {
 		return nil, nil
 	}
 
-	return []*message.Batch{resMsg}, nil
+	return []message.Batch{resMsg}, nil
 }
 
 func (s *switchProc) Close(ctx context.Context) error {

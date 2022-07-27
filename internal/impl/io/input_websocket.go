@@ -129,7 +129,7 @@ func (w *websocketReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *websocketReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (w *websocketReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	client := w.getWS()
 	if client == nil {
 		return nil, nil, component.ErrNotConnected

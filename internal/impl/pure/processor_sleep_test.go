@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -22,14 +23,11 @@ func TestSleep(t *testing.T) {
 	}
 
 	msgIn := message.QuickBatch([][]byte{[]byte("hello world")})
-	msgsOut, res := slp.ProcessMessage(msgIn)
-	if res != nil {
-		t.Fatal(res)
-	}
-
-	if exp, act := msgIn, msgsOut[0]; exp != act {
-		t.Errorf("Wrong message returned: %v != %v", act, exp)
-	}
+	msgsOut, err := slp.ProcessMessage(msgIn)
+	require.NoError(t, err)
+	require.Len(t, msgsOut, 1)
+	require.Len(t, msgsOut[0], 1)
+	assert.Equal(t, "hello world", string(msgsOut[0][0].AsBytes()))
 }
 
 func TestSleepExit(t *testing.T) {

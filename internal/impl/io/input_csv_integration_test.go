@@ -53,7 +53,7 @@ foo6,bar6,baz6
 		`{"header4":"foo6","header5":"bar6","header6":"baz6"}`,
 	} {
 		m := readMsg(t, f.TransactionChan())
-		assert.Equal(t, exp, string(m.Get(0).Get()))
+		assert.Equal(t, exp, string(m.Get(0).AsBytes()))
 	}
 }
 
@@ -91,6 +91,6 @@ foo6,bar6,baz6
 		`{"header4":"foo6","header5":"bar6","header6":"baz6"}`,
 	} {
 		m := readMsg(t, f.TransactionChan())
-		assert.Equal(t, exp, string(m.Get(0).Get()))
+		assert.Equal(t, exp, string(m.Get(0).AsBytes()))
 	}
 }

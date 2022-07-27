@@ -95,7 +95,7 @@ func (r *redisListReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (r *redisListReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (r *redisListReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	var client redis.UniversalClient
 
 	r.cMut.Lock()

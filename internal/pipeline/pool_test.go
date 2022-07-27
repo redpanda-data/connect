@@ -155,7 +155,7 @@ func TestPoolMultiMsgs(t *testing.T) {
 				if !open {
 					t.Error("Closed early")
 				}
-				act := string(procT.Payload.Get(0).Get())
+				act := string(procT.Payload.Get(0).AsBytes())
 				if _, exists := expMsgs[act]; !exists {
 					t.Errorf("Unexpected result: %v", act)
 				} else {

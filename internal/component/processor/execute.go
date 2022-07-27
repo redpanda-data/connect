@@ -10,12 +10,12 @@ import (
 // ExecuteAll attempts to execute a slice of processors to a message. Returns
 // N resulting messages or a response. The response may indicate either a NoAck
 // in the event of the message being buffered or an unrecoverable error.
-func ExecuteAll(procs []V1, msgs ...*message.Batch) ([]*message.Batch, error) {
-	resultMsgs := make([]*message.Batch, len(msgs))
+func ExecuteAll(procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
+	resultMsgs := make([]message.Batch, len(msgs))
 	copy(resultMsgs, msgs)
 
 	for i := 0; len(resultMsgs) > 0 && i < len(procs); i++ {
-		var nextResultMsgs []*message.Batch
+		var nextResultMsgs []message.Batch
 		for _, m := range resultMsgs {
 			rMsgs, resultRes := procs[i].ProcessMessage(m)
 			if resultRes != nil {
@@ -36,12 +36,12 @@ func ExecuteAll(procs []V1, msgs ...*message.Batch) ([]*message.Batch, error) {
 // subsequent processors. Returns N resulting messages or a response. The
 // response may indicate either a NoAck in the event of the message being
 // buffered or an unrecoverable error.
-func ExecuteTryAll(procs []V1, msgs ...*message.Batch) ([]*message.Batch, error) {
-	resultMsgs := make([]*message.Batch, len(msgs))
+func ExecuteTryAll(procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
+	resultMsgs := make([]message.Batch, len(msgs))
 	copy(resultMsgs, msgs)
 
 	for i := 0; len(resultMsgs) > 0 && i < len(procs); i++ {
-		var nextResultMsgs []*message.Batch
+		var nextResultMsgs []message.Batch
 		for _, m := range resultMsgs {
 			// Skip messages that failed a prior stage.
 			if m.Get(0).ErrorGet() != nil {
@@ -63,21 +63,21 @@ func ExecuteTryAll(procs []V1, msgs ...*message.Batch) ([]*message.Batch, error)
 }
 
 type catchMessage struct {
-	batches []*message.Batch
+	batches []message.Batch
 	caught  bool
 }
 
 // ExecuteCatchAll attempts to execute a slice of processors to only messages
 // that have failed a processing step. Returns N resulting messages or a
 // response.
-func ExecuteCatchAll(procs []V1, msgs ...*message.Batch) ([]*message.Batch, error) {
+func ExecuteCatchAll(procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
 	// Preserves the original order of messages before entering the catch block.
 	// Only processors that have failed a previous stage are "caught", and will
 	// remain caught until all catch processors are executed.
 	catchBatches := make([]catchMessage, len(msgs))
 	for i, m := range msgs {
 		catchBatches[i] = catchMessage{
-			batches: []*message.Batch{m},
+			batches: []message.Batch{m},
 			caught:  m.Get(0).ErrorGet() != nil,
 		}
 	}
@@ -88,7 +88,7 @@ func ExecuteCatchAll(procs []V1, msgs ...*message.Batch) ([]*message.Batch, erro
 				continue
 			}
 
-			var nextResultBatches []*message.Batch
+			var nextResultBatches []message.Batch
 			for _, m := range catchBatches[j].batches {
 				rMsgs, resultRes := procs[i].ProcessMessage(m)
 				if resultRes != nil {
@@ -102,7 +102,7 @@ func ExecuteCatchAll(procs []V1, msgs ...*message.Batch) ([]*message.Batch, erro
 		}
 	}
 
-	var resultBatches []*message.Batch
+	var resultBatches []message.Batch
 	for _, b := range catchBatches {
 		resultBatches = append(resultBatches, b.batches...)
 	}
@@ -115,7 +115,7 @@ func ExecuteCatchAll(procs []V1, msgs ...*message.Batch) ([]*message.Batch, erro
 // flagged as failed and the span has the error logged.
 func IteratePartsWithSpanV2(
 	tracer trace.TracerProvider,
-	operationName string, parts []int, msg *message.Batch,
+	operationName string, parts []int, msg message.Batch,
 	iter func(int, *tracing.Span, *message.Part) error,
 ) {
 	exec := func(i int) {

@@ -477,7 +477,7 @@ root = this.apply("foo")`, goodMapFile),
 				for k, v := range p.Meta {
 					part.MetaSet(k, v)
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 			if test.output.Meta == nil {
 				test.output.Meta = map[string]string{}
@@ -490,7 +490,7 @@ root = this.apply("foo")`, goodMapFile),
 			require.NoError(t, err)
 
 			newPart := part{
-				Content: string(resPart.Get()),
+				Content: string(resPart.AsBytes()),
 				Meta:    map[string]string{},
 			}
 			_ = resPart.MetaIter(func(k, v string) error {

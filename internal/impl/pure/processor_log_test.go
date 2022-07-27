@@ -99,7 +99,7 @@ func TestLogLevelTrace(t *testing.T) {
 		}
 
 		input := message.QuickBatch([][]byte{[]byte(fmt.Sprintf(`{"foo":"%v"}`, level))})
-		expMsgs := []*message.Batch{input}
+		expMsgs := []message.Batch{input}
 		actMsgs, res := l.ProcessMessage(input)
 		if res != nil {
 			t.Fatal(res)
@@ -148,7 +148,7 @@ func TestLogWithFields(t *testing.T) {
 	}
 
 	input := message.QuickBatch([][]byte{[]byte(`{"foo":"info message","bar":"with fields"}`)})
-	expMsgs := []*message.Batch{input}
+	expMsgs := []message.Batch{input}
 	actMsgs, res := l.ProcessMessage(input)
 	if res != nil {
 		t.Fatal(res)
@@ -169,7 +169,7 @@ func TestLogWithFields(t *testing.T) {
 	}
 
 	input = message.QuickBatch([][]byte{[]byte(`{"foo":"info message 2","bar":"with fields 2"}`)})
-	expMsgs = []*message.Batch{input}
+	expMsgs = []message.Batch{input}
 	actMsgs, res = l.ProcessMessage(input)
 	if res != nil {
 		t.Fatal(res)
@@ -215,7 +215,7 @@ root.is_cool = this.is_cool`
 	input := message.QuickBatch([][]byte{[]byte(
 		`{"age":10,"is_cool":true,"ignore":"this value please"}`,
 	)})
-	expMsgs := []*message.Batch{input}
+	expMsgs := []message.Batch{input}
 	actMsgs, res := l.ProcessMessage(input)
 	require.Nil(t, res)
 	assert.Equal(t, expMsgs, actMsgs)

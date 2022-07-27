@@ -44,10 +44,7 @@ func TestKinesisFirehoseWriteSinglePartMessage(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	msg := message.QuickBatch(nil)
-	part := message.NewPart([]byte(`{"foo":"bar","id":123}`))
-	msg.Append(part)
-
+	msg := message.Batch{message.NewPart([]byte(`{"foo":"bar","id":123}`))}
 	if err := k.Write(msg); err != nil {
 		t.Error(err)
 	}
@@ -82,7 +79,7 @@ func TestKinesisFirehoseWriteMultiPartMessage(t *testing.T) {
 	msg := message.QuickBatch(nil)
 	for _, p := range parts {
 		part := message.NewPart(p.data)
-		msg.Append(part)
+		msg = append(msg, part)
 	}
 
 	if err := k.Write(msg); err != nil {
@@ -112,7 +109,7 @@ func TestKinesisFirehoseWriteChunk(t *testing.T) {
 	msg := message.QuickBatch(nil)
 	for i := 0; i < n; i++ {
 		part := message.NewPart([]byte(`{"foo":"bar","id":123}`))
-		msg.Append(part)
+		msg = append(msg, part)
 	}
 
 	if err := k.Write(msg); err != nil {
@@ -171,7 +168,7 @@ func TestKinesisFirehoseWriteChunkWithThrottling(t *testing.T) {
 	msg := message.QuickBatch(nil)
 	for i := 0; i < n; i++ {
 		part := message.NewPart([]byte(`{"foo":"bar","id":123}`))
-		msg.Append(part)
+		msg = append(msg, part)
 	}
 
 	expectedLengths := []int{
@@ -210,8 +207,9 @@ func TestKinesisFirehoseWriteError(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	msg := message.QuickBatch(nil)
-	msg.Append(message.NewPart([]byte(`{"foo":"bar"}`)))
+	msg := message.Batch{
+		message.NewPart([]byte(`{"foo":"bar"}`)),
+	}
 
 	if exp, err := "blah", k.Write(msg); err.Error() != exp {
 		t.Errorf("Expected err to equal %s, got %v", exp, err)
@@ -253,10 +251,11 @@ func TestKinesisFirehoseWriteMessageThrottling(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	msg := message.QuickBatch(nil)
-	msg.Append(message.NewPart([]byte(`{"foo":"bar","id":123}`)))
-	msg.Append(message.NewPart([]byte(`{"foo":"baz","id":456}`)))
-	msg.Append(message.NewPart([]byte(`{"foo":"qux","id":789}`)))
+	msg := message.Batch{
+		message.NewPart([]byte(`{"foo":"bar","id":123}`)),
+		message.NewPart([]byte(`{"foo":"baz","id":456}`)),
+		message.NewPart([]byte(`{"foo":"qux","id":789}`)),
+	}
 
 	if err := k.Write(msg); err != nil {
 		t.Error(err)
@@ -295,8 +294,9 @@ func TestKinesisFirehoseWriteBackoffMaxRetriesExceeded(t *testing.T) {
 		log: log.Noop(),
 	}
 
-	msg := message.QuickBatch(nil)
-	msg.Append(message.NewPart([]byte(`{"foo":"bar","id":123}`)))
+	msg := message.Batch{
+		message.NewPart([]byte(`{"foo":"bar","id":123}`)),
+	}
 
 	if err := k.Write(msg); err == nil {
 		t.Error(errors.New("expected kinesis.Write to error"))

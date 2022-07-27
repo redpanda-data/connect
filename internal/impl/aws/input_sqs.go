@@ -340,7 +340,7 @@ func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
 }
 
 // ReadWithContext attempts to read a new message from the target SQS.
-func (a *awsSQSReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (a *awsSQSReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	if a.session == nil {
 		return nil, nil, component.ErrNotConnected
 	}
@@ -362,7 +362,7 @@ func (a *awsSQSReader) ReadWithContext(ctx context.Context) (*message.Batch, inp
 	if next.Body != nil {
 		part := message.NewPart([]byte(*next.Body))
 		addSQSMetadata(part, next)
-		msg.Append(part)
+		msg = append(msg, part)
 	}
 	if msg.Len() == 0 {
 		return nil, nil, component.ErrTimeout

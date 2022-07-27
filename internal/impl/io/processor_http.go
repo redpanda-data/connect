@@ -125,8 +125,8 @@ func newHTTPProc(conf processor.HTTPConfig, mgr bundle.NewManagement) (processor
 	return g, nil
 }
 
-func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
-	var responseMsg *message.Batch
+func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+	var responseMsg message.Batch
 
 	if h.asMultipart || msg.Len() == 1 {
 		// Easy, just do a single request.
@@ -138,7 +138,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 				codeStr = strconv.Itoa(hErr.Code)
 			}
 			h.log.Errorf("HTTP request to '%v' failed: %v", h.rawURL, err)
-			responseMsg = msg.Copy()
+			responseMsg = msg.ShallowCopy()
 			_ = responseMsg.Iter(func(i int, p *message.Part) error {
 				if len(codeStr) > 0 {
 					p.MetaSet("http_status_code", codeStr)
@@ -150,48 +150,47 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 			parts := make([]*message.Part, resultMsg.Len())
 			_ = resultMsg.Iter(func(i int, p *message.Part) error {
 				if i < msg.Len() {
-					parts[i] = msg.Get(i).Copy()
+					parts[i] = msg.Get(i).ShallowCopy()
 				} else {
-					parts[i] = msg.Get(0).Copy()
+					parts[i] = msg.Get(0).ShallowCopy()
 				}
-				parts[i].Set(p.Get())
+				parts[i].SetBytes(p.AsBytes())
 				_ = p.MetaIter(func(k, v string) error {
 					parts[i].MetaSet(k, v)
 					return nil
 				})
 				return nil
 			})
-			responseMsg = message.QuickBatch(nil)
-			responseMsg.Append(parts...)
+			responseMsg = parts
 		}
 	} else if !h.parallel {
 		responseMsg = message.QuickBatch(nil)
 
 		_ = msg.Iter(func(i int, p *message.Part) error {
 			tmpMsg := message.QuickBatch(nil)
-			tmpMsg.Append(p)
+			tmpMsg = append(tmpMsg, p)
 			result, err := h.client.Send(context.Background(), tmpMsg, tmpMsg)
 			if err != nil {
 				h.log.Errorf("HTTP request to '%v' failed: %v", h.rawURL, err)
 
-				errPart := p.Copy()
+				errPart := p.ShallowCopy()
 				var hErr component.ErrUnexpectedHTTPRes
 				if ok := errors.As(err, &hErr); ok {
 					errPart.MetaSet("http_status_code", strconv.Itoa(hErr.Code))
 				}
 				errPart.ErrorSet(err)
-				_ = responseMsg.Append(errPart)
+				responseMsg = append(responseMsg, errPart)
 				return nil
 			}
 
 			_ = result.Iter(func(i int, rp *message.Part) error {
-				tmpPart := p.Copy()
-				tmpPart.Set(rp.Get())
+				tmpPart := p.ShallowCopy()
+				tmpPart.SetBytes(rp.AsBytes())
 				_ = rp.MetaIter(func(k, v string) error {
 					tmpPart.MetaSet(k, v)
 					return nil
 				})
-				_ = responseMsg.Append(tmpPart)
+				responseMsg = append(responseMsg, tmpPart)
 				return nil
 			})
 			return nil
@@ -200,7 +199,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 		// Hard, need to do parallel requests limited by max parallelism.
 		results := make([]*message.Part, msg.Len())
 		_ = msg.Iter(func(i int, p *message.Part) error {
-			results[i] = p.Copy()
+			results[i] = p.ShallowCopy()
 			return nil
 		})
 		reqChan, resChan := make(chan int), make(chan error)
@@ -208,14 +207,13 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 		for i := 0; i < msg.Len(); i++ {
 			go func() {
 				for index := range reqChan {
-					tmpMsg := message.QuickBatch(nil)
-					tmpMsg.Append(msg.Get(index))
+					tmpMsg := message.Batch{msg.Get(index)}
 					result, err := h.client.Send(context.Background(), tmpMsg, tmpMsg)
 					if err == nil && result.Len() != 1 {
 						err = fmt.Errorf("unexpected response size: %v", result.Len())
 					}
 					if err == nil {
-						results[index].Set(result.Get(0).Get())
+						results[index].SetBytes(result.Get(0).AsBytes())
 						_ = result.Get(0).MetaIter(func(k, v string) error {
 							results[index].MetaSet(k, v)
 							return nil
@@ -243,14 +241,13 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 		}
 
 		close(reqChan)
-		responseMsg = message.QuickBatch(nil)
-		responseMsg.Append(results...)
+		responseMsg = results
 	}
 
 	if responseMsg.Len() < 1 {
 		return nil, fmt.Errorf("HTTP response from '%v' was empty", h.rawURL)
 	}
-	return []*message.Batch{responseMsg}, nil
+	return []message.Batch{responseMsg}, nil
 }
 
 func (h *httpProc) Close(ctx context.Context) error {

@@ -39,7 +39,7 @@ func (d *dropWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (d *dropWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (d *dropWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	return nil
 }
 

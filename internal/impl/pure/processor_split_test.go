@@ -46,7 +46,7 @@ func TestSplitToSingleParts(t *testing.T) {
 			continue
 		}
 		for i, expBytes := range tIn {
-			if act, exp := string(msgs[i].Get(0).Get()), string(expBytes); act != exp {
+			if act, exp := string(msgs[i].Get(0).AsBytes()), string(expBytes); act != exp {
 				t.Errorf("Wrong contents: %v != %v", act, exp)
 			}
 			if act, exp := msgs[i].Get(0).MetaGet("foo"), "bar"; act != exp {
@@ -82,13 +82,13 @@ func TestSplitToMultipleParts(t *testing.T) {
 	if exp, act := 1, msgs[1].Len(); exp != act {
 		t.Fatalf("Wrong message count: %v != %v", act, exp)
 	}
-	if exp, act := "foo", string(msgs[0].Get(0).Get()); act != exp {
+	if exp, act := "foo", string(msgs[0].Get(0).AsBytes()); act != exp {
 		t.Errorf("Wrong contents: %v != %v", act, exp)
 	}
-	if exp, act := "bar", string(msgs[0].Get(1).Get()); act != exp {
+	if exp, act := "bar", string(msgs[0].Get(1).AsBytes()); act != exp {
 		t.Errorf("Wrong contents: %v != %v", act, exp)
 	}
-	if exp, act := "baz", string(msgs[1].Get(0).Get()); act != exp {
+	if exp, act := "baz", string(msgs[1].Get(0).AsBytes()); act != exp {
 		t.Errorf("Wrong contents: %v != %v", act, exp)
 	}
 }
@@ -119,13 +119,13 @@ func TestSplitByBytes(t *testing.T) {
 	if exp, act := 1, msgs[1].Len(); exp != act {
 		t.Fatalf("Wrong message 2 count: %v != %v", act, exp)
 	}
-	if exp, act := "foo", string(msgs[0].Get(0).Get()); act != exp {
+	if exp, act := "foo", string(msgs[0].Get(0).AsBytes()); act != exp {
 		t.Errorf("Wrong contents: %v != %v", act, exp)
 	}
-	if exp, act := "bar", string(msgs[0].Get(1).Get()); act != exp {
+	if exp, act := "bar", string(msgs[0].Get(1).AsBytes()); act != exp {
 		t.Errorf("Wrong contents: %v != %v", act, exp)
 	}
-	if exp, act := "baz", string(msgs[1].Get(0).Get()); act != exp {
+	if exp, act := "baz", string(msgs[1].Get(0).AsBytes()); act != exp {
 		t.Errorf("Wrong contents: %v != %v", act, exp)
 	}
 }
@@ -159,13 +159,13 @@ func TestSplitByBytesTooLarge(t *testing.T) {
 	if exp, act := 1, msgs[2].Len(); exp != act {
 		t.Fatalf("Wrong message 3 count: %v != %v", act, exp)
 	}
-	if exp, act := "foo", string(msgs[0].Get(0).Get()); act != exp {
+	if exp, act := "foo", string(msgs[0].Get(0).AsBytes()); act != exp {
 		t.Errorf("Wrong contents: %v != %v", act, exp)
 	}
-	if exp, act := "bar", string(msgs[1].Get(0).Get()); act != exp {
+	if exp, act := "bar", string(msgs[1].Get(0).AsBytes()); act != exp {
 		t.Errorf("Wrong contents: %v != %v", act, exp)
 	}
-	if exp, act := "baz", string(msgs[2].Get(0).Get()); act != exp {
+	if exp, act := "baz", string(msgs[2].Get(0).AsBytes()); act != exp {
 		t.Errorf("Wrong contents: %v != %v", act, exp)
 	}
 }

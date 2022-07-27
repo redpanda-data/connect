@@ -261,13 +261,13 @@ type pendingBulkIndex struct {
 
 // WriteWithContext will attempt to write a message to Elasticsearch, wait for
 // acknowledgement, and returns an error if applicable.
-func (e *Elasticsearch) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (e *Elasticsearch) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	return e.Write(msg)
 }
 
 // Write will attempt to write a message to Elasticsearch, wait for
 // acknowledgement, and returns an error if applicable.
-func (e *Elasticsearch) Write(msg *message.Batch) error {
+func (e *Elasticsearch) Write(msg message.Batch) error {
 	if e.client == nil {
 		return component.ErrNotConnected
 	}
@@ -276,7 +276,7 @@ func (e *Elasticsearch) Write(msg *message.Batch) error {
 
 	requests := make([]*pendingBulkIndex, msg.Len())
 	if err := msg.Iter(func(i int, part *message.Part) error {
-		jObj, ierr := part.JSON()
+		jObj, ierr := part.AsStructured()
 		if ierr != nil {
 			e.log.Errorf("Failed to marshal message into JSON document: %v\n", ierr)
 			return fmt.Errorf("failed to marshal message into JSON document: %w", ierr)

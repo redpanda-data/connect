@@ -99,7 +99,7 @@ func newWhile(conf processor.WhileConfig, mgr bundle.NewManagement) (*whileProc,
 	}, nil
 }
 
-func (w *whileProc) checkMsg(msg *message.Batch) bool {
+func (w *whileProc) checkMsg(msg message.Batch) bool {
 	c, err := w.check.QueryPart(0, msg)
 	if err != nil {
 		c = false
@@ -108,8 +108,8 @@ func (w *whileProc) checkMsg(msg *message.Batch) bool {
 	return c
 }
 
-func (w *whileProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) (msgs []*message.Batch, res error) {
-	msgs = []*message.Batch{msg}
+func (w *whileProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) (msgs []message.Batch, res error) {
+	msgs = []message.Batch{msg}
 
 	loops := 0
 	condResult := w.atLeastOnce || w.checkMsg(msg)

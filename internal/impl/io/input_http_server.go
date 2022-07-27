@@ -251,7 +251,7 @@ func newHTTPServerInput(conf input.Config, mgr bundle.NewManagement) (input.Stre
 
 //------------------------------------------------------------------------------
 
-func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (*message.Batch, error) {
+func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Batch, error) {
 	msg := message.QuickBatch(nil)
 
 	contentType := r.Header.Get("Content-Type")
@@ -278,14 +278,14 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (*message.B
 			if msgBytes, err = io.ReadAll(p); err != nil {
 				return nil, err
 			}
-			msg.Append(message.NewPart(msgBytes))
+			msg = append(msg, message.NewPart(msgBytes))
 		}
 	} else {
 		var msgBytes []byte
 		if msgBytes, err = io.ReadAll(r.Body); err != nil {
 			return nil, err
 		}
-		msg.Append(message.NewPart(msgBytes))
+		msg = append(msg, message.NewPart(msgBytes))
 	}
 
 	_ = msg.Iter(func(i int, p *message.Part) error {
@@ -427,7 +427,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 	responseMsg := message.QuickBatch(nil)
 	for _, resMsg := range store.Get() {
 		_ = resMsg.Iter(func(i int, part *message.Part) error {
-			responseMsg.Append(part)
+			responseMsg = append(responseMsg, part)
 			return nil
 		})
 	}
@@ -454,7 +454,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				return nil
 			})
-			payload := part.Get()
+			payload := part.AsBytes()
 			if w.Header().Get("Content-Type") == "" {
 				w.Header().Set("Content-Type", http.DetectContentType(payload))
 			}
@@ -476,7 +476,7 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 					}
 					return nil
 				})
-				payload := part.Get()
+				payload := part.AsBytes()
 
 				mimeHeader := textproto.MIMEHeader{}
 				if customContentTypeExists {
@@ -614,7 +614,7 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 		for _, responseMsg := range store.Get() {
 			if err := responseMsg.Iter(func(i int, part *message.Part) error {
-				return ws.WriteMessage(websocket.TextMessage, part.Get())
+				return ws.WriteMessage(websocket.TextMessage, part.AsBytes())
 			}); err != nil {
 				h.log.Errorf("Failed to send sync response over websocket: %v\n", err)
 			}

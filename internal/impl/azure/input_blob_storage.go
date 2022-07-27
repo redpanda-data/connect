@@ -331,9 +331,8 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 	return object, nil
 }
 
-func blobStorageMsgFromParts(p *azurePendingObject, parts []*message.Part) *message.Batch {
-	msg := message.QuickBatch(nil)
-	msg.Append(parts...)
+func blobStorageMsgFromParts(p *azurePendingObject, parts []*message.Part) message.Batch {
+	msg := message.Batch(parts)
 	_ = msg.Iter(func(_ int, part *message.Part) error {
 		part.MetaSet("blob_storage_key", p.target.key)
 		if p.obj.Container != nil {
@@ -349,13 +348,12 @@ func blobStorageMsgFromParts(p *azurePendingObject, parts []*message.Part) *mess
 		}
 		return nil
 	})
-
 	return msg
 }
 
 // ReadWithContext attempts to read a new message from the target Azure Blob
 // Storage container.
-func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn input.AsyncAckFn, err error) {
+func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 

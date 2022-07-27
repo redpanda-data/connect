@@ -232,7 +232,7 @@ func (c *cassandraWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (c *cassandraWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (c *cassandraWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	c.connLock.RLock()
 	session := c.session
 	c.connLock.RUnlock()
@@ -247,7 +247,7 @@ func (c *cassandraWriter) WriteWithContext(ctx context.Context, msg *message.Bat
 	return c.writeBatch(session, msg)
 }
 
-func (c *cassandraWriter) writeRow(session *gocql.Session, msg *message.Batch) error {
+func (c *cassandraWriter) writeRow(session *gocql.Session, msg message.Batch) error {
 	values, err := c.mapArgs(msg, 0)
 	if err != nil {
 		return fmt.Errorf("parsing args: %w", err)
@@ -259,7 +259,7 @@ func (c *cassandraWriter) writeRow(session *gocql.Session, msg *message.Batch) e
 	return nil
 }
 
-func (c *cassandraWriter) writeBatch(session *gocql.Session, msg *message.Batch) error {
+func (c *cassandraWriter) writeBatch(session *gocql.Session, msg message.Batch) error {
 	batch := session.NewBatch(gocql.UnloggedBatch)
 
 	if err := msg.Iter(func(i int, p *message.Part) error {
@@ -280,7 +280,7 @@ func (c *cassandraWriter) writeBatch(session *gocql.Session, msg *message.Batch)
 	return nil
 }
 
-func (c *cassandraWriter) mapArgs(msg *message.Batch, index int) ([]interface{}, error) {
+func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]interface{}, error) {
 	if c.argsMapping != nil {
 		// We've got an "args_mapping" field, extract values from there.
 		part, err := c.argsMapping.MapPart(index, msg)
@@ -288,7 +288,7 @@ func (c *cassandraWriter) mapArgs(msg *message.Batch, index int) ([]interface{},
 			return nil, fmt.Errorf("executing bloblang mapping: %w", err)
 		}
 
-		jraw, err := part.JSON()
+		jraw, err := part.AsStructured()
 		if err != nil {
 			return nil, fmt.Errorf("parsing bloblang mapping result as json: %w", err)
 		}

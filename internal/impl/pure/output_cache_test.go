@@ -224,7 +224,7 @@ func TestCacheBatches(t *testing.T) {
 			key := fmt.Sprintf("key%v", i*10+j)
 			value := fmt.Sprintf(`{"key":"%v","test":"hello world"}`, key)
 			exp[key] = value
-			msg.Append(message.NewPart([]byte(value)))
+			msg = append(msg, message.NewPart([]byte(value)))
 		}
 		if err := c.WriteWithContext(tCtx, msg); err != nil {
 			t.Fatal(err)

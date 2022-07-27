@@ -94,9 +94,8 @@ func tarArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message, e
 	}
 
 	tw.Close()
-	newPart := msg[0].Copy()
-	newPart.SetBytes(buf.Bytes())
-	return newPart, nil
+	msg[0].SetBytes(buf.Bytes())
+	return msg[0], nil
 }
 
 func zipArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message, error) {
@@ -125,14 +124,11 @@ func zipArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message, e
 	}
 	zw.Close()
 
-	newPart := msg[0].Copy()
-	newPart.SetBytes(buf.Bytes())
-	return newPart, nil
+	msg[0].SetBytes(buf.Bytes())
+	return msg[0], nil
 }
 
 func binaryArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message, error) {
-	newPart := msg[0].Copy()
-
 	parts := make([][]byte, 0, len(msg))
 	for _, p := range msg {
 		pBytes, err := p.AsBytes()
@@ -142,8 +138,8 @@ func binaryArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message
 		parts = append(parts, pBytes)
 	}
 
-	newPart.SetBytes(message.SerializeBytes(parts))
-	return newPart, nil
+	msg[0].SetBytes(message.SerializeBytes(parts))
+	return msg[0], nil
 }
 
 func linesArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message, error) {
@@ -154,9 +150,8 @@ func linesArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message,
 			return nil, err
 		}
 	}
-	newPart := msg[0].Copy()
-	newPart.SetBytes(bytes.Join(tmpParts, []byte("\n")))
-	return newPart, nil
+	msg[0].SetBytes(bytes.Join(tmpParts, []byte("\n")))
+	return msg[0], nil
 }
 
 func concatenateArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message, error) {
@@ -168,25 +163,22 @@ func concatenateArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Me
 		}
 		_, _ = buf.Write(pBytes)
 	}
-	newPart := msg[0].Copy()
-	newPart.SetBytes(buf.Bytes())
-	return newPart, nil
+	msg[0].SetBytes(buf.Bytes())
+	return msg[0], nil
 }
 
 func jsonArrayArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message, error) {
 	var array []interface{}
 
 	for _, part := range msg {
-		doc, jerr := part.AsStructured()
+		doc, jerr := part.AsStructuredMut()
 		if jerr != nil {
 			return nil, fmt.Errorf("failed to parse message as JSON: %v", jerr)
 		}
 		array = append(array, doc)
 	}
-
-	newPart := msg[0].Copy()
-	newPart.SetStructured(array)
-	return newPart, nil
+	msg[0].SetStructuredMut(array)
+	return msg[0], nil
 }
 
 func strToArchiver(str string) (archiveFunc, error) {

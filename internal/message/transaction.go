@@ -19,7 +19,7 @@ import "context"
 // acknowledged is the source transaction acknowledged in turn.
 type Transaction struct {
 	// Payload is the message payload of this transaction.
-	Payload *Batch
+	Payload Batch
 
 	// ResponseChan should receive a response at the end of a transaction (once
 	// the message is no longer owned by the receiver.) The response itself
@@ -41,7 +41,7 @@ type Transaction struct {
 
 // NewTransaction creates a new transaction object from a message payload and a
 // response channel.
-func NewTransaction(payload *Batch, resChan chan<- error) Transaction {
+func NewTransaction(payload Batch, resChan chan<- error) Transaction {
 	return Transaction{
 		Payload:      payload,
 		ResponseChan: resChan,
@@ -51,7 +51,7 @@ func NewTransaction(payload *Batch, resChan chan<- error) Transaction {
 
 // NewTransactionFunc creates a new transaction object that associates a message
 // batch payload with a func used to acknowledge delivery of the message batch.
-func NewTransactionFunc(payload *Batch, fn func(context.Context, error) error) Transaction {
+func NewTransactionFunc(payload Batch, fn func(context.Context, error) error) Transaction {
 	return Transaction{
 		Payload:      payload,
 		responseFunc: fn,

@@ -7,10 +7,10 @@ import (
 )
 
 // Processor provides a mock processor implementation around a closure.
-type Processor func(*message.Batch) ([]*message.Batch, error)
+type Processor func(message.Batch) ([]message.Batch, error)
 
 // ProcessMessage returns the closure result executed on a batch.
-func (p Processor) ProcessMessage(b *message.Batch) ([]*message.Batch, error) {
+func (p Processor) ProcessMessage(b message.Batch) ([]message.Batch, error) {
 	return p(b)
 }
 

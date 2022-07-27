@@ -32,7 +32,7 @@ func newAsyncMockWriter() *mockAsyncWriter {
 func (w *mockAsyncWriter) ConnectWithContext(ctx context.Context) error {
 	return <-w.connChan
 }
-func (w *mockAsyncWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (w *mockAsyncWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	w.msgsRcvd.Store(atomic.AddUint64(&w.msgsTotal, 1), msg)
 	return <-w.writeChan
 }
@@ -46,7 +46,7 @@ type writerCantConnect struct{}
 func (w writerCantConnect) ConnectWithContext(ctx context.Context) error {
 	return component.ErrNotConnected
 }
-func (w writerCantConnect) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (w writerCantConnect) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	return component.ErrNotConnected
 }
 func (w writerCantConnect) CloseAsync() {}
@@ -62,7 +62,7 @@ func (w *writerCantSend) ConnectWithContext(ctx context.Context) error {
 	w.connected++
 	return nil
 }
-func (w *writerCantSend) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (w *writerCantSend) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	return component.ErrNotConnected
 }
 func (w *writerCantSend) CloseAsync() {}
@@ -559,7 +559,7 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 	msgRcvd, exists := writerImpl.msgsRcvd.Load(uint64(1))
 	require.True(t, exists)
 
-	if act := message.GetAllBytes(msgRcvd.(*message.Batch)); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(msgRcvd.(message.Batch)); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }
@@ -625,7 +625,7 @@ func TestAsyncWriterSadPath(t *testing.T) {
 	msgRcvd, exists := writerImpl.msgsRcvd.Load(uint64(1))
 	require.True(t, exists)
 
-	if act := message.GetAllBytes(msgRcvd.(*message.Batch)); !reflect.DeepEqual(exp, act) {
+	if act := message.GetAllBytes(msgRcvd.(message.Batch)); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong message sent: %v != %v", act, exp)
 	}
 }

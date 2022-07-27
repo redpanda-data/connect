@@ -159,7 +159,7 @@ func (n *natsReader) disconnect() {
 	n.natsChan = nil
 }
 
-func (n *natsReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (n *natsReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	n.cMut.Lock()
 	natsChan := n.natsChan
 	natsConn := n.natsConn

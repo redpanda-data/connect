@@ -184,7 +184,7 @@ func (s *nanomsgReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *nanomsgReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (s *nanomsgReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	s.cMut.Lock()
 	socket := s.socket
 	s.cMut.Unlock()

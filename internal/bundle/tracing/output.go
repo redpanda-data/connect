@@ -37,7 +37,7 @@ func (t *tracedOutput) loop(inChan <-chan message.Transaction) {
 		}
 		_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 			_ = atomic.AddUint64(t.ctr, 1)
-			t.e.Add(EventConsume, string(part.Get()))
+			t.e.Add(EventConsume, string(part.AsBytes()))
 			return nil
 		})
 		select {

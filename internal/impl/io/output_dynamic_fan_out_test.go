@@ -57,8 +57,8 @@ func TestBasicDynamicFanOut(t *testing.T) {
 				var ts message.Transaction
 				select {
 				case ts = <-mockOutputs[index].TChan:
-					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+					if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 					}
 				case <-time.After(time.Second):
 					t.Error("Timed out waiting for broker propagate", index)
@@ -110,8 +110,8 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 				var ts message.Transaction
 				select {
 				case ts = <-out.TChan:
-					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-						t.Errorf("Wrong content returned for output '%v': %s != %s", name, ts.Payload.Get(0).Get(), content[0])
+					if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+						t.Errorf("Wrong content returned for output '%v': %s != %s", name, ts.Payload.Get(0).AsBytes(), content[0])
 					}
 				case <-time.After(time.Second):
 					t.Error("Timed out waiting for broker propagate")
@@ -148,8 +148,8 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 				var ts message.Transaction
 				select {
 				case ts = <-out.TChan:
-					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-						t.Errorf("Wrong content returned for output '%v': %s != %s", name, ts.Payload.Get(0).Get(), content[0])
+					if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+						t.Errorf("Wrong content returned for output '%v': %s != %s", name, ts.Payload.Get(0).AsBytes(), content[0])
 					}
 				case <-time.After(time.Second):
 					t.Error("Timed out waiting for broker propagate")

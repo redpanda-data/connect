@@ -88,7 +88,7 @@ func (a *airGapWriter) ConnectWithContext(ctx context.Context) error {
 	return a.w.Connect(ctx)
 }
 
-func (a *airGapWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *airGapWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	err := a.w.Write(ctx, newMessageFromPart(msg.Get(0)))
 	if err != nil && errors.Is(err, ErrNotConnected) {
 		err = component.ErrNotConnected
@@ -130,7 +130,7 @@ func (a *airGapBatchWriter) ConnectWithContext(ctx context.Context) error {
 	return a.w.Connect(ctx)
 }
 
-func (a *airGapBatchWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *airGapBatchWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	parts := make([]*Message, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		parts[i] = newMessageFromPart(part)
@@ -174,22 +174,21 @@ func newResourceOutput(o ioutput.Sync) *ResourceOutput {
 // Write a message to the output, or return an error either if delivery is not
 // possible or the context is cancelled.
 func (o *ResourceOutput) Write(ctx context.Context, m *Message) error {
-	payload := message.QuickBatch(nil)
-	payload.Append(m.part)
+	payload := message.Batch{m.part}
 	return o.writeMsg(ctx, payload)
 }
 
 // WriteBatch attempts to write a message batch to the output, and returns an
 // error either if delivery is not possible or the context is cancelled.
 func (o *ResourceOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
-	payload := message.QuickBatch(nil)
-	for _, m := range b {
-		payload.Append(m.part)
+	payload := make(message.Batch, len(b))
+	for i, m := range b {
+		payload[i] = m.part
 	}
 	return o.writeMsg(ctx, payload)
 }
 
-func (o *ResourceOutput) writeMsg(ctx context.Context, payload *message.Batch) error {
+func (o *ResourceOutput) writeMsg(ctx context.Context, payload message.Batch) error {
 	var wg sync.WaitGroup
 	var ackErr error
 	wg.Add(1)
@@ -232,8 +231,7 @@ func newOwnedOutput(o ioutput.Streamed) (*OwnedOutput, error) {
 // Write a message to the output, or return an error either if delivery is not
 // possible or the context is cancelled.
 func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
-	payload := message.QuickBatch(nil)
-	payload.Append(m.part)
+	payload := message.Batch{m.part}
 
 	resChan := make(chan error, 1)
 	select {
@@ -253,9 +251,9 @@ func (o *OwnedOutput) Write(ctx context.Context, m *Message) error {
 // WriteBatch attempts to write a message batch to the output, and returns an
 // error either if delivery is not possible or the context is cancelled.
 func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
-	payload := message.QuickBatch(nil)
-	for _, m := range b {
-		payload.Append(m.part)
+	payload := make(message.Batch, len(b))
+	for i, m := range b {
+		payload[i] = m.part
 	}
 
 	resChan := make(chan error, 1)

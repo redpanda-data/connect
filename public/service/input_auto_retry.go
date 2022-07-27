@@ -53,7 +53,7 @@ func (i *autoRetryInput) Connect(ctx context.Context) error {
 }
 
 func (i *autoRetryInput) wrapAckFunc(m messageRetry) (*Message, AckFunc) {
-	return m.msg, func(ctx context.Context, err error) error {
+	return m.msg.Copy(), func(ctx context.Context, err error) error {
 		if err != nil {
 			i.msgsMut.Lock()
 			i.resendMessages = append(i.resendMessages, m)

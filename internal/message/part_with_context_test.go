@@ -19,51 +19,51 @@ func TestPartWithContext(t *testing.T) {
 	if exp, act := false, p2.IsEmpty(); exp != act {
 		t.Errorf("Wrong value: %v != %v", act, exp)
 	}
-	if exp, act := "foobar", string(p2.Get()); exp != act {
+	if exp, act := "foobar", string(p2.AsBytes()); exp != act {
 		t.Errorf("Wrong value: %v != %v", act, exp)
 	}
-	p2.Set([]byte(`barbaz`))
-	if exp, act := "barbaz", string(p1.Get()); exp != act {
+	p2.SetBytes([]byte(`barbaz`))
+	if exp, act := "barbaz", string(p1.AsBytes()); exp != act {
 		t.Errorf("Wrong value: %v != %v", act, exp)
 	}
 
 	if exp, act := ctx, GetContext(p2); exp != act {
 		t.Errorf("Wrong context returned: %v != %v", act, exp)
 	}
-	if exp, act := ctx, GetContext(p2.Copy()); exp != act {
+	if exp, act := ctx, GetContext(p2.ShallowCopy()); exp != act {
 		t.Errorf("Wrong context returned: %v != %v", act, exp)
 	}
 	if exp, act := ctx, GetContext(p2.DeepCopy()); exp != act {
 		t.Errorf("Wrong context returned: %v != %v", act, exp)
 	}
-	if exp, act := ctx, GetContext(p2.Copy().DeepCopy().Copy()); exp != act {
+	if exp, act := ctx, GetContext(p2.ShallowCopy().DeepCopy().ShallowCopy()); exp != act {
 		t.Errorf("Wrong context returned: %v != %v", act, exp)
 	}
 
 	ctx = context.WithValue(ctx, testKey("bar"), "baz")
 	p3 := WithContext(ctx, p2)
 
-	if exp, act := "barbaz", string(p3.Get()); exp != act {
+	if exp, act := "barbaz", string(p3.AsBytes()); exp != act {
 		t.Errorf("Wrong value: %v != %v", act, exp)
 	}
-	p3.Set([]byte(`bazqux`))
-	if exp, act := "bazqux", string(p1.Get()); exp != act {
+	p3.SetBytes([]byte(`bazqux`))
+	if exp, act := "bazqux", string(p1.AsBytes()); exp != act {
 		t.Errorf("Wrong value: %v != %v", act, exp)
 	}
-	if exp, act := "bazqux", string(p2.Get()); exp != act {
+	if exp, act := "bazqux", string(p2.AsBytes()); exp != act {
 		t.Errorf("Wrong value: %v != %v", act, exp)
 	}
 
 	if exp, act := ctx, GetContext(p3); exp != act {
 		t.Errorf("Wrong context returned: %v != %v", act, exp)
 	}
-	if exp, act := ctx, GetContext(p3.Copy()); exp != act {
+	if exp, act := ctx, GetContext(p3.ShallowCopy()); exp != act {
 		t.Errorf("Wrong context returned: %v != %v", act, exp)
 	}
 	if exp, act := ctx, GetContext(p3.DeepCopy()); exp != act {
 		t.Errorf("Wrong context returned: %v != %v", act, exp)
 	}
-	if exp, act := ctx, GetContext(p3.Copy().DeepCopy().Copy()); exp != act {
+	if exp, act := ctx, GetContext(p3.ShallowCopy().DeepCopy().ShallowCopy()); exp != act {
 		t.Errorf("Wrong context returned: %v != %v", act, exp)
 	}
 }

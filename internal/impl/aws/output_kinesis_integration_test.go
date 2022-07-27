@@ -117,7 +117,7 @@ func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Ki
 
 	msg := message.QuickBatch(nil)
 	for _, record := range records {
-		msg.Append(message.NewPart(record))
+		msg = append(msg, message.NewPart(record))
 	}
 
 	if err := r.WriteWithContext(context.Background(), msg); err != nil {

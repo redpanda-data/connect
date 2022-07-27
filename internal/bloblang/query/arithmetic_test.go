@@ -797,7 +797,7 @@ func TestArithmetic(t *testing.T) {
 						part.MetaSet(k, v)
 					}
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 
 			res, err := test.input.Exec(FunctionContext{

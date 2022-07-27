@@ -118,12 +118,12 @@ func newKinesisWriter(conf output.KinesisConfig, mgr bundle.NewManagement) (*kin
 // and passing each new message through the partition and hash key interpolation
 // process, allowing the user to define the partition and hash key per message
 // part.
-func (a *kinesisWriter) toRecords(msg *message.Batch) ([]*kinesis.PutRecordsRequestEntry, error) {
+func (a *kinesisWriter) toRecords(msg message.Batch) ([]*kinesis.PutRecordsRequestEntry, error) {
 	entries := make([]*kinesis.PutRecordsRequestEntry, msg.Len())
 
 	err := msg.Iter(func(i int, p *message.Part) error {
 		entry := kinesis.PutRecordsRequestEntry{
-			Data:         p.Get(),
+			Data:         p.AsBytes(),
 			PartitionKey: aws.String(a.partitionKey.String(i, msg)),
 		}
 
@@ -166,7 +166,7 @@ func (a *kinesisWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (a *kinesisWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *kinesisWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}

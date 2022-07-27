@@ -65,7 +65,7 @@ consumeLoop:
 				break consumeLoop
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
-			act = append(act, string(tran.Payload.Get(0).Get()))
+			act = append(act, string(tran.Payload.Get(0).AsBytes()))
 			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
@@ -133,7 +133,7 @@ consumeLoop:
 				break consumeLoop
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
-			act = append(act, string(tran.Payload.Get(0).Get()))
+			act = append(act, string(tran.Payload.Get(0).AsBytes()))
 			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
@@ -255,7 +255,7 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 						break consumeLoop
 					}
 					assert.Equal(t, 1, tran.Payload.Len())
-					act = append(act, string(tran.Payload.Get(0).Get()))
+					act = append(act, string(tran.Payload.Get(0).AsBytes()))
 					require.NoError(t, tran.Ack(tCtx, nil))
 				case <-time.After(time.Minute):
 					t.Fatalf("Failed to consume message after: %v", act)
@@ -340,7 +340,7 @@ consumeLoop:
 				break consumeLoop
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
-			act = append(act, string(tran.Payload.Get(0).Get()))
+			act = append(act, string(tran.Payload.Get(0).AsBytes()))
 			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
@@ -394,7 +394,7 @@ func TestSequenceSad(t *testing.T) {
 				t.Fatal("closed earlier than expected")
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
-			assert.Equal(t, str, string(tran.Payload.Get(0).Get()))
+			assert.Equal(t, str, string(tran.Payload.Get(0).AsBytes()))
 			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message %v", i)
@@ -420,7 +420,7 @@ func TestSequenceSad(t *testing.T) {
 				t.Fatal("closed earlier than expected")
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
-			assert.Equal(t, str, string(tran.Payload.Get(0).Get()))
+			assert.Equal(t, str, string(tran.Payload.Get(0).AsBytes()))
 			require.NoError(t, tran.Ack(tCtx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message %v", i)
@@ -457,7 +457,7 @@ func TestSequenceEarlyTermination(t *testing.T) {
 			t.Fatal("closed earlier than expected")
 		}
 		assert.Equal(t, 1, tran.Payload.Len())
-		assert.Equal(t, "foo", string(tran.Payload.Get(0).Get()))
+		assert.Equal(t, "foo", string(tran.Payload.Get(0).AsBytes()))
 	case <-time.After(time.Minute):
 		t.Fatal("timed out")
 	}

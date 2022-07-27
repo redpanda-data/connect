@@ -15,7 +15,7 @@ type Input struct {
 
 // NewInput creates a new mock input that will return transactions containing a
 // list of batches, then exit.
-func NewInput(batches []*message.Batch) *Input {
+func NewInput(batches []message.Batch) *Input {
 	ts := make(chan message.Transaction, len(batches))
 	resChan := make(chan error, len(batches))
 	go func() {

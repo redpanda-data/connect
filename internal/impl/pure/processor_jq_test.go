@@ -65,7 +65,7 @@ func TestJQMutation(t *testing.T) {
 	ogExp := ogObj.String()
 
 	msgIn := message.QuickBatch(make([][]byte, 1))
-	msgIn.Get(0).SetJSON(ogObj.Data())
+	msgIn.Get(0).SetStructured(ogObj.Data())
 	msgs, res := jSet.ProcessMessage(msgIn)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)

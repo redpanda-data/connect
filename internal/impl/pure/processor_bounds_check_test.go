@@ -75,7 +75,7 @@ func TestBoundsCheck(t *testing.T) {
 		require.Len(t, msgs, 1)
 		require.Equal(t, len(parts), msgs[0].Len())
 		for i, p := range parts {
-			assert.Equal(t, string(p), string(msgs[0].Get(i).Get()), i)
+			assert.Equal(t, string(p), string(msgs[0].Get(i).AsBytes()), i)
 		}
 	}
 

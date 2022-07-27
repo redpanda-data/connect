@@ -265,7 +265,7 @@ func TestExpressionsParser(t *testing.T) {
 						part.MetaSet(k, v)
 					}
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 
 			e, err := tryParseQuery(test.input)

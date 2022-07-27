@@ -238,7 +238,7 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 				s.logger.Debugf("Failed to convert rows: %v", err)
 				msg.SetError(err)
 			} else {
-				msg.SetStructured(jArray)
+				msg.SetStructuredMut(jArray)
 			}
 		}
 	}

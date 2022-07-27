@@ -11,7 +11,7 @@ import (
 // Executor stores a parsed Bloblang mapping and provides APIs for executing it.
 type Executor struct {
 	exec              *mapping.Executor
-	emptyQueryMessage *message.Batch
+	emptyQueryMessage message.Batch
 }
 
 func newExecutor(exec *mapping.Executor) *Executor {

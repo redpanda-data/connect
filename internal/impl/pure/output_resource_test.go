@@ -61,7 +61,7 @@ func TestResourceOutput(t *testing.T) {
 		require.NotNil(t, outTS[i])
 		require.NotNil(t, outTS[i].Payload)
 		assert.Equal(t, 1, outTS[i].Payload.Len())
-		assert.Equal(t, exp, string(outTS[i].Payload.Get(0).Get()))
+		assert.Equal(t, exp, string(outTS[i].Payload.Get(0).AsBytes()))
 	}
 	outLock.Unlock()
 

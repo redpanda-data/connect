@@ -183,7 +183,7 @@ func TestHTTPClientRetries(t *testing.T) {
 func TestHTTPClientBasic(t *testing.T) {
 	nTestLoops := 1000
 
-	resultChan := make(chan *message.Batch, 1)
+	resultChan := make(chan message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		msg := message.QuickBatch(nil)
 		defer func() {
@@ -195,7 +195,7 @@ func TestHTTPClientBasic(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		msg.Append(message.NewPart(b))
+		msg = append(msg, message.NewPart(b))
 	}))
 	defer ts.Close()
 
@@ -221,7 +221,7 @@ func TestHTTPClientBasic(t *testing.T) {
 				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 1)
 				return
 			}
-			if exp, actual := testStr, string(resMsg.Get(0).Get()); exp != actual {
+			if exp, actual := testStr, string(resMsg.Get(0).AsBytes()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}
@@ -274,7 +274,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 
 		resMsg := resMsgs[0]
 		require.Equal(t, 1, resMsg.Len())
-		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).Get()))
+		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).AsBytes()))
 		assert.Equal(t, "", resMsg.Get(0).MetaGet("fooheader"))
 	}
 
@@ -322,7 +322,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 
 		resMsg := resMsgs[0]
 		require.Equal(t, 1, resMsg.Len())
-		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).Get()))
+		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).AsBytes()))
 		assert.Equal(t, "foovalue", resMsg.Get(0).MetaGet("fooheader"))
 	}
 
@@ -335,7 +335,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 func TestHTTPClientMultipart(t *testing.T) {
 	nTestLoops := 1000
 
-	resultChan := make(chan *message.Batch, 1)
+	resultChan := make(chan message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		msg := message.QuickBatch(nil)
 		defer func() {
@@ -364,7 +364,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				msg.Append(message.NewPart(msgBytes))
+				msg = append(msg, message.NewPart(msgBytes))
 			}
 		} else {
 			b, err := io.ReadAll(r.Body)
@@ -372,7 +372,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			msg.Append(message.NewPart(b))
+			msg = append(msg, message.NewPart(b))
 		}
 	}))
 	defer ts.Close()
@@ -402,11 +402,11 @@ func TestHTTPClientMultipart(t *testing.T) {
 				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 2)
 				return
 			}
-			if exp, actual := testStr+"PART-A", string(resMsg.Get(0).Get()); exp != actual {
+			if exp, actual := testStr+"PART-A", string(resMsg.Get(0).AsBytes()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}
-			if exp, actual := testStr+"PART-B", string(resMsg.Get(1).Get()); exp != actual {
+			if exp, actual := testStr+"PART-B", string(resMsg.Get(1).AsBytes()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}
@@ -423,7 +423,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 }
 func TestHTTPOutputClientMultipartBody(t *testing.T) {
 	nTestLoops := 1000
-	resultChan := make(chan *message.Batch, 1)
+	resultChan := make(chan message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		msg := message.QuickBatch(nil)
 		defer func() {
@@ -453,7 +453,7 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				msg.Append(message.NewPart(msgBytes))
+				msg = append(msg, message.NewPart(msgBytes))
 			}
 		}
 	}))
@@ -485,11 +485,11 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 				t.Errorf("Wrong # parts: %v != %v", resMsg.Len(), 2)
 				return
 			}
-			if exp, actual := "PART-A", string(resMsg.Get(0).Get()); exp != actual {
+			if exp, actual := "PART-A", string(resMsg.Get(0).AsBytes()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}
-			if exp, actual := "PART-B", string(resMsg.Get(1).Get()); exp != actual {
+			if exp, actual := "PART-B", string(resMsg.Get(1).AsBytes()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", exp, actual)
 				return
 			}
@@ -506,7 +506,7 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 }
 
 func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
-	resultChan := make(chan *message.Batch, 1)
+	resultChan := make(chan message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		msg := message.QuickBatch(nil)
 		defer func() {
@@ -536,7 +536,7 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				msg.Append(message.NewPart(a))
+				msg = append(msg, message.NewPart(a))
 			}
 		}
 	}))
@@ -569,7 +569,7 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 				return
 			}
 			mp := make(map[string][]string)
-			err := json.Unmarshal(resMsg.Get(i).Get(), &mp)
+			err := json.Unmarshal(resMsg.Get(i).AsBytes(), &mp)
 			if err != nil {
 				t.Error(err)
 			}

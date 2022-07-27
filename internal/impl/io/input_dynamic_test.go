@@ -57,7 +57,7 @@ generate:
 	select {
 	case ts, open := <-i.TransactionChan():
 		require.True(t, open)
-		assert.Equal(t, `{"source":"foo"}`, string(ts.Payload.Get(0).Get()))
+		assert.Equal(t, `{"source":"foo"}`, string(ts.Payload.Get(0).AsBytes()))
 		require.NoError(t, ts.Ack(ctx, nil))
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())

@@ -172,14 +172,14 @@ func jsonDocumentsUnarchive(part *service.Message) (service.MessageBatch, error)
 			return nil, err
 		}
 		newPart := part.Copy()
-		newPart.SetStructured(m)
+		newPart.SetStructuredMut(m)
 		parts = append(parts, newPart)
 	}
 	return parts, nil
 }
 
 func jsonArrayUnarchive(part *service.Message) (service.MessageBatch, error) {
-	jDoc, err := part.AsStructured()
+	jDoc, err := part.AsStructuredMut()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message into JSON array: %v", err)
 	}
@@ -192,14 +192,14 @@ func jsonArrayUnarchive(part *service.Message) (service.MessageBatch, error) {
 	parts := make(service.MessageBatch, len(jArray))
 	for i, ele := range jArray {
 		newPart := part.Copy()
-		newPart.SetStructured(ele)
+		newPart.SetStructuredMut(ele)
 		parts[i] = newPart
 	}
 	return parts, nil
 }
 
 func jsonMapUnarchive(part *service.Message) (service.MessageBatch, error) {
-	jDoc, err := part.AsStructured()
+	jDoc, err := part.AsStructuredMut()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message into JSON map: %v", err)
 	}
@@ -213,7 +213,7 @@ func jsonMapUnarchive(part *service.Message) (service.MessageBatch, error) {
 	i := 0
 	for key, ele := range jMap {
 		newPart := part.Copy()
-		newPart.SetStructured(ele)
+		newPart.SetStructuredMut(ele)
 		newPart.MetaSet("archive_key", key)
 		parts[i] = newPart
 		i++
@@ -264,7 +264,7 @@ func csvUnarchive(part *service.Message) (service.MessageBatch, error) {
 		}
 
 		newPart := part.Copy()
-		newPart.SetStructured(obj)
+		newPart.SetStructuredMut(obj)
 		newParts = append(newParts, newPart)
 	}
 

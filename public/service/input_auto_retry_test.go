@@ -276,6 +276,9 @@ func TestAutoRetryBuffer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, exp, string(b))
 
+	// Mutate the message to ensure it's not changed
+	msg.SetBytes([]byte("mutated message"))
+
 	// Prime second message.
 	go sendMsg(exp2)
 

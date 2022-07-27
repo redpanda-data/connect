@@ -53,12 +53,12 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessMessage(msg.ShallowCopy())
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
-	assert.Equal(t, "changed", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "unchanged", string(msg.Get(0).Get()))
+	assert.Equal(t, "changed", string(msgs[0].Get(0).AsBytes()))
+	assert.Equal(t, "unchanged", string(msg.Get(0).AsBytes()))
 }
 
 func TestProcessorAirGapOneToError(t *testing.T) {
@@ -74,8 +74,8 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
-	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
+	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).AsBytes()))
+	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).AsBytes()))
 	assert.EqualError(t, msgs[0].Get(0).ErrorGet(), "invalid character 'o' in literal null (expecting 'u')")
 }
 
@@ -95,14 +95,14 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessMessage(msg.ShallowCopy())
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 3, msgs[0].Len())
-	assert.Equal(t, "changed 1", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "changed 2", string(msgs[0].Get(1).Get()))
-	assert.Equal(t, "changed 3", string(msgs[0].Get(2).Get()))
-	assert.Equal(t, "unchanged", string(msg.Get(0).Get()))
+	assert.Equal(t, "changed 1", string(msgs[0].Get(0).AsBytes()))
+	assert.Equal(t, "changed 2", string(msgs[0].Get(1).AsBytes()))
+	assert.Equal(t, "changed 3", string(msgs[0].Get(2).AsBytes()))
+	assert.Equal(t, "unchanged", string(msg.Get(0).AsBytes()))
 }
 
 //------------------------------------------------------------------------------
@@ -147,12 +147,12 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessMessage(msg.ShallowCopy())
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
-	assert.Equal(t, "changed", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "unchanged", string(msg.Get(0).Get()))
+	assert.Equal(t, "changed", string(msgs[0].Get(0).AsBytes()))
+	assert.Equal(t, "unchanged", string(msg.Get(0).AsBytes()))
 }
 
 func TestBatchProcessorAirGapOneToError(t *testing.T) {
@@ -168,8 +168,8 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
-	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).Get()))
+	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).AsBytes()))
+	assert.Equal(t, "not a structured doc", string(msgs[0].Get(0).AsBytes()))
 	assert.EqualError(t, msgs[0].Get(0).ErrorGet(), "invalid character 'o' in literal null (expecting 'u')")
 }
 
@@ -189,15 +189,15 @@ func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessMessage(msg.ShallowCopy())
 	require.Nil(t, res)
 	require.Len(t, msgs, 2)
-	assert.Equal(t, "unchanged", string(msg.Get(0).Get()))
+	assert.Equal(t, "unchanged", string(msg.Get(0).AsBytes()))
 
 	assert.Equal(t, 2, msgs[0].Len())
-	assert.Equal(t, "changed 1", string(msgs[0].Get(0).Get()))
-	assert.Equal(t, "changed 2", string(msgs[0].Get(1).Get()))
+	assert.Equal(t, "changed 1", string(msgs[0].Get(0).AsBytes()))
+	assert.Equal(t, "changed 2", string(msgs[0].Get(1).AsBytes()))
 
 	assert.Equal(t, 1, msgs[1].Len())
-	assert.Equal(t, "changed 3", string(msgs[1].Get(0).Get()))
+	assert.Equal(t, "changed 3", string(msgs[1].Get(0).AsBytes()))
 }

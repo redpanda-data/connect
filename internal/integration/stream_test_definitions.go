@@ -239,8 +239,9 @@ func StreamTestSendBatchCount(n int) StreamTestDefinition {
 			for i := 0; i < n; i++ {
 				payload := fmt.Sprintf("hello world %v", i)
 				set[payload] = nil
-				msg := message.QuickBatch(nil)
-				msg.Append(message.NewPart([]byte(payload)))
+				msg := message.Batch{
+					message.NewPart([]byte(payload)),
+				}
 				select {
 				case tranChan <- message.NewTransaction(msg, resChan):
 				case res := <-resChan:
@@ -288,8 +289,9 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 			for i := 0; i < n; i++ {
 				payload := fmt.Sprintf("hello world %v", i)
 				set[payload] = nil
-				msg := message.QuickBatch(nil)
-				msg.Append(message.NewPart([]byte(payload)))
+				msg := message.Batch{
+					message.NewPart([]byte(payload)),
+				}
 				select {
 				case tranChan <- message.NewTransaction(msg, resChan):
 				case res := <-resChan:
@@ -451,22 +453,22 @@ func StreamTestCheckpointCapture() StreamTestDefinition {
 			responseFns := make([]func(context.Context, error) error, 5)
 
 			msg, responseFns[0] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
-			assert.Equal(t, "A", string(msg.Get()))
+			assert.Equal(t, "A", string(msg.AsBytes()))
 			require.NoError(t, responseFns[0](env.ctx, nil))
 
 			msg, responseFns[1] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
-			assert.Equal(t, "B", string(msg.Get()))
+			assert.Equal(t, "B", string(msg.AsBytes()))
 			require.NoError(t, responseFns[1](env.ctx, nil))
 
 			msg, responseFns[2] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
-			assert.Equal(t, "C", string(msg.Get()))
+			assert.Equal(t, "C", string(msg.AsBytes()))
 
 			msg, responseFns[3] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
-			assert.Equal(t, "D", string(msg.Get()))
+			assert.Equal(t, "D", string(msg.AsBytes()))
 			require.NoError(t, responseFns[3](env.ctx, nil))
 
 			msg, responseFns[4] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
-			assert.Equal(t, "E", string(msg.Get()))
+			assert.Equal(t, "E", string(msg.AsBytes()))
 
 			require.NoError(t, responseFns[2](env.ctx, errors.New("rejecting just cus")))
 			require.NoError(t, responseFns[4](env.ctx, errors.New("rejecting just cus")))
@@ -485,13 +487,13 @@ func StreamTestCheckpointCapture() StreamTestDefinition {
 			})
 
 			msg = receiveMessage(env.ctx, t, input.TransactionChan(), nil)
-			assert.Equal(t, "C", string(msg.Get()))
+			assert.Equal(t, "C", string(msg.AsBytes()))
 
 			msg = receiveMessage(env.ctx, t, input.TransactionChan(), nil)
-			assert.Equal(t, "D", string(msg.Get()))
+			assert.Equal(t, "D", string(msg.AsBytes()))
 
 			msg = receiveMessage(env.ctx, t, input.TransactionChan(), nil)
-			assert.Equal(t, "E", string(msg.Get()))
+			assert.Equal(t, "E", string(msg.AsBytes()))
 		},
 	)
 }
@@ -611,7 +613,7 @@ func StreamTestAtLeastOnceDelivery() StreamTestDefinition {
 
 			for i := 0; i < len(expectedMessages); i++ {
 				msg, responseFn := receiveMessageNoRes(env.ctx, t, input.TransactionChan())
-				key := string(msg.Get())
+				key := string(msg.AsBytes())
 				assert.Contains(t, expectedMessages, key)
 				delete(expectedMessages, key)
 				if key != "C" && key != "E" {
@@ -650,7 +652,7 @@ func StreamTestAtLeastOnceDelivery() StreamTestDefinition {
 
 			for i := 0; i < len(expectedMessages); i++ {
 				msg = receiveMessage(env.ctx, t, input.TransactionChan(), nil)
-				key := string(msg.Get())
+				key := string(msg.AsBytes())
 				assert.Contains(t, expectedMessages, key)
 				delete(expectedMessages, key)
 			}

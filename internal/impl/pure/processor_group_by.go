@@ -123,12 +123,12 @@ func newGroupBy(conf processor.GroupByConfig, mgr bundle.NewManagement) (process
 	}, nil
 }
 
-func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	if msg.Len() == 0 {
 		return nil, nil
 	}
 
-	groups := make([]*message.Batch, len(g.groups))
+	groups := make([]message.Batch, len(g.groups))
 	for i := range groups {
 		groups[i] = message.QuickBatch(nil)
 	}
@@ -148,7 +148,7 @@ func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 					"type", groupStr,
 				)
 				spans[i].SetTag("group", groupStr)
-				groups[j].Append(p.Copy())
+				groups[j] = append(groups[j], p)
 				return nil
 			}
 		}
@@ -158,11 +158,11 @@ func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 			"type", "default",
 		)
 		spans[i].SetTag("group", "default")
-		groupless.Append(p.Copy())
+		groupless = append(groupless, p)
 		return nil
 	})
 
-	msgs := []*message.Batch{}
+	msgs := []message.Batch{}
 	for i, gmsg := range groups {
 		if gmsg.Len() == 0 {
 			continue

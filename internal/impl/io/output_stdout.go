@@ -70,7 +70,7 @@ func (w *stdoutWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *stdoutWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (w *stdoutWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		return w.handle.Write(ctx, p)
 	})

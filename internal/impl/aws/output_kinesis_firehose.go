@@ -93,12 +93,12 @@ func newKinesisFirehoseWriter(conf output.KinesisFirehoseConfig, log log.Modular
 // and passing each new message through the partition and hash key interpolation
 // process, allowing the user to define the partition and hash key per message
 // part.
-func (a *kinesisFirehoseWriter) toRecords(msg *message.Batch) ([]*firehose.Record, error) {
+func (a *kinesisFirehoseWriter) toRecords(msg message.Batch) ([]*firehose.Record, error) {
 	entries := make([]*firehose.Record, msg.Len())
 
 	err := msg.Iter(func(i int, p *message.Part) error {
 		entry := firehose.Record{
-			Data: p.Get(),
+			Data: p.AsBytes(),
 		}
 
 		if len(entry.Data) > mebibyte {
@@ -149,14 +149,14 @@ func (a *kinesisFirehoseWriter) Connect() error {
 // Write attempts to write message contents to a target Kinesis Firehose delivery
 // stream in batches of 500. If throttling is detected, failed messages are retried
 // according to the configurable backoff settings.
-func (a *kinesisFirehoseWriter) Write(msg *message.Batch) error {
+func (a *kinesisFirehoseWriter) Write(msg message.Batch) error {
 	return a.WriteWithContext(context.Background(), msg)
 }
 
 // WriteWithContext attempts to write message contents to a target Kinesis
 // Firehose delivery stream in batches of 500. If throttling is detected, failed
 // messages are retried according to the configurable backoff settings.
-func (a *kinesisFirehoseWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *kinesisFirehoseWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}

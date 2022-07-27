@@ -183,17 +183,17 @@ func (a *azureBlobStorageWriter) createContainer(c *storage.Container, accessLev
 	return c.Create(&opts)
 }
 
-func (a *azureBlobStorageWriter) WriteWithContext(_ context.Context, msg *message.Batch) error {
+func (a *azureBlobStorageWriter) WriteWithContext(_ context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		c := a.client.GetContainerReference(a.container.String(i, msg))
 		b := c.GetBlobReference(a.path.String(i, msg))
-		if err := a.uploadBlob(b, a.blobType.String(i, msg), p.Get()); err != nil {
+		if err := a.uploadBlob(b, a.blobType.String(i, msg), p.AsBytes()); err != nil {
 			if containerNotFound(err) {
 				if cerr := a.createContainer(c, a.accessLevel.String(i, msg)); cerr != nil {
 					a.log.Debugf("error creating container: %v.", cerr)
 					return cerr
 				}
-				err = a.uploadBlob(b, a.blobType.String(i, msg), p.Get())
+				err = a.uploadBlob(b, a.blobType.String(i, msg), p.AsBytes())
 				if err != nil {
 					a.log.Debugf("error retrying to upload  blob: %v.", err)
 				}

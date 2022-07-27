@@ -12,7 +12,7 @@ import (
 // that an error returned resulting from multiple transaction messages can be
 // reduced.
 type Tracked struct {
-	msg   *message.Batch
+	msg   message.Batch
 	group *message.SortGroup
 	ackFn func(context.Context, error) error
 }
@@ -22,7 +22,7 @@ type Tracked struct {
 // is returned from a downstream component that merged messages from other
 // transactions the tag can be used in order to determine whether the message
 // owned by this transaction succeeded.
-func NewTracked(msg *message.Batch, ackFn func(context.Context, error) error) *Tracked {
+func NewTracked(msg message.Batch, ackFn func(context.Context, error) error) *Tracked {
 	group, trackedMsg := message.NewSortGroup(msg)
 	return &Tracked{
 		msg:   trackedMsg,
@@ -32,7 +32,7 @@ func NewTracked(msg *message.Batch, ackFn func(context.Context, error) error) *T
 }
 
 // Message returns the message owned by this transaction.
-func (t *Tracked) Message() *message.Batch {
+func (t *Tracked) Message() message.Batch {
 	return t.msg
 }
 

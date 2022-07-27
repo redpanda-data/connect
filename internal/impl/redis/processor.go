@@ -214,7 +214,7 @@ func newRedisKeysOperator() redisOperator {
 		for _, v := range res {
 			iRes = append(iRes, v)
 		}
-		part.SetStructured(iRes)
+		part.SetStructuredMut(iRes)
 		return nil
 	}
 }
@@ -342,7 +342,7 @@ func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.Mess
 		return err
 	}
 
-	msg.SetStructured(res)
+	msg.SetStructuredMut(res)
 	return nil
 }
 

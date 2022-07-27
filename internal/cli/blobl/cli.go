@@ -111,7 +111,7 @@ Find out more about Bloblang at: https://benthos.dev/docs/guides/bloblang/about`
 }
 
 type execCache struct {
-	msg  *message.Batch
+	msg  message.Batch
 	vars map[string]interface{}
 }
 
@@ -123,7 +123,7 @@ func newExecCache() *execCache {
 }
 
 func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input []byte) (string, error) {
-	e.msg.Get(0).Set(input)
+	e.msg.Get(0).SetBytes(input)
 
 	var valuePtr *interface{}
 	var parseErr error
@@ -134,7 +134,7 @@ func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutpu
 				var value interface{} = input
 				valuePtr = &value
 			} else {
-				if jObj, err := e.msg.Get(0).JSON(); err == nil {
+				if jObj, err := e.msg.Get(0).AsStructured(); err == nil {
 					valuePtr = &jObj
 				} else {
 					if errors.Is(err, message.ErrMessagePartNotExist) {

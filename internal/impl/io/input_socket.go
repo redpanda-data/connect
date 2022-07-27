@@ -110,7 +110,7 @@ func (s *socketReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *socketReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (s *socketReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	s.codecMut.Lock()
 	codec := s.codec
 	s.codecMut.Unlock()
@@ -143,9 +143,7 @@ func (s *socketReader) ReadWithContext(ctx context.Context) (*message.Batch, inp
 	// benefit to aggregating acks.
 	_ = codecAckFn(context.Background(), nil)
 
-	msg := message.QuickBatch(nil)
-	msg.Append(parts...)
-
+	msg := message.Batch(parts)
 	if msg.Len() == 0 {
 		return nil, nil, component.ErrTimeout
 	}

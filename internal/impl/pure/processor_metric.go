@@ -159,7 +159,7 @@ type metricProcessor struct {
 	mGaugeVec   metrics.StatGaugeVec
 	mTimerVec   metrics.StatTimerVec
 
-	handler func(string, int, *message.Batch) error
+	handler func(string, int, message.Batch) error
 }
 
 type labels []label
@@ -168,7 +168,7 @@ type label struct {
 	value *field.Expression
 }
 
-func (l *label) val(index int, msg *message.Batch) string {
+func (l *label) val(index int, msg message.Batch) string {
 	return l.value.String(index, msg)
 }
 
@@ -180,7 +180,7 @@ func (l labels) names() []string {
 	return names
 }
 
-func (l labels) values(index int, msg *message.Batch) []string {
+func (l labels) values(index int, msg message.Batch) []string {
 	var values []string
 	for i := range l {
 		values = append(values, l[i].val(index, msg))
@@ -259,7 +259,7 @@ func newMetricProcessor(conf processor.Config, mgr bundle.NewManagement, log log
 	return m, nil
 }
 
-func (m *metricProcessor) handleCounter(val string, index int, msg *message.Batch) error {
+func (m *metricProcessor) handleCounter(val string, index int, msg message.Batch) error {
 	if len(m.labels) > 0 {
 		m.mCounterVec.With(m.labels.values(index, msg)...).Incr(1)
 	} else {
@@ -268,7 +268,7 @@ func (m *metricProcessor) handleCounter(val string, index int, msg *message.Batc
 	return nil
 }
 
-func (m *metricProcessor) handleCounterBy(val string, index int, msg *message.Batch) error {
+func (m *metricProcessor) handleCounterBy(val string, index int, msg message.Batch) error {
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return err
@@ -284,7 +284,7 @@ func (m *metricProcessor) handleCounterBy(val string, index int, msg *message.Ba
 	return nil
 }
 
-func (m *metricProcessor) handleGauge(val string, index int, msg *message.Batch) error {
+func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) error {
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return err
@@ -300,7 +300,7 @@ func (m *metricProcessor) handleGauge(val string, index int, msg *message.Batch)
 	return nil
 }
 
-func (m *metricProcessor) handleTimer(val string, index int, msg *message.Batch) error {
+func (m *metricProcessor) handleTimer(val string, index int, msg message.Batch) error {
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return err
@@ -316,7 +316,7 @@ func (m *metricProcessor) handleTimer(val string, index int, msg *message.Batch)
 	return nil
 }
 
-func (m *metricProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
+func (m *metricProcessor) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		value := m.value.String(i, msg)
 		if err := m.handler(value, i, msg); err != nil {
@@ -324,7 +324,7 @@ func (m *metricProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, 
 		}
 		return nil
 	})
-	return []*message.Batch{msg}, nil
+	return []message.Batch{msg}, nil
 }
 
 func (m *metricProcessor) CloseAsync() {

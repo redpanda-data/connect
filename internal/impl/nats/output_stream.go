@@ -136,7 +136,7 @@ func (n *natsStreamWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (n *natsStreamWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (n *natsStreamWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	n.connMut.RLock()
 	conn := n.stanConn
 	n.connMut.RUnlock()
@@ -146,7 +146,7 @@ func (n *natsStreamWriter) WriteWithContext(ctx context.Context, msg *message.Ba
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		err := conn.Publish(n.conf.Subject, p.Get())
+		err := conn.Publish(n.conf.Subject, p.AsBytes())
 		if err == stan.ErrConnectionClosed {
 			conn.Close()
 			n.connMut.Lock()

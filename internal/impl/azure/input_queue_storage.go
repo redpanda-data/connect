@@ -123,7 +123,7 @@ func (a *azureQueueStorage) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg *message.Batch, ackFn input.AsyncAckFn, err error) {
+func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
 	queueName := a.queueName.String(0, msg)
 	queueURL := a.serviceURL.NewQueueURL(queueName)
 	messageURL := queueURL.NewMessagesURL()
@@ -165,7 +165,7 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg *message.B
 			for k, v := range metadata {
 				part.MetaSet(k, v)
 			}
-			msg.Append(part)
+			msg = append(msg, part)
 			dqm[i] = queueMsg
 		}
 		return msg, func(ctx context.Context, res error) error {

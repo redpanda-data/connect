@@ -48,7 +48,7 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 	defer batchPolicy.CloseAsync()
 
 	var nextTimedBatchChan <-chan time.Time
-	var flushBatch func(context.Context, chan<- asyncMessage, *message.Batch, int64) bool
+	var flushBatch func(context.Context, chan<- asyncMessage, message.Batch, int64) bool
 	if k.conf.CheckpointLimit > 1 {
 		flushBatch = k.asyncCheckpointer(claim.Topic(), claim.Partition())
 	} else {

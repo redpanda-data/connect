@@ -54,29 +54,29 @@ func newSplit(conf processor.SplitConfig, mgr bundle.NewManagement) (*splitProc,
 	}, nil
 }
 
-func (s *splitProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+func (s *splitProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	if msg.Len() == 0 {
 		return nil, nil
 	}
 
-	msgs := []*message.Batch{}
+	msgs := []message.Batch{}
 
 	nextMsg := message.QuickBatch(nil)
 	byteSize := 0
 
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		if (s.size > 0 && nextMsg.Len() >= s.size) ||
-			(s.byteSize > 0 && (byteSize+len(p.Get())) > s.byteSize) {
+			(s.byteSize > 0 && (byteSize+len(p.AsBytes())) > s.byteSize) {
 			if nextMsg.Len() > 0 {
 				msgs = append(msgs, nextMsg)
 				nextMsg = message.QuickBatch(nil)
 				byteSize = 0
 			} else {
-				s.log.Warnf("A single message exceeds the target batch byte size of '%v', actual size: '%v'", s.byteSize, len(p.Get()))
+				s.log.Warnf("A single message exceeds the target batch byte size of '%v', actual size: '%v'", s.byteSize, len(p.AsBytes()))
 			}
 		}
-		nextMsg.Append(p)
-		byteSize += len(p.Get())
+		nextMsg = append(nextMsg, p)
+		byteSize += len(p.AsBytes())
 		return nil
 	})
 

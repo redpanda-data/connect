@@ -49,7 +49,7 @@ func TestFunctionExamples(t *testing.T) {
 						require.EqualError(t, err, exp, fmt.Sprintf("%v-%v", i, j))
 					} else {
 						require.NoError(t, err)
-						assert.Equal(t, exp, string(p.Get()), fmt.Sprintf("%v-%v", i, j))
+						assert.Equal(t, exp, string(p.AsBytes()), fmt.Sprintf("%v-%v", i, j))
 					}
 				}
 			}
@@ -100,7 +100,7 @@ func TestMethodExamples(t *testing.T) {
 						require.Nil(t, p)
 					} else {
 						require.NoError(t, err)
-						assert.Equal(t, exp, string(p.Get()), fmt.Sprintf("%v-%v", i, j))
+						assert.Equal(t, exp, string(p.AsBytes()), fmt.Sprintf("%v-%v", i, j))
 					}
 				}
 			}
@@ -118,7 +118,7 @@ func TestMethodExamples(t *testing.T) {
 							require.EqualError(t, err, exp, fmt.Sprintf("%v-%v-%v", target.Category, i, j))
 						} else {
 							require.NoError(t, err)
-							assert.Equal(t, exp, string(p.Get()), fmt.Sprintf("%v-%v-%v", target.Category, i, j))
+							assert.Equal(t, exp, string(p.AsBytes()), fmt.Sprintf("%v-%v-%v", target.Category, i, j))
 						}
 					}
 				}

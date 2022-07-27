@@ -71,8 +71,8 @@ func TestSwitchNoConditions(t *testing.T) {
 		for j := 0; j < nOutputs; j++ {
 			select {
 			case ts := <-mockOutputs[j].TChan:
-				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+				if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 				}
 				resFnSlice = append(resFnSlice, ts.Ack)
 			case <-time.After(time.Second):
@@ -127,8 +127,8 @@ func TestSwitchNoRetries(t *testing.T) {
 		for j := 0; j < nOutputs; j++ {
 			select {
 			case ts := <-mockOutputs[j].TChan:
-				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+				if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 				}
 				resFnSlice = append(resFnSlice, ts.Ack)
 			case <-time.After(time.Second):
@@ -214,7 +214,7 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 	errContents := []string{}
 	bOut.WalkParts(func(i int, p *message.Part, e error) bool {
 		if e != nil {
-			errContents = append(errContents, string(p.Get()))
+			errContents = append(errContents, string(p.AsBytes()))
 			assert.EqualError(t, e, "meow")
 		}
 		return true
@@ -298,7 +298,7 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 		errContents := []string{}
 		bOut.WalkParts(func(i int, p *message.Part, e error) bool {
 			if e != nil {
-				errContents = append(errContents, string(p.Get()))
+				errContents = append(errContents, string(p.AsBytes()))
 				assert.EqualError(t, e, fmt.Sprintf("err %v", i))
 			}
 			return true
@@ -356,7 +356,7 @@ func TestSwitchWithConditions(t *testing.T) {
 					closed++
 					continue outputLoop
 				}
-				if act := string(ts.Payload.Get(0).Get()); act != bar {
+				if act := string(ts.Payload.Get(0).AsBytes()); act != bar {
 					t.Errorf("Expected output 0 msgs to equal %s, got %s", bar, act)
 				}
 			case ts, ok = <-mockOutputs[1].TChan:
@@ -364,7 +364,7 @@ func TestSwitchWithConditions(t *testing.T) {
 					closed++
 					continue outputLoop
 				}
-				if act := string(ts.Payload.Get(0).Get()); act != baz {
+				if act := string(ts.Payload.Get(0).AsBytes()); act != baz {
 					t.Errorf("Expected output 1 msgs to equal %s, got %s", baz, act)
 				}
 			case ts, ok = <-mockOutputs[2].TChan:
@@ -372,7 +372,7 @@ func TestSwitchWithConditions(t *testing.T) {
 					closed++
 					continue outputLoop
 				}
-				if act := string(ts.Payload.Get(0).Get()); act == bar || act == baz {
+				if act := string(ts.Payload.Get(0).AsBytes()); act == bar || act == baz {
 					t.Errorf("Expected output 2 msgs to not equal %s or %s, got %s", bar, baz, act)
 				}
 			case <-time.After(time.Second):
@@ -455,13 +455,13 @@ func TestSwitchError(t *testing.T) {
 		select {
 		case ts = <-mockOutputs[0].TChan:
 			assert.Equal(t, 1, ts.Payload.Len())
-			assert.Equal(t, `{"foo":"bar"}`, string(ts.Payload.Get(0).Get()))
+			assert.Equal(t, `{"foo":"bar"}`, string(ts.Payload.Get(0).AsBytes()))
 		case ts = <-mockOutputs[1].TChan:
 			assert.Equal(t, 1, ts.Payload.Len())
-			assert.Equal(t, `{"foo":"baz"}`, string(ts.Payload.Get(0).Get()))
+			assert.Equal(t, `{"foo":"baz"}`, string(ts.Payload.Get(0).AsBytes()))
 		case ts = <-mockOutputs[2].TChan:
 			assert.Equal(t, 1, ts.Payload.Len())
-			assert.Equal(t, `{"foo":"buz"}`, string(ts.Payload.Get(0).Get()))
+			assert.Equal(t, `{"foo":"buz"}`, string(ts.Payload.Get(0).AsBytes()))
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for output to propagate")
 		}
@@ -521,13 +521,13 @@ func TestSwitchBatchSplit(t *testing.T) {
 		select {
 		case ts = <-mockOutputs[0].TChan:
 			assert.Equal(t, 1, ts.Payload.Len())
-			assert.Equal(t, `{"foo":"bar"}`, string(ts.Payload.Get(0).Get()))
+			assert.Equal(t, `{"foo":"bar"}`, string(ts.Payload.Get(0).AsBytes()))
 		case ts = <-mockOutputs[1].TChan:
 			assert.Equal(t, 1, ts.Payload.Len())
-			assert.Equal(t, `{"foo":"baz"}`, string(ts.Payload.Get(0).Get()))
+			assert.Equal(t, `{"foo":"baz"}`, string(ts.Payload.Get(0).AsBytes()))
 		case ts = <-mockOutputs[2].TChan:
 			assert.Equal(t, 1, ts.Payload.Len())
-			assert.Equal(t, `{"foo":"buz"}`, string(ts.Payload.Get(0).Get()))
+			assert.Equal(t, `{"foo":"buz"}`, string(ts.Payload.Get(0).AsBytes()))
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for output to propagate")
 		}
@@ -586,10 +586,10 @@ func TestSwitchBatchGroup(t *testing.T) {
 		t.Error("did not expect message route to 0")
 	case ts = <-mockOutputs[1].TChan:
 		assert.Equal(t, 4, ts.Payload.Len())
-		assert.Equal(t, `{"foo":"baz"}`, string(ts.Payload.Get(0).Get()))
-		assert.Equal(t, `{"foo":"bar"}`, string(ts.Payload.Get(1).Get()))
-		assert.Equal(t, `{"foo":"buz"}`, string(ts.Payload.Get(2).Get()))
-		assert.Equal(t, `{"foo":"nope"}`, string(ts.Payload.Get(3).Get()))
+		assert.Equal(t, `{"foo":"baz"}`, string(ts.Payload.Get(0).AsBytes()))
+		assert.Equal(t, `{"foo":"bar"}`, string(ts.Payload.Get(1).AsBytes()))
+		assert.Equal(t, `{"foo":"buz"}`, string(ts.Payload.Get(2).AsBytes()))
+		assert.Equal(t, `{"foo":"nope"}`, string(ts.Payload.Get(3).AsBytes()))
 	case ts = <-mockOutputs[2].TChan:
 		t.Error("did not expect message route to 2")
 	case <-time.After(time.Second):
@@ -728,7 +728,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 						closed++
 						continue outputLoop
 					}
-					if act := string(ts.Payload.Get(0).Get()); act != bar {
+					if act := string(ts.Payload.Get(0).AsBytes()); act != bar {
 						t.Errorf("Expected output 0 msgs to equal %s, got %s", bar, act)
 					}
 					resFns = append(resFns, ts.Ack)
@@ -737,7 +737,7 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 						closed++
 						continue outputLoop
 					}
-					if act := string(ts.Payload.Get(0).Get()); act != baz {
+					if act := string(ts.Payload.Get(0).AsBytes()); act != baz {
 						t.Errorf("Expected output 1 msgs to equal %s, got %s", baz, act)
 					}
 					resFns = append(resFns, ts.Ack)

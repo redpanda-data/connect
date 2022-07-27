@@ -61,6 +61,35 @@ output:
 			},
 		},
 		{
+			name: "pipeline processors chained",
+			confFn: func(iterations int) string {
+				return fmt.Sprintf(`
+input:
+  generate:
+    count: %v
+    interval: ""
+    mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
+      root.id = uuid_v4()
+      root.name = fake("name")
+      root.mobile = fake("phone_number")
+      root.site = fake("url")
+
+pipeline:
+  processors:
+    - jq:
+        query: '{id: .id, name: .name, mobile: .mobile, site: .site}'
+    - jq:
+        query: '{id: .id, name: .name, mobile: .mobile, site: .site}'
+    - jq:
+        query: '{id: .id, name: .name, mobile: .mobile, site: .site}'
+
+output:
+  drop: {}
+`, iterations)
+			},
+		},
+		{
 			name: "basic mapping",
 			confFn: func(iterations int) string {
 				return fmt.Sprintf(`
@@ -83,6 +112,36 @@ pipeline:
         root = this
         root.loud_name = this.name.uppercase()
         root.good_friends = this.friends.filter(f -> f.lowercase().contains("a"))
+
+output:
+  drop: {}
+`, iterations)
+			},
+		},
+		{
+			name: "basic mapping as branch",
+			confFn: func(iterations int) string {
+				return fmt.Sprintf(`
+input:
+  generate:
+    count: %v
+    interval: ""
+    mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
+      root.id = uuid_v4()
+      root.name = fake("name")
+      root.mobile = fake("phone_number")
+      root.site = fake("url")
+      root.email = fake("email")
+      root.friends = range(0, (random_int() %% 10) + 1).map_each(fake("name"))
+
+pipeline:
+  processors:
+    - branch:
+        processors: [ noop: {} ]
+        result_map: |
+          root.loud_name = this.name.uppercase()
+          root.good_friends = this.friends.filter(f -> f.lowercase().contains("a"))
 
 output:
   drop: {}
@@ -204,6 +263,84 @@ pipeline:
         root.loud_name = this.name.uppercase()
         root.good_friends = this.friends.filter(f -> f.lowercase().contains("a"))
         root.meows = this.meows.map_each_key(key -> key.uppercase())
+
+output:
+  drop: {}
+`, iterations)
+			},
+		},
+		{
+			name: "basic branch processors",
+			confFn: func(iterations int) string {
+				return fmt.Sprintf(`
+input:
+  generate:
+    count: %v
+    interval: ""
+    mapping: |
+      meta = {"foo":"foo value","bar":(random_int()%%10).string()}
+      root.id = uuid_v4()
+      root.name = fake("name")
+      root.email = fake("email")
+
+pipeline:
+  processors:
+    - branch:
+        request_map: |
+          root.foo = meta("foo")
+          root.email = this.email
+        processors:
+          - bloblang: root = content().uppercase()
+        result_map: |
+          root.foo_stuff = content().string()
+    - branch:
+        request_map: |
+          root.bar = meta("bar")
+          root.name = this.name
+        processors:
+          - bloblang: root = content().uppercase()
+        result_map: |
+          root.bar_stuff = content().string()
+
+output:
+  drop: {}
+`, iterations)
+			},
+		},
+		{
+			name: "basic workflow processors",
+			confFn: func(iterations int) string {
+				return fmt.Sprintf(`
+input:
+  generate:
+    count: %v
+    interval: ""
+    mapping: |
+      meta = {"foo":"foo value","bar":(random_int()%%10).string()}
+      root.id = uuid_v4()
+      root.name = fake("name")
+      root.email = fake("email")
+
+pipeline:
+  processors:
+    - workflow:
+        branches:
+          foo_stuff:
+            request_map: |
+              root.foo = meta("foo")
+              root.email = this.email
+            processors:
+              - bloblang: root = content().uppercase()
+            result_map: |
+              root.foo_stuff = content().string()
+          bar_stuff:
+            request_map: |
+              root.bar = meta("bar")
+              root.name = this.name
+            processors:
+              - bloblang: root = content().uppercase()
+            result_map: |
+              root.bar_stuff = content().string()
 
 output:
   drop: {}

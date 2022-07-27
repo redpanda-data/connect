@@ -22,7 +22,7 @@ func TestResourceProc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mgr.Processors["foo"] = func(b *message.Batch) ([]*message.Batch, error) {
+	mgr.Processors["foo"] = func(b message.Batch) ([]message.Batch, error) {
 		msgs, res := resProc.ProcessMessage(b)
 		if res != nil {
 			return nil, res
@@ -46,7 +46,7 @@ func TestResourceProc(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Error("Expected only 1 message")
 	}
-	if exp, act := "foo: bar", string(msgs[0].Get(0).Get()); exp != act {
+	if exp, act := "foo: bar", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }

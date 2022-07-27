@@ -165,7 +165,7 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 	return *f.scannerInfo, nil
 }
 
-func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (f *fileConsumer) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	for {
 		scannerInfo, err := f.getReader(ctx)
 		if err != nil {
@@ -192,7 +192,7 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, inp
 
 		msg := message.QuickBatch(nil)
 		for _, part := range parts {
-			if len(part.Get()) == 0 {
+			if len(part.AsBytes()) == 0 {
 				continue
 			}
 
@@ -200,7 +200,7 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (*message.Batch, inp
 			part.MetaSet("mod_time_unix", modTimeUnix)
 			part.MetaSet("mod_time", modTime)
 
-			msg.Append(part)
+			msg = append(msg, part)
 		}
 		if msg.Len() == 0 {
 			_ = codecAckFn(ctx, nil)

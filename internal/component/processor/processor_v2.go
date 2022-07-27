@@ -30,7 +30,7 @@ type V2Batched interface {
 	// Process a batch of messages into one or more resulting batches, or return
 	// an error if the entire batch could not be processed. If zero messages are
 	// returned and the error is nil then all messages are filtered.
-	ProcessBatch(ctx context.Context, spans []*tracing.Span, b *message.Batch) ([]*message.Batch, error)
+	ProcessBatch(ctx context.Context, spans []*tracing.Span, b message.Batch) ([]message.Batch, error)
 
 	// Close the component, blocks until either the underlying resources are
 	// cleaned up or the context is cancelled. Returns an error if the context
@@ -69,23 +69,21 @@ func NewV2ToV1Processor(typeStr string, p V2, mgr component.Observability) V1 {
 	}
 }
 
-func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
+func (a *v2ToV1Processor) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
 	a.mReceived.Incr(int64(msg.Len()))
 	a.mBatchReceived.Incr(1)
 
 	tStarted := time.Now()
 
 	newParts := make([]*message.Part, 0, msg.Len())
-
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		span := tracing.CreateChildSpan(a.mgr.Tracer(), a.typeStr, part)
 
 		nextParts, err := a.p.Process(context.Background(), part)
 		if err != nil {
-			newPart := part.Copy()
 			a.mError.Incr(1)
-			MarkErr(newPart, span, err)
-			nextParts = append(nextParts, newPart)
+			MarkErr(part, span, err)
+			nextParts = append(nextParts, part)
 		}
 
 		span.Finish()
@@ -100,12 +98,9 @@ func (a *v2ToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, 
 		return nil, nil
 	}
 
-	newMsg := message.QuickBatch(nil)
-	newMsg.SetAll(newParts)
-
-	a.mSent.Incr(int64(newMsg.Len()))
+	a.mSent.Incr(int64(len(newParts)))
 	a.mBatchSent.Incr(1)
-	return []*message.Batch{newMsg}, nil
+	return []message.Batch{newParts}, nil
 }
 
 func (a *v2ToV1Processor) CloseAsync() {
@@ -157,7 +152,7 @@ func NewV2BatchedToV1Processor(typeStr string, p V2Batched, mgr component.Observ
 	}
 }
 
-func (a *v2BatchedToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
+func (a *v2BatchedToV1Processor) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
 	a.mReceived.Incr(int64(msg.Len()))
 	a.mBatchReceived.Incr(1)
 
@@ -167,12 +162,11 @@ func (a *v2BatchedToV1Processor) ProcessMessage(msg *message.Batch) ([]*message.
 	outputBatches, err := a.p.ProcessBatch(context.Background(), spans, msg)
 	if err != nil {
 		a.mError.Incr(1)
-		outputBatch := msg.Copy()
-		_ = outputBatch.Iter(func(i int, p *message.Part) error {
+		_ = msg.Iter(func(i int, p *message.Part) error {
 			MarkErr(p, spans[i], err)
 			return nil
 		})
-		outputBatches = append(outputBatches, outputBatch)
+		outputBatches = append(outputBatches, msg)
 	}
 
 	for _, s := range spans {

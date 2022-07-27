@@ -193,8 +193,8 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 type mockProc struct {
 }
 
-func (m mockProc) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	msgs := [1]*message.Batch{msg}
+func (m mockProc) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+	msgs := [1]message.Batch{msg}
 	return msgs[:], nil
 }
 
@@ -251,7 +251,7 @@ func TestBasicWrapProcessors(t *testing.T) {
 	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
-		} else if exp, act := "baz", string(ts.Payload.Get(0).Get()); exp != act {
+		} else if exp, act := "baz", string(ts.Payload.Get(0).AsBytes()); exp != act {
 			t.Errorf("Wrong message received: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):
@@ -321,7 +321,7 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 	case ts, open = <-newInput.TransactionChan():
 		if !open {
 			t.Error("channel was closed")
-		} else if exp, act := "baz", string(ts.Payload.Get(0).Get()); exp != act {
+		} else if exp, act := "baz", string(ts.Payload.Get(0).AsBytes()); exp != act {
 			t.Errorf("Wrong message received: %v != %v", act, exp)
 		}
 	case <-time.After(time.Second):

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -77,7 +78,7 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	readerImpl.msgsToSnd = []*message.Batch{
+	readerImpl.msgsToSnd = []message.Batch{
 		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
 	pres := input.NewAsyncPreserver(readerImpl)
@@ -166,7 +167,7 @@ func TestAsyncPreserverCloseThenAck(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	readerImpl.msgsToSnd = []*message.Batch{
+	readerImpl.msgsToSnd = []message.Batch{
 		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
 	pres := input.NewAsyncPreserver(readerImpl)
@@ -242,7 +243,7 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	readerImpl.msgsToSnd = []*message.Batch{
+	readerImpl.msgsToSnd = []message.Batch{
 		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
 	pres := input.NewAsyncPreserver(readerImpl)
@@ -328,6 +329,120 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 	wg.Wait()
 }
 
+func TestAsyncPreserverMutateThenNack(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+
+	msg := message.NewPart(nil)
+	msg.SetStructuredMut(map[string]interface{}{
+		"hello": "world",
+	})
+
+	batch := message.Batch{msg}
+
+	readerImpl := newMockAsyncReaderBlocked()
+	readerImpl.msgsToSnd = []message.Batch{batch}
+	pres := input.NewAsyncPreserver(readerImpl)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		select {
+		case readerImpl.connChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.readChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.readChan <- component.ErrTypeClosed:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.readChan <- component.ErrTypeClosed:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.ackChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.unblockCloseAsyncChan <- struct{}{}:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+
+		select {
+		case readerImpl.waitForCloseChan <- nil:
+		case <-ctx.Done():
+			t.Error("Timed out")
+		}
+	}()
+
+	err := pres.ConnectWithContext(ctx)
+	assert.NoError(t, err)
+
+	msgOne, ackFn1, err := pres.ReadWithContext(ctx)
+	assert.NoError(t, err)
+	require.Equal(t, 1, msgOne.Len())
+
+	mStruct, err := msgOne.Get(0).AsStructuredMut()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{
+		"hello": "world",
+	}, mStruct)
+
+	_, err = gabs.Wrap(mStruct).Set("woof", "meow")
+	require.NoError(t, err)
+
+	go func() {
+		time.Sleep(time.Millisecond * 100)
+		assert.NoError(t, ackFn1(ctx, errors.New("huh")))
+	}()
+
+	_, _, err = pres.ReadWithContext(ctx)
+	assert.Equal(t, component.ErrTimeout, err)
+
+	msgTwo, ackFn2, err := pres.ReadWithContext(ctx)
+	require.NoError(t, err)
+
+	mStruct, err = msgTwo.Get(0).AsStructuredMut()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{
+		"hello": "world",
+	}, mStruct)
+
+	go func() {
+		time.Sleep(time.Millisecond * 100)
+		assert.NoError(t, ackFn2(ctx, nil))
+	}()
+
+	_, _, err = pres.ReadWithContext(ctx)
+	assert.Equal(t, component.ErrTypeClosed, err)
+
+	pres.CloseAsync()
+	err = pres.WaitForClose(time.Second)
+	assert.NoError(t, err)
+
+	wg.Wait()
+}
+
 func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 	t.Parallel()
 
@@ -335,7 +450,7 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 	defer cancel()
 
 	readerImpl := newMockAsyncReaderBlocked()
-	readerImpl.msgsToSnd = []*message.Batch{
+	readerImpl.msgsToSnd = []message.Batch{
 		message.QuickBatch([][]byte{[]byte("hello world")}),
 	}
 	pres := input.NewAsyncPreserver(readerImpl)
@@ -436,7 +551,7 @@ func TestAsyncPreserverHappy(t *testing.T) {
 			t.Error("Timed out")
 		}
 		for _, p := range expParts {
-			readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch([][]byte{p})}
+			readerImpl.msgsToSnd = []message.Batch{message.QuickBatch([][]byte{p})}
 			select {
 			case readerImpl.readChan <- nil:
 			case <-time.After(time.Second):
@@ -454,7 +569,7 @@ func TestAsyncPreserverHappy(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if act := msg.Get(0).Get(); !reflect.DeepEqual(act, exp) {
+		if act := msg.Get(0).AsBytes(); !reflect.DeepEqual(act, exp) {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	}
@@ -575,7 +690,7 @@ func TestAsyncPreserverBatchError(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
-		readerImpl.msgsToSnd = []*message.Batch{
+		readerImpl.msgsToSnd = []message.Batch{
 			message.QuickBatch([][]byte{
 				[]byte("foo"),
 				[]byte("bar"),
@@ -638,7 +753,7 @@ func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Error("Timed out")
 		}
-		readerImpl.msgsToSnd = []*message.Batch{
+		readerImpl.msgsToSnd = []message.Batch{
 			message.QuickBatch([][]byte{
 				[]byte("foo"),
 				[]byte("bar"),
@@ -670,12 +785,13 @@ func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
 		[]byte("bev"),
 	}, message.GetAllBytes(msg))
 
-	bMsg := message.QuickBatch(nil)
-	bMsg.Append(msg.Get(1))
-	bMsg.Append(msg.Get(3))
-	bMsg.Append(msg.Get(0))
-	bMsg.Append(msg.Get(4))
-	bMsg.Append(msg.Get(2))
+	bMsg := message.Batch{
+		msg.Get(1),
+		msg.Get(3),
+		msg.Get(0),
+		msg.Get(4),
+		msg.Get(2),
+	}
 
 	bErr := batch.NewError(bMsg, errors.New("first"))
 	bErr.Failed(1, errors.New("second"))
@@ -705,7 +821,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	pres := input.NewAsyncPreserver(readerImpl)
 
 	sendMsg := func(content string) {
-		readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch(
+		readerImpl.msgsToSnd = []message.Batch{message.QuickBatch(
 			[][]byte{[]byte(content)},
 		)}
 		select {
@@ -732,7 +848,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0).Get()); exp != act {
+	if act := string(msg.Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp)
 	}
 
@@ -745,7 +861,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0).Get()); exp != act {
+	if act := string(msg.Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp)
 	}
 
@@ -755,7 +871,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0).Get()); exp2 != act {
+	if act := string(msg.Get(0).AsBytes()); exp2 != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp2)
 	}
 
@@ -768,14 +884,14 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0).Get()); exp != act {
+	if act := string(msg.Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp)
 	}
 	msg, aFn2, err = pres.ReadWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0).Get()); exp2 != act {
+	if act := string(msg.Get(0).AsBytes()); exp2 != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp2)
 	}
 
@@ -792,7 +908,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act := string(msg.Get(0).Get()); exp3 != act {
+	if act := string(msg.Get(0).AsBytes()); exp3 != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp3)
 	}
 }
@@ -807,7 +923,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 	pres := input.NewAsyncPreserver(readerImpl)
 
 	sendMsg := func(content string) {
-		readerImpl.msgsToSnd = []*message.Batch{message.QuickBatch(
+		readerImpl.msgsToSnd = []message.Batch{message.QuickBatch(
 			[][]byte{[]byte(content)},
 		)}
 		select {
@@ -838,7 +954,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 			t.Fatal(err)
 		}
 		ackFns = append(ackFns, aFn)
-		if act := string(msg.Get(0).Get()); exp != act {
+		if act := string(msg.Get(0).AsBytes()); exp != act {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	}
@@ -855,7 +971,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 			t.Fatal(err)
 		}
 		ackFns = append(ackFns, aFn)
-		if act := string(msg.Get(0).Get()); exp != act {
+		if act := string(msg.Get(0).AsBytes()); exp != act {
 			t.Errorf("Wrong message returned: %v != %v", act, exp)
 		}
 	}
