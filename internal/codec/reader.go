@@ -16,10 +16,11 @@ import (
 	"strings"
 	"sync"
 
+	goavro "github.com/linkedin/goavro/v2"
+
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/service"
-	goavro "github.com/linkedin/goavro/v2"
 )
 
 // ReaderDocs is a static field documentation for input codecs.
@@ -403,16 +404,18 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 			}
 			part := message.NewPart(mp)
 			return part, nil
-		} else {
-			jb, err := a.avroCodec.TextualFromNative(nil, datum)
-			if err != nil {
-				return nil, err
-			}
-			m.SetBytes(jb)
-			mp, err := m.AsBytes()
-			part := message.NewPart(mp)
-			return part, nil
 		}
+		jb, err := a.avroCodec.TextualFromNative(nil, datum)
+		if err != nil {
+			return nil, err
+		}
+		m.SetBytes(jb)
+		mp, err := m.AsBytes()
+		if err != nil {
+			return nil, err
+		}
+		part := message.NewPart(mp)
+		return part, nil
 	}
 
 	var logicalTypes bool
