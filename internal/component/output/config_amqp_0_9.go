@@ -30,6 +30,7 @@ type AMQPConfig struct {
 	Mandatory       bool                         `json:"mandatory" yaml:"mandatory"`
 	Immediate       bool                         `json:"immediate" yaml:"immediate"`
 	TLS             btls.Config                  `json:"tls" yaml:"tls"`
+	Timeout         string                       `json:"timeout" yaml:"timeout"`
 }
 
 // NewAMQPConfig creates a new AMQPConfig with default values.
@@ -53,5 +54,6 @@ func NewAMQPConfig() AMQPConfig {
 		Mandatory:       false,
 		Immediate:       false,
 		TLS:             btls.NewConfig(),
+		Timeout:         "",
 	}
 }

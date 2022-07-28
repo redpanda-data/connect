@@ -79,6 +79,7 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 			docs.FieldBool("persistent", "Whether message delivery should be persistent (transient by default).").Advanced().HasDefault(false),
 			docs.FieldBool("mandatory", "Whether to set the mandatory flag on published messages. When set if a published message is routed to zero queues it is returned.").Advanced().HasDefault(false),
 			docs.FieldBool("immediate", "Whether to set the immediate flag on published messages. When set if there are no ready consumers of a queue then the message is dropped instead of waiting.").Advanced().HasDefault(false),
+			docs.FieldString("timeout", "The maximum period to wait before abandoning it and reattempting. If not set, wait indefinitely.").Advanced().HasDefault(""),
 			btls.FieldSpec(),
 		),
 		Categories: []string{
@@ -107,6 +108,7 @@ type amqp09Writer struct {
 	conn       *amqp.Connection
 	amqpChan   *amqp.Channel
 	returnChan <-chan amqp.Return
+	timeout    time.Duration
 
 	deliveryMode uint8
 
@@ -114,10 +116,18 @@ type amqp09Writer struct {
 }
 
 func newAMQP09Writer(mgr bundle.NewManagement, conf output.AMQPConfig, log log.Modular) (*amqp09Writer, error) {
+	var timeout time.Duration
+	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
+		if timeout, err = time.ParseDuration(tout); err != nil {
+			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
+		}
+	}
 	a := amqp09Writer{
 		log:          log,
 		conf:         conf,
 		deliveryMode: amqp.Transient,
+		timeout:      timeout,
 	}
 	var err error
 	if a.metaFilter, err = conf.Metadata.Filter(); err != nil {
@@ -223,7 +233,7 @@ func (a *amqp09Writer) disconnect() error {
 	return nil
 }
 
-func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *amqp09Writer) WriteWithContext(wctx context.Context, msg *message.Batch) error {
 	a.connLock.RLock()
 	conn := a.conn
 	amqpChan := a.amqpChan
@@ -232,6 +242,17 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 
 	if conn == nil {
 		return component.ErrNotConnected
+	}
+
+	var ctx context.Context
+	if a.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(
+			wctx, a.timeout,
+		)
+		defer cancel()
+	} else {
+		ctx = wctx
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
@@ -258,7 +279,8 @@ func (a *amqp09Writer) WriteWithContext(ctx context.Context, msg *message.Batch)
 			return nil
 		})
 
-		conf, err := amqpChan.PublishWithDeferredConfirm(
+		conf, err := amqpChan.PublishWithDeferredConfirmWithContext(
+			ctx,
 			a.conf.Exchange,  // publish to an exchange
 			bindingKey,       // routing to 0 or more queues
 			a.conf.Mandatory, // mandatory
