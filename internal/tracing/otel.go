@@ -173,12 +173,9 @@ func InitSpansFromParentTextMap(prov trace.TracerProvider, operationName string,
 
 // FinishSpans calls Finish on all message parts containing a span.
 func FinishSpans(msg message.Batch) {
-	_ = msg.Iter(func(i int, p *message.Part) error {
-		span := GetSpan(p)
-		if span == nil {
-			return nil
+	for _, p := range msg {
+		if span := GetSpan(p); span != nil {
+			span.unwrap().End()
 		}
-		span.unwrap().End()
-		return nil
-	})
+	}
 }

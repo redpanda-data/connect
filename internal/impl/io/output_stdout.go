@@ -24,9 +24,6 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		if aw, ok := w.(*output.AsyncWriter); ok {
-			aw.SetNoCancel()
-		}
 		return w, nil
 	}), docs.ComponentSpec{
 		Name: "stdout",

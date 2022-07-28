@@ -83,29 +83,14 @@ func (w *AsyncWriter) SetInjectTracingMap(exec *mapping.Executor) {
 	w.injectTracingMap = exec
 }
 
-// SetNoCancel configures the async writer so that write calls do not use a
-// context that gets cancelled on shutdown. This is much more efficient as it
-// reduces allocations, goroutines and defers for each write call, but also
-// means the write can block graceful termination. Therefore this setting should
-// be reserved for outputs that are exceptionally fast.
-func (w *AsyncWriter) SetNoCancel() {
-	w.noCancel = true
-}
-
 //------------------------------------------------------------------------------
 
-func (w *AsyncWriter) latencyMeasuringWrite(msg message.Batch) (latencyNs int64, err error) {
+func (w *AsyncWriter) latencyMeasuringWrite(ctx context.Context, msg message.Batch) (latencyNs int64, err error) {
 	t0 := time.Now()
-	var ctx context.Context
-	if w.noCancel {
-		ctx = context.Background()
-	} else {
-		var done func()
-		ctx, done = w.shutSig.CloseAtLeisureCtx(context.Background())
-		defer done()
-	}
 	err = w.writer.WriteWithContext(ctx, msg)
-	latencyNs = time.Since(t0).Nanoseconds()
+	if latencyNs = time.Since(t0).Nanoseconds(); latencyNs < 1 {
+		latencyNs = 1
+	}
 	return latencyNs, err
 }
 
@@ -144,6 +129,8 @@ func (w *AsyncWriter) loop() {
 		mConn       = w.stats.GetCounter("output_connection_up")
 		mFailedConn = w.stats.GetCounter("output_connection_failed")
 		mLostConn   = w.stats.GetCounter("output_connection_lost")
+
+		traceName = "output_" + w.typeStr
 	)
 
 	defer func() {
@@ -163,10 +150,8 @@ func (w *AsyncWriter) loop() {
 	defer done()
 
 	initConnection := func() bool {
-		initConnCtx, initConnDone := w.shutSig.CloseAtLeisureCtx(context.Background())
-		defer initConnDone()
 		for {
-			if err := w.writer.ConnectWithContext(initConnCtx); err != nil {
+			if err := w.writer.ConnectWithContext(closeLeisureCtx); err != nil {
 				if w.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
 					return false
 				}
@@ -174,7 +159,7 @@ func (w *AsyncWriter) loop() {
 				mFailedConn.Incr(1)
 				select {
 				case <-time.After(connBackoff.NextBackOff()):
-				case <-initConnCtx.Done():
+				case <-closeLeisureCtx.Done():
 					return false
 				}
 			} else {
@@ -202,7 +187,7 @@ func (w *AsyncWriter) loop() {
 		// If another goroutine got here first and we're able to send over the
 		// connection, then we gracefully accept defeat.
 		if atomic.LoadInt32(&w.isConnected) == 1 {
-			if latency, err = w.latencyMeasuringWrite(msg); err != component.ErrNotConnected {
+			if latency, err = w.latencyMeasuringWrite(closeLeisureCtx, msg); err != component.ErrNotConnected {
 				return
 			} else if err != nil {
 				mError.Incr(1)
@@ -216,7 +201,7 @@ func (w *AsyncWriter) loop() {
 				err = component.ErrTypeClosed
 				return
 			}
-			if latency, err = w.latencyMeasuringWrite(msg); err != component.ErrNotConnected {
+			if latency, err = w.latencyMeasuringWrite(closeLeisureCtx, msg); err != component.ErrNotConnected {
 				atomic.StoreInt32(&w.isConnected, 1)
 				mConn.Incr(1)
 				return
@@ -242,10 +227,10 @@ func (w *AsyncWriter) loop() {
 			}
 
 			w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
-			spans := tracing.CreateChildSpans(w.tracer, "output_"+w.typeStr, ts.Payload)
+			spans := tracing.CreateChildSpans(w.tracer, traceName, ts.Payload)
 			w.injectSpans(ts.Payload, spans)
 
-			latency, err := w.latencyMeasuringWrite(ts.Payload)
+			latency, err := w.latencyMeasuringWrite(closeLeisureCtx, ts.Payload)
 
 			// If our writer says it is not connected.
 			if err == component.ErrNotConnected {
