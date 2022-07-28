@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `batch_size` added to the `generate` input.
+- The `amqp_0_9` output now supports setting the `timeout` of publish.
 
 ### Fixed
 
