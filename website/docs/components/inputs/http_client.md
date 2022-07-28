@@ -722,6 +722,7 @@ Requires version 3.42.0 or newer
 |---|---|
 | `auto` | EXPERIMENTAL: Attempts to derive a codec for each file based on information such as the extension. For example, a .tar.gz file would be consumed with the `gzip/tar` codec. Defaults to all-bytes. |
 | `all-bytes` | Consume the entire file as a single binary message. |
+| `avro-ocf:marshaler=x` | EXPERIMENTAL: Consume the file by individual datum. Marshaler options: `goavro`, `json`. Use `goavro` if OCF contains logical types. |
 | `chunker:x` | Consume the file in chunks of a given number of bytes. |
 | `csv` | Consume structured rows as comma separated values, the first row must be a header row. |
 | `csv:x` | Consume structured rows as values separated by a custom delimiter, the first row must be a header row. The custom delimiter must be a single character, e.g. the codec `"csv:\t"` would consume a tab delimited file. |
