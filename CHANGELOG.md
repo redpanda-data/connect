@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `batch_size` added to the `generate` input.
+
 ### Fixed
 
 - The `mongodb` processor and output default `write_concern.w_timeout` empty value no longer causes configuration issues.

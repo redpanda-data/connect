@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -47,6 +46,7 @@ testing your pipeline configs.`,
 				"@every 1s", "0,30 */2 * * * *", "TZ=Europe/London 30 3-6,20-23 * * *",
 			),
 			docs.FieldInt("count", "An optional number of messages to generate, if set above 0 the specified number of messages is generated and then the input will shut down."),
+			docs.FieldInt("batch_size", "The number of generated messages that should be accumulated into each batch flushed at the specified interval.").HasDefault(1),
 		).ChildDefaultAndTypesFromStruct(input.NewGenerateConfig()),
 		Categories: []string{
 			"Utility",
@@ -100,7 +100,8 @@ input:
 //------------------------------------------------------------------------------
 
 type generateReader struct {
-	remaining   int64
+	remaining   int
+	batchSize   int
 	limited     bool
 	firstIsFree bool
 	exec        *mapping.Executor
@@ -140,11 +141,11 @@ func newGenerateReader(mgr bundle.NewManagement, conf input.GenerateConfig) (*ge
 		}
 		return nil, fmt.Errorf("failed to parse mapping: %v", err)
 	}
-	remaining := int64(conf.Count)
 	return &generateReader{
 		exec:        exec,
-		remaining:   remaining,
-		limited:     remaining > 0,
+		remaining:   conf.Count,
+		batchSize:   conf.BatchSize,
+		limited:     conf.Count > 0,
 		timer:       timer,
 		schedule:    schedule,
 		location:    location,
@@ -188,9 +189,13 @@ func (b *generateReader) ConnectWithContext(ctx context.Context) error {
 
 // ReadWithContext a new bloblang generated message.
 func (b *generateReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+	batchSize := b.batchSize
 	if b.limited {
-		if remaining := atomic.AddInt64(&b.remaining, -1); remaining < 0 {
+		if b.remaining <= 0 {
 			return nil, nil, component.ErrTypeClosed
+		}
+		if b.remaining < batchSize {
+			batchSize = b.remaining
 		}
 	}
 
@@ -207,19 +212,24 @@ func (b *generateReader) ReadWithContext(ctx context.Context) (*message.Batch, i
 			return nil, nil, component.ErrTimeout
 		}
 	}
-
 	b.firstIsFree = false
-	p, err := b.exec.MapPart(0, message.QuickBatch(nil))
-	if err != nil {
-		return nil, nil, err
-	}
-	if p == nil {
-		return nil, nil, component.ErrTimeout
-	}
 
 	msg := message.QuickBatch(nil)
-	msg.Append(p)
-
+	for i := 0; i < batchSize; i++ {
+		p, err := b.exec.MapPart(0, message.QuickBatch(nil))
+		if err != nil {
+			return nil, nil, err
+		}
+		if p != nil {
+			if b.limited {
+				b.remaining--
+			}
+			msg.Append(p)
+		}
+	}
+	if msg.Len() == 0 {
+		return nil, nil, component.ErrTimeout
+	}
 	return msg, func(context.Context, error) error { return nil }, nil
 }
 

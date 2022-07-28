@@ -30,6 +30,7 @@ input:
     mapping: ""
     interval: 1s
     count: 0
+    batch_size: 1
 ```
 
 ## Fields
@@ -81,6 +82,14 @@ An optional number of messages to generate, if set above 0 the specified number 
 
 Type: `int`  
 Default: `0`  
+
+### `batch_size`
+
+The number of generated messages that should be accumulated into each batch flushed at the specified interval.
+
+
+Type: `int`  
+Default: `1`  
 
 ## Examples
 

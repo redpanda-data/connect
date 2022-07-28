@@ -4,15 +4,17 @@ package input
 type GenerateConfig struct {
 	Mapping string `json:"mapping" yaml:"mapping"`
 	// internal can be both duration string or cron expression
-	Interval string `json:"interval" yaml:"interval"`
-	Count    int    `json:"count" yaml:"count"`
+	Interval  string `json:"interval" yaml:"interval"`
+	Count     int    `json:"count" yaml:"count"`
+	BatchSize int    `json:"batch_size" yaml:"batch_size"`
 }
 
 // NewGenerateConfig creates a new BloblangConfig with default values.
 func NewGenerateConfig() GenerateConfig {
 	return GenerateConfig{
-		Mapping:  "",
-		Interval: "1s",
-		Count:    0,
+		Mapping:   "",
+		Interval:  "1s",
+		Count:     0,
+		BatchSize: 1,
 	}
 }

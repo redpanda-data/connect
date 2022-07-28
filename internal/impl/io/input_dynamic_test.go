@@ -73,6 +73,7 @@ generate:
     mapping: root.source = "foo"
     interval: 100ms
     count: 0
+    batch_size: 1
 `, res.Body.String())
 
 	i.CloseAsync()

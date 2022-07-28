@@ -141,6 +141,44 @@ func TestBloblangRemaining(t *testing.T) {
 	assert.EqualError(t, err, "type was closed")
 }
 
+func TestBloblangRemainingBatched(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer done()
+
+	conf := input.NewGenerateConfig()
+	conf.Mapping = `root = "foobar"`
+	conf.Interval = "1ms"
+	conf.BatchSize = 2
+	conf.Count = 9
+
+	b, err := newGenerateReader(mock.NewManager(), conf)
+	require.NoError(t, err)
+
+	err = b.ConnectWithContext(ctx)
+	require.NoError(t, err)
+
+	for i := 0; i < 5; i++ {
+		m, _, err := b.ReadWithContext(ctx)
+		require.NoError(t, err)
+		if i == 4 {
+			require.Equal(t, 1, m.Len())
+		} else {
+			require.Equal(t, 2, m.Len())
+			assert.Equal(t, "foobar", string(m.Get(1).Get()))
+		}
+		assert.Equal(t, "foobar", string(m.Get(0).Get()))
+	}
+
+	_, _, err = b.ReadWithContext(ctx)
+	assert.EqualError(t, err, "type was closed")
+
+	_, _, err = b.ReadWithContext(ctx)
+	assert.EqualError(t, err, "type was closed")
+
+	_, _, err = b.ReadWithContext(ctx)
+	assert.EqualError(t, err, "type was closed")
+}
+
 func TestBloblangUnbounded(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer done()
