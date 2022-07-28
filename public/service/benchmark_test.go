@@ -17,56 +17,34 @@ import (
 func BenchmarkStreamPipelines(b *testing.B) {
 	for _, test := range []struct {
 		name   string
-		confFn func(iterations int) string
+		confFn func(iterations, batchSize int) string
 	}{
 		{
 			name: "basic pipeline",
-			confFn: func(iterations int) string {
+			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`
 input:
   generate:
     count: %v
+    batch_size: %v
     interval: ""
     mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
       root.id = uuid_v4()
 
 output:
   drop: {}
-`, iterations)
-			},
-		},
-		{
-			name: "basic pipeline batched",
-			confFn: func(iterations int) string {
-				batchCount := 20
-				messageCount := iterations / batchCount
-				if messageCount <= 0 {
-					messageCount = 1
-				}
-				return fmt.Sprintf(`
-input:
-  generate:
-    count: %v
-    interval: ""
-    mapping: |
-      meta = {"foo":"foo value","bar":"bar value"}
-      root = range(0, %v).map_each({"id": uuid_v4()})
-  processors:
-   - unarchive:
-       format: json_array
-
-output:
-  drop: {}
-`, messageCount, batchCount)
+`, iterations, batchSize)
 			},
 		},
 		{
 			name: "pipeline processors chained",
-			confFn: func(iterations int) string {
+			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`
 input:
   generate:
     count: %v
+    batch_size: %v
     interval: ""
     mapping: |
       meta = {"foo":"foo value","bar":"bar value"}
@@ -86,16 +64,17 @@ pipeline:
 
 output:
   drop: {}
-`, iterations)
+`, iterations, batchSize)
 			},
 		},
 		{
 			name: "basic mapping",
-			confFn: func(iterations int) string {
+			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`
 input:
   generate:
     count: %v
+    batch_size: %v
     interval: ""
     mapping: |
       meta = {"foo":"foo value","bar":"bar value"}
@@ -115,16 +94,45 @@ pipeline:
 
 output:
   drop: {}
-`, iterations)
+`, iterations, batchSize)
 			},
 		},
 		{
-			name: "basic mapping as branch",
-			confFn: func(iterations int) string {
+			name: "basic mapping as input proc",
+			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`
 input:
   generate:
     count: %v
+    batch_size: %v
+    interval: ""
+    mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
+      root.id = uuid_v4()
+      root.name = fake("name")
+      root.mobile = fake("phone_number")
+      root.site = fake("url")
+      root.email = fake("email")
+      root.friends = range(0, (random_int() %% 10) + 1).map_each(fake("name"))
+  processors:
+    - bloblang: |
+        root = this
+        root.loud_name = this.name.uppercase()
+        root.good_friends = this.friends.filter(f -> f.lowercase().contains("a"))
+
+output:
+  drop: {}
+`, iterations, batchSize)
+			},
+		},
+		{
+			name: "basic mapping as branch",
+			confFn: func(iterations, batchSize int) string {
+				return fmt.Sprintf(`
+input:
+  generate:
+    count: %v
+    batch_size: %v
     interval: ""
     mapping: |
       meta = {"foo":"foo value","bar":"bar value"}
@@ -145,16 +153,17 @@ pipeline:
 
 output:
   drop: {}
-`, iterations)
+`, iterations, batchSize)
 			},
 		},
 		{
 			name: "basic multiplexing",
-			confFn: func(iterations int) string {
+			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`
 input:
   generate:
     count: %v
+    batch_size: %v
     interval: ""
     mapping: |
       meta = {"foo":"foo value","bar":"bar value"}
@@ -174,16 +183,17 @@ output:
           drop: {}
       - output:
           drop: {}
-`, iterations)
+`, iterations, batchSize)
 			},
 		},
 		{
 			name: "basic switch processor",
-			confFn: func(iterations int) string {
+			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`
 input:
   generate:
     count: %v
+    batch_size: %v
     interval: ""
     mapping: |
       meta = {"foo":"foo value","bar":"bar value"}
@@ -204,16 +214,17 @@ pipeline:
 
 output:
   drop: {}
-`, iterations)
+`, iterations, batchSize)
 			},
 		},
 		{
 			name: "convoluted data generation",
-			confFn: func(iterations int) string {
+			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`
 input:
   generate:
     count: %v
+    batch_size: %v
     interval: ""
     mapping: |
       meta = {"foo":"foo value","bar":"bar value"}
@@ -229,16 +240,17 @@ input:
 
 output:
   drop: {}
-`, iterations)
+`, iterations, batchSize)
 			},
 		},
 		{
 			name: "large data mapping",
-			confFn: func(iterations int) string {
+			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`
 input:
   generate:
     count: %v
+    batch_size: %v
     interval: ""
     mapping: |
       meta = {"foo":"foo value","bar":"bar value"}
@@ -266,16 +278,17 @@ pipeline:
 
 output:
   drop: {}
-`, iterations)
+`, iterations, batchSize)
 			},
 		},
 		{
 			name: "basic branch processors",
-			confFn: func(iterations int) string {
+			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`
 input:
   generate:
     count: %v
+    batch_size: %v
     interval: ""
     mapping: |
       meta = {"foo":"foo value","bar":(random_int()%%10).string()}
@@ -304,16 +317,17 @@ pipeline:
 
 output:
   drop: {}
-`, iterations)
+`, iterations, batchSize)
 			},
 		},
 		{
 			name: "basic workflow processors",
-			confFn: func(iterations int) string {
+			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`
 input:
   generate:
     count: %v
+    batch_size: %v
     interval: ""
     mapping: |
       meta = {"foo":"foo value","bar":(random_int()%%10).string()}
@@ -344,26 +358,34 @@ pipeline:
 
 output:
   drop: {}
-`, iterations)
+`, iterations, batchSize)
 			},
 		},
 	} {
 		test := test
-		b.Run(test.name, func(b *testing.B) {
-			builder := service.NewStreamBuilder()
-			require.NoError(b, builder.SetYAML(test.confFn(b.N)))
-			require.NoError(b, builder.SetLoggerYAML(`level: none`))
+		for _, batchSize := range []int{1, 10, 50} {
+			batchSize := batchSize
+			b.Run(fmt.Sprintf("%v/%v", test.name, batchSize), func(b *testing.B) {
+				iterations := b.N / batchSize
+				if iterations < 1 {
+					iterations = 1
+				}
 
-			strm, err := builder.Build()
-			require.NoError(b, err)
+				builder := service.NewStreamBuilder()
+				require.NoError(b, builder.SetYAML(test.confFn(iterations, batchSize)))
+				require.NoError(b, builder.SetLoggerYAML(`level: none`))
 
-			ctx, done := context.WithTimeout(context.Background(), time.Second*30)
-			defer done()
+				strm, err := builder.Build()
+				require.NoError(b, err)
 
-			b.ReportAllocs()
-			b.ResetTimer()
+				ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+				defer done()
 
-			require.NoError(b, strm.Run(ctx))
-		})
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				require.NoError(b, strm.Run(ctx))
+			})
+		}
 	}
 }
