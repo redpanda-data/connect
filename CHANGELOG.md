@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Field `batch_size` added to the `generate` input.
 - The `amqp_0_9` output now supports setting the `timeout` of publish.
+- New experimental input codec `avro-ocf:marshaler=x`.
 
 ### Fixed
 
