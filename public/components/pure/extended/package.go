@@ -12,5 +12,6 @@ import (
 	// Import pure but larger packages.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/lang"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/msgpack"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/urlencoded"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/xml"
 )
