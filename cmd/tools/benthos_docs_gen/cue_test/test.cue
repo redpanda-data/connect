@@ -1,7 +1,5 @@
-import "github.com/benthosdev/benthos/resources/cue/test:benthos"
-
 testCases:
-  simple: benthos.#Config & {
+  simple: #Config & {
     input: {
       label: "sample_input"
       generate: mapping: "root = 'hello'"
@@ -21,7 +19,7 @@ testCases:
   }
 
   #Guarded: self = {
-    _output: benthos.#Output
+    _output: #Output
 
     switch: cases: [
       {
