@@ -2179,9 +2179,9 @@ root = content().parse_parquet()
 root = content().parse_parquet(byte_array_as_string: true)
 ```
 
-### `parse_url_encoded`
+### `parse_url_query`
 
-Attempts to parse a string as url-encoded data and returns a structured result.
+Attempts to parse a url-encoded query string and returns a structured result.
 
 ### `parse_xml`
 

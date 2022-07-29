@@ -1,4 +1,4 @@
-package urlencoded_test
+package pure
 
 import (
 	"testing"
@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	_ "github.com/benthosdev/benthos/v4/internal/impl/urlencoded"
 )
 
 func TestParseUrlencoded(t *testing.T) {
@@ -20,21 +19,21 @@ func TestParseUrlencoded(t *testing.T) {
 	}{
 		{
 			name:   "simple parsing",
-			method: "parse_url_encoded",
+			method: "parse_url_query",
 			target: "username=example",
 			args:   []interface{}{},
 			exp:    map[string]interface{}{"username": "example"},
 		},
 		{
 			name:   "parsing multiple values under the same key",
-			method: "parse_url_encoded",
+			method: "parse_url_query",
 			target: "usernames=userA&usernames=userB",
 			args:   []interface{}{},
 			exp:    map[string]interface{}{"usernames": []string{"userA", "userB"}},
 		},
 		{
 			name:   "decodes data correctly",
-			method: "parse_url_encoded",
+			method: "parse_url_query",
 			target: "email=example%40email.com",
 			args:   []interface{}{},
 			exp:    map[string]interface{}{"email": "example@email.com"},
