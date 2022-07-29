@@ -20,6 +20,7 @@ type Config struct {
 	Type       string           `json:"type" yaml:"type"`
 	Jaeger     JaegerConfig     `json:"jaeger" yaml:"jaeger"`
 	CloudTrace CloudTraceConfig `json:"gcp_cloudtrace" yaml:"gcp_cloudtrace"`
+	OtlpConfig OtlpConfig       `json:"open_telemetry_collector" yaml:"open_telemetry_collector"`
 	None       struct{}         `json:"none" yaml:"none"`
 	Plugin     interface{}      `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
@@ -30,6 +31,7 @@ func NewConfig() Config {
 		Type:       "none",
 		Jaeger:     NewJaegerConfig(),
 		CloudTrace: NewCloudTraceConfig(),
+		OtlpConfig: NewOtlpConfig(),
 		None:       struct{}{},
 		Plugin:     nil,
 	}
