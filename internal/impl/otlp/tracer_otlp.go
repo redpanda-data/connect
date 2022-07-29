@@ -15,54 +15,113 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-
-	"github.com/benthosdev/benthos/v4/internal/component/tracer"
-	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func init() {
-	bundle.AllTracers.Add(NewOtlp, docs.ComponentSpec{
-		Name:    "open_telemetry_collector",
-		Type:    docs.TypeTracer,
-		Status:  docs.StatusExperimental,
-		Summary: `Send tracing events to a [OpenTelemetry](https://opentelemetry.io/docs/collector/) collector.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("http", "A list of http collectors.").
-				Array().
-				WithChildren(
-					docs.FieldString("url", "The URL of a collector to send tracing events to.").HasDefault("localhost:4318"),
-				),
-			docs.FieldString("grpc", "A list of grpc collectors.").
-				Array().
-				WithChildren(
-					docs.FieldString("url", "The URL of a collector to send tracing events to.").HasDefault("localhost:4317"),
-				),
-			docs.FieldString("tags", "A map of tags to add to all tracing spans.").Map().Advanced().HasDefault(map[string]interface{}{}),
-		),
-	})
+	spec := service.NewConfigSpec().
+		Summary("Send tracing events to a [OpenTelemetry](https://opentelemetry.io/docs/collector/) collector.").
+		Field(service.NewObjectListField("http",
+			service.NewStringField("url").
+				Description("The URL of a collector to send tracing events to.").
+				Default("localhost:4318"),
+		).Description("A list of http collectors.")).
+		Field(service.NewObjectListField("grpc",
+			service.NewStringField("url").
+				Description("The URL of a collector to send tracing events to.").
+				Default("localhost:4317"),
+		).Description("A list of grpc collectors.")).
+		Field(service.NewStringMapField("tags").
+			Description("A map of tags to add to all tracing spans.").
+			Default(map[string]string{}).
+			Advanced())
+
+	err := service.RegisterOtelTracerProvider(
+		"open_telemetry_collector",
+		spec,
+		func(conf *service.ParsedConfig) (trace.TracerProvider, error) {
+			c, err := newOtlpConfig(conf)
+			if err != nil {
+				return nil, err
+			}
+			return newOtlp(c)
+		})
+
+	if err != nil {
+		panic(err)
+	}
 }
 
-//------------------------------------------------------------------------------
+type collector struct {
+	url string
+}
 
-func NewOtlp(config tracer.Config, nm bundle.NewManagement) (trace.TracerProvider, error) {
-	ctx := context.TODO()
-	var opts []tracesdk.TracerProviderOption
+type otlp struct {
+	grpc []collector
+	http []collector
+	tags map[string]string
+}
 
-	opts, err := addGrpcCollectors(config.OtlpConfig.Grpc, ctx, opts)
+func newOtlpConfig(conf *service.ParsedConfig) (*otlp, error) {
+	http, err := collectors(conf, "http")
+	if err != nil {
+		return nil, err
+	}
+
+	grpc, err := collectors(conf, "grpc")
+	if err != nil {
+		return nil, err
+	}
+
+	tags, err := conf.FieldStringMap("tags")
 
 	if err != nil {
 		return nil, err
 	}
 
-	opts, err = addHttpCollectors(config.OtlpConfig.Http, ctx, opts)
+	return &otlp{
+		grpc,
+		http,
+		tags,
+	}, nil
+}
+
+func collectors(conf *service.ParsedConfig, name string) ([]collector, error) {
+	list, err := conf.FieldObjectList(name)
+	if err != nil {
+		return nil, err
+	}
+	collectors := make([]collector, len(list))
+	for _, pc := range list {
+		u, err := pc.FieldString("url")
+		if err != nil {
+			return nil, err
+		}
+		collectors = append(collectors, collector{u})
+	}
+	return collectors, nil
+}
+
+//------------------------------------------------------------------------------
+
+func newOtlp(config *otlp) (trace.TracerProvider, error) {
+	ctx := context.TODO()
+	var opts []tracesdk.TracerProviderOption
+
+	opts, err := addGrpcCollectors(config.grpc, ctx, opts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	opts, err = addHttpCollectors(config.http, ctx, opts)
 
 	if err != nil {
 		return nil, err
 	}
 	var attrs []attribute.KeyValue
 
-	for k, v := range config.OtlpConfig.Tags {
+	for k, v := range config.tags {
 		attrs = append(attrs, attribute.String(k, v))
 	}
 
@@ -71,14 +130,14 @@ func NewOtlp(config tracer.Config, nm bundle.NewManagement) (trace.TracerProvide
 	return tracesdk.NewTracerProvider(opts...), nil
 }
 
-func addGrpcCollectors(collectors []tracer.Collector, ctx context.Context, opts []tracesdk.TracerProviderOption) ([]tracesdk.TracerProviderOption, error) {
+func addGrpcCollectors(collectors []collector, ctx context.Context, opts []tracesdk.TracerProviderOption) ([]tracesdk.TracerProviderOption, error) {
 	for _, c := range collectors {
 		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 
 		exp, err := otlptrace.New(ctx, otlptracegrpc.NewClient(
 			otlptracegrpc.WithInsecure(),
-			otlptracegrpc.WithEndpoint(c.Url),
+			otlptracegrpc.WithEndpoint(c.url),
 			otlptracegrpc.WithDialOption(grpc.WithBlock()),
 		))
 
@@ -91,14 +150,14 @@ func addGrpcCollectors(collectors []tracer.Collector, ctx context.Context, opts 
 	return opts, nil
 }
 
-func addHttpCollectors(collectors []tracer.Collector, ctx context.Context, opts []tracesdk.TracerProviderOption) ([]tracesdk.TracerProviderOption, error) {
+func addHttpCollectors(collectors []collector, ctx context.Context, opts []tracesdk.TracerProviderOption) ([]tracesdk.TracerProviderOption, error) {
 	for _, c := range collectors {
 		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 
 		exp, err := otlptrace.New(ctx, otlptracehttp.NewClient(
 			otlptracehttp.WithInsecure(),
-			otlptracehttp.WithEndpoint(c.Url),
+			otlptracehttp.WithEndpoint(c.url),
 		))
 
 		if err != nil {
