@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -18,7 +18,7 @@ import (
 type Pool struct {
 	running uint32
 
-	workers []iprocessor.Pipeline
+	workers []processor.Pipeline
 
 	log log.Modular
 
@@ -30,14 +30,14 @@ type Pool struct {
 }
 
 // NewPool creates a new processing pool.
-func NewPool(threads int, log log.Modular, msgProcessors ...iprocessor.V1) (*Pool, error) {
+func NewPool(threads int, log log.Modular, msgProcessors ...processor.V1) (*Pool, error) {
 	if threads <= 0 {
 		threads = runtime.NumCPU()
 	}
 
 	p := &Pool{
 		running:     1,
-		workers:     make([]iprocessor.Pipeline, threads),
+		workers:     make([]processor.Pipeline, threads),
 		log:         log,
 		messagesOut: make(chan message.Transaction),
 		closeChan:   make(chan struct{}),
@@ -82,7 +82,7 @@ func (p *Pool) loop() {
 			atomic.AddInt64(&remainingWorkers, -1)
 			continue
 		}
-		go func(w iprocessor.Pipeline) {
+		go func(w processor.Pipeline) {
 			defer func() {
 				if atomic.AddInt64(&remainingWorkers, -1) == 0 {
 					close(internalMessages)

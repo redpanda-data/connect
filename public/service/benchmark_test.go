@@ -87,8 +87,37 @@ input:
 
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         root = this
+        root.loud_name = this.name.uppercase()
+        root.good_friends = this.friends.filter(f -> f.lowercase().contains("a"))
+
+output:
+  drop: {}
+`, iterations, batchSize)
+			},
+		},
+		{
+			name: "basic mapping inline",
+			confFn: func(iterations, batchSize int) string {
+				return fmt.Sprintf(`
+input:
+  generate:
+    count: %v
+    batch_size: %v
+    interval: ""
+    mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
+      root.id = uuid_v4()
+      root.name = fake("name")
+      root.mobile = fake("phone_number")
+      root.site = fake("url")
+      root.email = fake("email")
+      root.friends = range(0, (random_int() %% 10) + 1).map_each(fake("name"))
+
+pipeline:
+  processors:
+    - mutation: |
         root.loud_name = this.name.uppercase()
         root.good_friends = this.friends.filter(f -> f.lowercase().contains("a"))
 
@@ -115,7 +144,7 @@ input:
       root.email = fake("email")
       root.friends = range(0, (random_int() %% 10) + 1).map_each(fake("name"))
   processors:
-    - bloblang: |
+    - mapping: |
         root = this
         root.loud_name = this.name.uppercase()
         root.good_friends = this.friends.filter(f -> f.lowercase().contains("a"))
@@ -204,13 +233,13 @@ pipeline:
     - switch:
         - check: this.id.contains("a")
           processors:
-            - bloblang: 'root = content().uppercase()'
+            - mapping: 'root = content().uppercase()'
         - check: this.id.contains("b")
           processors:
-            - bloblang: 'root = content().uppercase()'
+            - mapping: 'root = content().uppercase()'
         - check: this.id.contains("c")
           processors:
-            - bloblang: 'root = content().uppercase()'
+            - mapping: 'root = content().uppercase()'
 
 output:
   drop: {}
@@ -270,7 +299,7 @@ input:
 
 pipeline:
   processors:
-    - bloblang: |
+    - mapping: |
         root = this
         root.loud_name = this.name.uppercase()
         root.good_friends = this.friends.filter(f -> f.lowercase().contains("a"))
@@ -303,7 +332,7 @@ pipeline:
           root.foo = meta("foo")
           root.email = this.email
         processors:
-          - bloblang: root = content().uppercase()
+          - mapping: root = content().uppercase()
         result_map: |
           root.foo_stuff = content().string()
     - branch:
@@ -311,7 +340,7 @@ pipeline:
           root.bar = meta("bar")
           root.name = this.name
         processors:
-          - bloblang: root = content().uppercase()
+          - mapping: root = content().uppercase()
         result_map: |
           root.bar_stuff = content().string()
 
@@ -344,7 +373,7 @@ pipeline:
               root.foo = meta("foo")
               root.email = this.email
             processors:
-              - bloblang: root = content().uppercase()
+              - mapping: root = content().uppercase()
             result_map: |
               root.foo_stuff = content().string()
           bar_stuff:
@@ -352,7 +381,7 @@ pipeline:
               root.bar = meta("bar")
               root.name = this.name
             processors:
-              - bloblang: root = content().uppercase()
+              - mapping: root = content().uppercase()
             result_map: |
               root.bar_stuff = content().string()
 

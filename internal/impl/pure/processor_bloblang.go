@@ -33,7 +33,11 @@ Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.`,
 		Description: `
 Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information [check out the docs](/docs/guides/bloblang/about).
 
-If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression ` + "`from \"<path>\"`" + `, where the path must be absolute, or relative from the location that Benthos is executed from.`,
+If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression ` + "`from \"<path>\"`" + `, where the path must be absolute, or relative from the location that Benthos is executed from.
+
+## Component Rename
+
+This processor was recently renamed to the ` + "[`mapping` processor](/docs/components/processors/mapping)" + ` in order to make the purpose of the processor more prominent. It is still valid to use the existing ` + "`bloblang`" + ` name but eventually it will be deprecated and replaced by the new name in example configs.`,
 		Footnotes: `
 ## Error Handling
 

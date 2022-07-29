@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -18,7 +18,7 @@ import (
 // The processor will read from a source, perform some processing, and then
 // either propagate a new message or drop it.
 type Processor struct {
-	msgProcessors []iprocessor.V1
+	msgProcessors []processor.V1
 
 	messagesOut chan message.Transaction
 	responsesIn chan error
@@ -29,7 +29,7 @@ type Processor struct {
 }
 
 // NewProcessor returns a new message processing pipeline.
-func NewProcessor(msgProcessors ...iprocessor.V1) *Processor {
+func NewProcessor(msgProcessors ...processor.V1) *Processor {
 	return &Processor{
 		msgProcessors: msgProcessors,
 		messagesOut:   make(chan message.Transaction),
@@ -67,7 +67,7 @@ func (p *Processor) loop() {
 			return
 		}
 
-		resultMsgs, resultRes := iprocessor.ExecuteAll(p.msgProcessors, tran.Payload)
+		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
 			if err := tran.Ack(closeCtx, resultRes); err != nil && closeCtx.Err() != nil {
 				return

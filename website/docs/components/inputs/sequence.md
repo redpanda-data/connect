@@ -171,7 +171,7 @@ input:
           codec: lines
           paths: [ ./hobbies.ndjson ]
         processors:
-          - bloblang: |
+          - mapping: |
               root.uuid = this.document.uuid
               root.hobbies = this.document.hobbies.map_each(this.type)
 ```

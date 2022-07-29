@@ -237,6 +237,34 @@ func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
 	return nil, nil
 }
 
+// BloblangOverlay executes a parsed Bloblang mapping onto a message where the
+// contents of the message are mutated directly rather than creating an entirely
+// new object.
+//
+// Returns the same message back in a mutated form, or an error if the mapping
+// fails. If the mapping results in the root being deleted the returned message
+// will be nil, which indicates it has been filtered.
+//
+// Note that using overlay means certain functions within the Bloblang mapping
+// will behave differently. In the root of the mapping the right-hand keywords
+// `root` and `this` refer to the same mutable root of the output document.
+func (m *Message) BloblangOverlay(blobl *bloblang.Executor) (*Message, error) {
+	uw := blobl.XUnwrapper().(interface {
+		Unwrap() *mapping.Executor
+	}).Unwrap()
+
+	msg := message.Batch{m.part}
+
+	res, err := uw.MapOnto(m.part, 0, msg)
+	if err != nil {
+		return nil, err
+	}
+	if res != nil {
+		return newMessageFromPart(res), nil
+	}
+	return nil, nil
+}
+
 // BloblangQuery executes a parsed Bloblang mapping on a message batch, from the
 // perspective of a particular message index, and returns a message back or an
 // error if the mapping fails. If the mapping results in the root being deleted
@@ -255,6 +283,40 @@ func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Messa
 	}
 
 	res, err := uw.MapPart(index, msg)
+	if err != nil {
+		return nil, err
+	}
+	if res != nil {
+		return newMessageFromPart(res), nil
+	}
+	return nil, nil
+}
+
+// BloblangOverlay executes a parsed Bloblang mapping onto a message within the
+// batch, where the contents of the message are mutated directly rather than
+// creating an entirely new object.
+//
+// Returns the same message back in a mutated form, or an error if the mapping
+// fails. If the mapping results in the root being deleted the returned message
+// will be nil, which indicates it has been filtered.
+//
+// This method allows mappings to perform windowed aggregations across message
+// batches.
+//
+// Note that using overlay means certain functions within the Bloblang mapping
+// will behave differently. In the root of the mapping the right-hand keywords
+// `root` and `this` refer to the same mutable root of the output document.
+func (b MessageBatch) BloblangOverlay(index int, blobl *bloblang.Executor) (*Message, error) {
+	uw := blobl.XUnwrapper().(interface {
+		Unwrap() *mapping.Executor
+	}).Unwrap()
+
+	msg := make(message.Batch, len(b))
+	for i, m := range b {
+		msg[i] = m.part
+	}
+
+	res, err := uw.MapOnto(b[index].part, index, msg)
 	if err != nil {
 		return nil, err
 	}

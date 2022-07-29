@@ -16,7 +16,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Splits a [batch of messages](/docs/configuration/batching/) into N batches, where each resulting batch contains a group of messages determined by a [Bloblang query](/docs/guides/bloblang/about/).
+Splits a [batch of messages](/docs/configuration/batching) into N batches, where each resulting batch contains a group of messages determined by a [Bloblang query](/docs/guides/bloblang/about).
 
 ```yml
 # Config fields, showing default values
@@ -32,7 +32,7 @@ The functionality of this processor depends on being applied across messages tha
 
 ### `[].check`
 
-A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message belongs to a given group.
+A [Bloblang query](/docs/guides/bloblang/about) that should return a boolean value indicating whether a message belongs to a given group.
 
 
 Type: `string`  
@@ -50,7 +50,7 @@ check: "true"
 
 ### `[].processors`
 
-A list of [processors](/docs/components/processors/about/) to execute on the newly formed group.
+A list of [processors](/docs/components/processors/about) to execute on the newly formed group.
 
 
 Type: `array`  
@@ -76,7 +76,7 @@ pipeline:
               format: tar
           - compress:
               algorithm: gzip
-          - bloblang: 'meta grouping = "foo"'
+          - mapping: 'meta grouping = "foo"'
 
 output:
   switch:

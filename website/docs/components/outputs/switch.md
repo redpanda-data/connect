@@ -88,7 +88,7 @@ output:
             url: tcp://localhost:6379
             stream: everything_else
           processors:
-            - bloblang: |
+            - mapping: |
                 root = this
                 root.type = this.type | "unknown"
 ```
