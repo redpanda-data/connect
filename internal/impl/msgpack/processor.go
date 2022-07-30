@@ -49,9 +49,8 @@ func strToMsgPackOperator(opStr string) (msgPackOperator, error) {
 				return nil, fmt.Errorf("failed to convert MsgPack document to JSON: %v", err)
 			}
 
-			resMsg := m.Copy()
-			resMsg.SetStructured(jObj)
-			return resMsg, nil
+			m.SetStructuredMut(jObj)
+			return m, nil
 		}, nil
 	case "from_json":
 		return func(m *service.Message) (*service.Message, error) {
@@ -65,9 +64,8 @@ func strToMsgPackOperator(opStr string) (msgPackOperator, error) {
 				return nil, fmt.Errorf("failed to convert JSON to MsgPack: %v", err)
 			}
 
-			resMsg := m.Copy()
-			resMsg.SetBytes(b)
-			return resMsg, nil
+			m.SetBytes(b)
+			return m, nil
 		}, nil
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)

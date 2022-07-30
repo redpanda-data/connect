@@ -134,15 +134,13 @@ func (c *gcpPubSubReader) ConnectWithContext(ignored context.Context) error {
 	return nil
 }
 
-func (c *gcpPubSubReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (c *gcpPubSubReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	c.subMut.Lock()
 	msgsChan := c.msgsChan
 	c.subMut.Unlock()
 	if msgsChan == nil {
 		return nil, nil, component.ErrNotConnected
 	}
-
-	msg := message.QuickBatch(nil)
 
 	var gmsg *pubsub.Message
 	var open bool
@@ -160,8 +158,8 @@ func (c *gcpPubSubReader) ReadWithContext(ctx context.Context) (*message.Batch, 
 		part.MetaSet(k, v)
 	}
 	part.MetaSet("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
-	msg.Append(part)
 
+	msg := message.Batch{part}
 	return msg, func(ctx context.Context, res error) error {
 		if res != nil {
 			gmsg.Nack()

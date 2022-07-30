@@ -161,7 +161,7 @@ func isValidSQSAttribute(k, v string) bool {
 	return len(sqsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
-func (a *sqsWriter) getSQSAttributes(msg *message.Batch, i int) sqsAttributes {
+func (a *sqsWriter) getSQSAttributes(msg message.Batch, i int) sqsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
 	_ = a.metaFilter.Iter(p, func(k, v string) error {
@@ -200,11 +200,11 @@ func (a *sqsWriter) getSQSAttributes(msg *message.Batch, i int) sqsAttributes {
 		attrMap:  values,
 		groupID:  groupID,
 		dedupeID: dedupeID,
-		content:  aws.String(string(p.Get())),
+		content:  aws.String(string(p.AsBytes())),
 	}
 }
 
-func (a *sqsWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *sqsWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	if a.sqs == nil {
 		return component.ErrNotConnected
 	}

@@ -100,7 +100,7 @@ func newAirGapBatchProcessor(typeStr string, p BatchProcessor, mgr bundle.NewMan
 	return processor.NewV2BatchedToV1Processor(typeStr, &airGapBatchProcessor{p}, mgr)
 }
 
-func (a *airGapBatchProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch *message.Batch) ([]*message.Batch, error) {
+func (a *airGapBatchProcessor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
 	inputBatch := make([]*Message, batch.Len())
 	_ = batch.Iter(func(i int, p *message.Part) error {
 		inputBatch[i] = newMessageFromPart(p)
@@ -112,11 +112,11 @@ func (a *airGapBatchProcessor) ProcessBatch(ctx context.Context, spans []*tracin
 		return nil, err
 	}
 
-	newBatches := make([]*message.Batch, len(outputBatches))
+	newBatches := make([]message.Batch, len(outputBatches))
 	for i, batch := range outputBatches {
-		newBatch := message.QuickBatch(nil)
-		for _, msg := range batch {
-			newBatch.Append(msg.part)
+		newBatch := make(message.Batch, len(batch))
+		for i, m := range batch {
+			newBatch[i] = m.part
 		}
 		newBatches[i] = newBatch
 	}
@@ -139,12 +139,7 @@ type OwnedProcessor struct {
 // Process a single message, returns either a batch of zero or more resulting
 // messages or an error if the message could not be processed.
 func (o *OwnedProcessor) Process(ctx context.Context, msg *Message) (MessageBatch, error) {
-	outMsg := message.QuickBatch(nil)
-
-	// TODO: After V4 we can modify the internal message type to remove this
-	// requirement.
-	msg.ensureCopied()
-	outMsg.Append(msg.part)
+	outMsg := message.Batch{msg.part}
 
 	iMsgs, res := o.p.ProcessMessage(outMsg)
 	if res != nil {
@@ -169,13 +164,9 @@ func (o *OwnedProcessor) Process(ctx context.Context, msg *Message) (MessageBatc
 // error is marked against individual messages with the `SetError` method and a
 // nil error is returned by this method.
 func (o *OwnedProcessor) ProcessBatch(ctx context.Context, batch MessageBatch) ([]MessageBatch, error) {
-	outMsg := message.QuickBatch(nil)
-
-	for _, msg := range batch {
-		// TODO: After V4 we can modify the internal message type to remove this
-		// requirement.
-		msg.ensureCopied()
-		outMsg.Append(msg.part)
+	outMsg := make(message.Batch, len(batch))
+	for i, msg := range batch {
+		outMsg[i] = msg.part
 	}
 
 	iMsgs, res := o.p.ProcessMessage(outMsg)

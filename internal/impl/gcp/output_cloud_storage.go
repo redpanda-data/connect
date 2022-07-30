@@ -187,7 +187,7 @@ func (g *gcpCloudStorageOutput) ConnectWithContext(ctx context.Context) error {
 
 // WriteWithContext attempts to write message contents to a target GCP Cloud
 // Storage bucket as files.
-func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	g.connMut.RLock()
 	client := g.client
 	g.connMut.RUnlock()
@@ -241,7 +241,7 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg *messa
 		w.ContentType = g.contentType.String(i, msg)
 		w.ContentEncoding = g.contentEncoding.String(i, msg)
 		w.Metadata = metadata
-		if _, err = w.Write(p.Get()); err != nil {
+		if _, err = w.Write(p.AsBytes()); err != nil {
 			return err
 		}
 

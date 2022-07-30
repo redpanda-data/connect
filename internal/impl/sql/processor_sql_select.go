@@ -233,7 +233,7 @@ func (s *sqlSelectProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 			s.logger.Debugf("Failed to convert rows: %v", err)
 			msg.SetError(err)
 		} else {
-			msg.SetStructured(jArray)
+			msg.SetStructuredMut(jArray)
 		}
 	}
 	return []service.MessageBatch{batch}, nil

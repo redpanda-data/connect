@@ -231,11 +231,9 @@ func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2
 
 // ProcessBatch applies the processor to a message batch, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch *message.Batch) ([]*message.Batch, error) {
-	newBatch := batch.Copy()
-
+func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
-	processor.IteratePartsWithSpanV2(m.tracer, "mongodb", nil, newBatch, func(i int, s *tracing.Span, p *message.Part) error {
+	processor.IteratePartsWithSpanV2(m.tracer, "mongodb", nil, batch, func(i int, s *tracing.Span, p *message.Part) error {
 		var err error
 		var filterVal, documentVal *message.Part
 		var upsertVal, filterValWanted, documentValWanted bool
@@ -245,13 +243,13 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 		upsertVal = m.conf.Upsert
 
 		if filterValWanted {
-			if filterVal, err = m.filterMap.MapPart(i, newBatch); err != nil {
+			if filterVal, err = m.filterMap.MapPart(i, batch); err != nil {
 				return fmt.Errorf("failed to execute filter_map: %v", err)
 			}
 		}
 
 		if (filterVal != nil || !filterValWanted) && documentValWanted {
-			if documentVal, err = m.documentMap.MapPart(i, newBatch); err != nil {
+			if documentVal, err = m.documentMap.MapPart(i, batch); err != nil {
 				return fmt.Errorf("failed to execute document_map: %v", err)
 			}
 		}
@@ -267,31 +265,31 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 		var docJSON, filterJSON, hintJSON interface{}
 
 		if filterValWanted {
-			if filterJSON, err = filterVal.JSON(); err != nil {
+			if filterJSON, err = filterVal.AsStructured(); err != nil {
 				return err
 			}
 		}
 
 		if documentValWanted {
-			if docJSON, err = documentVal.JSON(); err != nil {
+			if docJSON, err = documentVal.AsStructured(); err != nil {
 				return err
 			}
 		}
 
 		findOptions := &options.FindOneOptions{}
 		if m.hintMap != nil {
-			hintVal, err := m.hintMap.MapPart(i, newBatch)
+			hintVal, err := m.hintMap.MapPart(i, batch)
 			if err != nil {
 				return fmt.Errorf("failed to execute hint_map: %v", err)
 			}
-			if hintJSON, err = hintVal.JSON(); err != nil {
+			if hintJSON, err = hintVal.AsStructured(); err != nil {
 				return err
 			}
 			findOptions.Hint = hintJSON
 		}
 
 		var writeModel mongo.WriteModel
-		collection := m.database.Collection(m.collection.String(i, newBatch), m.writeConcernCollectionOption)
+		collection := m.database.Collection(m.collection.String(i, batch), m.writeConcernCollectionOption)
 
 		switch m.operation {
 		case client.OperationInsertOne:
@@ -337,7 +335,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 				return err
 			}
 
-			p.Set(data)
+			p.SetBytes(data)
 
 			return nil
 		}
@@ -353,7 +351,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			// We should have at least one write model in the slice
 			if _, err := collection.BulkWrite(context.Background(), writeModels); err != nil {
 				m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
-				_ = newBatch.Iter(func(i int, p *message.Part) error {
+				_ = batch.Iter(func(i int, p *message.Part) error {
 					processor.MarkErr(p, spans[i], err)
 					return nil
 				})
@@ -361,7 +359,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 		}
 	}
 
-	return []*message.Batch{newBatch}, nil
+	return []message.Batch{batch}, nil
 }
 
 // Close shuts down the processor and stops processing requests.

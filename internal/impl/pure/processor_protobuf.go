@@ -183,7 +183,7 @@ func newProtobufToJSONOperator(msg string, importPaths []string) (protobufOperat
 
 	return func(part *message.Part) error {
 		msg := dynamic.NewMessage(m)
-		if err := proto.Unmarshal(part.Get(), msg); err != nil {
+		if err := proto.Unmarshal(part.AsBytes(), msg); err != nil {
 			return fmt.Errorf("failed to unmarshal message: %w", err)
 		}
 
@@ -192,7 +192,7 @@ func newProtobufToJSONOperator(msg string, importPaths []string) (protobufOperat
 			return fmt.Errorf("failed to marshal protobuf message: %w", err)
 		}
 
-		part.Set(data)
+		part.SetBytes(data)
 		return nil
 	}, nil
 }
@@ -218,7 +218,7 @@ func newProtobufFromJSONOperator(msg string, importPaths []string) (protobufOper
 
 	return func(part *message.Part) error {
 		msg := dynamic.NewMessage(m)
-		if err := msg.UnmarshalJSONPB(unmarshaler, part.Get()); err != nil {
+		if err := msg.UnmarshalJSONPB(unmarshaler, part.AsBytes()); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON message: %w", err)
 		}
 
@@ -227,7 +227,7 @@ func newProtobufFromJSONOperator(msg string, importPaths []string) (protobufOper
 			return fmt.Errorf("failed to marshal protobuf message: %v", err)
 		}
 
-		part.Set(data)
+		part.SetBytes(data)
 		return nil
 	}, nil
 }
@@ -310,12 +310,11 @@ func newProtobuf(conf processor.ProtobufConfig, mgr bundle.NewManagement) (*prot
 }
 
 func (p *protobufProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	newPart := msg.Copy()
-	if err := p.operator(newPart); err != nil {
+	if err := p.operator(msg); err != nil {
 		p.log.Debugf("Operator failed: %v", err)
 		return nil, err
 	}
-	return []*message.Part{newPart}, nil
+	return []*message.Part{msg}, nil
 }
 
 func (p *protobufProc) Close(context.Context) error {

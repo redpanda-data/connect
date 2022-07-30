@@ -140,7 +140,7 @@ func (m *mongoInput) Read(ctx context.Context) (*service.Message, service.AckFun
 		return nil, nil, err
 	}
 	msg := service.NewMessage(nil)
-	msg.SetStructured(result)
+	msg.SetStructuredMut(result)
 	return msg, func(ctx context.Context, err error) error {
 		return nil
 	}, nil

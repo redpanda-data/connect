@@ -155,7 +155,7 @@ func TestFunctions(t *testing.T) {
 						part.MetaSet(k, v)
 					}
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 
 			for i := 0; i < 10; i++ {
@@ -176,11 +176,11 @@ func TestFunctions(t *testing.T) {
 
 			// Ensure nothing changed
 			for i, m := range test.messages {
-				doc, err := msg.Get(i).JSON()
+				doc, err := msg.Get(i).AsStructuredMut()
 				if err == nil {
-					msg.Get(i).SetJSON(doc)
+					msg.Get(i).SetStructured(doc)
 				}
-				assert.Equal(t, m.content, string(msg.Get(i).Get()))
+				assert.Equal(t, m.content, string(msg.Get(i).AsBytes()))
 			}
 		})
 	}

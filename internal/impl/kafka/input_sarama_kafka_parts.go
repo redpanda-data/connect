@@ -47,7 +47,7 @@ func (k *kafkaReader) runPartitionConsumer(
 	defer batchPolicy.CloseAsync()
 
 	var nextTimedBatchChan <-chan time.Time
-	var flushBatch func(context.Context, chan<- asyncMessage, *message.Batch, int64) bool
+	var flushBatch func(context.Context, chan<- asyncMessage, message.Batch, int64) bool
 	if k.conf.CheckpointLimit > 1 {
 		flushBatch = k.asyncCheckpointer(topic, partition)
 	} else {

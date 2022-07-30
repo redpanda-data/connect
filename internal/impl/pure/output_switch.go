@@ -149,7 +149,7 @@ output:
             url: tcp://localhost:6379
             stream: everything_else
           processors:
-            - bloblang: |
+            - mapping: |
                 root = this
                 root.type = this.type | "unknown"
 `,
@@ -269,7 +269,7 @@ func (o *switchOutput) Connected() bool {
 
 func (o *switchOutput) dispatchToTargets(
 	group *message.SortGroup,
-	sourceMessage *message.Batch,
+	sourceMessage message.Batch,
 	outputTargets [][]*message.Part,
 	ackFn func(context.Context, error) error,
 ) {
@@ -333,8 +333,8 @@ func (o *switchOutput) dispatchToTargets(
 			continue
 		}
 
-		msgCopy, i := message.QuickBatch(nil), target
-		msgCopy.SetAll(parts)
+		msgCopy, i := make(message.Batch, len(parts)), target
+		copy(msgCopy, parts)
 
 		select {
 		case o.outputTSChans[i] <- message.NewTransactionFunc(msgCopy, func(ctx context.Context, err error) error {
@@ -425,7 +425,7 @@ func (o *switchOutput) loop() {
 				}
 				if test {
 					routedAtLeastOnce = true
-					outputTargets[j] = append(outputTargets[j], p.Copy())
+					outputTargets[j] = append(outputTargets[j], p.ShallowCopy())
 					if !o.continues[j] {
 						return nil
 					}

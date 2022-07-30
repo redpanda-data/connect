@@ -176,7 +176,7 @@ func (n *nsqReader) read(ctx context.Context) (*nsq.Message, error) {
 	return nil, component.ErrTimeout
 }
 
-func (n *nsqReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (n *nsqReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msg, err := n.read(ctx)
 	if err != nil {
 		return nil, nil, err

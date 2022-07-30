@@ -160,7 +160,7 @@ func addGrokPatternsFromPath(path string, patterns map[string]string) error {
 }
 
 func (g *grokProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	body := msg.Get()
+	body := msg.AsBytes()
 
 	var values map[string]interface{}
 	for _, compiler := range g.gparsers {
@@ -183,10 +183,8 @@ func (g *grokProc) Process(ctx context.Context, msg *message.Part) ([]*message.P
 		_, _ = gObj.SetP(v, k)
 	}
 
-	newMsg := msg.Copy()
-	newMsg.SetJSON(gObj.Data())
-
-	return []*message.Part{newMsg}, nil
+	msg.SetStructuredMut(gObj.Data())
+	return []*message.Part{msg}, nil
 }
 
 func (g *grokProc) Close(context.Context) error {

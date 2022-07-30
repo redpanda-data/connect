@@ -221,7 +221,7 @@ var _ = registerSimpleFunction(
 		),
 	),
 	func(ctx FunctionContext) (interface{}, error) {
-		return ctx.MsgBatch.Get(ctx.Index).Get(), nil
+		return ctx.MsgBatch.Get(ctx.Index).AsBytes(), nil
 	},
 )
 
@@ -406,7 +406,7 @@ func jsonFunction(args *ParsedParams) (Function, error) {
 		argPath = gabs.DotPathToSlice(path)
 	}
 	return ClosureFunction("json path `"+SliceToDotPath(argPath...)+"`", func(ctx FunctionContext) (interface{}, error) {
-		jPart, err := ctx.MsgBatch.Get(ctx.Index).JSON()
+		jPart, err := ctx.MsgBatch.Get(ctx.Index).AsStructured()
 		if err != nil {
 			return nil, &ErrRecoverable{
 				Recovered: nil,

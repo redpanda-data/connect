@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -55,8 +56,8 @@ func TestBasicFanOut(t *testing.T) {
 			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[j].TChan:
-				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+				if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 				}
 				resFnSlice = append(resFnSlice, ts.Ack)
 			case <-time.After(time.Second):
@@ -75,6 +76,82 @@ func TestBasicFanOut(t *testing.T) {
 			t.Fatal("Timed out responding to broker")
 		}
 	}
+
+	oTM.CloseAsync()
+	require.NoError(t, oTM.WaitForClose(time.Second*5))
+}
+
+func TestBasicFanOutMutations(t *testing.T) {
+	mockOutputA := &mock.OutputChanneled{}
+	mockOutputB := &mock.OutputChanneled{}
+	outputs := []output.Streamed{
+		mockOutputA,
+		mockOutputB,
+	}
+
+	readChan := make(chan message.Transaction)
+
+	oTM, err := newFanOutOutputBroker(outputs)
+	require.NoError(t, err)
+	require.NoError(t, oTM.Consume(readChan))
+
+	assert.True(t, oTM.Connected())
+
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	defer done()
+
+	inMsg := message.NewPart(nil)
+	inMsg.SetStructuredMut(map[string]interface{}{
+		"hello": "world",
+	})
+
+	inBatch := message.Batch{inMsg}
+	select {
+	case readChan <- message.NewTransactionFunc(inBatch, func(ctx context.Context, err error) error {
+		inStruct, err := inMsg.AsStructuredMut()
+		require.NoError(t, err)
+
+		assert.Equal(t, map[string]interface{}{
+			"hello": "world",
+		}, inStruct)
+
+		_, err = gabs.Wrap(inStruct).Set("quack", "moo")
+		require.NoError(t, err)
+		return nil
+	}):
+	case <-time.After(time.Second):
+		t.Errorf("Timed out waiting for broker send")
+		return
+	}
+
+	testMockOutput := func(mockOutput *mock.OutputChanneled) {
+		var ts message.Transaction
+		select {
+		case ts = <-mockOutput.TChan:
+		case <-time.After(time.Second):
+			t.Fatal("Timed out waiting for broker propagate")
+		}
+
+		outStruct, err := ts.Payload.Get(0).AsStructuredMut()
+		require.NoError(t, err)
+		assert.Equal(t, map[string]interface{}{
+			"hello": "world",
+		}, outStruct)
+
+		_, err = gabs.Wrap(outStruct).Set("woof", "meow")
+		require.NoError(t, err)
+		require.NoError(t, ts.Ack(tCtx, nil))
+	}
+
+	testMockOutput(mockOutputA)
+	testMockOutput(mockOutputB)
+
+	inStruct, err := inMsg.AsStructured()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{
+		"hello": "world",
+		"moo":   "quack",
+	}, inStruct)
 
 	oTM.CloseAsync()
 	require.NoError(t, oTM.WaitForClose(time.Second*5))

@@ -158,8 +158,8 @@ func TestFallbackHappyPath(t *testing.T) {
 			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[0].TChan:
-				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+				if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 				}
 			case <-mockOutputs[1].TChan:
 				t.Error("Received message in wrong order")
@@ -232,8 +232,8 @@ func TestFallbackHappyishPath(t *testing.T) {
 			var ts message.Transaction
 			select {
 			case ts = <-mockOutputs[0].TChan:
-				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+				if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 				}
 			case <-mockOutputs[1].TChan:
 				t.Error("Received message in wrong order")
@@ -251,8 +251,8 @@ func TestFallbackHappyishPath(t *testing.T) {
 
 			select {
 			case ts = <-mockOutputs[1].TChan:
-				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+				if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 				}
 				assert.Equal(t, ts.Payload.Get(0).MetaGet("fallback_error"), "test err")
 			case <-mockOutputs[0].TChan:
@@ -325,8 +325,8 @@ func TestFallbackAllFail(t *testing.T) {
 				var ts message.Transaction
 				select {
 				case ts = <-mockOutputs[j%3].TChan:
-					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+					if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 					}
 				case <-mockOutputs[(j+1)%3].TChan:
 					t.Errorf("Received message in wrong order: %v != %v", j%3, (j+1)%3)

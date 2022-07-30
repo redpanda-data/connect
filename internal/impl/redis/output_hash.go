@@ -151,9 +151,9 @@ func (r *redisHashWriter) ConnectWithContext(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 func walkForHashFields(
-	msg *message.Batch, index int, fields map[string]interface{},
+	msg message.Batch, index int, fields map[string]interface{},
 ) error {
-	jVal, err := msg.Get(index).JSON()
+	jVal, err := msg.Get(index).AsStructured()
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func walkForHashFields(
 	return nil
 }
 
-func (r *redisHashWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (r *redisHashWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()

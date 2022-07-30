@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -589,4 +590,57 @@ func TestSystemWindowParallelReadAndWrites(t *testing.T) {
 
 	close(startChan)
 	wg.Wait()
+}
+
+func TestSystemWindowOwnership(t *testing.T) {
+	ctx := context.Background()
+
+	mapping, err := bloblang.Parse(`root = this.ts`)
+	require.NoError(t, err)
+
+	currentTS := time.Unix(10, 1).UTC()
+	w, err := newSystemWindowBuffer(mapping, func() time.Time {
+		return currentTS
+	}, time.Second, 0, 0, 0, nil)
+	require.NoError(t, err)
+
+	inMsg := service.NewMessage(nil)
+	inMsg.SetStructuredMut(map[string]interface{}{
+		"hello": "world",
+		"ts":    10,
+	})
+
+	err = w.WriteBatch(ctx, service.MessageBatch{inMsg}, func(ctx context.Context, err error) error {
+		inStruct, err := inMsg.AsStructuredMut()
+		require.NoError(t, err)
+		_, err = gabs.Wrap(inStruct).Set("quack", "moo")
+		require.NoError(t, err)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Len(t, w.pending, 1)
+
+	outBatch, ackFunc, err := w.ReadBatch(ctx)
+	require.NoError(t, err)
+	require.Len(t, outBatch, 1)
+
+	outStruct, err := outBatch[0].AsStructuredMut()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{
+		"hello": "world",
+		"ts":    10,
+	}, outStruct)
+
+	require.NoError(t, ackFunc(ctx, nil))
+
+	_, err = gabs.Wrap(outStruct).Set("woof", "meow")
+	require.NoError(t, err)
+
+	inStruct, err := inMsg.AsStructured()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{
+		"hello": "world",
+		"moo":   "quack",
+		"ts":    10,
+	}, inStruct)
 }

@@ -51,7 +51,7 @@ This processor will interpolate functions within the ` + "`key` and `value`" + `
 Deduplication can be done using the add operator with a key extracted from the
 message payload, since it fails when a key already exists we can remove the
 duplicates using a
-[` + "`bloblang` processor" + `](/docs/components/processors/bloblang):`,
+[` + "`mapping` processor" + `](/docs/components/processors/mapping):`,
 				Config: `
 pipeline:
   processors:
@@ -60,7 +60,7 @@ pipeline:
         operator: add
         key: '${! json("message.id") }'
         value: "storeme"
-    - bloblang: root = if errored() { deleted() }
+    - mapping: root = if errored() { deleted() }
 
 cache_resources:
   - label: foocache
@@ -87,7 +87,7 @@ pipeline:
               key: ${! content() }
               value: t
     # Delete all messages if we failed
-    - bloblang: |
+    - mapping: |
         root = if errored().from(0) {
           deleted()
         }
@@ -251,9 +251,8 @@ func cacheOperatorFromString(operator string) (cacheOperator, error) {
 
 //------------------------------------------------------------------------------
 
-func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
-	resMsg := msg.Copy()
-	_ = resMsg.Iter(func(index int, part *message.Part) error {
+func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
+	_ = msg.Iter(func(index int, part *message.Part) error {
 		key := c.key.String(index, msg)
 		value := c.value.Bytes(index, msg)
 
@@ -287,12 +286,12 @@ func (c *cacheProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 		}
 
 		if useResult {
-			part.Set(result)
+			part.SetBytes(result)
 		}
 		return nil
 	})
 
-	return []*message.Batch{resMsg}, nil
+	return []message.Batch{msg}, nil
 }
 
 func (c *cacheProc) Close(ctx context.Context) error {

@@ -108,7 +108,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 		var outTr message.Transaction
 		select {
 		case outTr = <-b.TransactionChan():
-			assert.Equal(t, i, outTr.Payload.Get(0).Get()[0])
+			assert.Equal(t, i, outTr.Payload.Get(0).AsBytes()[0])
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for unbuffered message %v read", i)
 		}
@@ -161,7 +161,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	// Extract last message
 	select {
 	case outTr = <-b.TransactionChan():
-		assert.Equal(t, byte(0), outTr.Payload.Get(0).Get()[0])
+		assert.Equal(t, byte(0), outTr.Payload.Get(0).AsBytes()[0])
 		require.NoError(t, outTr.Ack(ctx, nil))
 	case <-time.After(time.Second):
 		t.Fatalf("Timed out waiting for final buffered message read")
@@ -179,7 +179,7 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	for i = 1; i <= total; i++ {
 		select {
 		case outTr = <-b.TransactionChan():
-			assert.Equal(t, i, outTr.Payload.Get(0).Get()[0])
+			assert.Equal(t, i, outTr.Payload.Get(0).AsBytes()[0])
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for buffered message %v read", i)
 		}
@@ -241,7 +241,7 @@ func TestStreamBufferClosing(t *testing.T) {
 	for i = 0; i < total; i++ {
 		select {
 		case val := <-b.TransactionChan():
-			assert.Equal(t, i, val.Payload.Get(0).Get()[0])
+			assert.Equal(t, i, val.Payload.Get(0).AsBytes()[0])
 			require.NoError(t, val.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			t.Fatalf("Timed out waiting for final buffered message read")

@@ -25,7 +25,7 @@ type mockMsgProcessor struct {
 	mut               sync.Mutex
 }
 
-func (m *mockMsgProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
+func (m *mockMsgProcessor) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
 	if drop := <-m.dropChan; drop {
 		return nil, errMockProc
 	}
@@ -33,7 +33,7 @@ func (m *mockMsgProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch,
 		[]byte("foo"),
 		[]byte("bar"),
 	})
-	msgs := [1]*message.Batch{newMsg}
+	msgs := [1]message.Batch{newMsg}
 	return msgs[:], nil
 }
 
@@ -174,8 +174,8 @@ type mockMultiMsgProcessor struct {
 	mut               sync.Mutex
 }
 
-func (m *mockMultiMsgProcessor) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	var msgs []*message.Batch
+func (m *mockMultiMsgProcessor) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+	var msgs []message.Batch
 	for i := 0; i < m.N; i++ {
 		newMsg := message.QuickBatch([][]byte{
 			[]byte(fmt.Sprintf("test%v", i)),
@@ -235,7 +235,7 @@ func TestProcessorMultiMsgs(t *testing.T) {
 			if !open {
 				t.Error("Closed early")
 			}
-			act := string(procT.Payload.Get(0).Get())
+			act := string(procT.Payload.Get(0).AsBytes())
 			if _, exists := expMsgs[act]; !exists {
 				t.Errorf("Unexpected result: %v", act)
 			} else {
@@ -314,7 +314,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		act := string(procT.Payload.Get(0).Get())
+		act := string(procT.Payload.Get(0).AsBytes())
 		if _, exists := expMsgs[act]; !exists {
 			t.Errorf("Unexpected result: %v", act)
 		}
@@ -336,7 +336,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 			if !open {
 				t.Error("Closed early")
 			}
-			act := string(procT.Payload.Get(0).Get())
+			act := string(procT.Payload.Get(0).AsBytes())
 			if _, exists := expMsgs[act]; !exists {
 				t.Errorf("Unexpected result: %v", act)
 			} else {
@@ -363,7 +363,7 @@ func TestProcessorMultiMsgsOddSync(t *testing.T) {
 		if !open {
 			t.Error("Closed early")
 		}
-		act := string(procT.Payload.Get(0).Get())
+		act := string(procT.Payload.Get(0).AsBytes())
 		assert.Equal(t, "test0", act)
 		errResFn = procT.Ack
 	case <-time.After(time.Second):

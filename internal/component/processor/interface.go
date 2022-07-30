@@ -18,7 +18,7 @@ type V1 interface {
 	//
 	// More information about this form of error handling can be found at:
 	// https://www.benthos.dev/docs/configuration/error_handling
-	ProcessMessage(*message.Batch) ([]*message.Batch, error)
+	ProcessMessage(message.Batch) ([]message.Batch, error)
 
 	// CloseAsync triggers the shut down of this component but should not block
 	// the calling goroutine.

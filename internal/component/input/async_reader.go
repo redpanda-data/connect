@@ -67,7 +67,15 @@ func (r *AsyncReader) loop() {
 		mFailedConn = r.mgr.Metrics().GetCounter("input_connection_failed")
 		mLostConn   = r.mgr.Metrics().GetCounter("input_connection_lost")
 		mLatency    = r.mgr.Metrics().GetTimer("input_latency_ns")
+
+		traceName = "input_" + r.typeStr
 	)
+
+	closeAtLeisureCtx, calDone := r.shutSig.CloseAtLeisureCtx(context.Background())
+	defer calDone()
+
+	closeNowCtx, cnDone := r.shutSig.CloseNowCtx(context.Background())
+	defer cnDone()
 
 	defer func() {
 		r.reader.CloseAsync()
@@ -94,10 +102,8 @@ func (r *AsyncReader) loop() {
 	}()
 
 	initConnection := func() bool {
-		initConnCtx, initConnDone := r.shutSig.CloseAtLeisureCtx(context.Background())
-		defer initConnDone()
 		for {
-			if err := r.reader.ConnectWithContext(initConnCtx); err != nil {
+			if err := r.reader.ConnectWithContext(closeAtLeisureCtx); err != nil {
 				if r.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
 					return false
 				}
@@ -105,7 +111,7 @@ func (r *AsyncReader) loop() {
 				mFailedConn.Incr(1)
 				select {
 				case <-time.After(r.connBackoff.NextBackOff()):
-				case <-initConnCtx.Done():
+				case <-closeAtLeisureCtx.Done():
 					return false
 				}
 			} else {
@@ -121,9 +127,7 @@ func (r *AsyncReader) loop() {
 	atomic.StoreInt32(&r.connected, 1)
 
 	for {
-		readCtx, readDone := r.shutSig.CloseAtLeisureCtx(context.Background())
-		msg, ackFn, err := r.reader.ReadWithContext(readCtx)
-		readDone()
+		msg, ackFn, err := r.reader.ReadWithContext(closeAtLeisureCtx)
 
 		// If our reader says it is not connected.
 		if err == component.ErrNotConnected {
@@ -162,7 +166,7 @@ func (r *AsyncReader) loop() {
 		startedAt := time.Now()
 
 		resChan := make(chan error, 1)
-		tracing.InitSpans(r.mgr.Tracer(), "input_"+r.typeStr, msg)
+		tracing.InitSpans(r.mgr.Tracer(), traceName, msg)
 		select {
 		case r.transactions <- message.NewTransaction(msg, resChan):
 		case <-r.shutSig.CloseAtLeisureChan():
@@ -171,7 +175,7 @@ func (r *AsyncReader) loop() {
 
 		pendingAcks.Add(1)
 		go func(
-			m *message.Batch,
+			m message.Batch,
 			aFn AsyncAckFn,
 			rChan chan error,
 		) {
@@ -189,11 +193,9 @@ func (r *AsyncReader) loop() {
 			mLatency.Timing(time.Since(startedAt).Nanoseconds())
 			tracing.FinishSpans(m)
 
-			ackCtx, ackDone := r.shutSig.CloseNowCtx(context.Background())
-			if err = aFn(ackCtx, res); err != nil {
+			if err = aFn(closeNowCtx, res); err != nil {
 				r.mgr.Logger().Errorf("Failed to acknowledge message: %v\n", err)
 			}
-			ackDone()
 		}(msg, ackFn, resChan)
 	}
 }

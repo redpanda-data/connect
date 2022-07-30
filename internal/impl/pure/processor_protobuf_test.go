@@ -121,7 +121,7 @@ func TestProtobuf(t *testing.T) {
 
 			input := message.QuickBatch(nil)
 			for _, p := range test.input {
-				input.Append(message.NewPart(p))
+				input = append(input, message.NewPart(p))
 			}
 
 			msgs, res := proc.ProcessMessage(input)
@@ -179,7 +179,7 @@ func TestProtobufErrors(t *testing.T) {
 
 			input := message.QuickBatch(nil)
 			for _, p := range test.input {
-				input.Append(message.NewPart(p))
+				input = append(input, message.NewPart(p))
 			}
 
 			msgs, res := proc.ProcessMessage(input)

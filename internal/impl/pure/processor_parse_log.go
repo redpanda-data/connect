@@ -250,16 +250,14 @@ func newParseLog(conf processor.ParseLogConfig, mgr bundle.NewManagement) (proce
 }
 
 func (s *parseLogProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	newPart := msg.Copy()
-
-	dataMap, err := s.format(newPart.Get())
+	dataMap, err := s.format(msg.AsBytes())
 	if err != nil {
 		s.log.Debugf("Failed to parse message as %s: %v", s.formatStr, err)
 		return nil, err
 	}
 
-	newPart.SetJSON(dataMap)
-	return []*message.Part{newPart}, nil
+	msg.SetStructuredMut(dataMap)
+	return []*message.Part{msg}, nil
 }
 
 func (s *parseLogProc) Close(ctx context.Context) error {

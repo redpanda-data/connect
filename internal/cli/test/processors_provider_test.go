@@ -107,7 +107,7 @@ pipeline:
 	}
 	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")}))
 	require.NoError(t, res)
-	if exp, act := "DEFAULTVALUE", string(msgs[0].Get(0).Get()); exp != act {
+	if exp, act := "DEFAULTVALUE", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 
@@ -121,7 +121,7 @@ pipeline:
 	}
 	msgs, res = processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")}))
 	require.NoError(t, res)
-	if exp, act := "NEWVALUE", string(msgs[0].Get(0).Get()); exp != act {
+	if exp, act := "NEWVALUE", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 }
@@ -148,7 +148,7 @@ pipeline:
 
 	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")}))
 	require.NoError(t, res)
-	if exp, act := "HELLO WORLD", string(msgs[0].Get(0).Get()); exp != act {
+	if exp, act := "HELLO WORLD", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
 	}
 }
@@ -195,7 +195,7 @@ pipeline:
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())
 
-	assert.Equal(t, "starts with first mock first proc second mock second proc", string(msgs[0].Get(0).Get()))
+	assert.Equal(t, "starts with first mock first proc second mock second proc", string(msgs[0].Get(0).AsBytes()))
 }
 
 func TestProcessorsProviderMocksFromLabel(t *testing.T) {
@@ -242,7 +242,7 @@ pipeline:
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())
 
-	assert.Equal(t, "starts with first mock first proc second mock second proc", string(msgs[0].Get(0).Get()))
+	assert.Equal(t, "starts with first mock first proc second mock second proc", string(msgs[0].Get(0).AsBytes()))
 }
 
 func TestProcessorsProviderMocksMixed(t *testing.T) {
@@ -289,7 +289,7 @@ pipeline:
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())
 
-	assert.Equal(t, "starts with first mock first proc second mock second proc", string(msgs[0].Get(0).Get()))
+	assert.Equal(t, "starts with first mock first proc second mock second proc", string(msgs[0].Get(0).AsBytes()))
 }
 
 func TestProcessorsExtraResources(t *testing.T) {

@@ -99,7 +99,7 @@ pipeline:
               key: '${! meta("kafka_topic") }-${! meta("kafka_partition") }'
               cache: foo_cache
               processors:
-                - bloblang: 'root = ""'
+                - mapping: 'root = ""'
                 - http:
                     url: http://example.com/enrichment/${! meta("kafka_topic") }/${! meta("kafka_partition") }
                     verb: GET

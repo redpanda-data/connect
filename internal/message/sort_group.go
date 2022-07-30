@@ -39,18 +39,15 @@ func NewSortGroupParts(parts []*Part) (*SortGroup, []*Part) {
 }
 
 // NewSortGroup creates a new sort group to be associated with a
-func NewSortGroup(m *Batch) (*SortGroup, *Batch) {
-	inParts := make([]*Part, m.Len())
+func NewSortGroup(m Batch) (*SortGroup, Batch) {
+	inParts := make([]*Part, len(m))
 	_ = m.Iter(func(i int, part *Part) error {
 		inParts[i] = part
 		return nil
 	})
 
 	group, outParts := NewSortGroupParts(inParts)
-	newMsg := QuickBatch(nil)
-	newMsg.SetAll(outParts)
-
-	return group, newMsg
+	return group, outParts
 }
 
 // GetIndex attempts to determine the original index of a message part relative

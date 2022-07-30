@@ -55,7 +55,7 @@ func TestSocketServerBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -122,7 +122,7 @@ func TestSocketServerRetries(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func(reject bool) (*message.Batch, error) {
+	readNextMsg := func(reject bool) (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -153,12 +153,12 @@ func TestSocketServerRetries(t *testing.T) {
 	msg, err = readNextMsg(false)
 	require.NoError(t, err)
 	require.Equal(t, 1, msg.Len())
-	actRemaining = append(actRemaining, string(msg.Get(0).Get()))
+	actRemaining = append(actRemaining, string(msg.Get(0).AsBytes()))
 
 	msg, err = readNextMsg(false)
 	require.NoError(t, err)
 	require.Equal(t, 1, msg.Len())
-	actRemaining = append(actRemaining, string(msg.Get(0).Get()))
+	actRemaining = append(actRemaining, string(msg.Get(0).AsBytes()))
 
 	sort.Strings(actRemaining)
 	assert.Equal(t, expRemaining, actRemaining)
@@ -239,7 +239,7 @@ func TestSocketServerRecon(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -260,7 +260,7 @@ func TestSocketServerRecon(t *testing.T) {
 		msg, err := readNextMsg()
 		require.NoError(t, err)
 
-		act := string(msg.Get(0).Get())
+		act := string(msg.Get(0).AsBytes())
 		assert.Contains(t, expMsgs, act)
 
 		delete(expMsgs, act)
@@ -312,7 +312,7 @@ func TestSocketServerMpart(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -379,7 +379,7 @@ func TestSocketServerMpartCDelim(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -448,7 +448,7 @@ func TestSocketServerMpartSdown(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -511,7 +511,7 @@ func TestSocketUDPServerBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -580,7 +580,7 @@ func TestSocketUDPServerRetries(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func(reject bool) (*message.Batch, error) {
+	readNextMsg := func(reject bool) (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -611,12 +611,12 @@ func TestSocketUDPServerRetries(t *testing.T) {
 	msg, err = readNextMsg(false)
 	require.NoError(t, err)
 	require.Equal(t, 1, msg.Len())
-	actRemaining = append(actRemaining, string(msg.Get(0).Get()))
+	actRemaining = append(actRemaining, string(msg.Get(0).AsBytes()))
 
 	msg, err = readNextMsg(false)
 	require.NoError(t, err)
 	require.Equal(t, 1, msg.Len())
-	actRemaining = append(actRemaining, string(msg.Get(0).Get()))
+	actRemaining = append(actRemaining, string(msg.Get(0).AsBytes()))
 
 	sort.Strings(actRemaining)
 	assert.Equal(t, expRemaining, actRemaining)
@@ -696,7 +696,7 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -769,7 +769,7 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -847,7 +847,7 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -920,7 +920,7 @@ func TestTCPSocketServerBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -994,7 +994,7 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -1015,7 +1015,7 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 		msg, err := readNextMsg()
 		require.NoError(t, err)
 
-		act := string(msg.Get(0).Get())
+		act := string(msg.Get(0).AsBytes())
 		assert.Contains(t, expMsgs, act)
 		delete(expMsgs, act)
 	}
@@ -1067,7 +1067,7 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -1135,7 +1135,7 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
@@ -1204,7 +1204,7 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 		wg.Done()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():

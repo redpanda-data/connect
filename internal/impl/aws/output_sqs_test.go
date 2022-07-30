@@ -221,7 +221,7 @@ func TestSQSSendLimit(t *testing.T) {
 
 	inMsg := message.QuickBatch(nil)
 	for i := 0; i < 15; i++ {
-		inMsg.Append(message.NewPart([]byte(fmt.Sprintf("hello world %v", i+1))))
+		inMsg = append(inMsg, message.NewPart([]byte(fmt.Sprintf("hello world %v", i+1))))
 	}
 	require.NoError(t, w.WriteWithContext(tCtx, inMsg))
 

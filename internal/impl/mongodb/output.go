@@ -256,7 +256,7 @@ func (m *Writer) ConnectWithContext(ctx context.Context) error {
 }
 
 // WriteWithContext attempts to perform the designated operation to the mongo DB collection.
-func (m *Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (m *Writer) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	m.mu.Lock()
 	collection := m.collection
 	m.mu.Unlock()
@@ -298,13 +298,13 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error
 		var docJSON, filterJSON, hintJSON interface{}
 
 		if filterValWanted {
-			if filterJSON, err = filterVal.JSON(); err != nil {
+			if filterJSON, err = filterVal.AsStructured(); err != nil {
 				return err
 			}
 		}
 
 		if documentValWanted {
-			if docJSON, err = documentVal.JSON(); err != nil {
+			if docJSON, err = documentVal.AsStructured(); err != nil {
 				return err
 			}
 		}
@@ -314,7 +314,7 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg *message.Batch) error
 			if err != nil {
 				return fmt.Errorf("failed to execute hint_map: %v", err)
 			}
-			if hintJSON, err = hintVal.JSON(); err != nil {
+			if hintJSON, err = hintVal.AsStructured(); err != nil {
 				return err
 			}
 		}

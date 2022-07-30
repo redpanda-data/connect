@@ -99,7 +99,7 @@ func (e *subprocessProc) getSendSubprocessorFunc(codec string) (func(part *messa
 			const prefixBytes int = 4
 
 			lenBuf := make([]byte, prefixBytes)
-			m := part.Get()
+			m := part.AsBytes()
 			binary.BigEndian.PutUint32(lenBuf, uint32(len(m)))
 
 			res, err := e.subproc.Send(lenBuf, m, nil)
@@ -109,13 +109,13 @@ func (e *subprocessProc) getSendSubprocessorFunc(codec string) (func(part *messa
 			}
 			res2 := make([]byte, len(res))
 			copy(res2, res)
-			part.Set(res2)
+			part.SetBytes(res2)
 			return nil
 		}, nil
 	case "netstring":
 		return func(part *message.Part) error {
 			lenBuf := make([]byte, 0)
-			m := part.Get()
+			m := part.AsBytes()
 			lenBuf = append(strconv.AppendUint(lenBuf, uint64(len(m)), 10), ':')
 			res, err := e.subproc.Send(lenBuf, m, commaBytes)
 			if err != nil {
@@ -124,13 +124,13 @@ func (e *subprocessProc) getSendSubprocessorFunc(codec string) (func(part *messa
 			}
 			res2 := make([]byte, len(res))
 			copy(res2, res)
-			part.Set(res2)
+			part.SetBytes(res2)
 			return nil
 		}, nil
 	case "lines":
 		return func(part *message.Part) error {
 			results := [][]byte{}
-			splitMsg := bytes.Split(part.Get(), newLineBytes)
+			splitMsg := bytes.Split(part.AsBytes(), newLineBytes)
 			for j, p := range splitMsg {
 				if len(p) == 0 && len(splitMsg) > 1 && j == (len(splitMsg)-1) {
 					results = append(results, []byte(""))
@@ -143,7 +143,7 @@ func (e *subprocessProc) getSendSubprocessorFunc(codec string) (func(part *messa
 				}
 				results = append(results, res)
 			}
-			part.Set(bytes.Join(results, newLineBytes))
+			part.SetBytes(bytes.Join(results, newLineBytes))
 			return nil
 		}, nil
 	}
@@ -450,11 +450,10 @@ func (e *subprocessProc) Process(ctx context.Context, msg *message.Part) ([]*mes
 	e.mut.Lock()
 	defer e.mut.Unlock()
 
-	result := msg.Copy()
-	if err := e.procFunc(result); err != nil {
+	if err := e.procFunc(msg); err != nil {
 		return nil, err
 	}
-	return []*message.Part{result}, nil
+	return []*message.Part{msg}, nil
 }
 
 func (e *subprocessProc) Close(ctx context.Context) error {

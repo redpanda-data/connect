@@ -67,7 +67,7 @@ func TestHTTPClientBadRequest(t *testing.T) {
 func TestHTTPClientSendBasic(t *testing.T) {
 	nTestLoops := 1000
 
-	resultChan := make(chan *message.Batch, 1)
+	resultChan := make(chan message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		msg := message.QuickBatch(nil)
 		defer func() {
@@ -77,7 +77,7 @@ func TestHTTPClientSendBasic(t *testing.T) {
 		b, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 
-		msg.Append(message.NewPart(b))
+		msg = append(msg, message.NewPart(b))
 	}))
 	defer ts.Close()
 
@@ -97,7 +97,7 @@ func TestHTTPClientSendBasic(t *testing.T) {
 		select {
 		case resMsg := <-resultChan:
 			require.Equal(t, 1, resMsg.Len())
-			assert.Equal(t, testStr, string(resMsg.Get(0).Get()))
+			assert.Equal(t, testStr, string(resMsg.Get(0).AsBytes()))
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
@@ -126,7 +126,7 @@ func TestHTTPClientBadContentType(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 1, res.Len())
-	assert.Equal(t, "HELLO WORLD", string(res.Get(0).Get()))
+	assert.Equal(t, "HELLO WORLD", string(res.Get(0).AsBytes()))
 }
 
 func TestHTTPClientDropOn(t *testing.T) {
@@ -169,14 +169,14 @@ func TestHTTPClientSuccessfulOn(t *testing.T) {
 	resMsg, err := h.Send(context.Background(), testMsg, testMsg)
 	require.NoError(t, err)
 
-	assert.Equal(t, `{"foo":"bar"}`, string(resMsg.Get(0).Get()))
+	assert.Equal(t, `{"foo":"bar"}`, string(resMsg.Get(0).AsBytes()))
 	assert.Equal(t, int32(1), atomic.LoadInt32(&reqs))
 }
 
 func TestHTTPClientSendInterpolate(t *testing.T) {
 	nTestLoops := 1000
 
-	resultChan := make(chan *message.Batch, 1)
+	resultChan := make(chan message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/firstvar", r.URL.Path)
 		assert.Equal(t, "hdr-secondvar", r.Header.Get("dynamic"))
@@ -191,7 +191,7 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 		b, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 
-		msg.Append(message.NewPart(b))
+		msg = append(msg, message.NewPart(b))
 	}))
 	defer ts.Close()
 
@@ -214,7 +214,7 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 		select {
 		case resMsg := <-resultChan:
 			require.Equal(t, 1, resMsg.Len())
-			assert.Equal(t, testStr, string(resMsg.Get(0).Get()))
+			assert.Equal(t, testStr, string(resMsg.Get(0).AsBytes()))
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
@@ -224,7 +224,7 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 func TestHTTPClientSendMultipart(t *testing.T) {
 	nTestLoops := 1000
 
-	resultChan := make(chan *message.Batch, 1)
+	resultChan := make(chan message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		msg := message.QuickBatch(nil)
 		defer func() {
@@ -246,13 +246,13 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 				msgBytes, err := io.ReadAll(p)
 				require.NoError(t, err)
 
-				msg.Append(message.NewPart(msgBytes))
+				msg = append(msg, message.NewPart(msgBytes))
 			}
 		} else {
 			b, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 
-			msg.Append(message.NewPart(b))
+			msg = append(msg, message.NewPart(b))
 		}
 	}))
 	defer ts.Close()
@@ -276,8 +276,8 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 		select {
 		case resMsg := <-resultChan:
 			assert.Equal(t, 2, resMsg.Len())
-			assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).Get()))
-			assert.Equal(t, testStr+"PART-B", string(resMsg.Get(1).Get()))
+			assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).AsBytes()))
+			assert.Equal(t, testStr+"PART-B", string(resMsg.Get(1).AsBytes()))
 		case <-time.After(time.Second):
 			t.Fatal("Action timed out")
 		}
@@ -309,7 +309,7 @@ func TestHTTPClientReceive(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, 1, resMsg.Len())
-		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).Get()))
+		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).AsBytes()))
 		assert.Equal(t, "", resMsg.Get(0).MetaGet("foo-bar"))
 		assert.Equal(t, "201", resMsg.Get(0).MetaGet("http_status_code"))
 	}
@@ -355,7 +355,7 @@ foo_a: foo a value
 bar_a: 
 foo_b: foo b value
 bar_b: 
-`, string(resMsg.Get(0).Get()))
+`, string(resMsg.Get(0).AsBytes()))
 }
 
 func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
@@ -438,7 +438,7 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			_, err = io.Copy(part, bytes.NewReader(msg.Get(i).Get()))
+			_, err = io.Copy(part, bytes.NewReader(msg.Get(i).AsBytes()))
 			require.NoError(t, err)
 		}
 		writer.Close()
@@ -461,8 +461,8 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, 2, resMsg.Len())
-		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).Get()))
-		assert.Equal(t, testStr+"PART-B", string(resMsg.Get(1).Get()))
+		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).AsBytes()))
+		assert.Equal(t, testStr+"PART-B", string(resMsg.Get(1).AsBytes()))
 		assert.Equal(t, "", resMsg.Get(0).MetaGet("foo-bar"))
 		assert.Equal(t, "201", resMsg.Get(0).MetaGet("http_status_code"))
 		assert.Equal(t, "", resMsg.Get(1).MetaGet("foo-bar"))

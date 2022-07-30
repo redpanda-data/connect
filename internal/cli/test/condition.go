@@ -139,8 +139,7 @@ func parseBloblangCondition(n yaml.Node) (*bloblangCondition, error) {
 
 // Check this condition against a message part.
 func (b *bloblangCondition) Check(p *message.Part) error {
-	msg := message.QuickBatch(nil)
-	msg.Append(p)
+	msg := message.Batch{p}
 	res, err := b.m.QueryPart(0, msg)
 	if err != nil {
 		return err
@@ -159,7 +158,7 @@ type ContentEqualsCondition string
 
 // Check this condition against a message part.
 func (c ContentEqualsCondition) Check(p *message.Part) error {
-	if exp, act := string(c), string(p.Get()); exp != act {
+	if exp, act := string(c), string(p.AsBytes()); exp != act {
 		return fmt.Errorf("content mismatch\n  expected: %v\n  received: %v", blue(exp), red(act))
 	}
 	return nil
@@ -174,8 +173,8 @@ type ContentMatchesCondition string
 // Check this condition against a message part.
 func (c ContentMatchesCondition) Check(p *message.Part) error {
 	re := regexp.MustCompile(string(c))
-	if !re.MatchString(string(p.Get())) {
-		return fmt.Errorf("pattern mismatch\n   pattern: %v\n  received: %v", blue(string(c)), red(string(p.Get())))
+	if !re.MatchString(string(p.AsBytes())) {
+		return fmt.Errorf("pattern mismatch\n   pattern: %v\n  received: %v", blue(string(c)), red(string(p.AsBytes())))
 	}
 	return nil
 }
@@ -190,7 +189,7 @@ type ContentJSONEqualsCondition string
 // Check this condition against a message part.
 func (c ContentJSONEqualsCondition) Check(p *message.Part) error {
 	jdopts := jsondiff.DefaultConsoleOptions()
-	diff, explanation := jsondiff.Compare(p.Get(), []byte(c), &jdopts)
+	diff, explanation := jsondiff.Compare(p.AsBytes(), []byte(c), &jdopts)
 	if diff != jsondiff.FullMatch {
 		return fmt.Errorf("JSON content mismatch\n%v", explanation)
 	}
@@ -207,7 +206,7 @@ type ContentJSONContainsCondition string
 // Check this condition against a message part.
 func (c ContentJSONContainsCondition) Check(p *message.Part) error {
 	jdopts := jsondiff.DefaultConsoleOptions()
-	diff, explanation := jsondiff.Compare(p.Get(), []byte(c), &jdopts)
+	diff, explanation := jsondiff.Compare(p.AsBytes(), []byte(c), &jdopts)
 	if diff != jsondiff.FullMatch && diff != jsondiff.SupersetMatch {
 		return fmt.Errorf("JSON superset mismatch\n%v", explanation)
 	}
@@ -233,7 +232,7 @@ func (c FileEqualsCondition) checkFrom(dir string, p *message.Part) error {
 		return fmt.Errorf("failed to read comparison file: %w", err)
 	}
 
-	if exp, act := string(fileContent), string(p.Get()); exp != act {
+	if exp, act := string(fileContent), string(p.AsBytes()); exp != act {
 		return fmt.Errorf("content mismatch\n  expected: %v\n  received: %v", blue(exp), red(act))
 	}
 	return nil

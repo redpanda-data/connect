@@ -76,7 +76,7 @@ func TestBatcherStandard(t *testing.T) {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
 	}
 	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
-		if exp, act := fmt.Sprintf("test%v", i), string(part.Get()); exp != act {
+		if exp, act := fmt.Sprintf("test%v", i), string(part.AsBytes()); exp != act {
 			t.Errorf("Unexpected message part: %v != %v", act, exp)
 		}
 		return nil
@@ -96,7 +96,7 @@ func TestBatcherStandard(t *testing.T) {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
 	}
 	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
-		if exp, act := fmt.Sprintf("test%v", i+3), string(part.Get()); exp != act {
+		if exp, act := fmt.Sprintf("test%v", i+3), string(part.AsBytes()); exp != act {
 			t.Errorf("Unexpected message part: %v != %v", act, exp)
 		}
 		return nil
@@ -129,7 +129,7 @@ func TestBatcherStandard(t *testing.T) {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
 	}
 	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
-		if exp, act := fmt.Sprintf("test%v", i+6), string(part.Get()); exp != act {
+		if exp, act := fmt.Sprintf("test%v", i+6), string(part.AsBytes()); exp != act {
 			t.Errorf("Unexpected message part: %v != %v", act, exp)
 		}
 		return nil
@@ -207,7 +207,7 @@ func TestBatcherErrorTracking(t *testing.T) {
 
 	assert.Equal(t, 3, tran.Payload.Len())
 	_ = tran.Payload.Iter(func(i int, part *message.Part) error {
-		assert.Equal(t, fmt.Sprintf("test%v", i), string(part.Get()))
+		assert.Equal(t, fmt.Sprintf("test%v", i), string(part.AsBytes()))
 		return nil
 	})
 
@@ -266,7 +266,7 @@ func TestBatcherTiming(t *testing.T) {
 	if exp, act := 1, tran.Payload.Len(); exp != act {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
 	}
-	if exp, act := "foo1", string(tran.Payload.Get(0).Get()); exp != act {
+	if exp, act := "foo1", string(tran.Payload.Get(0).AsBytes()); exp != act {
 		t.Errorf("Unexpected message part: %v != %v", act, exp)
 	}
 
@@ -296,7 +296,7 @@ func TestBatcherTiming(t *testing.T) {
 	if exp, act := 1, tran.Payload.Len(); exp != act {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
 	}
-	if exp, act := "foo2", string(tran.Payload.Get(0).Get()); exp != act {
+	if exp, act := "foo2", string(tran.Payload.Get(0).AsBytes()); exp != act {
 		t.Errorf("Unexpected message part: %v != %v", act, exp)
 	}
 
@@ -352,7 +352,7 @@ func TestBatcherFinalFlush(t *testing.T) {
 	if exp, act := 1, tran.Payload.Len(); exp != act {
 		t.Errorf("Wrong batch size: %v != %v", act, exp)
 	}
-	if exp, act := "foo1", string(tran.Payload.Get(0).Get()); exp != act {
+	if exp, act := "foo1", string(tran.Payload.Get(0).AsBytes()); exp != act {
 		t.Errorf("Unexpected message part: %v != %v", act, exp)
 	}
 

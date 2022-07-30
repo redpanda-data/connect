@@ -65,7 +65,7 @@ func newInsertPart(conf processor.InsertPartConfig, mgr bundle.NewManagement) (p
 	}, nil
 }
 
-func (p *insertPart) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+func (p *insertPart) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	newPartBytes := p.part.Bytes(0, msg)
 
 	index := p.index
@@ -80,20 +80,20 @@ func (p *insertPart) ProcessBatch(ctx context.Context, spans []*tracing.Span, ms
 	}
 
 	newMsg := message.QuickBatch(nil)
-	newPart := msg.Get(0).Copy()
-	newPart.Set(newPartBytes)
+	newPart := msg.Get(0).ShallowCopy()
+	newPart.SetBytes(newPartBytes)
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		if i == index {
-			newMsg.Append(newPart)
+			newMsg = append(newMsg, newPart)
 		}
-		newMsg.Append(p.Copy())
+		newMsg = append(newMsg, p.ShallowCopy())
 		return nil
 	})
 	if index == msg.Len() {
-		newMsg.Append(newPart)
+		newMsg = append(newMsg, newPart)
 	}
 
-	return []*message.Batch{newMsg}, nil
+	return []message.Batch{newMsg}, nil
 }
 
 func (p *insertPart) Close(context.Context) error {

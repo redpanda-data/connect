@@ -45,7 +45,7 @@ type Async interface {
 	// successful a message is returned along with a function used to
 	// acknowledge receipt of the returned message. It's safe to process the
 	// returned message and read the next message asynchronously.
-	ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error)
+	ReadWithContext(ctx context.Context) (message.Batch, AsyncAckFn, error)
 
 	// CloseAsync triggers the shut down of this component but should not block
 	// the calling goroutine.

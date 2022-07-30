@@ -156,14 +156,13 @@ func newCompress(conf processor.CompressConfig, mgr bundle.NewManagement) (*comp
 }
 
 func (c *compressProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	newBytes, err := c.comp(c.level, msg.Get())
+	newBytes, err := c.comp(c.level, msg.AsBytes())
 	if err != nil {
 		c.log.Errorf("Failed to compress message: %v\n", err)
 		return nil, err
 	}
-	newMsg := msg.Copy()
-	newMsg.Set(newBytes)
-	return []*message.Part{newMsg}, nil
+	msg.SetBytes(newBytes)
+	return []*message.Part{msg}, nil
 }
 
 func (c *compressProc) Close(context.Context) error {

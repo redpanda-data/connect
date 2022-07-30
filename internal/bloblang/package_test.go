@@ -203,15 +203,15 @@ func TestMappingParallelExecution(t *testing.T) {
 
 					for j := 0; j < 100; j++ {
 						part := message.NewPart(nil)
-						part.SetJSON(test.input)
+						part.SetStructured(test.input)
 
 						msg := message.QuickBatch(nil)
-						msg.Append(part)
+						msg = append(msg, part)
 
 						p, err := m.MapPart(0, msg)
 						require.NoError(t, err)
 
-						res, err := p.JSON()
+						res, err := p.AsStructuredMut()
 						require.NoError(t, err)
 
 						assert.Equal(t, test.output, res)

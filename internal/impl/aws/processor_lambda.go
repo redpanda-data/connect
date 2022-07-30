@@ -169,40 +169,32 @@ func newLambdaProc(
 //------------------------------------------------------------------------------
 
 func (l *lambdaProc) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	var resultMsg service.MessageBatch
 	if !l.parallel || len(batch) == 1 {
-		resultMsg = batch.Copy()
-		for _, p := range resultMsg {
+		for _, p := range batch {
 			if err := l.client.InvokeV2(p); err != nil {
 				l.log.Errorf("Lambda function '%v' failed: %v\n", l.functionName, err)
 				p.SetError(err)
 			}
 		}
 	} else {
-		parts := make([]*service.Message, len(batch))
-		for i, p := range batch {
-			parts[i] = p.Copy()
-		}
-
 		wg := sync.WaitGroup{}
-		wg.Add(len(parts))
+		wg.Add(len(batch))
 
-		for i := 0; i < len(parts); i++ {
+		for i := 0; i < len(batch); i++ {
 			go func(index int) {
-				err := l.client.InvokeV2(parts[index])
+				err := l.client.InvokeV2(batch[index])
 				if err != nil {
 					l.log.Errorf("Lambda parallel request to '%v' failed: %v\n", l.functionName, err)
-					parts[index].SetError(err)
+					batch[index].SetError(err)
 				}
 				wg.Done()
 			}(i)
 		}
 
 		wg.Wait()
-		resultMsg = service.MessageBatch(parts)
 	}
 
-	return []service.MessageBatch{resultMsg}, nil
+	return []service.MessageBatch{batch}, nil
 }
 
 func (l *lambdaProc) Close(context.Context) error {

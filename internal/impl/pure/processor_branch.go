@@ -309,12 +309,12 @@ pathLoop:
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
-	b.mReceived.Incr(int64(msg.Len()))
+func (b *Branch) ProcessMessage(batch message.Batch) ([]message.Batch, error) {
+	b.mReceived.Incr(int64(batch.Len()))
 	b.mBatchReceived.Incr(1)
 	startedAt := time.Now()
 
-	branchMsg, propSpans := tracing.WithChildSpans(b.tracer, "branch", msg.Copy())
+	branchMsg, propSpans := tracing.WithChildSpans(b.tracer, "branch", batch.ShallowCopy())
 	defer func() {
 		for _, s := range propSpans {
 			s.Finish()
@@ -329,43 +329,40 @@ func (b *Branch) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
 		return nil
 	})
 
-	resultParts, mapErrs, err := b.createResult(parts, msg)
+	resultParts, mapErrs, err := b.createResult(parts, batch)
 	if err != nil {
-		result := msg.Copy()
 		// Add general error to all messages.
-		_ = result.Iter(func(i int, p *message.Part) error {
+		_ = batch.Iter(func(i int, p *message.Part) error {
 			p.ErrorSet(err)
 			return nil
 		})
 		// And override with mapping specific errors where appropriate.
 		for _, e := range mapErrs {
-			result.Get(e.index).ErrorSet(e.err)
+			batch.Get(e.index).ErrorSet(e.err)
 		}
-		msgs := [1]*message.Batch{result}
+		msgs := [1]message.Batch{batch}
 		return msgs[:], nil
 	}
 
-	result := msg.DeepCopy()
 	for _, e := range mapErrs {
-		result.Get(e.index).ErrorSet(e.err)
+		batch.Get(e.index).ErrorSet(e.err)
 		b.log.Errorf("Branch error: %v", e.err)
 	}
 
-	if mapErrs, err = b.overlayResult(result, resultParts); err != nil {
-		_ = result.Iter(func(i int, p *message.Part) error {
+	if mapErrs, err = b.overlayResult(batch, resultParts); err != nil {
+		_ = batch.Iter(func(i int, p *message.Part) error {
 			p.ErrorSet(err)
 			return nil
 		})
-		msgs := [1]*message.Batch{result}
-		return msgs[:], nil
+		return []message.Batch{batch}, nil
 	}
 	for _, e := range mapErrs {
-		result.Get(e.index).ErrorSet(e.err)
+		batch.Get(e.index).ErrorSet(e.err)
 		b.log.Errorf("Branch error: %v", e.err)
 	}
 
 	b.mLatency.Timing(time.Since(startedAt).Nanoseconds())
-	return []*message.Batch{result}, nil
+	return []message.Batch{batch}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -385,7 +382,7 @@ func newBranchMapError(index int, err error) branchMapError {
 // of the payload will remain unchanged, where reduced indexes are nil. This
 // result can be overlayed onto the original message in order to complete the
 // map.
-func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch) ([]*message.Part, []branchMapError, error) {
+func (b *Branch) createResult(parts []*message.Part, referenceMsg message.Batch) ([]*message.Part, []branchMapError, error) {
 	originalLen := len(parts)
 
 	// Create request payloads
@@ -400,7 +397,7 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 			continue
 		}
 		if b.requestMap != nil {
-			_ = parts[i].Set(nil)
+			_ = parts[i].SetBytes(nil)
 			newPart, err := b.requestMap.MapOnto(parts[i], i, referenceMsg)
 			if err != nil {
 				b.mError.Incr(1)
@@ -422,13 +419,11 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 	parts = newParts
 
 	// Execute child processors
-	var procResults []*message.Batch
+	var procResults []message.Batch
 	var err error
 	if len(parts) > 0 {
 		var res error
-		msg := message.QuickBatch(nil)
-		msg.SetAll(parts)
-		if procResults, res = processor.ExecuteAll(b.children, msg); res != nil {
+		if procResults, res = processor.ExecuteAll(b.children, parts); res != nil {
 			err = fmt.Errorf("child processors failed: %v", res)
 		}
 		if len(procResults) == 0 {
@@ -464,7 +459,7 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg *message.Batch
 
 // overlayResult attempts to merge the result of a process_map with the original
 // payload as per the map specified in the postmap and postmap_optional fields.
-func (b *Branch) overlayResult(payload *message.Batch, results []*message.Part) ([]branchMapError, error) {
+func (b *Branch) overlayResult(payload message.Batch, results []*message.Part) ([]branchMapError, error) {
 	if exp, act := payload.Len(), len(results); exp != act {
 		b.mError.Incr(1)
 		return nil, fmt.Errorf(
@@ -473,24 +468,15 @@ func (b *Branch) overlayResult(payload *message.Batch, results []*message.Part) 
 		)
 	}
 
-	resultMsg := message.QuickBatch(nil)
-	resultMsg.SetAll(results)
-
 	var failed []branchMapError
 
 	if b.resultMap != nil {
-		parts := make([]*message.Part, payload.Len())
-		_ = payload.Iter(func(i int, p *message.Part) error {
-			parts[i] = p
-			return nil
-		})
-
 		for i, result := range results {
 			if result == nil {
 				continue
 			}
 
-			newPart, err := b.resultMap.MapOnto(payload.Get(i), i, resultMsg)
+			newPart, err := b.resultMap.MapOnto(payload.Get(i), i, message.Batch(results))
 			if err != nil {
 				b.mError.Incr(1)
 				b.log.Debugf("Failed to map result '%v': %v\n", i, err)
@@ -501,11 +487,9 @@ func (b *Branch) overlayResult(payload *message.Batch, results []*message.Part) 
 
 			// TODO: Allow filtering here?
 			if newPart != nil {
-				parts[i] = newPart
+				payload[i] = newPart
 			}
 		}
-
-		payload.SetAll(parts)
 	}
 
 	b.mBatchSent.Incr(1)
@@ -513,7 +497,7 @@ func (b *Branch) overlayResult(payload *message.Batch, results []*message.Part) 
 	return failed, nil
 }
 
-func alignBranchResult(length int, skipped, failed []int, result []*message.Batch) ([]*message.Part, error) {
+func alignBranchResult(length int, skipped, failed []int, result []message.Batch) ([]*message.Part, error) {
 	resMsgParts := []*message.Part{}
 	for _, m := range result {
 		_ = m.Iter(func(i int, p *message.Part) error {

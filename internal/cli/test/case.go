@@ -157,7 +157,7 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 		c.InputBatches = append(c.InputBatches, c.InputBatch)
 	}
 
-	var inputMsg []*message.Batch
+	var inputMsg []message.Batch
 
 	for _, inputBatch := range c.InputBatches {
 		parts := make([]*message.Part, len(inputBatch))
@@ -174,8 +174,7 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 			parts[i] = part
 		}
 
-		currentBatch := message.QuickBatch(nil)
-		currentBatch.SetAll(parts)
+		currentBatch := message.Batch(parts)
 		inputMsg = append(inputMsg, currentBatch)
 	}
 
@@ -199,7 +198,7 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 		}
 		_ = v.Iter(func(i2 int, part *message.Part) error {
 			if len(expectedBatch) <= i2 {
-				reportFailure(fmt.Sprintf("unexpected message from batch %v: %s", i, part.Get()))
+				reportFailure(fmt.Sprintf("unexpected message from batch %v: %s", i, part.AsBytes()))
 				return nil
 			}
 			condErrs := expectedBatch[i2].CheckAll(dir, part)

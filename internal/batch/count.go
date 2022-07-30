@@ -31,7 +31,7 @@ func CollapsedCount(p *message.Part) int {
 // were combined into the resulting batched message parts. This value could
 // differ from message.Len() when users configure processors that archive
 // batched message parts.
-func MessageCollapsedCount(m *message.Batch) int {
+func MessageCollapsedCount(m message.Batch) int {
 	total := 0
 	_ = m.Iter(func(i int, p *message.Part) error {
 		total += CollapsedCount(p)

@@ -94,7 +94,7 @@ func (o *fanOutOutputBroker) loop() {
 		_ = atomic.AddInt64(&ackPending, 1)
 		pendingResponses := int64(len(o.outputTSChans))
 		for target := range o.outputTSChans {
-			msgCopy, i := ts.Payload.Copy(), target
+			msgCopy, i := ts.Payload.ShallowCopy(), target
 			select {
 			case o.outputTSChans[i] <- message.NewTransactionFunc(msgCopy, func(ctx context.Context, err error) error {
 				if atomic.AddInt64(&pendingResponses, -1) == 0 || err != nil {

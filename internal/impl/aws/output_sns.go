@@ -141,7 +141,7 @@ func isValidSNSAttribute(k, v string) bool {
 	return len(snsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
-func (a *snsWriter) getSNSAttributes(msg *message.Batch, i int) snsAttributes {
+func (a *snsWriter) getSNSAttributes(msg message.Batch, i int) snsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
 	_ = a.metaFilter.Iter(p, func(k, v string) error {
@@ -180,7 +180,7 @@ func (a *snsWriter) getSNSAttributes(msg *message.Batch, i int) snsAttributes {
 	}
 }
 
-func (a *snsWriter) WriteWithContext(wctx context.Context, msg *message.Batch) error {
+func (a *snsWriter) WriteWithContext(wctx context.Context, msg message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}
@@ -192,7 +192,7 @@ func (a *snsWriter) WriteWithContext(wctx context.Context, msg *message.Batch) e
 		attrs := a.getSNSAttributes(msg, i)
 		message := &sns.PublishInput{
 			TopicArn:               aws.String(a.conf.TopicArn),
-			Message:                aws.String(string(p.Get())),
+			Message:                aws.String(string(p.AsBytes())),
 			MessageAttributes:      attrs.attrMap,
 			MessageGroupId:         attrs.groupID,
 			MessageDeduplicationId: attrs.dedupeID,

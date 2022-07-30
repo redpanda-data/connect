@@ -101,17 +101,16 @@ func (c *compiled) ExpandToNode(node *yaml.Node) (*yaml.Node, error) {
 		return nil, fmt.Errorf("invalid config for template component: %w", err)
 	}
 
-	msg := message.QuickBatch(nil)
 	part := message.NewPart(nil)
-	part.SetJSON(generic)
-	msg.Append(part)
+	part.SetStructuredMut(generic)
+	msg := message.Batch{part}
 
 	newPart, err := c.mapping.MapPart(0, msg)
 	if err != nil {
 		return nil, fmt.Errorf("mapping failed for template component: %w", err)
 	}
 
-	resultGeneric, err := newPart.JSON()
+	resultGeneric, err := newPart.AsStructured()
 	if err != nil {
 		return nil, fmt.Errorf("mapping for template component resulted in invalid config: %w", err)
 	}

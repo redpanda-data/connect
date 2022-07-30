@@ -12,13 +12,13 @@ import (
 // message of a batch.
 type Error struct {
 	err        error
-	source     *message.Batch
+	source     message.Batch
 	partErrors map[int]error
 }
 
 // NewError creates a new batch-wide error, where it's possible to add granular
 // errors for individual messages of the batch.
-func NewError(msg *message.Batch, err error) *Error {
+func NewError(msg message.Batch, err error) *Error {
 	if berr, ok := err.(*Error); ok {
 		err = berr.Unwrap()
 	}

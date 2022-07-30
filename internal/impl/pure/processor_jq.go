@@ -147,13 +147,9 @@ func (j *jqProc) getPartMetadata(part *message.Part) map[string]interface{} {
 
 func (j *jqProc) getPartValue(part *message.Part, raw bool) (obj interface{}, err error) {
 	if raw {
-		return string(part.Get()), nil
+		return string(part.AsBytes()), nil
 	}
-	obj, err = part.JSON()
-	if err == nil {
-		obj, err = message.CopyJSON(obj)
-	}
-	if err != nil {
+	if obj, err = part.AsStructured(); err != nil {
 		j.log.Debugf("Failed to parse part into json: %v\n", err)
 		return nil, err
 	}
@@ -161,13 +157,11 @@ func (j *jqProc) getPartValue(part *message.Part, raw bool) (obj interface{}, er
 }
 
 func (j *jqProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	part := msg.Copy()
-
-	in, err := j.getPartValue(part, j.inRaw)
+	in, err := j.getPartValue(msg, j.inRaw)
 	if err != nil {
 		return nil, err
 	}
-	metadata := j.getPartMetadata(part)
+	metadata := j.getPartMetadata(msg)
 
 	var emitted []interface{}
 	iter := j.code.Run(in, metadata)
@@ -198,16 +192,16 @@ func (j *jqProc) Process(ctx context.Context, msg *message.Part) ([]*message.Par
 			return nil, nil
 		}
 
-		part.Set(raw)
-		return []*message.Part{part}, nil
+		msg.SetBytes(raw)
+		return []*message.Part{msg}, nil
 	} else if len(emitted) > 1 {
-		part.SetJSON(emitted)
+		msg.SetStructuredMut(emitted)
 	} else if len(emitted) == 1 {
-		part.SetJSON(emitted[0])
+		msg.SetStructuredMut(emitted[0])
 	} else {
 		return nil, nil
 	}
-	return []*message.Part{part}, nil
+	return []*message.Part{msg}, nil
 }
 
 func (*jqProc) Close(ctx context.Context) error {

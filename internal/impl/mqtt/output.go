@@ -195,7 +195,7 @@ func (m *mqttWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (m *mqttWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (m *mqttWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	m.connMut.RLock()
 	client := m.client
 	m.connMut.RUnlock()
@@ -213,7 +213,7 @@ func (m *mqttWriter) WriteWithContext(ctx context.Context, msg *message.Batch) e
 				m.log.Errorf("Error parsing boolean value from retained flag: %v \n", parseErr)
 			}
 		}
-		mtok := client.Publish(m.topic.String(i, msg), m.conf.QoS, retained, p.Get())
+		mtok := client.Publish(m.topic.String(i, msg), m.conf.QoS, retained, p.AsBytes())
 		mtok.Wait()
 		sendErr := mtok.Error()
 		if sendErr == mqtt.ErrNotConnected {

@@ -15,7 +15,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/io"
 )
 
-func readMsg(t *testing.T, tranChan <-chan message.Transaction) *message.Batch {
+func readMsg(t *testing.T, tranChan <-chan message.Transaction) message.Batch {
 	t.Helper()
 
 	tCtx, done := context.WithTimeout(context.Background(), time.Second)
@@ -55,15 +55,15 @@ func main() {
 
 	msg := readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "foo", string(msg.Get(0).Get()))
+	assert.Equal(t, "foo", string(msg.Get(0).AsBytes()))
 
 	msg = readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "bar", string(msg.Get(0).Get()))
+	assert.Equal(t, "bar", string(msg.Get(0).AsBytes()))
 
 	msg = readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "baz", string(msg.Get(0).Get()))
+	assert.Equal(t, "baz", string(msg.Get(0).AsBytes()))
 
 	select {
 	case _, open := <-i.TransactionChan():
@@ -98,27 +98,27 @@ func main() {
 
 	msg := readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "foo", string(msg.Get(0).Get()))
+	assert.Equal(t, "foo", string(msg.Get(0).AsBytes()))
 
 	msg = readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "bar", string(msg.Get(0).Get()))
+	assert.Equal(t, "bar", string(msg.Get(0).AsBytes()))
 
 	msg = readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "baz", string(msg.Get(0).Get()))
+	assert.Equal(t, "baz", string(msg.Get(0).AsBytes()))
 
 	msg = readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "foo", string(msg.Get(0).Get()))
+	assert.Equal(t, "foo", string(msg.Get(0).AsBytes()))
 
 	msg = readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "bar", string(msg.Get(0).Get()))
+	assert.Equal(t, "bar", string(msg.Get(0).AsBytes()))
 
 	msg = readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "baz", string(msg.Get(0).Get()))
+	assert.Equal(t, "baz", string(msg.Get(0).AsBytes()))
 
 	i.CloseAsync()
 	require.NoError(t, i.WaitForClose(time.Second))
@@ -150,11 +150,11 @@ func main() {
 
 	msg := readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "foo:0", string(msg.Get(0).Get()))
+	assert.Equal(t, "foo:0", string(msg.Get(0).AsBytes()))
 
 	msg = readMsg(t, i.TransactionChan())
 	assert.Equal(t, 1, msg.Len())
-	assert.Equal(t, "foo:1", string(msg.Get(0).Get()))
+	assert.Equal(t, "foo:1", string(msg.Get(0).AsBytes()))
 
 	i.CloseAsync()
 	require.NoError(t, i.WaitForClose(time.Second))

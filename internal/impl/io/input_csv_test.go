@@ -54,11 +54,11 @@ func TestCSVReaderHappy(t *testing.T) {
 		`{"header1":"bar1","header2":"bar2","header3":"bar3"}`,
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 	} {
-		var resMsg *message.Batch
+		var resMsg message.Batch
 		resMsg, _, err = f.ReadWithContext(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, exp, string(resMsg.Get(0).Get()))
+		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()))
 	}
 
 	_, _, err = f.ReadWithContext(context.Background())
@@ -121,13 +121,13 @@ func TestCSVReaderGroupCount(t *testing.T) {
 			`{"bar":"bar7","baz":"baz7","foo":"foo7"}`,
 		},
 	} {
-		var resMsg *message.Batch
+		var resMsg message.Batch
 		resMsg, _, err = f.ReadWithContext(context.Background())
 		require.NoError(t, err)
 
 		require.Equal(t, len(exp), resMsg.Len())
 		for i := 0; i < len(exp); i++ {
-			assert.Equal(t, exp[i], string(resMsg.Get(i).Get()))
+			assert.Equal(t, exp[i], string(resMsg.Get(i).AsBytes()))
 		}
 	}
 
@@ -193,7 +193,7 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 		`{"header4":"bar1","header5":"bar2","header6":"bar3"}`,
 		`{"header4":"baz1","header5":"baz2","header6":"baz3"}`,
 	} {
-		var resMsg *message.Batch
+		var resMsg message.Batch
 		var ackFn input.AsyncAckFn
 		resMsg, ackFn, err = f.ReadWithContext(context.Background())
 		if err == component.ErrNotConnected {
@@ -201,7 +201,7 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 			resMsg, ackFn, err = f.ReadWithContext(context.Background())
 		}
 		require.NoError(t, err, i)
-		assert.Equal(t, exp, string(resMsg.Get(0).Get()), i)
+		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()), i)
 		_ = ackFn(context.Background(), nil)
 	}
 
@@ -251,11 +251,11 @@ func TestCSVReaderCustomComma(t *testing.T) {
 		`{"header1":"bar1","header2":"bar2","header3":"bar3"}`,
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 	} {
-		var resMsg *message.Batch
+		var resMsg message.Batch
 		resMsg, _, err = f.ReadWithContext(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, exp, string(resMsg.Get(0).Get()))
+		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()))
 	}
 
 	_, _, err = f.ReadWithContext(context.Background())
@@ -306,11 +306,11 @@ func TestCSVReaderRelaxed(t *testing.T) {
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 		`{"header1":"buz1","header2":"buz2"}`,
 	} {
-		var resMsg *message.Batch
+		var resMsg message.Batch
 		resMsg, _, err = f.ReadWithContext(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, exp, string(resMsg.Get(0).Get()))
+		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()))
 	}
 
 	_, _, err = f.ReadWithContext(context.Background())
@@ -361,13 +361,13 @@ func TestCSVReaderStrict(t *testing.T) {
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 		errors.New("record on line 5: wrong number of fields"),
 	} {
-		var resMsg *message.Batch
+		var resMsg message.Batch
 		resMsg, _, err = f.ReadWithContext(context.Background())
 
 		switch expT := exp.(type) {
 		case string:
 			require.NoError(t, err)
-			assert.Equal(t, expT, string(resMsg.Get(0).Get()))
+			assert.Equal(t, expT, string(resMsg.Get(0).AsBytes()))
 		case error:
 			assert.EqualError(t, err, expT.Error())
 		}
@@ -454,7 +454,7 @@ func TestLazyQuotes(t *testing.T) {
 		}
 		require.NoError(t, err, test.name)
 
-		actual := string(resMsg.Get(0).Get())
+		actual := string(resMsg.Get(0).AsBytes())
 
 		assert.Equal(t, test.expected, actual, test.name)
 	}

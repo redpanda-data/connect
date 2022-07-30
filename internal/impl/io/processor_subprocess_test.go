@@ -272,8 +272,7 @@ func main() {
 			[]byte(`baz`),
 		})
 		if extra {
-			msgIn.Append(message.NewPart([]byte(``)))
-			msgIn.Append(message.NewPart([]byte("|{o\n\r\no}|")))
+			msgIn = append(msgIn, message.NewPart([]byte(``)), message.NewPart([]byte("|{o\n\r\no}|")))
 		}
 
 		msgs, res := proc.ProcessMessage(msgIn)

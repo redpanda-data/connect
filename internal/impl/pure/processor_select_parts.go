@@ -58,7 +58,7 @@ func newSelectParts(conf processor.SelectPartsConfig, mgr bundle.NewManagement) 
 	}, nil
 }
 
-func (m *selectPartsProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+func (m *selectPartsProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	newMsg := message.QuickBatch(nil)
 
 	lParts := msg.Len()
@@ -71,13 +71,13 @@ func (m *selectPartsProc) ProcessBatch(ctx context.Context, spans []*tracing.Spa
 		if index < 0 || index >= lParts {
 			continue
 		}
-		newMsg.Append(msg.Get(index).Copy())
+		newMsg = append(newMsg, msg.Get(index).ShallowCopy())
 	}
 
 	if newMsg.Len() == 0 {
 		return nil, nil
 	}
-	return []*message.Batch{newMsg}, nil
+	return []message.Batch{newMsg}, nil
 }
 
 func (m *selectPartsProc) Close(ctx context.Context) error {

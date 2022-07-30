@@ -12,9 +12,9 @@ type passthrough struct {
 	called int
 }
 
-func (p *passthrough) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
+func (p *passthrough) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
 	p.called++
-	return []*message.Batch{msg}, nil
+	return []message.Batch{msg}, nil
 }
 
 func (p *passthrough) CloseAsync() {
@@ -41,7 +41,7 @@ func TestExecuteAllBasic(t *testing.T) {
 	if exp, act := 1, msgs[0].Len(); exp != act {
 		t.Fatalf("Wrong count of message parts: %v != %v", act, exp)
 	}
-	if exp, act := "test message", string(msgs[0].Get(0).Get()); exp != act {
+	if exp, act := "test message", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	for _, proc := range procs {
@@ -72,7 +72,7 @@ func TestExecuteAllBasicBatch(t *testing.T) {
 	if exp, act := 3, msgs[0].Len(); exp != act {
 		t.Fatalf("Wrong count of message parts: %v != %v", act, exp)
 	}
-	if exp, act := "test message 1", string(msgs[0].Get(0).Get()); exp != act {
+	if exp, act := "test message 1", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	for _, proc := range procs {
@@ -103,10 +103,10 @@ func TestExecuteAllMulti(t *testing.T) {
 	if exp, act := 1, msgs[1].Len(); exp != act {
 		t.Fatalf("Wrong count of message parts: %v != %v", act, exp)
 	}
-	if exp, act := "test message 1", string(msgs[0].Get(0).Get()); exp != act {
+	if exp, act := "test message 1", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
-	if exp, act := "test message 2", string(msgs[1].Get(0).Get()); exp != act {
+	if exp, act := "test message 2", string(msgs[1].Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	for _, proc := range procs {
@@ -120,7 +120,7 @@ type errored struct {
 	called int
 }
 
-func (p *errored) ProcessMessage(msg *message.Batch) ([]*message.Batch, error) {
+func (p *errored) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
 	p.called++
 	return nil, errors.New("test error")
 }

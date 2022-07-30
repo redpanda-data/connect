@@ -292,7 +292,7 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 
 // CreateRequest forms an *http.Request from a message to be sent as the body,
 // and also a message used to form headers (they can be the same).
-func (h *Client) CreateRequest(sendMsg, refMsg *message.Batch) (req *http.Request, err error) {
+func (h *Client) CreateRequest(sendMsg, refMsg message.Batch) (req *http.Request, err error) {
 	var overrideContentType string
 	var body io.Reader
 	if len(h.multipart) > 0 {
@@ -314,7 +314,7 @@ func (h *Client) CreateRequest(sendMsg, refMsg *message.Batch) (req *http.Reques
 		overrideContentType = writer.FormDataContentType()
 		body = buf
 	} else if sendMsg != nil && sendMsg.Len() == 1 {
-		if msgBytes := sendMsg.Get(0).Get(); len(msgBytes) > 0 {
+		if msgBytes := sendMsg.Get(0).AsBytes(); len(msgBytes) > 0 {
 			if _, exists := h.headers["Content-Type"]; !exists {
 				overrideContentType = "application/octet-stream"
 			}
@@ -342,7 +342,7 @@ func (h *Client) CreateRequest(sendMsg, refMsg *message.Batch) (req *http.Reques
 			if part, err = writer.CreatePart(headers); err != nil {
 				return
 			}
-			if _, err = io.Copy(part, bytes.NewReader(sendMsg.Get(i).Get())); err != nil {
+			if _, err = io.Copy(part, bytes.NewReader(sendMsg.Get(i).AsBytes())); err != nil {
 				return
 			}
 		}
@@ -381,7 +381,7 @@ func (h *Client) CreateRequest(sendMsg, refMsg *message.Batch) (req *http.Reques
 }
 
 // ParseResponse attempts to parse an HTTP response into a 2D slice of bytes.
-func (h *Client) ParseResponse(res *http.Response) (resMsg *message.Batch, err error) {
+func (h *Client) ParseResponse(res *http.Response) (resMsg message.Batch, err error) {
 	resMsg = message.QuickBatch(nil)
 
 	if res.Body != nil {
@@ -417,7 +417,8 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg *message.Batch, err e
 					return
 				}
 
-				index := resMsg.Append(message.NewPart(buffer.Bytes()[bufferIndex : bufferIndex+bytesRead]))
+				resMsg = append(resMsg, message.NewPart(buffer.Bytes()[bufferIndex:bufferIndex+bytesRead]))
+				index := len(resMsg) - 1
 				bufferIndex += bytesRead
 
 				if h.metaExtractFilter.IsSet() {
@@ -437,9 +438,9 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg *message.Batch, err e
 				return
 			}
 			if bytesRead > 0 {
-				resMsg.Append(message.NewPart(buffer.Bytes()[:bytesRead]))
+				resMsg = append(resMsg, message.NewPart(buffer.Bytes()[:bytesRead]))
 			} else {
-				resMsg.Append(message.NewPart(nil))
+				resMsg = append(resMsg, message.NewPart(nil))
 			}
 			if h.metaExtractFilter.IsSet() {
 				part := resMsg.Get(0)
@@ -452,7 +453,7 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg *message.Batch, err e
 			}
 		}
 	} else {
-		resMsg.Append(message.NewPart(nil))
+		resMsg = append(resMsg, message.NewPart(nil))
 	}
 
 	_ = resMsg.Iter(func(i int, p *message.Part) error {
@@ -492,7 +493,7 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 // SendToResponse attempts to create an HTTP request from a provided message,
 // performs it, and then returns the *http.Response, allowing the raw response
 // to be consumed.
-func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg *message.Batch) (res *http.Response, err error) {
+func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg message.Batch) (res *http.Response, err error) {
 	var spans []*tracing.Span
 	if sendMsg != nil {
 		spans = tracing.CreateChildSpans(h.mgr.Tracer(), "http_request", sendMsg)
@@ -608,7 +609,7 @@ func UnexpectedErr(res *http.Response) error {
 //
 // If the request is successful then the response is parsed into a message,
 // including headers added as metadata (when configured to do so).
-func (h *Client) Send(ctx context.Context, sendMsg, refMsg *message.Batch) (*message.Batch, error) {
+func (h *Client) Send(ctx context.Context, sendMsg, refMsg message.Batch) (message.Batch, error) {
 	res, err := h.SendToResponse(ctx, sendMsg, refMsg)
 	if err != nil {
 		return nil, err

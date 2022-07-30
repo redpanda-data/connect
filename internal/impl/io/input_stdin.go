@@ -68,7 +68,7 @@ func (s *stdinConsumer) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *stdinConsumer) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (s *stdinConsumer) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	parts, codecAckFn, err := s.scanner.Next(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) ||
@@ -85,9 +85,7 @@ func (s *stdinConsumer) ReadWithContext(ctx context.Context) (*message.Batch, in
 	}
 	_ = codecAckFn(ctx, nil)
 
-	msg := message.QuickBatch(nil)
-	msg.Append(parts...)
-
+	msg := message.Batch(parts)
 	if msg.Len() == 0 {
 		return nil, nil, component.ErrTimeout
 	}

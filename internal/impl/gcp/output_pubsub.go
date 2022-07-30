@@ -166,7 +166,7 @@ func (c *gcpPubSubWriter) getTopic(ctx context.Context, t string) (*pubsub.Topic
 	return topic, nil
 }
 
-func (c *gcpPubSubWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (c *gcpPubSubWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	topics := make([]*pubsub.Topic, msg.Len())
 	if err := msg.Iter(func(i int, _ *message.Part) error {
 		var tErr error
@@ -185,7 +185,7 @@ func (c *gcpPubSubWriter) WriteWithContext(ctx context.Context, msg *message.Bat
 			return nil
 		})
 		gmsg := &pubsub.Message{
-			Data: part.Get(),
+			Data: part.AsBytes(),
 		}
 		if c.orderingEnabled {
 			gmsg.OrderingKey = c.orderingKey.String(i, msg)

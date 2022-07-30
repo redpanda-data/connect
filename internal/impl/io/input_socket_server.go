@@ -132,7 +132,7 @@ func (t *socketServerInput) Addr() net.Addr {
 	return t.conn.LocalAddr()
 }
 
-func (t *socketServerInput) sendMsg(msg *message.Batch) bool {
+func (t *socketServerInput) sendMsg(msg message.Batch) bool {
 	tStarted := time.Now()
 
 	// Block whilst retries are happening
@@ -268,8 +268,7 @@ acceptLoop:
 				// there's no benefit to aggregating acks.
 				_ = ackFn(t.ctx, nil)
 
-				msg := message.QuickBatch(nil)
-				msg.Append(parts...)
+				msg := message.Batch(parts)
 				if !t.sendMsg(msg) {
 					return
 				}
@@ -318,8 +317,7 @@ func (t *socketServerInput) udpLoop() {
 		// there's no benefit to aggregating acks.
 		_ = ackFn(t.ctx, nil)
 
-		msg := message.QuickBatch(nil)
-		msg.Append(parts...)
+		msg := message.Batch(parts)
 		if !t.sendMsg(msg) {
 			return
 		}

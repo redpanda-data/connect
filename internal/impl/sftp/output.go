@@ -112,7 +112,7 @@ func (s *sftpWriter) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (s *sftpWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (s *sftpWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	s.handleMut.Lock()
 	client := s.client
 	s.handleMut.Unlock()

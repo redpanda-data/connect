@@ -100,7 +100,7 @@ func (a *azureQueueStorageWriter) ConnectWithContext(ctx context.Context) error 
 	return nil
 }
 
-func (a *azureQueueStorageWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (a *azureQueueStorageWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		queueURL := a.serviceURL.NewQueueURL(a.queueName.String(i, msg))
 		msgURL := queueURL.NewMessagesURL()
@@ -119,7 +119,7 @@ func (a *azureQueueStorageWriter) WriteWithContext(ctx context.Context, msg *mes
 			}
 			return 0
 		}()
-		message := string(p.Get())
+		message := string(p.AsBytes())
 		_, err := msgURL.Enqueue(ctx, message, 0, timeToLive)
 		if err != nil {
 			if cerr, ok := err.(azqueue.StorageError); ok {

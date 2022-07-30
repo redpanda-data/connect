@@ -64,7 +64,7 @@ func TestParseLogCases(t *testing.T) {
 			if len(msgsOut) != 1 {
 				tt.Fatalf("Wrong count of result messages: %v != 1", len(msgsOut))
 			}
-			if exp, act := test.output, string(msgsOut[0].Get(0).Get()); exp != act {
+			if exp, act := test.output, string(msgsOut[0].Get(0).AsBytes()); exp != act {
 				tt.Errorf("Wrong result: %v != %v", act, exp)
 			}
 		})
@@ -108,7 +108,7 @@ func TestParseLogRFC5424(t *testing.T) {
 			if len(msgsOut) != 1 {
 				tt.Fatalf("Wrong count of result messages: %v != 1", len(msgsOut))
 			}
-			if exp, act := test.output, string(msgsOut[0].Get(0).Get()); exp != act {
+			if exp, act := test.output, string(msgsOut[0].Get(0).AsBytes()); exp != act {
 				tt.Errorf("Wrong result: %v != %v", act, exp)
 			}
 		})

@@ -177,12 +177,15 @@ output:
 metrics:
   meow:
     foo: foo value from config
+
+logger:
+  level: none
 `))
 
 	strm, err := builder.Build()
 	require.NoError(t, err)
 
-	ctx, done := context.WithTimeout(context.Background(), time.Second)
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
 	defer done()
 
 	require.NoError(t, strm.Run(ctx))
@@ -193,7 +196,7 @@ metrics:
 	assert.Greater(t, testMetrics.values["timer:input_latency_ns:[label path]:[fooinput root.input]"], int64(1))
 	delete(testMetrics.values, "timer:input_latency_ns:[label path]:[fooinput root.input]")
 
-	assert.Greater(t, testMetrics.values["timer:output_latency_ns:[label path]:[foooutput root.output]"], int64(1))
+	assert.GreaterOrEqual(t, testMetrics.values["timer:output_latency_ns:[label path]:[foooutput root.output]"], int64(1))
 	delete(testMetrics.values, "timer:output_latency_ns:[label path]:[foooutput root.output]")
 
 	assert.Equal(t, map[string]int64{

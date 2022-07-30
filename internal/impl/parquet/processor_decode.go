@@ -120,7 +120,7 @@ func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Messa
 			_, _ = s.eConf.extractPQValueGroup(schema.Fields(), row, mappedData, 0, 0)
 
 			newMsg := msg.Copy()
-			newMsg.SetStructured(mappedData)
+			newMsg.SetStructuredMut(mappedData)
 			resBatch = append(resBatch, newMsg)
 		}
 	}

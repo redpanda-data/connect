@@ -81,18 +81,16 @@ func newAirGapBatchBuffer(b BatchBuffer) buffer.ReaderWriter {
 	return &airGapBatchBuffer{b, shutdown.NewSignaller()}
 }
 
-func (a *airGapBatchBuffer) Write(ctx context.Context, msg *message.Batch, aFn buffer.AckFunc) error {
+func (a *airGapBatchBuffer) Write(ctx context.Context, msg message.Batch, aFn buffer.AckFunc) error {
 	parts := make([]*Message, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
-		// Copy because we ack the message after returning, therefore we lose
-		// ownership of the underlying.
-		parts[i] = newMessageFromPart(part).Copy()
+		parts[i] = newMessageFromPart(part)
 		return nil
 	})
 	return a.b.WriteBatch(ctx, parts, AckFunc(aFn))
 }
 
-func (a *airGapBatchBuffer) Read(ctx context.Context) (*message.Batch, buffer.AckFunc, error) {
+func (a *airGapBatchBuffer) Read(ctx context.Context) (message.Batch, buffer.AckFunc, error) {
 	batch, ackFn, err := a.b.ReadBatch(ctx)
 	if err != nil {
 		if errors.Is(err, ErrEndOfBuffer) {
@@ -100,11 +98,12 @@ func (a *airGapBatchBuffer) Read(ctx context.Context) (*message.Batch, buffer.Ac
 		}
 		return nil, nil, err
 	}
-	tMsg := message.QuickBatch(nil)
-	for _, msg := range batch {
-		tMsg.Append(msg.part)
+
+	mBatch := make(message.Batch, len(batch))
+	for i, p := range batch {
+		mBatch[i] = p.part
 	}
-	return tMsg, func(c context.Context, aerr error) error {
+	return mBatch, func(c context.Context, aerr error) error {
 		return ackFn(c, aerr)
 	}, nil
 }

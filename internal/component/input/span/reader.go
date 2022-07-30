@@ -51,7 +51,7 @@ func (s *Reader) ConnectWithContext(ctx context.Context) error {
 // successful a message is returned along with a function used to
 // acknowledge receipt of the returned message. It's safe to process the
 // returned message and read the next message asynchronously.
-func (s *Reader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (s *Reader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	m, afn, err := s.rdr.ReadWithContext(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -63,7 +63,7 @@ func (s *Reader) ReadWithContext(ctx context.Context) (*message.Batch, input.Asy
 		return m, afn, nil
 	}
 
-	structured, err := spanPart.JSON()
+	structured, err := spanPart.AsStructured()
 	if err != nil {
 		s.mgr.Logger().Errorf("Mapping failed for tracing span: %v", err)
 		return m, afn, nil

@@ -79,7 +79,7 @@ func TestFileDirectory(t *testing.T) {
 		}
 
 		res := tran.Payload.Get(0)
-		resStr := string(res.Get())
+		resStr := string(res.AsBytes())
 		if _, exists := act[resStr]; exists {
 			t.Errorf("Received duplicate message: %v", resStr)
 		}

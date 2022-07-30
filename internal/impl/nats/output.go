@@ -132,12 +132,12 @@ func (n *natsWriter) ConnectWithContext(ctx context.Context) error {
 }
 
 // WriteWithContext attempts to write a message.
-func (n *natsWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (n *natsWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	return n.Write(msg)
 }
 
 // Write attempts to write a message.
-func (n *natsWriter) Write(msg *message.Batch) error {
+func (n *natsWriter) Write(msg message.Batch) error {
 	n.connMut.RLock()
 	conn := n.natsConn
 	n.connMut.RUnlock()
@@ -151,7 +151,7 @@ func (n *natsWriter) Write(msg *message.Batch) error {
 		n.log.Debugf("Writing NATS message to topic %s", subject)
 		// fill message data
 		nMsg := nats.NewMsg(subject)
-		nMsg.Data = p.Get()
+		nMsg.Data = p.AsBytes()
 		if conn.HeadersSupported() {
 			// fill bloblang headers
 			for k, v := range n.headers {

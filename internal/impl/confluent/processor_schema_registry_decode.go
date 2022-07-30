@@ -147,13 +147,12 @@ func (s *schemaRegistryDecoder) Process(ctx context.Context, msg *service.Messag
 		return nil, err
 	}
 
-	newMsg := msg.Copy()
-	newMsg.SetBytes(remaining)
-	if err := decoder(newMsg); err != nil {
+	msg.SetBytes(remaining)
+	if err := decoder(msg); err != nil {
 		return nil, err
 	}
 
-	return service.MessageBatch{newMsg}, nil
+	return service.MessageBatch{msg}, nil
 }
 
 func (s *schemaRegistryDecoder) Close(ctx context.Context) error {
@@ -329,7 +328,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 			}
 			m.SetBytes(jb)
 		} else {
-			m.SetStructured(native)
+			m.SetStructuredMut(native)
 		}
 		return nil
 	}

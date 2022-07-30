@@ -238,7 +238,7 @@ func (m *mqttReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (m *mqttReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (m *mqttReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	m.cMut.Lock()
 	msgChan := m.msgChan
 	m.cMut.Unlock()

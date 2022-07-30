@@ -15,10 +15,10 @@ import (
 func TestMessageCopyAirGap(t *testing.T) {
 	p := message.NewPart([]byte("hello world"))
 	p.MetaSet("foo", "bar")
-	g1 := newMessageFromPart(p)
+	g1 := newMessageFromPart(p.ShallowCopy())
 	g2 := g1.Copy()
 
-	b := p.Get()
+	b := p.AsBytes()
 	v := p.MetaGet("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
@@ -38,7 +38,7 @@ func TestMessageCopyAirGap(t *testing.T) {
 	g2.SetBytes([]byte("and now this"))
 	g2.MetaSet("foo", "baz")
 
-	b = p.Get()
+	b = p.AsBytes()
 	v = p.MetaGet("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
@@ -58,7 +58,7 @@ func TestMessageCopyAirGap(t *testing.T) {
 	g1.SetBytes([]byte("but not this"))
 	g1.MetaSet("foo", "buz")
 
-	b = p.Get()
+	b = p.AsBytes()
 	v = p.MetaGet("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
@@ -118,7 +118,7 @@ func TestMessageMutate(t *testing.T) {
 	p := message.NewPart([]byte(`not a json doc`))
 	p.MetaSet("foo", "bar")
 	p.MetaSet("bar", "baz")
-	g1 := newMessageFromPart(p)
+	g1 := newMessageFromPart(p.ShallowCopy())
 
 	_, err := g1.AsStructured()
 	assert.Error(t, err)
@@ -126,7 +126,7 @@ func TestMessageMutate(t *testing.T) {
 	g1.SetStructured(map[string]interface{}{
 		"foo": "bar",
 	})
-	assert.Equal(t, "not a json doc", string(p.Get()))
+	assert.Equal(t, "not a json doc", string(p.AsBytes()))
 
 	s, err := g1.AsStructured()
 	assert.NoError(t, err)
@@ -135,7 +135,7 @@ func TestMessageMutate(t *testing.T) {
 	}, s)
 
 	g1.SetBytes([]byte("foo bar baz"))
-	assert.Equal(t, "not a json doc", string(p.Get()))
+	assert.Equal(t, "not a json doc", string(p.AsBytes()))
 
 	_, err = g1.AsStructured()
 	assert.Error(t, err)
@@ -290,12 +290,11 @@ func BenchmarkMessageMappingNew(b *testing.B) {
 
 func BenchmarkMessageMappingOld(b *testing.B) {
 	part := message.NewPart(nil)
-	part.SetJSON(map[string]interface{}{
+	part.SetStructured(map[string]interface{}{
 		"content": "hello world",
 	})
 
-	msg := message.QuickBatch(nil)
-	msg.Append(part)
+	msg := message.Batch{part}
 
 	blobl, err := ibloblang.GlobalEnvironment().NewMapping("root.new_content = this.content.uppercase()")
 	require.NoError(b, err)
@@ -307,7 +306,7 @@ func BenchmarkMessageMappingOld(b *testing.B) {
 		res, err := blobl.MapPart(0, msg)
 		require.NoError(b, err)
 
-		resI, err := res.JSON()
+		resI, err := res.AsStructuredMut()
 		require.NoError(b, err)
 		assert.Equal(b, map[string]interface{}{
 			"new_content": "HELLO WORLD",

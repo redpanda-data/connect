@@ -7,13 +7,13 @@ import (
 
 // GetAllBytes returns a 2D byte slice representing the raw byte content of the
 // parts of a message.
-func GetAllBytes(m *Batch) [][]byte {
-	if m.Len() == 0 {
+func GetAllBytes(m Batch) [][]byte {
+	if len(m) == 0 {
 		return nil
 	}
-	parts := make([][]byte, m.Len())
+	parts := make([][]byte, len(m))
 	_ = m.Iter(func(i int, p *Part) error {
-		parts[i] = p.Get()
+		parts[i] = p.AsBytes()
 		return nil
 	})
 	return parts

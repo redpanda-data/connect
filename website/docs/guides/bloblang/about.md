@@ -406,7 +406,7 @@ Why? That's a good question. Bloblang supports non-JSON formats too, so it can't
 [blobl.arithmetic]: /docs/guides/bloblang/arithmetic
 [blobl.walkthrough]: /docs/guides/bloblang/walkthrough
 [blobl.variables]: #variables
-[blobl.proc]: /docs/components/processors/bloblang
+[blobl.proc]: /docs/components/processors/mapping
 [blobl.interp]: /docs/configuration/interpolation#bloblang-queries
 [blobl.functions]: /docs/guides/bloblang/functions
 [blobl.functions.meta]: /docs/guides/bloblang/functions#meta

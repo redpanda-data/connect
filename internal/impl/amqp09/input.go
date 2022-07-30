@@ -310,7 +310,7 @@ func amqpSetMetadata(p *message.Part, k string, v interface{}) {
 }
 
 // ReadWithContext a new AMQP09 message.
-func (a *amqp09Reader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (a *amqp09Reader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	var c <-chan amqp.Delivery
 
 	a.m.RLock()
@@ -357,7 +357,7 @@ func (a *amqp09Reader) ReadWithContext(ctx context.Context) (*message.Batch, inp
 		amqpSetMetadata(part, "amqp_exchange", data.Exchange)
 		amqpSetMetadata(part, "amqp_routing_key", data.RoutingKey)
 
-		msg.Append(part)
+		msg = append(msg, part)
 	}
 
 	select {

@@ -456,10 +456,10 @@ func TestWorkflows(t *testing.T) {
 				if m.err != nil {
 					part.ErrorSet(m.err)
 				}
-				inputMsg.Append(part)
+				inputMsg = append(inputMsg, part)
 			}
 
-			msgs, res := p.ProcessMessage(inputMsg)
+			msgs, res := p.ProcessMessage(inputMsg.ShallowCopy())
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
 				require.EqualError(t, res, test.err)
@@ -468,7 +468,7 @@ func TestWorkflows(t *testing.T) {
 				assert.Equal(t, len(test.output), msgs[0].Len())
 				for i, out := range test.output {
 					comparePart := mockMsg{
-						content: string(msgs[0].Get(i).Get()),
+						content: string(msgs[0].Get(i).AsBytes()),
 						meta:    map[string]string{},
 					}
 
@@ -491,7 +491,7 @@ func TestWorkflows(t *testing.T) {
 
 			// Ensure nothing changed
 			for i, m := range test.input {
-				assert.Equal(t, m.content, string(inputMsg.Get(i).Get()))
+				assert.Equal(t, m.content, string(inputMsg.Get(i).AsBytes()))
 			}
 
 			p.CloseAsync()

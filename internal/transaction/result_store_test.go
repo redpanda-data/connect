@@ -10,11 +10,10 @@ import (
 func TestResultStore(t *testing.T) {
 	impl := &resultStoreImpl{}
 	ctx := context.WithValue(context.Background(), ResultStoreKey, impl)
-	msg := message.QuickBatch(nil)
-	p := message.NewPart([]byte("foo"))
-	p = message.WithContext(ctx, p)
-	msg.Append(p)
-	msg.Append(message.NewPart([]byte("bar")))
+	msg := message.Batch{
+		message.WithContext(ctx, message.NewPart([]byte("foo"))),
+		message.NewPart([]byte("bar")),
+	}
 
 	impl.Add(msg)
 	results := impl.Get()
@@ -24,10 +23,10 @@ func TestResultStore(t *testing.T) {
 	if results[0].Len() != 2 {
 		t.Fatalf("Wrong count of messages: %v", results[0].Len())
 	}
-	if exp, act := "foo", string(results[0].Get(0).Get()); exp != act {
+	if exp, act := "foo", string(results[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong message contents: %v != %v", act, exp)
 	}
-	if exp, act := "bar", string(results[0].Get(1).Get()); exp != act {
+	if exp, act := "bar", string(results[0].Get(1).AsBytes()); exp != act {
 		t.Errorf("Wrong message contents: %v != %v", act, exp)
 	}
 	if store := message.GetContext(results[0].Get(0)).Value(ResultStoreKey); store != nil {

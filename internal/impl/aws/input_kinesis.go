@@ -96,7 +96,7 @@ var (
 )
 
 type asyncMessage struct {
-	msg   *message.Batch
+	msg   message.Batch
 	ackFn input.AsyncAckFn
 }
 
@@ -707,7 +707,7 @@ func (k *kinesisReader) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a message from Kinesis.
-func (k *kinesisReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (k *kinesisReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()

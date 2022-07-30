@@ -118,14 +118,13 @@ func newXML(conf processor.XMLConfig, mgr bundle.NewManagement) (*xmlProc, error
 }
 
 func (p *xmlProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	newPart := msg.Copy()
-	root, err := ToMap(newPart.Get(), p.cast)
+	root, err := ToMap(msg.AsBytes(), p.cast)
 	if err != nil {
 		p.log.Debugf("Failed to parse part as XML: %v", err)
 		return nil, err
 	}
-	newPart.SetJSON(root)
-	return []*message.Part{newPart}, nil
+	msg.SetStructuredMut(root)
+	return []*message.Part{msg}, nil
 }
 
 func (p *xmlProc) Close(ctx context.Context) error {

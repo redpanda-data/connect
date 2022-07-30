@@ -202,7 +202,6 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		}
 	}
 
-	batch = batch.Copy()
 	for i, msg := range batch {
 		var args []interface{}
 		resMsg, err := batch.BloblangQuery(i, s.argsMapping)

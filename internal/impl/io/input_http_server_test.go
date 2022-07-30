@@ -92,10 +92,10 @@ func TestHTTPBasic(t *testing.T) {
 		var ts message.Transaction
 		select {
 		case ts = <-h.TransactionChan():
-			if res := string(ts.Payload.Get(0).Get()); res != testStr {
+			if res := string(ts.Payload.Get(0).AsBytes()); res != testStr {
 				t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 			}
-			ts.Payload.Get(0).Set([]byte(testResponse))
+			ts.Payload.Get(0).SetBytes([]byte(testResponse))
 			require.NoError(t, transaction.SetAsResponse(ts.Payload))
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
@@ -136,9 +136,9 @@ func TestHTTPBasic(t *testing.T) {
 		case ts = <-h.TransactionChan():
 			if exp, actual := 2, ts.Payload.Len(); exp != actual {
 				t.Errorf("Wrong number of parts: %v != %v", actual, exp)
-			} else if exp, actual := partOne, string(ts.Payload.Get(0).Get()); exp != actual {
+			} else if exp, actual := partOne, string(ts.Payload.Get(0).AsBytes()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", actual, exp)
-			} else if exp, actual := partTwo, string(ts.Payload.Get(1).Get()); exp != actual {
+			} else if exp, actual := partTwo, string(ts.Payload.Get(1).AsBytes()); exp != actual {
 				t.Errorf("Wrong result, %v != %v", actual, exp)
 			}
 		case <-time.After(time.Second):
@@ -178,10 +178,10 @@ func TestHTTPBasic(t *testing.T) {
 		var ts message.Transaction
 		select {
 		case ts = <-h.TransactionChan():
-			if res := string(ts.Payload.Get(0).Get()); res != testStr {
+			if res := string(ts.Payload.Get(0).AsBytes()); res != testStr {
 				t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 			}
-			ts.Payload.Get(0).Set([]byte(testResponse))
+			ts.Payload.Get(0).SetBytes([]byte(testResponse))
 			require.NoError(t, transaction.SetAsResponse(ts.Payload))
 		case <-time.After(time.Second):
 			t.Error("Timed out waiting for message")
@@ -237,7 +237,7 @@ func TestHTTPServerLifecycle(t *testing.T) {
 	conf.HTTPServer.Path = "/foo/bar"
 
 	timeout := time.Second * 5
-	readNextMsg := func(in input.Streamed) (*message.Batch, error) {
+	readNextMsg := func(in input.Streamed) (message.Batch, error) {
 		t.Helper()
 		var tran message.Transaction
 		select {
@@ -329,7 +329,7 @@ func TestHTTPServerMetadata(t *testing.T) {
 
 	timeout := time.Second * 5
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-server.TransactionChan():
@@ -395,7 +395,7 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 		defer resp.Body.Close()
 	}()
 
-	readNextMsg := func() (*message.Batch, error) {
+	readNextMsg := func() (message.Batch, error) {
 		var tran message.Transaction
 		select {
 		case tran = <-server.TransactionChan():
@@ -790,9 +790,7 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if exp, act := input, string(resBytes); exp != act {
-			t.Errorf("Wrong sync response: %v != %v", act, exp)
-		}
+		assert.JSONEq(t, input, string(resBytes))
 		if exp, act := "application/json", res.Header.Get("Content-Type"); exp != act {
 			t.Errorf("Wrong sync response header: %v != %v", act, exp)
 		}
@@ -813,7 +811,7 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	var ts message.Transaction
 	select {
 	case ts = <-h.TransactionChan():
-		if res := string(ts.Payload.Get(0).Get()); res != input {
+		if res := string(ts.Payload.Get(0).AsBytes()); res != input {
 			t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 		}
 		require.NoError(t, transaction.SetAsResponse(ts.Payload))
@@ -941,10 +939,10 @@ func TestHTTPSyncResponseMultipart(t *testing.T) {
 	select {
 	case ts = <-h.TransactionChan():
 		for i, in := range input {
-			assert.Equal(t, in, string(ts.Payload.Get(i).Get()))
+			assert.Equal(t, in, string(ts.Payload.Get(i).AsBytes()))
 		}
 		for i, o := range output {
-			ts.Payload.Get(i).Set([]byte(o))
+			ts.Payload.Get(i).SetBytes([]byte(o))
 		}
 		require.NoError(t, transaction.SetAsResponse(ts.Payload))
 	case <-time.After(time.Second):
@@ -1005,9 +1003,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if exp, act := input, string(resBytes); exp != act {
-			t.Errorf("Wrong sync response: %v != %v", act, exp)
-		}
+		assert.JSONEq(t, input, string(resBytes))
 		if exp, act := "application/json", res.Header.Get("Content-Type"); exp != act {
 			t.Errorf("Wrong sync response header: %v != %v", act, exp)
 		}
@@ -1029,9 +1025,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if exp, act := input, string(resBytes); exp != act {
-			t.Errorf("Wrong sync response: %v != %v", act, exp)
-		}
+		assert.JSONEq(t, input, string(resBytes))
 		if exp, act := "application/json", res.Header.Get("Content-Type"); exp != act {
 			t.Errorf("Wrong sync response header: %v != %v", act, exp)
 		}
@@ -1044,7 +1038,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 	var ts message.Transaction
 	select {
 	case ts = <-h.TransactionChan():
-		if res := string(ts.Payload.Get(0).Get()); res != input {
+		if res := string(ts.Payload.Get(0).AsBytes()); res != input {
 			t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 		}
 		require.NoError(t, transaction.SetAsResponse(ts.Payload))
@@ -1056,7 +1050,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 	// Errored message
 	select {
 	case ts = <-h.TransactionChan():
-		if res := string(ts.Payload.Get(0).Get()); res != input {
+		if res := string(ts.Payload.Get(0).AsBytes()); res != input {
 			t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 		}
 		ts.Payload.Get(0).MetaSet("status", "400")

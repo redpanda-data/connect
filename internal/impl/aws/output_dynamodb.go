@@ -265,7 +265,7 @@ func jsonToMap(path string, root interface{}) (*dynamodb.AttributeValue, error) 
 	return walkJSON(gObj.Data()), nil
 }
 
-func (d *dynamoDBWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (d *dynamoDBWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	if d.client == nil {
 		return component.ErrNotConnected
 	}
@@ -291,7 +291,7 @@ func (d *dynamoDBWriter) WriteWithContext(ctx context.Context, msg *message.Batc
 			}
 		}
 		if len(d.jsonMapColumns) > 0 {
-			jRoot, err := p.JSON()
+			jRoot, err := p.AsStructured()
 			if err != nil {
 				d.log.Errorf("Failed to extract JSON maps from document: %v", err)
 			} else {

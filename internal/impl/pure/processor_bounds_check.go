@@ -51,7 +51,7 @@ func newBoundsCheck(conf processor.BoundsCheckConfig, mgr bundle.NewManagement) 
 	}, nil
 }
 
-func (m *boundsCheck) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+func (m *boundsCheck) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	lParts := msg.Len()
 	if lParts < m.conf.MinParts {
 		m.log.Debugf(
@@ -69,7 +69,7 @@ func (m *boundsCheck) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 
 	var reject bool
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		if size := len(p.Get()); size > m.conf.MaxPartSize ||
+		if size := len(p.AsBytes()); size > m.conf.MaxPartSize ||
 			size < m.conf.MinPartSize {
 			m.log.Debugf(
 				"Rejecting message due to message part size (%v -> %v): %v\n",
@@ -86,7 +86,7 @@ func (m *boundsCheck) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 		return nil, nil
 	}
 
-	msgs := [1]*message.Batch{msg}
+	msgs := [1]message.Batch{msg}
 	return msgs[:], nil
 }
 

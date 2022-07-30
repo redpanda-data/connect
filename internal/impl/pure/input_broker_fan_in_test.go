@@ -55,8 +55,8 @@ func TestBasicFanIn(t *testing.T) {
 				var ts message.Transaction
 				select {
 				case ts = <-fanIn.TransactionChan():
-					if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+					if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+						t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 					}
 				case <-time.After(time.Second * 5):
 					t.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)
@@ -176,7 +176,7 @@ func TestFanInAsync(t *testing.T) {
 			t.Errorf("Timed out waiting for broker propagate: %v", i)
 			return
 		}
-		require.NoError(t, ts.Ack(tCtx, errors.New(string(ts.Payload.Get(0).Get()))))
+		require.NoError(t, ts.Ack(tCtx, errors.New(string(ts.Payload.Get(0).AsBytes()))))
 	}
 
 	wg.Wait()
@@ -224,8 +224,8 @@ func BenchmarkBasicFanIn(b *testing.B) {
 			var ts message.Transaction
 			select {
 			case ts = <-fanIn.TransactionChan():
-				if !bytes.Equal(ts.Payload.Get(0).Get(), content[0]) {
-					b.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).Get(), content[0])
+				if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
+					b.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 				}
 			case <-time.After(time.Second * 5):
 				b.Errorf("Timed out waiting for broker propagate: %v, %v", i, j)

@@ -160,7 +160,7 @@ func (r *indefiniteRetry) loop() {
 
 		rChan := make(chan error)
 		select {
-		case r.transactionsOut <- message.NewTransaction(tran.Payload, rChan):
+		case r.transactionsOut <- message.NewTransaction(tran.Payload.ShallowCopy(), rChan):
 		case <-r.shutSig.CloseAtLeisureChan():
 			return
 		}
@@ -218,7 +218,7 @@ func (r *indefiniteRetry) loop() {
 					}
 
 					select {
-					case r.transactionsOut <- message.NewTransaction(ts.Payload, resChan):
+					case r.transactionsOut <- message.NewTransaction(ts.Payload.ShallowCopy(), resChan):
 					case <-r.shutSig.CloseAtLeisureChan():
 						return
 					}

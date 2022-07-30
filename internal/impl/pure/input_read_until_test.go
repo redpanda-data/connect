@@ -90,7 +90,7 @@ func testReadUntilBasic(inConf input.Config, t *testing.T) {
 			t.Fatal("timed out")
 		}
 
-		if exp, act := expMsg, string(tran.Payload.Get(0).Get()); exp != act {
+		if exp, act := expMsg, string(tran.Payload.Get(0).AsBytes()); exp != act {
 			t.Errorf("Wrong message contents: %v != %v", act, exp)
 		}
 		if i == len(expMsgs)-1 {
@@ -154,7 +154,7 @@ func testReadUntilRetry(inConf input.Config, t *testing.T) {
 		}
 
 		i++
-		act := string(tran.Payload.Get(0).Get())
+		act := string(tran.Payload.Get(0).AsBytes())
 		if _, exists := expMsgs[act]; !exists {
 			t.Errorf("Unexpected message contents '%v': %v", i, act)
 		} else {
@@ -195,7 +195,7 @@ remainingLoop:
 			t.Fatal("timed out")
 		}
 
-		act := string(tran.Payload.Get(0).Get())
+		act := string(tran.Payload.Get(0).AsBytes())
 		if _, exists := expMsgs[act]; !exists {
 			t.Errorf("Unexpected message contents '%v': %v", i, act)
 		} else {

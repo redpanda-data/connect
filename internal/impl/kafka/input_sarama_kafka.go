@@ -134,7 +134,7 @@ func newKafkaInput(conf input.Config, mgr bundle.NewManagement, log log.Modular,
 //------------------------------------------------------------------------------
 
 type asyncMessage struct {
-	msg   *message.Batch
+	msg   message.Batch
 	ackFn input.AsyncAckFn
 }
 
@@ -300,9 +300,9 @@ func newKafkaReader(conf input.KafkaConfig, mgr bundle.NewManagement, log log.Mo
 
 //------------------------------------------------------------------------------
 
-func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, *message.Batch, int64) bool {
+func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, message.Batch, int64) bool {
 	cp := checkpoint.NewCapped(int64(k.conf.CheckpointLimit))
-	return func(ctx context.Context, c chan<- asyncMessage, msg *message.Batch, offset int64) bool {
+	return func(ctx context.Context, c chan<- asyncMessage, msg message.Batch, offset int64) bool {
 		if msg == nil {
 			return true
 		}
@@ -339,9 +339,9 @@ func (k *kafkaReader) asyncCheckpointer(topic string, partition int32) func(cont
 	}
 }
 
-func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, *message.Batch, int64) bool {
+func (k *kafkaReader) syncCheckpointer(topic string, partition int32) func(context.Context, chan<- asyncMessage, message.Batch, int64) bool {
 	ackedChan := make(chan error)
-	return func(ctx context.Context, c chan<- asyncMessage, msg *message.Batch, offset int64) bool {
+	return func(ctx context.Context, c chan<- asyncMessage, msg message.Batch, offset int64) bool {
 		if msg == nil {
 			return true
 		}
@@ -483,7 +483,7 @@ func (k *kafkaReader) ConnectWithContext(ctx context.Context) error {
 }
 
 // ReadWithContext attempts to read a message from a kafkaReader topic.
-func (k *kafkaReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (k *kafkaReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()

@@ -74,7 +74,7 @@ func newResourceProcessor(conf processor.Config, mgr bundle.NewManagement, log l
 	}, nil
 }
 
-func (r *resourceProcessor) ProcessMessage(msg *message.Batch) (msgs []*message.Batch, res error) {
+func (r *resourceProcessor) ProcessMessage(msg message.Batch) (msgs []message.Batch, res error) {
 	if err := r.mgr.AccessProcessor(context.Background(), r.name, func(p processor.V1) {
 		msgs, res = p.ProcessMessage(msg)
 	}); err != nil {

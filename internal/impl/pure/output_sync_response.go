@@ -74,7 +74,7 @@ func (s SyncResponseWriter) ConnectWithContext(ctx context.Context) error {
 
 // WriteWithContext writes a message batch to a ResultStore located in the first
 // message of the batch.
-func (s SyncResponseWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (s SyncResponseWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	return transaction.SetAsResponse(msg)
 }
 

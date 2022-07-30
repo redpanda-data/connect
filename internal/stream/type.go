@@ -8,9 +8,10 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	ibuffer "github.com/benthosdev/benthos/v4/internal/component/buffer"
-	iinput "github.com/benthosdev/benthos/v4/internal/component/input"
-	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/buffer"
+	"github.com/benthosdev/benthos/v4/internal/component/input"
+	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
@@ -21,10 +22,10 @@ import (
 type Type struct {
 	conf Config
 
-	inputLayer    iinput.Streamed
-	bufferLayer   ibuffer.Streamed
-	pipelineLayer pipeline.Type
-	outputLayer   ioutput.Streamed
+	inputLayer    input.Streamed
+	bufferLayer   buffer.Streamed
+	pipelineLayer processor.Pipeline
+	outputLayer   output.Streamed
 
 	manager bundle.NewManagement
 
@@ -130,7 +131,7 @@ func (t *Type) start() (err error) {
 		return
 	}
 
-	go func(out ioutput.Streamed) {
+	go func(out output.Streamed) {
 		for {
 			if err := out.WaitForClose(time.Second); err == nil {
 				t.onClose()

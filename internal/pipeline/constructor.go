@@ -31,7 +31,7 @@ func NewConfig() Config {
 //------------------------------------------------------------------------------
 
 // New creates an input type based on an input configuration.
-func New(conf Config, mgr bundle.NewManagement) (Type, error) {
+func New(conf Config, mgr bundle.NewManagement) (processor.Pipeline, error) {
 	processors := make([]processor.V1, len(conf.Processors))
 	for j, procConf := range conf.Processors {
 		var err error

@@ -211,7 +211,7 @@ func (s *parquetProcessor) processBatchReader(ctx context.Context, batch service
 			}
 			for _, v := range res {
 				outMsg := m.Copy()
-				outMsg.SetStructured(v)
+				outMsg.SetStructuredMut(v)
 				outBatch = append(outBatch, outMsg)
 			}
 		}
@@ -250,7 +250,7 @@ func (s *parquetProcessor) processBatchWriter(ctx context.Context, batch service
 		return nil, fmt.Errorf("failed to close parquet writer: %w", err)
 	}
 
-	outMsg := batch[0].Copy()
+	outMsg := batch[0]
 	outMsg.SetBytes(buf.Bytes())
 	return []service.MessageBatch{{outMsg}}, nil
 }

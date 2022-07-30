@@ -186,7 +186,7 @@ func (s *subprocessReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *subprocessReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (s *subprocessReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msgChan, errChan := s.msgChan, s.errChan
 	if msgChan == nil {
 		return nil, nil, component.ErrNotConnected
@@ -202,8 +202,7 @@ func (s *subprocessReader) ReadWithContext(ctx context.Context) (*message.Batch,
 			}
 			return nil, nil, component.ErrTypeClosed
 		}
-		msg := message.QuickBatch(nil)
-		msg.Append(message.NewPart(b))
+		msg := message.Batch{message.NewPart(b)}
 		return msg, func(context.Context, error) error { return nil }, nil
 	case err, open := <-errChan:
 		if !open {

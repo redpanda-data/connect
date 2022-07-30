@@ -227,7 +227,7 @@ func (h *httpServerOutput) getHandler(w http.ResponseWriter, r *http.Request) {
 			if part, err = writer.CreatePart(textproto.MIMEHeader{
 				"Content-Type": []string{"application/octet-stream"},
 			}); err == nil {
-				_, err = io.Copy(part, bytes.NewReader(ts.Payload.Get(i).Get()))
+				_, err = io.Copy(part, bytes.NewReader(ts.Payload.Get(i).AsBytes()))
 			}
 		}
 
@@ -236,7 +236,7 @@ func (h *httpServerOutput) getHandler(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(body.Bytes())
 	} else {
 		w.Header().Add("Content-Type", "application/octet-stream")
-		_, _ = w.Write(ts.Payload.Get(0).Get())
+		_, _ = w.Write(ts.Payload.Get(0).AsBytes())
 	}
 
 	h.mGetBatchSent.Incr(1)
@@ -277,7 +277,7 @@ func (h *httpServerOutput) streamHandler(w http.ResponseWriter, r *http.Request)
 
 		var data []byte
 		if ts.Payload.Len() == 1 {
-			data = ts.Payload.Get(0).Get()
+			data = ts.Payload.Get(0).AsBytes()
 		} else {
 			data = append(bytes.Join(message.GetAllBytes(ts.Payload), []byte("\n")), byte('\n'))
 		}

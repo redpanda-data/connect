@@ -668,7 +668,7 @@ bar""")`,
 				if m.err != nil {
 					part.ErrorSet(m.err)
 				}
-				msg.Append(part)
+				msg = append(msg, part)
 			}
 
 			e, perr := tryParseQuery(test.input)

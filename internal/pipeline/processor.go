@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
-	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
+	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
@@ -18,7 +18,7 @@ import (
 // The processor will read from a source, perform some processing, and then
 // either propagate a new message or drop it.
 type Processor struct {
-	msgProcessors []iprocessor.V1
+	msgProcessors []processor.V1
 
 	messagesOut chan message.Transaction
 	responsesIn chan error
@@ -29,7 +29,7 @@ type Processor struct {
 }
 
 // NewProcessor returns a new message processing pipeline.
-func NewProcessor(msgProcessors ...iprocessor.V1) *Processor {
+func NewProcessor(msgProcessors ...processor.V1) *Processor {
 	return &Processor{
 		msgProcessors: msgProcessors,
 		messagesOut:   make(chan message.Transaction),
@@ -67,7 +67,7 @@ func (p *Processor) loop() {
 			return
 		}
 
-		resultMsgs, resultRes := iprocessor.ExecuteAll(p.msgProcessors, tran.Payload)
+		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
 			if err := tran.Ack(closeCtx, resultRes); err != nil && closeCtx.Err() != nil {
 				return
@@ -89,7 +89,7 @@ func (p *Processor) loop() {
 
 // dispatchMessages attempts to send a multiple messages results of processors
 // over the shared messages channel. This send is retried until success.
-func (p *Processor) dispatchMessages(ctx context.Context, msgs []*message.Batch, ackFn func(context.Context, error) error) {
+func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, ackFn func(context.Context, error) error) {
 	throt := throttle.New(throttle.OptCloseChan(p.shutSig.CloseAtLeisureChan()))
 
 	pending := msgs
@@ -97,12 +97,12 @@ func (p *Processor) dispatchMessages(ctx context.Context, msgs []*message.Batch,
 		wg := sync.WaitGroup{}
 		wg.Add(len(pending))
 
-		var newPending []*message.Batch
+		var newPending []message.Batch
 		var newPendingMut sync.Mutex
 
 		for _, b := range pending {
 			b := b
-			transac := message.NewTransactionFunc(b, func(ctx context.Context, err error) error {
+			transac := message.NewTransactionFunc(b.ShallowCopy(), func(ctx context.Context, err error) error {
 				if err != nil {
 					newPendingMut.Lock()
 					newPending = append(newPending, b)

@@ -634,7 +634,7 @@ func (a *csvReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, err
 	}
 
 	part := message.NewPart(nil)
-	part.SetJSON(obj)
+	part.SetStructuredMut(obj)
 
 	return []*message.Part{part}, a.ack, nil
 }
@@ -919,7 +919,7 @@ func isEmpty(p []*message.Part) bool {
 	if len(p) == 0 {
 		return true
 	}
-	if len(p) == 1 && len(p[0].Get()) == 0 {
+	if len(p) == 1 && len(p[0].AsBytes()) == 0 {
 		return true
 	}
 	return false

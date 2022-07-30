@@ -102,8 +102,8 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 			require.NoError(t, err)
 			require.NoError(t, ackFn(context.Background(), nil))
 			require.Len(t, p, 1)
-			assert.Equal(t, exp, string(p[0].Get()))
-			allReads[string(p[0].Get())] = p[0].Get()
+			assert.Equal(t, exp, string(p[0].AsBytes()))
+			allReads[string(p[0].AsBytes())] = p[0].AsBytes()
 		}
 
 		_, _, err = r.Next(context.Background())
@@ -138,8 +138,8 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 			require.NoError(t, err)
 			require.NoError(t, ackFn(context.Background(), nil))
 			require.Len(t, p, 1)
-			assert.Equal(t, exp, string(p[0].Get()))
-			allReads[string(p[0].Get())] = p[0].Get()
+			assert.Equal(t, exp, string(p[0].AsBytes()))
+			allReads[string(p[0].AsBytes())] = p[0].AsBytes()
 		}
 
 		_, _, err = r.Next(context.Background())
@@ -174,8 +174,8 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 			require.NoError(t, err)
 			require.NoError(t, ackFn(context.Background(), nil))
 			require.Len(t, p, 1)
-			assert.Equal(t, exp, string(p[0].Get()))
-			allReads[string(p[0].Get())] = p[0].Get()
+			assert.Equal(t, exp, string(p[0].AsBytes()))
+			allReads[string(p[0].AsBytes())] = p[0].AsBytes()
 		}
 
 		_, _, err = r.Next(context.Background())
@@ -211,8 +211,8 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 			require.NoError(t, err)
 			require.Len(t, p, 1)
 			ackFns = append(ackFns, ackFn)
-			assert.Equal(t, exp, string(p[0].Get()))
-			allReads[string(p[0].Get())] = p[0].Get()
+			assert.Equal(t, exp, string(p[0].AsBytes()))
+			allReads[string(p[0].AsBytes())] = p[0].AsBytes()
 		}
 
 		_, _, err = r.Next(context.Background())
@@ -254,8 +254,8 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 			p, ackFn, err := r.Next(context.Background())
 			require.NoError(t, err)
 			require.Len(t, p, 1)
-			assert.Equal(t, exp, string(p[0].Get()))
-			allReads[string(p[0].Get())] = p[0].Get()
+			assert.Equal(t, exp, string(p[0].AsBytes()))
+			allReads[string(p[0].AsBytes())] = p[0].AsBytes()
 
 			go func() {
 				defer wg.Done()
@@ -300,8 +300,8 @@ func testReaderSuite(t *testing.T, codec, path string, data []byte, expected ...
 				require.NoError(t, err)
 				require.Len(t, p, 1)
 				ackFns = append(ackFns, ackFn)
-				assert.Equal(t, exp, string(p[0].Get()))
-				allReads[string(p[0].Get())] = p[0].Get()
+				assert.Equal(t, exp, string(p[0].AsBytes()))
+				allReads[string(p[0].AsBytes())] = p[0].AsBytes()
 			}
 
 			_, _, err = r.Next(context.Background())
@@ -536,7 +536,7 @@ func TestTarGzipReaderOld(t *testing.T) {
 func strsFromParts(ps []*message.Part) []string {
 	var strs []string
 	for _, part := range ps {
-		strs = append(strs, string(part.Get()))
+		strs = append(strs, string(part.AsBytes()))
 	}
 	return strs
 }

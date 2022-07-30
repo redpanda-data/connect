@@ -58,7 +58,7 @@ func newSleep(conf processor.SleepConfig, mgr bundle.NewManagement) (*sleepProc,
 	return t, nil
 }
 
-func (s *sleepProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+func (s *sleepProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		period, err := time.ParseDuration(s.durationStr.String(i, msg))
 		if err != nil {
@@ -74,7 +74,7 @@ func (s *sleepProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 		}
 		return nil
 	})
-	return []*message.Batch{msg}, nil
+	return []message.Batch{msg}, nil
 }
 
 func (s *sleepProc) Close(ctx context.Context) error {

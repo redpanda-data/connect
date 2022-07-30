@@ -16,11 +16,11 @@ import (
 type asyncPreserverResend struct {
 	boff     backoff.BackOff
 	attempts int
-	msg      *message.Batch
+	msg      message.Batch
 	ackFn    AsyncAckFn
 }
 
-func newResendMsg(msg *message.Batch, ackFn AsyncAckFn) asyncPreserverResend {
+func newResendMsg(msg message.Batch, ackFn AsyncAckFn) asyncPreserverResend {
 	boff := backoff.NewExponentialBackOff()
 	boff.InitialInterval = time.Millisecond
 	boff.MaxInterval = time.Second
@@ -73,14 +73,14 @@ func (p *AsyncPreserver) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (p *AsyncPreserver) wrapAckFn(m asyncPreserverResend) (*message.Batch, AsyncAckFn) {
+func (p *AsyncPreserver) wrapAckFn(m asyncPreserverResend) (message.Batch, AsyncAckFn) {
 	if m.msg.Len() == 1 {
 		return p.wrapSingleAckFn(m)
 	}
 	return p.wrapBatchAckFn(m)
 }
 
-func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (*message.Batch, AsyncAckFn) {
+func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (message.Batch, AsyncAckFn) {
 	sortGroup, trackedMsg := message.NewSortGroup(m.msg)
 
 	return trackedMsg, func(ctx context.Context, res error) error {
@@ -93,7 +93,7 @@ func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (*message.Batch,
 						return true
 					}
 					if tagIndex := sortGroup.GetIndex(p); tagIndex >= 0 {
-						resendMsg.Append(m.msg.Get(tagIndex))
+						resendMsg = append(resendMsg, m.msg.Get(tagIndex))
 						return true
 					}
 
@@ -119,7 +119,7 @@ func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (*message.Batch,
 	}
 }
 
-func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (*message.Batch, AsyncAckFn) {
+func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (message.Batch, AsyncAckFn) {
 	return m.msg, func(ctx context.Context, res error) error {
 		if res != nil {
 			p.msgsMut.Lock()
@@ -134,7 +134,7 @@ func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (*message.Batch
 }
 
 // ReadWithContext attempts to read a new message from the source.
-func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (*message.Batch, AsyncAckFn, error) {
+func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (message.Batch, AsyncAckFn, error) {
 	var cancel func()
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
@@ -163,13 +163,13 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (*message.Batch, A
 			}
 		}
 		sendMsg, ackFn := p.wrapAckFn(resend)
-		return sendMsg, ackFn, nil
+		return sendMsg.ShallowCopy(), ackFn, nil
 	}
 	p.resendInterrupt = cancel
 	p.msgsMut.Unlock()
 
 	var (
-		msg *message.Batch
+		msg message.Batch
 		aFn AsyncAckFn
 		err error
 	)
@@ -201,7 +201,7 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (*message.Batch, A
 	}
 	atomic.AddInt64(&p.pendingMessages, 1)
 	sendMsg, ackFn := p.wrapAckFn(newResendMsg(msg, aFn))
-	return sendMsg, ackFn, nil
+	return sendMsg.ShallowCopy(), ackFn, nil
 }
 
 // CloseAsync triggers the asynchronous closing of the reader.

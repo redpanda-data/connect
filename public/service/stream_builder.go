@@ -168,8 +168,7 @@ func (s *StreamBuilder) AddProducerFunc() (MessageHandlerFunc, error) {
 	s.inputs = append(s.inputs, conf)
 
 	return func(ctx context.Context, m *Message) error {
-		tmpMsg := message.QuickBatch(nil)
-		tmpMsg.Append(m.part)
+		tmpMsg := message.Batch{m.part}
 		resChan := make(chan error)
 		select {
 		case tChan <- message.NewTransaction(tmpMsg, resChan):
@@ -217,9 +216,9 @@ func (s *StreamBuilder) AddBatchProducerFunc() (MessageBatchHandlerFunc, error) 
 	s.inputs = append(s.inputs, conf)
 
 	return func(ctx context.Context, b MessageBatch) error {
-		tmpMsg := message.QuickBatch(nil)
-		for _, m := range b {
-			tmpMsg.Append(m.part)
+		tmpMsg := make(message.Batch, len(b))
+		for i, m := range b {
+			tmpMsg[i] = m.part
 		}
 		resChan := make(chan error)
 		select {

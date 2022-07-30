@@ -188,7 +188,7 @@ func (a *azureTableStorageWriter) ConnectWithContext(ctx context.Context) error 
 	return nil
 }
 
-func (a *azureTableStorageWriter) WriteWithContext(wctx context.Context, msg *message.Batch) error {
+func (a *azureTableStorageWriter) WriteWithContext(wctx context.Context, msg message.Batch) error {
 	writeReqs := make(map[string]map[string][]*aztables.EDMEntity)
 	if err := output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		entity := &aztables.EDMEntity{}
@@ -208,10 +208,10 @@ func (a *azureTableStorageWriter) WriteWithContext(wctx context.Context, msg *me
 	return a.execBatch(wctx, writeReqs)
 }
 
-func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg *message.Batch) map[string]interface{} {
+func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg message.Batch) map[string]interface{} {
 	properties := make(map[string]interface{})
 	if len(a.properties) == 0 {
-		err := json.Unmarshal(p.Get(), &properties)
+		err := json.Unmarshal(p.AsBytes(), &properties)
 		if err != nil {
 			a.log.Errorf("error unmarshalling message: %v.", err)
 		}

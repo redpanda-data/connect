@@ -31,7 +31,7 @@ func TestInputWrapperSwap(t *testing.T) {
 	select {
 	case tran, open := <-iWrapper.TransactionChan():
 		require.True(t, open)
-		assert.Equal(t, `{"name":"from root generate"}`, string(tran.Payload.Get(0).Get()))
+		assert.Equal(t, `{"name":"from root generate"}`, string(tran.Payload.Get(0).AsBytes()))
 		assert.NoError(t, tran.Ack(ctx, nil))
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
@@ -59,7 +59,7 @@ func TestInputWrapperSwap(t *testing.T) {
 			case tran, open := <-iWrapper.TransactionChan():
 				require.True(t, open, i)
 
-				actual := string(tran.Payload.Get(0).Get())
+				actual := string(tran.Payload.Get(0).AsBytes())
 				assert.NoError(t, tran.Ack(ctx, nil), i)
 				if expected == actual {
 					break consumeLoop

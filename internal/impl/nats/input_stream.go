@@ -269,7 +269,7 @@ func (n *natsStreamReader) read(ctx context.Context) (*stan.Msg, error) {
 	return msg, nil
 }
 
-func (n *natsStreamReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (n *natsStreamReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msg, err := n.read(ctx)
 	if err != nil {
 		return nil, nil, err

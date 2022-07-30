@@ -161,7 +161,7 @@ func (s *nanomsgWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *nanomsgWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (s *nanomsgWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	s.sockMut.RLock()
 	socket := s.socket
 	s.sockMut.RUnlock()
@@ -171,7 +171,7 @@ func (s *nanomsgWriter) WriteWithContext(ctx context.Context, msg *message.Batch
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		return socket.Send(p.Get())
+		return socket.Send(p.AsBytes())
 	})
 }
 

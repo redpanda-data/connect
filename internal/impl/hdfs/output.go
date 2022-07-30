@@ -103,7 +103,7 @@ func (h *hdfsWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (h *hdfsWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (h *hdfsWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	if h.client == nil {
 		return component.ErrNotConnected
 	}
@@ -123,7 +123,7 @@ func (h *hdfsWriter) WriteWithContext(ctx context.Context, msg *message.Batch) e
 			return err
 		}
 
-		if _, err := fw.Write(p.Get()); err != nil {
+		if _, err := fw.Write(p.AsBytes()); err != nil {
 			return err
 		}
 		fw.Close()

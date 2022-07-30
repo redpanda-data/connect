@@ -122,8 +122,6 @@ func cleanNulls(v interface{}) {
 }
 
 func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	outBatch := batch.Copy()
-
 	stmts := []*dynamodb.BatchStatementRequest{}
 	for i := range batch {
 		req := &dynamodb.BatchStatementRequest{}
@@ -163,26 +161,26 @@ func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.Messag
 			if res.Error.Code != nil {
 				code = fmt.Sprintf(" (%v)", *res.Error.Code)
 			}
-			outBatch[i].SetError(fmt.Errorf("failed to process statement%v: %v", code, *res.Error.Message))
+			batch[i].SetError(fmt.Errorf("failed to process statement%v: %v", code, *res.Error.Message))
 			continue
 		}
 		if res.Item != nil {
 			itemBytes, err := json.Marshal(res.Item)
 			if err != nil {
-				outBatch[i].SetError(fmt.Errorf("failed to encode PartiQL result: %v", err))
+				batch[i].SetError(fmt.Errorf("failed to encode PartiQL result: %v", err))
 				continue
 			}
 			var resMap interface{}
 			if err := json.Unmarshal(itemBytes, &resMap); err != nil {
-				outBatch[i].SetError(fmt.Errorf("failed to decode PartiQL result: %v", err))
+				batch[i].SetError(fmt.Errorf("failed to decode PartiQL result: %v", err))
 				continue
 			}
 			cleanNulls(resMap)
-			outBatch[i].SetStructured(resMap)
+			batch[i].SetStructuredMut(resMap)
 		}
 	}
 
-	return []service.MessageBatch{outBatch}, nil
+	return []service.MessageBatch{batch}, nil
 }
 
 func (d *dynamoDBPartiQL) Close(ctx context.Context) error {

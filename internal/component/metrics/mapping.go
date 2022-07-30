@@ -57,14 +57,13 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 	}
 
 	part := message.NewPart(nil)
-	part.SetJSON(path)
+	part.SetStructuredMut(path)
 	for i, v := range labelNames {
 		part.MetaSet(v, labelValues[i])
 	}
-	msg := message.QuickBatch(nil)
-	msg.Append(part)
+	msg := message.Batch{part}
 
-	outPart := part.Copy()
+	outPart := part.DeepCopy()
 
 	var input interface{} = path
 	vars := map[string]interface{}{}

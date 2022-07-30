@@ -78,7 +78,7 @@ func TestJMESPathMutation(t *testing.T) {
 	ogExp := ogObj.String()
 
 	msgIn := message.QuickBatch(make([][]byte, 1))
-	msgIn.Get(0).SetJSON(ogObj.Data())
+	msgIn.Get(0).SetStructured(ogObj.Data())
 	msgs, res := jSet.ProcessMessage(msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")

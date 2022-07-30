@@ -106,7 +106,7 @@ func (r *redisPubSubReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (r *redisPubSubReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (r *redisPubSubReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	var pubsub *redis.PubSub
 
 	r.cMut.Lock()

@@ -116,7 +116,7 @@ func (r *redisStreamsWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (r *redisStreamsWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (r *redisStreamsWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
@@ -131,7 +131,7 @@ func (r *redisStreamsWriter) WriteWithContext(ctx context.Context, msg *message.
 			values[k] = v
 			return nil
 		})
-		values[r.conf.BodyKey] = p.Get()
+		values[r.conf.BodyKey] = p.AsBytes()
 		return values
 	}
 

@@ -149,15 +149,14 @@ func newDecompress(conf processor.DecompressConfig, mgr bundle.NewManagement) (*
 }
 
 func (d *decompressProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	newBytes, err := d.decomp(msg.Get())
+	newBytes, err := d.decomp(msg.AsBytes())
 	if err != nil {
 		d.log.Errorf("Failed to decompress message part: %v\n", err)
 		return nil, err
 	}
 
-	newMsg := msg.Copy()
-	newMsg.Set(newBytes)
-	return []*message.Part{newMsg}, nil
+	msg.SetBytes(newBytes)
+	return []*message.Part{msg}, nil
 }
 
 func (d *decompressProc) Close(context.Context) error {

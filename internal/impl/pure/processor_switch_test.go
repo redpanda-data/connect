@@ -117,7 +117,7 @@ func TestSwitchCases(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			msg := message.QuickBatch(nil)
 			for _, s := range test.input {
-				msg.Append(message.NewPart([]byte(s)))
+				msg = append(msg, message.NewPart([]byte(s)))
 			}
 			msgs, res := c.ProcessMessage(msg)
 			require.Nil(t, res)
@@ -163,10 +163,11 @@ func TestSwitchError(t *testing.T) {
 		assert.NoError(t, c.WaitForClose(time.Second))
 	}()
 
-	msg := message.QuickBatch(nil)
-	msg.Append(message.NewPart([]byte(`{"id":"foo","content":"just a foo"}`)))
-	msg.Append(message.NewPart([]byte(`{"content":"bar but doesnt have an id!"}`)))
-	msg.Append(message.NewPart([]byte(`{"id":"buz","content":"a real foobar"}`)))
+	msg := message.Batch{
+		message.NewPart([]byte(`{"id":"foo","content":"just a foo"}`)),
+		message.NewPart([]byte(`{"content":"bar but doesnt have an id!"}`)),
+		message.NewPart([]byte(`{"id":"buz","content":"a real foobar"}`)),
+	}
 
 	msgs, res := c.ProcessMessage(msg)
 	require.Nil(t, res)
@@ -307,7 +308,7 @@ func BenchmarkSwitch1(b *testing.B) {
 		assert.NoError(b, c.WaitForClose(time.Second))
 	}()
 
-	msgs := []*message.Batch{
+	msgs := []message.Batch{
 		message.QuickBatch([][]byte{[]byte("A")}),
 		message.QuickBatch([][]byte{[]byte("B")}),
 		message.QuickBatch([][]byte{[]byte("C")}),

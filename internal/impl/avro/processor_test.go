@@ -132,7 +132,7 @@ func TestAvroBasic(t *testing.T) {
 
 			input := message.QuickBatch(nil)
 			for _, p := range test.input {
-				input.Append(message.NewPart([]byte(p)))
+				input = append(input, message.NewPart([]byte(p)))
 			}
 
 			exp := make([][]byte, len(test.output))
@@ -289,7 +289,7 @@ func TestAvroSchemaPath(t *testing.T) {
 
 			input := message.QuickBatch(nil)
 			for _, p := range test.input {
-				input.Append(message.NewPart([]byte(p)))
+				input = append(input, message.NewPart([]byte(p)))
 			}
 
 			exp := make([][]byte, len(test.output))

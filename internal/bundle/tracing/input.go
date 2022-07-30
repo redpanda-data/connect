@@ -39,7 +39,7 @@ func (t *tracedInput) loop() {
 		}
 		_ = tran.Payload.Iter(func(i int, part *message.Part) error {
 			_ = atomic.AddUint64(t.ctr, 1)
-			t.e.Add(EventProduce, string(part.Get()))
+			t.e.Add(EventProduce, string(part.AsBytes()))
 			return nil
 		})
 		select {

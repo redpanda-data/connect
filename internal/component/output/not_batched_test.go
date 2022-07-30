@@ -30,7 +30,7 @@ func (m *mockNBWriter) ConnectWithContext(context.Context) error {
 	return nil
 }
 
-func (m *mockNBWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (m *mockNBWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	m.mut.Lock()
 	defer m.mut.Unlock()
 
@@ -38,11 +38,11 @@ func (m *mockNBWriter) WriteWithContext(ctx context.Context, msg *message.Batch)
 	assert.Equal(m.t, 1, msg.Len())
 	return msg.Iter(func(i int, p *message.Part) error {
 		for _, eOn := range m.errorOn {
-			if eOn == string(p.Get()) {
+			if eOn == string(p.AsBytes()) {
 				return errors.New("test err")
 			}
 		}
-		m.written = append(m.written, string(p.Get()))
+		m.written = append(m.written, string(p.AsBytes()))
 		return nil
 	})
 }
@@ -61,10 +61,9 @@ func (m *mockNBWriter) WaitForClose(time.Duration) error {
 }
 
 func TestNotBatchedSingleMessages(t *testing.T) {
-	msg := func(c string) *message.Batch {
+	msg := func(c string) message.Batch {
 		p := message.NewPart([]byte(c))
-		msg := message.QuickBatch(nil)
-		msg.Append(p)
+		msg := message.Batch{p}
 		return msg
 	}
 
@@ -100,10 +99,9 @@ func TestNotBatchedSingleMessages(t *testing.T) {
 }
 
 func TestShutdown(t *testing.T) {
-	msg := func(c string) *message.Batch {
+	msg := func(c string) message.Batch {
 		p := message.NewPart([]byte(c))
-		msg := message.QuickBatch(nil)
-		msg.Append(p)
+		msg := message.Batch{p}
 		return msg
 	}
 
@@ -146,11 +144,10 @@ func TestShutdown(t *testing.T) {
 }
 
 func TestNotBatchedBreakOutMessages(t *testing.T) {
-	msg := func(c ...string) *message.Batch {
+	msg := func(c ...string) message.Batch {
 		msg := message.QuickBatch(nil)
 		for _, str := range c {
-			p := message.NewPart([]byte(str))
-			msg.Append(p)
+			msg = append(msg, message.NewPart([]byte(str)))
 		}
 		return msg
 	}
@@ -187,11 +184,10 @@ func TestNotBatchedBreakOutMessages(t *testing.T) {
 }
 
 func TestNotBatchedBreakOutMessagesErrors(t *testing.T) {
-	msg := func(c ...string) *message.Batch {
+	msg := func(c ...string) message.Batch {
 		msg := message.QuickBatch(nil)
 		for _, str := range c {
-			p := message.NewPart([]byte(str))
-			msg.Append(p)
+			msg = append(msg, message.NewPart([]byte(str)))
 		}
 		return msg
 	}
@@ -244,11 +240,10 @@ func TestNotBatchedBreakOutMessagesErrors(t *testing.T) {
 }
 
 func TestNotBatchedBreakOutMessagesErrorsAsync(t *testing.T) {
-	msg := func(c ...string) *message.Batch {
+	msg := func(c ...string) message.Batch {
 		msg := message.QuickBatch(nil)
 		for _, str := range c {
-			p := message.NewPart([]byte(str))
-			msg.Append(p)
+			msg = append(msg, message.NewPart([]byte(str)))
 		}
 		return msg
 	}

@@ -107,7 +107,7 @@ func TestXMLCases(t *testing.T) {
 			if len(msgsOut) != 1 {
 				tt.Fatalf("Wrong count of result messages: %v != 1", len(msgsOut))
 			}
-			if exp, act := test.output, string(msgsOut[0].Get(0).Get()); exp != act {
+			if exp, act := test.output, string(msgsOut[0].Get(0).AsBytes()); exp != act {
 				tt.Errorf("Wrong result: %v != %v", act, exp)
 			}
 			assert.NoError(t, msgsOut[0].Get(0).ErrorGet())
@@ -135,7 +135,7 @@ func TestXMLWithCast(t *testing.T) {
 	if len(msgsOut) != 1 {
 		t.Fatalf("Wrong count of result messages: %v != 1", len(msgsOut))
 	}
-	if exp, act := `{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}`, string(msgsOut[0].Get(0).Get()); exp != act {
+	if exp, act := `{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}`, string(msgsOut[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	assert.NoError(t, msgsOut[0].Get(0).ErrorGet())

@@ -103,7 +103,7 @@ func (h *hdfsReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (h *hdfsReader) ReadWithContext(ctx context.Context) (*message.Batch, input.AsyncAckFn, error) {
+func (h *hdfsReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	if len(h.targets) == 0 {
 		return nil, nil, component.ErrTypeClosed
 	}

@@ -102,7 +102,7 @@ func (s *socketWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *socketWriter) WriteWithContext(ctx context.Context, msg *message.Batch) error {
+func (s *socketWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
 	s.writerMut.Lock()
 	w := s.writer
 	s.writerMut.Unlock()

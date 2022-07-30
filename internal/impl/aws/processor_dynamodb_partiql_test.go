@@ -56,8 +56,8 @@ root."-".S = json("content")
 	db := newDynamoDBPartiQL(nil, client, query, nil, mapping)
 
 	reqBatch := service.MessageBatch{
-		service.NewMessage([]byte(`{"id":"foo","content":"foo stuff"}`)),
-		service.NewMessage([]byte(`{"id":"bar","content":"bar stuff"}`)),
+		service.NewMessage([]byte(`{"content":"foo stuff","id":"foo"}`)),
+		service.NewMessage([]byte(`{"content":"bar stuff","id":"bar"}`)),
 	}
 
 	resBatch, err := db.ProcessBatch(context.Background(), reqBatch)
@@ -194,9 +194,9 @@ root."-".S = json("content")
 	db := newDynamoDBPartiQL(nil, client, query, nil, mapping)
 
 	reqBatch := service.MessageBatch{
-		service.NewMessage([]byte(`{"id":"foo","content":"foo stuff"}`)),
-		service.NewMessage([]byte(`{"id":"bar","content":"bar stuff"}`)),
-		service.NewMessage([]byte(`{"id":"baz","content":"baz stuff"}`)),
+		service.NewMessage([]byte(`{"content":"foo stuff","id":"foo"}`)),
+		service.NewMessage([]byte(`{"content":"bar stuff","id":"bar"}`)),
+		service.NewMessage([]byte(`{"content":"baz stuff","id":"baz"}`)),
 	}
 
 	resBatch, err := db.ProcessBatch(context.Background(), reqBatch)

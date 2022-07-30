@@ -33,7 +33,11 @@ Executes a [Bloblang](/docs/guides/bloblang/about) mapping on messages.`,
 		Description: `
 Bloblang is a powerful language that enables a wide range of mapping, transformation and filtering tasks. For more information [check out the docs](/docs/guides/bloblang/about).
 
-If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression ` + "`from \"<path>\"`" + `, where the path must be absolute, or relative from the location that Benthos is executed from.`,
+If your mapping is large and you'd prefer for it to live in a separate file then you can execute a mapping directly from a file with the expression ` + "`from \"<path>\"`" + `, where the path must be absolute, or relative from the location that Benthos is executed from.
+
+## Component Rename
+
+This processor was recently renamed to the ` + "[`mapping` processor](/docs/components/processors/mapping)" + ` in order to make the purpose of the processor more prominent. It is still valid to use the existing ` + "`bloblang`" + ` name but eventually it will be deprecated and replaced by the new name in example configs.`,
 		Footnotes: `
 ## Error Handling
 
@@ -144,12 +148,12 @@ func newBloblang(conf string, mgr bundle.NewManagement) (processor.V2Batched, er
 	}, nil
 }
 
-func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg *message.Batch) ([]*message.Batch, error) {
+func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg message.Batch) ([]message.Batch, error) {
 	newParts := make([]*message.Part, 0, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		p, err := b.exec.MapPart(i, msg)
 		if err != nil {
-			p = part.Copy()
+			p = part
 			b.log.Errorf("%v\n", err)
 			processor.MarkErr(p, spans[i], err)
 		}
@@ -161,10 +165,7 @@ func (b *bloblangProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 	if len(newParts) == 0 {
 		return nil, nil
 	}
-
-	newMsg := message.QuickBatch(nil)
-	newMsg.SetAll(newParts)
-	return []*message.Batch{newMsg}, nil
+	return []message.Batch{newParts}, nil
 }
 
 func (b *bloblangProc) Close(context.Context) error {
