@@ -8,8 +8,9 @@ import (
 // queue needs to be declared and bound to an exchange, as well as any fields
 // specifying how to accomplish that.
 type AMQP09QueueDeclareConfig struct {
-	Enabled bool `json:"enabled" yaml:"enabled"`
-	Durable bool `json:"durable" yaml:"durable"`
+	Enabled    bool `json:"enabled" yaml:"enabled"`
+	Durable    bool `json:"durable" yaml:"durable"`
+	AutoDelete bool `json:"auto_delete" yaml:"auto_delete"`
 }
 
 // AMQP09BindingConfig contains fields describing a queue binding to be
@@ -39,8 +40,9 @@ func NewAMQP09Config() AMQP09Config {
 		URLs:  []string{},
 		Queue: "",
 		QueueDeclare: AMQP09QueueDeclareConfig{
-			Enabled: false,
-			Durable: true,
+			Enabled:    false,
+			Durable:    true,
+			AutoDelete: false,
 		},
 		ConsumerTag:        "",
 		AutoAck:            false,
