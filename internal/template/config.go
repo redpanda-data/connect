@@ -120,7 +120,7 @@ func (c Config) compile() (*compiled, error) {
 			return nil, fmt.Errorf("parse metrics mapping: %w", err)
 		}
 	}
-	return &compiled{spec, mapping, metricsMapping}, nil
+	return &compiled{spec: spec, mapping: mapping, metricsMapping: metricsMapping}, nil
 }
 
 func diffYAMLNodesAsJSON(expNode, actNode *yaml.Node) (string, error) {

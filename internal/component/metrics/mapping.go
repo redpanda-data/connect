@@ -31,7 +31,7 @@ func NewMapping(mapping string, logger log.Modular) (*Mapping, error) {
 		}
 		return nil, err
 	}
-	return &Mapping{m, logger, map[string]interface{}{}}, nil
+	return &Mapping{m: m, logger: logger, staticVars: map[string]interface{}{}}, nil
 }
 
 // WithStaticVars adds a map of key/value pairs to the static variables of the

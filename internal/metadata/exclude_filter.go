@@ -32,7 +32,7 @@ func NewExcludeFilterConfig() ExcludeFilterConfig {
 // Filter attempts to construct a metadata filter.
 func (m ExcludeFilterConfig) Filter() (*ExcludeFilter, error) {
 	return &ExcludeFilter{
-		m.ExcludePrefixes,
+		excludePrefixes: m.ExcludePrefixes,
 	}, nil
 }
 

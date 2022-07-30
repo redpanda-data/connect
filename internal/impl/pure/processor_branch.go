@@ -373,7 +373,7 @@ type branchMapError struct {
 }
 
 func newBranchMapError(index int, err error) branchMapError {
-	return branchMapError{index, err}
+	return branchMapError{index: index, err: err}
 }
 
 //------------------------------------------------------------------------------

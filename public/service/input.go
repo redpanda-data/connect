@@ -107,7 +107,7 @@ type airGapReader struct {
 }
 
 func newAirGapReader(r Input) input.Async {
-	return &airGapReader{r, shutdown.NewSignaller()}
+	return &airGapReader{r: r, sig: shutdown.NewSignaller()}
 }
 
 func (a *airGapReader) ConnectWithContext(ctx context.Context) error {
@@ -162,7 +162,7 @@ type airGapBatchReader struct {
 }
 
 func newAirGapBatchReader(r BatchInput) input.Async {
-	return &airGapBatchReader{r, shutdown.NewSignaller()}
+	return &airGapBatchReader{r: r, sig: shutdown.NewSignaller()}
 }
 
 func (a *airGapBatchReader) ConnectWithContext(ctx context.Context) error {

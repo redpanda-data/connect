@@ -43,7 +43,7 @@ func ClosureFunction(
 	if queryTargets == nil {
 		queryTargets = func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil }
 	}
-	return closureFunction{annotation, exec, queryTargets}
+	return closureFunction{annotation: annotation, exec: exec, queryTargets: queryTargets}
 }
 
 type closureFunction struct {

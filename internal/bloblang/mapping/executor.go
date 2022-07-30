@@ -51,7 +51,9 @@ type Statement struct {
 // parsed expression that created the statement.
 func NewStatement(input []rune, assignment Assignment, query query.Function) Statement {
 	return Statement{
-		input, assignment, query,
+		input:      input,
+		assignment: assignment,
+		query:      query,
 	}
 }
 
@@ -75,7 +77,13 @@ const defaultMaxMapStacks = 5000
 // is an optional slice pointing to the parsed expression that created the
 // executor.
 func NewExecutor(annotation string, input []rune, maps map[string]query.Function, statements ...Statement) *Executor {
-	return &Executor{annotation, input, maps, statements, defaultMaxMapStacks}
+	return &Executor{
+		annotation:   annotation,
+		input:        input,
+		maps:         maps,
+		statements:   statements,
+		maxMapStacks: defaultMaxMapStacks,
+	}
 }
 
 // SetMaxMapRecursion configures the maximum recursion allowed for maps, if the

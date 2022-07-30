@@ -37,7 +37,7 @@ func newMessageRetryBatched(msg MessageBatch, ackFn AckFunc) messageRetryBatched
 	boff.MaxInterval = time.Second
 	boff.Multiplier = 1.1
 	boff.MaxElapsedTime = 0
-	return messageRetryBatched{boff, 0, msg, ackFn}
+	return messageRetryBatched{boff: boff, attempts: 0, msg: msg, ackFn: ackFn}
 }
 
 type autoRetryInputBatched struct {

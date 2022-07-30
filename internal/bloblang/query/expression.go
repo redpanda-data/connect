@@ -15,7 +15,8 @@ type MatchCase struct {
 // query is checked and, if true, the underlying query is executed and returned.
 func NewMatchCase(caseFn, queryFn Function) MatchCase {
 	return MatchCase{
-		caseFn, queryFn,
+		caseFn:  caseFn,
+		queryFn: queryFn,
 	}
 }
 
@@ -113,7 +114,7 @@ func NewIfFunction(queryFn, ifFn Function, elseIfs []ElseIf, elseFn Function) Fu
 // is executed with a new context the context is captured under a new name, with
 // the "main" context left intact.
 func NewNamedContextFunction(name string, fn Function) Function {
-	return &NamedContextFunction{name, fn}
+	return &NamedContextFunction{name: name, fn: fn}
 }
 
 // NamedContextFunction wraps a query function in a mechanism that captures the

@@ -37,7 +37,7 @@ func newMessageRetry(msg *Message, ackFn AckFunc) messageRetry {
 	boff.MaxInterval = time.Second
 	boff.Multiplier = 1.1
 	boff.MaxElapsedTime = 0
-	return messageRetry{boff, 0, msg, ackFn}
+	return messageRetry{boff: boff, attempts: 0, msg: msg, ackFn: ackFn}
 }
 
 type autoRetryInput struct {

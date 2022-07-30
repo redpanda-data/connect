@@ -26,7 +26,7 @@ func newResendMsg(msg message.Batch, ackFn AsyncAckFn) asyncPreserverResend {
 	boff.MaxInterval = time.Second
 	boff.Multiplier = 1.1
 	boff.MaxElapsedTime = 0
-	return asyncPreserverResend{boff, 0, msg, ackFn}
+	return asyncPreserverResend{boff: boff, attempts: 0, msg: msg, ackFn: ackFn}
 }
 
 // AsyncPreserver is a wrapper for input.Async implementations that keeps a

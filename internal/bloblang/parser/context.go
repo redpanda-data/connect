@@ -46,7 +46,7 @@ type namedContext struct {
 // WithNamedContext returns a Context with a named execution context.
 func (pCtx Context) WithNamedContext(name string) Context {
 	next := pCtx.namedContext
-	pCtx.namedContext = &namedContext{name, next}
+	pCtx.namedContext = &namedContext{name: name, next: next}
 	return pCtx
 }
 

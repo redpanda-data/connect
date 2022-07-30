@@ -37,7 +37,7 @@ func NewReader(inputName, mapping string, rdr input.Async, mgr bundle.NewManagem
 	if err != nil {
 		return nil, err
 	}
-	return &Reader{inputName, mgr, exe, rdr}, nil
+	return &Reader{inputName: inputName, mgr: mgr, mapping: exe, rdr: rdr}, nil
 }
 
 // ConnectWithContext attempts to establish a connection to the source, if

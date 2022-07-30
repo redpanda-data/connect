@@ -96,7 +96,7 @@ func (f *FunctionSet) Without(functions ...string) *FunctionSet {
 			specs[v.Name] = v
 		}
 	}
-	return &FunctionSet{f.disableCtors, constructors, specs}
+	return &FunctionSet{disableCtors: f.disableCtors, constructors: constructors, specs: specs}
 }
 
 // OnlyPure creates a clone of the function set that can be mutated in

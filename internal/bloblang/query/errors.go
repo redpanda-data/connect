@@ -121,7 +121,7 @@ func ErrFrom(err error, from Function) error {
 	if errors.As(err, &fErr) {
 		return err
 	}
-	return &errFrom{from, err}
+	return &errFrom{from: from, err: err}
 }
 
 //------------------------------------------------------------------------------

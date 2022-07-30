@@ -43,7 +43,7 @@ func TestIteratorMethods(t *testing.T) {
 		return fn
 	}
 	method := func(name string, args ...interface{}) easyMethod {
-		return easyMethod{name, args}
+		return easyMethod{name: name, args: args}
 	}
 
 	tests := map[string]struct {

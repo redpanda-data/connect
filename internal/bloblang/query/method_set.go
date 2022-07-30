@@ -92,7 +92,7 @@ func (m *MethodSet) Without(methods ...string) *MethodSet {
 			specs[v.Name] = v
 		}
 	}
-	return &MethodSet{m.disableCtors, constructors, specs}
+	return &MethodSet{disableCtors: m.disableCtors, constructors: constructors, specs: specs}
 }
 
 // OnlyPure creates a clone of the methods set that can be mutated in isolation,

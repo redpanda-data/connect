@@ -131,7 +131,7 @@ func newS3ObjectTarget(key, bucket string, notificationAt time.Time, ackFn codec
 			return nil
 		}
 	}
-	return &s3ObjectTarget{key, bucket, notificationAt, ackFn}
+	return &s3ObjectTarget{key: key, bucket: bucket, notificationAt: notificationAt, ackFn: ackFn}
 }
 
 type s3ObjectTargetReader interface {
@@ -258,7 +258,7 @@ func newSQSTargetReader(
 	s3 *s3.S3,
 	sqs *sqs.SQS,
 ) *sqsTargetReader {
-	return &sqsTargetReader{conf, log, sqs, s3, time.Time{}, nil}
+	return &sqsTargetReader{conf: conf, log: log, sqs: sqs, s3: s3, nextRequest: time.Time{}, pending: nil}
 }
 
 func (s *sqsTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {

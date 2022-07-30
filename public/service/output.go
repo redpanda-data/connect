@@ -81,7 +81,7 @@ type airGapWriter struct {
 }
 
 func newAirGapWriter(w Output) ioutput.AsyncSink {
-	return &airGapWriter{w, shutdown.NewSignaller()}
+	return &airGapWriter{w: w, sig: shutdown.NewSignaller()}
 }
 
 func (a *airGapWriter) ConnectWithContext(ctx context.Context) error {
@@ -123,7 +123,7 @@ type airGapBatchWriter struct {
 }
 
 func newAirGapBatchWriter(w BatchOutput) ioutput.AsyncSink {
-	return &airGapBatchWriter{w, shutdown.NewSignaller()}
+	return &airGapBatchWriter{w: w, sig: shutdown.NewSignaller()}
 }
 
 func (a *airGapBatchWriter) ConnectWithContext(ctx context.Context) error {

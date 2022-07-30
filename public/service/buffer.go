@@ -78,7 +78,7 @@ type airGapBatchBuffer struct {
 }
 
 func newAirGapBatchBuffer(b BatchBuffer) buffer.ReaderWriter {
-	return &airGapBatchBuffer{b, shutdown.NewSignaller()}
+	return &airGapBatchBuffer{b: b, sig: shutdown.NewSignaller()}
 }
 
 func (a *airGapBatchBuffer) Write(ctx context.Context, msg message.Batch, aFn buffer.AckFunc) error {

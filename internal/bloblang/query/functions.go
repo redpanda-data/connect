@@ -107,7 +107,7 @@ func NewNamedContextFieldFunction(namedContext, pathStr string) Function {
 	if len(pathStr) > 0 {
 		path = gabs.DotPathToSlice(pathStr)
 	}
-	return &fieldFunction{namedContext, false, path}
+	return &fieldFunction{namedContext: namedContext, fromRoot: false, path: path}
 }
 
 // NewFieldFunction creates a query function that returns a field from the
@@ -175,7 +175,7 @@ func (l *Literal) String() string {
 // NewLiteralFunction creates a query function that returns a static, literal
 // value.
 func NewLiteralFunction(annotation string, v interface{}) *Literal {
-	return &Literal{annotation, v}
+	return &Literal{annotation: annotation, Value: v}
 }
 
 //------------------------------------------------------------------------------

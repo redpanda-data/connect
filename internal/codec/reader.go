@@ -210,7 +210,7 @@ func partReader(codec string, conf ReaderConfig) (ReaderConstructor, bool, error
 	switch codec {
 	case "all-bytes":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
-			return &allBytesReader{r, fn, false}, nil
+			return &allBytesReader{i: r, ack: fn, consumed: false}, nil
 		}, true, nil
 	case "avro-ocf":
 		return func(path string, r io.ReadCloser, fn ReaderAckFn) (Reader, error) {
