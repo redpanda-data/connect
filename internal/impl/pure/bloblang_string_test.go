@@ -19,21 +19,21 @@ func TestParseUrlencoded(t *testing.T) {
 	}{
 		{
 			name:   "simple parsing",
-			method: "parse_url_query",
+			method: "parse_form_url_encoded",
 			target: "username=example",
 			args:   []interface{}{},
 			exp:    map[string]interface{}{"username": "example"},
 		},
 		{
 			name:   "parsing multiple values under the same key",
-			method: "parse_url_query",
+			method: "parse_form_url_encoded",
 			target: "usernames=userA&usernames=userB",
 			args:   []interface{}{},
 			exp:    map[string]interface{}{"usernames": []string{"userA", "userB"}},
 		},
 		{
 			name:   "decodes data correctly",
-			method: "parse_url_query",
+			method: "parse_form_url_encoded",
 			target: "email=example%40email.com",
 			args:   []interface{}{},
 			exp:    map[string]interface{}{"email": "example@email.com"},

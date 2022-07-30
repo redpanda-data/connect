@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 - The `amqp_0_9` output now supports setting the `timeout` of publish.
 - New experimental input codec `avro-ocf:marshaler=x`.
 - New `mapping` and `mutation` processors.
-- New `parse_url_query` bloblang method.
+- New `parse_form_url_encoded` bloblang method.
 
 ### Fixed
 

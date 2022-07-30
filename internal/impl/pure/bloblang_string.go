@@ -9,10 +9,16 @@ import (
 )
 
 func init() {
-	if err := bloblang.RegisterMethodV2("parse_url_query",
+	if err := bloblang.RegisterMethodV2("parse_form_url_encoded",
 		bloblang.NewPluginSpec().
 			Category(query.MethodCategoryParsing).
-			Description(`Attempts to parse a url-encoded query string and returns a structured result.`),
+			Description(`Attempts to parse a url-encoded query string (from an x-www-form-urlencoded request body) and returns a structured result.`).
+			Example("", `root.values = this.body.parse_form_url_encoded()`,
+				[2]string{
+					`{"body":"noise=meow&animal=cat"}`,
+					`{"values":{"animal":"cat","noise":"meow"}}`,
+				},
+			),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			return bloblang.StringMethod(func(data string) (interface{}, error) {
 				values, err := url.ParseQuery(data)

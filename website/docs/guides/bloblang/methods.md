@@ -2125,6 +2125,20 @@ root.orders = this.orders.parse_csv()
 # Out: {"orders":[{"bar":"bar 1","foo":"foo 1"},{"bar":"bar 2","foo":"foo 2"}]}
 ```
 
+### `parse_form_url_encoded`
+
+Attempts to parse a url-encoded query string (from an x-www-form-urlencoded request body) and returns a structured result.
+
+#### Examples
+
+
+```coffee
+root.values = this.body.parse_form_url_encoded()
+
+# In:  {"body":"noise=meow&animal=cat"}
+# Out: {"values":{"animal":"cat","noise":"meow"}}
+```
+
 ### `parse_json`
 
 Attempts to parse a string as a JSON document and returns the result.
@@ -2178,10 +2192,6 @@ root = content().parse_parquet()
 ```coffee
 root = content().parse_parquet(byte_array_as_string: true)
 ```
-
-### `parse_url_query`
-
-Attempts to parse a url-encoded query string and returns a structured result.
 
 ### `parse_xml`
 
