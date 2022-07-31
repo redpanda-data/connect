@@ -27,6 +27,7 @@ func TestCUEGenerate(t *testing.T) {
 
 	ctx := cuecontext.New()
 	schemaV := ctx.CompileBytes(source)
+	require.NoError(t, schemaV.Validate())
 
 	v := ctx.CompileString(inputCue, cue.Scope(schemaV))
 	require.NoError(t, v.Validate())
