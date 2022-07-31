@@ -222,10 +222,10 @@ const features = [
     description: (
       <>
         <p>
-          Benthos runs fast and processes messages using a transaction model, making it able to guarantee at-least-once delivery even in the event of crashes, disk corruption, or other unexpected server faults.
+          Delivery guarantees <a href="https://youtu.be/QmpBOCvY8mY">can be a dodgy subject</a>. Benthos processes and acknowledges messages using an in-process transaction model with no need for any disk persisted state, so when connecting to at-least-once sources and sinks it's able to guarantee at-least-once delivery even in the event of crashes, disk corruption, or other unexpected server faults.
         </p>
         <p>
-          It's completely stateless with no need for disk persisted state, allowing for easy deployment and liberal scaling. It also exposes <a href="/docs/components/metrics/about">metrics</a> and <a href="/docs/components/tracers/about">tracing</a> events to targets of your choice.
+          This behaviour is the default and free of caveats, which also makes deploying and scaling Benthos much simpler. However, simplicity doesn't negate the need for observability, so it also exposes <a href="/docs/components/metrics/about">metrics</a> and <a href="/docs/components/tracers/about">tracing</a> events to targets of your choice.
         </p>
       </>
     ),

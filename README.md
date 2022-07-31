@@ -9,7 +9,7 @@ Benthos is a high performance and resilient stream processor, able to connect va
 
 It comes with a [powerful mapping language][bloblang-about], is easy to deploy and monitor, and ready to drop into your pipeline either as a static binary, docker image, or [serverless function][serverless], making it cloud native as heck.
 
-Benthos is fully declarative, with stream pipelines defined in a single config file, allowing you to specify connectors and a list of processing stages:
+Benthos is declarative, with stream pipelines defined in as few as a single config file, allowing you to specify connectors and a list of processing stages:
 
 ```yaml
 input:
@@ -33,11 +33,13 @@ output:
 
 ### Delivery Guarantees
 
-Yep, we got 'em. Benthos implements transaction based resiliency with back pressure. When connecting to at-least-once sources and sinks it guarantees at-least-once delivery without needing to persist messages during transit.
+Delivery guarantees [can be a dodgy subject](https://youtu.be/QmpBOCvY8mY). Benthos processes and acknowledges messages using an in-process transaction model with no need for any disk persisted state, so when connecting to at-least-once sources and sinks it's able to guarantee at-least-once delivery even in the event of crashes, disk corruption, or other unexpected server faults.
+
+This behaviour is the default and free of caveats, which also makes deploying and scaling Benthos much simpler.
 
 ## Supported Sources & Sinks
 
-Apache Pulsar, AWS (DynamoDB, Kinesis, S3, SQS, SNS), Azure (Blob storage, Queue storage, Table storage), Cassandra, Elasticsearch, File, GCP (Pub/Sub, Cloud storage), HDFS, HTTP (server and client, including websockets), Kafka, Memcached, MQTT, Nanomsg, NATS, NATS JetStream, NATS Streaming, NSQ, AMQP 0.91 (RabbitMQ), AMQP 1, Redis (streams, list, pubsub, hashes), MongoDB, SQL (MySQL, PostgreSQL, Clickhouse, MSSQL), Stdin/Stdout, TCP & UDP, sockets and ZMQ4.
+AWS (DynamoDB, Kinesis, S3, SQS, SNS), Azure (Blob storage, Queue storage, Table storage), GCP (Pub/Sub, Cloud storage, Big query), Kafka, NATS (JetStream, Streaming), NSQ, MQTT, AMQP 0.91 (RabbitMQ), AMQP 1, Redis (streams, list, pubsub, hashes), Cassandra, Elasticsearch, HDFS, HTTP (server and client, including websockets), MongoDB, SQL (MySQL, PostgreSQL, Clickhouse, MSSQL), and [many][input-categories] [more][output-categories].
 
 Connectors are being added constantly, if something you want is missing then [open an issue](https://github.com/benthosdev/benthos/issues/new).
 
@@ -172,6 +174,8 @@ docker run --rm \
 Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come and chat (links are on the [community page][community]), and watch your back.
 
 [inputs]: https://www.benthos.dev/docs/components/inputs/about
+[input-categories]: https://www.benthos.dev/docs/components/inputs/about#categories
+[output-categories]: https://www.benthos.dev/docs/components/outputs/about#categories
 [processors]: https://www.benthos.dev/docs/components/processors/about
 [outputs]: https://www.benthos.dev/docs/components/outputs/about
 [metrics]: https://www.benthos.dev/docs/components/metrics/about
