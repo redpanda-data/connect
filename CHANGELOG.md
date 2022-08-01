@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New experimental input codec `avro-ocf:marshaler=x`.
 - New `mapping` and `mutation` processors.
 - New `parse_form_url_encoded` bloblang method.
+- The `amqp_0_9` input now supports setting the `auto-delete` bit during queue declaration.
 
 ### Fixed
 
@@ -44,7 +45,6 @@ All notable changes to this project will be documented in this file.
 - New `parse_parquet` bloblang method.
 - CLI flag `--prefix-stream-endpoints` added for disabling streams mode API prefixing.
 - Field `timestamp_name` added to the logger config.
-- AMQP 0-9-1 input now supports setting the `auto-delete` bit during queue declaration.
 
 ## 4.3.0 - 2022-06-23
 
