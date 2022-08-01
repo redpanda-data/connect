@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -206,7 +205,7 @@ func (a *azureTableStorageWriter) WriteWithContext(wctx context.Context, msg mes
 	}); err != nil {
 		return err
 	}
-	return a.execBatch(writeReqs)
+	return a.execBatch(wctx, writeReqs)
 }
 
 func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg message.Batch) map[string]interface{} {
@@ -234,13 +233,10 @@ func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg mess
 	return properties
 }
 
-func (a *azureTableStorageWriter) execBatch(writeReqs map[string]map[string][]*aztables.EDMEntity) error {
+func (a *azureTableStorageWriter) execBatch(ctx context.Context, writeReqs map[string]map[string][]*aztables.EDMEntity) error {
 	for tn, pks := range writeReqs {
 		table := a.client.NewClient(tn)
-		_, err := table.Create(context.Background(), nil)
-		if !tableExists(err) {
-			return err
-		}
+		var err error
 		for _, entities := range pks {
 			var batch []aztables.TransactionAction
 			ne := len(entities)
@@ -250,8 +246,22 @@ func (a *azureTableStorageWriter) execBatch(writeReqs map[string]map[string][]*a
 					return err
 				}
 				if reachedBatchLimit(i) || isLastEntity(i, ne) {
-					if _, err := table.SubmitTransaction(context.Background(), batch, nil); err != nil {
-						return err
+					if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
+						if tErr, ok := err.(*azcore.ResponseError); ok {
+							if strings.Contains(tErr.Error(), "TableNotFound") {
+								_, err = table.Create(ctx, nil)
+								if err != nil {
+									return err
+								}
+								if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
+									return err
+								}
+							} else {
+								return err
+							}
+						} else {
+							return err
+						}
 					}
 					batch = nil
 				}
@@ -259,17 +269,6 @@ func (a *azureTableStorageWriter) execBatch(writeReqs map[string]map[string][]*a
 		}
 	}
 	return nil
-}
-
-func tableExists(err error) bool {
-	if err == nil {
-		return false
-	}
-	var azErr *azcore.ResponseError
-	if errors.As(err, &azErr) {
-		return azErr.StatusCode == http.StatusConflict
-	}
-	return false
 }
 
 func isLastEntity(i, ne int) bool {
