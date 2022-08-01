@@ -59,7 +59,7 @@ func StreamBenchSend(batchSize, parallelism int) StreamBenchDefinition {
 			go func() {
 				defer wg.Done()
 				for len(set) > 0 {
-					messageInSet(b, true, true, receiveMessage(env.ctx, b, input.TransactionChan(), nil), set)
+					messagesInSet(b, true, true, receiveBatch(env.ctx, b, input.TransactionChan(), nil), set)
 				}
 			}()
 

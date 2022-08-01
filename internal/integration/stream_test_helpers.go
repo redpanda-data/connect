@@ -579,13 +579,28 @@ func receiveMessage(
 ) *message.Part {
 	t.Helper()
 
-	b, ackFn := receiveMessageNoRes(ctx, t, tranChan)
+	b, ackFn := receiveBatchNoRes(ctx, t, tranChan)
+	require.NoError(t, ackFn(ctx, err))
+	require.Len(t, b, 1)
+
+	return b.Get(0)
+}
+
+func receiveBatch(
+	ctx context.Context,
+	t testing.TB,
+	tranChan <-chan message.Transaction,
+	err error,
+) message.Batch {
+	t.Helper()
+
+	b, ackFn := receiveBatchNoRes(ctx, t, tranChan)
 	require.NoError(t, ackFn(ctx, err))
 	return b
 }
 
 // nolint:gocritic // Ignore unnamedResult false positive
-func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, func(context.Context, error) error) {
+func receiveBatchNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (message.Batch, func(context.Context, error) error) {
 	t.Helper()
 
 	var tran message.Transaction
@@ -597,9 +612,17 @@ func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan mess
 	}
 
 	require.True(t, open)
-	require.Equal(t, tran.Payload.Len(), 1)
+	return tran.Payload, tran.Ack
+}
 
-	return tran.Payload.Get(0), tran.Ack
+// nolint:gocritic // Ignore unnamedResult false positive
+func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, func(context.Context, error) error) {
+	t.Helper()
+
+	b, fn := receiveBatchNoRes(ctx, t, tranChan)
+	require.Len(t, b, 1)
+
+	return b.Get(0), fn
 }
 
 func messageMatch(t testing.TB, p *message.Part, content string, metadata ...string) {
@@ -618,20 +641,22 @@ func messageMatch(t testing.TB, p *message.Part, content string, metadata ...str
 	}
 }
 
-func messageInSet(t testing.TB, pop, allowDupes bool, p *message.Part, set map[string][]string) {
+func messagesInSet(t testing.TB, pop, allowDupes bool, b message.Batch, set map[string][]string) {
 	t.Helper()
 
-	metadata, exists := set[string(p.AsBytes())]
-	if allowDupes && !exists {
-		return
-	}
-	require.True(t, exists, "in set: %v, set: %v", string(p.AsBytes()), set)
+	for _, p := range b {
+		metadata, exists := set[string(p.AsBytes())]
+		if allowDupes && !exists {
+			return
+		}
+		require.True(t, exists, "in set: %v, set: %v", string(p.AsBytes()), set)
 
-	for i := 0; i < len(metadata); i += 2 {
-		assert.Equal(t, metadata[i+1], p.MetaGet(metadata[i]))
-	}
+		for i := 0; i < len(metadata); i += 2 {
+			assert.Equal(t, metadata[i+1], p.MetaGet(metadata[i]))
+		}
 
-	if pop {
-		delete(set, string(p.AsBytes()))
+		if pop {
+			delete(set, string(p.AsBytes()))
+		}
 	}
 }

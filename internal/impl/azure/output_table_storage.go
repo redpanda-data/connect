@@ -247,19 +247,17 @@ func (a *azureTableStorageWriter) execBatch(ctx context.Context, writeReqs map[s
 				}
 				if reachedBatchLimit(i) || isLastEntity(i, ne) {
 					if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
-						if tErr, ok := err.(*azcore.ResponseError); ok {
-							if strings.Contains(tErr.Error(), "TableNotFound") {
-								_, err = table.Create(ctx, nil)
-								if err != nil {
-									return err
-								}
-								if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
-									return err
-								}
-							} else {
-								return err
-							}
-						} else {
+						tErr, ok := err.(*azcore.ResponseError)
+						if !ok {
+							return err
+						}
+						if !strings.Contains(tErr.Error(), "TableNotFound") {
+							return err
+						}
+						if _, err = table.Create(ctx, nil); err != nil {
+							return err
+						}
+						if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
 							return err
 						}
 					}

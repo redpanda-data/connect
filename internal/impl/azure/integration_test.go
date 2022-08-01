@@ -174,12 +174,12 @@ input:
 	t.Run("queue_storage", func(t *testing.T) {
 		template := `
 output:
- azure_queue_storage:
+  azure_queue_storage:
    queue_name: $VAR1$ID
    storage_connection_string: "UseDevelopmentStorage=true;"
 
 input:
- azure_queue_storage:
+  azure_queue_storage:
    queue_name: $VAR1$ID
    storage_connection_string: "UseDevelopmentStorage=true;"
 `

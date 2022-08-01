@@ -148,7 +148,7 @@ func StreamTestSendBatch(n int) StreamTestDefinition {
 			assert.NoError(t, err)
 
 			for len(set) > 0 {
-				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+				messagesInSet(t, true, env.allowDuplicateMessages, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 			}
 		},
 	)
@@ -198,7 +198,7 @@ func StreamTestSendBatches(batchSize, batches, parallelism int) StreamTestDefini
 			go func() {
 				defer wg.Done()
 				for len(set) > 0 {
-					messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+					messagesInSet(t, true, env.allowDuplicateMessages, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 				}
 			}()
 
@@ -261,7 +261,7 @@ func StreamTestSendBatchCount(n int) StreamTestDefinition {
 			}
 
 			for len(set) > 0 {
-				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+				messagesInSet(t, true, env.allowDuplicateMessages, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 			}
 		},
 	)
@@ -316,7 +316,7 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 			})
 
 			for len(set) > 0 {
-				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+				messagesInSet(t, true, env.allowDuplicateMessages, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 			}
 		},
 	)
@@ -354,10 +354,7 @@ func StreamTestReceiveBatchCount(n int) StreamTestDefinition {
 			}
 
 			assert.Equal(t, n, tran.Payload.Len())
-			_ = tran.Payload.Iter(func(_ int, p *message.Part) error {
-				messageInSet(t, true, false, p, set)
-				return nil
-			})
+			messagesInSet(t, true, false, tran.Payload, set)
 
 			require.NoError(t, tran.Ack(env.ctx, nil))
 		},
@@ -387,7 +384,7 @@ func StreamTestStreamSequential(n int) StreamTestDefinition {
 			}
 
 			for len(set) > 0 {
-				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+				messagesInSet(t, true, env.allowDuplicateMessages, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 			}
 		},
 	)
@@ -421,7 +418,7 @@ func StreamTestStreamIsolated(n int) StreamTestDefinition {
 			})
 
 			for len(set) > 0 {
-				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+				messagesInSet(t, true, env.allowDuplicateMessages, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 			}
 		},
 	)
@@ -531,7 +528,7 @@ func StreamTestStreamParallel(n int) StreamTestDefinition {
 			go func() {
 				defer wg.Done()
 				for len(set) > 0 {
-					messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+					messagesInSet(t, true, env.allowDuplicateMessages, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 				}
 			}()
 
@@ -567,9 +564,9 @@ func StreamTestStreamSaturatedUnacked(n int) StreamTestDefinition {
 
 			resFns := make([]func(context.Context, error) error, n/2)
 			for i := range resFns {
-				var b *message.Part
-				b, resFns[i] = receiveMessageNoRes(env.ctx, t, input.TransactionChan())
-				messageInSet(t, true, env.allowDuplicateMessages, b, set)
+				var b message.Batch
+				b, resFns[i] = receiveBatchNoRes(env.ctx, t, input.TransactionChan())
+				messagesInSet(t, true, env.allowDuplicateMessages, b, set)
 			}
 
 			<-time.After(time.Second * 5)
@@ -579,7 +576,7 @@ func StreamTestStreamSaturatedUnacked(n int) StreamTestDefinition {
 
 			// Consume all remaining messages
 			for len(set) > 0 {
-				messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+				messagesInSet(t, true, env.allowDuplicateMessages, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 			}
 		},
 	)
@@ -697,19 +694,19 @@ func StreamTestStreamParallelLossy(n int) StreamTestDefinition {
 				for i := 0; i < n; i++ {
 					if i%10 == 1 {
 						rejected++
-						messageInSet(
+						messagesInSet(
 							t, false, true,
-							receiveMessage(env.ctx, t, input.TransactionChan(), errors.New("rejected just cus")),
+							receiveBatch(env.ctx, t, input.TransactionChan(), errors.New("rejected just cus")),
 							set,
 						)
 					} else {
-						messageInSet(t, true, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+						messagesInSet(t, true, true, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 					}
 				}
 
 				t.Log("Finished first loop, looping through rejected messages.")
 				for len(set) > 0 {
-					messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+					messagesInSet(t, true, env.allowDuplicateMessages, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 				}
 			}()
 
@@ -755,13 +752,13 @@ func StreamTestStreamParallelLossyThroughReconnect(n int) StreamTestDefinition {
 				for i := 0; i < n; i++ {
 					if i%10 == 1 {
 						rejected++
-						messageInSet(
+						messagesInSet(
 							t, false, env.allowDuplicateMessages,
-							receiveMessage(env.ctx, t, input.TransactionChan(), errors.New("rejected just cus")),
+							receiveBatch(env.ctx, t, input.TransactionChan(), errors.New("rejected just cus")),
 							set,
 						)
 					} else {
-						messageInSet(t, true, env.allowDuplicateMessages, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+						messagesInSet(t, true, env.allowDuplicateMessages, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 					}
 				}
 
@@ -774,7 +771,7 @@ func StreamTestStreamParallelLossyThroughReconnect(n int) StreamTestDefinition {
 
 				t.Log("Finished first loop, looping through rejected messages.")
 				for len(set) > 0 {
-					messageInSet(t, true, true, receiveMessage(env.ctx, t, input.TransactionChan(), nil), set)
+					messagesInSet(t, true, true, receiveBatch(env.ctx, t, input.TransactionChan(), nil), set)
 				}
 			}()
 
