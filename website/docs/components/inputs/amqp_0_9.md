@@ -51,6 +51,7 @@ input:
     queue_declare:
       enabled: false
       durable: true
+      auto_delete: false
     bindings_declare: []
     consumer_tag: ""
     auto_ack: false
@@ -156,6 +157,14 @@ Whether the declared queue is durable.
 
 Type: `bool`  
 Default: `true`  
+
+### `queue_declare.auto_delete`
+
+Whether the declared queue will auto-delete.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `bindings_declare`
 

@@ -85,6 +85,7 @@ then the declaration passively verifies that they match the target fields.`,
 			).WithChildren(
 				docs.FieldBool("enabled", "Whether to enable queue declaration.").HasDefault(false),
 				docs.FieldBool("durable", "Whether the declared queue is durable.").HasDefault(true),
+				docs.FieldBool("auto_delete", "Whether the declared queue will auto-delete.").HasDefault(false),
 			).Advanced(),
 			docs.FieldObject("bindings_declare",
 				"Allows you to passively declare bindings for the target queue.",
@@ -192,12 +193,12 @@ func (a *amqp09Reader) ConnectWithContext(ctx context.Context) (err error) {
 
 	if a.conf.QueueDeclare.Enabled {
 		if _, err = amqpChan.QueueDeclare(
-			a.conf.Queue,                // name of the queue
-			a.conf.QueueDeclare.Durable, // durable
-			false,                       // delete when unused
-			false,                       // exclusive
-			false,                       // noWait
-			nil,                         // arguments
+			a.conf.Queue,                   // name of the queue
+			a.conf.QueueDeclare.Durable,    // durable
+			a.conf.QueueDeclare.AutoDelete, // delete when unused
+			false,                          // exclusive
+			false,                          // noWait
+			nil,                            // arguments
 		); err != nil {
 			return fmt.Errorf("queue Declare: %s", err)
 		}
