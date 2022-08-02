@@ -86,6 +86,10 @@ func doFieldSpec(spec docs.FieldSpec) (*ast.Field, error) {
 }
 
 func doScalarField(spec docs.FieldSpec) (*ast.Field, error) {
+	label := ast.NewIdent(spec.Name)
+	optionalMark := token.Blank.Pos()
+
+	var optional token.Pos
 	var val ast.Expr
 
 	switch spec.Type {
@@ -115,31 +119,32 @@ func doScalarField(spec docs.FieldSpec) (*ast.Field, error) {
 	case docs.FieldTypeUnknown:
 		val = ast.NewIdent("_")
 	case docs.FieldTypeInput:
-		// The following set of case switches have unresolvable structure cycles.
-		// We need to form a disjunction with `null`` to break the cycle...
+		// The following set of cases have unresolvable structure cycles.
+		// We need to mark them as optional to break the cycle...
 		// https://cuelang.org/docs/references/spec/#structural-cycles
-		val = ast.NewBinExpr(token.OR, ast.NewIdent("null"), identInputDisjunction)
+		val, optional = identInputDisjunction, optionalMark
 	case docs.FieldTypeBuffer:
-		val = ast.NewBinExpr(token.OR, ast.NewIdent("null"), identBufferDisjunction)
+		val, optional = identBufferDisjunction, optionalMark
 	case docs.FieldTypeCache:
-		val = ast.NewBinExpr(token.OR, ast.NewIdent("null"), identCacheDisjunction)
+		val, optional = identCacheDisjunction, optionalMark
 	case docs.FieldTypeProcessor:
-		val = ast.NewBinExpr(token.OR, ast.NewIdent("null"), identProcessorDisjunction)
+		val, optional = identProcessorDisjunction, optionalMark
 	case docs.FieldTypeRateLimit:
-		val = ast.NewBinExpr(token.OR, ast.NewIdent("null"), identRateLimitDisjunction)
+		val, optional = identRateLimitDisjunction, optionalMark
 	case docs.FieldTypeOutput:
-		val = ast.NewBinExpr(token.OR, ast.NewIdent("null"), identOutputDisjunction)
+		val, optional = identOutputDisjunction, optionalMark
 	case docs.FieldTypeMetrics:
-		val = ast.NewBinExpr(token.OR, ast.NewIdent("null"), identMetricDisjunction)
+		val, optional = identMetricDisjunction, optionalMark
 	case docs.FieldTypeTracer:
-		val = ast.NewBinExpr(token.OR, ast.NewIdent("null"), identTracerDisjunction)
+		val, optional = identTracerDisjunction, optionalMark
 	default:
 		return nil, fmt.Errorf("unrecognised field type: %s", spec.Type)
 	}
 
 	return &ast.Field{
-		Label: ast.NewIdent(spec.Name),
-		Value: val,
+		Label:    label,
+		Value:    val,
+		Optional: optional,
 	}, nil
 }
 
