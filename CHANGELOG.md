@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.5.0 - TBD
+
 ### Added
 
 - Field `batch_size` added to the `generate` input.
