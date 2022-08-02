@@ -17,7 +17,7 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-Send tracing events to a [OpenTelemetry](https://opentelemetry.io/docs/collector/) collector.
+Send tracing events to an [Open Telemetry collector](https://opentelemetry.io/docs/collector/).
 
 
 <Tabs defaultValue="common" values={[
