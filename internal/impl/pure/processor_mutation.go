@@ -140,7 +140,7 @@ func newMutation(exec *bloblang.Executor, log *service.Logger) service.BatchProc
 func (m *mutationProc) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	newBatch := make(service.MessageBatch, 0, len(batch))
 	for i, msg := range batch {
-		newPart, err := batch.BloblangOverlay(i, m.exec)
+		newPart, err := batch.BloblangMutate(i, m.exec)
 		if err != nil {
 			m.log.Error(err.Error())
 			msg.SetError(err)

@@ -155,6 +155,37 @@ output:
 			},
 		},
 		{
+			name: "basic mapping inline split with input proc",
+			confFn: func(iterations, batchSize int) string {
+				return fmt.Sprintf(`
+input:
+  generate:
+    count: %v
+    batch_size: %v
+    interval: ""
+    mapping: |
+      meta = {"foo":"foo value","bar":"bar value"}
+      root.id = uuid_v4()
+      root.name = fake("name")
+      root.mobile = fake("phone_number")
+      root.site = fake("url")
+      root.email = fake("email")
+      root.friends = range(0, (random_int() %% 10) + 1).map_each(fake("name"))
+  processors:
+    - mutation: |
+        root.loud_name = this.name.uppercase()
+
+pipeline:
+  processors:
+    - mutation: |
+        root.good_friends = this.friends.filter(f -> f.lowercase().contains("a"))
+
+output:
+  drop: {}
+`, iterations, batchSize)
+			},
+		},
+		{
 			name: "basic mapping as branch",
 			confFn: func(iterations, batchSize int) string {
 				return fmt.Sprintf(`

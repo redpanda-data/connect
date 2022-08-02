@@ -237,7 +237,7 @@ func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
 	return nil, nil
 }
 
-// BloblangOverlay executes a parsed Bloblang mapping onto a message where the
+// BloblangMutate executes a parsed Bloblang mapping onto a message where the
 // contents of the message are mutated directly rather than creating an entirely
 // new object.
 //
@@ -248,7 +248,7 @@ func (m *Message) BloblangQuery(blobl *bloblang.Executor) (*Message, error) {
 // Note that using overlay means certain functions within the Bloblang mapping
 // will behave differently. In the root of the mapping the right-hand keywords
 // `root` and `this` refer to the same mutable root of the output document.
-func (m *Message) BloblangOverlay(blobl *bloblang.Executor) (*Message, error) {
+func (m *Message) BloblangMutate(blobl *bloblang.Executor) (*Message, error) {
 	uw := blobl.XUnwrapper().(interface {
 		Unwrap() *mapping.Executor
 	}).Unwrap()
@@ -292,7 +292,7 @@ func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Messa
 	return nil, nil
 }
 
-// BloblangOverlay executes a parsed Bloblang mapping onto a message within the
+// BloblangMutate executes a parsed Bloblang mapping onto a message within the
 // batch, where the contents of the message are mutated directly rather than
 // creating an entirely new object.
 //
@@ -306,7 +306,7 @@ func (b MessageBatch) BloblangQuery(index int, blobl *bloblang.Executor) (*Messa
 // Note that using overlay means certain functions within the Bloblang mapping
 // will behave differently. In the root of the mapping the right-hand keywords
 // `root` and `this` refer to the same mutable root of the output document.
-func (b MessageBatch) BloblangOverlay(index int, blobl *bloblang.Executor) (*Message, error) {
+func (b MessageBatch) BloblangMutate(index int, blobl *bloblang.Executor) (*Message, error) {
 	uw := blobl.XUnwrapper().(interface {
 		Unwrap() *mapping.Executor
 	}).Unwrap()
