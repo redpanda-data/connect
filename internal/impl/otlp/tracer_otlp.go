@@ -20,7 +20,7 @@ import (
 
 func init() {
 	spec := service.NewConfigSpec().
-		Summary("Send tracing events to a [OpenTelemetry](https://opentelemetry.io/docs/collector/) collector.").
+		Summary("Send tracing events to an [Open Telemetry collector](https://opentelemetry.io/docs/collector/).").
 		Field(service.NewObjectListField("http",
 			service.NewStringField("url").
 				Description("The URL of a collector to send tracing events to.").
@@ -108,13 +108,13 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	ctx := context.TODO()
 	var opts []tracesdk.TracerProviderOption
 
-	opts, err := addGrpcCollectors(config.grpc, ctx, opts)
+	opts, err := addGrpcCollectors(ctx, config.grpc, opts)
 
 	if err != nil {
 		return nil, err
 	}
 
-	opts, err = addHttpCollectors(config.http, ctx, opts)
+	opts, err = addHTTPCollectors(ctx, config.http, opts)
 
 	if err != nil {
 		return nil, err
@@ -130,40 +130,36 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	return tracesdk.NewTracerProvider(opts...), nil
 }
 
-func addGrpcCollectors(collectors []collector, ctx context.Context, opts []tracesdk.TracerProviderOption) ([]tracesdk.TracerProviderOption, error) {
-	for _, c := range collectors {
-		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		defer cancel()
+func addGrpcCollectors(ctx context.Context, collectors []collector, opts []tracesdk.TracerProviderOption) ([]tracesdk.TracerProviderOption, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
+	defer cancel()
 
+	for _, c := range collectors {
 		exp, err := otlptrace.New(ctx, otlptracegrpc.NewClient(
 			otlptracegrpc.WithInsecure(),
 			otlptracegrpc.WithEndpoint(c.url),
 			otlptracegrpc.WithDialOption(grpc.WithBlock()),
 		))
-
 		if err != nil {
 			return nil, err
 		}
-
 		opts = append(opts, tracesdk.WithBatcher(exp))
 	}
 	return opts, nil
 }
 
-func addHttpCollectors(collectors []collector, ctx context.Context, opts []tracesdk.TracerProviderOption) ([]tracesdk.TracerProviderOption, error) {
-	for _, c := range collectors {
-		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		defer cancel()
+func addHTTPCollectors(ctx context.Context, collectors []collector, opts []tracesdk.TracerProviderOption) ([]tracesdk.TracerProviderOption, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
+	defer cancel()
 
+	for _, c := range collectors {
 		exp, err := otlptrace.New(ctx, otlptracehttp.NewClient(
 			otlptracehttp.WithInsecure(),
 			otlptracehttp.WithEndpoint(c.url),
 		))
-
 		if err != nil {
 			return nil, err
 		}
-
 		opts = append(opts, tracesdk.WithBatcher(exp))
 	}
 	return opts, nil

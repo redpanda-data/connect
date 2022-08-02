@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New `mapping` and `mutation` processors.
 - New `parse_form_url_encoded` bloblang method.
 - The `amqp_0_9` input now supports setting the `auto-delete` bit during queue declaration.
+- New `open_telemetry_collector` tracer.
 
 ### Fixed
 

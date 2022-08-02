@@ -470,6 +470,9 @@ func TestDocumentationCoverage(t *testing.T) {
 		conf := tracer.NewConfig()
 		tConf := reflect.TypeOf(conf)
 		for _, v := range bundle.AllTracers.Docs() {
+			if v.Plugin {
+				continue
+			}
 			conf.Type = v.Name
 			gen := getGenericConf(t, docs.TypeTracer, conf)
 			walkSpecWithConfig(t, "tracer."+v.Name, v.Config, gen[v.Name])

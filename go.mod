@@ -55,7 +55,6 @@ require (
 	github.com/gocql/gocql v0.0.0-20211222173705-d73e6b1002a7
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/golang-jwt/jwt v3.2.2+incompatible
-	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
 	github.com/google/flatbuffers v2.0.5+incompatible // indirect
