@@ -15,7 +15,9 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 		Summary(`Use a Google Cloud Storage bucket as a cache.`).
 		Description(`It is not possible to atomically upload cloud storage objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.`).
 		Field(service.NewStringField("bucket").
-			Description("The Google Cloud Storage bucket to store items in."))
+			Description("The Google Cloud Storage bucket to store items in.")).
+		Field(service.NewStringField("content_type").
+			Description("Optional field to explicitly set the Content-Type.").Default("").Optional())
 
 	return spec
 }
@@ -38,6 +40,14 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 		return nil, err
 	}
 
+	contentType := ""
+	if parsedConf.Contains("content_type") {
+		contentType, err = parsedConf.FieldString("content_type")
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	client, err := storage.NewClient(context.Background())
 	if err != nil {
 		return nil, err
@@ -45,6 +55,7 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 
 	return &gcpCloudStorageCache{
 		bucketHandle: client.Bucket(bucket),
+		contentType:  contentType,
 	}, nil
 }
 
@@ -52,6 +63,7 @@ func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCl
 
 type gcpCloudStorageCache struct {
 	bucketHandle *storage.BucketHandle
+	contentType  string
 }
 
 func (c *gcpCloudStorageCache) Get(ctx context.Context, key string) ([]byte, error) {
@@ -77,6 +89,10 @@ func (c *gcpCloudStorageCache) Get(ctx context.Context, key string) ([]byte, err
 func (c *gcpCloudStorageCache) Set(ctx context.Context, key string, value []byte, _ *time.Duration) error {
 	writer := c.bucketHandle.Object(key).NewWriter(ctx)
 
+	if c.contentType != "" {
+		writer.ContentType = c.contentType
+	}
+
 	_, err := writer.Write(value)
 	if err != nil {
 		return err
@@ -95,6 +111,10 @@ func (c *gcpCloudStorageCache) Add(ctx context.Context, key string, value []byte
 	}
 
 	writer := objectHandle.NewWriter(ctx)
+
+	if c.contentType != "" {
+		writer.ContentType = c.contentType
+	}
 
 	_, err = writer.Write(value)
 	if err != nil {
