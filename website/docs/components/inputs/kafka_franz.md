@@ -320,7 +320,7 @@ Type: `string`
 | `PLAIN` | Plain text authentication. |
 | `SCRAM-SHA-256` | SCRAM based authentication as specified in RFC5802. |
 | `SCRAM-SHA-512` | SCRAM based authentication as specified in RFC5802. |
-| `none` | Default, no sasl authentication |
+| `none` | Disable sasl authentication |
 
 
 ### `sasl[].username`

@@ -29,7 +29,7 @@ var AWSSASLFromConfigFn = notImportedAWSFn
 func saslField() *service.ConfigField {
 	return service.NewObjectListField("sasl",
 		service.NewStringAnnotatedEnumField("mechanism", map[string]string{
-			"none":          "Default, no sasl authentication",
+			"none":          "Disable sasl authentication",
 			"PLAIN":         "Plain text authentication.",
 			"OAUTHBEARER":   "OAuth Bearer based authentication.",
 			"SCRAM-SHA-256": "SCRAM based authentication as specified in RFC5802.",
