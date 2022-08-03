@@ -51,7 +51,7 @@ Mutations are advantageous over a standard mapping in situations where the resul
 
 ## Error Handling
 
-Bloblang mappings can fail, in which case the message remains unchanged, errors are logged, and the message is flagged as having failed, allowing you to use [standard processor error handling patterns](/docs/configuration/error_handling).
+Bloblang mappings can fail, in which case the error is logged and the message is flagged as having failed, allowing you to use [standard processor error handling patterns](/docs/configuration/error_handling).
 
 However, Bloblang itself also provides powerful ways of ensuring your mappings do not fail by specifying desired fallback behaviour, which you can read about [in this section](/docs/guides/bloblang/about#error-handling).
 			
