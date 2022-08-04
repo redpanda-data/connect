@@ -331,9 +331,12 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 	})
 
 	textMapGeneric := map[string]interface{}{}
+	// Go normalises headers changing the way they are capitalised, here we are converting from normalised headers to
+	// a TextMap format which is case-sensitive. To ensure propagation still happens we need to convert the headers to
+	// lowercase as that is the format expected by the OTEL libraries.
 	for k, vals := range r.Header {
 		for _, v := range vals {
-			textMapGeneric[k] = v
+			textMapGeneric[strings.ToLower(k)] = v
 		}
 	}
 
