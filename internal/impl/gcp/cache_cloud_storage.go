@@ -17,7 +17,7 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 		Field(service.NewStringField("bucket").
 			Description("The Google Cloud Storage bucket to store items in.")).
 		Field(service.NewStringField("content_type").
-			Description("Optional field to explicitly set the Content-Type.").Default("").Optional())
+			Description("Optional field to explicitly set the Content-Type.").Optional())
 
 	return spec
 }
