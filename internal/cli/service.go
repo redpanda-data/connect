@@ -383,6 +383,15 @@ func cmdService(
 		close(httpServerClosedChan)
 	}()
 
+	var exitDelay time.Duration
+	if td := conf.SystemCloseDelay; len(td) > 0 {
+		var err error
+		if exitDelay, err = time.ParseDuration(td); err != nil {
+			logger.Errorf("Failed to parse shutdown delay period string: %v\n", err)
+			return 1
+		}
+	}
+
 	var exitTimeout time.Duration
 	if tout := conf.SystemCloseTimeout; len(tout) > 0 {
 		var err error
@@ -394,6 +403,18 @@ func cmdService(
 
 	// Defer clean up.
 	defer func() {
+		if exitDelay > 0 {
+			select {
+			// We should only cause a shutdown delay if the pipeline has terminated.
+			// Other termination conditions are considered intentional and require
+			// immediate shutdown.
+			case <-dataStreamClosedChan:
+				logger.Infof("Shutdown delay is in effect for %s\n", exitDelay)
+				<-time.After(exitDelay)
+			default:
+			}
+		}
+
 		go func() {
 			_ = httpServer.Shutdown(context.Background())
 			select {

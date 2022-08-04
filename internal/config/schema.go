@@ -19,6 +19,7 @@ type Type struct {
 	Logger                 log.Config     `json:"logger" yaml:"logger"`
 	Metrics                metrics.Config `json:"metrics" yaml:"metrics"`
 	Tracer                 tracer.Config  `json:"tracer" yaml:"tracer"`
+	SystemCloseDelay       string         `json:"shutdown_delay" yaml:"shutdown_delay"`
 	SystemCloseTimeout     string         `json:"shutdown_timeout" yaml:"shutdown_timeout"`
 	Tests                  []interface{}  `json:"tests,omitempty" yaml:"tests,omitempty"`
 }
@@ -32,6 +33,7 @@ func New() Type {
 		Logger:             log.NewConfig(),
 		Metrics:            metrics.NewConfig(),
 		Tracer:             tracer.NewConfig(),
+		SystemCloseDelay:   "",
 		SystemCloseTimeout: "20s",
 		Tests:              nil,
 	}
@@ -43,6 +45,7 @@ var observabilityFields = docs.FieldSpecs{
 	docs.FieldObject("logger", "Describes how operational logs should be emitted.").WithChildren(log.Spec()...),
 	docs.FieldMetrics("metrics", "A mechanism for exporting metrics.").Optional(),
 	docs.FieldTracer("tracer", "A mechanism for exporting traces.").Optional(),
+	docs.FieldString("shutdown_delay", "A period of time to wait for metrics and traces to be pulled or pushed from the process.").HasDefault("0s"),
 	docs.FieldString("shutdown_timeout", "The maximum period of time to wait for a clean shutdown. If this time is exceeded Benthos will forcefully close.").HasDefault("20s"),
 }
 
