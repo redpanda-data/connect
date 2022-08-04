@@ -227,7 +227,6 @@ func (c *ConfigField) Version(v string) *ConfigField {
 // linting rule:
 //
 // `root = if this.lowercase() != this { [ "field must be lowercase" ] }`
-//
 func (c *ConfigField) LintRule(blobl string) *ConfigField {
 	c.field = c.field.LinterBlobl(blobl)
 	return c
@@ -407,10 +406,10 @@ func (c *ConfigSpec) EncodeJSON(v []byte) error {
 // that ensures some fields are mutually exclusive and some require others we
 // might use the following:
 //
-// `root = match {
-//   this.exists("meow") && this.exists("woof") => [ "both `+"`meow`"+` and `+"`woof`"+` can't be set simultaneously" ],
-//   this.exists("reticulation") && (!this.exists("splines") || this.splines == "") => [ "`+"`splines`"+` is required when setting `+"`reticulation`"+`" ],
-// }`
+// root = match {
+// this.exists("meow") && this.exists("woof") => [ "both `+"`meow`"+` and `+"`woof`"+` can't be set simultaneously" ],
+// this.exists("reticulation") && (!this.exists("splines") || this.splines == "") => [ "`+"`splines`"+` is required when setting `+"`reticulation`"+`" ],
+// }
 func (c *ConfigSpec) LintRule(blobl string) *ConfigSpec {
 	c.component.Config = c.component.Config.LinterBlobl(blobl)
 	return c

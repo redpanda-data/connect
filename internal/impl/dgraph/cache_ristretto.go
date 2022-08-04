@@ -63,6 +63,7 @@ func newRistrettoCacheFromConfig(conf *service.ParsedConfig) (*ristrettoCache, e
 }
 
 //------------------------------------------------------------------------------
+
 type ristrettoCache struct {
 	defaultTTL time.Duration
 	cache      *ristretto.Cache

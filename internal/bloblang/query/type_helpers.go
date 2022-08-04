@@ -459,11 +459,9 @@ func IClone(root interface{}) interface{} {
 // of the following conditions:
 //
 // - The types exactly match and have the same value
-// - The types are both either a string or byte slice and the underlying data is
-//   the same
+// - The types are both either a string or byte slice and the underlying data is the same
 // - The types are both numerical and have the same value
-// - Both types are a matching slice or map containing values matching these
-//   same conditions
+// - Both types are a matching slice or map containing values matching these same conditions
 func ICompare(left, right interface{}) bool {
 	if left == nil && right == nil {
 		return true

@@ -127,18 +127,7 @@ func GetInferenceCandidateFromYAML(docProv Provider, t Type, node *yaml.Node) (s
 }
 
 // GetPluginConfigYAML extracts a plugin configuration node from a component
-// config. This exists because there are two styles of plugin config, the old
-// style (within `plugin`):
-//
-// type: foo
-// plugin:
-//   bar: baz
-//
-// And the new style:
-//
-// foo:
-//   bar: baz
-//
+// config. This exists because there are two styles of plugin config.
 func GetPluginConfigYAML(name string, node *yaml.Node) (yaml.Node, error) {
 	node = unwrapDocumentNode(node)
 	for i := 0; i < len(node.Content)-1; i += 2 {
