@@ -14,7 +14,7 @@ import (
 )
 
 func TestInprocDryRun(t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
 	t.Parallel()
@@ -42,7 +42,7 @@ func TestInprocDryRun(t *testing.T) {
 }
 
 func TestInprocDryRunNoConn(t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
 	t.Parallel()
