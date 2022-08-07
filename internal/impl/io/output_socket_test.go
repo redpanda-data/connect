@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
@@ -16,6 +18,9 @@ import (
 )
 
 func TestSocketBasic(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
@@ -34,13 +39,13 @@ func TestSocketBasic(t *testing.T) {
 	}
 
 	defer func() {
-		if err := wtr.WaitForClose(time.Second); err != nil {
+		if err := wtr.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
 
 	go func() {
-		if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
+		if cerr := wtr.Connect(context.Background()); cerr != nil {
 			t.Error(cerr)
 		}
 	}()
@@ -60,16 +65,17 @@ func TestSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	wtr.CloseAsync()
+
+	require.NoError(t, wtr.Close(ctx))
 	wg.Wait()
 
 	exp := "foo\nbar\nbaz\n"
@@ -81,6 +87,9 @@ func TestSocketBasic(t *testing.T) {
 }
 
 func TestSocketMultipart(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
@@ -99,13 +108,13 @@ func TestSocketMultipart(t *testing.T) {
 	}
 
 	defer func() {
-		if err := wtr.WaitForClose(time.Second); err != nil {
+		if err := wtr.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
 
 	go func() {
-		if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
+		if cerr := wtr.Connect(context.Background()); cerr != nil {
 			t.Error(cerr)
 		}
 	}()
@@ -125,13 +134,14 @@ func TestSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
-	wtr.CloseAsync()
+
+	require.NoError(t, wtr.Close(ctx))
 	wg.Wait()
 
 	exp := "foo\nbar\nbaz\nqux\n"
@@ -152,6 +162,9 @@ func (w *testOutputWrapPacketConn) Read(p []byte) (n int, err error) {
 }
 
 func TestUDPSocketBasic(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		if conn, err = net.ListenPacket("tcp6", "[::1]:0"); err != nil {
@@ -170,12 +183,12 @@ func TestUDPSocketBasic(t *testing.T) {
 	}
 
 	defer func() {
-		if err := wtr.WaitForClose(time.Second); err != nil {
+		if err := wtr.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
 
-	if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
+	if cerr := wtr.Connect(context.Background()); cerr != nil {
 		t.Fatal(cerr)
 	}
 
@@ -189,16 +202,17 @@ func TestUDPSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	wtr.CloseAsync()
+
+	require.NoError(t, wtr.Close(ctx))
 	wg.Wait()
 
 	exp := "foo\nbar\nbaz\n"
@@ -210,6 +224,9 @@ func TestUDPSocketBasic(t *testing.T) {
 }
 
 func TestUDPSocketMultipart(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		if conn, err = net.ListenPacket("tcp6", "[::1]:0"); err != nil {
@@ -228,12 +245,12 @@ func TestUDPSocketMultipart(t *testing.T) {
 	}
 
 	defer func() {
-		if err := wtr.WaitForClose(time.Second); err != nil {
+		if err := wtr.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
 
-	if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
+	if cerr := wtr.Connect(context.Background()); cerr != nil {
 		t.Fatal(cerr)
 	}
 
@@ -247,13 +264,14 @@ func TestUDPSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
-	wtr.CloseAsync()
+
+	require.NoError(t, wtr.Close(ctx))
 	wg.Wait()
 
 	exp := "foo\nbar\nbaz\nqux\n"
@@ -265,6 +283,9 @@ func TestUDPSocketMultipart(t *testing.T) {
 }
 
 func TestTCPSocketBasic(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		if ln, err = net.Listen("tcp6", "[::1]:0"); err != nil {
@@ -283,13 +304,13 @@ func TestTCPSocketBasic(t *testing.T) {
 	}
 
 	defer func() {
-		if err := wtr.WaitForClose(time.Second); err != nil {
+		if err := wtr.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
 
 	go func() {
-		if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
+		if cerr := wtr.Connect(context.Background()); cerr != nil {
 			t.Error(cerr)
 		}
 	}()
@@ -309,16 +330,17 @@ func TestTCPSocketBasic(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	wtr.CloseAsync()
+
+	require.NoError(t, wtr.Close(ctx))
 	wg.Wait()
 
 	exp := "foo\nbar\nbaz\n"
@@ -330,6 +352,9 @@ func TestTCPSocketBasic(t *testing.T) {
 }
 
 func TestTCPSocketMultipart(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		if ln, err = net.Listen("tcp6", "[::1]:0"); err != nil {
@@ -348,13 +373,13 @@ func TestTCPSocketMultipart(t *testing.T) {
 	}
 
 	defer func() {
-		if err := wtr.WaitForClose(time.Second); err != nil {
+		if err := wtr.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
 
 	go func() {
-		if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
+		if cerr := wtr.Connect(context.Background()); cerr != nil {
 			t.Error(cerr)
 		}
 	}()
@@ -374,13 +399,14 @@ func TestTCPSocketMultipart(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar"), []byte("baz")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("qux")})); err != nil {
 		t.Error(err)
 	}
-	wtr.CloseAsync()
+
+	require.NoError(t, wtr.Close(ctx))
 	wg.Wait()
 
 	exp := "foo\nbar\nbaz\nqux\n"
@@ -392,6 +418,9 @@ func TestTCPSocketMultipart(t *testing.T) {
 }
 
 func TestSocketCustomDelimeter(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	tmpDir := t.TempDir()
 
 	ln, err := net.Listen("unix", filepath.Join(tmpDir, "benthos.sock"))
@@ -411,13 +440,13 @@ func TestSocketCustomDelimeter(t *testing.T) {
 	}
 
 	defer func() {
-		if err := wtr.WaitForClose(time.Second); err != nil {
+		if err := wtr.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
 
 	go func() {
-		if cerr := wtr.ConnectWithContext(context.Background()); cerr != nil {
+		if cerr := wtr.Connect(context.Background()); cerr != nil {
 			t.Error(cerr)
 		}
 	}()
@@ -437,16 +466,17 @@ func TestSocketCustomDelimeter(t *testing.T) {
 		wg.Done()
 	}()
 
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar\n")})); err != nil {
 		t.Error(err)
 	}
-	if err = wtr.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("baz\t")})); err != nil {
+	if err = wtr.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("baz\t")})); err != nil {
 		t.Error(err)
 	}
-	wtr.CloseAsync()
+
+	require.NoError(t, wtr.Close(ctx))
 	wg.Wait()
 
 	exp := "foo\tbar\n\tbaz\t"

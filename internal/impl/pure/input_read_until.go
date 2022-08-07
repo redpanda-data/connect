@@ -10,7 +10,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -130,12 +129,9 @@ func newReadUntilInput(conf input.Config, mgr bundle.NewManagement, log log.Modu
 func (r *readUntilInput) loop() {
 	defer func() {
 		if r.wrapped != nil {
-			r.wrapped.CloseAsync()
-
-			// TODO: This triggers a tier 2 shutdown in the child.
-			err := r.wrapped.WaitForClose(time.Second)
-			for ; err != nil; err = r.wrapped.WaitForClose(time.Second) {
-			}
+			r.wrapped.TriggerStopConsuming()
+			r.wrapped.TriggerCloseNow()
+			_ = r.wrapped.WaitForClose(context.Background())
 		}
 
 		close(r.transactions)
@@ -239,17 +235,19 @@ func (r *readUntilInput) Connected() bool {
 	return r.wrapped.Connected()
 }
 
-// CloseAsync shuts down the ReadUntil input and stops processing requests.
-func (r *readUntilInput) CloseAsync() {
+func (r *readUntilInput) TriggerStopConsuming() {
 	r.shutSig.CloseAtLeisure()
 }
 
-// WaitForClose blocks until the ReadUntil input has closed down.
-func (r *readUntilInput) WaitForClose(timeout time.Duration) error {
+func (r *readUntilInput) TriggerCloseNow() {
+	r.shutSig.CloseNow()
+}
+
+func (r *readUntilInput) WaitForClose(ctx context.Context) error {
 	select {
 	case <-r.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

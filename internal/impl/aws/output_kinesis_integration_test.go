@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
@@ -99,14 +100,11 @@ func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Ki
 		t.Fatal(err)
 	}
 
-	if err := r.ConnectWithContext(context.Background()); err != nil {
+	if err := r.Connect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		r.CloseAsync()
-		if err := r.WaitForClose(time.Millisecond); err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, r.Close(context.Background()))
 	}()
 
 	records := [][]byte{
@@ -120,7 +118,7 @@ func testKinesisConnect(t *testing.T, c output.KinesisConfig, client *kinesis.Ki
 		msg = append(msg, message.NewPart(record))
 	}
 
-	if err := r.WriteWithContext(context.Background(), msg); err != nil {
+	if err := r.WriteBatch(context.Background(), msg); err != nil {
 		t.Fatal(err)
 	}
 

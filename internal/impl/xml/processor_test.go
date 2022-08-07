@@ -1,6 +1,7 @@
 package xml_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -100,7 +101,7 @@ func TestXMLCases(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			msgsOut, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(test.input)}))
+			msgsOut, res := proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte(test.input)}))
 			if res != nil {
 				tt.Fatal(res)
 			}
@@ -128,7 +129,7 @@ func TestXMLWithCast(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgsOut, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(testString)}))
+	msgsOut, res := proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte(testString)}))
 	if res != nil {
 		t.Fatal(res.Error())
 	}

@@ -31,17 +31,17 @@ func (m *mockOutput) Connected() bool {
 	return true
 }
 
-func (m *mockOutput) CloseAsync() {
+func (m *mockOutput) TriggerCloseNow() {
 	// NOT EXPECTING TO HIT THIS
 }
 
-func (m *mockOutput) WaitForClose(dur time.Duration) error {
+func (m *mockOutput) WaitForClose(ctx context.Context) error {
 	select {
 	case _, open := <-m.ts:
 		if open {
 			return errors.New("messages chan still open")
 		}
-	case <-time.After(dur):
+	case <-ctx.Done():
 		return errors.New("timed out")
 	}
 	return nil
@@ -63,11 +63,11 @@ func (m *mockPipe) TransactionChan() <-chan message.Transaction {
 	return m.ts
 }
 
-func (m *mockPipe) CloseAsync() {
+func (m *mockPipe) TriggerCloseNow() {
 	close(m.ts)
 }
 
-func (m *mockPipe) WaitForClose(time.Duration) error {
+func (m *mockPipe) WaitForClose(ctx context.Context) error {
 	return errors.New("not expecting to see this")
 }
 
@@ -106,10 +106,13 @@ func TestBasicWrapPipeline(t *testing.T) {
 		t.Error("Wrong messages chan in mock pipe")
 	}
 
-	newOutput.CloseAsync()
-	if err = newOutput.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	close(dudMsgChan)
+	mockPi.TriggerCloseNow()
+	newOutput.TriggerCloseNow()
+	require.NoError(t, newOutput.WaitForClose(ctx))
 }
 
 func TestBasicWrapPipelinesOrdering(t *testing.T) {
@@ -192,8 +195,7 @@ func TestBasicWrapPipelinesOrdering(t *testing.T) {
 		}
 	}
 
-	newOutput.CloseAsync()
-	if err = newOutput.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	close(tChan)
+	newOutput.TriggerCloseNow()
+	require.NoError(t, newOutput.WaitForClose(ctx))
 }

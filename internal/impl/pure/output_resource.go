@@ -12,6 +12,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
@@ -19,13 +20,11 @@ func init() {
 		if !nm.ProbeOutput(c.Resource) {
 			return nil, fmt.Errorf("output resource '%v' was not found", c.Resource)
 		}
-		ctx, done := context.WithCancel(context.Background())
 		return &resourceOutput{
-			mgr:  nm,
-			name: c.Resource,
-			log:  nm.Logger(),
-			ctx:  ctx,
-			done: done,
+			mgr:     nm,
+			name:    c.Resource,
+			log:     nm.Logger(),
+			shutSig: shutdown.NewSignaller(),
 		}, nil
 	}), docs.ComponentSpec{
 		Name:    "resource",
@@ -85,29 +84,34 @@ type resourceOutput struct {
 
 	transactions <-chan message.Transaction
 
-	ctx  context.Context
-	done func()
+	shutSig *shutdown.Signaller
 }
 
 func (r *resourceOutput) loop() {
+	cnCtx, cnDone := r.shutSig.CloseNowCtx(context.Background())
+	defer cnDone()
+
+	defer func() {
+		r.shutSig.ShutdownComplete()
+	}()
+
 	var ts *message.Transaction
 	for {
 		if ts == nil {
 			select {
 			case t, open := <-r.transactions:
 				if !open {
-					r.done()
 					return
 				}
 				ts = &t
-			case <-r.ctx.Done():
+			case <-r.shutSig.CloseNowChan():
 				return
 			}
 		}
 
 		var err error
-		if oerr := r.mgr.AccessOutput(context.Background(), r.name, func(o output.Sync) {
-			err = o.WriteTransaction(r.ctx, *ts)
+		if oerr := r.mgr.AccessOutput(cnCtx, r.name, func(o output.Sync) {
+			err = o.WriteTransaction(cnCtx, *ts)
 		}); oerr != nil {
 			err = oerr
 		}
@@ -115,7 +119,7 @@ func (r *resourceOutput) loop() {
 			r.log.Errorf("Failed to obtain output resource '%v': %v", r.name, err)
 			select {
 			case <-time.After(time.Second):
-			case <-r.ctx.Done():
+			case <-r.shutSig.CloseNowChan():
 				return
 			}
 		} else {
@@ -143,15 +147,15 @@ func (r *resourceOutput) Connected() (isConnected bool) {
 	return
 }
 
-func (r *resourceOutput) CloseAsync() {
-	r.done()
+func (r *resourceOutput) TriggerCloseNow() {
+	r.shutSig.CloseNow()
 }
 
-func (r *resourceOutput) WaitForClose(timeout time.Duration) error {
+func (r *resourceOutput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-r.ctx.Done():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-r.shutSig.HasClosedChan():
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

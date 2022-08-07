@@ -2,7 +2,6 @@ package input
 
 import (
 	"context"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -19,13 +18,18 @@ type Streamed interface {
 	// connected to its target.
 	Connected() bool
 
-	// CloseAsync triggers the shut down of this component but should not block
-	// the calling goroutine.
-	CloseAsync()
+	// TriggerStopConsuming instructs the input to start shutting down resources
+	// once all pending messages are delivered and acknowledged. This call does
+	// not block.
+	TriggerStopConsuming()
+
+	// TriggerCloseNow triggers the shut down of this component but should not
+	// block the calling goroutine.
+	TriggerCloseNow()
 
 	// WaitForClose is a blocking call to wait until the component has finished
 	// shutting down and cleaning up resources.
-	WaitForClose(timeout time.Duration) error
+	WaitForClose(ctx context.Context) error
 }
 
 // AsyncAckFn is a function used to acknowledge receipt of a message batch. The
@@ -36,22 +40,18 @@ type AsyncAckFn func(context.Context, error) error
 // Async is a type that reads Benthos messages from an external source and
 // allows acknowledgements for a message batch to be propagated asynchronously.
 type Async interface {
-	// ConnectWithContext attempts to establish a connection to the source, if
+	// Connect attempts to establish a connection to the source, if
 	// unsuccessful returns an error. If the attempt is successful (or not
 	// necessary) returns nil.
-	ConnectWithContext(ctx context.Context) error
+	Connect(ctx context.Context) error
 
-	// ReadWithContext attempts to read a new message from the source. If
+	// ReadBatch attempts to read a new message from the source. If
 	// successful a message is returned along with a function used to
 	// acknowledge receipt of the returned message. It's safe to process the
 	// returned message and read the next message asynchronously.
-	ReadWithContext(ctx context.Context) (message.Batch, AsyncAckFn, error)
+	ReadBatch(ctx context.Context) (message.Batch, AsyncAckFn, error)
 
-	// CloseAsync triggers the shut down of this component but should not block
-	// the calling goroutine.
-	CloseAsync()
-
-	// WaitForClose is a blocking call to wait until the component has finished
-	// shutting down and cleaning up resources.
-	WaitForClose(timeout time.Duration) error
+	// Close triggers the shut down of this component and blocks until
+	// completion or context cancellation.
+	Close(ctx context.Context) error
 }

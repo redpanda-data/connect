@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -127,7 +126,7 @@ func (w *whileProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 			s.LogKV("event", "loop")
 		}
 
-		msgs, res = processor.ExecuteAll(w.children, msgs...)
+		msgs, res = processor.ExecuteAll(ctx, w.children, msgs...)
 		if len(msgs) == 0 {
 			return
 		}
@@ -149,14 +148,7 @@ func (w *whileProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg
 func (w *whileProc) Close(ctx context.Context) error {
 	w.shutSig.CloseNow()
 	for _, p := range w.children {
-		p.CloseAsync()
-	}
-	deadline, exists := ctx.Deadline()
-	if !exists {
-		deadline = time.Now().Add(time.Second * 5)
-	}
-	for _, p := range w.children {
-		if err := p.WaitForClose(time.Until(deadline)); err != nil {
+		if err := p.Close(ctx); err != nil {
 			return err
 		}
 	}

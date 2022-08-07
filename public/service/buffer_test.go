@@ -194,8 +194,8 @@ func TestStreamMemoryBuffer(t *testing.T) {
 	}
 	require.NoError(t, outTr.Ack(ctx, nil))
 
-	b.CloseAsync()
-	require.NoError(t, b.WaitForClose(time.Second))
+	b.TriggerCloseNow()
+	require.NoError(t, b.WaitForClose(ctx))
 
 	close(resChan)
 	close(tChan)
@@ -257,5 +257,5 @@ func TestStreamBufferClosing(t *testing.T) {
 	}
 
 	// Should already be shut down.
-	assert.NoError(t, b.WaitForClose(time.Second))
+	assert.NoError(t, b.WaitForClose(ctx))
 }

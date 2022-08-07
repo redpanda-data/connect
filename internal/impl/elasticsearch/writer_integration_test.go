@@ -11,6 +11,7 @@ import (
 
 	"github.com/olivere/elastic/v7"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/impl/elasticsearch"
@@ -143,15 +144,14 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Error(err)
 	}
 
 	defer func() {
-		m.CloseAsync()
-		if cErr := m.WaitForClose(time.Second); cErr != nil {
-			t.Error(cErr)
-		}
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, m.Close(ctx))
+		done()
 	}()
 
 	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":"hello world","user":"1"}`)})); err != nil {
@@ -195,15 +195,14 @@ func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Error(err)
 	}
 
 	defer func() {
-		m.CloseAsync()
-		if cErr := m.WaitForClose(time.Second); cErr != nil {
-			t.Error(cErr)
-		}
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, m.Close(ctx))
+		done()
 	}()
 
 	N := 10
@@ -265,15 +264,14 @@ func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		m.CloseAsync()
-		if cErr := m.WaitForClose(time.Second); cErr != nil {
-			t.Error(cErr)
-		}
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, m.Close(ctx))
+		done()
 	}()
 
 	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":true}`)})); err == nil {
@@ -298,15 +296,14 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		m.CloseAsync()
-		if cErr := m.WaitForClose(time.Second); cErr != nil {
-			t.Error(cErr)
-		}
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, m.Close(ctx))
+		done()
 	}()
 
 	N := 10
@@ -360,15 +357,14 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		m.CloseAsync()
-		if cErr := m.WaitForClose(time.Second); cErr != nil {
-			t.Error(cErr)
-		}
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, m.Close(ctx))
+		done()
 	}()
 
 	N := 10
@@ -424,15 +420,14 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		m.CloseAsync()
-		if cErr := m.WaitForClose(time.Second); cErr != nil {
-			t.Error(cErr)
-		}
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, m.Close(ctx))
+		done()
 	}()
 
 	N := 10
@@ -489,15 +484,14 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		m.CloseAsync()
-		if cErr := m.WaitForClose(time.Second); cErr != nil {
-			t.Error(cErr)
-		}
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, m.Close(ctx))
+		done()
 	}()
 
 	N := 10
@@ -582,15 +576,14 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		m.CloseAsync()
-		if cErr := m.WaitForClose(time.Second); cErr != nil {
-			t.Error(cErr)
-		}
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, m.Close(ctx))
+		done()
 	}()
 
 	N := 2
@@ -642,15 +635,14 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 		t.Fatal(err)
 	}
 
-	if err = m.Connect(); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() {
-		m.CloseAsync()
-		if cErr := m.WaitForClose(time.Second); cErr != nil {
-			t.Error(cErr)
-		}
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, m.Close(ctx))
+		done()
 	}()
 
 	testMsg = [][]byte{

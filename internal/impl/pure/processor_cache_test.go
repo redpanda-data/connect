@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -35,7 +36,7 @@ func TestCacheSet(t *testing.T) {
 		[]byte(`{"key":"1","value":"foo 3"}`),
 	})
 
-	output, res := proc.ProcessMessage(input)
+	output, res := proc.ProcessBatch(context.Background(), input)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -78,7 +79,7 @@ func TestCacheAdd(t *testing.T) {
 		[]byte(`{"key":"1","value":"foo 3"}`),
 	})
 
-	output, res := proc.ProcessMessage(input)
+	output, res := proc.ProcessBatch(context.Background(), input)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -132,7 +133,7 @@ func TestCacheGet(t *testing.T) {
 		[]byte(`{"key":"3"}`),
 	}
 
-	output, res := proc.ProcessMessage(input)
+	output, res := proc.ProcessBatch(context.Background(), input)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -174,7 +175,7 @@ func TestCacheDelete(t *testing.T) {
 		[]byte(`{"key":"4"}`),
 	})
 
-	output, res := proc.ProcessMessage(input)
+	output, res := proc.ProcessBatch(context.Background(), input)
 	if res != nil {
 		t.Fatal(res)
 	}

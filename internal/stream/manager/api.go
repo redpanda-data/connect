@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gorilla/mux"
 	"gopkg.in/yaml.v3"
@@ -205,12 +204,9 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 	errUpdate := make([]error, len(toUpdate))
 	errCreate := make([]error, len(toCreate))
 
-	// TODO: Replace with context
-	tmpTimeout := time.Second * 5
-
 	for i, id := range toDelete {
 		go func(sid string, j int) {
-			errDelete[j] = m.Delete(sid, tmpTimeout)
+			errDelete[j] = m.Delete(r.Context(), sid)
 			wg.Done()
 		}(id, i)
 	}
@@ -218,7 +214,7 @@ func (m *Type) HandleStreamsCRUD(w http.ResponseWriter, r *http.Request) {
 	for id, conf := range toUpdate {
 		newConf := conf
 		go func(sid string, sconf *stream.Config, j int) {
-			errUpdate[j] = m.Update(sid, *sconf, tmpTimeout)
+			errUpdate[j] = m.Update(r.Context(), sid, *sconf)
 			wg.Done()
 		}(id, &newConf, i)
 		i++
@@ -339,9 +335,6 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Replace with context
-	tmpTimeout := time.Second * 5
-
 	var conf stream.Config
 	var lints []string
 	switch r.Method {
@@ -397,16 +390,16 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write(errBytes)
 			return
 		}
-		serverErr = m.Update(id, conf, tmpTimeout)
+		serverErr = m.Update(r.Context(), id, conf)
 	case "DELETE":
-		serverErr = m.Delete(id, tmpTimeout)
+		serverErr = m.Delete(r.Context(), id)
 	case "PATCH":
 		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
 			if conf, requestErr = patchConfig(info.Config()); requestErr != nil {
 				return
 			}
-			serverErr = m.Update(id, conf, tmpTimeout)
+			serverErr = m.Update(r.Context(), id, conf)
 		}
 	default:
 		requestErr = fmt.Errorf("verb not supported: %v", r.Method)

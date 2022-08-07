@@ -2,7 +2,6 @@ package pure
 
 import (
 	"context"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -34,18 +33,15 @@ func newDropWriter(conf output.DropConfig, log log.Modular) *dropWriter {
 	return &dropWriter{log: log}
 }
 
-func (d *dropWriter) ConnectWithContext(ctx context.Context) error {
+func (d *dropWriter) Connect(ctx context.Context) error {
 	d.log.Infoln("Dropping messages.")
 	return nil
 }
 
-func (d *dropWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (d *dropWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return nil
 }
 
-func (d *dropWriter) CloseAsync() {
-}
-
-func (d *dropWriter) WaitForClose(time.Duration) error {
+func (d *dropWriter) Close(context.Context) error {
 	return nil
 }

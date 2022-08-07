@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
-	"runtime/pprof"
 	"sync"
 	"testing"
 	"time"
@@ -52,7 +50,7 @@ func newMockAsyncReader() *mockAsyncReader {
 	}
 }
 
-func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
+func (r *mockAsyncReader) Connect(ctx context.Context) error {
 	cerr, open := <-r.connChan
 	if !open {
 		return component.ErrNotConnected
@@ -60,7 +58,7 @@ func (r *mockAsyncReader) ConnectWithContext(ctx context.Context) error {
 	return cerr
 }
 
-func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (r *mockAsyncReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	select {
 	case <-ctx.Done():
 		return nil, nil, component.ErrTimeout
@@ -96,14 +94,11 @@ func (r *mockAsyncReader) ReadWithContext(ctx context.Context) (message.Batch, i
 	}, nil
 }
 
-func (r *mockAsyncReader) CloseAsync() {
+func (r *mockAsyncReader) Close(ctx context.Context) error {
 	<-r.unblockCloseAsyncChan
 	r.closeAsyncOnce.Do(func() {
 		close(r.closeAsyncChan)
 	})
-}
-
-func (r *mockAsyncReader) WaitForClose(time.Duration) error {
 	return <-r.waitForCloseChan
 }
 
@@ -111,16 +106,13 @@ func (r *mockAsyncReader) WaitForClose(time.Duration) error {
 
 type asyncReaderCantConnect struct{}
 
-func (r asyncReaderCantConnect) ConnectWithContext(ctx context.Context) error {
+func (r asyncReaderCantConnect) Connect(ctx context.Context) error {
 	return component.ErrNotConnected
 }
-func (r asyncReaderCantConnect) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (r asyncReaderCantConnect) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	return nil, nil, component.ErrNotConnected
 }
-func (r asyncReaderCantConnect) CloseAsync() {}
-func (r asyncReaderCantConnect) WaitForClose(time.Duration) error {
-	return nil
-}
+func (r asyncReaderCantConnect) Close(ctx context.Context) error { return nil }
 
 func TestAsyncReaderCantConnect(t *testing.T) {
 	r, err := input.NewAsyncReader("foo", true, asyncReaderCantConnect{}, mock.NewManager())
@@ -130,10 +122,8 @@ func TestAsyncReaderCantConnect(t *testing.T) {
 	}
 
 	// We will fail to connect but should still exit immediately.
-	r.CloseAsync()
-	if err = r.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	r.TriggerStopConsuming()
+	require.NoError(t, r.WaitForClose(context.Background()))
 }
 
 //------------------------------------------------------------------------------
@@ -142,17 +132,14 @@ type asyncReaderCantRead struct {
 	connected int
 }
 
-func (r *asyncReaderCantRead) ConnectWithContext(ctx context.Context) error {
+func (r *asyncReaderCantRead) Connect(ctx context.Context) error {
 	r.connected++
 	return nil
 }
-func (r *asyncReaderCantRead) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (r *asyncReaderCantRead) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	return nil, nil, component.ErrNotConnected
 }
-func (r *asyncReaderCantRead) CloseAsync() {}
-func (r *asyncReaderCantRead) WaitForClose(time.Duration) error {
-	return nil
-}
+func (r *asyncReaderCantRead) Close(ctx context.Context) error { return nil }
 
 func TestAsyncReaderCantRead(t *testing.T) {
 	readerImpl := &asyncReaderCantRead{}
@@ -163,11 +150,11 @@ func TestAsyncReaderCantRead(t *testing.T) {
 		return
 	}
 
-	// We will be failing to send but should still exit immediately.
-	r.CloseAsync()
-	if err = r.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	r.TriggerStopConsuming()
+	require.NoError(t, r.WaitForClose(ctx))
 
 	if readerImpl.connected < 1 {
 		t.Errorf("Connected wasn't called enough times: %v", readerImpl.connected)
@@ -192,9 +179,10 @@ func TestAsyncReaderTypeClosedOnConn(t *testing.T) {
 		}
 	}()
 
-	if err = r.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, r.WaitForClose(ctx))
 }
 
 func TestAsyncReaderTypeClosedOnReconn(t *testing.T) {
@@ -221,9 +209,10 @@ func TestAsyncReaderTypeClosedOnReconn(t *testing.T) {
 		}
 	}()
 
-	if err = r.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, r.WaitForClose(ctx))
 }
 
 func TestAsyncReaderTypeClosedOnReread(t *testing.T) {
@@ -253,9 +242,10 @@ func TestAsyncReaderTypeClosedOnReread(t *testing.T) {
 		}
 	}()
 
-	if err = r.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, r.WaitForClose(ctx))
 }
 
 //------------------------------------------------------------------------------
@@ -308,7 +298,7 @@ func TestAsyncReaderCanReconnect(t *testing.T) {
 	require.NoError(t, ts.Ack(tCtx, nil))
 
 	// We will be failing to send but should still exit immediately.
-	r.CloseAsync()
+	r.TriggerStopConsuming()
 
 	go func() {
 		select {
@@ -318,9 +308,7 @@ func TestAsyncReaderCanReconnect(t *testing.T) {
 		}
 	}()
 
-	if err = r.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, r.WaitForClose(tCtx))
 }
 
 func TestAsyncReaderFailsReconnect(t *testing.T) {
@@ -375,7 +363,7 @@ func TestAsyncReaderFailsReconnect(t *testing.T) {
 	require.NoError(t, ts.Ack(tCtx, nil))
 
 	// We will be failing to send but should still exit immediately.
-	r.CloseAsync()
+	r.TriggerStopConsuming()
 
 	go func() {
 		select {
@@ -384,9 +372,7 @@ func TestAsyncReaderFailsReconnect(t *testing.T) {
 		}
 	}()
 
-	if err = r.WaitForClose(time.Second * 10); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, r.WaitForClose(tCtx))
 }
 
 func TestAsyncReaderCloseDuringReconnect(t *testing.T) {
@@ -417,13 +403,13 @@ func TestAsyncReaderCloseDuringReconnect(t *testing.T) {
 	}()
 
 	// We will be failing to send but should still exit immediately.
-	r.CloseAsync()
+	r.TriggerStopConsuming()
 	close(readerImpl.readChan)
 
-	if err = r.WaitForClose(time.Second); err != nil {
-		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, r.WaitForClose(ctx))
 }
 
 func TestAsyncReaderHappyPath(t *testing.T) {
@@ -474,14 +460,11 @@ func TestAsyncReaderHappyPath(t *testing.T) {
 	require.NoError(t, ts.Ack(tCtx, nil))
 
 	// We will be failing to send but should still exit immediately.
-	r.CloseAsync()
+	r.TriggerStopConsuming()
 	close(readerImpl.readChan)
 	close(readerImpl.connChan)
 
-	if err = r.WaitForClose(time.Second * 30); err != nil {
-		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-		t.Fatal(err)
-	}
+	require.NoError(t, r.WaitForClose(tCtx))
 
 	if readerImpl.ackRcvd[0] != nil {
 		t.Error(readerImpl.ackRcvd[0])
@@ -526,7 +509,7 @@ func TestAsyncReaderCloseWithPendingAcks(t *testing.T) {
 	require.NoError(t, ts.Ack(tCtx, nil))
 
 	// Blocking the reader ack for now
-	r.CloseAsync()
+	r.TriggerStopConsuming()
 
 	select {
 	case <-readerImpl.closeAsyncChan:
@@ -605,14 +588,11 @@ func TestAsyncReaderSadPath(t *testing.T) {
 	require.NoError(t, ts.Ack(tCtx, expErr))
 
 	// We will be failing to send but should still exit immediately.
-	r.CloseAsync()
+	r.TriggerStopConsuming()
 	close(readerImpl.readChan)
 	close(readerImpl.connChan)
 
-	if err = r.WaitForClose(time.Second * 30); err != nil {
-		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-		t.Fatal(err)
-	}
+	require.NoError(t, r.WaitForClose(tCtx))
 
 	if actErr := readerImpl.ackRcvd[0]; expErr != actErr {
 		t.Errorf("Wrong response received: %v != %v", actErr, expErr)
@@ -689,14 +669,11 @@ func TestAsyncReaderParallel(t *testing.T) {
 	}
 
 	// We will be failing to send but should still exit immediately.
-	r.CloseAsync()
+	r.TriggerStopConsuming()
 	close(readerImpl.readChan)
 	close(readerImpl.connChan)
 
-	if err = r.WaitForClose(time.Second * 30); err != nil {
-		_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-		t.Fatal(err)
-	}
+	require.NoError(t, r.WaitForClose(tCtx))
 
 	if exp, act := expErrs, readerImpl.ackRcvd; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Unexpected errors returned: %v != %v", act, exp)
@@ -725,21 +702,18 @@ type mockStaticReader struct {
 	d []byte
 }
 
-func (r *mockStaticReader) ConnectWithContext(ctx context.Context) error {
+func (r *mockStaticReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (r *mockStaticReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (r *mockStaticReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	nextMsg := message.QuickBatch([][]byte{r.d})
 	return nextMsg, func(ctx context.Context, res error) error {
 		return nil
 	}, nil
 }
 
-func (r *mockStaticReader) CloseAsync() {
-}
-
-func (r *mockStaticReader) WaitForClose(time.Duration) error {
+func (r *mockStaticReader) Close(ctx context.Context) error {
 	return nil
 }
 
@@ -755,11 +729,11 @@ func benchmarkAsyncReaderGenerateN(b *testing.B, capacity int) {
 	require.NoError(b, err)
 
 	b.Cleanup(func() {
-		r.CloseAsync()
-		if err = r.WaitForClose(time.Second); err != nil {
-			_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-			b.Fatal(err)
-		}
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		defer done()
+
+		r.TriggerStopConsuming()
+		require.NoError(b, r.WaitForClose(ctx))
 	})
 
 	resFns := make([]func(context.Context, error) error, capacity)

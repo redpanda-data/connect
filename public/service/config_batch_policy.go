@@ -72,7 +72,7 @@ func (b *Batcher) UntilNext() (time.Duration, bool) {
 // Flush pending messages into a batch, apply any batching processors that are
 // part of the batching policy, and then return the result.
 func (b *Batcher) Flush(ctx context.Context) (batch MessageBatch, err error) {
-	m := b.p.Flush()
+	m := b.p.Flush(ctx)
 	if m == nil || m.Len() == 0 {
 		return
 	}
@@ -86,18 +86,7 @@ func (b *Batcher) Flush(ctx context.Context) (batch MessageBatch, err error) {
 // Close the batching policy, which cleans up any resources used by batching
 // processors.
 func (b *Batcher) Close(ctx context.Context) error {
-	b.p.CloseAsync()
-	for {
-		// Gross but will do for now until we replace these with context params.
-		if err := b.p.WaitForClose(time.Millisecond * 100); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-	}
+	return b.p.Close(ctx)
 }
 
 // NewBatcher creates a batching mechanism from the policy.

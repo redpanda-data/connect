@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -161,7 +160,7 @@ func (t *fallbackBroker) loop() {
 		for _, c := range t.outputTSChans {
 			close(c)
 		}
-		closeAllOutputs(t.outputs)
+		_ = closeAllOutputs(context.Background(), t.outputs)
 		t.shutSig.ShutdownComplete()
 	}()
 
@@ -206,30 +205,27 @@ func (t *fallbackBroker) loop() {
 	}
 }
 
-// CloseAsync shuts down the fallbackBroker broker and stops processing requests.
-func (t *fallbackBroker) CloseAsync() {
-	t.shutSig.CloseAtLeisure()
+func (t *fallbackBroker) TriggerCloseNow() {
+	t.shutSig.CloseNow()
 }
 
-// WaitForClose blocks until the fallbackBroker broker has closed down.
-func (t *fallbackBroker) WaitForClose(timeout time.Duration) error {
+func (t *fallbackBroker) WaitForClose(ctx context.Context) error {
 	select {
 	case <-t.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }
 
-func closeAllOutputs(outputs []output.Streamed) {
+func closeAllOutputs(ctx context.Context, outputs []output.Streamed) error {
 	for _, o := range outputs {
-		o.CloseAsync()
+		o.TriggerCloseNow()
 	}
 	for _, o := range outputs {
-		for {
-			if err := o.WaitForClose(time.Second); err == nil {
-				break
-			}
+		if err := o.WaitForClose(ctx); err != nil {
+			return err
 		}
 	}
+	return nil
 }

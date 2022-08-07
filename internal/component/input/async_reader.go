@@ -78,15 +78,7 @@ func (r *AsyncReader) loop() {
 	defer cnDone()
 
 	defer func() {
-		r.reader.CloseAsync()
-		go func() {
-			select {
-			case <-r.shutSig.CloseNowChan():
-				_ = r.reader.WaitForClose(0)
-			case <-r.shutSig.HasClosedChan():
-			}
-		}()
-		_ = r.reader.WaitForClose(shutdown.MaximumShutdownWait())
+		_ = r.reader.Close(context.Background())
 
 		atomic.StoreInt32(&r.connected, 0)
 
@@ -103,7 +95,7 @@ func (r *AsyncReader) loop() {
 
 	initConnection := func() bool {
 		for {
-			if err := r.reader.ConnectWithContext(closeAtLeisureCtx); err != nil {
+			if err := r.reader.Connect(closeAtLeisureCtx); err != nil {
 				if r.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
 					return false
 				}
@@ -127,7 +119,7 @@ func (r *AsyncReader) loop() {
 	atomic.StoreInt32(&r.connected, 1)
 
 	for {
-		msg, ackFn, err := r.reader.ReadWithContext(closeAtLeisureCtx)
+		msg, ackFn, err := r.reader.ReadBatch(closeAtLeisureCtx)
 
 		// If our reader says it is not connected.
 		if err == component.ErrNotConnected {
@@ -212,21 +204,26 @@ func (r *AsyncReader) Connected() bool {
 	return atomic.LoadInt32(&r.connected) == 1
 }
 
-// CloseAsync shuts down the AsyncReader input and stops processing requests.
-func (r *AsyncReader) CloseAsync() {
+// TriggerStopConsuming instructs the input to start shutting down resources
+// once all pending messages are delivered and acknowledged. This call does
+// not block.
+func (r *AsyncReader) TriggerStopConsuming() {
 	r.shutSig.CloseAtLeisure()
 }
 
-// WaitForClose blocks until the AsyncReader input has closed down.
-func (r *AsyncReader) WaitForClose(timeout time.Duration) error {
-	go func() {
-		<-time.After(timeout - time.Second)
-		r.shutSig.CloseNow()
-	}()
+// TriggerCloseNow triggers the shut down of this component but should not block
+// the calling goroutine.
+func (r *AsyncReader) TriggerCloseNow() {
+	r.shutSig.CloseNow()
+}
+
+// WaitForClose is a blocking call to wait until the component has finished
+// shutting down and cleaning up resources.
+func (r *AsyncReader) WaitForClose(ctx context.Context) error {
 	select {
 	case <-r.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

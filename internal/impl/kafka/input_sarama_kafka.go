@@ -427,8 +427,8 @@ func (k *kafkaReader) closeGroupAndConsumers() {
 
 //------------------------------------------------------------------------------
 
-// ConnectWithContext establishes a kafkaReader connection.
-func (k *kafkaReader) ConnectWithContext(ctx context.Context) error {
+// Connect establishes a kafkaReader connection.
+func (k *kafkaReader) Connect(ctx context.Context) error {
 	k.cMut.Lock()
 	defer k.cMut.Unlock()
 	if k.msgChan != nil {
@@ -482,8 +482,8 @@ func (k *kafkaReader) ConnectWithContext(ctx context.Context) error {
 	return k.connectBalancedTopics(ctx, config)
 }
 
-// ReadWithContext attempts to read a message from a kafkaReader topic.
-func (k *kafkaReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+// ReadBatch attempts to read a message from a kafkaReader topic.
+func (k *kafkaReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()
@@ -504,16 +504,12 @@ func (k *kafkaReader) ReadWithContext(ctx context.Context) (message.Batch, input
 }
 
 // CloseAsync shuts down the kafkaReader input and stops processing requests.
-func (k *kafkaReader) CloseAsync() {
-	go k.closeGroupAndConsumers()
-}
-
-// WaitForClose blocks until the kafkaReader input has closed down.
-func (k *kafkaReader) WaitForClose(timeout time.Duration) error {
+func (k *kafkaReader) Close(ctx context.Context) (err error) {
+	k.closeGroupAndConsumers()
 	select {
 	case <-k.closedChan:
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		err = ctx.Err()
 	}
-	return nil
+	return
 }

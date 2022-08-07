@@ -74,6 +74,9 @@ func main() {
 }
 
 func TestSubprocessRestarted(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	filePath := testProgram(t, `package main
 
 import (
@@ -120,11 +123,14 @@ func main() {
 	assert.Equal(t, 1, msg.Len())
 	assert.Equal(t, "baz", string(msg.Get(0).AsBytes()))
 
-	i.CloseAsync()
-	require.NoError(t, i.WaitForClose(time.Second))
+	i.TriggerStopConsuming()
+	require.NoError(t, i.WaitForClose(ctx))
 }
 
 func TestSubprocessCloseInBetween(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	filePath := testProgram(t, `package main
 
 import (
@@ -156,6 +162,6 @@ func main() {
 	assert.Equal(t, 1, msg.Len())
 	assert.Equal(t, "foo:1", string(msg.Get(0).AsBytes()))
 
-	i.CloseAsync()
-	require.NoError(t, i.WaitForClose(time.Second))
+	i.TriggerStopConsuming()
+	require.NoError(t, i.WaitForClose(ctx))
 }

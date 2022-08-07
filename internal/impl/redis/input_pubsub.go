@@ -3,7 +3,6 @@ package redis
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/go-redis/redis/v7"
 
@@ -79,7 +78,7 @@ func newRedisPubSubReader(conf input.RedisPubSubConfig, log log.Modular) (*redis
 	return r, nil
 }
 
-func (r *redisPubSubReader) ConnectWithContext(ctx context.Context) error {
+func (r *redisPubSubReader) Connect(ctx context.Context) error {
 	r.cMut.Lock()
 	defer r.cMut.Unlock()
 
@@ -106,7 +105,7 @@ func (r *redisPubSubReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (r *redisPubSubReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (r *redisPubSubReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	var pubsub *redis.PubSub
 
 	r.cMut.Lock()
@@ -148,10 +147,7 @@ func (r *redisPubSubReader) disconnect() error {
 	return err
 }
 
-func (r *redisPubSubReader) CloseAsync() {
-	_ = r.disconnect()
-}
-
-func (r *redisPubSubReader) WaitForClose(timeout time.Duration) error {
-	return nil
+func (r *redisPubSubReader) Close(ctx context.Context) (err error) {
+	err = r.disconnect()
+	return
 }

@@ -206,8 +206,8 @@ type Writer struct {
 	shutSig *shutdown.Signaller
 }
 
-// ConnectWithContext attempts to establish a connection to the target mongo DB
-func (m *Writer) ConnectWithContext(ctx context.Context) error {
+// Connect attempts to establish a connection to the target mongo DB
+func (m *Writer) Connect(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -255,8 +255,8 @@ func (m *Writer) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// WriteWithContext attempts to perform the designated operation to the mongo DB collection.
-func (m *Writer) WriteWithContext(ctx context.Context, msg message.Batch) error {
+// WriteBatch attempts to perform the designated operation to the mongo DB collection.
+func (m *Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 	m.mu.Lock()
 	collection := m.collection
 	m.mu.Unlock()
@@ -384,27 +384,16 @@ func (m *Writer) WriteWithContext(ctx context.Context, msg message.Batch) error 
 	return nil
 }
 
-// CloseAsync begins cleaning up resources used by this writer asynchronously.
-func (m *Writer) CloseAsync() {
-	go func() {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		if m.client != nil {
-			_ = m.client.Disconnect(context.Background())
-			m.client = nil
-		}
-		m.collection = nil
-		m.shutSig.ShutdownComplete()
-	}()
-}
+// Close begins cleaning up resources used by this writer.
+func (m *Writer) Close(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-// WaitForClose will block until either the writer is closed or a specified
-// timeout occurs.
-func (m *Writer) WaitForClose(timeout time.Duration) error {
-	select {
-	case <-m.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	var err error
+	if m.client != nil {
+		err = m.client.Disconnect(ctx)
+		m.client = nil
 	}
-	return nil
+	m.collection = nil
+	return err
 }

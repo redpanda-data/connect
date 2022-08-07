@@ -295,8 +295,8 @@ func (k *kafkaWriter) buildUserDefinedHeaders(staticHeaders map[string]string) [
 
 //------------------------------------------------------------------------------
 
-// ConnectWithContext attempts to establish a connection to a Kafka broker.
-func (k *kafkaWriter) ConnectWithContext(ctx context.Context) error {
+// Connect attempts to establish a connection to a Kafka broker.
+func (k *kafkaWriter) Connect(ctx context.Context) error {
 	k.connMut.Lock()
 	defer k.connMut.Unlock()
 
@@ -339,9 +339,9 @@ func (k *kafkaWriter) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-// WriteWithContext will attempt to write a message to Kafka, wait for
+// WriteBatch will attempt to write a message to Kafka, wait for
 // acknowledgement, and returns an error if applicable.
-func (k *kafkaWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	k.connMut.RLock()
 	producer := k.producer
 	k.connMut.RUnlock()
@@ -446,21 +446,18 @@ func (k *kafkaWriter) WriteWithContext(ctx context.Context, msg message.Batch) e
 	return nil
 }
 
-// CloseAsync shuts down the Kafka writer and stops processing messages.
-func (k *kafkaWriter) CloseAsync() {
-	go func() {
-		k.connMut.Lock()
-		if k.producer != nil {
-			k.producer.Close()
-			k.producer = nil
-		}
-		k.connMut.Unlock()
-	}()
-}
+// Close shuts down the Kafka writer and stops processing messages.
+func (k *kafkaWriter) Close(context.Context) error {
+	k.connMut.Lock()
+	defer k.connMut.Unlock()
 
-// WaitForClose blocks until the Kafka writer has closed down.
-func (k *kafkaWriter) WaitForClose(timeout time.Duration) error {
-	return nil
+	var err error
+	if k.producer != nil {
+		err = k.producer.Close()
+		k.producer = nil
+	}
+
+	return err
 }
 
 //------------------------------------------------------------------------------

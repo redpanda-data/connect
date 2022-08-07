@@ -73,7 +73,7 @@ func newRedisListReader(conf input.RedisListConfig, log log.Modular) (*redisList
 	return r, nil
 }
 
-func (r *redisListReader) ConnectWithContext(ctx context.Context) error {
+func (r *redisListReader) Connect(ctx context.Context) error {
 	r.cMut.Lock()
 	defer r.cMut.Unlock()
 
@@ -95,7 +95,7 @@ func (r *redisListReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (r *redisListReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (r *redisListReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	var client redis.UniversalClient
 
 	r.cMut.Lock()
@@ -135,10 +135,7 @@ func (r *redisListReader) disconnect() error {
 	return err
 }
 
-func (r *redisListReader) CloseAsync() {
-	_ = r.disconnect()
-}
-
-func (r *redisListReader) WaitForClose(timeout time.Duration) error {
-	return nil
+func (r *redisListReader) Close(ctx context.Context) (err error) {
+	err = r.disconnect()
+	return
 }

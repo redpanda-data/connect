@@ -343,7 +343,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, streamID, shardID, start
 	go func() {
 		defer func() {
 			commitCtxClose()
-			recordBatcher.Close(state == awsKinesisConsumerFinished)
+			recordBatcher.Close(context.Background(), state == awsKinesisConsumerFinished)
 			boff.Reset()
 			k.boffPool.Put(boff)
 
@@ -675,8 +675,8 @@ func (k *kinesisReader) runExplicitShards() {
 
 //------------------------------------------------------------------------------
 
-// ConnectWithContext establishes a kafkaReader connection.
-func (k *kinesisReader) ConnectWithContext(ctx context.Context) error {
+// Connect establishes a kafkaReader connection.
+func (k *kinesisReader) Connect(ctx context.Context) error {
 	k.cMut.Lock()
 	defer k.cMut.Unlock()
 	if k.msgChan != nil {
@@ -706,8 +706,8 @@ func (k *kinesisReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// ReadWithContext attempts to read a message from Kinesis.
-func (k *kinesisReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+// ReadBatch attempts to read a message from Kinesis.
+func (k *kinesisReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	k.cMut.Lock()
 	msgChan := k.msgChan
 	k.cMut.Unlock()
@@ -728,16 +728,12 @@ func (k *kinesisReader) ReadWithContext(ctx context.Context) (message.Batch, inp
 }
 
 // CloseAsync shuts down the Kinesis input and stops processing requests.
-func (k *kinesisReader) CloseAsync() {
+func (k *kinesisReader) Close(ctx context.Context) error {
 	k.done()
-}
-
-// WaitForClose blocks until the Kinesis input has closed down.
-func (k *kinesisReader) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-k.closedChan:
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

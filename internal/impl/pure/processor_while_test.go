@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -45,7 +46,7 @@ func TestWhileWithCount(t *testing.T) {
 		[]byte(`bar`),
 	}
 
-	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
+	msg, res := c.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar")}))
 	require.Nil(t, res)
 
 	assert.Equal(t, exp, message.GetAllBytes(msg[0]))
@@ -75,7 +76,7 @@ func TestWhileWithContentCheck(t *testing.T) {
 		[]byte(`bar`),
 	}
 
-	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
+	msg, res := c.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res)
 	}
@@ -109,7 +110,7 @@ func TestWhileWithCountALO(t *testing.T) {
 		[]byte(`bar`),
 	}
 
-	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
+	msg, res := c.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res)
 	}
@@ -143,7 +144,7 @@ func TestWhileMaxLoops(t *testing.T) {
 		[]byte(`bar`),
 	}
 
-	msg, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
+	msg, res := c.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res)
 	}
@@ -175,15 +176,14 @@ func TestWhileWithStaticTrue(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	go func() {
 		<-time.After(time.Millisecond * 100)
-		c.CloseAsync()
+		assert.NoError(t, c.Close(ctx))
 	}()
 
-	_, res := c.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
-	assert.NoError(t, res)
-
-	if err := c.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	_, err = c.ProcessBatch(ctx, message.QuickBatch([][]byte{[]byte("bar")}))
+	assert.NoError(t, err)
 }

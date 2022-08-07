@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
@@ -86,7 +85,7 @@ func newSocketReader(conf input.SocketConfig, logger log.Modular) (*socketReader
 	}, nil
 }
 
-func (s *socketReader) ConnectWithContext(ctx context.Context) error {
+func (s *socketReader) Connect(ctx context.Context) error {
 	s.codecMut.Lock()
 	defer s.codecMut.Unlock()
 
@@ -110,7 +109,7 @@ func (s *socketReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *socketReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (s *socketReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	s.codecMut.Lock()
 	codec := s.codec
 	s.codecMut.Unlock()
@@ -153,15 +152,14 @@ func (s *socketReader) ReadWithContext(ctx context.Context) (message.Batch, inpu
 	}, nil
 }
 
-func (s *socketReader) CloseAsync() {
+func (s *socketReader) Close(ctx context.Context) (err error) {
 	s.codecMut.Lock()
+	defer s.codecMut.Unlock()
+
 	if s.codec != nil {
-		s.codec.Close(context.Background())
+		err = s.codec.Close(ctx)
 		s.codec = nil
 	}
-	s.codecMut.Unlock()
-}
 
-func (s *socketReader) WaitForClose(time.Duration) error {
-	return nil
+	return
 }

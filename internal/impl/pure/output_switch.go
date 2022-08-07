@@ -323,7 +323,7 @@ func (o *switchOutput) dispatchToTargets(
 		pendingResponses++
 	}
 	if pendingResponses == 0 {
-		ctx, done := o.shutSig.CloseAtLeisureCtx(context.Background())
+		ctx, done := o.shutSig.CloseNowCtx(context.Background())
 		defer done()
 		_ = ackFn(ctx, nil)
 	}
@@ -358,7 +358,7 @@ func (o *switchOutput) dispatchToTargets(
 			}
 			return nil
 		}):
-		case <-o.shutSig.CloseAtLeisureChan():
+		case <-o.shutSig.CloseNowChan():
 			setErr(component.ErrTypeClosed)
 			return
 		}
@@ -377,7 +377,7 @@ func (o *switchOutput) loop() {
 			case <-ackInterruptChan:
 			case <-time.After(time.Millisecond * 100):
 				// Just incase an interrupt doesn't arrive.
-			case <-o.shutSig.CloseAtLeisureChan():
+			case <-o.shutSig.CloseNowChan():
 				break ackWaitLoop
 			}
 		}
@@ -385,18 +385,18 @@ func (o *switchOutput) loop() {
 			close(tChan)
 		}
 		for _, output := range o.outputs {
-			output.CloseAsync()
+			output.TriggerCloseNow()
 		}
 		for _, output := range o.outputs {
-			_ = output.WaitForClose(shutdown.MaximumShutdownWait())
+			_ = output.WaitForClose(context.Background())
 		}
 		o.shutSig.ShutdownComplete()
 	}()
 
-	shutCtx, done := o.shutSig.CloseAtLeisureCtx(context.Background())
+	shutCtx, done := o.shutSig.CloseNowCtx(context.Background())
 	defer done()
 
-	for !o.shutSig.ShouldCloseAtLeisure() {
+	for !o.shutSig.ShouldCloseNow() {
 		var ts message.Transaction
 		var open bool
 
@@ -405,7 +405,7 @@ func (o *switchOutput) loop() {
 			if !open {
 				return
 			}
-		case <-o.shutSig.CloseAtLeisureChan():
+		case <-o.shutSig.CloseNowChan():
 			return
 		}
 
@@ -455,15 +455,15 @@ func (o *switchOutput) loop() {
 	}
 }
 
-func (o *switchOutput) CloseAsync() {
-	o.shutSig.CloseAtLeisure()
+func (o *switchOutput) TriggerCloseNow() {
+	o.shutSig.CloseNow()
 }
 
-func (o *switchOutput) WaitForClose(timeout time.Duration) error {
+func (o *switchOutput) WaitForClose(ctx context.Context) error {
 	select {
 	case <-o.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

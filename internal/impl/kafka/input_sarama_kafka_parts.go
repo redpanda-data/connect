@@ -44,7 +44,7 @@ func (k *kafkaReader) runPartitionConsumer(
 			panic(err)
 		}
 	}
-	defer batchPolicy.CloseAsync()
+	defer batchPolicy.Close(context.Background())
 
 	var nextTimedBatchChan <-chan time.Time
 	var flushBatch func(context.Context, chan<- asyncMessage, message.Batch, int64) bool
@@ -66,7 +66,7 @@ partMsgLoop:
 		select {
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			if !flushBatch(ctx, k.msgChan, batchPolicy.Flush(), latestOffset+1) {
+			if !flushBatch(ctx, k.msgChan, batchPolicy.Flush(ctx), latestOffset+1) {
 				break partMsgLoop
 			}
 		case data, open := <-consumer.Messages():
@@ -80,7 +80,7 @@ partMsgLoop:
 
 			if batchPolicy.Add(part) {
 				nextTimedBatchChan = nil
-				if !flushBatch(ctx, k.msgChan, batchPolicy.Flush(), latestOffset+1) {
+				if !flushBatch(ctx, k.msgChan, batchPolicy.Flush(ctx), latestOffset+1) {
 					break partMsgLoop
 				}
 			}

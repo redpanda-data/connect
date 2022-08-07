@@ -1,7 +1,7 @@
 package pure
 
 import (
-	"time"
+	"context"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -24,14 +24,11 @@ func init() {
 
 type noopProcessor struct{}
 
-func (c *noopProcessor) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+func (c *noopProcessor) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	msgs := [1]message.Batch{msg}
 	return msgs[:], nil
 }
 
-func (c *noopProcessor) CloseAsync() {
-}
-
-func (c *noopProcessor) WaitForClose(timeout time.Duration) error {
+func (c *noopProcessor) Close(context.Context) error {
 	return nil
 }

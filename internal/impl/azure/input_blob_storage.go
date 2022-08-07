@@ -282,9 +282,9 @@ func newAzureBlobStorage(conf input.AzureBlobStorageConfig, log log.Modular, sta
 	return a, nil
 }
 
-// ConnectWithContext attempts to establish a connection to the target Azure
+// Connect attempts to establish a connection to the target Azure
 // Blob Storage container.
-func (a *azureBlobStorage) ConnectWithContext(ctx context.Context) error {
+func (a *azureBlobStorage) Connect(ctx context.Context) error {
 	var err error
 	a.keyReader, err = newAzureTargetReader(ctx, a.conf, a.log, a.container)
 	return err
@@ -351,9 +351,9 @@ func blobStorageMsgFromParts(p *azurePendingObject, parts []*message.Part) messa
 	return msg
 }
 
-// ReadWithContext attempts to read a new message from the target Azure Blob
+// ReadBatch attempts to read a new message from the target Azure Blob
 // Storage container.
-func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
+func (a *azureBlobStorage) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 
@@ -403,22 +403,13 @@ func (a *azureBlobStorage) ReadWithContext(ctx context.Context) (msg message.Bat
 	}, nil
 }
 
-// CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *azureBlobStorage) CloseAsync() {
-	go func() {
-		a.objectMut.Lock()
-		if a.object != nil {
-			a.object.scanner.Close(context.Background())
-			a.object = nil
-		}
-		a.objectMut.Unlock()
-	}()
-}
+func (a *azureBlobStorage) Close(ctx context.Context) (err error) {
+	a.objectMut.Lock()
+	defer a.objectMut.Unlock()
 
-// WaitForClose will block until either the reader is closed or a specified
-// timeout occurs.
-func (a *azureBlobStorage) WaitForClose(time.Duration) error {
-	return nil
+	if a.object != nil {
+		err = a.object.scanner.Close(ctx)
+		a.object = nil
+	}
+	return
 }
-
-//------------------------------------------------------------------------------

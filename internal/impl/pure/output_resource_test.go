@@ -16,6 +16,9 @@ import (
 )
 
 func TestResourceOutput(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	var outLock sync.Mutex
 	var outTS []message.Transaction
 
@@ -65,8 +68,8 @@ func TestResourceOutput(t *testing.T) {
 	}
 	outLock.Unlock()
 
-	p.CloseAsync()
-	assert.NoError(t, p.WaitForClose(time.Second))
+	p.TriggerCloseNow()
+	assert.NoError(t, p.WaitForClose(tCtx))
 }
 
 func TestOutputResourceBadName(t *testing.T) {

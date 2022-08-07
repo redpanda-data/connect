@@ -96,11 +96,11 @@ func newAzureQueueStorageWriter(conf output.AzureQueueStorageConfig, mgr bundle.
 	return s, nil
 }
 
-func (a *azureQueueStorageWriter) ConnectWithContext(ctx context.Context) error {
+func (a *azureQueueStorageWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (a *azureQueueStorageWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (a *azureQueueStorageWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		queueURL := a.serviceURL.NewQueueURL(a.queueName.String(i, msg))
 		msgURL := queueURL.NewMessagesURL()
@@ -144,9 +144,6 @@ func (a *azureQueueStorageWriter) WriteWithContext(ctx context.Context, msg mess
 	})
 }
 
-func (a *azureQueueStorageWriter) CloseAsync() {
-}
-
-func (a *azureQueueStorageWriter) WaitForClose(time.Duration) error {
+func (a *azureQueueStorageWriter) Close(context.Context) error {
 	return nil
 }

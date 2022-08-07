@@ -59,8 +59,10 @@ func TestFallbackOutputBasic(t *testing.T) {
 	require.NoError(t, s.Consume(sendChan))
 
 	t.Cleanup(func() {
-		s.CloseAsync()
-		require.NoError(t, s.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		s.TriggerCloseNow()
+		require.NoError(t, s.WaitForClose(ctx))
+		done()
 	})
 
 	inputs := []string{
@@ -111,8 +113,8 @@ func TestFallbackDoubleClose(t *testing.T) {
 	}
 
 	// This shouldn't cause a panic
-	oTM.CloseAsync()
-	oTM.CloseAsync()
+	oTM.TriggerCloseNow()
+	oTM.TriggerCloseNow()
 }
 
 //------------------------------------------------------------------------------
@@ -185,10 +187,8 @@ func TestFallbackHappyPath(t *testing.T) {
 		}
 	}
 
-	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second * 10); err != nil {
-		t.Error(err)
-	}
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
 
 func TestFallbackHappyishPath(t *testing.T) {
@@ -280,9 +280,7 @@ func TestFallbackHappyishPath(t *testing.T) {
 	}
 
 	close(readChan)
-	if err := oTM.WaitForClose(time.Second * 10); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
 
 func TestFallbackAllFail(t *testing.T) {
@@ -354,10 +352,8 @@ func TestFallbackAllFail(t *testing.T) {
 		}
 	}
 
-	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second * 10); err != nil {
-		t.Error(err)
-	}
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
 
 func TestFallbackAllFailParallel(t *testing.T) {
@@ -441,9 +437,5 @@ func TestFallbackAllFailParallel(t *testing.T) {
 	}
 
 	close(readChan)
-	if err := oTM.WaitForClose(time.Second * 10); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
-
-//------------------------------------------------------------------------------

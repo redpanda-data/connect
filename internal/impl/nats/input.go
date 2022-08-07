@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/nats-io/nats.go"
 
@@ -79,6 +78,7 @@ type natsReader struct {
 	natsSub       *nats.Subscription
 	natsChan      chan *nats.Msg
 	interruptChan chan struct{}
+	interruptOnce sync.Once
 	tlsConf       *tls.Config
 }
 
@@ -102,7 +102,7 @@ func newNATSReader(conf input.NATSConfig, log log.Modular) (*natsReader, error) 
 	return &n, nil
 }
 
-func (n *natsReader) ConnectWithContext(ctx context.Context) error {
+func (n *natsReader) Connect(ctx context.Context) error {
 	n.cMut.Lock()
 	defer n.cMut.Unlock()
 
@@ -159,7 +159,7 @@ func (n *natsReader) disconnect() {
 	n.natsChan = nil
 }
 
-func (n *natsReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (n *natsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	n.cMut.Lock()
 	natsChan := n.natsChan
 	natsConn := n.natsConn
@@ -203,10 +203,9 @@ func (n *natsReader) ReadWithContext(ctx context.Context) (message.Batch, input.
 	}, nil
 }
 
-func (n *natsReader) CloseAsync() {
-	close(n.interruptChan)
-}
-
-func (n *natsReader) WaitForClose(timeout time.Duration) error {
-	return nil
+func (n *natsReader) Close(ctx context.Context) (err error) {
+	n.interruptOnce.Do(func() {
+		close(n.interruptChan)
+	})
+	return
 }

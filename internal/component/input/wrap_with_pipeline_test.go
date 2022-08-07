@@ -30,13 +30,16 @@ func (m *mockInput) Connected() bool {
 	return true
 }
 
-func (m *mockInput) CloseAsync() {
+func (m *mockInput) TriggerStopConsuming() {
 	m.closeOnce.Do(func() {
 		close(m.ts)
 	})
 }
 
-func (m *mockInput) WaitForClose(time.Duration) error {
+func (m *mockInput) TriggerCloseNow() {
+}
+
+func (m *mockInput) WaitForClose(ctx context.Context) error {
 	return errors.New("wasnt expecting to ever see this tbh")
 }
 
@@ -56,11 +59,11 @@ func (m *mockPipe) TransactionChan() <-chan message.Transaction {
 	return m.ts
 }
 
-func (m *mockPipe) CloseAsync() {
+func (m *mockPipe) TriggerCloseNow() {
 	close(m.ts)
 }
 
-func (m *mockPipe) WaitForClose(time.Duration) error {
+func (m *mockPipe) WaitForClose(ctx context.Context) error {
 	return nil
 }
 
@@ -95,10 +98,11 @@ func TestBasicWrapPipeline(t *testing.T) {
 		t.Error("Wrong transactions chan in mock pipe")
 	}
 
-	newInput.CloseAsync()
-	if err = newInput.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	newInput.TriggerStopConsuming()
+	require.NoError(t, newInput.WaitForClose(ctx))
 
 	select {
 	case _, open := <-mockIn.ts:
@@ -165,10 +169,11 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 		t.Error("Wrong messages chan in mock pipe 2")
 	}
 
-	newInput.CloseAsync()
-	if err = newInput.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	newInput.TriggerStopConsuming()
+	require.NoError(t, newInput.WaitForClose(ctx))
 
 	select {
 	case _, open := <-mockIn.ts:
@@ -193,18 +198,12 @@ func TestBasicWrapMultiPipelines(t *testing.T) {
 type mockProc struct {
 }
 
-func (m mockProc) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+func (m mockProc) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	msgs := [1]message.Batch{msg}
 	return msgs[:], nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (m mockProc) CloseAsync() {
-	// Do nothing as our processor doesn't require resource cleanup.
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (m mockProc) WaitForClose(timeout time.Duration) error {
+func (m mockProc) Close(ctx context.Context) error {
 	// Do nothing as our processor doesn't require resource cleanup.
 	return nil
 }
@@ -278,10 +277,8 @@ func TestBasicWrapProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	newInput.CloseAsync()
-	if err = newInput.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	newInput.TriggerStopConsuming()
+	require.NoError(t, newInput.WaitForClose(tCtx))
 }
 
 func TestBasicWrapDoubleProcessors(t *testing.T) {
@@ -348,8 +345,6 @@ func TestBasicWrapDoubleProcessors(t *testing.T) {
 		t.Error("action timed out")
 	}
 
-	newInput.CloseAsync()
-	if err = newInput.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	newInput.TriggerStopConsuming()
+	require.NoError(t, newInput.WaitForClose(tCtx))
 }

@@ -1,6 +1,7 @@
 package io_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -43,6 +44,9 @@ func TestSubprocessOutputBasic(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Parallel()
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
 	dir := t.TempDir()
 
@@ -91,10 +95,10 @@ func main() {
 	sendMsg(t, "bar", tranChan)
 	sendMsg(t, "baz", tranChan)
 
-	o.CloseAsync()
-	o.CloseAsync() // No panic on double close
+	o.TriggerCloseNow()
+	o.TriggerCloseNow() // No panic on double close
 
-	require.NoError(t, o.WaitForClose(time.Second))
+	require.NoError(t, o.WaitForClose(ctx))
 
 	assert.Eventually(t, func() bool {
 		resBytes, err := os.ReadFile(path.Join(dir, "output.txt"))
@@ -107,6 +111,9 @@ func main() {
 
 func TestSubprocessOutputEarlyExit(t *testing.T) {
 	t.Skip()
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
 	dir := t.TempDir()
 
@@ -167,8 +174,8 @@ func main() {
 		return string(resBytes) == "BAZ\n"
 	}, time.Second, time.Millisecond*100)
 
-	o.CloseAsync()
-	require.NoError(t, o.WaitForClose(time.Second))
+	o.TriggerCloseNow()
+	require.NoError(t, o.WaitForClose(ctx))
 
 	resBytes, err := os.ReadFile(path.Join(dir, "foo.txt"))
 	require.NoError(t, err)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -76,18 +75,15 @@ func newRejectWriter(mgr bundle.NewManagement, errorString string) (*rejectWrite
 	return &rejectWriter{errExpr}, nil
 }
 
-func (w *rejectWriter) ConnectWithContext(ctx context.Context) error {
+func (w *rejectWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (w *rejectWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (w *rejectWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	errStr := w.errExpr.String(0, msg)
 	return errors.New(errStr)
 }
 
-func (w *rejectWriter) CloseAsync() {
-}
-
-func (w *rejectWriter) WaitForClose(timeout time.Duration) error {
+func (w *rejectWriter) Close(context.Context) error {
 	return nil
 }

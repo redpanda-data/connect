@@ -1,6 +1,7 @@
 package awk_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -21,7 +22,7 @@ func TestAWKValidation(t *testing.T) {
 	}
 
 	msgIn := message.QuickBatch([][]byte{[]byte("this is bad json")})
-	msgs, res := a.ProcessMessage(msgIn)
+	msgs, res := a.ProcessBatch(context.Background(), msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
 	}
@@ -53,7 +54,7 @@ func TestAWKBadExitStatus(t *testing.T) {
 	}
 
 	msgIn := message.QuickBatch([][]byte{[]byte("this will fail")})
-	msgs, res := a.ProcessMessage(msgIn)
+	msgs, res := a.ProcessBatch(context.Background(), msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
 	}
@@ -80,7 +81,7 @@ func TestAWKBadDateString(t *testing.T) {
 	}
 
 	msgIn := message.QuickBatch([][]byte{[]byte("this is a value")})
-	msgs, res := a.ProcessMessage(msgIn)
+	msgs, res := a.ProcessBatch(context.Background(), msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough on error")
 	}
@@ -112,7 +113,7 @@ func TestAWKJSONParts(t *testing.T) {
 		[]byte(`{"init":{"val":"third"}}`),
 		[]byte(`{"init":{"val":"fourth"}}`),
 	})
-	msgs, res := a.ProcessMessage(msgIn)
+	msgs, res := a.ProcessBatch(context.Background(), msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough on error")
 	}
@@ -605,7 +606,7 @@ func TestAWK(t *testing.T) {
 		for k, v := range test.metadata {
 			inMsg.Get(0).MetaSet(k, v)
 		}
-		msgs, _ := a.ProcessMessage(inMsg)
+		msgs, _ := a.ProcessBatch(context.Background(), inMsg)
 		if len(msgs) != 1 {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}

@@ -61,13 +61,16 @@ func New(batcher *policy.Batcher, child output.Streamed, mgr bundle.NewManagemen
 //------------------------------------------------------------------------------
 
 func (m *Impl) loop() {
+	closeNowCtx, cnDone := m.shutSig.CloseNowCtx(context.Background())
+	defer cnDone()
+
 	defer func() {
 		close(m.messagesOut)
-		m.child.CloseAsync()
-		_ = m.child.WaitForClose(shutdown.MaximumShutdownWait())
 
-		m.batcher.CloseAsync()
-		_ = m.batcher.WaitForClose(shutdown.MaximumShutdownWait())
+		m.child.TriggerCloseNow()
+		_ = m.child.WaitForClose(context.Background())
+
+		_ = m.batcher.Close(context.Background())
 
 		m.shutSig.ShutdownComplete()
 	}()
@@ -121,7 +124,7 @@ func (m *Impl) loop() {
 			continue
 		}
 
-		sendMsg := m.batcher.Flush()
+		sendMsg := m.batcher.Flush(closeNowCtx)
 		if sendMsg == nil {
 			continue
 		}
@@ -141,9 +144,9 @@ func (m *Impl) loop() {
 				if !open {
 					return
 				}
-				closeAtLeisureCtx, done := m.shutSig.CloseAtLeisureCtx(context.Background())
+				closeLeisureCtx, done := m.shutSig.CloseAtLeisureCtx(context.Background())
 				for _, t := range upstreamTrans {
-					if err := t.Ack(closeAtLeisureCtx, res); err != nil {
+					if err := t.Ack(closeLeisureCtx, res); err != nil {
 						done()
 						return
 					}
@@ -174,17 +177,17 @@ func (m *Impl) Consume(msgs <-chan message.Transaction) error {
 	return nil
 }
 
-// CloseAsync shuts down the Batcher and stops processing messages.
-func (m *Impl) CloseAsync() {
-	m.shutSig.CloseAtLeisure()
+// TriggerCloseNow shuts down the Batcher and stops processing messages.
+func (m *Impl) TriggerCloseNow() {
+	m.shutSig.CloseNow()
 }
 
 // WaitForClose blocks until the Batcher output has closed down.
-func (m *Impl) WaitForClose(timeout time.Duration) error {
+func (m *Impl) WaitForClose(ctx context.Context) error {
 	select {
 	case <-m.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

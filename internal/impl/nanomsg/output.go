@@ -107,7 +107,7 @@ func getOutputSocketFromType(t string) (mangos.Socket, error) {
 	return nil, errors.New("invalid Scalability Protocols socket type")
 }
 
-func (s *nanomsgWriter) ConnectWithContext(ctx context.Context) error {
+func (s *nanomsgWriter) Connect(ctx context.Context) error {
 	s.sockMut.Lock()
 	defer s.sockMut.Unlock()
 
@@ -161,7 +161,7 @@ func (s *nanomsgWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *nanomsgWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (s *nanomsgWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	s.sockMut.RLock()
 	socket := s.socket
 	s.sockMut.RUnlock()
@@ -175,17 +175,13 @@ func (s *nanomsgWriter) WriteWithContext(ctx context.Context, msg message.Batch)
 	})
 }
 
-func (s *nanomsgWriter) CloseAsync() {
-	go func() {
-		s.sockMut.Lock()
-		if s.socket != nil {
-			s.socket.Close()
-			s.socket = nil
-		}
-		s.sockMut.Unlock()
-	}()
-}
+func (s *nanomsgWriter) Close(context.Context) (err error) {
+	s.sockMut.Lock()
+	defer s.sockMut.Unlock()
 
-func (s *nanomsgWriter) WaitForClose(timeout time.Duration) error {
-	return nil
+	if s.socket != nil {
+		err = s.socket.Close()
+		s.socket = nil
+	}
+	return
 }

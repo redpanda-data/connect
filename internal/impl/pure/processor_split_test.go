@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -40,7 +41,7 @@ func TestSplitToSingleParts(t *testing.T) {
 			p.MetaSet("foo", "bar")
 			return nil
 		})
-		msgs, _ := proc.ProcessMessage(inMsg)
+		msgs, _ := proc.ProcessBatch(context.Background(), inMsg)
 		if exp, act := len(tIn), len(msgs); exp != act {
 			t.Errorf("Wrong count of messages: %v != %v", act, exp)
 			continue
@@ -72,7 +73,7 @@ func TestSplitToMultipleParts(t *testing.T) {
 		[]byte("bar"),
 		[]byte("baz"),
 	})
-	msgs, _ := proc.ProcessMessage(inMsg)
+	msgs, _ := proc.ProcessBatch(context.Background(), inMsg)
 	if exp, act := 2, len(msgs); exp != act {
 		t.Fatalf("Wrong message count: %v != %v", act, exp)
 	}
@@ -109,7 +110,7 @@ func TestSplitByBytes(t *testing.T) {
 		[]byte("bar"),
 		[]byte("baz"),
 	})
-	msgs, _ := proc.ProcessMessage(inMsg)
+	msgs, _ := proc.ProcessBatch(context.Background(), inMsg)
 	if exp, act := 2, len(msgs); exp != act {
 		t.Fatalf("Wrong batch count: %v != %v", act, exp)
 	}
@@ -146,7 +147,7 @@ func TestSplitByBytesTooLarge(t *testing.T) {
 		[]byte("bar"),
 		[]byte("baz"),
 	})
-	msgs, _ := proc.ProcessMessage(inMsg)
+	msgs, _ := proc.ProcessBatch(context.Background(), inMsg)
 	if exp, act := 3, len(msgs); exp != act {
 		t.Fatalf("Wrong batch count: %v != %v", act, exp)
 	}

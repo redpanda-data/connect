@@ -54,13 +54,11 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	m, err := newAMQP1Reader(conf, log.Noop())
 	require.NoError(t, err)
 
-	err = m.ConnectWithContext(ctx)
+	err = m.Connect(ctx)
 	require.NoError(t, err)
 
 	defer func() {
-		m.CloseAsync()
-		err := m.WaitForClose(time.Second)
-		assert.NoError(t, err)
+		_ = m.Close(context.Background())
 	}()
 
 	client, err := amqp.Dial(url)
@@ -105,7 +103,7 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	}
 
 	for i := 0; i < N; i++ {
-		actM, ackFn, err := m.ReadWithContext(ctx)
+		actM, ackFn, err := m.ReadBatch(ctx)
 		assert.NoError(t, err)
 		wg.Add(1)
 
@@ -125,7 +123,7 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 
 	readCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	_, _, err = m.ReadWithContext(readCtx)
+	_, _, err = m.ReadBatch(readCtx)
 	assert.Error(t, err, "got unexpected message (redelivery?)")
 
 }
@@ -141,19 +139,17 @@ func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
 	m, err := newAMQP1Reader(conf, log.Noop())
 	require.NoError(t, err)
 
-	err = m.ConnectWithContext(ctx)
+	err = m.Connect(ctx)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		m.CloseAsync()
-		err := m.WaitForClose(time.Second)
-		require.NoError(t, err)
+		_ = m.Close(context.Background())
 		wg.Done()
 	}()
 
-	if _, _, err = m.ReadWithContext(ctx); err != component.ErrTypeClosed && err != component.ErrNotConnected {
+	if _, _, err = m.ReadBatch(ctx); err != component.ErrTypeClosed && err != component.ErrNotConnected {
 		t.Errorf("Wrong error: %v != %v", err, component.ErrTypeClosed)
 	}
 

@@ -98,6 +98,7 @@ type natsStreamReader struct {
 
 	msgChan       chan *stan.Msg
 	interruptChan chan struct{}
+	interruptOnce sync.Once
 	tlsConf       *tls.Config
 }
 
@@ -155,7 +156,7 @@ func (n *natsStreamReader) disconnect() {
 	}
 }
 
-func (n *natsStreamReader) ConnectWithContext(ctx context.Context) error {
+func (n *natsStreamReader) Connect(ctx context.Context) error {
 	n.cMut.Lock()
 	defer n.cMut.Unlock()
 
@@ -269,7 +270,7 @@ func (n *natsStreamReader) read(ctx context.Context) (*stan.Msg, error) {
 	return msg, nil
 }
 
-func (n *natsStreamReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (n *natsStreamReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msg, err := n.read(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -288,11 +289,9 @@ func (n *natsStreamReader) ReadWithContext(ctx context.Context) (message.Batch, 
 	}, nil
 }
 
-func (n *natsStreamReader) CloseAsync() {
-	close(n.interruptChan)
-}
-
-func (n *natsStreamReader) WaitForClose(timeout time.Duration) error {
-	n.disconnect()
-	return nil
+func (n *natsStreamReader) Close(ctx context.Context) (err error) {
+	n.interruptOnce.Do(func() {
+		close(n.interruptChan)
+	})
+	return
 }

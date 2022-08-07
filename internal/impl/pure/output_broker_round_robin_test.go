@@ -24,8 +24,8 @@ func TestRoundRobinDoubleClose(t *testing.T) {
 	}
 
 	// This shouldn't cause a panic
-	oTM.CloseAsync()
-	oTM.CloseAsync()
+	oTM.TriggerCloseNow()
+	oTM.TriggerCloseNow()
 }
 
 //------------------------------------------------------------------------------
@@ -100,10 +100,8 @@ func TestBasicRoundRobin(t *testing.T) {
 		}
 	}
 
-	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second * 10); err != nil {
-		t.Error(err)
-	}
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
 
 //------------------------------------------------------------------------------
@@ -151,5 +149,3 @@ func BenchmarkBasicRoundRobin(b *testing.B) {
 
 	b.StopTimer()
 }
-
-//------------------------------------------------------------------------------

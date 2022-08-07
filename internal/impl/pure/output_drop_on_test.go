@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -41,8 +42,10 @@ func TestDropOnNothing(t *testing.T) {
 	d, err := bmock.NewManager().NewOutput(dropConf)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		d.CloseAsync()
-		assert.NoError(t, d.WaitForClose(time.Second*5))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		d.TriggerCloseNow()
+		assert.NoError(t, d.WaitForClose(ctx))
+		done()
 	})
 
 	tChan := make(chan message.Transaction)
@@ -87,8 +90,10 @@ func TestDropOnError(t *testing.T) {
 	d, err := bmock.NewManager().NewOutput(dropConf)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		d.CloseAsync()
-		assert.NoError(t, d.WaitForClose(time.Second*5))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		d.TriggerCloseNow()
+		assert.NoError(t, d.WaitForClose(ctx))
+		done()
 	})
 
 	tChan := make(chan message.Transaction)
@@ -162,8 +167,10 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 	d, err := bmock.NewManager().NewOutput(dropConf)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		d.CloseAsync()
-		assert.NoError(t, d.WaitForClose(time.Second*5))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		d.TriggerCloseNow()
+		assert.NoError(t, d.WaitForClose(ctx))
+		done()
 	})
 
 	tChan := make(chan message.Transaction)
@@ -250,8 +257,10 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 	d, err := bmock.NewManager().NewOutput(dropConf)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		d.CloseAsync()
-		assert.NoError(t, d.WaitForClose(time.Second*5))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		d.TriggerCloseNow()
+		assert.NoError(t, d.WaitForClose(ctx))
+		done()
 	})
 
 	tChan := make(chan message.Transaction)

@@ -51,21 +51,8 @@ func (w *inputWrapper) closeExistingInput(ctx context.Context) error {
 		return nil
 	}
 
-	deadline, hasDeadline := ctx.Deadline()
-	tFor := time.Millisecond * 100
-	if hasDeadline {
-		tFor = time.Until(deadline)
-	}
-
-	tmpInput.CloseAsync()
-	for {
-		if err := tmpInput.WaitForClose(tFor); err == nil {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-	}
+	tmpInput.TriggerStopConsuming()
+	return tmpInput.WaitForClose(ctx)
 }
 
 func (w *inputWrapper) swapInput(i input.Streamed) {
@@ -96,12 +83,8 @@ func (w *inputWrapper) loop() {
 		w.inputLock.Unlock()
 
 		if tmpInput != nil {
-			tmpInput.CloseAsync()
-			for {
-				if err := tmpInput.WaitForClose(time.Second); err == nil {
-					break
-				}
-			}
+			tmpInput.TriggerStopConsuming()
+			_ = tmpInput.WaitForClose(context.Background())
 		}
 
 		close(w.tranChan)
@@ -155,19 +138,19 @@ func (w *inputWrapper) loop() {
 	}
 }
 
-func (w *inputWrapper) CloseAsync() {
+func (w *inputWrapper) TriggerStopConsuming() {
 	w.shutSig.CloseAtLeisure()
 }
 
-func (w *inputWrapper) WaitForClose(timeout time.Duration) error {
-	go func() {
-		<-time.After(timeout - time.Second)
-		w.shutSig.CloseNow()
-	}()
+func (w *inputWrapper) TriggerCloseNow() {
+	w.shutSig.CloseNow()
+}
+
+func (w *inputWrapper) WaitForClose(ctx context.Context) error {
 	select {
 	case <-w.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

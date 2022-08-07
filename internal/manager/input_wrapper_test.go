@@ -70,6 +70,6 @@ func TestInputWrapperSwap(t *testing.T) {
 		}
 	}
 
-	iWrapper.CloseAsync()
-	require.NoError(t, iWrapper.WaitForClose(time.Second*5))
+	iWrapper.TriggerStopConsuming()
+	require.NoError(t, iWrapper.WaitForClose(ctx))
 }

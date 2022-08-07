@@ -75,11 +75,8 @@ func TestStaticBasicDynamicFanIn(t *testing.T) {
 		}
 	}
 
-	fanIn.CloseAsync()
-
-	if err := fanIn.WaitForClose(time.Second * 10); err != nil {
-		t.Error(err)
-	}
+	fanIn.TriggerStopConsuming()
+	require.NoError(t, fanIn.WaitForClose(tCtx))
 }
 
 func TestBasicDynamicFanIn(t *testing.T) {
@@ -164,11 +161,8 @@ func TestBasicDynamicFanIn(t *testing.T) {
 
 	wg.Wait()
 
-	fanIn.CloseAsync()
-
-	if err := fanIn.WaitForClose(time.Second * 10); err != nil {
-		t.Error(err)
-	}
+	fanIn.TriggerStopConsuming()
+	require.NoError(t, fanIn.WaitForClose(tCtx))
 }
 
 func TestStaticDynamicFanInShutdown(t *testing.T) {
@@ -223,7 +217,7 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 		}
 	}
 
-	fanIn.CloseAsync()
+	fanIn.TriggerStopConsuming()
 
 	// All inputs should be closed.
 	for _, mockIn := range mockInputs {
@@ -237,9 +231,9 @@ func TestStaticDynamicFanInShutdown(t *testing.T) {
 		}
 	}
 
-	if err := fanIn.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second)
+	require.NoError(t, fanIn.WaitForClose(ctx))
+	done()
 
 	mapMut.Lock()
 
@@ -279,7 +273,7 @@ func TestStaticDynamicFanInAsync(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer fanIn.CloseAsync()
+	defer fanIn.TriggerStopConsuming()
 
 	wg := sync.WaitGroup{}
 	wg.Add(nInputs)

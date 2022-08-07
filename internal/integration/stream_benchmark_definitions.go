@@ -23,7 +23,7 @@ func StreamBenchSend(batchSize, parallelism int) StreamBenchDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(b, tranChan, env)
 			b.Cleanup(func() {
-				closeConnectors(b, input, output)
+				closeConnectors(b, env, input, output)
 			})
 
 			sends := b.N / batchSize
@@ -87,7 +87,7 @@ func StreamBenchWrite(batchSize int) StreamBenchDefinition {
 			tranChan := make(chan message.Transaction)
 			output := initOutput(b, tranChan, env)
 			b.Cleanup(func() {
-				closeConnectors(b, nil, output)
+				closeConnectors(b, env, nil, output)
 			})
 
 			sends := b.N / batchSize

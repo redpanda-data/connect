@@ -1,6 +1,7 @@
 package io_test
 
 import (
+	"context"
 	"os"
 	"path"
 	"reflect"
@@ -38,7 +39,7 @@ func TestSubprocessWithSed(t *testing.T) {
 		[]byte(`hello baz world`),
 		[]byte(`foo`),
 	})
-	msgs, res := proc.ProcessMessage(msgIn)
+	msgs, res := proc.ProcessBatch(context.Background(), msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("Wrong count of messages")
 	}
@@ -50,10 +51,9 @@ func TestSubprocessWithSed(t *testing.T) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
 
-	proc.CloseAsync()
-	if err := proc.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+	require.NoError(t, proc.Close(ctx))
 }
 
 func TestSubprocessWithCat(t *testing.T) {
@@ -78,7 +78,7 @@ func TestSubprocessWithCat(t *testing.T) {
 		[]byte(`hello baz world`),
 		[]byte(`bar`),
 	})
-	msgs, res := proc.ProcessMessage(msgIn)
+	msgs, res := proc.ProcessBatch(context.Background(), msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("Wrong count of messages")
 	}
@@ -90,10 +90,9 @@ func TestSubprocessWithCat(t *testing.T) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
 
-	proc.CloseAsync()
-	if err := proc.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+	require.NoError(t, proc.Close(ctx))
 }
 
 func TestSubprocessLineBreaks(t *testing.T) {
@@ -123,7 +122,7 @@ func TestSubprocessLineBreaks(t *testing.T) {
 		[]byte(""),
 		[]byte("hello foo\n\nfoo world\n"),
 	})
-	msgs, res := proc.ProcessMessage(msgIn)
+	msgs, res := proc.ProcessBatch(context.Background(), msgIn)
 	if len(msgs) != 1 {
 		t.Fatalf("Wrong count of messages %d", len(msgs))
 	}
@@ -135,10 +134,9 @@ func TestSubprocessLineBreaks(t *testing.T) {
 		t.Errorf("Wrong results: %s != %s", act, exp)
 	}
 
-	proc.CloseAsync()
-	if err := proc.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+	require.NoError(t, proc.Close(ctx))
 }
 
 func TestSubprocessWithErrors(t *testing.T) {
@@ -156,14 +154,13 @@ func TestSubprocessWithErrors(t *testing.T) {
 		[]byte(`hello bar world`),
 	})
 
-	msgs, _ := proc.ProcessMessage(msgIn)
+	msgs, _ := proc.ProcessBatch(context.Background(), msgIn)
 
 	assert.Error(t, msgs[0].Get(0).ErrorGet())
 
-	proc.CloseAsync()
-	if err := proc.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+	require.NoError(t, proc.Close(ctx))
 }
 
 func testProgram(t *testing.T, program string) string {
@@ -275,7 +272,7 @@ func main() {
 			msgIn = append(msgIn, message.NewPart([]byte(``)), message.NewPart([]byte("|{o\n\r\no}|")))
 		}
 
-		msgs, res := proc.ProcessMessage(msgIn)
+		msgs, res := proc.ProcessBatch(context.Background(), msgIn)
 		require.Len(t, msgs, 1)
 		require.Nil(t, res)
 
@@ -284,8 +281,9 @@ func main() {
 		}
 		assert.Equal(t, exp, message.GetAllBytes(msgs[0]))
 
-		proc.CloseAsync()
-		assert.NoError(t, proc.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+		defer done()
+		require.NoError(t, proc.Close(ctx))
 	}
 	f("lines", "lines", false)
 	f("length_prefixed_uint32_be", "lines", false)

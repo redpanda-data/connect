@@ -7,7 +7,6 @@ import (
 	llog "log"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/nsqio/go-nsq"
 
@@ -66,6 +65,7 @@ type nsqReader struct {
 
 	internalMessages chan *nsq.Message
 	interruptChan    chan struct{}
+	interruptOnce    sync.Once
 }
 
 func newNSQReader(conf input.NSQConfig, log log.Modular) (*nsqReader, error) {
@@ -109,7 +109,7 @@ func (n *nsqReader) HandleMessage(message *nsq.Message) error {
 	return nil
 }
 
-func (n *nsqReader) ConnectWithContext(ctx context.Context) (err error) {
+func (n *nsqReader) Connect(ctx context.Context) (err error) {
 	n.cMut.Lock()
 	defer n.cMut.Unlock()
 
@@ -176,7 +176,7 @@ func (n *nsqReader) read(ctx context.Context) (*nsq.Message, error) {
 	return nil, component.ErrTimeout
 }
 
-func (n *nsqReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (n *nsqReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msg, err := n.read(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -191,11 +191,10 @@ func (n *nsqReader) ReadWithContext(ctx context.Context) (message.Batch, input.A
 	}, nil
 }
 
-func (n *nsqReader) CloseAsync() {
-	close(n.interruptChan)
-}
-
-func (n *nsqReader) WaitForClose(timeout time.Duration) error {
-	_ = n.disconnect()
-	return nil
+func (n *nsqReader) Close(ctx context.Context) (err error) {
+	n.interruptOnce.Do(func() {
+		close(n.interruptChan)
+	})
+	err = n.disconnect()
+	return
 }

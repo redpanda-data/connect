@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -45,21 +44,14 @@ func New(batcher *policy.Batcher, child input.Streamed, log log.Modular, stats m
 //------------------------------------------------------------------------------
 
 func (m *Impl) loop() {
+	closeNowCtx, cnDone := m.shutSig.CloseNowCtx(context.Background())
+	defer cnDone()
+
 	defer func() {
-		go func() {
-			select {
-			case <-m.shutSig.CloseNowChan():
-				_ = m.child.WaitForClose(0)
-				_ = m.batcher.WaitForClose(0)
-			case <-m.shutSig.HasClosedChan():
-			}
-		}()
+		m.child.TriggerCloseNow()
+		_ = m.child.WaitForClose(context.Background())
 
-		m.child.CloseAsync()
-		_ = m.child.WaitForClose(shutdown.MaximumShutdownWait())
-
-		m.batcher.CloseAsync()
-		_ = m.batcher.WaitForClose(shutdown.MaximumShutdownWait())
+		_ = m.batcher.Close(context.Background())
 
 		close(m.messagesOut)
 		m.shutSig.ShutdownComplete()
@@ -74,7 +66,7 @@ func (m *Impl) loop() {
 	pendingAcks := sync.WaitGroup{}
 
 	flushBatchFn := func() {
-		sendMsg := m.batcher.Flush()
+		sendMsg := m.batcher.Flush(closeNowCtx)
 		if sendMsg == nil {
 			return
 		}
@@ -97,14 +89,11 @@ func (m *Impl) loop() {
 				if !open {
 					return
 				}
-				closeNowCtx, done := m.shutSig.CloseNowCtx(context.Background())
 				for _, c := range aggregatedTransactions {
 					if err := c.Ack(closeNowCtx, res); err != nil {
-						done()
 						return
 					}
 				}
-				done()
 			}
 		}(resChan, pendingTrans)
 		pendingTrans = nil
@@ -137,7 +126,6 @@ func (m *Impl) loop() {
 					select {
 					case <-nextTimedBatchChan:
 					case <-m.shutSig.CloseAtLeisureChan():
-						return
 					}
 				}
 				flushBatchFn()
@@ -155,7 +143,7 @@ func (m *Impl) loop() {
 		case <-nextTimedBatchChan:
 			flushBatch = true
 			nextTimedBatchChan = nil
-		case <-m.shutSig.CloseAtLeisureChan():
+		case <-m.shutSig.CloseNowChan():
 			return
 		}
 
@@ -176,21 +164,27 @@ func (m *Impl) TransactionChan() <-chan message.Transaction {
 	return m.messagesOut
 }
 
-// CloseAsync shuts down the Batcher and stops processing messages.
-func (m *Impl) CloseAsync() {
+// TriggerStopConsuming instructs the input to start shutting down resources
+// once all pending messages are delivered and acknowledged. This call does
+// not block.
+func (m *Impl) TriggerStopConsuming() {
 	m.shutSig.CloseAtLeisure()
+	m.child.TriggerStopConsuming()
 }
 
-// WaitForClose blocks until the Batcher output has closed down.
-func (m *Impl) WaitForClose(timeout time.Duration) error {
-	go func() {
-		<-time.After(timeout - time.Second)
-		m.shutSig.CloseNow()
-	}()
+// TriggerCloseNow triggers the shut down of this component but should not block
+// the calling goroutine.
+func (m *Impl) TriggerCloseNow() {
+	m.shutSig.CloseNow()
+}
+
+// WaitForClose is a blocking call to wait until the component has finished
+// shutting down and cleaning up resources.
+func (m *Impl) WaitForClose(ctx context.Context) error {
 	select {
 	case <-m.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

@@ -184,11 +184,11 @@ func newAzureTableStorageWriter(conf output.AzureTableStorageConfig, mgr bundle.
 	return a, nil
 }
 
-func (a *azureTableStorageWriter) ConnectWithContext(ctx context.Context) error {
+func (a *azureTableStorageWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (a *azureTableStorageWriter) WriteWithContext(wctx context.Context, msg message.Batch) error {
+func (a *azureTableStorageWriter) WriteBatch(wctx context.Context, msg message.Batch) error {
 	writeReqs := make(map[string]map[string][]*aztables.EDMEntity)
 	if err := output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		entity := &aztables.EDMEntity{}
@@ -311,9 +311,6 @@ func (a *azureTableStorageWriter) addToBatch(batch []aztables.TransactionAction,
 	return batch, err
 }
 
-func (a *azureTableStorageWriter) CloseAsync() {
-}
-
-func (a *azureTableStorageWriter) WaitForClose(time.Duration) error {
+func (a *azureTableStorageWriter) Close(context.Context) error {
 	return nil
 }

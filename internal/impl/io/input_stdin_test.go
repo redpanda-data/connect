@@ -1,6 +1,7 @@
 package io_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -16,6 +17,9 @@ func TestSTDINClose(t *testing.T) {
 	s, err := mock.NewManager().NewInput(conf)
 	require.NoError(t, err)
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
+	s.TriggerStopConsuming()
+	require.NoError(t, s.WaitForClose(ctx))
 }

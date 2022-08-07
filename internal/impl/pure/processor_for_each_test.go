@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -27,7 +28,7 @@ func TestForEachEmpty(t *testing.T) {
 	exp := [][]byte{
 		[]byte("foo bar baz"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(exp))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -64,7 +65,7 @@ func TestForEachBasic(t *testing.T) {
 		[]byte("MSAyIDMgNA=="),
 		[]byte("aGVsbG8gZm9vIHdvcmxk"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -100,7 +101,7 @@ func TestForEachFilterSome(t *testing.T) {
 		[]byte("foo bar baz"),
 		[]byte("hello foo world"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -140,7 +141,7 @@ func TestForEachMultiProcs(t *testing.T) {
 		[]byte("Zm9vIGJhciBiYXo="),
 		[]byte("aGVsbG8gZm9vIHdvcmxk"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -172,7 +173,7 @@ func TestForEachFilterAll(t *testing.T) {
 		[]byte("1 2 3 4"),
 		[]byte("hello world"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
 	assert.NoError(t, res)
 	if len(msgs) != 0 {
 		t.Errorf("Wrong count of result msgs: %v", len(msgs))

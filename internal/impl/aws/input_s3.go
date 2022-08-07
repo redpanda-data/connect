@@ -555,9 +555,9 @@ func (a *awsS3Reader) getTargetReader(ctx context.Context) (s3ObjectTargetReader
 	return newStaticTargetReader(ctx, a.conf, a.log, a.s3)
 }
 
-// ConnectWithContext attempts to establish a connection to the target S3 bucket
+// Connect attempts to establish a connection to the target S3 bucket
 // and any relevant queues used to traverse the objects (SQS, etc).
-func (a *awsS3Reader) ConnectWithContext(ctx context.Context) error {
+func (a *awsS3Reader) Connect(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -668,8 +668,8 @@ func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, er
 	return object, nil
 }
 
-// ReadWithContext attempts to read a new message from the target S3 bucket.
-func (a *awsS3Reader) ReadWithContext(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
+// ReadBatch attempts to read a new message from the target S3 bucket.
+func (a *awsS3Reader) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
 	a.objectMut.Lock()
 	defer a.objectMut.Unlock()
 	if a.session == nil {
@@ -720,19 +720,13 @@ func (a *awsS3Reader) ReadWithContext(ctx context.Context) (msg message.Batch, a
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *awsS3Reader) CloseAsync() {
-	go func() {
-		a.objectMut.Lock()
-		if a.object != nil {
-			a.object.scanner.Close(context.Background())
-			a.object = nil
-		}
-		a.objectMut.Unlock()
-	}()
-}
+func (a *awsS3Reader) Close(ctx context.Context) (err error) {
+	a.objectMut.Lock()
+	defer a.objectMut.Unlock()
 
-// WaitForClose will block until either the reader is closed or a specified
-// timeout occurs.
-func (a *awsS3Reader) WaitForClose(time.Duration) error {
-	return nil
+	if a.object != nil {
+		err = a.object.scanner.Close(ctx)
+		a.object = nil
+	}
+	return
 }

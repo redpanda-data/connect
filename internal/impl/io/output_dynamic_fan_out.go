@@ -126,7 +126,7 @@ func (d *dynamicFanOutOutputBroker) addOutput(ident string, output output.Stream
 	}
 
 	if err := output.Consume(ow.tsChan); err != nil {
-		output.CloseAsync()
+		output.TriggerCloseNow()
 		return err
 	}
 	ow.ctx, ow.done = context.WithCancel(context.Background())
@@ -141,13 +141,8 @@ func (d *dynamicFanOutOutputBroker) removeOutput(ctx context.Context, ident stri
 		return nil
 	}
 
-	timeout := time.Second * 5
-	if deadline, ok := ctx.Deadline(); ok {
-		timeout = time.Until(deadline)
-	}
-
-	ow.output.CloseAsync()
-	err := ow.output.WaitForClose(timeout)
+	ow.output.TriggerCloseNow()
+	err := ow.output.WaitForClose(ctx)
 
 	ow.done()
 	close(ow.tsChan)
@@ -176,21 +171,17 @@ func (d *dynamicFanOutOutputBroker) loop() {
 		}
 
 		for _, ow := range d.outputs {
-			ow.output.CloseAsync()
+			ow.output.TriggerCloseNow()
 			close(ow.tsChan)
 		}
 		for _, ow := range d.outputs {
-			ow.output.CloseAsync()
+			ow.output.TriggerCloseNow()
 		}
 		for _, ow := range d.outputs {
-			if err := ow.output.WaitForClose(time.Second); err != nil {
-				for err != nil {
-					err = ow.output.WaitForClose(time.Second)
-				}
-			}
+			_ = ow.output.WaitForClose(context.Background())
 		}
 
-		d.shutSig.CloseAtLeisure()
+		d.shutSig.CloseNow()
 		apiWG.Wait()
 
 		d.outputs = map[string]outputWithTSChan{}
@@ -305,15 +296,15 @@ func (d *dynamicFanOutOutputBroker) Connected() bool {
 	return true
 }
 
-func (d *dynamicFanOutOutputBroker) CloseAsync() {
-	d.shutSig.CloseAtLeisure()
+func (d *dynamicFanOutOutputBroker) TriggerCloseNow() {
+	d.shutSig.CloseNow()
 }
 
-func (d *dynamicFanOutOutputBroker) WaitForClose(timeout time.Duration) error {
+func (d *dynamicFanOutOutputBroker) WaitForClose(ctx context.Context) error {
 	select {
 	case <-d.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

@@ -1,9 +1,9 @@
 package processor
 
 import (
+	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -12,15 +12,12 @@ type passthrough struct {
 	called int
 }
 
-func (p *passthrough) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+func (p *passthrough) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	p.called++
 	return []message.Batch{msg}, nil
 }
 
-func (p *passthrough) CloseAsync() {
-}
-
-func (p *passthrough) WaitForClose(timeout time.Duration) error {
+func (p *passthrough) Close(ctx context.Context) error {
 	return nil
 }
 
@@ -30,8 +27,10 @@ func TestExecuteAllBasic(t *testing.T) {
 		&passthrough{},
 	}
 
+	tCtx := context.Background()
+
 	msg := message.QuickBatch([][]byte{[]byte("test message")})
-	msgs, res := ExecuteAll(procs, msg)
+	msgs, res := ExecuteAll(tCtx, procs, msg)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -52,6 +51,8 @@ func TestExecuteAllBasic(t *testing.T) {
 }
 
 func TestExecuteAllBasicBatch(t *testing.T) {
+	tCtx := context.Background()
+
 	procs := []V1{
 		&passthrough{},
 		&passthrough{},
@@ -62,7 +63,7 @@ func TestExecuteAllBasicBatch(t *testing.T) {
 		[]byte("test message 2"),
 		[]byte("test message 3"),
 	})
-	msgs, res := ExecuteAll(procs, msg)
+	msgs, res := ExecuteAll(tCtx, procs, msg)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -83,6 +84,8 @@ func TestExecuteAllBasicBatch(t *testing.T) {
 }
 
 func TestExecuteAllMulti(t *testing.T) {
+	tCtx := context.Background()
+
 	procs := []V1{
 		&passthrough{},
 		&passthrough{},
@@ -90,7 +93,7 @@ func TestExecuteAllMulti(t *testing.T) {
 
 	msg1 := message.QuickBatch([][]byte{[]byte("test message 1")})
 	msg2 := message.QuickBatch([][]byte{[]byte("test message 2")})
-	msgs, res := ExecuteAll(procs, msg1, msg2)
+	msgs, res := ExecuteAll(tCtx, procs, msg1, msg2)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -120,19 +123,18 @@ type errored struct {
 	called int
 }
 
-func (p *errored) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+func (p *errored) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	p.called++
 	return nil, errors.New("test error")
 }
 
-func (p *errored) CloseAsync() {
-}
-
-func (p *errored) WaitForClose(timeout time.Duration) error {
+func (p *errored) Close(ctx context.Context) error {
 	return nil
 }
 
 func TestExecuteAllErrored(t *testing.T) {
+	tCtx := context.Background()
+
 	procs := []V1{
 		&passthrough{},
 		&errored{},
@@ -141,7 +143,7 @@ func TestExecuteAllErrored(t *testing.T) {
 
 	msg1 := message.QuickBatch([][]byte{[]byte("test message 1")})
 	msg2 := message.QuickBatch([][]byte{[]byte("test message 2")})
-	msgs, res := ExecuteAll(procs, msg1, msg2)
+	msgs, res := ExecuteAll(tCtx, procs, msg1, msg2)
 	if len(msgs) > 0 {
 		t.Fatal("received messages after drop")
 	}

@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // Output is an interface implemented by Benthos outputs that support single
@@ -76,19 +74,17 @@ type BatchOutput interface {
 // Implements output.AsyncSink
 type airGapWriter struct {
 	w Output
-
-	sig *shutdown.Signaller
 }
 
 func newAirGapWriter(w Output) ioutput.AsyncSink {
-	return &airGapWriter{w: w, sig: shutdown.NewSignaller()}
+	return &airGapWriter{w: w}
 }
 
-func (a *airGapWriter) ConnectWithContext(ctx context.Context) error {
+func (a *airGapWriter) Connect(ctx context.Context) error {
 	return a.w.Connect(ctx)
 }
 
-func (a *airGapWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (a *airGapWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	err := a.w.Write(ctx, newMessageFromPart(msg.Get(0)))
 	if err != nil && errors.Is(err, ErrNotConnected) {
 		err = component.ErrNotConnected
@@ -96,21 +92,8 @@ func (a *airGapWriter) WriteWithContext(ctx context.Context, msg message.Batch) 
 	return err
 }
 
-func (a *airGapWriter) CloseAsync() {
-	go func() {
-		// TODO: Determine whether to continue trying or log/exit.
-		_ = a.w.Close(context.Background())
-		a.sig.ShutdownComplete()
-	}()
-}
-
-func (a *airGapWriter) WaitForClose(tout time.Duration) error {
-	select {
-	case <-a.sig.HasClosedChan():
-	case <-time.After(tout):
-		return component.ErrTimeout
-	}
-	return nil
+func (a *airGapWriter) Close(ctx context.Context) error {
+	return a.w.Close(ctx)
 }
 
 //------------------------------------------------------------------------------
@@ -118,19 +101,17 @@ func (a *airGapWriter) WaitForClose(tout time.Duration) error {
 // Implements output.AsyncSink
 type airGapBatchWriter struct {
 	w BatchOutput
-
-	sig *shutdown.Signaller
 }
 
 func newAirGapBatchWriter(w BatchOutput) ioutput.AsyncSink {
-	return &airGapBatchWriter{w: w, sig: shutdown.NewSignaller()}
+	return &airGapBatchWriter{w: w}
 }
 
-func (a *airGapBatchWriter) ConnectWithContext(ctx context.Context) error {
+func (a *airGapBatchWriter) Connect(ctx context.Context) error {
 	return a.w.Connect(ctx)
 }
 
-func (a *airGapBatchWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (a *airGapBatchWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	parts := make([]*Message, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		parts[i] = newMessageFromPart(part)
@@ -143,21 +124,8 @@ func (a *airGapBatchWriter) WriteWithContext(ctx context.Context, msg message.Ba
 	return err
 }
 
-func (a *airGapBatchWriter) CloseAsync() {
-	go func() {
-		if err := a.w.Close(context.Background()); err == nil {
-			a.sig.ShutdownComplete()
-		}
-	}()
-}
-
-func (a *airGapBatchWriter) WaitForClose(tout time.Duration) error {
-	select {
-	case <-a.sig.HasClosedChan():
-	case <-time.After(tout):
-		return component.ErrTimeout
-	}
-	return nil
+func (a *airGapBatchWriter) Close(ctx context.Context) error {
+	return a.w.Close(context.Background())
 }
 
 //------------------------------------------------------------------------------
@@ -276,15 +244,5 @@ func (o *OwnedOutput) Close(ctx context.Context) error {
 	o.closeOnce.Do(func() {
 		close(o.t)
 	})
-	for {
-		// Gross but will do for now until we replace these with context params.
-		if err := o.o.WaitForClose(time.Millisecond * 100); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-	}
+	return o.o.WaitForClose(ctx)
 }

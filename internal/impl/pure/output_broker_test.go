@@ -56,10 +56,11 @@ func TestFanOutBroker(t *testing.T) {
 	}
 
 	defer func() {
-		s.CloseAsync()
-		if err := s.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		s.TriggerCloseNow()
+
+		ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+		assert.NoError(t, s.WaitForClose(ctx))
+		done()
 	}()
 
 	inputs := []string{
@@ -140,10 +141,11 @@ func TestRoundRobinBroker(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		s.CloseAsync()
-		if err := s.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		s.TriggerCloseNow()
+
+		ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+		assert.NoError(t, s.WaitForClose(ctx))
+		done()
 	})
 
 	inputs := []string{
@@ -230,10 +232,12 @@ func TestGreedyBroker(t *testing.T) {
 	}
 
 	defer func() {
-		s.CloseAsync()
-		if err := s.WaitForClose(time.Second); err != nil {
-			t.Error(err)
-		}
+		close(sendChan)
+		s.TriggerCloseNow()
+
+		ctx, done := context.WithTimeout(context.Background(), time.Second*10)
+		assert.NoError(t, s.WaitForClose(ctx))
+		done()
 	}()
 
 	inputs := []string{

@@ -184,7 +184,7 @@ func (c *cassandraWriter) parseArgs(mgr bundle.NewManagement) error {
 	return nil
 }
 
-func (c *cassandraWriter) ConnectWithContext(ctx context.Context) error {
+func (c *cassandraWriter) Connect(ctx context.Context) error {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
 	if c.session != nil {
@@ -232,7 +232,7 @@ func (c *cassandraWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (c *cassandraWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (c *cassandraWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	c.connLock.RLock()
 	session := c.session
 	c.connLock.RUnlock()
@@ -316,18 +316,13 @@ func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]interface{}, 
 	return nil, nil
 }
 
-func (c *cassandraWriter) CloseAsync() {
-	go func() {
-		c.connLock.Lock()
-		if c.session != nil {
-			c.session.Close()
-			c.session = nil
-		}
-		c.connLock.Unlock()
-	}()
-}
-
-func (c *cassandraWriter) WaitForClose(timeout time.Duration) error {
+func (c *cassandraWriter) Close(context.Context) error {
+	c.connLock.Lock()
+	if c.session != nil {
+		c.session.Close()
+		c.session = nil
+	}
+	c.connLock.Unlock()
 	return nil
 }
 

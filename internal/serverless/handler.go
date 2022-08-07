@@ -162,19 +162,21 @@ func NewHandler(conf config.Type) (*Handler, error) {
 	return &Handler{
 		transactionChan: transactionChan,
 		done: func(exitTimeout time.Duration) error {
-			timesOut := time.Now().Add(exitTimeout)
-			pipelineLayer.CloseAsync()
-			outputLayer.CloseAsync()
+			close(transactionChan)
 
-			if err = outputLayer.WaitForClose(exitTimeout); err != nil {
+			ctx, done := context.WithTimeout(context.Background(), exitTimeout)
+			defer done()
+
+			outputLayer.TriggerCloseNow()
+			if err = outputLayer.WaitForClose(ctx); err != nil {
 				return fmt.Errorf("failed to cleanly close output layer: %v", err)
 			}
-			if err = pipelineLayer.WaitForClose(time.Until(timesOut)); err != nil {
+			if err = pipelineLayer.WaitForClose(ctx); err != nil {
 				return fmt.Errorf("failed to cleanly close pipeline layer: %v", err)
 			}
 
-			manager.CloseAsync()
-			if err = manager.WaitForClose(time.Until(timesOut)); err != nil {
+			manager.TriggerStopConsuming()
+			if err = manager.WaitForClose(ctx); err != nil {
 				return fmt.Errorf("failed to cleanly close resources: %v", err)
 			}
 

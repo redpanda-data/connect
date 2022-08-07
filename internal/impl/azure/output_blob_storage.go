@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/Azure/go-autorest/autorest/azure"
@@ -152,7 +151,7 @@ func newAzureBlobStorageWriter(mgr bundle.NewManagement, conf output.AzureBlobSt
 	return a, nil
 }
 
-func (a *azureBlobStorageWriter) ConnectWithContext(ctx context.Context) error {
+func (a *azureBlobStorageWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
@@ -183,7 +182,7 @@ func (a *azureBlobStorageWriter) createContainer(c *storage.Container, accessLev
 	return c.Create(&opts)
 }
 
-func (a *azureBlobStorageWriter) WriteWithContext(_ context.Context, msg message.Batch) error {
+func (a *azureBlobStorageWriter) WriteBatch(_ context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		c := a.client.GetContainerReference(a.container.String(i, msg))
 		b := c.GetBlobReference(a.path.String(i, msg))
@@ -211,9 +210,6 @@ func containerNotFound(err error) bool {
 	return false
 }
 
-func (a *azureBlobStorageWriter) CloseAsync() {
-}
-
-func (a *azureBlobStorageWriter) WaitForClose(time.Duration) error {
+func (a *azureBlobStorageWriter) Close(context.Context) error {
 	return nil
 }

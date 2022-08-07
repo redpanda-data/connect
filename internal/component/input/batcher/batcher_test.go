@@ -113,7 +113,7 @@ func TestBatcherStandard(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Error("timed out")
 	}
-	batcher.CloseAsync()
+	batcher.TriggerStopConsuming()
 
 	select {
 	case tran = <-batcher.TransactionChan():
@@ -158,7 +158,7 @@ func TestBatcherStandard(t *testing.T) {
 		}
 	}
 
-	if err := batcher.WaitForClose(time.Second); err != nil {
+	if err := batcher.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }
@@ -226,8 +226,8 @@ func TestBatcherErrorTracking(t *testing.T) {
 	assert.EqualError(t, resErrs[1], "message specific error")
 	assert.Nil(t, resErrs[2])
 
-	mockInput.CloseAsync()
-	require.NoError(t, batcher.WaitForClose(time.Second))
+	mockInput.TriggerStopConsuming()
+	require.NoError(t, batcher.WaitForClose(tCtx))
 }
 
 func TestBatcherTiming(t *testing.T) {
@@ -300,7 +300,7 @@ func TestBatcherTiming(t *testing.T) {
 		t.Errorf("Unexpected message part: %v != %v", act, exp)
 	}
 
-	batcher.CloseAsync()
+	batcher.TriggerStopConsuming()
 
 	require.NoError(t, tran.Ack(tCtx, errSend))
 	select {
@@ -312,7 +312,7 @@ func TestBatcherTiming(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	if err := batcher.WaitForClose(time.Second); err != nil {
+	if err := batcher.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }
@@ -333,14 +333,14 @@ func TestBatcherFinalFlush(t *testing.T) {
 
 	batcher := batcher.New(batchPol, mockInput, log.Noop(), metrics.Noop())
 
-	resChan := make(chan error)
+	resChan := make(chan error, 1)
 	select {
 	case mockInput.TChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foo1")}), resChan):
 	case <-time.After(time.Second):
 		t.Fatal("timed out")
 	}
 
-	mockInput.CloseAsync()
+	mockInput.TriggerStopConsuming()
 
 	var tran message.Transaction
 	select {
@@ -356,10 +356,10 @@ func TestBatcherFinalFlush(t *testing.T) {
 		t.Errorf("Unexpected message part: %v != %v", act, exp)
 	}
 
-	batcher.CloseAsync()
+	batcher.TriggerStopConsuming()
 	require.NoError(t, tran.Ack(tCtx, nil))
 
-	if err := batcher.WaitForClose(time.Second); err != nil {
+	if err := batcher.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }

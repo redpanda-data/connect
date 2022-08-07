@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
@@ -64,11 +63,11 @@ func newStdinConsumer(conf input.STDINConfig) (*stdinConsumer, error) {
 	return &stdinConsumer{scanner}, nil
 }
 
-func (s *stdinConsumer) ConnectWithContext(ctx context.Context) error {
+func (s *stdinConsumer) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (s *stdinConsumer) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (s *stdinConsumer) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	parts, codecAckFn, err := s.scanner.Next(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) ||
@@ -95,14 +94,9 @@ func (s *stdinConsumer) ReadWithContext(ctx context.Context) (message.Batch, inp
 	}, nil
 }
 
-func (s *stdinConsumer) CloseAsync() {
-	go func() {
-		if s.scanner != nil {
-			s.scanner.Close(context.Background())
-		}
-	}()
-}
-
-func (s *stdinConsumer) WaitForClose(time.Duration) error {
-	return nil
+func (s *stdinConsumer) Close(ctx context.Context) (err error) {
+	if s.scanner != nil {
+		err = s.scanner.Close(ctx)
+	}
+	return
 }

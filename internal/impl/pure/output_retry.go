@@ -123,13 +123,13 @@ func (r *indefiniteRetry) loop() {
 	defer func() {
 		wg.Wait()
 		close(r.transactionsOut)
-		r.wrapped.CloseAsync()
-		_ = r.wrapped.WaitForClose(shutdown.MaximumShutdownWait())
+		r.wrapped.TriggerCloseNow()
+		_ = r.wrapped.WaitForClose(context.Background())
 		r.shutSig.ShutdownComplete()
 	}()
 
-	ctx, done := r.shutSig.CloseAtLeisureCtx(context.Background())
-	defer done()
+	cnCtx, cnDone := r.shutSig.CloseNowCtx(context.Background())
+	defer cnDone()
 
 	errInterruptChan := make(chan struct{})
 	var errLooped int64
@@ -142,7 +142,7 @@ func (r *indefiniteRetry) loop() {
 			case <-errInterruptChan:
 			case <-time.After(time.Millisecond * 100):
 				// Just incase an interrupt doesn't arrive.
-			case <-r.shutSig.CloseAtLeisureChan():
+			case <-r.shutSig.CloseNowChan():
 				return
 			}
 		}
@@ -154,14 +154,14 @@ func (r *indefiniteRetry) loop() {
 			if !open {
 				return
 			}
-		case <-r.shutSig.CloseAtLeisureChan():
+		case <-r.shutSig.CloseNowChan():
 			return
 		}
 
 		rChan := make(chan error)
 		select {
 		case r.transactionsOut <- message.NewTransaction(tran.Payload.ShallowCopy(), rChan):
-		case <-r.shutSig.CloseAtLeisureChan():
+		case <-r.shutSig.CloseNowChan():
 			return
 		}
 
@@ -185,11 +185,11 @@ func (r *indefiniteRetry) loop() {
 				}
 			}()
 
-			for !r.shutSig.ShouldCloseAtLeisure() {
+			for !r.shutSig.ShouldCloseNow() {
 				var res error
 				select {
 				case res = <-resChan:
-				case <-r.shutSig.CloseAtLeisureChan():
+				case <-r.shutSig.CloseNowChan():
 					return
 				}
 
@@ -213,13 +213,13 @@ func (r *indefiniteRetry) loop() {
 					}
 					select {
 					case <-time.After(nextBackoff):
-					case <-r.shutSig.CloseAtLeisureChan():
+					case <-r.shutSig.CloseNowChan():
 						return
 					}
 
 					select {
 					case r.transactionsOut <- message.NewTransaction(ts.Payload.ShallowCopy(), resChan):
-					case <-r.shutSig.CloseAtLeisureChan():
+					case <-r.shutSig.CloseNowChan():
 						return
 					}
 				} else {
@@ -228,7 +228,7 @@ func (r *indefiniteRetry) loop() {
 				}
 			}
 
-			if err := ts.Ack(ctx, resOut); err != nil && ctx.Err() != nil {
+			if err := ts.Ack(cnCtx, resOut); err != nil && cnCtx.Err() != nil {
 				return
 			}
 		}(tran, rChan)
@@ -255,16 +255,16 @@ func (r *indefiniteRetry) Connected() bool {
 }
 
 // CloseAsync shuts down the Retry input and stops processing requests.
-func (r *indefiniteRetry) CloseAsync() {
-	r.shutSig.CloseAtLeisure()
+func (r *indefiniteRetry) TriggerCloseNow() {
+	r.shutSig.CloseNow()
 }
 
 // WaitForClose blocks until the Retry input has closed down.
-func (r *indefiniteRetry) WaitForClose(timeout time.Duration) error {
+func (r *indefiniteRetry) WaitForClose(ctx context.Context) error {
 	select {
 	case <-r.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

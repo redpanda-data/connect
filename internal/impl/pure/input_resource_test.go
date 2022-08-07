@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -12,6 +13,9 @@ import (
 )
 
 func TestResourceInput(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	mgr := mock.NewManager()
 	mgr.Inputs["foo"] = mock.NewInput(nil)
 
@@ -24,8 +28,8 @@ func TestResourceInput(t *testing.T) {
 
 	assert.NotNil(t, p.TransactionChan())
 
-	p.CloseAsync()
-	assert.NoError(t, p.WaitForClose(time.Second))
+	p.TriggerStopConsuming()
+	assert.NoError(t, p.WaitForClose(ctx))
 }
 
 func TestResourceInputBadName(t *testing.T) {

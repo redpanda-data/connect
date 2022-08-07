@@ -71,7 +71,7 @@ func (a *awsKinesisRecordBatcher) HasPendingMessage() bool {
 
 func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessage, error) {
 	if a.flushedMessage == nil {
-		if a.flushedMessage = a.batchPolicy.Flush(); a.flushedMessage == nil {
+		if a.flushedMessage = a.batchPolicy.Flush(ctx); a.flushedMessage == nil {
 			return asyncMessage{}, nil
 		}
 	}
@@ -113,9 +113,9 @@ func (a *awsKinesisRecordBatcher) GetSequence() string {
 	return seq
 }
 
-func (a *awsKinesisRecordBatcher) Close(blocked bool) {
+func (a *awsKinesisRecordBatcher) Close(ctx context.Context, blocked bool) {
 	if blocked {
 		a.ackedWG.Wait()
 	}
-	a.batchPolicy.CloseAsync()
+	_ = a.batchPolicy.Close(ctx)
 }

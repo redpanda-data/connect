@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -69,7 +68,7 @@ func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 
 	resMsg := message.QuickBatch(nil)
 	for _, tmpMsg := range individualMsgs {
-		resultMsgs, err := processor.ExecuteAll(p.children, tmpMsg)
+		resultMsgs, err := processor.ExecuteAll(ctx, p.children, tmpMsg)
 		if err != nil {
 			return nil, err
 		}
@@ -89,14 +88,7 @@ func (p *forEachProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 
 func (p *forEachProc) Close(ctx context.Context) error {
 	for _, c := range p.children {
-		c.CloseAsync()
-	}
-	deadline, exists := ctx.Deadline()
-	if !exists {
-		deadline = time.Now().Add(time.Second * 5)
-	}
-	for _, c := range p.children {
-		if err := c.WaitForClose(time.Until(deadline)); err != nil {
+		if err := c.Close(ctx); err != nil {
 			return err
 		}
 	}

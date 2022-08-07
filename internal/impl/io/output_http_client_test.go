@@ -24,6 +24,9 @@ import (
 )
 
 func TestHTTPClientMultipartEnabled(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	resultChan := make(chan string, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -88,11 +91,14 @@ func TestHTTPClientMultipartEnabled(t *testing.T) {
 		t.Fatal("Action timed out")
 	}
 
-	h.CloseAsync()
-	require.NoError(t, h.WaitForClose(time.Second))
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPClientMultipartDisabled(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	resultChan := make(chan string, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resBytes, err := io.ReadAll(r.Body)
@@ -144,11 +150,14 @@ func TestHTTPClientMultipartDisabled(t *testing.T) {
 		t.Fatal("Action timed out")
 	}
 
-	h.CloseAsync()
-	require.NoError(t, h.WaitForClose(time.Second))
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPClientRetries(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	var reqCount uint32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddUint32(&reqCount, 1)
@@ -166,7 +175,7 @@ func TestHTTPClientRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = h.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err == nil {
+	if err = h.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err == nil {
 		t.Error("Expected error from end of retries")
 	}
 
@@ -174,13 +183,13 @@ func TestHTTPClientRetries(t *testing.T) {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", exp, act)
 	}
 
-	h.CloseAsync()
-	if err = h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, h.Close(ctx))
 }
 
 func TestHTTPClientBasic(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	nTestLoops := 1000
 
 	resultChan := make(chan message.Batch, 1)
@@ -211,7 +220,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		testStr := fmt.Sprintf("test%v", i)
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 
-		if err = h.WriteWithContext(context.Background(), testMsg); err != nil {
+		if err = h.WriteBatch(context.Background(), testMsg); err != nil {
 			t.Error(err)
 		}
 
@@ -231,13 +240,13 @@ func TestHTTPClientBasic(t *testing.T) {
 		}
 	}
 
-	h.CloseAsync()
-	if err = h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, h.Close(ctx))
 }
 
 func TestHTTPClientSyncResponse(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	nTestLoops := 1000
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -268,7 +277,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 		transaction.AddResultStore(testMsg, resultStore)
 
-		require.NoError(t, h.WriteWithContext(context.Background(), testMsg))
+		require.NoError(t, h.WriteBatch(context.Background(), testMsg))
 		resMsgs := resultStore.Get()
 		require.Len(t, resMsgs, 1)
 
@@ -278,13 +287,13 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 		assert.Equal(t, "", resMsg.Get(0).MetaGet("fooheader"))
 	}
 
-	h.CloseAsync()
-	if err = h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, h.Close(ctx))
 }
 
 func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	nTestLoops := 1000
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +325,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 		transaction.AddResultStore(testMsg, resultStore)
 
-		require.NoError(t, h.WriteWithContext(context.Background(), testMsg))
+		require.NoError(t, h.WriteBatch(context.Background(), testMsg))
 		resMsgs := resultStore.Get()
 		require.Len(t, resMsgs, 1)
 
@@ -326,13 +335,13 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 		assert.Equal(t, "foovalue", resMsg.Get(0).MetaGet("fooheader"))
 	}
 
-	h.CloseAsync()
-	if err = h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, h.Close(ctx))
 }
 
 func TestHTTPClientMultipart(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	nTestLoops := 1000
 
 	resultChan := make(chan message.Batch, 1)
@@ -392,7 +401,7 @@ func TestHTTPClientMultipart(t *testing.T) {
 			[]byte(testStr + "PART-B"),
 		})
 
-		if err = h.WriteWithContext(context.Background(), testMsg); err != nil {
+		if err = h.WriteBatch(context.Background(), testMsg); err != nil {
 			t.Error(err)
 		}
 
@@ -416,12 +425,13 @@ func TestHTTPClientMultipart(t *testing.T) {
 		}
 	}
 
-	h.CloseAsync()
-	if err = h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, h.Close(ctx))
 }
+
 func TestHTTPOutputClientMultipartBody(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	nTestLoops := 1000
 	resultChan := make(chan message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -476,7 +486,7 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < nTestLoops; i++ {
-		if err = h.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err != nil {
+		if err = h.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err != nil {
 			t.Error(err)
 		}
 		select {
@@ -499,13 +509,13 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 		}
 	}
 
-	h.CloseAsync()
-	if err = h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, h.Close(ctx))
 }
 
 func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	resultChan := make(chan message.Batch, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		msg := message.QuickBatch(nil)
@@ -558,7 +568,7 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = h.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err != nil {
+	if err = h.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte("test")})); err != nil {
 		t.Error(err)
 	}
 	select {
@@ -587,8 +597,6 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 		return
 
 	}
-	h.CloseAsync()
-	if err = h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+
+	require.NoError(t, h.Close(ctx))
 }

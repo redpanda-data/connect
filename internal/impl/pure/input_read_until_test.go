@@ -60,7 +60,7 @@ baz`)
 }
 
 func testReadUntilBasic(inConf input.Config, t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
 	rConf := input.NewConfig()
@@ -100,7 +100,7 @@ func testReadUntilBasic(inConf input.Config, t *testing.T) {
 		} else if exp, act := "", tran.Payload.Get(0).MetaGet("benthos_read_until"); exp != act {
 			t.Errorf("Metadata final message metadata added to non-final message: %v", act)
 		}
-		require.NoError(t, tran.Ack(tCtx, nil))
+		require.NoError(t, tran.Ack(ctx, nil))
 	}
 
 	// Should close automatically now
@@ -113,13 +113,13 @@ func testReadUntilBasic(inConf input.Config, t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	if err = in.WaitForClose(time.Second); err != nil {
+	if err = in.WaitForClose(ctx); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func testReadUntilRetry(inConf input.Config, t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
 	rConf := input.NewConfig()
@@ -174,7 +174,7 @@ func testReadUntilRetry(inConf input.Config, t *testing.T) {
 	}
 
 	for _, rFn := range resFns {
-		require.NoError(t, rFn(tCtx, errors.New("failed")))
+		require.NoError(t, rFn(ctx, errors.New("failed")))
 	}
 
 	expMsgs = map[string]struct{}{
@@ -201,7 +201,7 @@ remainingLoop:
 		} else {
 			delete(expMsgs, act)
 		}
-		require.NoError(t, tran.Ack(tCtx, nil))
+		require.NoError(t, tran.Ack(ctx, nil))
 	}
 	if len(expMsgs) == 3 {
 		t.Error("Expected at least one extra message")
@@ -217,7 +217,7 @@ remainingLoop:
 		t.Fatal("timed out")
 	}
 
-	if err = in.WaitForClose(time.Second); err != nil {
+	if err = in.WaitForClose(ctx); err != nil {
 		t.Fatal(err)
 	}
 }

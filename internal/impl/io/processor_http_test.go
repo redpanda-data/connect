@@ -1,6 +1,7 @@
 package io_test
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -35,7 +36,7 @@ func TestHTTPClientRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("test")}))
+	msgs, res := h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("test")}))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -85,7 +86,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
+	msgs, res := h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
 		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
@@ -98,7 +99,7 @@ func TestHTTPClientBasic(t *testing.T) {
 		t.Errorf("Wrong metadata value: %v != %v", act, exp)
 	}
 
-	msgs, res = h.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
+	msgs, res = h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
@@ -114,7 +115,7 @@ func TestHTTPClientBasic(t *testing.T) {
 	// Check metadata persists.
 	msg := message.QuickBatch([][]byte{[]byte("baz")})
 	msg.Get(0).MetaSet("foo", "bar")
-	msgs, res = h.ProcessMessage(msg)
+	msgs, res = h.ProcessBatch(context.Background(), msg)
 	if res != nil {
 		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
@@ -155,7 +156,7 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
+	msgs, res := h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
 		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
@@ -166,7 +167,7 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 		t.Errorf("Wrong response code metadata: %v != %v", act, exp)
 	}
 
-	msgs, res = h.ProcessMessage(message.QuickBatch([][]byte{[]byte("bar")}))
+	msgs, res = h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("bar")}))
 	if res != nil {
 		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
@@ -180,7 +181,7 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 	// Check metadata persists.
 	msg := message.QuickBatch([][]byte{[]byte("baz")})
 	msg.Get(0).MetaSet("foo", "bar")
-	msgs, res = h.ProcessMessage(msg)
+	msgs, res = h.ProcessBatch(context.Background(), msg)
 	if res != nil {
 		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
@@ -207,7 +208,7 @@ func TestHTTPClientEmpty404Response(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
+	msgs, res := h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
 		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
@@ -249,7 +250,7 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo")}))
+	msgs, res := h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo")}))
 	if res != nil {
 		t.Error(res)
 	} else if expC, actC := 1, msgs[0].Len(); actC != expC {
@@ -293,7 +294,7 @@ func TestHTTPClientSerial(t *testing.T) {
 		[]byte("quz"),
 	})
 	inputMsg.Get(0).MetaSet("foo", "bar")
-	msgs, res := h.ProcessMessage(inputMsg)
+	msgs, res := h.ProcessBatch(context.Background(), inputMsg)
 	require.NoError(t, res)
 	require.Len(t, msgs, 1)
 	require.Equal(t, 5, msgs[0].Len())
@@ -336,7 +337,7 @@ func TestHTTPClientParallel(t *testing.T) {
 		[]byte("quz"),
 	})
 	inputMsg.Get(0).MetaSet("foo", "bar")
-	msgs, res := h.ProcessMessage(inputMsg)
+	msgs, res := h.ProcessBatch(context.Background(), inputMsg)
 	if res != nil {
 		t.Error(res)
 	} else if expC, actC := 5, msgs[0].Len(); actC != expC {
@@ -379,7 +380,7 @@ func TestHTTPClientParallelError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{
+	msgs, res := h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),

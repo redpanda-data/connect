@@ -119,11 +119,11 @@ func newAzureQueueStorage(conf input.AzureQueueStorageConfig, mgr bundle.NewMana
 	return a, nil
 }
 
-func (a *azureQueueStorage) ConnectWithContext(ctx context.Context) error {
+func (a *azureQueueStorage) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
+func (a *azureQueueStorage) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
 	queueName := a.queueName.String(0, msg)
 	queueURL := a.serviceURL.NewQueueURL(queueName)
 	messageURL := queueURL.NewMessagesURL()
@@ -182,9 +182,6 @@ func (a *azureQueueStorage) ReadWithContext(ctx context.Context) (msg message.Ba
 	return nil, nil, nil
 }
 
-func (a *azureQueueStorage) CloseAsync() {
-}
-
-func (a *azureQueueStorage) WaitForClose(time.Duration) error {
+func (a *azureQueueStorage) Close(ctx context.Context) error {
 	return nil
 }

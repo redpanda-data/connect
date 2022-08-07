@@ -244,7 +244,7 @@ func newAmazonS3Writer(conf output.AmazonS3Config, mgr bundle.NewManagement) (*a
 	return a, nil
 }
 
-func (a *amazonS3Writer) ConnectWithContext(ctx context.Context) error {
+func (a *amazonS3Writer) Connect(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -263,7 +263,7 @@ func (a *amazonS3Writer) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (a *amazonS3Writer) WriteWithContext(wctx context.Context, msg message.Batch) error {
+func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}
@@ -343,9 +343,6 @@ func (a *amazonS3Writer) WriteWithContext(wctx context.Context, msg message.Batc
 	})
 }
 
-func (a *amazonS3Writer) CloseAsync() {
-}
-
-func (a *amazonS3Writer) WaitForClose(time.Duration) error {
+func (a *amazonS3Writer) Close(context.Context) error {
 	return nil
 }

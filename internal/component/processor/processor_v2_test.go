@@ -37,14 +37,10 @@ func TestProcessorAirGapShutdown(t *testing.T) {
 	rp := &fnProcessor{}
 	agrp := NewV2ToV1Processor("foo", rp, component.NoopObservability())
 
-	err := agrp.WaitForClose(time.Millisecond * 5)
-	assert.EqualError(t, err, "action timed out")
-	rp.Lock()
-	assert.False(t, rp.closed)
-	rp.Unlock()
+	ctx, done := context.WithTimeout(context.Background(), time.Microsecond*5)
+	defer done()
 
-	agrp.CloseAsync()
-	err = agrp.WaitForClose(time.Millisecond * 5)
+	err := agrp.Close(ctx)
 	assert.NoError(t, err)
 	rp.Lock()
 	assert.True(t, rp.closed)
@@ -52,6 +48,8 @@ func TestProcessorAirGapShutdown(t *testing.T) {
 }
 
 func TestProcessorAirGapOneToOne(t *testing.T) {
+	tCtx := context.Background()
+
 	agrp := NewV2ToV1Processor("foo", &fnProcessor{
 		fn: func(c context.Context, m *message.Part) ([]*message.Part, error) {
 			if b := m.AsBytes(); string(b) != "unchanged" {
@@ -64,7 +62,7 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 	}, component.NoopObservability())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessBatch(tCtx, msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
@@ -73,6 +71,8 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 }
 
 func TestProcessorAirGapOneToError(t *testing.T) {
+	tCtx := context.Background()
+
 	agrp := NewV2ToV1Processor("foo", &fnProcessor{
 		fn: func(c context.Context, m *message.Part) ([]*message.Part, error) {
 			_, err := m.AsStructuredMut()
@@ -81,7 +81,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 	}, component.NoopObservability())
 
 	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessBatch(tCtx, msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
@@ -91,6 +91,8 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 }
 
 func TestProcessorAirGapOneToMany(t *testing.T) {
+	tCtx := context.Background()
+
 	agrp := NewV2ToV1Processor("foo", &fnProcessor{
 		fn: func(c context.Context, m *message.Part) ([]*message.Part, error) {
 			if b := m.AsBytes(); string(b) != "unchanged" {
@@ -107,7 +109,7 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 	}, component.NoopObservability())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessBatch(tCtx, msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 3, msgs[0].Len())
@@ -134,20 +136,20 @@ func (p *fnBatchProcessor) Close(ctx context.Context) error {
 }
 
 func TestBatchProcessorAirGapShutdown(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Millisecond*5)
+	defer done()
+
 	rp := &fnBatchProcessor{}
 	agrp := NewV2BatchedToV1Processor("foo", rp, component.NoopObservability())
 
-	err := agrp.WaitForClose(time.Millisecond * 5)
-	assert.EqualError(t, err, "action timed out")
-	assert.False(t, rp.closed)
-
-	agrp.CloseAsync()
-	err = agrp.WaitForClose(time.Millisecond * 5)
+	err := agrp.Close(tCtx)
 	assert.NoError(t, err)
 	assert.True(t, rp.closed)
 }
 
 func TestBatchProcessorAirGapOneToOne(t *testing.T) {
+	tCtx := context.Background()
+
 	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
 		fn: func(c context.Context, msgs message.Batch) ([]message.Batch, error) {
 			if b := msgs.Get(0).AsBytes(); string(b) != "unchanged" {
@@ -160,7 +162,7 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 	}, component.NoopObservability())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessBatch(tCtx, msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
@@ -169,6 +171,8 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 }
 
 func TestBatchProcessorAirGapOneToError(t *testing.T) {
+	tCtx := context.Background()
+
 	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
 		fn: func(c context.Context, msgs message.Batch) ([]message.Batch, error) {
 			_, err := msgs.Get(0).AsStructuredMut()
@@ -177,7 +181,7 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 	}, component.NoopObservability())
 
 	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessBatch(tCtx, msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
@@ -187,6 +191,8 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 }
 
 func TestBatchProcessorAirGapOneToMany(t *testing.T) {
+	tCtx := context.Background()
+
 	agrp := NewV2BatchedToV1Processor("foo", &fnBatchProcessor{
 		fn: func(c context.Context, msgs message.Batch) ([]message.Batch, error) {
 			if b := msgs.Get(0).AsBytes(); string(b) != "unchanged" {
@@ -206,7 +212,7 @@ func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 	}, component.NoopObservability())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessBatch(tCtx, msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 2)
 	assert.Equal(t, "unchanged", string(msg.Get(0).AsBytes()))

@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -124,7 +125,7 @@ func TestProtobuf(t *testing.T) {
 				input = append(input, message.NewPart(p))
 			}
 
-			msgs, res := proc.ProcessMessage(input)
+			msgs, res := proc.ProcessBatch(context.Background(), input)
 			require.Nil(t, res)
 			require.Len(t, msgs, 1)
 
@@ -182,7 +183,7 @@ func TestProtobufErrors(t *testing.T) {
 				input = append(input, message.NewPart(p))
 			}
 
-			msgs, res := proc.ProcessMessage(input)
+			msgs, res := proc.ProcessBatch(context.Background(), input)
 			require.Nil(t, res)
 			require.Len(t, msgs, 1)
 

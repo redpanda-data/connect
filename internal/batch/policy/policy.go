@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -127,10 +128,10 @@ func (p *Batcher) Add(part *message.Part) bool {
 
 // Flush clears all messages stored by this batch policy. Returns nil if the
 // policy is currently empty.
-func (p *Batcher) Flush() message.Batch {
+func (p *Batcher) Flush(ctx context.Context) message.Batch {
 	var newMsg message.Batch
 
-	resultMsgs := p.flushAny()
+	resultMsgs := p.flushAny(ctx)
 	if len(resultMsgs) == 1 {
 		newMsg = resultMsgs[0]
 	} else if len(resultMsgs) > 1 {
@@ -144,7 +145,7 @@ func (p *Batcher) Flush() message.Batch {
 	return newMsg
 }
 
-func (p *Batcher) flushAny() []message.Batch {
+func (p *Batcher) flushAny(ctx context.Context) []message.Batch {
 	var newMsg message.Batch
 	if len(p.parts) > 0 {
 		if !p.triggered && p.period > 0 && time.Since(p.lastBatch) > p.period {
@@ -163,9 +164,9 @@ func (p *Batcher) flushAny() []message.Batch {
 	}
 
 	if len(p.procs) > 0 {
-		resultMsgs, res := iprocessor.ExecuteAll(p.procs, newMsg)
-		if res != nil {
-			p.log.Errorf("Batch processors resulted in error: %v, the batch has been dropped.", res)
+		resultMsgs, err := iprocessor.ExecuteAll(ctx, p.procs, newMsg)
+		if err != nil {
+			p.log.Errorf("Batch processors resulted in error: %v, the batch has been dropped.", err)
 			return nil
 		}
 		return resultMsgs
@@ -192,18 +193,10 @@ func (p *Batcher) UntilNext() time.Duration {
 
 //------------------------------------------------------------------------------
 
-// CloseAsync shuts down the policy resources.
-func (p *Batcher) CloseAsync() {
+// Close shuts down the policy resources.
+func (p *Batcher) Close(ctx context.Context) error {
 	for _, c := range p.procs {
-		c.CloseAsync()
-	}
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (p *Batcher) WaitForClose(timeout time.Duration) error {
-	stopBy := time.Now().Add(timeout)
-	for _, c := range p.procs {
-		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
+		if err := c.Close(ctx); err != nil {
 			return err
 		}
 	}

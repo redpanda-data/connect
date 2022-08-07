@@ -155,7 +155,7 @@ func newSFTPReader(conf input.SFTPConfig, mgr bundle.NewManagement) (*sftpReader
 	return s, err
 }
 
-func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
+func (s *sftpReader) Connect(ctx context.Context) error {
 	var err error
 
 	s.scannerMut.Lock()
@@ -216,7 +216,7 @@ func (s *sftpReader) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (s *sftpReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (s *sftpReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	s.scannerMut.Lock()
 	defer s.scannerMut.Unlock()
 
@@ -261,24 +261,20 @@ func (s *sftpReader) ReadWithContext(ctx context.Context) (message.Batch, input.
 	}, nil
 }
 
-func (s *sftpReader) CloseAsync() {
-	go func() {
-		s.scannerMut.Lock()
-		if s.scanner != nil {
-			s.scanner.Close(context.Background())
-			s.scanner = nil
-			s.paths = nil
-		}
-		if s.client != nil {
-			s.client.Close()
-			s.client = nil
-		}
-		s.scannerMut.Unlock()
-	}()
-}
+func (s *sftpReader) Close(ctx context.Context) (err error) {
+	s.scannerMut.Lock()
+	defer s.scannerMut.Unlock()
 
-func (s *sftpReader) WaitForClose(timeout time.Duration) error {
-	return nil
+	if s.scanner != nil {
+		err = s.scanner.Close(ctx)
+		s.scanner = nil
+		s.paths = nil
+	}
+	if err == nil && s.client != nil {
+		err = s.client.Close()
+		s.client = nil
+	}
+	return
 }
 
 func (s *sftpReader) getFilePaths(ctx context.Context) ([]string, error) {

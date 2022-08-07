@@ -180,7 +180,7 @@ func newDynamoDBWriter(conf output.DynamoDBConfig, mgr bundle.NewManagement) (*d
 	return db, nil
 }
 
-func (d *dynamoDBWriter) ConnectWithContext(ctx context.Context) error {
+func (d *dynamoDBWriter) Connect(ctx context.Context) error {
 	if d.client != nil {
 		return nil
 	}
@@ -265,7 +265,7 @@ func jsonToMap(path string, root interface{}) (*dynamodb.AttributeValue, error) 
 	return walkJSON(gObj.Data()), nil
 }
 
-func (d *dynamoDBWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (d *dynamoDBWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	if d.client == nil {
 		return component.ErrNotConnected
 	}
@@ -414,9 +414,6 @@ unprocessedLoop:
 	return err
 }
 
-func (d *dynamoDBWriter) CloseAsync() {
-}
-
-func (d *dynamoDBWriter) WaitForClose(time.Duration) error {
+func (d *dynamoDBWriter) Close(context.Context) error {
 	return nil
 }

@@ -1,6 +1,7 @@
 package pure
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -307,9 +308,9 @@ pathLoop:
 
 //------------------------------------------------------------------------------
 
-// ProcessMessage applies the processor to a message, either creating >0
+// ProcessBatch applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (b *Branch) ProcessMessage(batch message.Batch) ([]message.Batch, error) {
+func (b *Branch) ProcessBatch(ctx context.Context, batch message.Batch) ([]message.Batch, error) {
 	b.mReceived.Incr(int64(batch.Len()))
 	b.mBatchReceived.Incr(1)
 	startedAt := time.Now()
@@ -329,7 +330,7 @@ func (b *Branch) ProcessMessage(batch message.Batch) ([]message.Batch, error) {
 		return nil
 	})
 
-	resultParts, mapErrs, err := b.createResult(parts, batch)
+	resultParts, mapErrs, err := b.createResult(ctx, parts, batch)
 	if err != nil {
 		// Add general error to all messages.
 		_ = batch.Iter(func(i int, p *message.Part) error {
@@ -382,7 +383,7 @@ func newBranchMapError(index int, err error) branchMapError {
 // of the payload will remain unchanged, where reduced indexes are nil. This
 // result can be overlayed onto the original message in order to complete the
 // map.
-func (b *Branch) createResult(parts []*message.Part, referenceMsg message.Batch) ([]*message.Part, []branchMapError, error) {
+func (b *Branch) createResult(ctx context.Context, parts []*message.Part, referenceMsg message.Batch) ([]*message.Part, []branchMapError, error) {
 	originalLen := len(parts)
 
 	// Create request payloads
@@ -423,7 +424,7 @@ func (b *Branch) createResult(parts []*message.Part, referenceMsg message.Batch)
 	var err error
 	if len(parts) > 0 {
 		var res error
-		if procResults, res = processor.ExecuteAll(b.children, parts); res != nil {
+		if procResults, res = processor.ExecuteAll(ctx, b.children, parts); res != nil {
 			err = fmt.Errorf("child processors failed: %v", res)
 		}
 		if len(procResults) == 0 {
@@ -538,18 +539,10 @@ func alignBranchResult(length int, skipped, failed []int, result []message.Batch
 	return resultParts, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (b *Branch) CloseAsync() {
+// Close blocks until the processor has closed down or the context is cancelled.
+func (b *Branch) Close(ctx context.Context) error {
 	for _, child := range b.children {
-		child.CloseAsync()
-	}
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (b *Branch) WaitForClose(timeout time.Duration) error {
-	until := time.Now().Add(timeout)
-	for _, child := range b.children {
-		if err := child.WaitForClose(time.Until(until)); err != nil {
+		if err := child.Close(ctx); err != nil {
 			return err
 		}
 	}

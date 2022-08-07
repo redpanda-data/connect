@@ -1,6 +1,7 @@
 package avro_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"reflect"
@@ -140,7 +141,7 @@ func TestAvroBasic(t *testing.T) {
 				exp[i] = []byte(p)
 			}
 
-			msgs, res := proc.ProcessMessage(input)
+			msgs, res := proc.ProcessBatch(context.Background(), input)
 			if res != nil {
 				tt.Fatal(res)
 			}
@@ -297,7 +298,7 @@ func TestAvroSchemaPath(t *testing.T) {
 				exp[i] = []byte(p)
 			}
 
-			msgs, res := proc.ProcessMessage(input)
+			msgs, res := proc.ProcessBatch(context.Background(), input)
 			if res != nil {
 				tt.Fatal(res)
 			}

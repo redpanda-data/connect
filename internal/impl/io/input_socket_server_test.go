@@ -19,7 +19,7 @@ import (
 )
 
 func TestSocketServerBasic(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -33,8 +33,8 @@ func TestSocketServerBasic(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("unix", conf.SocketServer.Address)
@@ -59,7 +59,7 @@ func TestSocketServerBasic(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -86,7 +86,7 @@ func TestSocketServerBasic(t *testing.T) {
 }
 
 func TestSocketServerRetries(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -100,8 +100,8 @@ func TestSocketServerRetries(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("unix", conf.SocketServer.Address)
@@ -130,7 +130,7 @@ func TestSocketServerRetries(t *testing.T) {
 			if reject {
 				res = errors.New("test err")
 			}
-			require.NoError(t, tran.Ack(tCtx, res))
+			require.NoError(t, tran.Ack(ctx, res))
 		case <-time.After(time.Second * 5):
 			return nil, errors.New("timed out")
 		}
@@ -168,6 +168,9 @@ func TestSocketServerRetries(t *testing.T) {
 }
 
 func TestSocketServerWriteClosed(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	tmpDir := t.TempDir()
 
 	conf := input.NewConfig()
@@ -183,8 +186,8 @@ func TestSocketServerWriteClosed(t *testing.T) {
 
 	_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
-	rdr.CloseAsync()
-	assert.NoError(t, rdr.WaitForClose(time.Second*3))
+	rdr.TriggerStopConsuming()
+	assert.NoError(t, rdr.WaitForClose(ctx))
 
 	_, cerr := conn.Write([]byte("bar\n"))
 	require.Error(t, cerr)
@@ -196,7 +199,7 @@ func TestSocketServerWriteClosed(t *testing.T) {
 }
 
 func TestSocketServerRecon(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -212,8 +215,8 @@ func TestSocketServerRecon(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("unix", addr.String())
@@ -243,7 +246,7 @@ func TestSocketServerRecon(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -271,7 +274,7 @@ func TestSocketServerRecon(t *testing.T) {
 }
 
 func TestSocketServerMpart(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -286,8 +289,8 @@ func TestSocketServerMpart(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("unix", conf.SocketServer.Address)
@@ -316,7 +319,7 @@ func TestSocketServerMpart(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -338,7 +341,7 @@ func TestSocketServerMpart(t *testing.T) {
 }
 
 func TestSocketServerMpartCDelim(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -353,8 +356,8 @@ func TestSocketServerMpartCDelim(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("unix", conf.SocketServer.Address)
@@ -383,7 +386,7 @@ func TestSocketServerMpartCDelim(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -405,7 +408,7 @@ func TestSocketServerMpartCDelim(t *testing.T) {
 }
 
 func TestSocketServerMpartSdown(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -420,8 +423,8 @@ func TestSocketServerMpartSdown(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("unix", conf.SocketServer.Address)
@@ -452,7 +455,7 @@ func TestSocketServerMpartSdown(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -473,7 +476,7 @@ func TestSocketServerMpartSdown(t *testing.T) {
 }
 
 func TestSocketUDPServerBasic(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	conf := input.NewConfig()
@@ -487,8 +490,8 @@ func TestSocketUDPServerBasic(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("udp", addr.String())
@@ -515,7 +518,7 @@ func TestSocketUDPServerBasic(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -542,7 +545,7 @@ func TestSocketUDPServerBasic(t *testing.T) {
 }
 
 func TestSocketUDPServerRetries(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	conf := input.NewConfig()
@@ -556,8 +559,8 @@ func TestSocketUDPServerRetries(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("udp", addr.String())
@@ -588,7 +591,7 @@ func TestSocketUDPServerRetries(t *testing.T) {
 			if reject {
 				res = errors.New("test err")
 			}
-			require.NoError(t, tran.Ack(tCtx, res))
+			require.NoError(t, tran.Ack(ctx, res))
 		case <-time.After(time.Second * 5):
 			return nil, errors.New("timed out")
 		}
@@ -626,6 +629,9 @@ func TestSocketUDPServerRetries(t *testing.T) {
 }
 
 func TestUDPServerWriteToClosed(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
+	defer done()
+
 	conf := input.NewConfig()
 	conf.Type = "socket_server"
 	conf.SocketServer.Network = "udp"
@@ -641,8 +647,8 @@ func TestUDPServerWriteToClosed(t *testing.T) {
 
 	_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
-	rdr.CloseAsync()
-	assert.NoError(t, rdr.WaitForClose(time.Second*3))
+	rdr.TriggerStopConsuming()
+	assert.NoError(t, rdr.WaitForClose(ctx))
 
 	// Just make sure data written doesn't panic
 	_, _ = conn.Write([]byte("bar\n"))
@@ -654,7 +660,7 @@ func TestUDPServerWriteToClosed(t *testing.T) {
 }
 
 func TestSocketUDPServerReconnect(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	conf := input.NewConfig()
@@ -668,8 +674,8 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("udp", addr.String())
@@ -700,7 +706,7 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -727,7 +733,7 @@ func TestSocketUDPServerReconnect(t *testing.T) {
 }
 
 func TestSocketUDPServerCustomDelim(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	conf := input.NewConfig()
@@ -742,8 +748,8 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("udp", addr.String())
@@ -773,7 +779,7 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -805,7 +811,7 @@ func TestSocketUDPServerCustomDelim(t *testing.T) {
 }
 
 func TestSocketUDPServerShutdown(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	conf := input.NewConfig()
@@ -819,8 +825,8 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("udp", addr.String())
@@ -851,7 +857,7 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -882,7 +888,7 @@ func TestSocketUDPServerShutdown(t *testing.T) {
 }
 
 func TestTCPSocketServerBasic(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	conf := input.NewConfig()
@@ -896,8 +902,8 @@ func TestTCPSocketServerBasic(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("tcp", addr.String())
@@ -924,7 +930,7 @@ func TestTCPSocketServerBasic(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -951,7 +957,7 @@ func TestTCPSocketServerBasic(t *testing.T) {
 }
 
 func TestTCPSocketServerReconnect(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	conf := input.NewConfig()
@@ -965,8 +971,8 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("tcp", addr.String())
@@ -998,7 +1004,7 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -1025,7 +1031,7 @@ func TestTCPSocketServerReconnect(t *testing.T) {
 }
 
 func TestTCPSocketServerMultipart(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	conf := input.NewConfig()
@@ -1040,8 +1046,8 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("tcp", addr.String())
@@ -1071,7 +1077,7 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -1093,7 +1099,7 @@ func TestTCPSocketServerMultipart(t *testing.T) {
 }
 
 func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	conf := input.NewConfig()
@@ -1108,8 +1114,8 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("tcp", addr.String())
@@ -1139,7 +1145,7 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -1161,7 +1167,7 @@ func TestTCPSocketServerMultipartCustomDelim(t *testing.T) {
 }
 
 func TestTCPSocketServerMultipartShutdown(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	conf := input.NewConfig()
@@ -1176,8 +1182,8 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 	addr := rdr.(interface{ Addr() net.Addr }).Addr()
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(t, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(t, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := net.Dial("tcp", addr.String())
@@ -1208,7 +1214,7 @@ func TestTCPSocketServerMultipartShutdown(t *testing.T) {
 		var tran message.Transaction
 		select {
 		case tran = <-rdr.TransactionChan():
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}

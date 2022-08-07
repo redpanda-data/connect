@@ -1,6 +1,7 @@
 package io_test
 
 import (
+	"context"
 	"os"
 	"path"
 	"path/filepath"
@@ -41,7 +42,9 @@ foo6,bar6,baz6
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		require.NoError(t, f.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second)
+		require.NoError(t, f.WaitForClose(ctx))
+		done()
 	})
 
 	for _, exp := range []string{
@@ -79,7 +82,9 @@ foo6,bar6,baz6
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		require.NoError(t, f.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second)
+		require.NoError(t, f.WaitForClose(ctx))
+		done()
 	})
 
 	for _, exp := range []string{

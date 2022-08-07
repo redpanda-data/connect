@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -178,7 +179,7 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 		inputMsg = append(inputMsg, currentBatch)
 	}
 
-	outputBatches, result := iprocessor.ExecuteAll(procSet, inputMsg...)
+	outputBatches, result := iprocessor.ExecuteAll(context.Background(), procSet, inputMsg...)
 	if result != nil {
 		reportFailure(fmt.Sprintf("processors resulted in error: %v", result))
 	}

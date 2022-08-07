@@ -112,7 +112,7 @@ func newSNSWriter(conf output.SNSConfig, mgr bundle.NewManagement) (*snsWriter, 
 	return s, nil
 }
 
-func (a *snsWriter) ConnectWithContext(ctx context.Context) error {
+func (a *snsWriter) Connect(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -180,7 +180,7 @@ func (a *snsWriter) getSNSAttributes(msg message.Batch, i int) snsAttributes {
 	}
 }
 
-func (a *snsWriter) WriteWithContext(wctx context.Context, msg message.Batch) error {
+func (a *snsWriter) WriteBatch(wctx context.Context, msg message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}
@@ -202,9 +202,6 @@ func (a *snsWriter) WriteWithContext(wctx context.Context, msg message.Batch) er
 	})
 }
 
-func (a *snsWriter) CloseAsync() {
-}
-
-func (a *snsWriter) WaitForClose(time.Duration) error {
+func (a *snsWriter) Close(context.Context) error {
 	return nil
 }

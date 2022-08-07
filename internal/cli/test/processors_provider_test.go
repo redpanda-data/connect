@@ -1,9 +1,11 @@
 package test_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,6 +72,9 @@ pipeline:
 }
 
 func TestProcessorsProvider(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	files := map[string]string{
 		"config1.yaml": `
 cache_resources:
@@ -105,7 +110,7 @@ pipeline:
 	if exp, act := 4, len(procs); exp != act {
 		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
 	}
-	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")}))
+	msgs, res := processor.ExecuteAll(tCtx, procs, message.QuickBatch([][]byte{[]byte("hello world")}))
 	require.NoError(t, res)
 	if exp, act := "DEFAULTVALUE", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
@@ -119,7 +124,7 @@ pipeline:
 	if exp, act := 4, len(procs); exp != act {
 		t.Fatalf("Unexpected processor count: %v != %v", act, exp)
 	}
-	msgs, res = processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")}))
+	msgs, res = processor.ExecuteAll(tCtx, procs, message.QuickBatch([][]byte{[]byte("hello world")}))
 	require.NoError(t, res)
 	if exp, act := "NEWVALUE", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
@@ -127,6 +132,9 @@ pipeline:
 }
 
 func TestProcessorsProviderLabel(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	files := map[string]string{
 		"config1.yaml": `
 pipeline:
@@ -146,7 +154,7 @@ pipeline:
 
 	assert.Len(t, procs, 1)
 
-	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("hello world")}))
+	msgs, res := processor.ExecuteAll(tCtx, procs, message.QuickBatch([][]byte{[]byte("hello world")}))
 	require.NoError(t, res)
 	if exp, act := "HELLO WORLD", string(msgs[0].Get(0).AsBytes()); exp != act {
 		t.Errorf("Unexpected result: %v != %v", act, exp)
@@ -154,6 +162,9 @@ pipeline:
 }
 
 func TestProcessorsProviderMocks(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	files := map[string]string{
 		"config1.yaml": `
 pipeline:
@@ -190,7 +201,7 @@ pipeline:
 
 	require.Len(t, procs, 4)
 
-	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("starts with")}))
+	msgs, res := processor.ExecuteAll(tCtx, procs, message.QuickBatch([][]byte{[]byte("starts with")}))
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())
@@ -199,6 +210,9 @@ pipeline:
 }
 
 func TestProcessorsProviderMocksFromLabel(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	files := map[string]string{
 		"config1.yaml": `
 pipeline:
@@ -237,7 +251,7 @@ pipeline:
 
 	require.Len(t, procs, 4)
 
-	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("starts with")}))
+	msgs, res := processor.ExecuteAll(tCtx, procs, message.QuickBatch([][]byte{[]byte("starts with")}))
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())
@@ -246,6 +260,9 @@ pipeline:
 }
 
 func TestProcessorsProviderMocksMixed(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	files := map[string]string{
 		"config1.yaml": `
 pipeline:
@@ -284,7 +301,7 @@ pipeline:
 
 	require.Len(t, procs, 4)
 
-	msgs, res := processor.ExecuteAll(procs, message.QuickBatch([][]byte{[]byte("starts with")}))
+	msgs, res := processor.ExecuteAll(tCtx, procs, message.QuickBatch([][]byte{[]byte("starts with")}))
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	require.Equal(t, 1, msgs[0].Len())

@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 )
 
 func TestInprocDryRun(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	t.Parallel()
 
 	mgr, err := manager.New(manager.NewResourceConfig())
@@ -31,13 +35,16 @@ func TestInprocDryRun(t *testing.T) {
 
 	<-time.After(time.Millisecond * 100)
 
-	ip.CloseAsync()
-	if err = ip.WaitForClose(time.Second); err != nil {
+	ip.TriggerStopConsuming()
+	if err = ip.WaitForClose(ctx); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestInprocDryRunNoConn(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	t.Parallel()
 
 	conf := input.NewConfig()
@@ -49,8 +56,8 @@ func TestInprocDryRunNoConn(t *testing.T) {
 
 	<-time.After(time.Millisecond * 100)
 
-	ip.CloseAsync()
-	if err = ip.WaitForClose(time.Second); err != nil {
+	ip.TriggerStopConsuming()
+	if err = ip.WaitForClose(ctx); err != nil {
 		t.Error(err)
 	}
 }

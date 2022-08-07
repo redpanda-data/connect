@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -40,7 +41,7 @@ func TestParallelBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{
+	msgs, res := h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
@@ -88,7 +89,7 @@ func TestParallelError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{
+	msgs, res := h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),
@@ -139,7 +140,7 @@ func TestParallelCapped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, res := h.ProcessMessage(message.QuickBatch([][]byte{
+	msgs, res := h.ProcessBatch(context.Background(), message.QuickBatch([][]byte{
 		[]byte("foo"),
 		[]byte("bar"),
 		[]byte("baz"),

@@ -51,8 +51,8 @@ func TestBundleInputTracing(t *testing.T) {
 		}
 	}
 
-	in.CloseAsync()
-	require.NoError(t, in.WaitForClose(time.Second))
+	in.TriggerStopConsuming()
+	require.NoError(t, in.WaitForClose(ctx))
 
 	assert.Equal(t, uint64(10), summary.Input)
 	assert.Equal(t, uint64(0), summary.ProcessorErrors)
@@ -104,8 +104,11 @@ func TestBundleOutputTracing(t *testing.T) {
 		}
 	}
 
-	out.CloseAsync()
-	require.NoError(t, out.WaitForClose(time.Second))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	out.TriggerCloseNow()
+	require.NoError(t, out.WaitForClose(ctx))
 
 	assert.Equal(t, uint64(0), summary.Input)
 	assert.Equal(t, uint64(0), summary.ProcessorErrors)
@@ -162,8 +165,12 @@ func TestBundleOutputWithProcessorsTracing(t *testing.T) {
 		}
 	}
 
-	out.CloseAsync()
-	require.NoError(t, out.WaitForClose(time.Second))
+	close(tranChan)
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, out.WaitForClose(ctx))
 
 	assert.Equal(t, uint64(0), summary.Input)
 	assert.Equal(t, uint64(0), summary.ProcessorErrors)
@@ -245,8 +252,11 @@ func TestBundleOutputWithBatchProcessorsTracing(t *testing.T) {
 		}
 	}
 
-	out.CloseAsync()
-	require.NoError(t, out.WaitForClose(time.Second))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	out.TriggerCloseNow()
+	require.NoError(t, out.WaitForClose(ctx))
 
 	assert.Equal(t, 0, int(summary.Input))
 	assert.Equal(t, 0, int(summary.ProcessorErrors))
@@ -288,6 +298,9 @@ func TestBundleOutputWithBatchProcessorsTracing(t *testing.T) {
 }
 
 func TestBundleProcessorTracing(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	tenv, summary := tracing.TracedBundle(bundle.GlobalEnvironment)
 
 	procConfig := processor.NewConfig()
@@ -308,14 +321,13 @@ root.count = if $ctr % 2 == 0 { throw("nah %v".format($ctr)) } else { $ctr }
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		batch, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}))
+		batch, res := proc.ProcessBatch(tCtx, message.QuickBatch([][]byte{[]byte(strconv.Itoa(i))}))
 		require.Nil(t, res)
 		require.Len(t, batch, 1)
 		assert.Equal(t, 1, batch[0].Len())
 	}
 
-	proc.CloseAsync()
-	require.NoError(t, proc.WaitForClose(time.Second))
+	require.NoError(t, proc.Close(tCtx))
 
 	assert.Equal(t, uint64(0), summary.Input)
 	assert.Equal(t, uint64(5), summary.ProcessorErrors)

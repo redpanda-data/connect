@@ -23,23 +23,19 @@ import (
 // the protocol supports a form of acknowledgement then it will be returned by
 // the call to Write.
 type AsyncSink interface {
-	// ConnectWithContext attempts to establish a connection to the sink, if
+	// Connect attempts to establish a connection to the sink, if
 	// unsuccessful returns an error. If the attempt is successful (or not
 	// necessary) returns nil.
-	ConnectWithContext(ctx context.Context) error
+	Connect(ctx context.Context) error
 
-	// WriteWithContext should block until either the message is sent (and
+	// WriteBatch should block until either the message is sent (and
 	// acknowledged) to a sink, or a transport specific error has occurred, or
 	// the Type is closed.
-	WriteWithContext(ctx context.Context, msg message.Batch) error
+	WriteBatch(ctx context.Context, msg message.Batch) error
 
-	// CloseAsync triggers the shut down of this component but should not block
-	// the calling goroutine.
-	CloseAsync()
-
-	// WaitForClose is a blocking call to wait until the component has finished
+	// Close is a blocking call to wait until the component has finished
 	// shutting down and cleaning up resources.
-	WaitForClose(timeout time.Duration) error
+	Close(ctx context.Context) error
 }
 
 // AsyncWriter is an output type that writes messages to a writer.Type.
@@ -87,7 +83,7 @@ func (w *AsyncWriter) SetInjectTracingMap(exec *mapping.Executor) {
 
 func (w *AsyncWriter) latencyMeasuringWrite(ctx context.Context, msg message.Batch) (latencyNs int64, err error) {
 	t0 := time.Now()
-	err = w.writer.WriteWithContext(ctx, msg)
+	err = w.writer.WriteBatch(ctx, msg)
 	if latencyNs = time.Since(t0).Nanoseconds(); latencyNs < 1 {
 		latencyNs = 1
 	}
@@ -134,8 +130,7 @@ func (w *AsyncWriter) loop() {
 	)
 
 	defer func() {
-		w.writer.CloseAsync()
-		_ = w.writer.WaitForClose(shutdown.MaximumShutdownWait())
+		_ = w.writer.Close(context.Background())
 
 		atomic.StoreInt32(&w.isConnected, 0)
 		w.shutSig.ShutdownComplete()
@@ -151,7 +146,7 @@ func (w *AsyncWriter) loop() {
 
 	initConnection := func() bool {
 		for {
-			if err := w.writer.ConnectWithContext(closeLeisureCtx); err != nil {
+			if err := w.writer.Connect(closeLeisureCtx); err != nil {
 				if w.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
 					return false
 				}
@@ -289,17 +284,17 @@ func (w *AsyncWriter) Connected() bool {
 	return atomic.LoadInt32(&w.isConnected) == 1
 }
 
-// CloseAsync shuts down the File output and stops processing messages.
-func (w *AsyncWriter) CloseAsync() {
-	w.shutSig.CloseAtLeisure()
+// TriggerCloseNow shuts down the output and stops processing messages.
+func (w *AsyncWriter) TriggerCloseNow() {
+	w.shutSig.CloseNow()
 }
 
 // WaitForClose blocks until the File output has closed down.
-func (w *AsyncWriter) WaitForClose(timeout time.Duration) error {
+func (w *AsyncWriter) WaitForClose(ctx context.Context) error {
 	select {
 	case <-w.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

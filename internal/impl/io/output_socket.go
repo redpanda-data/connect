@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
@@ -80,7 +79,7 @@ func newSocketWriter(conf output.SocketConfig, mgr bundle.NewManagement, log log
 	return &t, nil
 }
 
-func (s *socketWriter) ConnectWithContext(ctx context.Context) error {
+func (s *socketWriter) Connect(ctx context.Context) error {
 	s.writerMut.Lock()
 	defer s.writerMut.Unlock()
 	if s.writer != nil {
@@ -102,7 +101,7 @@ func (s *socketWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *socketWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (s *socketWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	s.writerMut.Lock()
 	w := s.writer
 	s.writerMut.Unlock()
@@ -123,15 +122,14 @@ func (s *socketWriter) WriteWithContext(ctx context.Context, msg message.Batch) 
 	})
 }
 
-func (s *socketWriter) CloseAsync() {
+func (s *socketWriter) Close(ctx context.Context) error {
 	s.writerMut.Lock()
+	defer s.writerMut.Unlock()
+
+	var err error
 	if s.writer != nil {
-		s.writer.Close(context.Background())
+		err = s.writer.Close(context.Background())
 		s.writer = nil
 	}
-	s.writerMut.Unlock()
-}
-
-func (s *socketWriter) WaitForClose(timeout time.Duration) error {
-	return nil
+	return err
 }

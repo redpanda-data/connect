@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -83,7 +82,7 @@ func (w *websocketReader) getWS() *websocket.Conn {
 	return ws
 }
 
-func (w *websocketReader) ConnectWithContext(ctx context.Context) error {
+func (w *websocketReader) Connect(ctx context.Context) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -129,7 +128,7 @@ func (w *websocketReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *websocketReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (w *websocketReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	client := w.getWS()
 	if client == nil {
 		return nil, nil, component.ErrNotConnected
@@ -149,15 +148,13 @@ func (w *websocketReader) ReadWithContext(ctx context.Context) (message.Batch, i
 	}, nil
 }
 
-func (w *websocketReader) CloseAsync() {
+func (w *websocketReader) Close(ctx context.Context) (err error) {
 	w.lock.Lock()
+	defer w.lock.Unlock()
+
 	if w.client != nil {
-		w.client.Close()
+		err = w.client.Close()
 		w.client = nil
 	}
-	w.lock.Unlock()
-}
-
-func (w *websocketReader) WaitForClose(timeout time.Duration) error {
-	return nil
+	return
 }

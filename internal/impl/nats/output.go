@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/nats-io/nats.go"
 
@@ -104,7 +103,7 @@ func newNATSWriter(conf output.NATSConfig, mgr bundle.NewManagement, log log.Mod
 	return &n, nil
 }
 
-func (n *natsWriter) ConnectWithContext(ctx context.Context) error {
+func (n *natsWriter) Connect(ctx context.Context) error {
 	n.connMut.Lock()
 	defer n.connMut.Unlock()
 
@@ -131,8 +130,8 @@ func (n *natsWriter) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-// WriteWithContext attempts to write a message.
-func (n *natsWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+// WriteBatch attempts to write a message.
+func (n *natsWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return n.Write(msg)
 }
 
@@ -170,17 +169,13 @@ func (n *natsWriter) Write(msg message.Batch) error {
 	})
 }
 
-func (n *natsWriter) CloseAsync() {
-	go func() {
-		n.connMut.Lock()
-		if n.natsConn != nil {
-			n.natsConn.Close()
-			n.natsConn = nil
-		}
-		n.connMut.Unlock()
-	}()
-}
+func (n *natsWriter) Close(context.Context) (err error) {
+	n.connMut.Lock()
+	defer n.connMut.Unlock()
 
-func (n *natsWriter) WaitForClose(timeout time.Duration) error {
-	return nil
+	if n.natsConn != nil {
+		n.natsConn.Close()
+		n.natsConn = nil
+	}
+	return
 }

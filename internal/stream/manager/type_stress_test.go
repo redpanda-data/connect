@@ -1,6 +1,7 @@
 package manager_test
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -18,6 +19,9 @@ import (
 )
 
 func TestTypeUnderStress(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	t.Skip("Skipping long running stress test")
 
 	res, err := bmanager.New(bmanager.NewResourceConfig())
@@ -46,11 +50,11 @@ func TestTypeUnderStress(t *testing.T) {
 					return err == nil && !details.IsRunning()
 				}, time.Second, time.Millisecond*50)
 
-				require.NoError(t, mgr.Delete(streamID, time.Second))
+				require.NoError(t, mgr.Delete(ctx, streamID))
 			}
 		}(j)
 	}
 
 	wg.Wait()
-	require.NoError(t, mgr.Stop(time.Second))
+	require.NoError(t, mgr.Stop(ctx))
 }

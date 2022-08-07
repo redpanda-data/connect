@@ -1,7 +1,7 @@
 package buffer
 
 import (
-	"time"
+	"context"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -14,19 +14,19 @@ type Streamed interface {
 	// transaction will be sent.
 	TransactionChan() <-chan message.Transaction
 
-	// StopConsuming instructs the buffer to cut off the producer it is
-	// consuming from. It will then enter a mode whereby messages can only be
-	// read, and when the buffer is empty it will shut down.
-	StopConsuming()
-
 	// Consume starts the type receiving transactions from a Transactor.
 	Consume(<-chan message.Transaction) error
 
-	// CloseAsync triggers the shut down of this component but should not block
-	// the calling goroutine.
-	CloseAsync()
+	// TriggerStopConsuming instructs the buffer to cut off the producer it is
+	// consuming from. It will then enter a mode whereby messages can only be
+	// read, and when the buffer is empty it will shut down.
+	TriggerStopConsuming()
+
+	// TriggerCloseNow triggers the shut down of this component but should not
+	// block the calling goroutine.
+	TriggerCloseNow()
 
 	// WaitForClose is a blocking call to wait until the component has finished
 	// shutting down and cleaning up resources.
-	WaitForClose(timeout time.Duration) error
+	WaitForClose(ctx context.Context) error
 }

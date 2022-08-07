@@ -78,10 +78,8 @@ func TestHTTPClientGET(t *testing.T) {
 		require.NoError(t, tr.Ack(tCtx, nil))
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	h.TriggerStopConsuming()
+	require.NoError(t, h.WaitForClose(tCtx))
 
 	if exp, act := uint32(len(inputs)), atomic.LoadUint32(&reqCount); exp != act && exp+1 != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", act, exp)
@@ -126,8 +124,8 @@ func TestHTTPClientPagination(t *testing.T) {
 		require.NoError(t, tr.Ack(tCtx, nil))
 	}
 
-	h.CloseAsync()
-	assert.NoError(t, h.WaitForClose(time.Second))
+	h.TriggerStopConsuming()
+	require.NoError(t, h.WaitForClose(tCtx))
 
 	pathsLock.Lock()
 	defer pathsLock.Unlock()
@@ -169,10 +167,11 @@ func TestHTTPClientGETError(t *testing.T) {
 		}
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	h.TriggerStopConsuming()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPClientGETNotExist(t *testing.T) {
@@ -188,10 +187,11 @@ func TestHTTPClientGETNotExist(t *testing.T) {
 
 	<-time.After(time.Millisecond * 500)
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	h.TriggerStopConsuming()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPClientGETStreamNotExist(t *testing.T) {
@@ -207,10 +207,11 @@ func TestHTTPClientGETStreamNotExist(t *testing.T) {
 
 	<-time.After(time.Millisecond * 500)
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	h.TriggerStopConsuming()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPClientGETStreamError(t *testing.T) {
@@ -241,10 +242,11 @@ func TestHTTPClientGETStreamError(t *testing.T) {
 		t.Error("Timed out")
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 2); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	h.TriggerStopConsuming()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPClientPOST(t *testing.T) {
@@ -313,10 +315,8 @@ func TestHTTPClientPOST(t *testing.T) {
 		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	h.TriggerStopConsuming()
+	require.NoError(t, h.WaitForClose(tCtx))
 
 	if exp, act := uint32(len(inputs)), atomic.LoadUint32(&reqCount); exp != act && exp+1 != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", act, exp)
@@ -391,11 +391,9 @@ func TestHTTPClientGETMultipart(t *testing.T) {
 		t.Errorf("Action timed out")
 	}
 	require.NoError(t, tr.Ack(tCtx, nil))
-	h.CloseAsync()
 
-	if err := h.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	h.TriggerStopConsuming()
+	require.NoError(t, h.WaitForClose(tCtx))
 
 	if exp, act := uint32(1), atomic.LoadUint32(&reqCount); exp != act && exp+1 != act {
 		t.Errorf("Wrong count of HTTP attempts: %v != %v", act, exp)
@@ -497,7 +495,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
-	h.CloseAsync()
+	h.TriggerStopConsuming()
 	reqMut.Unlock()
 
 	select {
@@ -506,7 +504,7 @@ func TestHTTPClientGETMultipartLoop(t *testing.T) {
 		t.Errorf("Action timed out")
 	}
 
-	if err := h.WaitForClose(time.Second); err != nil {
+	if err := h.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }
@@ -590,8 +588,8 @@ func TestHTTPClientStreamGETMultipartLoop(t *testing.T) {
 		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	h.TriggerStopConsuming()
+	if err := h.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }
@@ -658,8 +656,8 @@ func TestHTTPClientStreamGETMultiRecover(t *testing.T) {
 		}
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	h.TriggerStopConsuming()
+	if err := h.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }
@@ -717,8 +715,8 @@ func TestHTTPClientStreamGETRecover(t *testing.T) {
 		}
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	h.TriggerStopConsuming()
+	if err := h.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }
@@ -790,8 +788,8 @@ func TestHTTPClientStreamGETTokenization(t *testing.T) {
 	}, tokens)
 	tokensLock.Unlock()
 
-	h.CloseAsync()
-	require.NoError(t, h.WaitForClose(time.Second))
+	h.TriggerStopConsuming()
+	require.NoError(t, h.WaitForClose(tCtx))
 }
 
 func BenchmarkHTTPClientGETMultipart(b *testing.B) {
@@ -860,8 +858,8 @@ func BenchmarkHTTPClientGETMultipart(b *testing.B) {
 
 	b.StopTimer()
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second); err != nil {
+	h.TriggerStopConsuming()
+	if err := h.WaitForClose(tCtx); err != nil {
 		b.Error(err)
 	}
 }

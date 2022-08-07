@@ -3,7 +3,8 @@ package pure
 import (
 	"context"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
@@ -14,7 +15,7 @@ func TestSyncResponseWriter(t *testing.T) {
 
 	impl := transaction.NewResultStore()
 	w := SyncResponseWriter{}
-	if err := w.ConnectWithContext(wctx); err != nil {
+	if err := w.Connect(wctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -25,7 +26,7 @@ func TestSyncResponseWriter(t *testing.T) {
 	p = message.WithContext(ctx, p)
 	msg = append(msg, p, message.NewPart([]byte("bar")))
 
-	if err := w.WriteWithContext(wctx, msg); err != nil {
+	if err := w.WriteBatch(wctx, msg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -47,8 +48,5 @@ func TestSyncResponseWriter(t *testing.T) {
 		t.Error("Unexpected nested result store")
 	}
 
-	w.CloseAsync()
-	if err := w.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, w.Close(ctx))
 }

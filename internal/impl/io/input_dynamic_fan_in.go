@@ -2,7 +2,6 @@ package io
 
 import (
 	"context"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
@@ -135,7 +134,7 @@ func (d *dynamicFanInInput) removeInput(ctx context.Context, ident string) error
 		return nil
 	}
 
-	input.CloseAsync()
+	input.TriggerStopConsuming()
 	select {
 	case <-d.inputClosedChans[ident]:
 	case <-ctx.Done():
@@ -154,15 +153,19 @@ func (d *dynamicFanInInput) removeInput(ctx context.Context, ident string) error
 func (d *dynamicFanInInput) managerLoop() {
 	defer func() {
 		for _, i := range d.inputs {
-			i.CloseAsync()
+			i.TriggerStopConsuming()
 		}
+
+		closeNowCtx, done := d.shutSig.CloseNowCtx(context.Background())
 		for key := range d.inputs {
-			if err := d.removeInput(context.Background(), key); err != nil {
-				for err != nil {
-					err = d.removeInput(context.Background(), key)
-				}
-			}
+			_ = d.removeInput(closeNowCtx, key)
 		}
+
+		for _, i := range d.inputs {
+			i.TriggerCloseNow()
+		}
+
+		done()
 		close(d.transactionChan)
 		d.shutSig.ShutdownComplete()
 	}()
@@ -197,19 +200,19 @@ func (d *dynamicFanInInput) managerLoop() {
 	}
 }
 
-func (d *dynamicFanInInput) CloseAsync() {
+func (d *dynamicFanInInput) TriggerStopConsuming() {
 	d.shutSig.CloseAtLeisure()
 }
 
-func (d *dynamicFanInInput) WaitForClose(timeout time.Duration) error {
-	go func() {
-		<-time.After(timeout - time.Second)
-		d.shutSig.CloseNow()
-	}()
+func (d *dynamicFanInInput) TriggerCloseNow() {
+	d.shutSig.CloseNow()
+}
+
+func (d *dynamicFanInInput) WaitForClose(ctx context.Context) error {
 	select {
 	case <-d.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

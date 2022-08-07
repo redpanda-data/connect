@@ -56,7 +56,7 @@ func TestKinesisWriteSinglePartMessage(t *testing.T) {
 		message.NewPart([]byte(`{"foo":"bar","id":123}`)),
 	}
 
-	if err := k.WriteWithContext(context.Background(), msg); err != nil {
+	if err := k.WriteBatch(context.Background(), msg); err != nil {
 		t.Error(err)
 	}
 }
@@ -101,7 +101,7 @@ func TestKinesisWriteMultiPartMessage(t *testing.T) {
 		msg = append(msg, part)
 	}
 
-	if err := k.WriteWithContext(context.Background(), msg); err != nil {
+	if err := k.WriteBatch(context.Background(), msg); err != nil {
 		t.Error(err)
 	}
 }
@@ -134,7 +134,7 @@ func TestKinesisWriteChunk(t *testing.T) {
 		msg = append(msg, part)
 	}
 
-	if err := k.WriteWithContext(context.Background(), msg); err != nil {
+	if err := k.WriteBatch(context.Background(), msg); err != nil {
 		t.Error(err)
 	}
 	if exp, act := n/kinesisMaxRecordsCount+1, len(batchLengths); act != exp {
@@ -199,7 +199,7 @@ func TestKinesisWriteChunkWithThrottling(t *testing.T) {
 		500, 500, 500, 300,
 	}
 
-	if err := k.WriteWithContext(context.Background(), msg); err != nil {
+	if err := k.WriteBatch(context.Background(), msg); err != nil {
 		t.Error(err)
 	}
 	if exp, act := len(expectedLengths), len(batchLengths); act != exp {
@@ -238,7 +238,7 @@ func TestKinesisWriteError(t *testing.T) {
 		message.NewPart([]byte(`{"foo":"bar"}`)),
 	}
 
-	if exp, err := "blah", k.WriteWithContext(context.Background(), msg); err.Error() != exp {
+	if exp, err := "blah", k.WriteBatch(context.Background(), msg); err.Error() != exp {
 		t.Errorf("Expected err to equal %s, got %v", exp, err)
 	}
 	if exp, act := 3, calls; act != exp {
@@ -287,7 +287,7 @@ func TestKinesisWriteMessageThrottling(t *testing.T) {
 		message.NewPart([]byte(`{"foo":"qux","id":789}`)),
 	}
 
-	if err := k.WriteWithContext(context.Background(), msg); err != nil {
+	if err := k.WriteBatch(context.Background(), msg); err != nil {
 		t.Error(err)
 	}
 	if exp, act := msg.Len(), len(calls); act != exp {
@@ -331,7 +331,7 @@ func TestKinesisWriteBackoffMaxRetriesExceeded(t *testing.T) {
 		message.NewPart([]byte(`{"foo":"bar","id":123}`)),
 	}
 
-	if err := k.WriteWithContext(context.Background(), msg); err == nil {
+	if err := k.WriteBatch(context.Background(), msg); err == nil {
 		t.Error(errors.New("expected kinesis.Write to error"))
 	}
 	if exp := 3; calls != exp {
