@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 4.5.0 - TBD
+## 4.5.0 - 2022-08-07
 
 ### Added
 
