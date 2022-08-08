@@ -1934,6 +1934,20 @@ root.sorted = this.foo.sort_by(ele -> ele.id)
 # Out: {"sorted":[{"id":"aaa","message":"foo"},{"id":"bbb","message":"bar"},{"id":"ccc","message":"baz"}]}
 ```
 
+### `squash`
+
+Squashes an array of objects into a single object, where key collisions result in the values being merged (following similar rules as the `.merge()` method)
+
+#### Examples
+
+
+```coffee
+root.locations = this.locations.map_each(loc -> {loc.state: [loc.name]}).squash()
+
+# In:  {"locations":[{"name":"Seattle","state":"WA"},{"name":"New York","state":"NY"},{"name":"Bellevue","state":"WA"},{"name":"Olympia","state":"WA"}]}
+# Out: {"locations":{"NY":["New York"],"WA":["Seattle","Bellevue","Olympia"]}}
+```
+
 ### `sum`
 
 Sum the numerical values of an array.
