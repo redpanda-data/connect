@@ -282,11 +282,12 @@ You can check the output of the above command to see if certain sections are mis
 ## Shutting down
 
 Under normal operating conditions, the Benthos process will shut down when there are no more messages produced by inputs and the final message has been processed. The shutdown procedure can also be initiated by sending the process a interrupt (`SIGINT`) or termination (`SIGTERM`) signal. There are two top-level configuration options that control the shutdown behaviour: `shutdown_timeout` and `shutdown_delay`.
+
 ### Shutdown delay
 
-The `shutdown_delay` option can be used to delay the start of the shutdown procedure. This is useful for pipelines that will process a finite number of messages and terminate but need a short grace period to have their metrics and traces scraped. While the shutdown delay is in effect, the HTTP metrics endpoint continues to be available for scraping and any active tracers are free to flush remaining traces.
+The `shutdown_delay` option can be used to delay the start of the shutdown procedure. This is useful for pipelines that need a short grace period to have their metrics and traces scraped. While the shutdown delay is in effect, the HTTP metrics endpoint continues to be available for scraping and any active tracers are free to flush remaining traces.
 
-It is important to note the shutdown delay is only applied when a pipeline no longer has messages to process. It will not be applied if the process is being terminated using an OS signal or if an error occurs that initiates process termination.
+The shutdown delay can be interrupted by sending the Benthos process a second OS interrupt or termination signal.
 
 ### Shutdown timeout
 

@@ -404,14 +404,9 @@ func cmdService(
 	// Defer clean up.
 	defer func() {
 		if exitDelay > 0 {
-			select {
-			// We should only cause a shutdown delay if the pipeline has terminated.
-			// Other termination conditions are considered intentional and require
-			// immediate shutdown.
-			case <-dataStreamClosedChan:
-				logger.Infof("Shutdown delay is in effect for %s\n", exitDelay)
-				<-time.After(exitDelay)
-			default:
+			logger.Infof("Shutdown delay is in effect for %s\n", exitDelay)
+			if err := delayShutdown(context.Background(), exitDelay); err != nil {
+				logger.Errorf("Shutdown delay failed: %s", err)
 			}
 		}
 
@@ -469,4 +464,24 @@ func cmdService(
 		logger.Infoln("Run context was cancelled. Shutting down the service")
 	}
 	return 0
+}
+
+func delayShutdown(ctx context.Context, duration time.Duration) error {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	delayCtx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+
+	select {
+	case <-delayCtx.Done():
+		err := delayCtx.Err()
+		if err != nil && err != context.DeadlineExceeded {
+			return err
+		}
+	case sig := <-sigChan:
+		return fmt.Errorf("shutdown delay interrupted by signal: %s", sig)
+	}
+
+	return nil
 }
