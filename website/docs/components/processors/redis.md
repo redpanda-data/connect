@@ -330,7 +330,6 @@ A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an ar
 
 
 Type: `string`  
-Default: `""`  
 Requires version 4.3.0 or newer  
 
 ```yml
