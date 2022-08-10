@@ -210,7 +210,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 		{
 			name:        "message doesnt match schema",
 			input:       `{"Address":{"my.namespace.com.address":"not this","Name":"foo"}}`,
-			errContains: "schema does not specify default value",
+			errContains: "cannot decode textual union: cannot decode textual record",
 		},
 	}
 
