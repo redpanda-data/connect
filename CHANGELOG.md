@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.5.1 - 2022-08-10
+
+### Fixed
+
+- `kafka_franz` uses previous version of `franz-go`@1.3.1
+
 ### Added
 
 - New `squash` bloblang method.
