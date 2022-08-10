@@ -353,6 +353,10 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		return nil, 0, err
 	}
 
+	s.logger.Infof("codec 1 is: %#v", codec)
+
+	s.logger.Infof("codec 2 is: %v", codec)
+
 	return func(m *service.Message) error {
 		var datum interface{}
 		if s.avroRawJSON {
@@ -367,6 +371,8 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		} else if datum, err = m.AsStructured(); err != nil {
 			return err
 		}
+
+		s.logger.Infof("datum is: %#v", datum)
 
 		binary, err := codec.BinaryFromNative(nil, datum)
 		if err != nil {
