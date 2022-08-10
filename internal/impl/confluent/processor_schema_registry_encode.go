@@ -35,7 +35,7 @@ Currently only Avro schemas are supported.
 
 ### Avro JSON Format
 
-By default this processor expects documents formatted as [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding) when encoding Avro schemas. In this format the value of a union is encoded in JSON as follows:
+By default this processor expects documents formatted as [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding) when encoding Avro schemas. In this format the value of a union is encoded in JSON as follows:
 
 - if its type is ` + "`null`, then it is encoded as a JSON `null`" + `;
 - otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
@@ -57,7 +57,7 @@ However, it is possible to instead consume documents in raw JSON format (that ma
 			Example("60s").
 			Example("1h")).
 		Field(service.NewBoolField("avro_raw_json").
-			Description("Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If true the the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSON) instead of as (normal avro json)[https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec]").
+			Description("Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If true the the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSON) instead of as [normal avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec)").
 			Advanced().Default(false).Version("3.59.0")).
 		Field(service.NewTLSField("tls")).
 		Version("3.58.0")
