@@ -363,9 +363,9 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			//
 			// In this case we don't want to actually resume any of them yet so
 			// I add a forced timeout to deal with it.
-			stallCtx, pollDone := context.WithTimeout(closeCtx, time.Second)
+			stallCtx, done := context.WithTimeout(closeCtx, time.Second)
 			fetches := cl.PollFetches(stallCtx)
-			pollDone()
+			defer done()
 
 			if errs := fetches.Errors(); len(errs) > 0 {
 				// TODO: The documentation from franz-go is top-tier, it should
@@ -373,7 +373,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 				// restarting the client is actually necessary.
 				cl.Close()
 				for _, kerr := range errs {
-					if errors.Is(kerr.Err, context.Canceled) {
+					if errors.Is(kerr.Err, context.DeadlineExceeded) {
 						continue
 					}
 					f.log.Errorf("Kafka poll error on topic %v, partition %v: %v", kerr.Topic, kerr.Partition, kerr.Err)
