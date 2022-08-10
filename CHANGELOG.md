@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Reverted `kafka_franz` dependency back to `1.3.1` due to a regression in TLS/SASL commit retention.
+- Fixed an unintentional linting error when using interpolation functions in the `elasticsearch` outputs `action` field.
 
 ## 4.5.0 - 2022-08-07
 
