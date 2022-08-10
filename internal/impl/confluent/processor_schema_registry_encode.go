@@ -353,9 +353,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		return nil, 0, err
 	}
 
-	s.logger.Infof("codec 1 is: %#v", codec)
-
-	s.logger.Infof("codec 2 is: %v", codec)
+	s.logger.Tracef("codec is: %#v", codec)
 
 	return func(m *service.Message) error {
 		var datum interface{}
@@ -372,7 +370,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 			return err
 		}
 
-		s.logger.Infof("datum is: %#v", datum)
+		s.logger.Tracef("datum is: %#v", datum)
 
 		binary, err := codec.BinaryFromNative(nil, datum)
 		if err != nil {
