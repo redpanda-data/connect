@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/pkg/sftp"
 
@@ -99,7 +98,7 @@ func newSFTPWriter(conf output.SFTPConfig, mgr bundle.NewManagement) (*sftpWrite
 	return s, nil
 }
 
-func (s *sftpWriter) ConnectWithContext(ctx context.Context) error {
+func (s *sftpWriter) Connect(ctx context.Context) error {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
@@ -112,7 +111,7 @@ func (s *sftpWriter) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (s *sftpWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (s *sftpWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	s.handleMut.Lock()
 	client := s.client
 	s.handleMut.Unlock()
@@ -173,21 +172,17 @@ func (s *sftpWriter) WriteWithContext(ctx context.Context, msg message.Batch) er
 	})
 }
 
-func (s *sftpWriter) CloseAsync() {
-	go func() {
-		s.handleMut.Lock()
-		if s.handle != nil {
-			s.handle.Close(context.Background())
-			s.handle = nil
-		}
-		if s.client != nil {
-			s.client.Close()
-			s.client = nil
-		}
-		s.handleMut.Unlock()
-	}()
-}
+func (s *sftpWriter) Close(ctx context.Context) (err error) {
+	s.handleMut.Lock()
+	defer s.handleMut.Unlock()
 
-func (s *sftpWriter) WaitForClose(time.Duration) error {
-	return nil
+	if s.handle != nil {
+		err = s.handle.Close(ctx)
+		s.handle = nil
+	}
+	if err == nil && s.client != nil {
+		err = s.client.Close()
+		s.client = nil
+	}
+	return
 }

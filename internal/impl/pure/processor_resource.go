@@ -3,7 +3,6 @@ package pure
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -74,9 +73,9 @@ func newResourceProcessor(conf processor.Config, mgr bundle.NewManagement, log l
 	}, nil
 }
 
-func (r *resourceProcessor) ProcessMessage(msg message.Batch) (msgs []message.Batch, res error) {
-	if err := r.mgr.AccessProcessor(context.Background(), r.name, func(p processor.V1) {
-		msgs, res = p.ProcessMessage(msg)
+func (r *resourceProcessor) ProcessBatch(ctx context.Context, msg message.Batch) (msgs []message.Batch, res error) {
+	if err := r.mgr.AccessProcessor(ctx, r.name, func(p processor.V1) {
+		msgs, res = p.ProcessBatch(ctx, msg)
 	}); err != nil {
 		r.log.Errorf("Failed to obtain processor resource '%v': %v", r.name, err)
 		return nil, err
@@ -84,9 +83,6 @@ func (r *resourceProcessor) ProcessMessage(msg message.Batch) (msgs []message.Ba
 	return msgs, res
 }
 
-func (r *resourceProcessor) CloseAsync() {
-}
-
-func (r *resourceProcessor) WaitForClose(timeout time.Duration) error {
+func (r *resourceProcessor) Close(ctx context.Context) error {
 	return nil
 }

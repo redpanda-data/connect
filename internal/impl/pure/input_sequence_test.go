@@ -25,7 +25,7 @@ func writeFiles(t *testing.T, dir string, nameToContent map[string]string) {
 }
 
 func TestSequenceHappy(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
 	defer done()
 
 	t.Parallel()
@@ -66,7 +66,7 @@ consumeLoop:
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
 			act = append(act, string(tran.Payload.Get(0).AsBytes()))
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
 		}
@@ -74,12 +74,12 @@ consumeLoop:
 
 	assert.Equal(t, exp, act)
 
-	rdr.CloseAsync()
-	assert.NoError(t, rdr.WaitForClose(time.Second))
+	rdr.TriggerStopConsuming()
+	assert.NoError(t, rdr.WaitForClose(ctx))
 }
 
 func TestSequenceJoins(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
 	defer done()
 
 	t.Parallel()
@@ -134,7 +134,7 @@ consumeLoop:
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
 			act = append(act, string(tran.Payload.Get(0).AsBytes()))
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
 		}
@@ -144,12 +144,12 @@ consumeLoop:
 	sort.Strings(act)
 	assert.Equal(t, exp, act)
 
-	rdr.CloseAsync()
-	assert.NoError(t, rdr.WaitForClose(time.Second))
+	rdr.TriggerStopConsuming()
+	assert.NoError(t, rdr.WaitForClose(ctx))
 }
 
 func TestSequenceJoinsMergeStrategies(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
 	defer done()
 
 	t.Parallel()
@@ -256,7 +256,7 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 					}
 					assert.Equal(t, 1, tran.Payload.Len())
 					act = append(act, string(tran.Payload.Get(0).AsBytes()))
-					require.NoError(t, tran.Ack(tCtx, nil))
+					require.NoError(t, tran.Ack(ctx, nil))
 				case <-time.After(time.Minute):
 					t.Fatalf("Failed to consume message after: %v", act)
 				}
@@ -266,8 +266,8 @@ func TestSequenceJoinsMergeStrategies(t *testing.T) {
 			sort.Strings(act)
 			assert.Equal(t, exp, act)
 
-			rdr.CloseAsync()
-			assert.NoError(t, rdr.WaitForClose(time.Second))
+			rdr.TriggerStopConsuming()
+			assert.NoError(t, rdr.WaitForClose(ctx))
 		})
 	}
 }
@@ -276,7 +276,7 @@ func TestSequenceJoinsBig(t *testing.T) {
 	t.Skip()
 	t.Parallel()
 
-	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -341,7 +341,7 @@ consumeLoop:
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
 			act = append(act, string(tran.Payload.Get(0).AsBytes()))
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message after: %v", act)
 		}
@@ -351,12 +351,12 @@ consumeLoop:
 	sort.Strings(act)
 	assert.Equal(t, exp, act)
 
-	rdr.CloseAsync()
-	assert.NoError(t, rdr.WaitForClose(time.Second))
+	rdr.TriggerStopConsuming()
+	assert.NoError(t, rdr.WaitForClose(ctx))
 }
 
 func TestSequenceSad(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
 	defer done()
 
 	t.Parallel()
@@ -395,7 +395,7 @@ func TestSequenceSad(t *testing.T) {
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
 			assert.Equal(t, str, string(tran.Payload.Get(0).AsBytes()))
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message %v", i)
 		}
@@ -421,17 +421,20 @@ func TestSequenceSad(t *testing.T) {
 			}
 			assert.Equal(t, 1, tran.Payload.Len())
 			assert.Equal(t, str, string(tran.Payload.Get(0).AsBytes()))
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Minute):
 			t.Fatalf("Failed to consume message %v", i)
 		}
 	}
 
-	rdr.CloseAsync()
-	assert.NoError(t, rdr.WaitForClose(time.Second))
+	rdr.TriggerStopConsuming()
+	assert.NoError(t, rdr.WaitForClose(ctx))
 }
 
 func TestSequenceEarlyTermination(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -462,6 +465,6 @@ func TestSequenceEarlyTermination(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	rdr.CloseAsync()
-	assert.NoError(t, rdr.WaitForClose(time.Second*5))
+	rdr.TriggerCloseNow()
+	assert.NoError(t, rdr.WaitForClose(ctx))
 }

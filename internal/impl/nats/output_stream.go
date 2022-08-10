@@ -100,7 +100,7 @@ func newNATSStreamWriter(conf output.NATSStreamConfig, log log.Modular) (*natsSt
 	return &n, nil
 }
 
-func (n *natsStreamWriter) ConnectWithContext(ctx context.Context) error {
+func (n *natsStreamWriter) Connect(ctx context.Context) error {
 	n.connMut.Lock()
 	defer n.connMut.Unlock()
 
@@ -136,7 +136,7 @@ func (n *natsStreamWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (n *natsStreamWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (n *natsStreamWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	n.connMut.RLock()
 	conn := n.stanConn
 	n.connMut.RUnlock()
@@ -160,19 +160,17 @@ func (n *natsStreamWriter) WriteWithContext(ctx context.Context, msg message.Bat
 	})
 }
 
-func (n *natsStreamWriter) CloseAsync() {
+func (n *natsStreamWriter) Close(context.Context) (err error) {
 	n.connMut.Lock()
+	defer n.connMut.Unlock()
+
 	if n.natsConn != nil {
 		n.natsConn.Close()
 		n.natsConn = nil
 	}
 	if n.stanConn != nil {
-		n.stanConn.Close()
+		err = n.stanConn.Close()
 		n.stanConn = nil
 	}
-	n.connMut.Unlock()
-}
-
-func (n *natsStreamWriter) WaitForClose(timeout time.Duration) error {
-	return nil
+	return
 }

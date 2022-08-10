@@ -130,7 +130,7 @@ func newGCPPubSubWriter(conf output.GCPPubSubConfig, mgr bundle.NewManagement, l
 	}, nil
 }
 
-func (c *gcpPubSubWriter) ConnectWithContext(ctx context.Context) error {
+func (c *gcpPubSubWriter) Connect(ctx context.Context) error {
 	c.topicMut.Lock()
 	defer c.topicMut.Unlock()
 	if c.topics != nil {
@@ -166,7 +166,7 @@ func (c *gcpPubSubWriter) getTopic(ctx context.Context, t string) (*pubsub.Topic
 	return topic, nil
 }
 
-func (c *gcpPubSubWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (c *gcpPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	topics := make([]*pubsub.Topic, msg.Len())
 	if err := msg.Iter(func(i int, _ *message.Part) error {
 		var tErr error
@@ -212,19 +212,14 @@ func (c *gcpPubSubWriter) WriteWithContext(ctx context.Context, msg message.Batc
 	return nil
 }
 
-func (c *gcpPubSubWriter) CloseAsync() {
-	go func() {
-		c.topicMut.Lock()
-		defer c.topicMut.Unlock()
-		if c.topics != nil {
-			for _, t := range c.topics {
-				t.Stop()
-			}
-			c.topics = nil
+func (c *gcpPubSubWriter) Close(context.Context) error {
+	c.topicMut.Lock()
+	defer c.topicMut.Unlock()
+	if c.topics != nil {
+		for _, t := range c.topics {
+			t.Stop()
 		}
-	}()
-}
-
-func (c *gcpPubSubWriter) WaitForClose(time.Duration) error {
+		c.topics = nil
+	}
 	return nil
 }

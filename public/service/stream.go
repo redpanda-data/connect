@@ -83,6 +83,18 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 // messages on the next start up, but never results in dropped messages as long
 // as the input source supports at-least-once delivery.
 func (s *Stream) StopWithin(timeout time.Duration) error {
+	ctx, done := context.WithTimeout(context.Background(), timeout)
+	defer done()
+	return s.Stop(ctx)
+}
+
+// Stop attempts to close the stream gracefully, but if the context is closed or
+// draws near to a deadline the attempt becomes less graceful.
+//
+// An ungraceful shutdown increases the likelihood of processing duplicate
+// messages on the next start up, but never results in dropped messages as long
+// as the input source supports at-least-once delivery.
+func (s *Stream) Stop(ctx context.Context) error {
 	s.strmMut.Lock()
 	strm := s.strm
 	s.strmMut.Unlock()
@@ -90,19 +102,19 @@ func (s *Stream) StopWithin(timeout time.Duration) error {
 		return errors.New("stream has not been run yet")
 	}
 
-	stopAt := time.Now().Add(timeout)
-	if err := strm.Stop(timeout); err != nil {
+	if err := strm.Stop(ctx); err != nil {
 		// Still attempt to shut down other resources but do not block.
 		go func() {
-			s.mgr.CloseAsync()
+			s.mgr.TriggerStopConsuming()
 			s.stats.Close()
 		}()
 		return err
 	}
 
-	s.mgr.CloseAsync()
-	if err := s.mgr.WaitForClose(time.Until(stopAt)); err != nil {
+	s.mgr.TriggerStopConsuming()
+	if err := s.mgr.WaitForClose(ctx); err != nil {
 		// Same as above, attempt to shut down other resources but do not block.
+		s.mgr.TriggerCloseNow()
 		go s.stats.Close()
 		return err
 	}

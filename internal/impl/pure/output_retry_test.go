@@ -104,8 +104,8 @@ func TestRetryBasic(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	output.CloseAsync()
-	require.NoError(t, output.WaitForClose(time.Second*30))
+	output.TriggerCloseNow()
+	require.NoError(t, output.WaitForClose(ctx))
 }
 
 func TestRetrySadPath(t *testing.T) {
@@ -184,8 +184,8 @@ func TestRetrySadPath(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	output.CloseAsync()
-	require.NoError(t, output.WaitForClose(time.Second*30))
+	output.TriggerCloseNow()
+	require.NoError(t, output.WaitForClose(ctx))
 }
 
 func expectFromRetry(
@@ -260,6 +260,9 @@ func ackForRetry(
 }
 
 func TestRetryParallel(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	conf := output.NewConfig()
 	conf.Type = "retry"
 
@@ -312,8 +315,8 @@ func TestRetryParallel(t *testing.T) {
 	expectFromRetry(nil, mOut.TChan, t, "fourth")
 	ackForRetry(nil, resChan2, t)
 
-	output.CloseAsync()
-	require.NoError(t, output.WaitForClose(time.Second*30))
+	output.TriggerCloseNow()
+	require.NoError(t, output.WaitForClose(ctx))
 }
 
 func TestRetryMutations(t *testing.T) {
@@ -387,8 +390,8 @@ func TestRetryMutations(t *testing.T) {
 	testMockOutput(mockOutput, errors.New("test err"))
 	testMockOutput(mockOutput, nil)
 
-	output.CloseAsync()
-	require.NoError(t, output.WaitForClose(time.Second*5))
+	output.TriggerCloseNow()
+	require.NoError(t, output.WaitForClose(tCtx))
 
 	inStruct, err := inMsg.AsStructured()
 	require.NoError(t, err)

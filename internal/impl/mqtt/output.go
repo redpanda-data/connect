@@ -140,7 +140,7 @@ func newMQTTWriter(
 	return m, nil
 }
 
-func (m *mqttWriter) ConnectWithContext(ctx context.Context) error {
+func (m *mqttWriter) Connect(ctx context.Context) error {
 	m.connMut.Lock()
 	defer m.connMut.Unlock()
 
@@ -195,7 +195,7 @@ func (m *mqttWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (m *mqttWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (m *mqttWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	m.connMut.RLock()
 	client := m.client
 	m.connMut.RUnlock()
@@ -226,17 +226,13 @@ func (m *mqttWriter) WriteWithContext(ctx context.Context, msg message.Batch) er
 	})
 }
 
-func (m *mqttWriter) CloseAsync() {
-	go func() {
-		m.connMut.Lock()
-		if m.client != nil {
-			m.client.Disconnect(0)
-			m.client = nil
-		}
-		m.connMut.Unlock()
-	}()
-}
+func (m *mqttWriter) Close(context.Context) error {
+	m.connMut.Lock()
+	defer m.connMut.Unlock()
 
-func (m *mqttWriter) WaitForClose(timeout time.Duration) error {
+	if m.client != nil {
+		m.client.Disconnect(0)
+		m.client = nil
+	}
 	return nil
 }

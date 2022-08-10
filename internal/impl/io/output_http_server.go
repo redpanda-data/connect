@@ -210,7 +210,7 @@ func (h *httpServerOutput) getHandler(w http.ResponseWriter, r *http.Request) {
 	case ts, open = <-h.transactions:
 		if !open {
 			http.Error(w, "Server closed", http.StatusServiceUnavailable)
-			go h.CloseAsync()
+			go h.TriggerCloseNow()
 			return
 		}
 	case <-time.After(h.timeout - time.Since(tStart)):
@@ -268,7 +268,7 @@ func (h *httpServerOutput) streamHandler(w http.ResponseWriter, r *http.Request)
 		select {
 		case ts, open = <-h.transactions:
 			if !open {
-				go h.CloseAsync()
+				go h.TriggerCloseNow()
 				return
 			}
 		case <-r.Context().Done():
@@ -324,7 +324,7 @@ func (h *httpServerOutput) wsHandler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case ts, open = <-h.transactions:
 			if !open {
-				go h.CloseAsync()
+				go h.TriggerCloseNow()
 				return
 			}
 		case <-r.Context().Done():
@@ -388,8 +388,8 @@ func (h *httpServerOutput) Connected() bool {
 	return true
 }
 
-func (h *httpServerOutput) CloseAsync() {
-	h.shutSig.CloseAtLeisure()
+func (h *httpServerOutput) TriggerCloseNow() {
+	h.shutSig.CloseNow()
 	h.closeServerOnce.Do(func() {
 		if h.server != nil {
 			_ = h.server.Shutdown(context.Background())
@@ -398,11 +398,11 @@ func (h *httpServerOutput) CloseAsync() {
 	})
 }
 
-func (h *httpServerOutput) WaitForClose(timeout time.Duration) error {
+func (h *httpServerOutput) WaitForClose(ctx context.Context) error {
 	select {
 	case <-h.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

@@ -35,7 +35,10 @@ func TestBatcherEarlyTermination(t *testing.T) {
 	b := batcher.New(batchPol, out, mock.NewManager())
 	require.NoError(t, b.Consume(tInChan))
 
-	require.Error(t, b.WaitForClose(time.Millisecond*100))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	done()
+
+	require.Error(t, b.WaitForClose(ctx))
 
 	select {
 	case tInChan <- message.NewTransaction(message.QuickBatch([][]byte{[]byte("foo")}), resChan):
@@ -43,7 +46,10 @@ func TestBatcherEarlyTermination(t *testing.T) {
 		t.Error("unexpected")
 	}
 
-	require.Error(t, b.WaitForClose(time.Second))
+	ctx, done = context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.Error(t, b.WaitForClose(ctx))
 }
 
 func TestBatcherBasic(t *testing.T) {
@@ -175,7 +181,10 @@ func TestBatcherBasic(t *testing.T) {
 		t.Fatal("Timed out waiting for message read")
 	}
 
-	require.NoError(t, b.WaitForClose(time.Second*10))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, b.WaitForClose(ctx))
 	wg.Wait()
 }
 
@@ -251,8 +260,8 @@ func TestBatcherMaxInFlight(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	b.CloseAsync()
-	require.NoError(t, b.WaitForClose(time.Second*5))
+	b.TriggerCloseNow()
+	require.NoError(t, b.WaitForClose(timeOutCtx))
 }
 
 func TestBatcherBatchError(t *testing.T) {
@@ -329,11 +338,12 @@ func TestBatcherBatchError(t *testing.T) {
 	}
 
 	close(tInChan)
-	b.CloseAsync()
+	b.TriggerCloseNow()
 
-	if err = b.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, b.WaitForClose(ctx))
 	wg.Wait()
 }
 
@@ -380,11 +390,12 @@ func TestBatcherTimed(t *testing.T) {
 		t.Errorf("Wrong result from batch: %s != %s", act, exp)
 	}
 
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	close(tInChan)
-	b.CloseAsync()
-	if err = b.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	b.TriggerCloseNow()
+	require.NoError(t, b.WaitForClose(ctx))
 
 	close(resChan)
 }

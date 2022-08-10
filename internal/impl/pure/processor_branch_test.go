@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -228,7 +229,7 @@ func TestBranchBasic(t *testing.T) {
 				msg = append(msg, part)
 			}
 
-			outMsgs, res := proc.ProcessMessage(msg.ShallowCopy())
+			outMsgs, res := proc.ProcessBatch(context.Background(), msg.ShallowCopy())
 
 			require.Nil(t, res)
 			require.Len(t, outMsgs, 1)
@@ -265,8 +266,9 @@ func TestBranchBasic(t *testing.T) {
 				assert.Equal(t, m.content, string(msg.Get(i).AsBytes()))
 			}
 
-			proc.CloseAsync()
-			assert.NoError(t, proc.WaitForClose(time.Second))
+			ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+			defer done()
+			assert.NoError(t, proc.Close(ctx))
 		})
 	}
 }

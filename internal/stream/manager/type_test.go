@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -21,12 +22,15 @@ func harmlessConf() stream.Config {
 }
 
 func TestTypeBasicOperations(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	res, err := bmanager.New(bmanager.NewResourceConfig())
 	require.NoError(t, err)
 
 	mgr := New(res)
 
-	if err := mgr.Update("foo", harmlessConf(), time.Second); err == nil {
+	if err := mgr.Update(ctx, "foo", harmlessConf()); err == nil {
 		t.Error("Expected error on empty update")
 	}
 	if _, err := mgr.Read("foo"); err == nil {
@@ -51,7 +55,7 @@ func TestTypeBasicOperations(t *testing.T) {
 	newConf := harmlessConf()
 	newConf.Buffer.Type = "memory"
 
-	if err := mgr.Update("foo", newConf, time.Second); err != nil {
+	if err := mgr.Update(ctx, "foo", newConf); err != nil {
 		t.Error(err)
 	}
 
@@ -63,14 +67,14 @@ func TestTypeBasicOperations(t *testing.T) {
 		t.Errorf("Unexpected config: %v != %v", act, exp)
 	}
 
-	if err := mgr.Delete("foo", time.Second); err != nil {
+	if err := mgr.Delete(ctx, "foo"); err != nil {
 		t.Fatal(err)
 	}
-	if err := mgr.Delete("foo", time.Second); err == nil {
+	if err := mgr.Delete(ctx, "foo"); err == nil {
 		t.Error("Expected error on duplicate delete")
 	}
 
-	if err := mgr.Stop(time.Second * 5); err != nil {
+	if err := mgr.Stop(ctx); err != nil {
 		t.Error(err)
 	}
 
@@ -80,6 +84,9 @@ func TestTypeBasicOperations(t *testing.T) {
 }
 
 func TestTypeBasicClose(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	res, err := bmanager.New(bmanager.NewResourceConfig())
 	require.NoError(t, err)
 
@@ -90,7 +97,7 @@ func TestTypeBasicClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := mgr.Stop(time.Second); err != nil {
+	if err := mgr.Stop(ctx); err != nil {
 		t.Error(err)
 	}
 

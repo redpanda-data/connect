@@ -43,11 +43,12 @@ func TestCSVReaderHappy(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		f.CloseAsync()
-		require.NoError(t, f.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, f.Close(ctx))
+		done()
 	})
 
-	require.NoError(t, f.ConnectWithContext(context.Background()))
+	require.NoError(t, f.Connect(context.Background()))
 
 	for _, exp := range []string{
 		`{"header1":"foo1","header2":"foo2","header3":"foo3"}`,
@@ -55,16 +56,16 @@ func TestCSVReaderHappy(t *testing.T) {
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 	} {
 		var resMsg message.Batch
-		resMsg, _, err = f.ReadWithContext(context.Background())
+		resMsg, _, err = f.ReadBatch(context.Background())
 		require.NoError(t, err)
 
 		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()))
 	}
 
-	_, _, err = f.ReadWithContext(context.Background())
+	_, _, err = f.ReadBatch(context.Background())
 	assert.Equal(t, component.ErrNotConnected, err)
 
-	err = f.ConnectWithContext(context.Background())
+	err = f.Connect(context.Background())
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
@@ -100,11 +101,12 @@ func TestCSVReaderGroupCount(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		f.CloseAsync()
-		require.NoError(t, f.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, f.Close(ctx))
+		done()
 	})
 
-	require.NoError(t, f.ConnectWithContext(context.Background()))
+	require.NoError(t, f.Connect(context.Background()))
 
 	for _, exp := range [][]string{
 		{
@@ -122,7 +124,7 @@ func TestCSVReaderGroupCount(t *testing.T) {
 		},
 	} {
 		var resMsg message.Batch
-		resMsg, _, err = f.ReadWithContext(context.Background())
+		resMsg, _, err = f.ReadBatch(context.Background())
 		require.NoError(t, err)
 
 		require.Equal(t, len(exp), resMsg.Len())
@@ -131,10 +133,10 @@ func TestCSVReaderGroupCount(t *testing.T) {
 		}
 	}
 
-	_, _, err = f.ReadWithContext(context.Background())
+	_, _, err = f.ReadBatch(context.Background())
 	assert.Equal(t, component.ErrNotConnected, err)
 
-	err = f.ConnectWithContext(context.Background())
+	err = f.Connect(context.Background())
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
@@ -179,11 +181,12 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		f.CloseAsync()
-		require.NoError(t, f.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, f.Close(ctx))
+		done()
 	})
 
-	require.NoError(t, f.ConnectWithContext(context.Background()))
+	require.NoError(t, f.Connect(context.Background()))
 
 	for i, exp := range []string{
 		`{"header1":"foo1","header2":"foo2","header3":"foo3"}`,
@@ -195,20 +198,20 @@ func TestCSVReadersTwoFiles(t *testing.T) {
 	} {
 		var resMsg message.Batch
 		var ackFn input.AsyncAckFn
-		resMsg, ackFn, err = f.ReadWithContext(context.Background())
+		resMsg, ackFn, err = f.ReadBatch(context.Background())
 		if err == component.ErrNotConnected {
-			require.NoError(t, f.ConnectWithContext(context.Background()))
-			resMsg, ackFn, err = f.ReadWithContext(context.Background())
+			require.NoError(t, f.Connect(context.Background()))
+			resMsg, ackFn, err = f.ReadBatch(context.Background())
 		}
 		require.NoError(t, err, i)
 		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()), i)
 		_ = ackFn(context.Background(), nil)
 	}
 
-	_, _, err = f.ReadWithContext(context.Background())
+	_, _, err = f.ReadBatch(context.Background())
 	assert.Equal(t, component.ErrNotConnected, err)
 
-	err = f.ConnectWithContext(context.Background())
+	err = f.Connect(context.Background())
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
@@ -240,11 +243,12 @@ func TestCSVReaderCustomComma(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		f.CloseAsync()
-		require.NoError(t, f.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, f.Close(ctx))
+		done()
 	})
 
-	require.NoError(t, f.ConnectWithContext(context.Background()))
+	require.NoError(t, f.Connect(context.Background()))
 
 	for _, exp := range []string{
 		`{"header1":"foo1","header2":"foo2","header3":"foo3"}`,
@@ -252,16 +256,16 @@ func TestCSVReaderCustomComma(t *testing.T) {
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,
 	} {
 		var resMsg message.Batch
-		resMsg, _, err = f.ReadWithContext(context.Background())
+		resMsg, _, err = f.ReadBatch(context.Background())
 		require.NoError(t, err)
 
 		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()))
 	}
 
-	_, _, err = f.ReadWithContext(context.Background())
+	_, _, err = f.ReadBatch(context.Background())
 	assert.Equal(t, component.ErrNotConnected, err)
 
-	err = f.ConnectWithContext(context.Background())
+	err = f.Connect(context.Background())
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
@@ -294,11 +298,12 @@ func TestCSVReaderRelaxed(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		f.CloseAsync()
-		require.NoError(t, f.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, f.Close(ctx))
+		done()
 	})
 
-	require.NoError(t, f.ConnectWithContext(context.Background()))
+	require.NoError(t, f.Connect(context.Background()))
 
 	for _, exp := range []string{
 		`{"header1":"foo1","header2":"foo2","header3":"foo3"}`,
@@ -307,16 +312,16 @@ func TestCSVReaderRelaxed(t *testing.T) {
 		`{"header1":"buz1","header2":"buz2"}`,
 	} {
 		var resMsg message.Batch
-		resMsg, _, err = f.ReadWithContext(context.Background())
+		resMsg, _, err = f.ReadBatch(context.Background())
 		require.NoError(t, err)
 
 		assert.Equal(t, exp, string(resMsg.Get(0).AsBytes()))
 	}
 
-	_, _, err = f.ReadWithContext(context.Background())
+	_, _, err = f.ReadBatch(context.Background())
 	assert.Equal(t, component.ErrNotConnected, err)
 
-	err = f.ConnectWithContext(context.Background())
+	err = f.Connect(context.Background())
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
@@ -349,11 +354,12 @@ func TestCSVReaderStrict(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		f.CloseAsync()
-		require.NoError(t, f.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		require.NoError(t, f.Close(ctx))
+		done()
 	})
 
-	require.NoError(t, f.ConnectWithContext(context.Background()))
+	require.NoError(t, f.Connect(context.Background()))
 
 	for _, exp := range []interface{}{
 		`{"header1":"foo1","header2":"foo2","header3":"foo3"}`,
@@ -362,7 +368,7 @@ func TestCSVReaderStrict(t *testing.T) {
 		errors.New("record on line 5: wrong number of fields"),
 	} {
 		var resMsg message.Batch
-		resMsg, _, err = f.ReadWithContext(context.Background())
+		resMsg, _, err = f.ReadBatch(context.Background())
 
 		switch expT := exp.(type) {
 		case string:
@@ -373,10 +379,10 @@ func TestCSVReaderStrict(t *testing.T) {
 		}
 	}
 
-	_, _, err = f.ReadWithContext(context.Background())
+	_, _, err = f.ReadBatch(context.Background())
 	assert.Equal(t, component.ErrNotConnected, err)
 
-	err = f.ConnectWithContext(context.Background())
+	err = f.Connect(context.Background())
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
@@ -441,13 +447,14 @@ func TestLazyQuotes(t *testing.T) {
 		)
 		require.NoError(t, err, test.name)
 		t.Cleanup(func() {
-			f.CloseAsync()
-			require.NoError(t, f.WaitForClose(time.Second), test.name)
+			ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+			require.NoError(t, f.Close(ctx))
+			done()
 		})
 
-		require.NoError(t, f.ConnectWithContext(context.Background()), test.name)
+		require.NoError(t, f.Connect(context.Background()), test.name)
 
-		resMsg, _, err := f.ReadWithContext(context.Background())
+		resMsg, _, err := f.ReadBatch(context.Background())
 		if test.errContains != "" {
 			require.Contains(t, err.Error(), test.errContains, test.name)
 			return

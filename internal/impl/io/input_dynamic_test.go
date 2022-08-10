@@ -76,8 +76,8 @@ generate:
     batch_size: 1
 `, res.Body.String())
 
-	i.CloseAsync()
-	require.NoError(t, i.WaitForClose(time.Second))
+	i.TriggerStopConsuming()
+	require.NoError(t, i.WaitForClose(ctx))
 }
 
 func TestBrokerConfigs(t *testing.T) {

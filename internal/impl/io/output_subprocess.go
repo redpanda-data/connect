@@ -6,7 +6,6 @@ import (
 	"io"
 	"os/exec"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -92,7 +91,7 @@ func newSubprocessWriter(conf output.SubprocessConfig, log log.Modular) (*subpro
 	return s, nil
 }
 
-func (s *subprocessWriter) ConnectWithContext(ctx context.Context) error {
+func (s *subprocessWriter) Connect(ctx context.Context) error {
 	s.cmdMut.Lock()
 	defer s.cmdMut.Unlock()
 
@@ -136,7 +135,7 @@ func (s *subprocessWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *subprocessWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (s *subprocessWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	s.cmdMut.Lock()
 	defer s.cmdMut.Unlock()
 	if s.stdin == nil {
@@ -148,15 +147,14 @@ func (s *subprocessWriter) WriteWithContext(ctx context.Context, msg message.Bat
 	})
 }
 
-func (s *subprocessWriter) CloseAsync() {
+func (s *subprocessWriter) Close(ctx context.Context) error {
 	s.cmdMut.Lock()
+	defer s.cmdMut.Unlock()
+
+	var err error
 	if s.stdin != nil {
-		s.stdin.Close()
+		err = s.stdin.Close()
 		s.stdin = nil
 	}
-	s.cmdMut.Unlock()
-}
-
-func (s *subprocessWriter) WaitForClose(timeout time.Duration) error {
-	return nil
+	return err
 }

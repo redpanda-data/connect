@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/go-redis/redis/v7"
 
@@ -98,7 +97,7 @@ func newRedisStreamsWriter(conf output.RedisStreamsConfig, mgr bundle.NewManagem
 	return r, nil
 }
 
-func (r *redisStreamsWriter) ConnectWithContext(ctx context.Context) error {
+func (r *redisStreamsWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
@@ -116,7 +115,7 @@ func (r *redisStreamsWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (r *redisStreamsWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
@@ -192,10 +191,6 @@ func (r *redisStreamsWriter) disconnect() error {
 	return nil
 }
 
-func (r *redisStreamsWriter) CloseAsync() {
-	_ = r.disconnect()
-}
-
-func (r *redisStreamsWriter) WaitForClose(timeout time.Duration) error {
-	return nil
+func (r *redisStreamsWriter) Close(context.Context) error {
+	return r.disconnect()
 }

@@ -99,8 +99,8 @@ func NewCacheWriter(conf output.CacheConfig, mgr bundle.NewManagement, log log.M
 	}, nil
 }
 
-// ConnectWithContext does nothing.
-func (c *CacheWriter) ConnectWithContext(ctx context.Context) error {
+// Connect does nothing.
+func (c *CacheWriter) Connect(ctx context.Context) error {
 	c.log.Infof("Writing message parts as items in cache: %v\n", c.conf.Target)
 	return nil
 }
@@ -134,8 +134,8 @@ func (c *CacheWriter) writeMulti(ctx context.Context, msg message.Batch) error {
 	return err
 }
 
-// WriteWithContext attempts to store a message within a cache.
-func (c *CacheWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+// WriteBatch attempts to store a message within a cache.
+func (c *CacheWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	if msg.Len() > 1 {
 		return c.writeMulti(ctx, msg)
 	}
@@ -158,11 +158,7 @@ func (c *CacheWriter) WriteWithContext(ctx context.Context, msg message.Batch) e
 	return err
 }
 
-// CloseAsync does nothing.
-func (c *CacheWriter) CloseAsync() {
-}
-
-// WaitForClose does nothing.
-func (c *CacheWriter) WaitForClose(time.Duration) error {
+// Close does nothing.
+func (c *CacheWriter) Close(context.Context) error {
 	return nil
 }

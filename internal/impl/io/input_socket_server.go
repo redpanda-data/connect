@@ -332,15 +332,19 @@ func (t *socketServerInput) Connected() bool {
 	return true
 }
 
-func (t *socketServerInput) CloseAsync() {
+func (t *socketServerInput) TriggerStopConsuming() {
 	t.closeFn()
 }
 
-func (t *socketServerInput) WaitForClose(timeout time.Duration) error {
+func (t *socketServerInput) TriggerCloseNow() {
+	t.closeFn()
+}
+
+func (t *socketServerInput) WaitForClose(ctx context.Context) error {
 	select {
 	case <-t.closedChan:
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

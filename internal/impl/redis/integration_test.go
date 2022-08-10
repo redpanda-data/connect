@@ -40,9 +40,9 @@ func TestIntegrationRedis(t *testing.T) {
 		if cErr != nil {
 			return cErr
 		}
-		cErr = r.ConnectWithContext(context.Background())
+		cErr = r.Connect(context.Background())
 
-		r.CloseAsync()
+		_ = r.Close(context.Background())
 		return cErr
 	}))
 
@@ -248,9 +248,9 @@ func BenchmarkIntegrationRedis(b *testing.B) {
 		if cErr != nil {
 			return cErr
 		}
-		cErr = r.ConnectWithContext(context.Background())
+		cErr = r.Connect(context.Background())
 
-		r.CloseAsync()
+		_ = r.Close(context.Background())
 		return cErr
 	}))
 

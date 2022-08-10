@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -35,13 +36,10 @@ func TestInputAirGapShutdown(t *testing.T) {
 	i := &fnInput{}
 	agi := newAirGapReader(i)
 
-	err := agi.WaitForClose(time.Millisecond * 5)
-	assert.EqualError(t, err, "action timed out")
-	assert.False(t, i.closed)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
-	agi.CloseAsync()
-	err = agi.WaitForClose(time.Millisecond * 5)
-	assert.NoError(t, err)
+	require.NoError(t, agi.Close(ctx))
 	assert.True(t, i.closed)
 }
 
@@ -56,24 +54,24 @@ func TestInputAirGapSad(t *testing.T) {
 	}
 	agi := newAirGapReader(i)
 
-	err := agi.ConnectWithContext(context.Background())
+	err := agi.Connect(context.Background())
 	assert.EqualError(t, err, "bad connect")
 
-	_, _, err = agi.ReadWithContext(context.Background())
+	_, _, err = agi.ReadBatch(context.Background())
 	assert.EqualError(t, err, "bad read")
 
 	i.read = func() (*Message, AckFunc, error) {
 		return nil, nil, ErrNotConnected
 	}
 
-	_, _, err = agi.ReadWithContext(context.Background())
+	_, _, err = agi.ReadBatch(context.Background())
 	assert.Equal(t, component.ErrNotConnected, err)
 
 	i.read = func() (*Message, AckFunc, error) {
 		return nil, nil, ErrEndOfInput
 	}
 
-	_, _, err = agi.ReadWithContext(context.Background())
+	_, _, err = agi.ReadBatch(context.Background())
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
@@ -96,10 +94,10 @@ func TestInputAirGapHappy(t *testing.T) {
 	}
 	agi := newAirGapReader(i)
 
-	err := agi.ConnectWithContext(context.Background())
+	err := agi.Connect(context.Background())
 	assert.NoError(t, err)
 
-	outMsg, outAckFn, err := agi.ReadWithContext(context.Background())
+	outMsg, outAckFn, err := agi.ReadBatch(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, 1, outMsg.Len())
 	assert.Equal(t, "hello world", string(outMsg.Get(0).AsBytes()))
@@ -131,13 +129,10 @@ func TestBatchInputAirGapShutdown(t *testing.T) {
 	i := &fnBatchInput{}
 	agi := newAirGapBatchReader(i)
 
-	err := agi.WaitForClose(time.Millisecond * 5)
-	assert.EqualError(t, err, "action timed out")
-	assert.False(t, i.closed)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
 
-	agi.CloseAsync()
-	err = agi.WaitForClose(time.Millisecond * 5)
-	assert.NoError(t, err)
+	require.NoError(t, agi.Close(ctx))
 	assert.True(t, i.closed)
 }
 
@@ -152,24 +147,24 @@ func TestBatchInputAirGapSad(t *testing.T) {
 	}
 	agi := newAirGapBatchReader(i)
 
-	err := agi.ConnectWithContext(context.Background())
+	err := agi.Connect(context.Background())
 	assert.EqualError(t, err, "bad connect")
 
-	_, _, err = agi.ReadWithContext(context.Background())
+	_, _, err = agi.ReadBatch(context.Background())
 	assert.EqualError(t, err, "bad read")
 
 	i.read = func() (MessageBatch, AckFunc, error) {
 		return nil, nil, ErrNotConnected
 	}
 
-	_, _, err = agi.ReadWithContext(context.Background())
+	_, _, err = agi.ReadBatch(context.Background())
 	assert.Equal(t, component.ErrNotConnected, err)
 
 	i.read = func() (MessageBatch, AckFunc, error) {
 		return nil, nil, ErrEndOfInput
 	}
 
-	_, _, err = agi.ReadWithContext(context.Background())
+	_, _, err = agi.ReadBatch(context.Background())
 	assert.Equal(t, component.ErrTypeClosed, err)
 }
 
@@ -194,10 +189,10 @@ func TestBatchInputAirGapHappy(t *testing.T) {
 	}
 	agi := newAirGapBatchReader(i)
 
-	err := agi.ConnectWithContext(context.Background())
+	err := agi.Connect(context.Background())
 	assert.NoError(t, err)
 
-	outMsg, outAckFn, err := agi.ReadWithContext(context.Background())
+	outMsg, outAckFn, err := agi.ReadBatch(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, 3, outMsg.Len())
 	assert.Equal(t, "hello world", string(outMsg.Get(0).AsBytes()))

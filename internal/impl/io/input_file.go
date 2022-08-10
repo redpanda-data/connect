@@ -112,7 +112,7 @@ func newFileConsumer(conf input.FileConfig, log log.Modular) (*fileConsumer, err
 	}, nil
 }
 
-func (f *fileConsumer) ConnectWithContext(ctx context.Context) error {
+func (f *fileConsumer) Connect(ctx context.Context) error {
 	return nil
 }
 
@@ -165,7 +165,7 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 	return *f.scannerInfo, nil
 }
 
-func (f *fileConsumer) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (f *fileConsumer) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	for {
 		scannerInfo, err := f.getReader(ctx)
 		if err != nil {
@@ -213,20 +213,16 @@ func (f *fileConsumer) ReadWithContext(ctx context.Context) (message.Batch, inpu
 	}
 }
 
-func (f *fileConsumer) CloseAsync() {
-	go func() {
-		f.scannerMut.Lock()
-		if f.scannerInfo != nil {
-			f.scannerInfo.scanner.Close(context.Background())
-			f.scannerInfo = nil
-			f.paths = nil
-		}
-		f.scannerMut.Unlock()
-	}()
-}
+func (f *fileConsumer) Close(ctx context.Context) (err error) {
+	f.scannerMut.Lock()
+	defer f.scannerMut.Unlock()
 
-func (f *fileConsumer) WaitForClose(time.Duration) error {
-	return nil
+	if f.scannerInfo != nil {
+		err = f.scannerInfo.scanner.Close(ctx)
+		f.scannerInfo = nil
+		f.paths = nil
+	}
+	return
 }
 
 func (f *fileConsumer) getModTime(t time.Time) (modTimeUnix, modTime string) {

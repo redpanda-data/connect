@@ -3,7 +3,6 @@ package manager
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
@@ -45,13 +44,16 @@ func (w *outputWrapper) Connected() bool {
 	return w.output.Connected()
 }
 
-func (w *outputWrapper) CloseAsync() {
+func (w *outputWrapper) TriggerStopConsuming() {
 	w.closeOnce.Do(func() {
 		close(w.tranChan)
 	})
 }
 
-func (w *outputWrapper) WaitForClose(timeout time.Duration) error {
-	w.output.CloseAsync()
-	return w.output.WaitForClose(timeout)
+func (w *outputWrapper) TriggerCloseNow() {
+	w.output.TriggerCloseNow()
+}
+
+func (w *outputWrapper) WaitForClose(ctx context.Context) error {
+	return w.output.WaitForClose(ctx)
 }

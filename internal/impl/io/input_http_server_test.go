@@ -189,7 +189,7 @@ func TestHTTPBasic(t *testing.T) {
 		require.NoError(t, ts.Ack(tCtx, nil))
 	}
 
-	h.CloseAsync()
+	h.TriggerStopConsuming()
 }
 
 func getFreePort() (int, error) {
@@ -264,8 +264,8 @@ func TestHTTPServerLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, dummyData, message.GetAllBytes(msg)[0])
 
-	server.CloseAsync()
-	assert.NoError(t, server.WaitForClose(time.Second))
+	server.TriggerStopConsuming()
+	assert.NoError(t, server.WaitForClose(tCtx))
 
 	res, err := http.Post(testURL, "text/plain", bytes.NewReader(dummyData))
 	assert.NoError(t, err)
@@ -285,8 +285,8 @@ func TestHTTPServerLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, dummyData, message.GetAllBytes(msg)[0])
 
-	serverTwo.CloseAsync()
-	assert.NoError(t, serverTwo.WaitForClose(time.Second))
+	serverTwo.TriggerStopConsuming()
+	assert.NoError(t, serverTwo.WaitForClose(tCtx))
 }
 
 func TestHTTPServerMetadata(t *testing.T) {
@@ -305,8 +305,8 @@ func TestHTTPServerMetadata(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		server.CloseAsync()
-		assert.NoError(t, server.WaitForClose(time.Second))
+		server.TriggerStopConsuming()
+		assert.NoError(t, server.WaitForClose(tCtx))
 	}()
 
 	testServer := httptest.NewServer(reg.mut)
@@ -370,8 +370,8 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		server.CloseAsync()
-		assert.NoError(t, server.WaitForClose(time.Second))
+		server.TriggerStopConsuming()
+		assert.NoError(t, server.WaitForClose(tCtx))
 	}()
 
 	testServer := httptest.NewServer(reg.mut)
@@ -422,6 +422,9 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 func TestHTTPBadRequests(t *testing.T) {
 	t.Parallel()
 
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
 	mgr, err := manager.New(manager.NewResourceConfig(), manager.OptSetAPIReg(reg))
 	if err != nil {
@@ -447,13 +450,14 @@ func TestHTTPBadRequests(t *testing.T) {
 		t.Errorf("unexpected HTTP response code: %v != %v", exp, act)
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	h.TriggerStopConsuming()
+	assert.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPTimeout(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
 	t.Parallel()
 
 	reg := apiRegGorillaMutWrapper{mut: mux.NewRouter()}
@@ -486,8 +490,8 @@ func TestHTTPTimeout(t *testing.T) {
 		t.Errorf("Unexpected status code: %v != %v", exp, act)
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
+	h.TriggerStopConsuming()
+	if err := h.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }
@@ -560,8 +564,8 @@ rate_limit_resources:
 		t.Errorf("Unexpected status code: %v != %v", exp, act)
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
+	h.TriggerStopConsuming()
+	if err := h.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }
@@ -644,8 +648,8 @@ func TestHTTPServerWebsockets(t *testing.T) {
 	require.NoError(t, ts.Ack(tCtx, nil))
 	wg.Wait()
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
+	h.TriggerStopConsuming()
+	if err := h.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }
@@ -733,8 +737,8 @@ rate_limit_resources:
 		t.Errorf("Unexpected rate limit message: %v != %v", act, exp)
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
+	h.TriggerStopConsuming()
+	if err := h.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }
@@ -820,8 +824,8 @@ func TestHTTPSyncResponseHeaders(t *testing.T) {
 	}
 	require.NoError(t, ts.Ack(tCtx, nil))
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
+	h.TriggerStopConsuming()
+	if err := h.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 
@@ -950,8 +954,8 @@ func TestHTTPSyncResponseMultipart(t *testing.T) {
 	}
 	require.NoError(t, ts.Ack(tCtx, nil))
 
-	h.CloseAsync()
-	err = h.WaitForClose(time.Second * 5)
+	h.TriggerStopConsuming()
+	err = h.WaitForClose(tCtx)
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -1060,8 +1064,8 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 	}
 	require.NoError(t, ts.Ack(tCtx, nil))
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
+	h.TriggerStopConsuming()
+	if err := h.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 

@@ -24,26 +24,26 @@ func TestBloblangInterval(t *testing.T) {
 	b, err := newGenerateReader(mock.NewManager(), conf)
 	require.NoError(t, err)
 
-	err = b.ConnectWithContext(ctx)
+	err = b.Connect(ctx)
 	require.NoError(t, err)
 
 	// First read is immediate.
-	m, _, err := b.ReadWithContext(ctx)
+	m, _, err := b.ReadBatch(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, m.Len())
 	assert.Equal(t, "hello world", string(m.Get(0).AsBytes()))
 
 	// Second takes 50ms.
-	m, _, err = b.ReadWithContext(ctx)
+	m, _, err = b.ReadBatch(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, m.Len())
 	assert.Equal(t, "hello world", string(m.Get(0).AsBytes()))
 
 	// Third takes another 50ms and therefore times out.
-	_, _, err = b.ReadWithContext(ctx)
+	_, _, err = b.ReadBatch(ctx)
 	assert.EqualError(t, err, "action timed out")
 
-	b.CloseAsync()
+	require.NoError(t, b.Close(context.Background()))
 }
 
 func TestBloblangZeroInterval(t *testing.T) {
@@ -69,20 +69,20 @@ func TestBloblangCron(t *testing.T) {
 	assert.NotNil(t, b.schedule)
 	assert.NotNil(t, b.location)
 
-	err = b.ConnectWithContext(ctx)
+	err = b.Connect(ctx)
 	require.NoError(t, err)
 
 	// First takes 1s so.
-	m, _, err := b.ReadWithContext(ctx)
+	m, _, err := b.ReadBatch(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, m.Len())
 	assert.Equal(t, "hello world", string(m.Get(0).AsBytes()))
 
 	// Second takes another 1s and therefore times out.
-	_, _, err = b.ReadWithContext(ctx)
+	_, _, err = b.ReadBatch(ctx)
 	assert.EqualError(t, err, "action timed out")
 
-	b.CloseAsync()
+	require.NoError(t, b.Close(context.Background()))
 }
 
 func TestBloblangMapping(t *testing.T) {
@@ -98,11 +98,11 @@ func TestBloblangMapping(t *testing.T) {
 	b, err := newGenerateReader(mock.NewManager(), conf)
 	require.NoError(t, err)
 
-	err = b.ConnectWithContext(ctx)
+	err = b.Connect(ctx)
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		m, _, err := b.ReadWithContext(ctx)
+		m, _, err := b.ReadBatch(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 1, m.Len())
 		assert.Equal(t, fmt.Sprintf(`{"id":%v}`, i+1), string(m.Get(0).AsBytes()))
@@ -121,23 +121,23 @@ func TestBloblangRemaining(t *testing.T) {
 	b, err := newGenerateReader(mock.NewManager(), conf)
 	require.NoError(t, err)
 
-	err = b.ConnectWithContext(ctx)
+	err = b.Connect(ctx)
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		m, _, err := b.ReadWithContext(ctx)
+		m, _, err := b.ReadBatch(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 1, m.Len())
 		assert.Equal(t, "foobar", string(m.Get(0).AsBytes()))
 	}
 
-	_, _, err = b.ReadWithContext(ctx)
+	_, _, err = b.ReadBatch(ctx)
 	assert.EqualError(t, err, "type was closed")
 
-	_, _, err = b.ReadWithContext(ctx)
+	_, _, err = b.ReadBatch(ctx)
 	assert.EqualError(t, err, "type was closed")
 
-	_, _, err = b.ReadWithContext(ctx)
+	_, _, err = b.ReadBatch(ctx)
 	assert.EqualError(t, err, "type was closed")
 }
 
@@ -154,11 +154,11 @@ func TestBloblangRemainingBatched(t *testing.T) {
 	b, err := newGenerateReader(mock.NewManager(), conf)
 	require.NoError(t, err)
 
-	err = b.ConnectWithContext(ctx)
+	err = b.Connect(ctx)
 	require.NoError(t, err)
 
 	for i := 0; i < 5; i++ {
-		m, _, err := b.ReadWithContext(ctx)
+		m, _, err := b.ReadBatch(ctx)
 		require.NoError(t, err)
 		if i == 4 {
 			require.Equal(t, 1, m.Len())
@@ -169,13 +169,13 @@ func TestBloblangRemainingBatched(t *testing.T) {
 		assert.Equal(t, "foobar", string(m[0].AsBytes()))
 	}
 
-	_, _, err = b.ReadWithContext(ctx)
+	_, _, err = b.ReadBatch(ctx)
 	assert.EqualError(t, err, "type was closed")
 
-	_, _, err = b.ReadWithContext(ctx)
+	_, _, err = b.ReadBatch(ctx)
 	assert.EqualError(t, err, "type was closed")
 
-	_, _, err = b.ReadWithContext(ctx)
+	_, _, err = b.ReadBatch(ctx)
 	assert.EqualError(t, err, "type was closed")
 }
 
@@ -190,18 +190,17 @@ func TestBloblangUnbounded(t *testing.T) {
 	b, err := newGenerateReader(mock.NewManager(), conf)
 	require.NoError(t, err)
 
-	err = b.ConnectWithContext(ctx)
+	err = b.Connect(ctx)
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		m, _, err := b.ReadWithContext(ctx)
+		m, _, err := b.ReadBatch(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 1, m.Len())
 		assert.Equal(t, "foobar", string(m.Get(0).AsBytes()))
 	}
 
-	b.CloseAsync()
-	require.NoError(t, b.WaitForClose(time.Second))
+	require.NoError(t, b.Close(context.Background()))
 }
 
 func TestBloblangUnboundedEmpty(t *testing.T) {
@@ -215,16 +214,15 @@ func TestBloblangUnboundedEmpty(t *testing.T) {
 	b, err := newGenerateReader(mock.NewManager(), conf)
 	require.NoError(t, err)
 
-	err = b.ConnectWithContext(ctx)
+	err = b.Connect(ctx)
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		m, _, err := b.ReadWithContext(ctx)
+		m, _, err := b.ReadBatch(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 1, m.Len())
 		assert.Equal(t, "foobar", string(m.Get(0).AsBytes()))
 	}
 
-	b.CloseAsync()
-	require.NoError(t, b.WaitForClose(time.Second))
+	require.NoError(t, b.Close(context.Background()))
 }

@@ -171,7 +171,7 @@ func newAMQP09Writer(mgr bundle.NewManagement, conf output.AMQPConfig, log log.M
 	return &a, nil
 }
 
-func (a *amqp09Writer) ConnectWithContext(ctx context.Context) error {
+func (a *amqp09Writer) Connect(ctx context.Context) error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
 
@@ -233,7 +233,7 @@ func (a *amqp09Writer) disconnect() error {
 	return nil
 }
 
-func (a *amqp09Writer) WriteWithContext(wctx context.Context, msg message.Batch) error {
+func (a *amqp09Writer) WriteBatch(wctx context.Context, msg message.Batch) error {
 	a.connLock.RLock()
 	conn := a.conn
 	amqpChan := a.amqpChan
@@ -319,12 +319,8 @@ func (a *amqp09Writer) WriteWithContext(wctx context.Context, msg message.Batch)
 	})
 }
 
-func (a *amqp09Writer) CloseAsync() {
-	_ = a.disconnect()
-}
-
-func (a *amqp09Writer) WaitForClose(timeout time.Duration) error {
-	return nil
+func (a *amqp09Writer) Close(context.Context) error {
+	return a.disconnect()
 }
 
 // reDial connection to amqp with one or more fallback URLs

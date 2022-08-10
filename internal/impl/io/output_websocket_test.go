@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
@@ -17,6 +17,9 @@ import (
 )
 
 func TestWebsocketOutputBasic(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	expMsgs := []string{
 		"foo",
 		"bar",
@@ -57,23 +60,23 @@ func TestWebsocketOutputBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.ConnectWithContext(context.Background()); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	for _, msg := range expMsgs {
-		if err = m.WriteWithContext(context.Background(), message.QuickBatch([][]byte{[]byte(msg)})); err != nil {
+		if err = m.WriteBatch(context.Background(), message.QuickBatch([][]byte{[]byte(msg)})); err != nil {
 			t.Error(err)
 		}
 	}
 
-	m.CloseAsync()
-	if err = m.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, m.Close(ctx))
 }
 
 func TestWebsocketOutputClose(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	closeChan := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upgrader := websocket.Upgrader{}
@@ -100,20 +103,10 @@ func TestWebsocketOutputClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = m.ConnectWithContext(context.Background()); err != nil {
+	if err = m.Connect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		m.CloseAsync()
-		if cErr := m.WaitForClose(time.Second); cErr != nil {
-			t.Error(cErr)
-		}
-		wg.Done()
-	}()
-
-	wg.Wait()
+	require.NoError(t, m.Close(ctx))
 	close(closeChan)
 }

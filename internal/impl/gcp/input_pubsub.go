@@ -4,7 +4,6 @@ import (
 	"context"
 	"strconv"
 	"sync"
-	"time"
 
 	"cloud.google.com/go/pubsub"
 
@@ -90,7 +89,7 @@ func newGCPPubSubReader(conf input.GCPPubSubConfig, log log.Modular, stats metri
 	}, nil
 }
 
-func (c *gcpPubSubReader) ConnectWithContext(ignored context.Context) error {
+func (c *gcpPubSubReader) Connect(ignored context.Context) error {
 	c.subMut.Lock()
 	defer c.subMut.Unlock()
 	if c.subscription != nil {
@@ -134,7 +133,7 @@ func (c *gcpPubSubReader) ConnectWithContext(ignored context.Context) error {
 	return nil
 }
 
-func (c *gcpPubSubReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (c *gcpPubSubReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	c.subMut.Lock()
 	msgsChan := c.msgsChan
 	c.subMut.Unlock()
@@ -170,15 +169,13 @@ func (c *gcpPubSubReader) ReadWithContext(ctx context.Context) (message.Batch, i
 	}, nil
 }
 
-func (c *gcpPubSubReader) CloseAsync() {
+func (c *gcpPubSubReader) Close(ctx context.Context) error {
 	c.subMut.Lock()
+	defer c.subMut.Unlock()
+
 	if c.closeFunc != nil {
 		c.closeFunc()
 		c.closeFunc = nil
 	}
-	c.subMut.Unlock()
-}
-
-func (c *gcpPubSubReader) WaitForClose(time.Duration) error {
 	return nil
 }

@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -53,8 +54,9 @@ func TestSwitchCases(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		c.CloseAsync()
-		assert.NoError(t, c.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		defer done()
+		assert.NoError(t, c.Close(ctx))
 	}()
 
 	type testCase struct {
@@ -119,7 +121,7 @@ func TestSwitchCases(t *testing.T) {
 			for _, s := range test.input {
 				msg = append(msg, message.NewPart([]byte(s)))
 			}
-			msgs, res := c.ProcessMessage(msg)
+			msgs, res := c.ProcessBatch(context.Background(), msg)
 			require.Nil(t, res)
 
 			resStrs := []string{}
@@ -159,8 +161,9 @@ func TestSwitchError(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		c.CloseAsync()
-		assert.NoError(t, c.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		defer done()
+		assert.NoError(t, c.Close(ctx))
 	}()
 
 	msg := message.Batch{
@@ -169,7 +172,7 @@ func TestSwitchError(t *testing.T) {
 		message.NewPart([]byte(`{"id":"buz","content":"a real foobar"}`)),
 	}
 
-	msgs, res := c.ProcessMessage(msg)
+	msgs, res := c.ProcessBatch(context.Background(), msg)
 	require.Nil(t, res)
 
 	assert.Len(t, msgs, 1)
@@ -228,8 +231,9 @@ func BenchmarkSwitch10(b *testing.B) {
 	c, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(b, err)
 	defer func() {
-		c.CloseAsync()
-		assert.NoError(b, c.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		defer done()
+		assert.NoError(b, c.Close(ctx))
 	}()
 
 	msg := message.QuickBatch([][]byte{
@@ -261,7 +265,7 @@ func BenchmarkSwitch10(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		msgs, res := c.ProcessMessage(msg)
+		msgs, res := c.ProcessBatch(context.Background(), msg)
 		require.Nil(b, res)
 		assert.Equal(b, exp, message.GetAllBytes(msgs[0]))
 	}
@@ -304,8 +308,9 @@ func BenchmarkSwitch1(b *testing.B) {
 	c, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(b, err)
 	defer func() {
-		c.CloseAsync()
-		assert.NoError(b, c.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		defer done()
+		assert.NoError(b, c.Close(ctx))
 	}()
 
 	msgs := []message.Batch{
@@ -337,7 +342,7 @@ func BenchmarkSwitch1(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		resMsgs, res := c.ProcessMessage(msgs[i%len(msgs)])
+		resMsgs, res := c.ProcessBatch(context.Background(), msgs[i%len(msgs)])
 		require.Nil(b, res)
 		assert.Equal(b, [][]byte{exp[i%len(exp)]}, message.GetAllBytes(resMsgs[0]))
 	}

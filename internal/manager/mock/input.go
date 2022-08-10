@@ -1,8 +1,8 @@
 package mock
 
 import (
+	"context"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -37,14 +37,21 @@ func (f *Input) TransactionChan() <-chan message.Transaction {
 	return f.TChan
 }
 
-// CloseAsync does nothing.
-func (f *Input) CloseAsync() {
+// TriggerStopConsuming closes the input transaction channel.
+func (f *Input) TriggerStopConsuming() {
+	f.closeOnce.Do(func() {
+		close(f.TChan)
+	})
+}
+
+// TriggerCloseNow closes the input transaction channel.
+func (f *Input) TriggerCloseNow() {
 	f.closeOnce.Do(func() {
 		close(f.TChan)
 	})
 }
 
 // WaitForClose does nothing.
-func (f *Input) WaitForClose(time.Duration) error {
+func (f *Input) WaitForClose(ctx context.Context) error {
 	return nil
 }

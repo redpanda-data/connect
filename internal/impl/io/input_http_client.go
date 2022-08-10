@@ -6,7 +6,6 @@ import (
 	"io"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
@@ -152,7 +151,7 @@ func newHTTPClientInput(conf input.HTTPClientConfig, mgr bundle.NewManagement) (
 	}, nil
 }
 
-func (h *httpClientInput) ConnectWithContext(ctx context.Context) (err error) {
+func (h *httpClientInput) Connect(ctx context.Context) (err error) {
 	if !h.conf.Stream.Enabled {
 		return nil
 	}
@@ -189,7 +188,7 @@ func (h *httpClientInput) ConnectWithContext(ctx context.Context) (err error) {
 	return nil
 }
 
-func (h *httpClientInput) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (h *httpClientInput) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	if h.conf.Stream.Enabled {
 		return h.readStreamed(ctx)
 	}
@@ -277,18 +276,15 @@ func (h *httpClientInput) readNotStreamed(ctx context.Context) (message.Batch, i
 	}, nil
 }
 
-func (h *httpClientInput) CloseAsync() {
-	h.client.Close(context.Background())
-	go func() {
-		h.codecMut.Lock()
-		if h.codec != nil {
-			h.codec.Close(context.Background())
-			h.codec = nil
-		}
-		h.codecMut.Unlock()
-	}()
-}
+func (h *httpClientInput) Close(ctx context.Context) (err error) {
+	_ = h.client.Close(ctx)
 
-func (h *httpClientInput) WaitForClose(timeout time.Duration) error {
-	return nil
+	h.codecMut.Lock()
+	defer h.codecMut.Unlock()
+
+	if h.codec != nil {
+		err = h.codec.Close(ctx)
+		h.codec = nil
+	}
+	return
 }

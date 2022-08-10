@@ -8,7 +8,6 @@ import (
 	"io"
 	"os/exec"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -108,7 +107,7 @@ func newSubprocessReader(conf input.SubprocessConfig) (*subprocessReader, error)
 	return s, nil
 }
 
-func (s *subprocessReader) ConnectWithContext(ctx context.Context) error {
+func (s *subprocessReader) Connect(ctx context.Context) error {
 	if s.msgChan != nil {
 		return nil
 	}
@@ -186,7 +185,7 @@ func (s *subprocessReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (s *subprocessReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (s *subprocessReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msgChan, errChan := s.msgChan, s.errChan
 	if msgChan == nil {
 		return nil, nil, component.ErrNotConnected
@@ -220,10 +219,7 @@ func (s *subprocessReader) ReadWithContext(ctx context.Context) (message.Batch, 
 	return nil, nil, component.ErrTimeout
 }
 
-func (s *subprocessReader) CloseAsync() {
+func (s *subprocessReader) Close(ctx context.Context) (err error) {
 	s.close()
-}
-
-func (s *subprocessReader) WaitForClose(timeout time.Duration) error {
-	return nil
+	return
 }

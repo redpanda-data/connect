@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,17 +29,17 @@ func TestDedupe(t *testing.T) {
 	require.NoError(t, err)
 
 	msgIn := message.QuickBatch([][]byte{doc1})
-	msgOut, err := proc.ProcessMessage(msgIn)
+	msgOut, err := proc.ProcessBatch(context.Background(), msgIn)
 	require.NoError(t, err)
 	require.Len(t, msgOut, 1)
 
 	msgIn = message.QuickBatch([][]byte{doc2})
-	msgOut, err = proc.ProcessMessage(msgIn)
+	msgOut, err = proc.ProcessBatch(context.Background(), msgIn)
 	require.NoError(t, err)
 	require.Len(t, msgOut, 0)
 
 	msgIn = message.QuickBatch([][]byte{doc3})
-	msgOut, err = proc.ProcessMessage(msgIn)
+	msgOut, err = proc.ProcessBatch(context.Background(), msgIn)
 	require.NoError(t, err)
 	require.Len(t, msgOut, 1)
 
@@ -48,7 +49,7 @@ func TestDedupe(t *testing.T) {
 	require.NoError(t, err)
 
 	msgIn = message.QuickBatch([][]byte{doc1, doc2, doc3})
-	msgOut, err = proc.ProcessMessage(msgIn)
+	msgOut, err = proc.ProcessBatch(context.Background(), msgIn)
 	require.NoError(t, err)
 	require.Len(t, msgOut, 1)
 	assert.Equal(t, 2, msgOut[0].Len())
@@ -78,7 +79,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 
 	delete(mgr.Caches, "foocache")
 
-	msgs, err := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar")}))
+	msgs, err := proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar")}))
 	require.NoError(t, err)
 	assert.Len(t, msgs, 0)
 
@@ -90,7 +91,7 @@ func TestDedupeCacheErrors(t *testing.T) {
 
 	delete(mgr.Caches, "foocache")
 
-	msgs, err = proc.ProcessMessage(message.QuickBatch([][]byte{[]byte("foo"), []byte("bar")}))
+	msgs, err = proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte("foo"), []byte("bar")}))
 	require.NoError(t, err)
 	assert.Len(t, msgs, 1)
 }

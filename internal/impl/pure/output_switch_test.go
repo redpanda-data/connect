@@ -90,8 +90,8 @@ func TestSwitchNoConditions(t *testing.T) {
 		}
 	}
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 }
 
 func TestSwitchNoRetries(t *testing.T) {
@@ -152,11 +152,14 @@ func TestSwitchNoRetries(t *testing.T) {
 		}
 	}
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 }
 
 func TestSwitchBatchNoRetries(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	conf := output.NewConfig()
 	conf.Switch.RetryUntilSuccess = false
 
@@ -224,8 +227,8 @@ func TestSwitchBatchNoRetries(t *testing.T) {
 		`{"content":"hello world","id":3}`,
 	}, errContents)
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 }
 
 func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
@@ -311,8 +314,8 @@ func TestSwitchBatchNoRetriesBatchErr(t *testing.T) {
 		t.Fatal("Timed out responding to broker")
 	}
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 }
 
 func TestSwitchWithConditions(t *testing.T) {
@@ -409,8 +412,8 @@ func TestSwitchWithConditions(t *testing.T) {
 		}
 	}
 
-	s.CloseAsync()
-	assert.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 	wg.Wait()
 }
 
@@ -477,8 +480,8 @@ func TestSwitchError(t *testing.T) {
 		t.Error("Timed out responding to output")
 	}
 
-	s.CloseAsync()
-	assert.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 }
 
 func TestSwitchBatchSplit(t *testing.T) {
@@ -541,8 +544,8 @@ func TestSwitchBatchSplit(t *testing.T) {
 		t.Error("Timed out responding to output")
 	}
 
-	s.CloseAsync()
-	assert.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 }
 
 func TestSwitchBatchGroup(t *testing.T) {
@@ -610,11 +613,14 @@ func TestSwitchBatchGroup(t *testing.T) {
 		t.Error("Timed out responding to output")
 	}
 
-	s.CloseAsync()
-	assert.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 }
 
 func TestSwitchNoMatch(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
 
 	conf := output.NewConfig()
@@ -646,11 +652,14 @@ func TestSwitchNoMatch(t *testing.T) {
 		t.Fatal("Timed out responding to output")
 	}
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 }
 
 func TestSwitchNoMatchStrict(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOutputs := []*mock.OutputChanneled{{}, {}, {}}
 
 	conf := output.NewConfig()
@@ -683,8 +692,8 @@ func TestSwitchNoMatchStrict(t *testing.T) {
 		t.Fatal("Timed out responding to output")
 	}
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 }
 
 func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
@@ -779,8 +788,8 @@ func TestSwitchWithConditionsNoFallthrough(t *testing.T) {
 		}
 	}
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second*5))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 
 	wg.Wait()
 }
@@ -850,7 +859,7 @@ func TestSwitchAtLeastOnce(t *testing.T) {
 	}
 
 	close(readChan)
-	require.NoError(t, s.WaitForClose(time.Second*5))
+	require.NoError(t, s.WaitForClose(ctx))
 }
 
 func TestSwitchShutDownFromErrorResponse(t *testing.T) {
@@ -894,8 +903,8 @@ func TestSwitchShutDownFromErrorResponse(t *testing.T) {
 	}
 	require.NoError(t, ts.Ack(ctx, errors.New("test")))
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 
 	select {
 	case _, open := <-mockOutputs[0].TChan:
@@ -906,6 +915,9 @@ func TestSwitchShutDownFromErrorResponse(t *testing.T) {
 }
 
 func TestSwitchShutDownFromReceive(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOutputs := []*mock.OutputChanneled{{}, {}}
 
 	conf := output.NewConfig()
@@ -934,8 +946,8 @@ func TestSwitchShutDownFromReceive(t *testing.T) {
 		t.Fatal("Timed out waiting for msg rcv")
 	}
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 
 	select {
 	case _, open := <-mockOutputs[0].TChan:
@@ -946,6 +958,9 @@ func TestSwitchShutDownFromReceive(t *testing.T) {
 }
 
 func TestSwitchShutDownFromSend(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOutputs := []*mock.OutputChanneled{{}, {}}
 
 	conf := output.NewConfig()
@@ -967,8 +982,8 @@ func TestSwitchShutDownFromSend(t *testing.T) {
 		t.Fatal("Timed out waiting for msg send")
 	}
 
-	s.CloseAsync()
-	require.NoError(t, s.WaitForClose(time.Second))
+	s.TriggerCloseNow()
+	require.NoError(t, s.WaitForClose(ctx))
 
 	select {
 	case _, open := <-mockOutputs[0].TChan:

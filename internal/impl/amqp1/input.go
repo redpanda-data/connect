@@ -134,7 +134,7 @@ func newAMQP1Reader(conf input.AMQP1Config, log log.Modular) (*amqp1Reader, erro
 	return &a, nil
 }
 
-func (a *amqp1Reader) ConnectWithContext(ctx context.Context) error {
+func (a *amqp1Reader) Connect(ctx context.Context) error {
 	a.m.Lock()
 	defer a.m.Unlock()
 
@@ -212,7 +212,7 @@ func (a *amqp1Reader) disconnect(ctx context.Context) error {
 	return nil
 }
 
-func (a *amqp1Reader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (a *amqp1Reader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	a.m.RLock()
 	conn := a.conn
 	a.m.RUnlock()
@@ -274,14 +274,8 @@ func (a *amqp1Reader) ReadWithContext(ctx context.Context) (message.Batch, input
 	}, nil
 }
 
-// CloseAsync shuts down the AMQP1 input and stops processing requests.
-func (a *amqp1Reader) CloseAsync() {
-	_ = a.disconnect(context.Background())
-}
-
-// WaitForClose blocks until the AMQP1 input has closed down.
-func (a *amqp1Reader) WaitForClose(timeout time.Duration) error {
-	return nil
+func (a *amqp1Reader) Close(ctx context.Context) error {
+	return a.disconnect(ctx)
 }
 
 const (

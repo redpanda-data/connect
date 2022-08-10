@@ -490,7 +490,7 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 
 	require.NoError(t, output.Consume(trans))
 
-	require.Error(t, output.WaitForClose(time.Millisecond*100))
+	require.Error(t, output.WaitForClose(env.ctx))
 	if env.sleepAfterOutput > 0 {
 		time.Sleep(env.sleepAfterOutput)
 	}
@@ -498,14 +498,14 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 	return output
 }
 
-func closeConnectors(t testing.TB, input iinput.Streamed, output ioutput.Streamed) {
+func closeConnectors(t testing.TB, env *streamTestEnvironment, input iinput.Streamed, output ioutput.Streamed) {
 	if output != nil {
-		output.CloseAsync()
-		require.NoError(t, output.WaitForClose(time.Second*10))
+		output.TriggerCloseNow()
+		require.NoError(t, output.WaitForClose(env.ctx))
 	}
 	if input != nil {
-		input.CloseAsync()
-		require.NoError(t, input.WaitForClose(time.Second*10))
+		input.TriggerStopConsuming()
+		require.NoError(t, input.WaitForClose(env.ctx))
 	}
 }
 

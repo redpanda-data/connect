@@ -26,11 +26,11 @@ type mockNBWriter struct {
 	mut         sync.Mutex
 }
 
-func (m *mockNBWriter) ConnectWithContext(context.Context) error {
+func (m *mockNBWriter) Connect(context.Context) error {
 	return nil
 }
 
-func (m *mockNBWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (m *mockNBWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	m.mut.Lock()
 	defer m.mut.Unlock()
 
@@ -47,13 +47,10 @@ func (m *mockNBWriter) WriteWithContext(ctx context.Context, msg message.Batch) 
 	})
 }
 
-func (m *mockNBWriter) CloseAsync() {
+func (m *mockNBWriter) Close(ctx context.Context) error {
 	m.mut.Lock()
 	m.closeCalled = true
 	m.mut.Unlock()
-}
-
-func (m *mockNBWriter) WaitForClose(time.Duration) error {
 	if m.closeChan == nil {
 		return nil
 	}
@@ -91,8 +88,11 @@ func TestNotBatchedSingleMessages(t *testing.T) {
 		}
 	}
 
-	nbOut.CloseAsync()
-	assert.NoError(t, nbOut.WaitForClose(time.Second))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	nbOut.TriggerCloseNow()
+	assert.NoError(t, nbOut.WaitForClose(ctx))
 	assert.Equal(t, []string{
 		"foo0", "foo1", "foo2", "foo3", "foo4",
 	}, w.written)
@@ -127,8 +127,11 @@ func TestShutdown(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	nbOut.CloseAsync()
-	assert.EqualError(t, nbOut.WaitForClose(time.Millisecond*100), "action timed out")
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	done()
+
+	nbOut.TriggerCloseNow()
+	assert.EqualError(t, nbOut.WaitForClose(ctx), "context canceled")
 
 	select {
 	case w.closeChan <- errors.New("custom err"):
@@ -136,7 +139,10 @@ func TestShutdown(t *testing.T) {
 		t.Error("timed out")
 	}
 
-	assert.NoError(t, nbOut.WaitForClose(time.Millisecond*100))
+	ctx, done = context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	assert.NoError(t, nbOut.WaitForClose(ctx))
 	assert.Equal(t, []string{"foo"}, w.written)
 	w.mut.Lock()
 	assert.True(t, w.closeCalled)
@@ -176,8 +182,11 @@ func TestNotBatchedBreakOutMessages(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	nbOut.CloseAsync()
-	assert.NoError(t, nbOut.WaitForClose(time.Second))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	nbOut.TriggerCloseNow()
+	assert.NoError(t, nbOut.WaitForClose(ctx))
 	assert.Equal(t, []string{
 		"foo0", "foo1", "foo2", "foo3", "foo4",
 	}, w.written)
@@ -232,8 +241,11 @@ func TestNotBatchedBreakOutMessagesErrors(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	nbOut.CloseAsync()
-	assert.NoError(t, nbOut.WaitForClose(time.Second))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	nbOut.TriggerCloseNow()
+	assert.NoError(t, nbOut.WaitForClose(ctx))
 	assert.Equal(t, []string{
 		"foo0", "foo2", "foo4",
 	}, w.written)
@@ -288,8 +300,11 @@ func TestNotBatchedBreakOutMessagesErrorsAsync(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	nbOut.CloseAsync()
-	assert.NoError(t, nbOut.WaitForClose(time.Second))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	nbOut.TriggerCloseNow()
+	assert.NoError(t, nbOut.WaitForClose(ctx))
 	sort.Strings(w.written)
 	assert.Equal(t, []string{
 		"foo0", "foo2", "foo4",

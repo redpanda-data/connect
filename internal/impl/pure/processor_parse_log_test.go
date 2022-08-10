@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -57,7 +58,7 @@ func TestParseLogCases(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Run(test.name, func(tt *testing.T) {
-			msgsOut, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(test.input)}))
+			msgsOut, res := proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte(test.input)}))
 			if res != nil {
 				tt.Fatal(res)
 			}
@@ -101,7 +102,7 @@ func TestParseLogRFC5424(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			msgsOut, res := proc.ProcessMessage(message.QuickBatch([][]byte{[]byte(test.input)}))
+			msgsOut, res := proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte(test.input)}))
 			if res != nil {
 				tt.Fatal(res)
 			}

@@ -172,7 +172,7 @@ func TestSQSRetries(t *testing.T) {
 		[]byte("hello world 2"),
 		[]byte("hello world 3"),
 	})
-	require.NoError(t, w.WriteWithContext(tCtx, inMsg))
+	require.NoError(t, w.WriteBatch(tCtx, inMsg))
 
 	assert.Equal(t, []inEntries{
 		{
@@ -223,7 +223,7 @@ func TestSQSSendLimit(t *testing.T) {
 	for i := 0; i < 15; i++ {
 		inMsg = append(inMsg, message.NewPart([]byte(fmt.Sprintf("hello world %v", i+1))))
 	}
-	require.NoError(t, w.WriteWithContext(tCtx, inMsg))
+	require.NoError(t, w.WriteBatch(tCtx, inMsg))
 
 	assert.Equal(t, []inEntries{
 		{

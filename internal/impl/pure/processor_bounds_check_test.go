@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -71,7 +72,7 @@ func TestBoundsCheck(t *testing.T) {
 
 	for _, parts := range goodParts {
 		msg := message.QuickBatch(parts)
-		msgs, _ := proc.ProcessMessage(msg)
+		msgs, _ := proc.ProcessBatch(context.Background(), msg)
 		require.Len(t, msgs, 1)
 		require.Equal(t, len(parts), msgs[0].Len())
 		for i, p := range parts {
@@ -80,7 +81,7 @@ func TestBoundsCheck(t *testing.T) {
 	}
 
 	for _, parts := range badParts {
-		msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+		msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
 		assert.Len(t, msgs, 0)
 		assert.Nil(t, res)
 	}

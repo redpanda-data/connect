@@ -1,7 +1,7 @@
 package pure
 
 import (
-	"time"
+	"context"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -40,16 +40,13 @@ type syncResponseProc struct {
 	log log.Modular
 }
 
-func (s *syncResponseProc) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+func (s *syncResponseProc) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	if err := transaction.SetAsResponse(msg); err != nil {
 		s.log.Debugf("Failed to store message as a sync response: %v\n", err)
 	}
 	return []message.Batch{msg}, nil
 }
 
-func (s *syncResponseProc) CloseAsync() {
-}
-
-func (s *syncResponseProc) WaitForClose(timeout time.Duration) error {
+func (s *syncResponseProc) Close(context.Context) error {
 	return nil
 }

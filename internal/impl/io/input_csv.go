@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -213,16 +212,17 @@ func optCSVSetLazyQuotes(lazyQuotes bool) func(r *csvReader) {
 
 //------------------------------------------------------------------------------
 
-func (r *csvReader) closeHandle() {
+func (r *csvReader) closeHandle() (err error) {
 	if r.handle != nil {
 		if closer, ok := r.handle.(io.ReadCloser); ok {
-			closer.Close()
+			err = closer.Close()
 		}
 		r.handle = nil
 	}
+	return
 }
 
-func (r *csvReader) ConnectWithContext(ctx context.Context) error {
+func (r *csvReader) Connect(ctx context.Context) error {
 	r.mut.Lock()
 	defer r.mut.Unlock()
 	if r.scanner != nil {
@@ -263,7 +263,7 @@ func (r *csvReader) readNext(reader *csv.Reader) ([]string, error) {
 	return records, nil
 }
 
-func (r *csvReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (r *csvReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	r.mut.Lock()
 	scanner := r.scanner
 	headers := r.headers
@@ -321,15 +321,10 @@ func (r *csvReader) ReadWithContext(ctx context.Context) (message.Batch, input.A
 	return msg, func(context.Context, error) error { return nil }, nil
 }
 
-func (r *csvReader) CloseAsync() {
-	go func() {
-		r.mut.Lock()
-		r.onClose(context.Background())
-		r.closeHandle()
-		r.mut.Unlock()
-	}()
-}
+func (r *csvReader) Close(ctx context.Context) error {
+	r.mut.Lock()
+	defer r.mut.Unlock()
 
-func (r *csvReader) WaitForClose(timeout time.Duration) error {
-	return nil
+	r.onClose(ctx)
+	return r.closeHandle()
 }

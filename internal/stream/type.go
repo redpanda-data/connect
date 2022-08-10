@@ -2,12 +2,13 @@ package stream
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"net/http"
 	"runtime/pprof"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/buffer"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -15,8 +16,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/pipeline"
 )
-
-//------------------------------------------------------------------------------
 
 // Type creates and manages the lifetime of a Benthos stream.
 type Type struct {
@@ -133,7 +132,7 @@ func (t *Type) start() (err error) {
 
 	go func(out output.Streamed) {
 		for {
-			if err := out.WaitForClose(time.Second); err == nil {
+			if err := out.WaitForClose(context.Background()); err == nil {
 				t.onClose()
 				return
 			}
@@ -147,172 +146,114 @@ func (t *Type) start() (err error) {
 // closing the input layer and waiting for all other layers to terminate by
 // proxy. This should guarantee that all in-flight and buffered data is resolved
 // before shutting down.
-func (t *Type) StopGracefully(timeout time.Duration) (err error) {
-	t.inputLayer.CloseAsync()
-	started := time.Now()
-	if err = t.inputLayer.WaitForClose(timeout); err != nil {
+func (t *Type) StopGracefully(ctx context.Context) (err error) {
+	t.inputLayer.TriggerStopConsuming()
+	if err = t.inputLayer.WaitForClose(ctx); err != nil {
 		return
 	}
-
-	var remaining time.Duration
 
 	// If we have a buffer then wait right here. We want to try and allow the
 	// buffer to empty out before prompting the other layers to shut down.
 	if t.bufferLayer != nil {
-		t.bufferLayer.StopConsuming()
-		remaining = timeout - time.Since(started)
-		if remaining < 0 {
-			return component.ErrTimeout
-		}
-		if err = t.bufferLayer.WaitForClose(remaining); err != nil {
+		t.bufferLayer.TriggerStopConsuming()
+		if err = t.bufferLayer.WaitForClose(ctx); err != nil {
 			return
 		}
 	}
 
 	// After this point we can start closing the remaining components.
 	if t.pipelineLayer != nil {
-		t.pipelineLayer.CloseAsync()
-		remaining = timeout - time.Since(started)
-		if remaining < 0 {
-			return component.ErrTimeout
-		}
-		if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
+		if err = t.pipelineLayer.WaitForClose(ctx); err != nil {
 			return
 		}
 	}
 
-	t.outputLayer.CloseAsync()
-	remaining = timeout - time.Since(started)
-	if remaining < 0 {
-		return component.ErrTimeout
-	}
-	if err = t.outputLayer.WaitForClose(remaining); err != nil {
+	if err = t.outputLayer.WaitForClose(ctx); err != nil {
 		return
 	}
-
-	return nil
-}
-
-// StopOrdered attempts to close all components of the stream in the order of
-// positions within the stream, this allows data to flush all the way through
-// the pipeline under certain circumstances but is less graceful than
-// stopGracefully, which should be attempted first.
-func (t *Type) StopOrdered(timeout time.Duration) (err error) {
-	t.inputLayer.CloseAsync()
-	started := time.Now()
-	if err = t.inputLayer.WaitForClose(timeout); err != nil {
-		return
-	}
-
-	var remaining time.Duration
-
-	if t.bufferLayer != nil {
-		t.bufferLayer.CloseAsync()
-		remaining = timeout - time.Since(started)
-		if remaining < 0 {
-			return component.ErrTimeout
-		}
-		if err = t.bufferLayer.WaitForClose(remaining); err != nil {
-			return
-		}
-	}
-
-	if t.pipelineLayer != nil {
-		t.pipelineLayer.CloseAsync()
-		remaining = timeout - time.Since(started)
-		if remaining < 0 {
-			return component.ErrTimeout
-		}
-		if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
-			return
-		}
-	}
-
-	t.outputLayer.CloseAsync()
-	remaining = timeout - time.Since(started)
-	if remaining < 0 {
-		return component.ErrTimeout
-	}
-	if err = t.outputLayer.WaitForClose(remaining); err != nil {
-		return
-	}
-
 	return nil
 }
 
 // StopUnordered attempts to close all components in parallel without allowing
 // the stream to gracefully wind down in the order of component layers. This
 // should only be attempted if both stopGracefully and stopOrdered failed.
-func (t *Type) StopUnordered(timeout time.Duration) (err error) {
-	t.inputLayer.CloseAsync()
+func (t *Type) StopUnordered(ctx context.Context) (err error) {
+	t.inputLayer.TriggerCloseNow()
 	if t.bufferLayer != nil {
-		t.bufferLayer.CloseAsync()
+		t.bufferLayer.TriggerCloseNow()
 	}
 	if t.pipelineLayer != nil {
-		t.pipelineLayer.CloseAsync()
+		t.pipelineLayer.TriggerCloseNow()
 	}
-	t.outputLayer.CloseAsync()
+	t.outputLayer.TriggerCloseNow()
 
-	started := time.Now()
-	if err = t.inputLayer.WaitForClose(timeout); err != nil {
+	if err = t.inputLayer.WaitForClose(ctx); err != nil {
 		return
 	}
 
-	var remaining time.Duration
-
 	if t.bufferLayer != nil {
-		remaining = timeout - time.Since(started)
-		if remaining < 0 {
-			return component.ErrTimeout
-		}
-		if err = t.bufferLayer.WaitForClose(remaining); err != nil {
+		if err = t.bufferLayer.WaitForClose(ctx); err != nil {
 			return
 		}
 	}
 
 	if t.pipelineLayer != nil {
-		remaining = timeout - time.Since(started)
-		if remaining < 0 {
-			return component.ErrTimeout
-		}
-		if err = t.pipelineLayer.WaitForClose(remaining); err != nil {
+		if err = t.pipelineLayer.WaitForClose(ctx); err != nil {
 			return
 		}
 	}
 
-	remaining = timeout - time.Since(started)
-	if remaining < 0 {
-		return component.ErrTimeout
-	}
-	if err = t.outputLayer.WaitForClose(remaining); err != nil {
+	if err = t.outputLayer.WaitForClose(ctx); err != nil {
 		return
 	}
-
 	return nil
 }
 
 // Stop attempts to close the stream within the specified timeout period.
-// Initially the attempt is graceful, but as the timeout draws close the attempt
-// becomes progressively less graceful.
-func (t *Type) Stop(timeout time.Duration) error {
-	tOutUnordered := timeout / 4
-	tOutGraceful := timeout - tOutUnordered
+// Initially the attempt is graceful, but if the context contains a deadline and
+// it draws near the attempt becomes progressively less graceful.
+//
+// If the context is cancelled an error is returned _after_ asynchronously
+// instructing the remaining stream components to terminate ungracefully.
+func (t *Type) Stop(ctx context.Context) error {
+	ctxCloseGraceful := ctx
 
-	err := t.StopGracefully(tOutGraceful)
+	// If the provided context has a known deadline then we calculate a period
+	// of time whereby it would be appropriate to abandon graceful termination
+	// and attempt ungraceful termination within that deadline.
+	if deadline, ok := ctx.Deadline(); ok {
+		// The calculated time we're willing to wait for graceful termination is
+		// three quarters of the overall deadline.
+		tUntil := time.Until(deadline)
+		tUntil -= (tUntil / 4)
+
+		if tUntil > time.Second {
+			var gDone func()
+			ctxCloseGraceful, gDone = context.WithTimeout(ctx, tUntil)
+			defer gDone()
+		}
+	}
+
+	// Attempt graceful termination by instructing the input to stop consuming
+	// and for all downstream components to finish.
+	err := t.StopGracefully(ctxCloseGraceful)
 	if err == nil {
 		return nil
 	}
-	if err == component.ErrTimeout {
+	if errors.Is(err, context.Canceled) {
 		t.manager.Logger().Infoln("Unable to fully drain buffered messages within target time.")
 	} else {
 		t.manager.Logger().Errorf("Encountered error whilst shutting down: %v\n", err)
 	}
 
-	err = t.StopUnordered(tOutUnordered)
+	// If graceful termination failed then call unordered termination, if the
+	// overall ctx is already cancelled this will still trigger asynchronous
+	// clean up of resources, which is a best attempt.
+	err = t.StopUnordered(ctx)
 	if err == nil {
 		return nil
 	}
-	if err == component.ErrTimeout {
+	if errors.Is(err, context.Canceled) {
 		t.manager.Logger().Errorln("Failed to stop stream gracefully within target time.")
 
 		dumpBuf := bytes.NewBuffer(nil)
@@ -325,5 +266,3 @@ func (t *Type) Stop(timeout time.Duration) error {
 
 	return err
 }
-
-//------------------------------------------------------------------------------

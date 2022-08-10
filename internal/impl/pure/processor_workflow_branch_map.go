@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/quipo/dependencysolver"
 
@@ -76,16 +75,9 @@ func (w *workflowBranchMap) Lock() (dag [][]string, branches map[string]*Branch,
 	return
 }
 
-func (w *workflowBranchMap) CloseAsync() {
-	for _, b := range w.staticBranches {
-		b.CloseAsync()
-	}
-}
-
-func (w *workflowBranchMap) WaitForClose(timeout time.Duration) error {
-	stopBy := time.Now().Add(timeout)
+func (w *workflowBranchMap) Close(ctx context.Context) error {
 	for _, c := range w.staticBranches {
-		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
+		if err := c.Close(ctx); err != nil {
 			return err
 		}
 	}

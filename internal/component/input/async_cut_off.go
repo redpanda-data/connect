@@ -2,7 +2,6 @@ package input
 
 import (
 	"context"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -19,8 +18,9 @@ type asyncCutOffMsg struct {
 type AsyncCutOff struct {
 	msgChan chan asyncCutOffMsg
 	errChan chan error
-	ctx     context.Context
-	close   func()
+
+	ctx   context.Context
+	close func()
 
 	r Async
 }
@@ -39,17 +39,17 @@ func NewAsyncCutOff(r Async) *AsyncCutOff {
 
 //------------------------------------------------------------------------------
 
-// ConnectWithContext attempts to establish a connection to the source, if
+// Connect attempts to establish a connection to the source, if
 // unsuccessful returns an error. If the attempt is successful (or not
 // necessary) returns nil.
-func (c *AsyncCutOff) ConnectWithContext(ctx context.Context) error {
-	return c.r.ConnectWithContext(ctx)
+func (c *AsyncCutOff) Connect(ctx context.Context) error {
+	return c.r.Connect(ctx)
 }
 
-// ReadWithContext attempts to read a new message from the source.
-func (c *AsyncCutOff) ReadWithContext(ctx context.Context) (message.Batch, AsyncAckFn, error) {
+// ReadBatch attempts to read a new message from the source.
+func (c *AsyncCutOff) ReadBatch(ctx context.Context) (message.Batch, AsyncAckFn, error) {
 	go func() {
-		msg, ackFn, err := c.r.ReadWithContext(ctx)
+		msg, ackFn, err := c.r.ReadBatch(ctx)
 		if err == nil {
 			select {
 			case c.msgChan <- asyncCutOffMsg{
@@ -71,20 +71,19 @@ func (c *AsyncCutOff) ReadWithContext(ctx context.Context) (message.Batch, Async
 	case e := <-c.errChan:
 		return nil, nil, e
 	case <-ctx.Done():
-		c.r.CloseAsync()
+		go func() {
+			_ = c.r.Close(context.Background())
+		}()
 	case <-c.ctx.Done():
 	}
 	return nil, nil, component.ErrTypeClosed
 }
 
-// CloseAsync triggers the asynchronous closing of the reader.
-func (c *AsyncCutOff) CloseAsync() {
-	c.r.CloseAsync()
+// Close triggers the asynchronous closing of the reader.
+func (c *AsyncCutOff) Close(ctx context.Context) error {
+	go func() {
+		_ = c.r.Close(context.Background())
+	}()
 	c.close()
-}
-
-// WaitForClose blocks until either the reader is finished closing or a timeout
-// occurs.
-func (c *AsyncCutOff) WaitForClose(tout time.Duration) error {
-	return nil // We don't block here.
+	return nil
 }

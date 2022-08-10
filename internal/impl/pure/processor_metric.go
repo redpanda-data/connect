@@ -1,12 +1,12 @@
 package pure
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -316,7 +316,7 @@ func (m *metricProcessor) handleTimer(val string, index int, msg message.Batch) 
 	return nil
 }
 
-func (m *metricProcessor) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+func (m *metricProcessor) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		value := m.value.String(i, msg)
 		if err := m.handler(value, i, msg); err != nil {
@@ -327,9 +327,6 @@ func (m *metricProcessor) ProcessMessage(msg message.Batch) ([]message.Batch, er
 	return []message.Batch{msg}, nil
 }
 
-func (m *metricProcessor) CloseAsync() {
-}
-
-func (m *metricProcessor) WaitForClose(timeout time.Duration) error {
+func (m *metricProcessor) Close(ctx context.Context) error {
 	return nil
 }

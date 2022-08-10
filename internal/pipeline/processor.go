@@ -3,7 +3,6 @@ package pipeline
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -11,8 +10,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
-
-//------------------------------------------------------------------------------
 
 // Processor is a pipeline that supports both Consumer and Producer interfaces.
 // The processor will read from a source, perform some processing, and then
@@ -42,18 +39,20 @@ func NewProcessor(msgProcessors ...processor.V1) *Processor {
 
 // loop is the processing loop of this pipeline.
 func (p *Processor) loop() {
+	closeNowCtx, cnDone := p.shutSig.CloseNowCtx(context.Background())
+	defer cnDone()
+
 	defer func() {
 		// Signal all children to close.
 		for _, c := range p.msgProcessors {
-			c.CloseAsync()
+			if err := c.Close(closeNowCtx); err != nil {
+				break
+			}
 		}
 
 		close(p.messagesOut)
 		p.shutSig.ShutdownComplete()
 	}()
-
-	closeCtx, done := p.shutSig.CloseAtLeisureCtx(context.Background())
-	defer done()
 
 	var open bool
 	for !p.shutSig.ShouldCloseAtLeisure() {
@@ -63,20 +62,20 @@ func (p *Processor) loop() {
 			if !open {
 				return
 			}
-		case <-p.shutSig.CloseAtLeisureChan():
+		case <-p.shutSig.CloseNowChan():
 			return
 		}
 
-		resultMsgs, resultRes := processor.ExecuteAll(p.msgProcessors, tran.Payload)
+		resultMsgs, resultRes := processor.ExecuteAll(closeNowCtx, p.msgProcessors, tran.Payload)
 		if len(resultMsgs) == 0 {
-			if err := tran.Ack(closeCtx, resultRes); err != nil && closeCtx.Err() != nil {
+			if err := tran.Ack(closeNowCtx, resultRes); err != nil && closeNowCtx.Err() != nil {
 				return
 			}
 			continue
 		}
 
 		if len(resultMsgs) > 1 {
-			p.dispatchMessages(closeCtx, resultMsgs, tran.Ack)
+			p.dispatchMessages(closeNowCtx, resultMsgs, tran.Ack)
 		} else {
 			select {
 			case p.messagesOut <- message.NewTransactionFunc(resultMsgs[0], tran.Ack):
@@ -147,32 +146,19 @@ func (p *Processor) TransactionChan() <-chan message.Transaction {
 	return p.messagesOut
 }
 
-// CloseAsync shuts down the pipeline and stops processing messages.
-func (p *Processor) CloseAsync() {
-	p.shutSig.CloseAtLeisure()
-
-	// Signal all children to close.
-	for _, c := range p.msgProcessors {
-		c.CloseAsync()
-	}
+// TriggerCloseNow signals that the processor pipeline should close immediately.
+func (p *Processor) TriggerCloseNow() {
+	p.shutSig.CloseNow()
 }
 
-// WaitForClose blocks until the StackBuffer output has closed down.
-func (p *Processor) WaitForClose(timeout time.Duration) error {
-	stopBy := time.Now().Add(timeout)
+// WaitForClose blocks until the component has closed down or the context is
+// cancelled. Closing occurs either when the input transaction channel is closed
+// and messages are flushed (and acked), or when CloseNowAsync is called.
+func (p *Processor) WaitForClose(ctx context.Context) error {
 	select {
 	case <-p.shutSig.HasClosedChan():
-	case <-time.After(time.Until(stopBy)):
-		return component.ErrTimeout
-	}
-
-	// Wait for all processors to close.
-	for _, c := range p.msgProcessors {
-		if err := c.WaitForClose(time.Until(stopBy)); err != nil {
-			return err
-		}
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

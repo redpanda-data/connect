@@ -1,6 +1,7 @@
 package io_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -14,6 +15,9 @@ import (
 )
 
 func TestHTTPServerOutputBasic(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	nTestLoops := 10
 
 	conf := output.NewConfig()
@@ -71,13 +75,14 @@ func TestHTTPServerOutputBasic(t *testing.T) {
 		}
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }
 
 func TestHTTPServerOutputBadRequests(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	conf := output.NewConfig()
 	conf.Type = "http_server"
 	conf.HTTPServer.Address = "localhost:1236"
@@ -95,10 +100,8 @@ func TestHTTPServerOutputBadRequests(t *testing.T) {
 
 	<-time.After(time.Millisecond * 100)
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 
 	_, err = http.Get("http://localhost:1236/testpost")
 	if err == nil {
@@ -107,6 +110,9 @@ func TestHTTPServerOutputBadRequests(t *testing.T) {
 }
 
 func TestHTTPServerOutputTimeout(t *testing.T) {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	conf := output.NewConfig()
 	conf.Type = "http_server"
 	conf.HTTPServer.Address = "localhost:1235"
@@ -135,8 +141,6 @@ func TestHTTPServerOutputTimeout(t *testing.T) {
 		t.Errorf("Unexpected status code: %v != %v", exp, act)
 	}
 
-	h.CloseAsync()
-	if err := h.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	h.TriggerCloseNow()
+	require.NoError(t, h.WaitForClose(ctx))
 }

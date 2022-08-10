@@ -1,7 +1,7 @@
 package input
 
 import (
-	"time"
+	"context"
 
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -59,14 +59,21 @@ func (i *WithPipeline) Connected() bool {
 
 //------------------------------------------------------------------------------
 
-// CloseAsync triggers a closure of this object but does not block.
-func (i *WithPipeline) CloseAsync() {
-	i.in.CloseAsync()
-	i.pipe.CloseAsync()
+// TriggerStopConsuming instructs the input to start shutting down resources
+// once all pending messages are delivered and acknowledged. This call does
+// not block.
+func (i *WithPipeline) TriggerStopConsuming() {
+	i.in.TriggerStopConsuming()
 }
 
-// WaitForClose is a blocking call to wait until the object has finished closing
-// down and cleaning up resources.
-func (i *WithPipeline) WaitForClose(timeout time.Duration) error {
-	return i.pipe.WaitForClose(timeout)
+// TriggerCloseNow triggers the shut down of this component but should not block
+// the calling goroutine.
+func (i *WithPipeline) TriggerCloseNow() {
+	i.in.TriggerCloseNow()
+}
+
+// WaitForClose is a blocking call to wait until the component has finished
+// shutting down and cleaning up resources.
+func (i *WithPipeline) WaitForClose(ctx context.Context) error {
+	return i.pipe.WaitForClose(ctx)
 }

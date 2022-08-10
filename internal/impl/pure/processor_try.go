@@ -3,7 +3,6 @@ package pure
 import (
 	"context"
 	"strconv"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -105,7 +104,7 @@ func (p *tryProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg messa
 	})
 
 	var res error
-	if resultMsgs, res = processor.ExecuteTryAll(p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
+	if resultMsgs, res = processor.ExecuteTryAll(ctx, p.children, resultMsgs...); res != nil || len(resultMsgs) == 0 {
 		return nil, res
 	}
 
@@ -126,14 +125,7 @@ func (p *tryProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg messa
 
 func (p *tryProc) Close(ctx context.Context) error {
 	for _, c := range p.children {
-		c.CloseAsync()
-	}
-	deadline, exists := ctx.Deadline()
-	if !exists {
-		deadline = time.Now().Add(time.Second * 5)
-	}
-	for _, c := range p.children {
-		if err := c.WaitForClose(time.Until(deadline)); err != nil {
+		if err := c.Close(ctx); err != nil {
 			return err
 		}
 	}

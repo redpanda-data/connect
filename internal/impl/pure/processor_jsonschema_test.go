@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -87,7 +88,7 @@ func TestJSONSchemaExternalSchemaCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			msgs, _ := c.ProcessMessage(message.QuickBatch(tt.arg))
+			msgs, _ := c.ProcessBatch(context.Background(), message.QuickBatch(tt.arg))
 
 			if len(msgs) != 1 {
 				t.Fatalf("Test '%v' did not succeed", tt.name)
@@ -176,7 +177,7 @@ func TestJSONSchemaInlineSchemaCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			msgs, _ := c.ProcessMessage(message.QuickBatch(tt.arg))
+			msgs, _ := c.ProcessBatch(context.Background(), message.QuickBatch(tt.arg))
 
 			if len(msgs) != 1 {
 				t.Fatalf("Test '%v' did not succeed", tt.name)
@@ -278,7 +279,7 @@ func TestJSONSchemaLowercaseDescriptionCheck(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			msgs, _ := c.ProcessMessage(message.QuickBatch(tt.arg))
+			msgs, _ := c.ProcessBatch(context.Background(), message.QuickBatch(tt.arg))
 
 			if len(msgs) != 1 {
 				t.Fatalf("Test '%v' did not succeed", tt.name)

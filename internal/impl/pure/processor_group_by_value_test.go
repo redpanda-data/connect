@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -57,7 +58,7 @@ func TestGroupByValueBasic(t *testing.T) {
 		[]byte(`{"foo":0,"bar":7}`),
 		[]byte(`{"foo":1,"bar":8}`),
 	})
-	msgs, res := proc.ProcessMessage(input)
+	msgs, res := proc.ProcessBatch(context.Background(), input)
 	if res != nil {
 		t.Fatal(res)
 	}

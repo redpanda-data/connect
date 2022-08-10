@@ -1,8 +1,8 @@
 package tracing
 
 import (
+	"context"
 	"sync/atomic"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -58,12 +58,12 @@ func (t *tracedOutput) Connected() bool {
 	return t.wrapped.Connected()
 }
 
-func (t *tracedOutput) CloseAsync() {
-	t.wrapped.CloseAsync()
+func (t *tracedOutput) TriggerCloseNow() {
+	t.wrapped.TriggerCloseNow()
 }
 
-func (t *tracedOutput) WaitForClose(timeout time.Duration) error {
-	err := t.wrapped.WaitForClose(timeout)
+func (t *tracedOutput) WaitForClose(ctx context.Context) error {
+	err := t.wrapped.WaitForClose(ctx)
 	t.shutSig.CloseNow()
 	return err
 }

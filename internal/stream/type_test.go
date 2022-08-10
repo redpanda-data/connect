@@ -13,6 +13,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager"
+	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
@@ -31,7 +32,10 @@ func TestTypeConstruction(t *testing.T) {
 	strm, err := stream.New(conf, newMgr)
 	require.NoError(t, err)
 
-	assert.NoError(t, strm.Stop(time.Minute))
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
+	assert.NoError(t, strm.Stop(ctx))
 
 	newMgr, err = manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
@@ -39,7 +43,43 @@ func TestTypeConstruction(t *testing.T) {
 	strm, err = stream.New(conf, newMgr)
 	require.NoError(t, err)
 
-	require.NoError(t, strm.Stop(time.Minute))
+	require.NoError(t, strm.Stop(ctx))
+}
+
+func TestStreamCloseUngraceful(t *testing.T) {
+	t.Parallel()
+
+	conf := stream.NewConfig()
+	conf.Input.Type = "generate"
+	conf.Input.Generate.Mapping = `root = "hello world"`
+	conf.Input.Generate.Interval = ""
+	conf.Output.Type = "inproc"
+	conf.Output.Inproc = "foo"
+
+	newMgr, err := manager.New(manager.NewResourceConfig())
+	require.NoError(t, err)
+
+	strm, err := stream.New(conf, newMgr)
+	require.NoError(t, err)
+
+	tChan, err := newMgr.GetPipe("foo")
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
+	var tTmp message.Transaction
+	select {
+	case tTmp = <-tChan:
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	require.Len(t, tTmp.Payload, 1)
+
+	pBytes := tTmp.Payload[0].AsBytes()
+	assert.Equal(t, "hello world", string(pBytes))
+
+	assert.Error(t, strm.Stop(ctx))
 }
 
 func TestTypeCloseGracefully(t *testing.T) {
@@ -52,13 +92,16 @@ func TestTypeCloseGracefully(t *testing.T) {
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
 	strm, err := stream.New(conf, newMgr)
 	require.NoError(t, err)
-	assert.NoError(t, strm.StopGracefully(time.Minute))
+	assert.NoError(t, strm.StopGracefully(ctx))
 
 	strm, err = stream.New(conf, newMgr)
 	require.NoError(t, err)
-	assert.NoError(t, strm.StopGracefully(time.Minute))
+	assert.NoError(t, strm.StopGracefully(ctx))
 
 	conf.Pipeline.Processors = []processor.Config{
 		processor.NewConfig(),
@@ -66,34 +109,7 @@ func TestTypeCloseGracefully(t *testing.T) {
 
 	strm, err = stream.New(conf, newMgr)
 	require.NoError(t, err)
-	assert.NoError(t, strm.StopGracefully(time.Minute))
-}
-
-func TestTypeCloseOrdered(t *testing.T) {
-	conf := stream.NewConfig()
-	conf.Input.Type = "generate"
-	conf.Input.Generate.Mapping = "root = {}"
-	conf.Buffer.Type = "memory"
-	conf.Output.Type = "drop"
-
-	newMgr, err := manager.New(manager.NewResourceConfig())
-	require.NoError(t, err)
-
-	strm, err := stream.New(conf, newMgr)
-	require.NoError(t, err)
-	assert.NoError(t, strm.StopOrdered(time.Minute))
-
-	strm, err = stream.New(conf, newMgr)
-	require.NoError(t, err)
-	assert.NoError(t, strm.StopOrdered(time.Minute))
-
-	conf.Pipeline.Processors = []processor.Config{
-		processor.NewConfig(),
-	}
-
-	strm, err = stream.New(conf, newMgr)
-	require.NoError(t, err)
-	assert.NoError(t, strm.StopOrdered(time.Minute))
+	assert.NoError(t, strm.StopGracefully(ctx))
 }
 
 func TestTypeCloseUnordered(t *testing.T) {
@@ -106,13 +122,16 @@ func TestTypeCloseUnordered(t *testing.T) {
 	newMgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
 	strm, err := stream.New(conf, newMgr)
 	require.NoError(t, err)
-	assert.NoError(t, strm.StopUnordered(time.Minute))
+	assert.NoError(t, strm.StopUnordered(ctx))
 
 	strm, err = stream.New(conf, newMgr)
 	require.NoError(t, err)
-	assert.NoError(t, strm.StopUnordered(time.Minute))
+	assert.NoError(t, strm.StopUnordered(ctx))
 
 	conf.Pipeline.Processors = []processor.Config{
 		processor.NewConfig(),
@@ -120,7 +139,7 @@ func TestTypeCloseUnordered(t *testing.T) {
 
 	strm, err = stream.New(conf, newMgr)
 	require.NoError(t, err)
-	assert.NoError(t, strm.StopUnordered(time.Minute))
+	assert.NoError(t, strm.StopUnordered(ctx))
 }
 
 type mockAPIReg struct {
@@ -180,7 +199,10 @@ func TestHealthCheck(t *testing.T) {
 
 	validateHealthCheckResponse(t, mockAPIReg.server.URL, "OK")
 
-	assert.NoError(t, strm.StopUnordered(time.Minute))
+	stopCtx, stopDone := context.WithTimeout(context.Background(), time.Minute)
+	defer stopDone()
+
+	assert.NoError(t, strm.StopUnordered(stopCtx))
 
 	validateHealthCheckResponse(t, mockAPIReg.server.URL, "input not connected\noutput not connected\n")
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/go-redis/redis/v7"
 
@@ -130,7 +129,7 @@ func newRedisHashWriter(conf output.RedisHashConfig, mgr bundle.NewManagement) (
 	return r, nil
 }
 
-func (r *redisHashWriter) ConnectWithContext(ctx context.Context) error {
+func (r *redisHashWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
@@ -167,7 +166,7 @@ func walkForHashFields(
 	return nil
 }
 
-func (r *redisHashWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (r *redisHashWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
@@ -215,10 +214,6 @@ func (r *redisHashWriter) disconnect() error {
 	return nil
 }
 
-func (r *redisHashWriter) CloseAsync() {
-	_ = r.disconnect()
-}
-
-func (r *redisHashWriter) WaitForClose(timeout time.Duration) error {
-	return nil
+func (r *redisHashWriter) Close(context.Context) error {
+	return r.disconnect()
 }

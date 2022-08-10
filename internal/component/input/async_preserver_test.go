@@ -40,13 +40,10 @@ func TestAsyncPreserverClose(t *testing.T) {
 	wg.Add(1)
 
 	go func() {
-		if err := pres.ConnectWithContext(ctx); err != nil {
+		if err := pres.Connect(ctx); err != nil {
 			t.Error(err)
 		}
-		pres.CloseAsync()
-		if act := pres.WaitForClose(time.Second); act != exp {
-			t.Errorf("Wrong error returned: %v != %v", act, exp)
-		}
+		assert.EqualError(t, pres.Close(ctx), "foo error")
 		wg.Done()
 	}()
 
@@ -132,10 +129,10 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 		}
 	}()
 
-	err := pres.ConnectWithContext(ctx)
+	err := pres.Connect(ctx)
 	assert.NoError(t, err)
 
-	_, ackFn1, err := pres.ReadWithContext(ctx)
+	_, ackFn1, err := pres.ReadBatch(ctx)
 	assert.NoError(t, err)
 
 	go func() {
@@ -143,19 +140,17 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 		assert.NoError(t, ackFn1(ctx, errors.New("rejected")))
 	}()
 
-	_, _, err = pres.ReadWithContext(ctx)
+	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrTimeout, err)
 
-	_, ackFn2, err := pres.ReadWithContext(ctx)
+	_, ackFn2, err := pres.ReadBatch(ctx)
 	assert.NoError(t, err)
 	assert.NoError(t, ackFn2(ctx, nil))
 
-	_, _, err = pres.ReadWithContext(ctx)
+	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrTypeClosed, err)
 
-	pres.CloseAsync()
-	err = pres.WaitForClose(time.Second)
-	assert.NoError(t, err)
+	assert.NoError(t, pres.Close(ctx))
 
 	wg.Wait()
 }
@@ -215,10 +210,10 @@ func TestAsyncPreserverCloseThenAck(t *testing.T) {
 		}
 	}()
 
-	err := pres.ConnectWithContext(ctx)
+	err := pres.Connect(ctx)
 	assert.NoError(t, err)
 
-	_, ackFn1, err := pres.ReadWithContext(ctx)
+	_, ackFn1, err := pres.ReadBatch(ctx)
 	assert.NoError(t, err)
 
 	go func() {
@@ -226,13 +221,10 @@ func TestAsyncPreserverCloseThenAck(t *testing.T) {
 		assert.NoError(t, ackFn1(ctx, nil))
 	}()
 
-	_, _, err = pres.ReadWithContext(ctx)
+	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrTypeClosed, err)
 
-	pres.CloseAsync()
-	err = pres.WaitForClose(time.Second)
-	assert.NoError(t, err)
-
+	assert.NoError(t, pres.Close(ctx))
 	wg.Wait()
 }
 
@@ -297,10 +289,10 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 		}
 	}()
 
-	err := pres.ConnectWithContext(ctx)
+	err := pres.Connect(ctx)
 	assert.NoError(t, err)
 
-	_, ackFn1, err := pres.ReadWithContext(ctx)
+	_, ackFn1, err := pres.ReadBatch(ctx)
 	assert.NoError(t, err)
 
 	go func() {
@@ -308,10 +300,10 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 		assert.NoError(t, ackFn1(ctx, errors.New("huh")))
 	}()
 
-	_, _, err = pres.ReadWithContext(ctx)
+	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrTimeout, err)
 
-	_, ackFn2, err := pres.ReadWithContext(ctx)
+	_, ackFn2, err := pres.ReadBatch(ctx)
 	require.NoError(t, err)
 
 	go func() {
@@ -319,13 +311,10 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 		assert.NoError(t, ackFn2(ctx, nil))
 	}()
 
-	_, _, err = pres.ReadWithContext(ctx)
+	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrTypeClosed, err)
 
-	pres.CloseAsync()
-	err = pres.WaitForClose(time.Second)
-	assert.NoError(t, err)
-
+	assert.NoError(t, pres.Close(ctx))
 	wg.Wait()
 }
 
@@ -395,10 +384,10 @@ func TestAsyncPreserverMutateThenNack(t *testing.T) {
 		}
 	}()
 
-	err := pres.ConnectWithContext(ctx)
+	err := pres.Connect(ctx)
 	assert.NoError(t, err)
 
-	msgOne, ackFn1, err := pres.ReadWithContext(ctx)
+	msgOne, ackFn1, err := pres.ReadBatch(ctx)
 	assert.NoError(t, err)
 	require.Equal(t, 1, msgOne.Len())
 
@@ -416,10 +405,10 @@ func TestAsyncPreserverMutateThenNack(t *testing.T) {
 		assert.NoError(t, ackFn1(ctx, errors.New("huh")))
 	}()
 
-	_, _, err = pres.ReadWithContext(ctx)
+	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrTimeout, err)
 
-	msgTwo, ackFn2, err := pres.ReadWithContext(ctx)
+	msgTwo, ackFn2, err := pres.ReadBatch(ctx)
 	require.NoError(t, err)
 
 	mStruct, err = msgTwo.Get(0).AsStructuredMut()
@@ -433,13 +422,10 @@ func TestAsyncPreserverMutateThenNack(t *testing.T) {
 		assert.NoError(t, ackFn2(ctx, nil))
 	}()
 
-	_, _, err = pres.ReadWithContext(ctx)
+	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrTypeClosed, err)
 
-	pres.CloseAsync()
-	err = pres.WaitForClose(time.Second)
-	assert.NoError(t, err)
-
+	assert.NoError(t, pres.Close(ctx))
 	wg.Wait()
 }
 
@@ -504,16 +490,16 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 		}
 	}()
 
-	err := pres.ConnectWithContext(ctx)
+	err := pres.Connect(ctx)
 	assert.NoError(t, err)
 
-	_, ackFn1, err := pres.ReadWithContext(ctx)
+	_, ackFn1, err := pres.ReadBatch(ctx)
 	assert.NoError(t, err)
 
-	_, _, err = pres.ReadWithContext(ctx)
+	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrNotConnected, err)
 
-	err = pres.ConnectWithContext(ctx)
+	err = pres.Connect(ctx)
 	assert.NoError(t, err)
 
 	go func() {
@@ -521,13 +507,10 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 		assert.NoError(t, ackFn1(ctx, nil))
 	}()
 
-	_, _, err = pres.ReadWithContext(ctx)
+	_, _, err = pres.ReadBatch(ctx)
 	assert.Equal(t, component.ErrTypeClosed, err)
 
-	pres.CloseAsync()
-	err = pres.WaitForClose(time.Second)
-	assert.NoError(t, err)
-
+	assert.NoError(t, pres.Close(ctx))
 	wg.Wait()
 }
 
@@ -560,12 +543,12 @@ func TestAsyncPreserverHappy(t *testing.T) {
 		}
 	}()
 
-	if err := pres.ConnectWithContext(ctx); err != nil {
+	if err := pres.Connect(ctx); err != nil {
 		t.Error(err)
 	}
 
 	for _, exp := range expParts {
-		msg, _, err := pres.ReadWithContext(ctx)
+		msg, _, err := pres.ReadBatch(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -609,13 +592,13 @@ func TestAsyncPreserverErrorProp(t *testing.T) {
 		}
 	}()
 
-	if actErr := pres.ConnectWithContext(ctx); expErr != actErr {
+	if actErr := pres.Connect(ctx); expErr != actErr {
 		t.Errorf("Wrong error returned: %v != %v", actErr, expErr)
 	}
-	if _, _, actErr := pres.ReadWithContext(ctx); expErr != actErr {
+	if _, _, actErr := pres.ReadBatch(ctx); expErr != actErr {
 		t.Errorf("Wrong error returned: %v != %v", actErr, expErr)
 	}
-	if _, aFn, actErr := pres.ReadWithContext(ctx); actErr != nil {
+	if _, aFn, actErr := pres.ReadBatch(ctx); actErr != nil {
 		t.Fatal(actErr)
 	} else if actErr = aFn(ctx, nil); expErr != actErr {
 		t.Errorf("Wrong error returned: %v != %v", actErr, expErr)
@@ -654,11 +637,11 @@ func TestAsyncPreserverErrorBackoff(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
 	defer cancel()
 
-	require.NoError(t, pres.ConnectWithContext(ctx))
+	require.NoError(t, pres.Connect(ctx))
 
 	i := 0
 	for {
-		_, aFn, actErr := pres.ReadWithContext(ctx)
+		_, aFn, actErr := pres.ReadBatch(ctx)
 		if actErr != nil {
 			assert.EqualError(t, actErr, "context deadline exceeded")
 			break
@@ -671,8 +654,7 @@ func TestAsyncPreserverErrorBackoff(t *testing.T) {
 		}
 	}
 
-	pres.CloseAsync()
-	require.NoError(t, pres.WaitForClose(time.Second))
+	assert.NoError(t, pres.Close(ctx))
 }
 
 func TestAsyncPreserverBatchError(t *testing.T) {
@@ -710,9 +692,9 @@ func TestAsyncPreserverBatchError(t *testing.T) {
 		}
 	}()
 
-	require.NoError(t, pres.ConnectWithContext(ctx))
+	require.NoError(t, pres.Connect(ctx))
 
-	msg, ackFn, err := pres.ReadWithContext(ctx)
+	msg, ackFn, err := pres.ReadBatch(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, [][]byte{
 		[]byte("foo"),
@@ -728,7 +710,7 @@ func TestAsyncPreserverBatchError(t *testing.T) {
 
 	require.NoError(t, ackFn(ctx, bErr))
 
-	msg, ackFn, err = pres.ReadWithContext(ctx)
+	msg, ackFn, err = pres.ReadBatch(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, [][]byte{
 		[]byte("bar"),
@@ -773,9 +755,9 @@ func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
 		}
 	}()
 
-	require.NoError(t, pres.ConnectWithContext(ctx))
+	require.NoError(t, pres.Connect(ctx))
 
-	msg, ackFn, err := pres.ReadWithContext(ctx)
+	msg, ackFn, err := pres.ReadBatch(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, [][]byte{
 		[]byte("foo"),
@@ -799,7 +781,7 @@ func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
 
 	require.NoError(t, ackFn(ctx, bErr))
 
-	msg, ackFn, err = pres.ReadWithContext(ctx)
+	msg, ackFn, err = pres.ReadBatch(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, [][]byte{
 		[]byte("buz"),
@@ -844,7 +826,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	exp3 := "msg 3"
 
 	go sendMsg(exp)
-	msg, aFn, err := pres.ReadWithContext(ctx)
+	msg, aFn, err := pres.ReadBatch(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -857,7 +839,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 
 	// Fail previous message, expecting it to be resent.
 	_ = aFn(ctx, errors.New("failed"))
-	msg, aFn, err = pres.ReadWithContext(ctx)
+	msg, aFn, err = pres.ReadBatch(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -867,7 +849,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 
 	// Read the primed message.
 	var aFn2 input.AsyncAckFn
-	msg, aFn2, err = pres.ReadWithContext(ctx)
+	msg, aFn2, err = pres.ReadBatch(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -880,14 +862,14 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	_ = aFn2(ctx, errors.New("failed again"))
 
 	// Read both messages.
-	msg, aFn, err = pres.ReadWithContext(ctx)
+	msg, aFn, err = pres.ReadBatch(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if act := string(msg.Get(0).AsBytes()); exp != act {
 		t.Errorf("Wrong message returned: %v != %v", act, exp)
 	}
-	msg, aFn2, err = pres.ReadWithContext(ctx)
+	msg, aFn2, err = pres.ReadBatch(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -904,7 +886,7 @@ func TestAsyncPreserverBuffer(t *testing.T) {
 	_ = aFn(ctx, nil)
 	_ = aFn2(ctx, nil)
 
-	msg, _, err = pres.ReadWithContext(ctx)
+	msg, _, err = pres.ReadBatch(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -949,7 +931,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 	ackFns := []input.AsyncAckFn{}
 	for _, exp := range messages {
 		go sendMsg(exp)
-		msg, aFn, err := pres.ReadWithContext(ctx)
+		msg, aFn, err := pres.ReadBatch(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -966,7 +948,7 @@ func TestAsyncPreserverBufferBatchedAcks(t *testing.T) {
 	ackFns = []input.AsyncAckFn{}
 
 	for _, exp := range messages {
-		msg, aFn, err := pres.ReadWithContext(ctx)
+		msg, aFn, err := pres.ReadBatch(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -25,7 +26,7 @@ func TestTryEmpty(t *testing.T) {
 	exp := [][]byte{
 		[]byte("foo bar baz"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(exp))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -62,7 +63,7 @@ func TestTryBasic(t *testing.T) {
 		[]byte("MSAyIDMgNA=="),
 		[]byte("aGVsbG8gZm9vIHdvcmxk"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -98,7 +99,7 @@ func TestTryFilterSome(t *testing.T) {
 		[]byte("foo bar baz"),
 		[]byte("hello foo world"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -138,7 +139,7 @@ func TestTryMultiProcs(t *testing.T) {
 		[]byte("Zm9vIGJhciBiYXo="),
 		[]byte("aGVsbG8gZm9vIHdvcmxk"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -179,7 +180,7 @@ func TestTryFailJSON(t *testing.T) {
 		[]byte("NOT VALID JSON"),
 		[]byte("eyJiYXIiOiJiYXoyIn0="),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -220,7 +221,7 @@ func TestTryFilterAll(t *testing.T) {
 		[]byte("1 2 3 4"),
 		[]byte("hello world"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(parts))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(parts))
 	assert.NoError(t, res)
 	if len(msgs) != 0 {
 		t.Errorf("Wrong count of result msgs: %v", len(msgs))

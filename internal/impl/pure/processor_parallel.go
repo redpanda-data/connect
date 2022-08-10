@@ -4,7 +4,6 @@ import (
 	"context"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -82,7 +81,7 @@ func (p *parallelProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 		go func() {
 			// TODO: V4 Handle processor errors when we migrate to service APIs
 			for index := range reqChan {
-				resMsgs, _ := processor.ExecuteAll(p.children, resultMsgs[index])
+				resMsgs, _ := processor.ExecuteAll(ctx, p.children, resultMsgs[index])
 				resultParts := []*message.Part{}
 				for _, m := range resMsgs {
 					_ = m.Iter(func(i int, p *message.Part) error {
@@ -114,14 +113,7 @@ func (p *parallelProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, 
 
 func (p *parallelProc) Close(ctx context.Context) error {
 	for _, c := range p.children {
-		c.CloseAsync()
-	}
-	deadline, exists := ctx.Deadline()
-	if !exists {
-		deadline = time.Now().Add(time.Second * 5)
-	}
-	for _, c := range p.children {
-		if err := c.WaitForClose(time.Until(deadline)); err != nil {
+		if err := c.Close(ctx); err != nil {
 			return err
 		}
 	}

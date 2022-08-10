@@ -3,7 +3,6 @@ package pure
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
@@ -102,9 +101,12 @@ func (r *resourceInput) Connected() (isConnected bool) {
 	return
 }
 
-func (r *resourceInput) CloseAsync() {
+func (r *resourceInput) TriggerStopConsuming() {
 }
 
-func (r *resourceInput) WaitForClose(timeout time.Duration) error {
+func (r *resourceInput) TriggerCloseNow() {
+}
+
+func (r *resourceInput) WaitForClose(ctx context.Context) error {
 	return nil
 }

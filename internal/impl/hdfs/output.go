@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/colinmarc/hdfs"
 
@@ -84,7 +83,7 @@ func newHDFSWriter(conf output.HDFSConfig, mgr bundle.NewManagement) (*hdfsWrite
 	}, nil
 }
 
-func (h *hdfsWriter) ConnectWithContext(ctx context.Context) error {
+func (h *hdfsWriter) Connect(ctx context.Context) error {
 	if h.client != nil {
 		return nil
 	}
@@ -103,7 +102,7 @@ func (h *hdfsWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (h *hdfsWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (h *hdfsWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	if h.client == nil {
 		return component.ErrNotConnected
 	}
@@ -131,9 +130,6 @@ func (h *hdfsWriter) WriteWithContext(ctx context.Context, msg message.Batch) er
 	})
 }
 
-func (h *hdfsWriter) CloseAsync() {
-}
-
-func (h *hdfsWriter) WaitForClose(time.Duration) error {
+func (h *hdfsWriter) Close(context.Context) error {
 	return nil
 }

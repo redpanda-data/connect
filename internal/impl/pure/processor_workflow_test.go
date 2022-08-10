@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"strconv"
@@ -459,7 +460,7 @@ func TestWorkflows(t *testing.T) {
 				inputMsg = append(inputMsg, part)
 			}
 
-			msgs, res := p.ProcessMessage(inputMsg.ShallowCopy())
+			msgs, res := p.ProcessBatch(context.Background(), inputMsg.ShallowCopy())
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
 				require.EqualError(t, res, test.err)
@@ -494,8 +495,9 @@ func TestWorkflows(t *testing.T) {
 				assert.Equal(t, m.content, string(inputMsg.Get(i).AsBytes()))
 			}
 
-			p.CloseAsync()
-			assert.NoError(t, p.WaitForClose(time.Second))
+			ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+			defer done()
+			assert.NoError(t, p.Close(ctx))
 		})
 	}
 }
@@ -646,7 +648,7 @@ func TestWorkflowsWithResources(t *testing.T) {
 				parts = append(parts, []byte(input))
 			}
 
-			msgs, res := p.ProcessMessage(message.QuickBatch(parts))
+			msgs, res := p.ProcessBatch(context.Background(), message.QuickBatch(parts))
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
 				require.EqualError(t, res, test.err)
@@ -659,8 +661,9 @@ func TestWorkflowsWithResources(t *testing.T) {
 				assert.Equal(t, test.output, output)
 			}
 
-			p.CloseAsync()
-			assert.NoError(t, p.WaitForClose(time.Second))
+			ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+			defer done()
+			assert.NoError(t, p.Close(ctx))
 		})
 	}
 }
@@ -723,7 +726,7 @@ func TestWorkflowsParallel(t *testing.T) {
 						parts = append(parts, []byte(input))
 					}
 
-					msgs, res := p.ProcessMessage(message.QuickBatch(parts))
+					msgs, res := p.ProcessBatch(context.Background(), message.QuickBatch(parts))
 					require.Nil(t, res)
 					require.Len(t, msgs, 1)
 					var actual []string
@@ -738,8 +741,9 @@ func TestWorkflowsParallel(t *testing.T) {
 		close(startChan)
 		wg.Wait()
 
-		p.CloseAsync()
-		assert.NoError(t, p.WaitForClose(time.Second))
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		assert.NoError(t, p.Close(ctx))
+		done()
 	}
 }
 
@@ -904,7 +908,7 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 				parts = append(parts, []byte(input))
 			}
 
-			msgs, res := p.ProcessMessage(message.QuickBatch(parts))
+			msgs, res := p.ProcessBatch(context.Background(), message.QuickBatch(parts))
 			if len(test.err) > 0 {
 				require.NotNil(t, res)
 				require.EqualError(t, res, test.err)
@@ -917,8 +921,9 @@ func TestWorkflowsWithOrderResources(t *testing.T) {
 				assert.Equal(t, test.output, output)
 			}
 
-			p.CloseAsync()
-			assert.NoError(t, p.WaitForClose(time.Second))
+			ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+			defer done()
+			assert.NoError(t, p.Close(ctx))
 		})
 	}
 }

@@ -24,6 +24,7 @@ Use a Google Cloud Storage bucket as a cache.
 label: ""
 gcp_cloud_storage:
   bucket: ""
+  content_type: ""
 ```
 
 It is not possible to atomically upload cloud storage objects exclusively when the target does not already exist, therefore this cache is not suitable for deduplication.
@@ -33,6 +34,13 @@ It is not possible to atomically upload cloud storage objects exclusively when t
 ### `bucket`
 
 The Google Cloud Storage bucket to store items in.
+
+
+Type: `string`  
+
+### `content_type`
+
+Optional field to explicitly set the Content-Type.
 
 
 Type: `string`  

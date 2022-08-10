@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"testing"
@@ -100,7 +101,7 @@ func TestLogLevelTrace(t *testing.T) {
 
 		input := message.QuickBatch([][]byte{[]byte(fmt.Sprintf(`{"foo":"%v"}`, level))})
 		expMsgs := []message.Batch{input}
-		actMsgs, res := l.ProcessMessage(input)
+		actMsgs, res := l.ProcessBatch(context.Background(), input)
 		if res != nil {
 			t.Fatal(res)
 		}
@@ -149,7 +150,7 @@ func TestLogWithFields(t *testing.T) {
 
 	input := message.QuickBatch([][]byte{[]byte(`{"foo":"info message","bar":"with fields"}`)})
 	expMsgs := []message.Batch{input}
-	actMsgs, res := l.ProcessMessage(input)
+	actMsgs, res := l.ProcessBatch(context.Background(), input)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -170,7 +171,7 @@ func TestLogWithFields(t *testing.T) {
 
 	input = message.QuickBatch([][]byte{[]byte(`{"foo":"info message 2","bar":"with fields 2"}`)})
 	expMsgs = []message.Batch{input}
-	actMsgs, res = l.ProcessMessage(input)
+	actMsgs, res = l.ProcessBatch(context.Background(), input)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -216,7 +217,7 @@ root.is_cool = this.is_cool`
 		`{"age":10,"is_cool":true,"ignore":"this value please"}`,
 	)})
 	expMsgs := []message.Batch{input}
-	actMsgs, res := l.ProcessMessage(input)
+	actMsgs, res := l.ProcessBatch(context.Background(), input)
 	require.Nil(t, res)
 	assert.Equal(t, expMsgs, actMsgs)
 

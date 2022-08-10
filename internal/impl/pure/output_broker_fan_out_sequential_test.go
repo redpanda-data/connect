@@ -66,8 +66,11 @@ func TestBasicFanOutSequential(t *testing.T) {
 		}
 	}
 
-	oTM.CloseAsync()
-	assert.NoError(t, oTM.WaitForClose(time.Second*5))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	oTM.TriggerCloseNow()
+	assert.NoError(t, oTM.WaitForClose(ctx))
 }
 
 func TestFanOutSequentialBlock(t *testing.T) {
@@ -117,5 +120,8 @@ func TestFanOutSequentialBlock(t *testing.T) {
 	}
 
 	close(readChan)
-	require.NoError(t, oTM.WaitForClose(time.Second*5))
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+	require.NoError(t, oTM.WaitForClose(ctx))
 }

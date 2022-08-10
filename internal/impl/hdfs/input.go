@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
-	"time"
 
 	"github.com/colinmarc/hdfs"
 
@@ -74,7 +73,7 @@ func newHDFSReader(conf input.HDFSConfig, log log.Modular) *hdfsReader {
 	}
 }
 
-func (h *hdfsReader) ConnectWithContext(ctx context.Context) error {
+func (h *hdfsReader) Connect(ctx context.Context) error {
 	if h.client != nil {
 		return nil
 	}
@@ -103,7 +102,7 @@ func (h *hdfsReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (h *hdfsReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (h *hdfsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	if len(h.targets) == 0 {
 		return nil, nil, component.ErrTypeClosed
 	}
@@ -125,9 +124,6 @@ func (h *hdfsReader) ReadWithContext(ctx context.Context) (message.Batch, input.
 	}, nil
 }
 
-func (h *hdfsReader) CloseAsync() {
-}
-
-func (h *hdfsReader) WaitForClose(timeout time.Duration) error {
+func (h *hdfsReader) Close(ctx context.Context) error {
 	return nil
 }

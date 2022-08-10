@@ -75,6 +75,6 @@ func TestDynamicOutputAPI(t *testing.T) {
 drop: {}
 `, res.Body.String())
 
-	o.CloseAsync()
-	require.NoError(t, o.WaitForClose(time.Second))
+	o.TriggerCloseNow()
+	require.NoError(t, o.WaitForClose(ctx))
 }

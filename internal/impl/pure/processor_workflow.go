@@ -1,6 +1,7 @@
 package pure
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -445,8 +446,8 @@ func (w *Workflow) skipFromMeta(root interface{}) map[string]struct{} {
 	return skipList
 }
 
-// ProcessMessage applies workflow stages to each part of a message type.
-func (w *Workflow) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+// ProcessBatch applies workflow stages to each part of a message type.
+func (w *Workflow) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	w.mReceived.Incr(int64(msg.Len()))
 	w.mBatchReceived.Incr(1)
 	startedAt := time.Now()
@@ -507,7 +508,7 @@ func (w *Workflow) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
 				})
 
 				var mapErrs []branchMapError
-				results[index], mapErrs, errors[index] = children[id].createResult(branchParts, propMsg)
+				results[index], mapErrs, errors[index] = children[id].createResult(ctx, branchParts, propMsg)
 				for _, s := range branchSpans {
 					s.Finish()
 				}
@@ -588,12 +589,7 @@ func (w *Workflow) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
 	return []message.Batch{msg}, nil
 }
 
-// CloseAsync shuts down the processor and stops processing requests.
-func (w *Workflow) CloseAsync() {
-	w.children.CloseAsync()
-}
-
-// WaitForClose blocks until the processor has closed down.
-func (w *Workflow) WaitForClose(timeout time.Duration) error {
-	return w.children.WaitForClose(timeout)
+// Close shuts down the processor and stops processing requests.
+func (w *Workflow) Close(ctx context.Context) error {
+	return w.children.Close(ctx)
 }

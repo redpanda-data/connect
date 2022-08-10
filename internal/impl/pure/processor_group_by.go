@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -168,7 +167,7 @@ func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 			continue
 		}
 
-		resultMsgs, res := processor.ExecuteAll(g.groups[i].Processors, gmsg)
+		resultMsgs, res := processor.ExecuteAll(ctx, g.groups[i].Processors, gmsg)
 		if len(resultMsgs) > 0 {
 			msgs = append(msgs, resultMsgs...)
 		}
@@ -191,16 +190,7 @@ func (g *groupByProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, m
 func (g *groupByProc) Close(ctx context.Context) error {
 	for _, group := range g.groups {
 		for _, p := range group.Processors {
-			p.CloseAsync()
-		}
-	}
-	deadline, exists := ctx.Deadline()
-	if !exists {
-		deadline = time.Now().Add(time.Second * 5)
-	}
-	for _, group := range g.groups {
-		for _, p := range group.Processors {
-			if err := p.WaitForClose(time.Until(deadline)); err != nil {
+			if err := p.Close(ctx); err != nil {
 				return err
 			}
 		}

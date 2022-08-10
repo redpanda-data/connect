@@ -366,6 +366,7 @@ func (a *allBytesReader) Close(ctx context.Context) error {
 }
 
 //------------------------------------------------------------------------------
+
 type avroOCFReader struct {
 	ocf          *goavro.OCFReader
 	r            io.ReadCloser
@@ -487,6 +488,7 @@ func (a *avroOCFReader) Close(ctx context.Context) error {
 }
 
 //------------------------------------------------------------------------------
+
 type linesReader struct {
 	buf       *bufio.Scanner
 	r         io.ReadCloser

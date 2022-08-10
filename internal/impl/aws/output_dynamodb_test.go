@@ -55,7 +55,7 @@ func TestDynamoDBHappy(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, db.WriteWithContext(context.Background(), message.QuickBatch([][]byte{
+	require.NoError(t, db.WriteBatch(context.Background(), message.QuickBatch([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
 	})))
@@ -130,7 +130,7 @@ func TestDynamoDBSadToGood(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, db.WriteWithContext(context.Background(), message.QuickBatch([][]byte{
+	require.NoError(t, db.WriteBatch(context.Background(), message.QuickBatch([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
 		[]byte(`{"id":"baz","content":"baz stuff"}`),
@@ -242,7 +242,7 @@ func TestDynamoDBSadToGoodBatch(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, db.WriteWithContext(context.Background(), message.QuickBatch([][]byte{
+	require.NoError(t, db.WriteBatch(context.Background(), message.QuickBatch([][]byte{
 		[]byte(`{"id":"foo","content":"foo stuff"}`),
 		[]byte(`{"id":"bar","content":"bar stuff"}`),
 		[]byte(`{"id":"baz","content":"baz stuff"}`),
@@ -342,7 +342,7 @@ func TestDynamoDBSad(t *testing.T) {
 
 	expErr := batch.NewError(msg, errors.New("woop"))
 	expErr.Failed(1, barErr)
-	require.Equal(t, expErr, db.WriteWithContext(context.Background(), msg))
+	require.Equal(t, expErr, db.WriteBatch(context.Background(), msg))
 
 	batchExpected := []*dynamodb.WriteRequest{
 		{
@@ -456,7 +456,7 @@ func TestDynamoDBSadBatch(t *testing.T) {
 
 	expErr := batch.NewError(msg, errors.New("failed to set 1 items"))
 	expErr.Failed(1, errors.New("failed to set item"))
-	require.Equal(t, expErr, db.WriteWithContext(context.Background(), msg))
+	require.Equal(t, expErr, db.WriteBatch(context.Background(), msg))
 
 	expected := [][]*dynamodb.WriteRequest{
 		{

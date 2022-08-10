@@ -2,7 +2,6 @@ package mock
 
 import (
 	"context"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -20,12 +19,16 @@ func (o OutputWriter) Connected() bool {
 	return true
 }
 
-// CloseAsync does nothing.
-func (o OutputWriter) CloseAsync() {
+// TriggerStopConsuming does nothing.
+func (o OutputWriter) TriggerStopConsuming() {
+}
+
+// TriggerCloseNow does nothing.
+func (o OutputWriter) TriggerCloseNow() {
 }
 
 // WaitForClose does nothing.
-func (o OutputWriter) WaitForClose(time.Duration) error {
+func (o OutputWriter) WaitForClose(ctx context.Context) error {
 	return nil
 }
 
@@ -46,11 +49,11 @@ func (m *OutputChanneled) Consume(msgs <-chan message.Transaction) error {
 	return nil
 }
 
-// CloseAsync does nothing.
-func (m *OutputChanneled) CloseAsync() {
+// TriggerCloseNow does nothing.
+func (m *OutputChanneled) TriggerCloseNow() {
 }
 
 // WaitForClose does nothing.
-func (m OutputChanneled) WaitForClose(t time.Duration) error {
+func (m OutputChanneled) WaitForClose(ctx context.Context) error {
 	return nil
 }

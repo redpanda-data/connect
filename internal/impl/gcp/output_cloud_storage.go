@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path"
 	"sync"
-	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/gofrs/uuid"
@@ -169,9 +168,9 @@ func newGCPCloudStorageOutput(
 	return g, nil
 }
 
-// ConnectWithContext attempts to establish a connection to the target Google
+// Connect attempts to establish a connection to the target Google
 // Cloud Storage bucket.
-func (g *gcpCloudStorageOutput) ConnectWithContext(ctx context.Context) error {
+func (g *gcpCloudStorageOutput) Connect(ctx context.Context) error {
 	g.connMut.Lock()
 	defer g.connMut.Unlock()
 
@@ -185,9 +184,9 @@ func (g *gcpCloudStorageOutput) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-// WriteWithContext attempts to write message contents to a target GCP Cloud
+// WriteBatch attempts to write message contents to a target GCP Cloud
 // Storage bucket as files.
-func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batch) error {
 	g.connMut.RLock()
 	client := g.client
 	g.connMut.RUnlock()
@@ -259,22 +258,17 @@ func (g *gcpCloudStorageOutput) WriteWithContext(ctx context.Context, msg messag
 	})
 }
 
-// CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (g *gcpCloudStorageOutput) CloseAsync() {
-	go func() {
-		g.connMut.Lock()
-		if g.client != nil {
-			g.client.Close()
-			g.client = nil
-		}
-		g.connMut.Unlock()
-	}()
-}
+// Close begins cleaning up resources used by this reader asynchronously.
+func (g *gcpCloudStorageOutput) Close(context.Context) error {
+	g.connMut.Lock()
+	defer g.connMut.Unlock()
 
-// WaitForClose will block until either the reader is closed or a specified
-// timeout occurs.
-func (g *gcpCloudStorageOutput) WaitForClose(time.Duration) error {
-	return nil
+	var err error
+	if g.client != nil {
+		err = g.client.Close()
+		g.client = nil
+	}
+	return err
 }
 
 func (g *gcpCloudStorageOutput) appendToFile(ctx context.Context, source, dest string) error {

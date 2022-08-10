@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"context"
+
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -10,18 +12,18 @@ import (
 // ExecuteAll attempts to execute a slice of processors to a message. Returns
 // N resulting messages or a response. The response may indicate either a NoAck
 // in the event of the message being buffered or an unrecoverable error.
-func ExecuteAll(procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
+func ExecuteAll(ctx context.Context, procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
 	resultMsgs := make([]message.Batch, len(msgs))
 	copy(resultMsgs, msgs)
 
 	for i := 0; len(resultMsgs) > 0 && i < len(procs); i++ {
 		var nextResultMsgs []message.Batch
 		for _, m := range resultMsgs {
-			rMsgs, resultRes := procs[i].ProcessMessage(m)
-			if resultRes != nil {
+			rMsgs, err := procs[i].ProcessBatch(ctx, m)
+			if err != nil {
 				// We immediately return if a processor hits an unrecoverable
 				// error on a message.
-				return nil, resultRes
+				return nil, err
 			}
 			nextResultMsgs = append(nextResultMsgs, rMsgs...)
 		}
@@ -36,7 +38,7 @@ func ExecuteAll(procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
 // subsequent processors. Returns N resulting messages or a response. The
 // response may indicate either a NoAck in the event of the message being
 // buffered or an unrecoverable error.
-func ExecuteTryAll(procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
+func ExecuteTryAll(ctx context.Context, procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
 	resultMsgs := make([]message.Batch, len(msgs))
 	copy(resultMsgs, msgs)
 
@@ -48,11 +50,11 @@ func ExecuteTryAll(procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
 				nextResultMsgs = append(nextResultMsgs, m)
 				continue
 			}
-			rMsgs, resultRes := procs[i].ProcessMessage(m)
-			if resultRes != nil {
+			rMsgs, err := procs[i].ProcessBatch(ctx, m)
+			if err != nil {
 				// We immediately return if a processor hits an unrecoverable
 				// error on a message.
-				return nil, resultRes
+				return nil, err
 			}
 			nextResultMsgs = append(nextResultMsgs, rMsgs...)
 		}
@@ -70,7 +72,7 @@ type catchMessage struct {
 // ExecuteCatchAll attempts to execute a slice of processors to only messages
 // that have failed a processing step. Returns N resulting messages or a
 // response.
-func ExecuteCatchAll(procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
+func ExecuteCatchAll(ctx context.Context, procs []V1, msgs ...message.Batch) ([]message.Batch, error) {
 	// Preserves the original order of messages before entering the catch block.
 	// Only processors that have failed a previous stage are "caught", and will
 	// remain caught until all catch processors are executed.
@@ -90,7 +92,7 @@ func ExecuteCatchAll(procs []V1, msgs ...message.Batch) ([]message.Batch, error)
 
 			var nextResultBatches []message.Batch
 			for _, m := range catchBatches[j].batches {
-				rMsgs, resultRes := procs[i].ProcessMessage(m)
+				rMsgs, resultRes := procs[i].ProcessBatch(ctx, m)
 				if resultRes != nil {
 					// We immediately return if a processor hits an unrecoverable
 					// error on a message.

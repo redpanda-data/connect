@@ -236,23 +236,23 @@ func (m *Stream) TransactionChan() <-chan message.Transaction {
 	return m.messagesOut
 }
 
-// CloseAsync shuts down the Stream and stops processing messages.
-func (m *Stream) CloseAsync() {
-	m.shutSig.CloseNow()
-}
-
-// StopConsuming instructs the buffer to stop consuming messages and close once
-// the buffer is empty.
-func (m *Stream) StopConsuming() {
+// TriggerStopConsuming instructs the buffer to stop consuming messages and
+// close once the buffer is empty.
+func (m *Stream) TriggerStopConsuming() {
 	m.shutSig.CloseAtLeisure()
 }
 
+// TriggerCloseNow shuts down the Stream and stops processing messages.
+func (m *Stream) TriggerCloseNow() {
+	m.shutSig.CloseNow()
+}
+
 // WaitForClose blocks until the Stream output has closed down.
-func (m *Stream) WaitForClose(timeout time.Duration) error {
+func (m *Stream) WaitForClose(ctx context.Context) error {
 	select {
 	case <-m.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

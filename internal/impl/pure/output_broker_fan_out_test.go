@@ -77,8 +77,8 @@ func TestBasicFanOut(t *testing.T) {
 		}
 	}
 
-	oTM.CloseAsync()
-	require.NoError(t, oTM.WaitForClose(time.Second*5))
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
 
 func TestBasicFanOutMutations(t *testing.T) {
@@ -153,8 +153,8 @@ func TestBasicFanOutMutations(t *testing.T) {
 		"moo":   "quack",
 	}, inStruct)
 
-	oTM.CloseAsync()
-	require.NoError(t, oTM.WaitForClose(time.Second*5))
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
 
 func TestFanOutBackPressure(t *testing.T) {
@@ -232,8 +232,11 @@ func TestFanOutShutDownFromReceive(t *testing.T) {
 		t.Fatal("Timed out waiting for msg rcv")
 	}
 
-	oTM.CloseAsync()
-	require.NoError(t, oTM.WaitForClose(time.Second))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(ctx))
 
 	select {
 	case _, open := <-mockOutput.TChan:
@@ -260,8 +263,11 @@ func TestFanOutShutDownFromSend(t *testing.T) {
 		t.Fatal("Timed out waiting for msg send")
 	}
 
-	oTM.CloseAsync()
-	require.NoError(t, oTM.WaitForClose(time.Second))
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(ctx))
 
 	select {
 	case _, open := <-mockOutput.TChan:

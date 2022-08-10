@@ -6,12 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -90,11 +88,11 @@ func newFileWriter(pathStr, codecStr string, mgr bundle.NewManagement) (*fileWri
 
 //------------------------------------------------------------------------------
 
-func (w *fileWriter) ConnectWithContext(ctx context.Context) error {
+func (w *fileWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (w *fileWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (w *fileWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	err := output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		path := filepath.Clean(w.path.String(i, msg))
 
@@ -151,23 +149,14 @@ func (w *fileWriter) WriteWithContext(ctx context.Context, msg message.Batch) er
 	return nil
 }
 
-func (w *fileWriter) CloseAsync() {
-	go func() {
-		w.handleMut.Lock()
-		if w.handle != nil {
-			w.handle.Close(context.Background())
-			w.handle = nil
-		}
-		w.handleMut.Unlock()
-		w.shutSig.ShutdownComplete()
-	}()
-}
+func (w *fileWriter) Close(ctx context.Context) error {
+	w.handleMut.Lock()
+	defer w.handleMut.Unlock()
 
-func (w *fileWriter) WaitForClose(timeout time.Duration) error {
-	select {
-	case <-w.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	var err error
+	if w.handle != nil {
+		err = w.handle.Close(ctx)
+		w.handle = nil
 	}
-	return nil
+	return err
 }

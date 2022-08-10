@@ -182,13 +182,13 @@ func parseCronExpression(cronExpression string) (*cron.Schedule, *time.Location,
 	return &cronSchedule, loc, nil
 }
 
-// ConnectWithContext establishes a Bloblang reader.
-func (b *generateReader) ConnectWithContext(ctx context.Context) error {
+// Connect establishes a Bloblang reader.
+func (b *generateReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-// ReadWithContext a new bloblang generated message.
-func (b *generateReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+// ReadBatch a new bloblang generated message.
+func (b *generateReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	batchSize := b.batchSize
 	if b.limited {
 		if b.remaining <= 0 {
@@ -234,13 +234,9 @@ func (b *generateReader) ReadWithContext(ctx context.Context) (message.Batch, in
 }
 
 // CloseAsync shuts down the bloblang reader.
-func (b *generateReader) CloseAsync() {
+func (b *generateReader) Close(ctx context.Context) (err error) {
 	if b.timer != nil {
 		b.timer.Stop()
 	}
-}
-
-// WaitForClose blocks until the bloblang input has closed down.
-func (b *generateReader) WaitForClose(timeout time.Duration) error {
-	return nil
+	return
 }

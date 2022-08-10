@@ -3,7 +3,6 @@ package io
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -74,15 +73,13 @@ type httpClientWriter struct {
 
 	log log.Modular
 
-	conf      output.HTTPClientConfig
-	closeChan chan struct{}
+	conf output.HTTPClientConfig
 }
 
 func newHTTPClientWriter(conf output.HTTPClientConfig, mgr bundle.NewManagement) (*httpClientWriter, error) {
 	h := httpClientWriter{
-		log:       mgr.Logger(),
-		conf:      conf,
-		closeChan: make(chan struct{}),
+		log:  mgr.Logger(),
+		conf: conf,
 	}
 
 	opts := []func(*http.Client){
@@ -117,12 +114,12 @@ func newHTTPClientWriter(conf output.HTTPClientConfig, mgr bundle.NewManagement)
 	return &h, nil
 }
 
-func (h *httpClientWriter) ConnectWithContext(ctx context.Context) error {
+func (h *httpClientWriter) Connect(ctx context.Context) error {
 	h.log.Infof("Sending messages via HTTP requests to: %s\n", h.conf.URL)
 	return nil
 }
 
-func (h *httpClientWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (h *httpClientWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	resultMsg, err := h.client.Send(ctx, msg, msg)
 	if err == nil && h.conf.PropagateResponse {
 		parts := make([]*message.Part, resultMsg.Len())
@@ -148,11 +145,6 @@ func (h *httpClientWriter) WriteWithContext(ctx context.Context, msg message.Bat
 	return err
 }
 
-func (h *httpClientWriter) CloseAsync() {
-	close(h.closeChan)
-	go h.client.Close(context.Background())
-}
-
-func (h *httpClientWriter) WaitForClose(timeout time.Duration) error {
-	return nil
+func (h *httpClientWriter) Close(ctx context.Context) error {
+	return h.client.Close(ctx)
 }

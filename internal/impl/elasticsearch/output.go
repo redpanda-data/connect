@@ -184,14 +184,8 @@ func NewElasticsearchV2(conf output.ElasticsearchConfig, mgr bundle.NewManagemen
 
 //------------------------------------------------------------------------------
 
-// ConnectWithContext attempts to establish a connection to a Elasticsearch
-// broker.
-func (e *Elasticsearch) ConnectWithContext(ctx context.Context) error {
-	return e.Connect()
-}
-
 // Connect attempts to establish a connection to a Elasticsearch broker.
-func (e *Elasticsearch) Connect() error {
+func (e *Elasticsearch) Connect(ctx context.Context) error {
 	if e.client != nil {
 		return nil
 	}
@@ -259,9 +253,9 @@ type pendingBulkIndex struct {
 	ID       string
 }
 
-// WriteWithContext will attempt to write a message to Elasticsearch, wait for
+// WriteBatch will attempt to write a message to Elasticsearch, wait for
 // acknowledgement, and returns an error if applicable.
-func (e *Elasticsearch) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (e *Elasticsearch) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return e.Write(msg)
 }
 
@@ -356,12 +350,8 @@ func (e *Elasticsearch) Write(msg message.Batch) error {
 	return nil
 }
 
-// CloseAsync shuts down the Elasticsearch writer and stops processing messages.
-func (e *Elasticsearch) CloseAsync() {
-}
-
-// WaitForClose blocks until the Elasticsearch writer has closed down.
-func (e *Elasticsearch) WaitForClose(timeout time.Duration) error {
+// Close shuts down the Elasticsearch writer and stops processing messages.
+func (e *Elasticsearch) Close(context.Context) error {
 	return nil
 }
 

@@ -133,7 +133,7 @@ func newSQSWriter(conf output.AmazonSQSConfig, mgr bundle.NewManagement) (*sqsWr
 	return s, nil
 }
 
-func (a *sqsWriter) ConnectWithContext(ctx context.Context) error {
+func (a *sqsWriter) Connect(ctx context.Context) error {
 	if a.sqs != nil {
 		return nil
 	}
@@ -204,7 +204,7 @@ func (a *sqsWriter) getSQSAttributes(msg message.Batch, i int) sqsAttributes {
 	}
 }
 
-func (a *sqsWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (a *sqsWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	if a.sqs == nil {
 		return component.ErrNotConnected
 	}
@@ -310,12 +310,9 @@ func (a *sqsWriter) WriteWithContext(ctx context.Context, msg message.Batch) err
 	return err
 }
 
-func (a *sqsWriter) CloseAsync() {
+func (a *sqsWriter) Close(context.Context) error {
 	a.closer.Do(func() {
 		close(a.closeChan)
 	})
-}
-
-func (a *sqsWriter) WaitForClose(time.Duration) error {
 	return nil
 }

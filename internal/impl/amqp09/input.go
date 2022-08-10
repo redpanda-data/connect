@@ -169,8 +169,8 @@ func newAMQP09Reader(conf input.AMQP09Config, log log.Modular) (*amqp09Reader, e
 
 //------------------------------------------------------------------------------
 
-// ConnectWithContext establishes a connection to an AMQP09 server.
-func (a *amqp09Reader) ConnectWithContext(ctx context.Context) (err error) {
+// Connect establishes a connection to an AMQP09 server.
+func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
@@ -310,8 +310,8 @@ func amqpSetMetadata(p *message.Part, k string, v interface{}) {
 	}
 }
 
-// ReadWithContext a new AMQP09 message.
-func (a *amqp09Reader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+// ReadBatch a new AMQP09 message.
+func (a *amqp09Reader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	var c <-chan amqp.Delivery
 
 	a.m.RLock()
@@ -388,14 +388,8 @@ func (a *amqp09Reader) ReadWithContext(ctx context.Context) (message.Batch, inpu
 	return nil, nil, component.ErrTimeout
 }
 
-// CloseAsync shuts down the AMQP09 input and stops processing requests.
-func (a *amqp09Reader) CloseAsync() {
-	_ = a.disconnect()
-}
-
-// WaitForClose blocks until the AMQP09 input has closed down.
-func (a *amqp09Reader) WaitForClose(timeout time.Duration) error {
-	return nil
+func (a *amqp09Reader) Close(ctx context.Context) error {
+	return a.disconnect()
 }
 
 // reDial connection to amqp with one or more fallback URLs

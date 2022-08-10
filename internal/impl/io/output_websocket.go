@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -85,7 +84,7 @@ func (w *websocketWriter) getWS() *websocket.Conn {
 	return ws
 }
 
-func (w *websocketWriter) ConnectWithContext(ctx context.Context) error {
+func (w *websocketWriter) Connect(ctx context.Context) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -133,7 +132,7 @@ func (w *websocketWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (w *websocketWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (w *websocketWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	client := w.getWS()
 	if client == nil {
 		return component.ErrNotConnected
@@ -154,17 +153,14 @@ func (w *websocketWriter) WriteWithContext(ctx context.Context, msg message.Batc
 	return nil
 }
 
-func (w *websocketWriter) CloseAsync() {
-	go func() {
-		w.lock.Lock()
-		if w.client != nil {
-			w.client.Close()
-			w.client = nil
-		}
-		w.lock.Unlock()
-	}()
-}
+func (w *websocketWriter) Close(ctx context.Context) error {
+	w.lock.Lock()
+	defer w.lock.Unlock()
 
-func (w *websocketWriter) WaitForClose(timeout time.Duration) error {
-	return nil
+	var err error
+	if w.client != nil {
+		err = w.client.Close()
+		w.client = nil
+	}
+	return err
 }

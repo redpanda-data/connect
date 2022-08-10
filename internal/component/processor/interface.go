@@ -1,32 +1,22 @@
 package processor
 
 import (
-	"time"
+	"context"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
 // V1 is a common interface implemented by processors.
 type V1 interface {
-	// ProcessMessage attempts to process a message. This method returns both a
-	// slice of messages or a response indicating whether messages were dropped
-	// due to an intermittent error or were intentionally filtered.
-	//
-	// If an error occurs due to the contents of a message being invalid and you
-	// wish to expose this as a recoverable fault you can use FlagErr to flag a
-	// message as having failed without dropping it.
-	//
-	// More information about this form of error handling can be found at:
-	// https://www.benthos.dev/docs/configuration/error_handling
-	ProcessMessage(message.Batch) ([]message.Batch, error)
+	// Process a batch of messages into one or more resulting batches, or return
+	// an error if the entire batch could not be processed. If zero messages are
+	// returned and the error is nil then all messages are filtered.
+	ProcessBatch(ctx context.Context, b message.Batch) ([]message.Batch, error)
 
-	// CloseAsync triggers the shut down of this component but should not block
-	// the calling goroutine.
-	CloseAsync()
-
-	// WaitForClose is a blocking call to wait until the component has finished
-	// shutting down and cleaning up resources.
-	WaitForClose(timeout time.Duration) error
+	// Close the component, blocks until either the underlying resources are
+	// cleaned up or the context is cancelled. Returns an error if the context
+	// is cancelled.
+	Close(ctx context.Context) error
 }
 
 // Pipeline is an interface that implements channel based based consumer and
@@ -40,13 +30,15 @@ type Pipeline interface {
 	// Consume starts the type receiving transactions from a Transactor.
 	Consume(<-chan message.Transaction) error
 
-	// CloseAsync triggers the shut down of this component but should not block
-	// the calling goroutine.
-	CloseAsync()
+	// TriggerCloseNow signals that the component should close immediately,
+	// messages in flight will be dropped.
+	TriggerCloseNow()
 
-	// WaitForClose is a blocking call to wait until the component has finished
-	// shutting down and cleaning up resources.
-	WaitForClose(timeout time.Duration) error
+	// WaitForClose blocks until the component has closed down or the context is
+	// cancelled. Closing occurs either when the input transaction channel is
+	// closed and messages are flushed (and acked), or when CloseNowAsync is
+	// called.
+	WaitForClose(ctx context.Context) error
 }
 
 // PipelineConstructorFunc is a constructor to be called for each parallel

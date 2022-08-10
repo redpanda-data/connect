@@ -189,8 +189,8 @@ func (r *redisStreamsReader) sendAcks() {
 
 //------------------------------------------------------------------------------
 
-// ConnectWithContext establishes a connection to a Redis server.
-func (r *redisStreamsReader) ConnectWithContext(ctx context.Context) error {
+// Connect establishes a connection to a Redis server.
+func (r *redisStreamsReader) Connect(ctx context.Context) error {
 	r.cMut.Lock()
 	defer r.cMut.Unlock()
 
@@ -329,7 +329,7 @@ func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
 	return msg, nil
 }
 
-func (r *redisStreamsReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (r *redisStreamsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msg, err := r.read()
 	if err != nil {
 		if err == component.ErrTimeout {
@@ -370,17 +370,14 @@ func (r *redisStreamsReader) disconnect() error {
 	return err
 }
 
-func (r *redisStreamsReader) CloseAsync() {
+func (r *redisStreamsReader) Close(ctx context.Context) (err error) {
 	r.closeOnce.Do(func() {
 		close(r.closeChan)
 	})
-}
-
-func (r *redisStreamsReader) WaitForClose(timeout time.Duration) error {
 	select {
 	case <-r.closedChan:
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		err = ctx.Err()
 	}
-	return nil
+	return
 }

@@ -143,7 +143,7 @@ func (a *kinesisWriter) toRecords(msg message.Batch) ([]*kinesis.PutRecordsReque
 	return entries, err
 }
 
-func (a *kinesisWriter) ConnectWithContext(ctx context.Context) error {
+func (a *kinesisWriter) Connect(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -166,7 +166,7 @@ func (a *kinesisWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (a *kinesisWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (a *kinesisWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}
@@ -249,9 +249,6 @@ func (a *kinesisWriter) WriteWithContext(ctx context.Context, msg message.Batch)
 	return err
 }
 
-func (a *kinesisWriter) CloseAsync() {
-}
-
-func (a *kinesisWriter) WaitForClose(time.Duration) error {
+func (a *kinesisWriter) Close(context.Context) error {
 	return nil
 }

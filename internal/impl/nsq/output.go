@@ -7,7 +7,6 @@ import (
 	"io"
 	llog "log"
 	"sync"
-	"time"
 
 	nsq "github.com/nsqio/go-nsq"
 
@@ -80,7 +79,7 @@ func newNSQWriter(conf output.NSQConfig, mgr bundle.NewManagement) (*nsqWriter, 
 	return &n, nil
 }
 
-func (n *nsqWriter) ConnectWithContext(ctx context.Context) error {
+func (n *nsqWriter) Connect(ctx context.Context) error {
 	n.connMut.Lock()
 	defer n.connMut.Unlock()
 
@@ -106,7 +105,7 @@ func (n *nsqWriter) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (n *nsqWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (n *nsqWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	n.connMut.RLock()
 	prod := n.producer
 	n.connMut.RUnlock()
@@ -120,17 +119,13 @@ func (n *nsqWriter) WriteWithContext(ctx context.Context, msg message.Batch) err
 	})
 }
 
-func (n *nsqWriter) CloseAsync() {
-	go func() {
-		n.connMut.Lock()
-		if n.producer != nil {
-			n.producer.Stop()
-			n.producer = nil
-		}
-		n.connMut.Unlock()
-	}()
-}
+func (n *nsqWriter) Close(context.Context) error {
+	n.connMut.Lock()
+	defer n.connMut.Unlock()
 
-func (n *nsqWriter) WaitForClose(timeout time.Duration) error {
+	if n.producer != nil {
+		n.producer.Stop()
+		n.producer = nil
+	}
 	return nil
 }

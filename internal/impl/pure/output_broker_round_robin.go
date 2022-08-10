@@ -1,33 +1,28 @@
 package pure
 
 import (
-	"sync/atomic"
-	"time"
+	"context"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 type roundRobinOutputBroker struct {
-	running int32
-
 	transactions <-chan message.Transaction
 
 	outputTSChans []chan message.Transaction
 	outputs       []output.Streamed
 
-	closedChan chan struct{}
-	closeChan  chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 func newRoundRobinOutputBroker(outputs []output.Streamed) (*roundRobinOutputBroker, error) {
 	o := &roundRobinOutputBroker{
-		running:      1,
 		transactions: nil,
 		outputs:      outputs,
-		closedChan:   make(chan struct{}),
-		closeChan:    make(chan struct{}),
+		shutSig:      shutdown.NewSignaller(),
 	}
 	o.outputTSChans = make([]chan message.Transaction, len(o.outputs))
 	for i := range o.outputTSChans {
@@ -63,25 +58,25 @@ func (o *roundRobinOutputBroker) loop() {
 		for _, c := range o.outputTSChans {
 			close(c)
 		}
-		closeAllOutputs(o.outputs)
-		close(o.closedChan)
+		_ = closeAllOutputs(context.Background(), o.outputs)
+		o.shutSig.ShutdownComplete()
 	}()
 
 	i := 0
 	var open bool
-	for atomic.LoadInt32(&o.running) == 1 {
+	for {
 		var ts message.Transaction
 		select {
 		case ts, open = <-o.transactions:
 			if !open {
 				return
 			}
-		case <-o.closeChan:
+		case <-o.shutSig.CloseNowChan():
 			return
 		}
 		select {
 		case o.outputTSChans[i] <- ts:
-		case <-o.closeChan:
+		case <-o.shutSig.CloseNowChan():
 			return
 		}
 
@@ -92,17 +87,15 @@ func (o *roundRobinOutputBroker) loop() {
 	}
 }
 
-func (o *roundRobinOutputBroker) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&o.running, 1, 0) {
-		close(o.closeChan)
-	}
+func (o *roundRobinOutputBroker) TriggerCloseNow() {
+	o.shutSig.CloseNow()
 }
 
-func (o *roundRobinOutputBroker) WaitForClose(timeout time.Duration) error {
+func (o *roundRobinOutputBroker) WaitForClose(ctx context.Context) error {
 	select {
-	case <-o.closedChan:
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-o.shutSig.HasClosedChan():
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

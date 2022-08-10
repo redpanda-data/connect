@@ -3,12 +3,10 @@ package service
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // AckFunc is a common function returned by inputs that must be called once for
@@ -102,15 +100,13 @@ type BatchInput interface {
 // Implements input.AsyncReader
 type airGapReader struct {
 	r Input
-
-	sig *shutdown.Signaller
 }
 
 func newAirGapReader(r Input) input.Async {
-	return &airGapReader{r: r, sig: shutdown.NewSignaller()}
+	return &airGapReader{r: r}
 }
 
-func (a *airGapReader) ConnectWithContext(ctx context.Context) error {
+func (a *airGapReader) Connect(ctx context.Context) error {
 	err := a.r.Connect(ctx)
 	if err != nil && errors.Is(err, ErrEndOfInput) {
 		err = component.ErrTypeClosed
@@ -118,7 +114,7 @@ func (a *airGapReader) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (a *airGapReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (a *airGapReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msg, ackFn, err := a.r.Read(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNotConnected) {
@@ -135,21 +131,8 @@ func (a *airGapReader) ReadWithContext(ctx context.Context) (message.Batch, inpu
 	}, nil
 }
 
-func (a *airGapReader) CloseAsync() {
-	go func() {
-		// TODO: Determine whether to continue trying or log/exit.
-		_ = a.r.Close(context.Background())
-		a.sig.ShutdownComplete()
-	}()
-}
-
-func (a *airGapReader) WaitForClose(tout time.Duration) error {
-	select {
-	case <-a.sig.HasClosedChan():
-	case <-time.After(tout):
-		return component.ErrTimeout
-	}
-	return nil
+func (a *airGapReader) Close(ctx context.Context) error {
+	return a.r.Close(ctx)
 }
 
 //------------------------------------------------------------------------------
@@ -157,15 +140,13 @@ func (a *airGapReader) WaitForClose(tout time.Duration) error {
 // Implements input.AsyncReader
 type airGapBatchReader struct {
 	r BatchInput
-
-	sig *shutdown.Signaller
 }
 
 func newAirGapBatchReader(r BatchInput) input.Async {
-	return &airGapBatchReader{r: r, sig: shutdown.NewSignaller()}
+	return &airGapBatchReader{r: r}
 }
 
-func (a *airGapBatchReader) ConnectWithContext(ctx context.Context) error {
+func (a *airGapBatchReader) Connect(ctx context.Context) error {
 	err := a.r.Connect(ctx)
 	if err != nil && errors.Is(err, ErrEndOfInput) {
 		err = component.ErrTypeClosed
@@ -173,7 +154,7 @@ func (a *airGapBatchReader) ConnectWithContext(ctx context.Context) error {
 	return err
 }
 
-func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (a *airGapBatchReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	batch, ackFn, err := a.r.ReadBatch(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNotConnected) {
@@ -193,21 +174,8 @@ func (a *airGapBatchReader) ReadWithContext(ctx context.Context) (message.Batch,
 	}, nil
 }
 
-func (a *airGapBatchReader) CloseAsync() {
-	go func() {
-		if err := a.r.Close(context.Background()); err == nil {
-			a.sig.ShutdownComplete()
-		}
-	}()
-}
-
-func (a *airGapBatchReader) WaitForClose(tout time.Duration) error {
-	select {
-	case <-a.sig.HasClosedChan():
-	case <-time.After(tout):
-		return component.ErrTimeout
-	}
-	return nil
+func (a *airGapBatchReader) Close(ctx context.Context) error {
+	return a.r.Close(ctx)
 }
 
 //------------------------------------------------------------------------------
@@ -287,16 +255,6 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 
 // Close the input.
 func (o *OwnedInput) Close(ctx context.Context) error {
-	o.i.CloseAsync()
-	for {
-		// Gross but will do for now until we replace these with context params.
-		if err := o.i.WaitForClose(time.Millisecond * 100); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-	}
+	o.i.TriggerStopConsuming()
+	return o.i.WaitForClose(ctx)
 }

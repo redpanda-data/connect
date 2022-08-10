@@ -28,20 +28,21 @@ func (p *fnProcessor) Close(ctx context.Context) error {
 }
 
 func TestProcessorAirGapShutdown(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
 	rp := &fnProcessor{}
 	agrp := newAirGapProcessor("foo", rp, mock.NewManager())
 
-	err := agrp.WaitForClose(time.Millisecond * 5)
-	assert.EqualError(t, err, "action timed out")
-	assert.False(t, rp.closed)
-
-	agrp.CloseAsync()
-	err = agrp.WaitForClose(time.Millisecond * 5)
+	err := agrp.Close(tCtx)
 	assert.NoError(t, err)
 	assert.True(t, rp.closed)
 }
 
 func TestProcessorAirGapOneToOne(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
 	agrp := newAirGapProcessor("foo", &fnProcessor{
 		fn: func(c context.Context, m *Message) (MessageBatch, error) {
 			if b, err := m.AsBytes(); err != nil || string(b) != "unchanged" {
@@ -53,7 +54,7 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg.ShallowCopy())
+	msgs, res := agrp.ProcessBatch(tCtx, msg.ShallowCopy())
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
@@ -62,6 +63,9 @@ func TestProcessorAirGapOneToOne(t *testing.T) {
 }
 
 func TestProcessorAirGapOneToError(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
 	agrp := newAirGapProcessor("foo", &fnProcessor{
 		fn: func(c context.Context, m *Message) (MessageBatch, error) {
 			_, err := m.AsStructured()
@@ -70,7 +74,7 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessBatch(tCtx, msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
@@ -80,6 +84,9 @@ func TestProcessorAirGapOneToError(t *testing.T) {
 }
 
 func TestProcessorAirGapOneToMany(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
 	agrp := newAirGapProcessor("foo", &fnProcessor{
 		fn: func(c context.Context, m *Message) (MessageBatch, error) {
 			if b, err := m.AsBytes(); err != nil || string(b) != "unchanged" {
@@ -95,7 +102,7 @@ func TestProcessorAirGapOneToMany(t *testing.T) {
 	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg.ShallowCopy())
+	msgs, res := agrp.ProcessBatch(tCtx, msg.ShallowCopy())
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 3, msgs[0].Len())
@@ -122,20 +129,21 @@ func (p *fnBatchProcessor) Close(ctx context.Context) error {
 }
 
 func TestBatchProcessorAirGapShutdown(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
 	rp := &fnBatchProcessor{}
 	agrp := newAirGapBatchProcessor("foo", rp, mock.NewManager())
 
-	err := agrp.WaitForClose(time.Millisecond * 5)
-	assert.EqualError(t, err, "action timed out")
-	assert.False(t, rp.closed)
-
-	agrp.CloseAsync()
-	err = agrp.WaitForClose(time.Millisecond * 5)
+	err := agrp.Close(tCtx)
 	assert.NoError(t, err)
 	assert.True(t, rp.closed)
 }
 
 func TestBatchProcessorAirGapOneToOne(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
 	agrp := newAirGapBatchProcessor("foo", &fnBatchProcessor{
 		fn: func(c context.Context, msgs MessageBatch) ([]MessageBatch, error) {
 			if b, err := msgs[0].AsBytes(); err != nil || string(b) != "unchanged" {
@@ -147,7 +155,7 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg.ShallowCopy())
+	msgs, res := agrp.ProcessBatch(tCtx, msg.ShallowCopy())
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
@@ -156,6 +164,9 @@ func TestBatchProcessorAirGapOneToOne(t *testing.T) {
 }
 
 func TestBatchProcessorAirGapOneToError(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
 	agrp := newAirGapBatchProcessor("foo", &fnBatchProcessor{
 		fn: func(c context.Context, msgs MessageBatch) ([]MessageBatch, error) {
 			_, err := msgs[0].AsStructured()
@@ -164,7 +175,7 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("not a structured doc")})
-	msgs, res := agrp.ProcessMessage(msg)
+	msgs, res := agrp.ProcessBatch(tCtx, msg)
 	require.Nil(t, res)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, 1, msgs[0].Len())
@@ -174,6 +185,9 @@ func TestBatchProcessorAirGapOneToError(t *testing.T) {
 }
 
 func TestBatchProcessorAirGapOneToMany(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second)
+	defer done()
+
 	agrp := newAirGapBatchProcessor("foo", &fnBatchProcessor{
 		fn: func(c context.Context, msgs MessageBatch) ([]MessageBatch, error) {
 			if b, err := msgs[0].AsBytes(); err != nil || string(b) != "unchanged" {
@@ -189,7 +203,7 @@ func TestBatchProcessorAirGapOneToMany(t *testing.T) {
 	}, mock.NewManager())
 
 	msg := message.QuickBatch([][]byte{[]byte("unchanged")})
-	msgs, res := agrp.ProcessMessage(msg.ShallowCopy())
+	msgs, res := agrp.ProcessBatch(tCtx, msg.ShallowCopy())
 	require.Nil(t, res)
 	require.Len(t, msgs, 2)
 	assert.Equal(t, "unchanged", string(msg.Get(0).AsBytes()))

@@ -1,9 +1,8 @@
 package pure
 
 import (
-	"time"
+	"context"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -81,17 +80,23 @@ func (i *fanInInputBroker) loop() {
 	}
 }
 
-func (i *fanInInputBroker) CloseAsync() {
+func (i *fanInInputBroker) TriggerStopConsuming() {
 	for _, closable := range i.closables {
-		closable.CloseAsync()
+		closable.TriggerStopConsuming()
 	}
 }
 
-func (i *fanInInputBroker) WaitForClose(timeout time.Duration) error {
+func (i *fanInInputBroker) TriggerCloseNow() {
+	for _, closable := range i.closables {
+		closable.TriggerCloseNow()
+	}
+}
+
+func (i *fanInInputBroker) WaitForClose(ctx context.Context) error {
 	select {
 	case <-i.closedChan:
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,7 +66,7 @@ func TestMetricCounter(t *testing.T) {
 	}
 
 	for _, i := range inputs {
-		msg, res := proc.ProcessMessage(message.QuickBatch(i))
+		msg, res := proc.ProcessBatch(context.Background(), message.QuickBatch(i))
 		assert.Len(t, msg, 1)
 		assert.Nil(t, res)
 	}
@@ -115,7 +116,7 @@ func TestMetricCounterBy(t *testing.T) {
 	}
 
 	for _, i := range inputs {
-		msg, res := proc.ProcessMessage(message.QuickBatch(i))
+		msg, res := proc.ProcessBatch(context.Background(), message.QuickBatch(i))
 		assert.Len(t, msg, 1)
 		assert.Nil(t, res)
 	}
@@ -165,7 +166,7 @@ func TestMetricGauge(t *testing.T) {
 	}
 
 	for _, i := range inputs {
-		msg, res := proc.ProcessMessage(message.QuickBatch(i))
+		msg, res := proc.ProcessBatch(context.Background(), message.QuickBatch(i))
 		assert.Len(t, msg, 1)
 		assert.Nil(t, res)
 	}
@@ -211,7 +212,7 @@ func TestMetricTiming(t *testing.T) {
 	}
 
 	for _, i := range inputs {
-		msg, res := proc.ProcessMessage(message.QuickBatch(i))
+		msg, res := proc.ProcessBatch(context.Background(), message.QuickBatch(i))
 		assert.Len(t, msg, 1)
 		assert.Nil(t, res)
 	}

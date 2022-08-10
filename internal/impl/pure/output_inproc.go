@@ -1,8 +1,7 @@
 package pure
 
 import (
-	"sync/atomic"
-	"time"
+	"context"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -11,6 +10,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
@@ -40,8 +40,6 @@ collision occurs.`,
 }
 
 type inprocOutput struct {
-	running int32
-
 	pipe string
 	mgr  bundle.NewManagement
 	log  log.Modular
@@ -49,19 +47,16 @@ type inprocOutput struct {
 	transactionsOut chan message.Transaction
 	transactionsIn  <-chan message.Transaction
 
-	closedChan chan struct{}
-	closeChan  chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 func newInprocOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular) (output.Streamed, error) {
 	i := &inprocOutput{
-		running:         1,
 		pipe:            conf.Inproc,
 		mgr:             mgr,
 		log:             log,
 		transactionsOut: make(chan message.Transaction),
-		closedChan:      make(chan struct{}),
-		closeChan:       make(chan struct{}),
+		shutSig:         shutdown.NewSignaller(),
 	}
 	mgr.SetPipe(i.pipe, i.transactionsOut)
 	return i, nil
@@ -69,29 +64,28 @@ func newInprocOutput(conf output.Config, mgr bundle.NewManagement, log log.Modul
 
 func (i *inprocOutput) loop() {
 	defer func() {
-		atomic.StoreInt32(&i.running, 0)
 		i.mgr.UnsetPipe(i.pipe, i.transactionsOut)
 		close(i.transactionsOut)
-		close(i.closedChan)
+		i.shutSig.ShutdownComplete()
 	}()
 
 	i.log.Infof("Sending inproc messages to ID: %s\n", i.pipe)
 
 	var open bool
-	for atomic.LoadInt32(&i.running) == 1 {
+	for {
 		var ts message.Transaction
 		select {
 		case ts, open = <-i.transactionsIn:
 			if !open {
 				return
 			}
-		case <-i.closeChan:
+		case <-i.shutSig.CloseNowChan():
 			return
 		}
 
 		select {
 		case i.transactionsOut <- ts:
-		case <-i.closeChan:
+		case <-i.shutSig.CloseNowChan():
 			return
 		}
 	}
@@ -110,17 +104,15 @@ func (i *inprocOutput) Connected() bool {
 	return true
 }
 
-func (i *inprocOutput) CloseAsync() {
-	if atomic.CompareAndSwapInt32(&i.running, 1, 0) {
-		close(i.closeChan)
-	}
+func (i *inprocOutput) TriggerCloseNow() {
+	i.shutSig.CloseNow()
 }
 
-func (i *inprocOutput) WaitForClose(timeout time.Duration) error {
+func (i *inprocOutput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-i.closedChan:
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-i.shutSig.HasClosedChan():
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

@@ -1,9 +1,10 @@
 package pipeline
 
 import (
+	"context"
 	"runtime"
+	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -16,8 +17,6 @@ import (
 // channel. Inputs remain coupled to their outputs as they propagate the
 // response channel in the transaction.
 type Pool struct {
-	running uint32
-
 	workers []processor.Pipeline
 
 	log log.Modular
@@ -25,8 +24,7 @@ type Pool struct {
 	messagesIn  <-chan message.Transaction
 	messagesOut chan message.Transaction
 
-	closeChan chan struct{}
-	closed    chan struct{}
+	shutSig *shutdown.Signaller
 }
 
 // NewPool creates a new processing pool.
@@ -36,12 +34,10 @@ func NewPool(threads int, log log.Modular, msgProcessors ...processor.V1) (*Pool
 	}
 
 	p := &Pool{
-		running:     1,
 		workers:     make([]processor.Pipeline, threads),
 		log:         log,
 		messagesOut: make(chan message.Transaction),
-		closeChan:   make(chan struct{}),
-		closed:      make(chan struct{}),
+		shutSig:     shutdown.NewSignaller(),
 	}
 
 	for i := range p.workers {
@@ -55,26 +51,28 @@ func NewPool(threads int, log log.Modular, msgProcessors ...processor.V1) (*Pool
 
 // loop is the processing loop of this pipeline.
 func (p *Pool) loop() {
+	// Note this is currently kept open as we only have our children as a
+	// shutdown mechanism. This puts trust in individual processor pipelines, if
+	// that's not realistic we can consider adding a close now to the
+	// TriggerCloseNow method.
+	closeNowCtx, cnDone := p.shutSig.CloseNowCtx(context.Background())
+	defer cnDone()
+
 	defer func() {
-		atomic.StoreUint32(&p.running, 0)
-
-		// Signal all workers to close.
-		for _, worker := range p.workers {
-			worker.CloseAsync()
-		}
-
-		// Wait for all workers to be closed before closing our response and
-		// messages channels as the workers may still have access to them.
-		for _, worker := range p.workers {
-			_ = worker.WaitForClose(shutdown.MaximumShutdownWait())
+		for _, c := range p.workers {
+			if err := c.WaitForClose(closeNowCtx); err != nil {
+				break
+			}
 		}
 
 		close(p.messagesOut)
-		close(p.closed)
+		p.shutSig.ShutdownComplete()
 	}()
 
 	internalMessages := make(chan message.Transaction)
 	remainingWorkers := int64(len(p.workers))
+
+	var closeInternalOnce sync.Once
 
 	for _, worker := range p.workers {
 		if err := worker.Consume(p.messagesIn); err != nil {
@@ -84,8 +82,10 @@ func (p *Pool) loop() {
 		}
 		go func(w processor.Pipeline) {
 			defer func() {
-				if atomic.AddInt64(&remainingWorkers, -1) == 0 {
-					close(internalMessages)
+				if v := atomic.AddInt64(&remainingWorkers, -1); v <= 0 {
+					closeInternalOnce.Do(func() {
+						close(internalMessages)
+					})
 				}
 			}()
 			for {
@@ -96,19 +96,19 @@ func (p *Pool) loop() {
 					if !open {
 						return
 					}
-				case <-p.closeChan:
+				case <-p.shutSig.CloseNowChan():
 					return
 				}
 				select {
 				case internalMessages <- t:
-				case <-p.closeChan:
+				case <-p.shutSig.CloseNowChan():
 					return
 				}
 			}
 		}(worker)
 	}
 
-	for atomic.LoadUint32(&p.running) == 1 && atomic.LoadInt64(&remainingWorkers) > 0 {
+	for atomic.LoadInt64(&remainingWorkers) > 0 {
 		select {
 		case t, open := <-internalMessages:
 			if !open {
@@ -116,10 +116,10 @@ func (p *Pool) loop() {
 			}
 			select {
 			case p.messagesOut <- t:
-			case <-p.closeChan:
+			case <-p.shutSig.CloseNowChan():
 				return
 			}
-		case <-p.closeChan:
+		case <-p.shutSig.CloseNowChan():
 			return
 		}
 	}
@@ -143,19 +143,23 @@ func (p *Pool) TransactionChan() <-chan message.Transaction {
 	return p.messagesOut
 }
 
-// CloseAsync shuts down the pipeline and stops processing messages.
-func (p *Pool) CloseAsync() {
-	if atomic.CompareAndSwapUint32(&p.running, 1, 0) {
-		close(p.closeChan)
+// TriggerCloseNow signals that the component should close immediately,
+// messages in flight will be dropped.
+func (p *Pool) TriggerCloseNow() {
+	for _, w := range p.workers {
+		w.TriggerCloseNow()
 	}
 }
 
-// WaitForClose - Blocks until the StackBuffer output has closed down.
-func (p *Pool) WaitForClose(timeout time.Duration) error {
+// WaitForClose blocks until the component has closed down or the context is
+// cancelled. Closing occurs either when the input transaction channel is
+// closed and messages are flushed (and acked), or when CloseNowAsync is
+// called.
+func (p *Pool) WaitForClose(ctx context.Context) error {
 	select {
-	case <-p.closed:
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-p.shutSig.HasClosedChan():
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

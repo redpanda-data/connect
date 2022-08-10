@@ -228,9 +228,9 @@ func newGCPCloudStorageInput(conf input.GCPCloudStorageConfig, log log.Modular, 
 	return g, nil
 }
 
-// ConnectWithContext attempts to establish a connection to the target Google
+// Connect attempts to establish a connection to the target Google
 // Cloud Storage bucket.
-func (g *gcpCloudStorageInput) ConnectWithContext(ctx context.Context) error {
+func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 	var err error
 	g.client, err = storage.NewClient(context.Background())
 	if err != nil {
@@ -297,9 +297,9 @@ func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*messa
 	return msg
 }
 
-// ReadWithContext attempts to read a new message from the target Google Cloud
+// ReadBatch attempts to read a new message from the target Google Cloud
 // Storage bucket.
-func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
+func (g *gcpCloudStorageInput) ReadBatch(ctx context.Context) (msg message.Batch, ackFn input.AsyncAckFn, err error) {
 	g.objectMut.Lock()
 	defer g.objectMut.Unlock()
 
@@ -347,25 +347,18 @@ func (g *gcpCloudStorageInput) ReadWithContext(ctx context.Context) (msg message
 }
 
 // CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (g *gcpCloudStorageInput) CloseAsync() {
-	go func() {
-		g.objectMut.Lock()
-		if g.object != nil {
-			g.object.scanner.Close(context.Background())
-			g.object = nil
-		}
+func (g *gcpCloudStorageInput) Close(ctx context.Context) (err error) {
+	g.objectMut.Lock()
+	defer g.objectMut.Unlock()
 
-		if g.client != nil {
-			g.client.Close()
-			g.client = nil
-		}
+	if g.object != nil {
+		err = g.object.scanner.Close(ctx)
+		g.object = nil
+	}
 
-		g.objectMut.Unlock()
-	}()
-}
-
-// WaitForClose will block until either the reader is closed or a specified
-// timeout occurs.
-func (g *gcpCloudStorageInput) WaitForClose(time.Duration) error {
-	return nil
+	if err == nil && g.client != nil {
+		err = g.client.Close()
+		g.client = nil
+	}
+	return
 }

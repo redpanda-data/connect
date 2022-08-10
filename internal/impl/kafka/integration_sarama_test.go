@@ -336,11 +336,11 @@ func TestIntegrationSaramaOld(t *testing.T) {
 		if serr != nil {
 			return serr
 		}
-		defer tmpOutput.CloseAsync()
-		if serr := tmpOutput.ConnectWithContext(context.Background()); serr != nil {
+		defer tmpOutput.Close(context.Background())
+		if serr := tmpOutput.Connect(context.Background()); serr != nil {
 			return serr
 		}
-		return tmpOutput.WriteWithContext(context.Background(), message.QuickBatch([][]byte{
+		return tmpOutput.WriteBatch(context.Background(), message.QuickBatch([][]byte{
 			[]byte("foo message"),
 		}))
 	}))

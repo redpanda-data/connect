@@ -22,7 +22,7 @@ import (
 )
 
 func TestSocketInputBasic(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -43,8 +43,8 @@ func TestSocketInputBasic(t *testing.T) {
 	}
 
 	defer func() {
-		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
+		rdr.TriggerStopConsuming()
+		if err := rdr.WaitForClose(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -75,7 +75,7 @@ func TestSocketInputBasic(t *testing.T) {
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -112,7 +112,7 @@ func TestSocketInputBasic(t *testing.T) {
 }
 
 func TestSocketInputReconnect(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -133,8 +133,8 @@ func TestSocketInputReconnect(t *testing.T) {
 	}
 
 	defer func() {
-		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
+		rdr.TriggerStopConsuming()
+		if err := rdr.WaitForClose(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -171,7 +171,7 @@ func TestSocketInputReconnect(t *testing.T) {
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -208,7 +208,7 @@ func TestSocketInputReconnect(t *testing.T) {
 }
 
 func TestSocketInputMultipart(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -230,8 +230,8 @@ func TestSocketInputMultipart(t *testing.T) {
 	}
 
 	defer func() {
-		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
+		rdr.TriggerStopConsuming()
+		if err := rdr.WaitForClose(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -265,7 +265,7 @@ func TestSocketInputMultipart(t *testing.T) {
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -294,7 +294,7 @@ func TestSocketInputMultipart(t *testing.T) {
 }
 
 func TestSocketMultipartCustomDelim(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -316,8 +316,8 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 	}
 
 	defer func() {
-		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
+		rdr.TriggerStopConsuming()
+		if err := rdr.WaitForClose(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -351,7 +351,7 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -380,7 +380,7 @@ func TestSocketMultipartCustomDelim(t *testing.T) {
 }
 
 func TestSocketMultipartShutdown(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -402,8 +402,8 @@ func TestSocketMultipartShutdown(t *testing.T) {
 	}
 
 	defer func() {
-		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
+		rdr.TriggerStopConsuming()
+		if err := rdr.WaitForClose(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -438,7 +438,7 @@ func TestSocketMultipartShutdown(t *testing.T) {
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out on read")
 		}
@@ -466,7 +466,7 @@ func TestSocketMultipartShutdown(t *testing.T) {
 }
 
 func TestTCPSocketInputBasic(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -487,8 +487,8 @@ func TestTCPSocketInputBasic(t *testing.T) {
 	}
 
 	defer func() {
-		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
+		rdr.TriggerStopConsuming()
+		if err := rdr.WaitForClose(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -519,7 +519,7 @@ func TestTCPSocketInputBasic(t *testing.T) {
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -556,7 +556,7 @@ func TestTCPSocketInputBasic(t *testing.T) {
 }
 
 func TestTCPSocketReconnect(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -577,8 +577,8 @@ func TestTCPSocketReconnect(t *testing.T) {
 	}
 
 	defer func() {
-		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
+		rdr.TriggerStopConsuming()
+		if err := rdr.WaitForClose(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -615,7 +615,7 @@ func TestTCPSocketReconnect(t *testing.T) {
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -652,7 +652,7 @@ func TestTCPSocketReconnect(t *testing.T) {
 }
 
 func TestTCPSocketInputMultipart(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -674,8 +674,8 @@ func TestTCPSocketInputMultipart(t *testing.T) {
 	}
 
 	defer func() {
-		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
+		rdr.TriggerStopConsuming()
+		if err := rdr.WaitForClose(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -709,7 +709,7 @@ func TestTCPSocketInputMultipart(t *testing.T) {
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -738,7 +738,7 @@ func TestTCPSocketInputMultipart(t *testing.T) {
 }
 
 func TestTCPSocketMultipartCustomDelim(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -760,8 +760,8 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 	}
 
 	defer func() {
-		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
+		rdr.TriggerStopConsuming()
+		if err := rdr.WaitForClose(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -795,7 +795,7 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out")
 		}
@@ -824,7 +824,7 @@ func TestTCPSocketMultipartCustomDelim(t *testing.T) {
 }
 
 func TestTCPSocketMultipartShutdown(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -846,8 +846,8 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 	}
 
 	defer func() {
-		rdr.CloseAsync()
-		if err := rdr.WaitForClose(time.Second); err != nil {
+		rdr.TriggerStopConsuming()
+		if err := rdr.WaitForClose(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -882,7 +882,7 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 		select {
 		case tran := <-rdr.TransactionChan():
 			msg = tran.Payload.DeepCopy()
-			require.NoError(t, tran.Ack(tCtx, nil))
+			require.NoError(t, tran.Ack(ctx, nil))
 		case <-time.After(time.Second):
 			return nil, errors.New("timed out on read")
 		}
@@ -910,7 +910,7 @@ func TestTCPSocketMultipartShutdown(t *testing.T) {
 }
 
 func BenchmarkTCPSocketWithCutOff(b *testing.B) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -933,8 +933,8 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 	require.NoError(b, err)
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(b, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(b, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := ln.Accept()
@@ -957,7 +957,7 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 		case tran := <-rdr.TransactionChan():
 			payload = string(tran.Payload.Get(0).AsBytes())
 			go func() {
-				require.NoError(b, tran.Ack(tCtx, nil))
+				require.NoError(b, tran.Ack(ctx, nil))
 			}()
 		case <-time.After(time.Second):
 			return "", errors.New("timed out")
@@ -980,7 +980,7 @@ func BenchmarkTCPSocketWithCutOff(b *testing.B) {
 }
 
 func BenchmarkTCPSocketNoCutOff(b *testing.B) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, done := context.WithTimeout(context.Background(), time.Second*20)
 	defer done()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1003,8 +1003,8 @@ func BenchmarkTCPSocketNoCutOff(b *testing.B) {
 	require.NoError(b, err)
 
 	defer func() {
-		rdr.CloseAsync()
-		assert.NoError(b, rdr.WaitForClose(time.Second))
+		rdr.TriggerStopConsuming()
+		assert.NoError(b, rdr.WaitForClose(ctx))
 	}()
 
 	conn, err := ln.Accept()
@@ -1027,7 +1027,7 @@ func BenchmarkTCPSocketNoCutOff(b *testing.B) {
 		case tran := <-rdr.TransactionChan():
 			payload = string(tran.Payload.Get(0).AsBytes())
 			go func() {
-				require.NoError(b, tran.Ack(tCtx, nil))
+				require.NoError(b, tran.Ack(ctx, nil))
 			}()
 		case <-time.After(time.Second):
 			return "", errors.New("timed out")

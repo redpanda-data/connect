@@ -58,11 +58,11 @@ func NewAsyncPreserver(r Async) *AsyncPreserver {
 
 //------------------------------------------------------------------------------
 
-// ConnectWithContext attempts to establish a connection to the source, if
+// Connect attempts to establish a connection to the source, if
 // unsuccessful returns an error. If the attempt is successful (or not
 // necessary) returns nil.
-func (p *AsyncPreserver) ConnectWithContext(ctx context.Context) error {
-	err := p.r.ConnectWithContext(ctx)
+func (p *AsyncPreserver) Connect(ctx context.Context) error {
+	err := p.r.Connect(ctx)
 	// If our source has finished but we still have messages in flight then
 	// we act like we're still open. Read will be called and we can either
 	// return the pending messages or wait for them.
@@ -133,8 +133,8 @@ func (p *AsyncPreserver) wrapSingleAckFn(m asyncPreserverResend) (message.Batch,
 	}
 }
 
-// ReadWithContext attempts to read a new message from the source.
-func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (message.Batch, AsyncAckFn, error) {
+// ReadBatch attempts to read a new message from the source.
+func (p *AsyncPreserver) ReadBatch(ctx context.Context) (message.Batch, AsyncAckFn, error) {
 	var cancel func()
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
@@ -176,7 +176,7 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (message.Batch, As
 	if atomic.LoadInt32(&p.inputClosed) > 0 {
 		err = component.ErrTypeClosed
 	} else {
-		msg, aFn, err = p.r.ReadWithContext(ctx)
+		msg, aFn, err = p.r.ReadBatch(ctx)
 	}
 	if err != nil {
 		// If our source has finished but we still have messages in flight then
@@ -204,13 +204,8 @@ func (p *AsyncPreserver) ReadWithContext(ctx context.Context) (message.Batch, As
 	return sendMsg.ShallowCopy(), ackFn, nil
 }
 
-// CloseAsync triggers the asynchronous closing of the reader.
-func (p *AsyncPreserver) CloseAsync() {
-	p.r.CloseAsync()
-}
-
-// WaitForClose blocks until either the reader is finished closing or a timeout
-// occurs.
-func (p *AsyncPreserver) WaitForClose(tout time.Duration) error {
-	return p.r.WaitForClose(tout)
+// Close triggers the shut down of this component and blocks until completion or
+// context cancellation.
+func (p *AsyncPreserver) Close(ctx context.Context) error {
+	return p.r.Close(ctx)
 }

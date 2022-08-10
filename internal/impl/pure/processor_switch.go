@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -202,7 +201,7 @@ func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg me
 		if len(passed) > 0 {
 			execMsg := message.Batch(passed)
 
-			msgs, res := processor.ExecuteAll(switchCase.processors, execMsg)
+			msgs, res := processor.ExecuteAll(ctx, switchCase.processors, execMsg)
 			if res != nil {
 				return nil, res
 			}
@@ -236,16 +235,7 @@ func (s *switchProc) ProcessBatch(ctx context.Context, _ []*tracing.Span, msg me
 func (s *switchProc) Close(ctx context.Context) error {
 	for _, c := range s.cases {
 		for _, p := range c.processors {
-			p.CloseAsync()
-		}
-	}
-	deadline, exists := ctx.Deadline()
-	if !exists {
-		deadline = time.Now().Add(time.Second * 5)
-	}
-	for _, c := range s.cases {
-		for _, p := range c.processors {
-			if err := p.WaitForClose(time.Until(deadline)); err != nil {
+			if err := p.Close(ctx); err != nil {
 				return err
 			}
 		}

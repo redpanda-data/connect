@@ -3,7 +3,6 @@ package io
 import (
 	"context"
 	"os"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/codec"
@@ -63,19 +62,16 @@ func newStdoutWriter(codecStr string) (*stdoutWriter, error) {
 	}, nil
 }
 
-func (w *stdoutWriter) ConnectWithContext(ctx context.Context) error {
+func (w *stdoutWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (w *stdoutWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (w *stdoutWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		return w.handle.Write(ctx, p)
 	})
 }
 
-func (w *stdoutWriter) CloseAsync() {
-}
-
-func (w *stdoutWriter) WaitForClose(timeout time.Duration) error {
+func (w *stdoutWriter) Close(ctx context.Context) error {
 	return nil
 }

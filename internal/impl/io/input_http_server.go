@@ -22,7 +22,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
@@ -331,9 +330,12 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 	})
 
 	textMapGeneric := map[string]interface{}{}
+	// Go normalises headers changing the way they are capitalised, here we are converting from normalised headers to
+	// a TextMap format which is case-sensitive. To ensure propagation still happens we need to convert the headers to
+	// lowercase as that is the format expected by the OTEL libraries.
 	for k, vals := range r.Header {
 		for _, v := range vals {
-			textMapGeneric[k] = v
+			textMapGeneric[strings.ToLower(k)] = v
 		}
 	}
 
@@ -686,21 +688,19 @@ func (h *httpServerInput) Connected() bool {
 	return true
 }
 
-// CloseAsync shuts down the HTTPServer input and stops processing requests.
-func (h *httpServerInput) CloseAsync() {
+func (h *httpServerInput) TriggerStopConsuming() {
 	h.shutSig.CloseAtLeisure()
 }
 
-// WaitForClose blocks until the HTTPServer input has closed down.
-func (h *httpServerInput) WaitForClose(timeout time.Duration) error {
-	go func() {
-		<-time.After(timeout - time.Second)
-		h.shutSig.CloseNow()
-	}()
+func (h *httpServerInput) TriggerCloseNow() {
+	h.shutSig.CloseNow()
+}
+
+func (h *httpServerInput) WaitForClose(ctx context.Context) error {
 	select {
 	case <-h.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

@@ -1,9 +1,8 @@
 package pure
 
 import (
-	"time"
+	"context"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -36,22 +35,16 @@ func (g *greedyOutputBroker) Connected() bool {
 	return true
 }
 
-func (g *greedyOutputBroker) CloseAsync() {
+func (g *greedyOutputBroker) TriggerCloseNow() {
 	for _, out := range g.outputs {
-		out.CloseAsync()
+		out.TriggerCloseNow()
 	}
 }
 
-func (g *greedyOutputBroker) WaitForClose(timeout time.Duration) error {
-	tStarted := time.Now()
-	remaining := timeout
+func (g *greedyOutputBroker) WaitForClose(ctx context.Context) error {
 	for _, out := range g.outputs {
-		if err := out.WaitForClose(remaining); err != nil {
+		if err := out.WaitForClose(ctx); err != nil {
 			return err
-		}
-		remaining -= time.Since(tStarted)
-		if remaining <= 0 {
-			return component.ErrTimeout
 		}
 	}
 	return nil

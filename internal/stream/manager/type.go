@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -180,7 +181,7 @@ func (m *Type) Read(id string) (*StreamStatus, error) {
 
 // Update attempts to stop an existing stream and replace it with a new version
 // of the same stream.
-func (m *Type) Update(id string, conf stream.Config, timeout time.Duration) error {
+func (m *Type) Update(ctx context.Context, id string, conf stream.Config) error {
 	m.lock.Lock()
 	wrapper, exists := m.streams[id]
 	closed := m.closed
@@ -197,7 +198,7 @@ func (m *Type) Update(id string, conf stream.Config, timeout time.Duration) erro
 		return nil
 	}
 
-	if err := m.Delete(id, timeout); err != nil {
+	if err := m.Delete(ctx, id); err != nil {
 		return err
 	}
 	return m.Create(id, conf)
@@ -206,7 +207,7 @@ func (m *Type) Update(id string, conf stream.Config, timeout time.Duration) erro
 // Delete attempts to stop and remove a stream by its ID. Returns an error if
 // the stream was not found, or if clean shutdown fails in the specified period
 // of time.
-func (m *Type) Delete(id string, timeout time.Duration) error {
+func (m *Type) Delete(ctx context.Context, id string) error {
 	m.lock.Lock()
 	if m.closed {
 		m.lock.Unlock()
@@ -219,7 +220,7 @@ func (m *Type) Delete(id string, timeout time.Duration) error {
 		return ErrStreamDoesNotExist
 	}
 
-	if err := wrapper.strm.Stop(timeout); err != nil {
+	if err := wrapper.strm.Stop(ctx); err != nil {
 		return err
 	}
 
@@ -234,7 +235,7 @@ func (m *Type) Delete(id string, timeout time.Duration) error {
 
 // Stop attempts to gracefully shut down all active streams and close the
 // stream manager.
-func (m *Type) Stop(timeout time.Duration) error {
+func (m *Type) Stop(ctx context.Context) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -242,7 +243,7 @@ func (m *Type) Stop(timeout time.Duration) error {
 
 	for k, v := range m.streams {
 		go func(id string, strm *StreamStatus) {
-			if err := strm.strm.Stop(timeout); err != nil {
+			if err := strm.strm.Stop(ctx); err != nil {
 				resultChan <- id
 			} else {
 				resultChan <- ""
@@ -265,5 +266,3 @@ func (m *Type) Stop(timeout time.Duration) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

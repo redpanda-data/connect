@@ -7,7 +7,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
@@ -44,7 +43,6 @@ type V2Batched interface {
 type v2ToV1Processor struct {
 	typeStr string
 	p       V2
-	sig     *shutdown.Signaller
 	mgr     component.Observability
 
 	mReceived      metrics.StatCounter
@@ -58,7 +56,7 @@ type v2ToV1Processor struct {
 // NewV2ToV1Processor wraps a processor.V2 with a struct that implements V1.
 func NewV2ToV1Processor(typeStr string, p V2, mgr component.Observability) V1 {
 	return &v2ToV1Processor{
-		typeStr: typeStr, p: p, sig: shutdown.NewSignaller(), mgr: mgr,
+		typeStr: typeStr, p: p, mgr: mgr,
 
 		mReceived:      mgr.Metrics().GetCounter("processor_received"),
 		mBatchReceived: mgr.Metrics().GetCounter("processor_batch_received"),
@@ -69,7 +67,7 @@ func NewV2ToV1Processor(typeStr string, p V2, mgr component.Observability) V1 {
 	}
 }
 
-func (a *v2ToV1Processor) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+func (a *v2ToV1Processor) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	a.mReceived.Incr(int64(msg.Len()))
 	a.mBatchReceived.Incr(1)
 
@@ -79,7 +77,7 @@ func (a *v2ToV1Processor) ProcessMessage(msg message.Batch) ([]message.Batch, er
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		span := tracing.CreateChildSpan(a.mgr.Tracer(), a.typeStr, part)
 
-		nextParts, err := a.p.Process(context.Background(), part)
+		nextParts, err := a.p.Process(ctx, part)
 		if err != nil {
 			a.mError.Incr(1)
 			MarkErr(part, span, err)
@@ -103,21 +101,8 @@ func (a *v2ToV1Processor) ProcessMessage(msg message.Batch) ([]message.Batch, er
 	return []message.Batch{newParts}, nil
 }
 
-func (a *v2ToV1Processor) CloseAsync() {
-	go func() {
-		if err := a.p.Close(context.Background()); err == nil {
-			a.sig.ShutdownComplete()
-		}
-	}()
-}
-
-func (a *v2ToV1Processor) WaitForClose(tout time.Duration) error {
-	select {
-	case <-a.sig.HasClosedChan():
-	case <-time.After(tout):
-		return component.ErrTimeout
-	}
-	return nil
+func (a *v2ToV1Processor) Close(ctx context.Context) error {
+	return a.p.Close(ctx)
 }
 
 //------------------------------------------------------------------------------
@@ -126,7 +111,6 @@ func (a *v2ToV1Processor) WaitForClose(tout time.Duration) error {
 type v2BatchedToV1Processor struct {
 	typeStr string
 	p       V2Batched
-	sig     *shutdown.Signaller
 	mgr     component.Observability
 
 	mReceived      metrics.StatCounter
@@ -141,7 +125,7 @@ type v2BatchedToV1Processor struct {
 // implements types.Processor.
 func NewV2BatchedToV1Processor(typeStr string, p V2Batched, mgr component.Observability) V1 {
 	return &v2BatchedToV1Processor{
-		typeStr: typeStr, p: p, sig: shutdown.NewSignaller(), mgr: mgr,
+		typeStr: typeStr, p: p, mgr: mgr,
 
 		mReceived:      mgr.Metrics().GetCounter("processor_received"),
 		mBatchReceived: mgr.Metrics().GetCounter("processor_batch_received"),
@@ -152,14 +136,14 @@ func NewV2BatchedToV1Processor(typeStr string, p V2Batched, mgr component.Observ
 	}
 }
 
-func (a *v2BatchedToV1Processor) ProcessMessage(msg message.Batch) ([]message.Batch, error) {
+func (a *v2BatchedToV1Processor) ProcessBatch(ctx context.Context, msg message.Batch) ([]message.Batch, error) {
 	a.mReceived.Incr(int64(msg.Len()))
 	a.mBatchReceived.Incr(1)
 
 	tStarted := time.Now()
 	spans := tracing.CreateChildSpans(a.mgr.Tracer(), a.typeStr, msg)
 
-	outputBatches, err := a.p.ProcessBatch(context.Background(), spans, msg)
+	outputBatches, err := a.p.ProcessBatch(ctx, spans, msg)
 	if err != nil {
 		a.mError.Incr(1)
 		_ = msg.Iter(func(i int, p *message.Part) error {
@@ -185,19 +169,6 @@ func (a *v2BatchedToV1Processor) ProcessMessage(msg message.Batch) ([]message.Ba
 	return outputBatches, nil
 }
 
-func (a *v2BatchedToV1Processor) CloseAsync() {
-	go func() {
-		if err := a.p.Close(context.Background()); err == nil {
-			a.sig.ShutdownComplete()
-		}
-	}()
-}
-
-func (a *v2BatchedToV1Processor) WaitForClose(tout time.Duration) error {
-	select {
-	case <-a.sig.HasClosedChan():
-	case <-time.After(tout):
-		return component.ErrTimeout
-	}
-	return nil
+func (a *v2BatchedToV1Processor) Close(ctx context.Context) error {
+	return a.p.Close(ctx)
 }

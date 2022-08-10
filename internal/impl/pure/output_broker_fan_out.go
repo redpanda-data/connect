@@ -68,14 +68,14 @@ func (o *fanOutOutputBroker) loop() {
 			case <-ackInterruptChan:
 			case <-time.After(time.Millisecond * 100):
 				// Just incase an interrupt doesn't arrive.
-			case <-o.shutSig.CloseAtLeisureChan():
+			case <-o.shutSig.CloseNowChan():
 				break ackWaitLoop
 			}
 		}
 		for _, c := range o.outputTSChans {
 			close(c)
 		}
-		closeAllOutputs(o.outputs)
+		_ = closeAllOutputs(context.Background(), o.outputs)
 		o.shutSig.ShutdownComplete()
 	}()
 
@@ -87,7 +87,7 @@ func (o *fanOutOutputBroker) loop() {
 			if !open {
 				return
 			}
-		case <-o.shutSig.CloseAtLeisureChan():
+		case <-o.shutSig.CloseNowChan():
 			return
 		}
 
@@ -109,22 +109,22 @@ func (o *fanOutOutputBroker) loop() {
 				}
 				return nil
 			}):
-			case <-o.shutSig.CloseAtLeisureChan():
+			case <-o.shutSig.CloseNowChan():
 				return
 			}
 		}
 	}
 }
 
-func (o *fanOutOutputBroker) CloseAsync() {
-	o.shutSig.CloseAtLeisure()
+func (o *fanOutOutputBroker) TriggerCloseNow() {
+	o.shutSig.CloseNow()
 }
 
-func (o *fanOutOutputBroker) WaitForClose(timeout time.Duration) error {
+func (o *fanOutOutputBroker) WaitForClose(ctx context.Context) error {
 	select {
 	case <-o.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

@@ -111,10 +111,8 @@ func TestPoolBasic(t *testing.T) {
 		t.Fatal("Timed out")
 	}
 
-	proc.CloseAsync()
-	if err := proc.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	proc.TriggerCloseNow()
+	require.NoError(t, proc.WaitForClose(ctx))
 }
 
 func TestPoolMultiMsgs(t *testing.T) {
@@ -186,10 +184,8 @@ func TestPoolMultiMsgs(t *testing.T) {
 		}
 	}
 
-	proc.CloseAsync()
-	if err := proc.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	proc.TriggerCloseNow()
+	require.NoError(t, proc.WaitForClose(ctx))
 }
 
 func TestPoolMultiThreads(t *testing.T) {
@@ -258,10 +254,8 @@ func TestPoolMultiThreads(t *testing.T) {
 		}
 	}
 
-	proc.CloseAsync()
-	if err := proc.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	proc.TriggerCloseNow()
+	require.NoError(t, proc.WaitForClose(ctx))
 }
 
 func TestPoolMultiNaturalClose(t *testing.T) {
@@ -280,8 +274,5 @@ func TestPoolMultiNaturalClose(t *testing.T) {
 	}
 
 	close(tChan)
-
-	if err := proc.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, proc.WaitForClose(context.Background()))
 }

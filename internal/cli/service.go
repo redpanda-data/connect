@@ -33,7 +33,7 @@ import (
 var testSuffix = "_benthos_test"
 
 type stoppable interface {
-	Stop(timeout time.Duration) error
+	Stop(ctx context.Context) error
 }
 
 //------------------------------------------------------------------------------
@@ -102,7 +102,10 @@ func initStreamsMode(
 	logger.Infoln("Launching benthos in streams mode, use CTRL+C to close")
 
 	if err := confReader.SubscribeStreamChanges(func(id string, newStreamConf stream.Config) bool {
-		if err = streamMgr.Update(id, newStreamConf, time.Second*30); err != nil && errors.Is(err, strmmgr.ErrStreamDoesNotExist) {
+		ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+		defer done()
+
+		if err = streamMgr.Update(ctx, id, newStreamConf); err != nil && errors.Is(err, strmmgr.ErrStreamDoesNotExist) {
 			err = streamMgr.Create(id, newStreamConf)
 		}
 		if err != nil {
@@ -131,7 +134,7 @@ type swappableStopper struct {
 	mut     sync.Mutex
 }
 
-func (s *swappableStopper) Stop(timeout time.Duration) error {
+func (s *swappableStopper) Stop(ctx context.Context) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -140,7 +143,7 @@ func (s *swappableStopper) Stop(timeout time.Duration) error {
 	}
 
 	s.stopped = true
-	return s.current.Stop(timeout)
+	return s.current.Stop(ctx)
 }
 
 func (s *swappableStopper) Replace(fn func() (stoppable, error)) error {
@@ -152,7 +155,10 @@ func (s *swappableStopper) Replace(fn func() (stoppable, error)) error {
 		return nil
 	}
 
-	if err := s.current.Stop(time.Second * 30); err != nil {
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	if err := s.current.Stop(ctx); err != nil {
 		return fmt.Errorf("failed to stop active stream: %w", err)
 	}
 
@@ -418,12 +424,13 @@ func cmdService(
 			os.Exit(1)
 		}
 
-		timesOut := time.Now().Add(exitTimeout)
-		if err := stoppableStream.Stop(exitTimeout); err != nil {
+		ctx, done := context.WithTimeout(context.Background(), exitTimeout)
+		if err := stoppableStream.Stop(ctx); err != nil {
 			os.Exit(1)
 		}
-		manager.CloseAsync()
-		if err := manager.WaitForClose(time.Until(timesOut)); err != nil {
+
+		manager.TriggerStopConsuming()
+		if err := manager.WaitForClose(ctx); err != nil {
 			logger.Warnf(
 				"Service failed to close cleanly within allocated time: %v."+
 					" Exiting forcefully and dumping stack trace to stderr\n", err,
@@ -431,6 +438,7 @@ func cmdService(
 			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 			os.Exit(1)
 		}
+		done()
 	}()
 
 	sigChan := make(chan os.Signal, 1)

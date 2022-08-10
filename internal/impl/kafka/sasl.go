@@ -29,6 +29,7 @@ var AWSSASLFromConfigFn = notImportedAWSFn
 func saslField() *service.ConfigField {
 	return service.NewObjectListField("sasl",
 		service.NewStringAnnotatedEnumField("mechanism", map[string]string{
+			"none":          "Disable sasl authentication",
 			"PLAIN":         "Plain text authentication.",
 			"OAUTHBEARER":   "OAuth Bearer based authentication.",
 			"SCRAM-SHA-256": "SCRAM based authentication as specified in RFC5802.",
@@ -75,21 +76,29 @@ func saslMechanismsFromConfig(c *service.ParsedConfig) ([]sasl.Mechanism, error)
 		return nil, err
 	}
 
-	mechanisms := make([]sasl.Mechanism, len(sList))
+	var mechanisms []sasl.Mechanism
+	var mechanism sasl.Mechanism
 	for i, mConf := range sList {
 		mechStr, err := mConf.FieldString("mechanism")
 		if err == nil {
 			switch mechStr {
+			case "", "none":
+				continue
 			case "PLAIN":
-				mechanisms[i], err = plainSaslFromConfig(mConf)
+				mechanism, err = plainSaslFromConfig(mConf)
+				mechanisms = append(mechanisms, mechanism)
 			case "OAUTHBEARER":
-				mechanisms[i], err = oauthSaslFromConfig(mConf)
+				mechanism, err = oauthSaslFromConfig(mConf)
+				mechanisms = append(mechanisms, mechanism)
 			case "SCRAM-SHA-256":
-				mechanisms[i], err = scram256SaslFromConfig(mConf)
+				mechanism, err = scram256SaslFromConfig(mConf)
+				mechanisms = append(mechanisms, mechanism)
 			case "SCRAM-SHA-512":
-				mechanisms[i], err = scram512SaslFromConfig(mConf)
+				mechanism, err = scram512SaslFromConfig(mConf)
+				mechanisms = append(mechanisms, mechanism)
 			case "AWS_MSK_IAM":
-				mechanisms[i], err = AWSSASLFromConfigFn(mConf)
+				mechanism, err = AWSSASLFromConfigFn(mConf)
+				mechanisms = append(mechanisms, mechanism)
 			default:
 				err = fmt.Errorf("unknown mechanism: %v", mechStr)
 			}

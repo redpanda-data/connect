@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -26,7 +27,7 @@ func TestCatchEmpty(t *testing.T) {
 	exp := [][]byte{
 		[]byte("foo bar baz"),
 	}
-	msgs, res := proc.ProcessMessage(message.QuickBatch(exp))
+	msgs, res := proc.ProcessBatch(context.Background(), message.QuickBatch(exp))
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -75,7 +76,7 @@ func TestCatchBasic(t *testing.T) {
 		p.ErrorSet(errors.New("foo"))
 		return nil
 	})
-	msgs, res := proc.ProcessMessage(msg)
+	msgs, res := proc.ProcessBatch(context.Background(), msg)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -122,7 +123,7 @@ func TestCatchFilterSome(t *testing.T) {
 		p.ErrorSet(errors.New("foo"))
 		return nil
 	})
-	msgs, res := proc.ProcessMessage(msg)
+	msgs, res := proc.ProcessBatch(context.Background(), msg)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -173,7 +174,7 @@ func TestCatchMultiProcs(t *testing.T) {
 		p.ErrorSet(errors.New("foo"))
 		return nil
 	})
-	msgs, res := proc.ProcessMessage(msg)
+	msgs, res := proc.ProcessBatch(context.Background(), msg)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -219,7 +220,7 @@ func TestCatchNotFails(t *testing.T) {
 	msg := message.QuickBatch(parts)
 	msg.Get(0).ErrorSet(errors.New("foo"))
 	msg.Get(2).ErrorSet(errors.New("foo"))
-	msgs, res := proc.ProcessMessage(msg)
+	msgs, res := proc.ProcessBatch(context.Background(), msg)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -262,7 +263,7 @@ func TestCatchFilterAll(t *testing.T) {
 		p.ErrorSet(errors.New("foo"))
 		return nil
 	})
-	msgs, res := proc.ProcessMessage(msg)
+	msgs, res := proc.ProcessBatch(context.Background(), msg)
 	assert.NoError(t, res)
 	if len(msgs) != 0 {
 		t.Errorf("Wrong count of result msgs: %v", len(msgs))

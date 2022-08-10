@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"strconv"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestJMESPathAllParts(t *testing.T) {
 		[]byte(`{"foo":{"bar":1}}`),
 		[]byte(`{"foo":{"bar":2}}`),
 	})
-	msgs, res := jSet.ProcessMessage(msgIn)
+	msgs, res := jSet.ProcessBatch(context.Background(), msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("Wrong count of messages")
 	}
@@ -51,7 +52,7 @@ func TestJMESPathValidation(t *testing.T) {
 	}
 
 	msgIn := message.QuickBatch([][]byte{[]byte("this is bad json")})
-	msgs, res := jSet.ProcessMessage(msgIn)
+	msgs, res := jSet.ProcessBatch(context.Background(), msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
 	}
@@ -79,7 +80,7 @@ func TestJMESPathMutation(t *testing.T) {
 
 	msgIn := message.QuickBatch(make([][]byte, 1))
 	msgIn.Get(0).SetStructured(ogObj.Data())
-	msgs, res := jSet.ProcessMessage(msgIn)
+	msgs, res := jSet.ProcessBatch(context.Background(), msgIn)
 	if len(msgs) != 1 {
 		t.Fatal("No passthrough for bad input data")
 	}
@@ -169,7 +170,7 @@ func TestJMESPath(t *testing.T) {
 				[]byte(test.input),
 			},
 		)
-		msgs, _ := jSet.ProcessMessage(inMsg)
+		msgs, _ := jSet.ProcessBatch(context.Background(), inMsg)
 		if len(msgs) != 1 {
 			t.Fatalf("Test '%v' did not succeed", test.name)
 		}

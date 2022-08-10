@@ -29,46 +29,37 @@ func newAsyncMockWriter() *mockAsyncWriter {
 	}
 }
 
-func (w *mockAsyncWriter) ConnectWithContext(ctx context.Context) error {
+func (w *mockAsyncWriter) Connect(ctx context.Context) error {
 	return <-w.connChan
 }
-func (w *mockAsyncWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (w *mockAsyncWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	w.msgsRcvd.Store(atomic.AddUint64(&w.msgsTotal, 1), msg)
 	return <-w.writeChan
 }
-func (w *mockAsyncWriter) CloseAsync() {}
-func (w *mockAsyncWriter) WaitForClose(time.Duration) error {
-	return nil
-}
+func (w *mockAsyncWriter) Close(context.Context) error { return nil }
 
 type writerCantConnect struct{}
 
-func (w writerCantConnect) ConnectWithContext(ctx context.Context) error {
+func (w writerCantConnect) Connect(ctx context.Context) error {
 	return component.ErrNotConnected
 }
-func (w writerCantConnect) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (w writerCantConnect) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return component.ErrNotConnected
 }
-func (w writerCantConnect) CloseAsync() {}
-func (w writerCantConnect) WaitForClose(time.Duration) error {
-	return nil
-}
+func (w writerCantConnect) Close(context.Context) error { return nil }
 
 type writerCantSend struct {
 	connected int
 }
 
-func (w *writerCantSend) ConnectWithContext(ctx context.Context) error {
+func (w *writerCantSend) Connect(ctx context.Context) error {
 	w.connected++
 	return nil
 }
-func (w *writerCantSend) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (w *writerCantSend) WriteBatch(ctx context.Context, msg message.Batch) error {
 	return component.ErrNotConnected
 }
-func (w *writerCantSend) CloseAsync() {}
-func (w *writerCantSend) WaitForClose(time.Duration) error {
-	return nil
-}
+func (w *writerCantSend) Close(context.Context) error { return nil }
 
 //------------------------------------------------------------------------------
 
@@ -87,11 +78,12 @@ func TestAsyncWriterCantConnect(t *testing.T) {
 		t.Error("Expected error from duplicate receiver call")
 	}
 
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	// We will fail to connect but should still exit immediately.
-	w.CloseAsync()
-	if err = w.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	w.TriggerCloseNow()
+	require.NoError(t, w.WaitForClose(ctx))
 }
 
 //------------------------------------------------------------------------------
@@ -113,10 +105,11 @@ func TestAsyncWriterCantSendClosed(t *testing.T) {
 		t.Error(err)
 	}
 
-	w.CloseAsync()
-	if err = w.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	w.TriggerCloseNow()
+	require.NoError(t, w.WaitForClose(ctx))
 }
 
 func TestAsyncWriterCantSendClosedChan(t *testing.T) {
@@ -137,9 +130,11 @@ func TestAsyncWriterCantSendClosedChan(t *testing.T) {
 	}
 
 	close(msgChan)
-	if err = w.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, w.WaitForClose(ctx))
 }
 
 //------------------------------------------------------------------------------
@@ -167,9 +162,10 @@ func TestAsyncWriterStartClosed(t *testing.T) {
 		t.Fatal("Timed out")
 	}
 
-	if err = w.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, w.WaitForClose(ctx))
 }
 
 func TestAsyncWriterClosesOnReconn(t *testing.T) {
@@ -215,9 +211,10 @@ func TestAsyncWriterClosesOnReconn(t *testing.T) {
 		t.Error("Timed out")
 	}
 
-	if err = w.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, w.WaitForClose(ctx))
 }
 
 func TestAsyncWriterClosesOnResend(t *testing.T) {
@@ -268,9 +265,10 @@ func TestAsyncWriterClosesOnResend(t *testing.T) {
 		t.Error("Timed out")
 	}
 
-	if err = w.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, w.WaitForClose(ctx))
 }
 
 //------------------------------------------------------------------------------
@@ -334,10 +332,11 @@ func TestAsyncWriterCanReconnect(t *testing.T) {
 		t.Error("Timed out")
 	}
 
-	w.CloseAsync()
-	if err = w.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	w.TriggerCloseNow()
+	require.NoError(t, w.WaitForClose(ctx))
 }
 
 func TestAsyncWriterCanReconnectAsync(t *testing.T) {
@@ -438,10 +437,11 @@ func TestAsyncWriterCanReconnectAsync(t *testing.T) {
 	}
 	<-doneChan
 
-	w.CloseAsync()
-	if err = w.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	w.TriggerCloseNow()
+	require.NoError(t, w.WaitForClose(ctx))
 }
 
 func TestAsyncWriterCantReconnect(t *testing.T) {
@@ -489,7 +489,7 @@ func TestAsyncWriterCantReconnect(t *testing.T) {
 	}
 
 	// We will be failing to send but should still exit immediately.
-	w.CloseAsync()
+	w.TriggerCloseNow()
 
 	go func() {
 		select {
@@ -498,9 +498,10 @@ func TestAsyncWriterCantReconnect(t *testing.T) {
 		}
 	}()
 
-	if err = w.WaitForClose(time.Second * 5); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	require.NoError(t, w.WaitForClose(ctx))
 }
 
 func TestAsyncWriterHappyPath(t *testing.T) {
@@ -550,11 +551,12 @@ func TestAsyncWriterHappyPath(t *testing.T) {
 		t.Fatal("Timed out")
 	}
 
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	// We will be failing to send but should still exit immediately.
-	w.CloseAsync()
-	if err = w.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	w.TriggerCloseNow()
+	require.NoError(t, w.WaitForClose(ctx))
 
 	msgRcvd, exists := writerImpl.msgsRcvd.Load(uint64(1))
 	require.True(t, exists)
@@ -617,10 +619,11 @@ func TestAsyncWriterSadPath(t *testing.T) {
 	}
 
 	// We will be failing to send but should still exit immediately.
-	w.CloseAsync()
-	if err = w.WaitForClose(time.Second); err != nil {
-		t.Error(err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
+	w.TriggerCloseNow()
+	require.NoError(t, w.WaitForClose(ctx))
 
 	msgRcvd, exists := writerImpl.msgsRcvd.Load(uint64(1))
 	require.True(t, exists)

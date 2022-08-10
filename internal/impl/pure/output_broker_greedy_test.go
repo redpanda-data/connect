@@ -24,8 +24,8 @@ func TestGreedyDoubleClose(t *testing.T) {
 	}
 
 	// This shouldn't cause a panic
-	oTM.CloseAsync()
-	oTM.CloseAsync()
+	oTM.TriggerCloseNow()
+	oTM.TriggerCloseNow()
 }
 
 //------------------------------------------------------------------------------
@@ -95,8 +95,8 @@ func TestBasicGreedy(t *testing.T) {
 		}
 	}
 
-	oTM.CloseAsync()
-	if err := oTM.WaitForClose(time.Second * 10); err != nil {
+	oTM.TriggerCloseNow()
+	if err := oTM.WaitForClose(tCtx); err != nil {
 		t.Error(err)
 	}
 }

@@ -1,6 +1,7 @@
 package pure_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -16,6 +17,9 @@ import (
 )
 
 func TestInproc(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*5)
+	defer done()
+
 	mgr, err := manager.New(manager.NewResourceConfig())
 	require.NoError(t, err)
 
@@ -49,8 +53,8 @@ func TestInproc(t *testing.T) {
 		t.Error("Timed out")
 	}
 
-	ip.CloseAsync()
-	require.NoError(t, ip.WaitForClose(time.Second))
+	ip.TriggerCloseNow()
+	require.NoError(t, ip.WaitForClose(tCtx))
 
 	select {
 	case _, open := <-toutchan:

@@ -127,7 +127,7 @@ func newMQTTReader(conf input.MQTTConfig, log log.Modular) (*mqttReader, error) 
 	return m, nil
 }
 
-func (m *mqttReader) ConnectWithContext(ctx context.Context) error {
+func (m *mqttReader) Connect(ctx context.Context) error {
 	m.cMut.Lock()
 	defer m.cMut.Unlock()
 
@@ -238,7 +238,7 @@ func (m *mqttReader) ConnectWithContext(ctx context.Context) error {
 	return nil
 }
 
-func (m *mqttReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (m *mqttReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	m.cMut.Lock()
 	msgChan := m.msgChan
 	m.cMut.Unlock()
@@ -279,16 +279,14 @@ func (m *mqttReader) ReadWithContext(ctx context.Context) (message.Batch, input.
 	return nil, nil, component.ErrTimeout
 }
 
-func (m *mqttReader) CloseAsync() {
+func (m *mqttReader) Close(ctx context.Context) (err error) {
 	m.cMut.Lock()
+	defer m.cMut.Unlock()
+
 	if m.client != nil {
 		m.client.Disconnect(0)
 		m.client = nil
 		close(m.interruptChan)
 	}
-	m.cMut.Unlock()
-}
-
-func (m *mqttReader) WaitForClose(timeout time.Duration) error {
-	return nil
+	return
 }

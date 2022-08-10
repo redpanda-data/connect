@@ -3,7 +3,6 @@ package output
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -92,15 +91,15 @@ func (n *notBatchedOutput) breakMessageOut(msg message.Batch) error {
 }
 
 func (n *notBatchedOutput) loop() {
-	defer func() {
-		close(n.outChan)
-		n.out.CloseAsync()
-		_ = n.out.WaitForClose(shutdown.MaximumShutdownWait())
-		n.shutSig.ShutdownComplete()
-	}()
-
 	ctx, done := n.shutSig.CloseNowCtx(context.Background())
 	defer done()
+
+	defer func() {
+		close(n.outChan)
+		n.out.TriggerCloseNow()
+		_ = n.out.WaitForClose(ctx)
+		n.shutSig.ShutdownComplete()
+	}()
 
 	for {
 		var tran message.Transaction
@@ -151,16 +150,16 @@ func (n *notBatchedOutput) Connected() bool {
 	return n.out.Connected()
 }
 
-func (n *notBatchedOutput) CloseAsync() {
-	n.shutSig.CloseAtLeisure()
+func (n *notBatchedOutput) TriggerCloseNow() {
+	n.shutSig.CloseNow()
 }
 
 // WaitForClose blocks until the File output has closed down.
-func (n *notBatchedOutput) WaitForClose(timeout time.Duration) error {
+func (n *notBatchedOutput) WaitForClose(ctx context.Context) error {
 	select {
 	case <-n.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

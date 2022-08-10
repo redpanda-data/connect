@@ -99,9 +99,9 @@ func newAWSSQSReader(conf input.AWSSQSConfig, log log.Modular) (*awsSQSReader, e
 	}, nil
 }
 
-// ConnectWithContext attempts to establish a connection to the target SQS
+// Connect attempts to establish a connection to the target SQS
 // queue.
-func (a *awsSQSReader) ConnectWithContext(ctx context.Context) error {
+func (a *awsSQSReader) Connect(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -339,8 +339,8 @@ func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
 	}
 }
 
-// ReadWithContext attempts to read a new message from the target SQS.
-func (a *awsSQSReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+// ReadBatch attempts to read a new message from the target SQS.
+func (a *awsSQSReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	if a.session == nil {
 		return nil, nil, component.ErrNotConnected
 	}
@@ -404,26 +404,30 @@ func (a *awsSQSReader) ReadWithContext(ctx context.Context) (message.Batch, inpu
 	}, nil
 }
 
-// CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *awsSQSReader) CloseAsync() {
+func (a *awsSQSReader) Close(ctx context.Context) error {
 	a.closeSignal.CloseAtLeisure()
-}
 
-// WaitForClose will block until either the reader is closed or a specified
-// timeout occurs.
-func (a *awsSQSReader) WaitForClose(tout time.Duration) error {
-	go func() {
-		closeNowAt := tout - time.Second
-		if closeNowAt < time.Second {
-			closeNowAt = time.Second
+	var closeNowAt time.Duration
+	if dline, ok := ctx.Deadline(); ok {
+		if closeNowAt = time.Until(dline) - time.Second; closeNowAt <= 0 {
+			a.closeSignal.CloseNow()
 		}
-		<-time.After(closeNowAt)
-		a.closeSignal.CloseNow()
-	}()
-	select {
-	case <-time.After(tout):
-		return component.ErrTimeout
-	case <-a.closeSignal.HasClosedChan():
-		return nil
 	}
+	if closeNowAt > 0 {
+		select {
+		case <-time.After(closeNowAt):
+			a.closeSignal.CloseNow()
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-a.closeSignal.HasClosedChan():
+			return nil
+		}
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-a.closeSignal.HasClosedChan():
+	}
+	return nil
 }

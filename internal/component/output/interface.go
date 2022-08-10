@@ -2,7 +2,6 @@ package output
 
 import (
 	"context"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
@@ -17,13 +16,17 @@ type Sync interface {
 	// connected to its target.
 	Connected() bool
 
-	// CloseAsync triggers the shut down of this component but should not block
-	// the calling goroutine.
-	CloseAsync()
+	// TriggerStopConsuming instructs the output to start shutting down
+	// resources once all pending messages are delivered and acknowledged.
+	TriggerStopConsuming()
+
+	// TriggerCloseNow triggers the shut down of this component but should not
+	// block the calling goroutine.
+	TriggerCloseNow()
 
 	// WaitForClose is a blocking call to wait until the component has finished
 	// shutting down and cleaning up resources.
-	WaitForClose(timeout time.Duration) error
+	WaitForClose(ctx context.Context) error
 }
 
 // Streamed is a common interface implemented by outputs and provides channel
@@ -36,11 +39,11 @@ type Streamed interface {
 	// connected to its target.
 	Connected() bool
 
-	// CloseAsync triggers the shut down of this component but should not block
-	// the calling goroutine.
-	CloseAsync()
+	// TriggerCloseNow triggers the shut down of this component but should not
+	// block the calling goroutine.
+	TriggerCloseNow()
 
 	// WaitForClose is a blocking call to wait until the component has finished
 	// shutting down and cleaning up resources.
-	WaitForClose(timeout time.Duration) error
+	WaitForClose(ctx context.Context) error
 }

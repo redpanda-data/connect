@@ -12,7 +12,6 @@ import (
 	"github.com/OneOfOne/xxhash"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -478,28 +477,22 @@ func (r *sequenceInput) dispatchJoinedMessage(wg *sync.WaitGroup, msg message.Ba
 }
 
 func (r *sequenceInput) loop() {
+	shutNowCtx, done := r.shutSig.CloseNowCtx(context.Background())
+	defer done()
+
 	var shardJoinWG sync.WaitGroup
 	defer func() {
 		shardJoinWG.Wait()
 		if t, _ := r.getTarget(); t != nil {
-			t.CloseAsync()
-			go func() {
-				select {
-				case <-r.shutSig.CloseNowChan():
-					_ = t.WaitForClose(0)
-				case <-r.shutSig.HasClosedChan():
-				}
-			}()
-			_ = t.WaitForClose(shutdown.MaximumShutdownWait())
+			t.TriggerStopConsuming()
+			_ = t.WaitForClose(shutNowCtx)
+			t.TriggerCloseNow()
 		}
 		close(r.transactions)
 		r.shutSig.ShutdownComplete()
 	}()
 
 	target, finalInSequence := r.getTarget()
-
-	shutNowCtx, done := r.shutSig.CloseNowCtx(context.Background())
-	defer done()
 
 runLoop:
 	for {
@@ -544,7 +537,6 @@ runLoop:
 		select {
 		case tran, open = <-target.TransactionChan():
 			if !open {
-				target.CloseAsync() // For good measure.
 				target = nil
 				continue runLoop
 			}
@@ -580,21 +572,19 @@ func (r *sequenceInput) Connected() bool {
 	return false
 }
 
-func (r *sequenceInput) CloseAsync() {
+func (r *sequenceInput) TriggerStopConsuming() {
 	r.shutSig.CloseAtLeisure()
 }
 
-func (r *sequenceInput) WaitForClose(timeout time.Duration) error {
-	go func() {
-		if tAfter := timeout - time.Second; tAfter > 0 {
-			<-time.After(timeout - time.Second)
-		}
-		r.shutSig.CloseNow()
-	}()
+func (r *sequenceInput) TriggerCloseNow() {
+	r.shutSig.CloseNow()
+}
+
+func (r *sequenceInput) WaitForClose(ctx context.Context) error {
 	select {
 	case <-r.shutSig.HasClosedChan():
-	case <-time.After(timeout):
-		return component.ErrTimeout
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

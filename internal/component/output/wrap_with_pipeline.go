@@ -1,11 +1,10 @@
 package output
 
 import (
-	"time"
+	"context"
 
 	iprocessor "github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // WithPipeline is a type that wraps both an output type and a pipeline type
@@ -60,17 +59,16 @@ func (i *WithPipeline) Connected() bool {
 
 //------------------------------------------------------------------------------
 
-// CloseAsync triggers a closure of this object but does not block.
-func (i *WithPipeline) CloseAsync() {
-	i.pipe.CloseAsync()
+// TriggerCloseNow triggers a closure of this object but does not block.
+func (i *WithPipeline) TriggerCloseNow() {
 	go func() {
-		_ = i.pipe.WaitForClose(shutdown.MaximumShutdownWait())
-		i.out.CloseAsync()
+		_ = i.pipe.WaitForClose(context.Background())
+		i.out.TriggerCloseNow()
 	}()
 }
 
 // WaitForClose is a blocking call to wait until the object has finished closing
 // down and cleaning up resources.
-func (i *WithPipeline) WaitForClose(timeout time.Duration) error {
-	return i.out.WaitForClose(timeout)
+func (i *WithPipeline) WaitForClose(ctx context.Context) error {
+	return i.out.WaitForClose(ctx)
 }

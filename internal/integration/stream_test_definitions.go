@@ -27,7 +27,7 @@ func StreamTestOpenClose() StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			require.NoError(t, sendMessage(env.ctx, t, tranChan, "hello world"))
@@ -49,13 +49,13 @@ func StreamTestOpenCloseIsolated() StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, nil, output)
+				closeConnectors(t, env, nil, output)
 			})
 			require.NoError(t, sendMessage(env.ctx, t, tranChan, "hello world"))
 
 			input := initInput(t, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, nil)
+				closeConnectors(t, env, input, nil)
 			})
 			messageMatch(t, receiveMessage(env.ctx, t, input.TransactionChan(), nil), "hello world")
 		},
@@ -73,7 +73,7 @@ func StreamTestMetadata() StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			require.NoError(t, sendMessage(
@@ -107,7 +107,7 @@ func StreamTestMetadataFilter() StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			require.NoError(t, sendMessage(
@@ -134,7 +134,7 @@ func StreamTestSendBatch(n int) StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			set := map[string][]string{}
@@ -166,7 +166,7 @@ func StreamTestSendBatches(batchSize, batches, parallelism int) StreamTestDefini
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			set := map[string][]string{}
@@ -230,7 +230,7 @@ func StreamTestSendBatchCount(n int) StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			resChan := make(chan error)
@@ -280,7 +280,7 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, nil, output)
+				closeConnectors(t, env, nil, output)
 			})
 
 			resChan := make(chan error)
@@ -312,7 +312,7 @@ func StreamTestSendBatchCountIsolated(n int) StreamTestDefinition {
 
 			input := initInput(t, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, nil)
+				closeConnectors(t, env, input, nil)
 			})
 
 			for len(set) > 0 {
@@ -335,7 +335,7 @@ func StreamTestReceiveBatchCount(n int) StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			set := map[string][]string{}
@@ -372,7 +372,7 @@ func StreamTestStreamSequential(n int) StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			set := map[string][]string{}
@@ -401,7 +401,7 @@ func StreamTestStreamIsolated(n int) StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, nil, output)
+				closeConnectors(t, env, nil, output)
 			})
 
 			set := map[string][]string{}
@@ -414,7 +414,7 @@ func StreamTestStreamIsolated(n int) StreamTestDefinition {
 
 			input := initInput(t, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, nil)
+				closeConnectors(t, env, input, nil)
 			})
 
 			for len(set) > 0 {
@@ -435,7 +435,7 @@ func StreamTestCheckpointCapture() StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, nil, output)
+				closeConnectors(t, env, nil, output)
 			})
 
 			go func() {
@@ -470,7 +470,7 @@ func StreamTestCheckpointCapture() StreamTestDefinition {
 			require.NoError(t, responseFns[2](env.ctx, errors.New("rejecting just cus")))
 			require.NoError(t, responseFns[4](env.ctx, errors.New("rejecting just cus")))
 
-			closeConnectors(t, input, nil)
+			closeConnectors(t, env, input, nil)
 
 			select {
 			case <-time.After(time.Second * 5):
@@ -480,7 +480,7 @@ func StreamTestCheckpointCapture() StreamTestDefinition {
 
 			input = initInput(t, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, nil)
+				closeConnectors(t, env, input, nil)
 			})
 
 			msg = receiveMessage(env.ctx, t, input.TransactionChan(), nil)
@@ -505,7 +505,7 @@ func StreamTestStreamParallel(n int) StreamTestDefinition {
 			tranChan := make(chan message.Transaction, n)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			set := map[string][]string{}
@@ -552,7 +552,7 @@ func StreamTestStreamSaturatedUnacked(n int) StreamTestDefinition {
 			tranChan := make(chan message.Transaction, n)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			set := map[string][]string{}
@@ -593,7 +593,7 @@ func StreamTestAtLeastOnceDelivery() StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, nil, output)
+				closeConnectors(t, env, nil, output)
 			})
 
 			expectedMessages := map[string]struct{}{
@@ -630,7 +630,7 @@ func StreamTestAtLeastOnceDelivery() StreamTestDefinition {
 				t.Fatal(env.ctx.Err())
 			}
 
-			closeConnectors(t, input, nil)
+			closeConnectors(t, env, input, nil)
 
 			select {
 			case <-time.After(time.Second * 5):
@@ -640,7 +640,7 @@ func StreamTestAtLeastOnceDelivery() StreamTestDefinition {
 
 			input = initInput(t, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, nil)
+				closeConnectors(t, env, input, nil)
 			})
 
 			expectedMessages = map[string]struct{}{
@@ -668,7 +668,7 @@ func StreamTestStreamParallelLossy(n int) StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, input, output)
+				closeConnectors(t, env, input, output)
 			})
 
 			set := map[string][]string{}
@@ -726,7 +726,7 @@ func StreamTestStreamParallelLossyThroughReconnect(n int) StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			input, output := initConnectors(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, nil, output)
+				closeConnectors(t, env, nil, output)
 			})
 
 			set := map[string][]string{}
@@ -762,11 +762,11 @@ func StreamTestStreamParallelLossyThroughReconnect(n int) StreamTestDefinition {
 					}
 				}
 
-				closeConnectors(t, input, nil)
+				closeConnectors(t, env, input, nil)
 
 				input = initInput(t, env)
 				t.Cleanup(func() {
-					closeConnectors(t, input, nil)
+					closeConnectors(t, env, input, nil)
 				})
 
 				t.Log("Finished first loop, looping through rejected messages.")
@@ -795,7 +795,7 @@ func StreamTestOutputOnlySendSequential(n int, getFn GetMessageFunc) StreamTestD
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, nil, output)
+				closeConnectors(t, env, nil, output)
 			})
 
 			set := map[string]string{}
@@ -825,7 +825,7 @@ func StreamTestOutputOnlySendBatch(n int, getFn GetMessageFunc) StreamTestDefini
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, nil, output)
+				closeConnectors(t, env, nil, output)
 			})
 
 			set := map[string]string{}
@@ -858,7 +858,7 @@ func StreamTestOutputOnlyOverride(getFn GetMessageFunc) StreamTestDefinition {
 			tranChan := make(chan message.Transaction)
 			output := initOutput(t, tranChan, env)
 			t.Cleanup(func() {
-				closeConnectors(t, nil, output)
+				closeConnectors(t, env, nil, output)
 			})
 
 			first := `{"content":"this should be overridden","id":1}`

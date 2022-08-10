@@ -3,7 +3,6 @@ package span
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,24 +15,19 @@ import (
 type fnReader struct {
 	connectWithContext func(ctx context.Context) error
 	readWithContext    func(ctx context.Context) (message.Batch, input.AsyncAckFn, error)
-	closeAsync         func()
-	waitForClose       func(timeout time.Duration) error
+	close              func(ctx context.Context) error
 }
 
-func (f *fnReader) ConnectWithContext(ctx context.Context) error {
+func (f *fnReader) Connect(ctx context.Context) error {
 	return f.connectWithContext(ctx)
 }
 
-func (f *fnReader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+func (f *fnReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	return f.readWithContext(ctx)
 }
 
-func (f *fnReader) CloseAsync() {
-	f.closeAsync()
-}
-
-func (f *fnReader) WaitForClose(timeout time.Duration) error {
-	return f.waitForClose(timeout)
+func (f *fnReader) Close(ctx context.Context) error {
+	return f.close(ctx)
 }
 
 func TestSpanReader(t *testing.T) {
@@ -82,25 +76,22 @@ func TestSpanReader(t *testing.T) {
 						return nil
 					}, nil
 				},
-				closeAsync: func() {
+				close: func(ctx context.Context) error {
 					closeCalled = true
-				},
-				waitForClose: func(tout time.Duration) error {
 					waitCalled = true
 					return nil
 				},
 			}, mock.NewManager())
 			require.NoError(t, err)
 
-			assert.Nil(t, r.ConnectWithContext(context.Background()))
+			assert.Nil(t, r.Connect(context.Background()))
 
-			res, _, err := r.ReadWithContext(context.Background())
+			res, _, err := r.ReadBatch(context.Background())
 			require.NoError(t, err)
 			assert.Equal(t, 1, res.Len())
 			assert.Equal(t, test.contents, string(res.Get(0).AsBytes()))
 
-			r.CloseAsync()
-			assert.Nil(t, r.WaitForClose(time.Second))
+			assert.NoError(t, r.Close(context.Background()))
 
 			assert.True(t, connCalled)
 			assert.True(t, closeCalled)

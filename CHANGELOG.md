@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 4.5.0 - TBD
+### Added
+
+- New `squash` bloblang method.
+
+## 4.5.0 - 2022-08-07
 
 ### Added
 
@@ -16,6 +20,8 @@ All notable changes to this project will be documented in this file.
 - New `parse_form_url_encoded` bloblang method.
 - The `amqp_0_9` input now supports setting the `auto-delete` bit during queue declaration.
 - New `open_telemetry_collector` tracer.
+- The `kafka_franz` input and output now supports no-op SASL options with the mechanism `none`.
+- Field `content_type` added to the `gcp_cloud_storage` cache.
 
 ### Fixed
 
@@ -25,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - Fixed a potential crash when the `contains` bloblang method was used to compare complex types.
 - Fixed an issue where the `kafka_franz` input or output wouldn't use TLS connections without custom certificate configuration.
 - Fixed structural cycle in the CUE representation of the `retry` output.
+- Tracing headers from HTTP requests to the `http_server` input are now correctly extracted.
 
 ### Changed
 

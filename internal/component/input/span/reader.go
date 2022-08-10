@@ -2,7 +2,6 @@ package span
 
 import (
 	"context"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -40,19 +39,19 @@ func NewReader(inputName, mapping string, rdr input.Async, mgr bundle.NewManagem
 	return &Reader{inputName: inputName, mgr: mgr, mapping: exe, rdr: rdr}, nil
 }
 
-// ConnectWithContext attempts to establish a connection to the source, if
+// Connect attempts to establish a connection to the source, if
 // unsuccessful returns an error. If the attempt is successful (or not
 // necessary) returns nil.
-func (s *Reader) ConnectWithContext(ctx context.Context) error {
-	return s.rdr.ConnectWithContext(ctx)
+func (s *Reader) Connect(ctx context.Context) error {
+	return s.rdr.Connect(ctx)
 }
 
-// ReadWithContext attempts to read a new message from the source. If
+// ReadBatch attempts to read a new message from the source. If
 // successful a message is returned along with a function used to
 // acknowledge receipt of the returned message. It's safe to process the
 // returned message and read the next message asynchronously.
-func (s *Reader) ReadWithContext(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
-	m, afn, err := s.rdr.ReadWithContext(ctx)
+func (s *Reader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
+	m, afn, err := s.rdr.ReadBatch(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -81,14 +80,8 @@ func (s *Reader) ReadWithContext(ctx context.Context) (message.Batch, input.Asyn
 	return m, afn, nil
 }
 
-// CloseAsync triggers the shut down of this component but should not block
-// the calling goroutine.
-func (s *Reader) CloseAsync() {
-	s.rdr.CloseAsync()
-}
-
-// WaitForClose is a blocking call to wait until the component has finished
-// shutting down and cleaning up resources.
-func (s *Reader) WaitForClose(timeout time.Duration) error {
-	return s.rdr.WaitForClose(timeout)
+// Close triggers the shut down of this component and blocks until completion or
+// context cancellation.
+func (s *Reader) Close(ctx context.Context) error {
+	return s.rdr.Close(ctx)
 }

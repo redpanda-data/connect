@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/Azure/go-amqp"
 
@@ -94,11 +93,7 @@ func newAMQP1Writer(conf output.AMQP1Config, log log.Modular) (*amqp1Writer, err
 	return &a, nil
 }
 
-func (a *amqp1Writer) Connect() error {
-	return a.ConnectWithContext(context.Background())
-}
-
-func (a *amqp1Writer) ConnectWithContext(ctx context.Context) error {
+func (a *amqp1Writer) Connect(ctx context.Context) error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
 
@@ -175,7 +170,7 @@ func (a *amqp1Writer) disconnect(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-func (a *amqp1Writer) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (a *amqp1Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 	var s *amqp.Sender
 	a.connLock.RLock()
 	if a.sender != nil {
@@ -214,10 +209,6 @@ func (a *amqp1Writer) WriteWithContext(ctx context.Context, msg message.Batch) e
 	})
 }
 
-func (a *amqp1Writer) CloseAsync() {
-	_ = a.disconnect(context.Background())
-}
-
-func (a *amqp1Writer) WaitForClose(timeout time.Duration) error {
-	return nil
+func (a *amqp1Writer) Close(ctx context.Context) error {
+	return a.disconnect(ctx)
 }

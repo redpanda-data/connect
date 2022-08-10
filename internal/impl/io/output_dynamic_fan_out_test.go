@@ -75,8 +75,8 @@ func TestBasicDynamicFanOut(t *testing.T) {
 		}
 	}
 
-	oTM.CloseAsync()
-	require.NoError(t, oTM.WaitForClose(time.Second*5))
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
 
 func TestDynamicFanOutChangeOutputs(t *testing.T) {
@@ -179,8 +179,8 @@ func TestDynamicFanOutChangeOutputs(t *testing.T) {
 		delete(outputs, oldOutputName)
 	}
 
-	oTM.CloseAsync()
-	require.NoError(t, oTM.WaitForClose(time.Second*5))
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
 
 func TestDynamicFanOutAtLeastOnce(t *testing.T) {
@@ -243,8 +243,8 @@ func TestDynamicFanOutAtLeastOnce(t *testing.T) {
 		t.Error("Timed out responding to broker")
 	}
 
-	close(readChan)
-	assert.NoError(t, oTM.WaitForClose(time.Second*5))
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
 
 func TestDynamicFanOutStartEmpty(t *testing.T) {
@@ -301,7 +301,7 @@ func TestDynamicFanOutStartEmpty(t *testing.T) {
 	}
 
 	close(readChan)
-	assert.NoError(t, oTM.WaitForClose(time.Second*5))
+	require.NoError(t, oTM.WaitForClose(tCtx))
 }
 
 func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
@@ -347,8 +347,8 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 
 	require.NoError(t, ts.Ack(tCtx, errors.New("test")))
 
-	oTM.CloseAsync()
-	assert.NoError(t, oTM.WaitForClose(time.Second))
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 
 	select {
 	case _, open := <-mockOutput.TChan:
@@ -366,6 +366,9 @@ func TestDynamicFanOutShutDownFromErrorResponse(t *testing.T) {
 }
 
 func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOutput := &mock.OutputChanneled{}
 	outputs := map[string]output.Streamed{
 		"test": mockOutput,
@@ -390,8 +393,8 @@ func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
 		t.Fatal("Timed out waiting for msg rcv")
 	}
 
-	oTM.CloseAsync()
-	require.NoError(t, oTM.WaitForClose(time.Second))
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 
 	select {
 	case _, open := <-mockOutput.TChan:
@@ -402,6 +405,9 @@ func TestDynamicFanOutShutDownFromReceive(t *testing.T) {
 }
 
 func TestDynamicFanOutShutDownFromSend(t *testing.T) {
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mockOutput := &mock.OutputChanneled{}
 	outputs := map[string]output.Streamed{
 		"test": mockOutput,
@@ -419,8 +425,8 @@ func TestDynamicFanOutShutDownFromSend(t *testing.T) {
 		t.Fatal("Timed out waiting for msg send")
 	}
 
-	oTM.CloseAsync()
-	require.NoError(t, oTM.WaitForClose(time.Second))
+	oTM.TriggerCloseNow()
+	require.NoError(t, oTM.WaitForClose(tCtx))
 
 	select {
 	case _, open := <-mockOutput.TChan:

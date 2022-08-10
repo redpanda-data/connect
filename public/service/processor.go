@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
@@ -141,7 +140,7 @@ type OwnedProcessor struct {
 func (o *OwnedProcessor) Process(ctx context.Context, msg *Message) (MessageBatch, error) {
 	outMsg := message.Batch{msg.part}
 
-	iMsgs, res := o.p.ProcessMessage(outMsg)
+	iMsgs, res := o.p.ProcessBatch(ctx, outMsg)
 	if res != nil {
 		return nil, res
 	}
@@ -169,7 +168,7 @@ func (o *OwnedProcessor) ProcessBatch(ctx context.Context, batch MessageBatch) (
 		outMsg[i] = msg.part
 	}
 
-	iMsgs, res := o.p.ProcessMessage(outMsg)
+	iMsgs, res := o.p.ProcessBatch(ctx, outMsg)
 	if res != nil {
 		return nil, res
 	}
@@ -188,18 +187,7 @@ func (o *OwnedProcessor) ProcessBatch(ctx context.Context, batch MessageBatch) (
 
 // Close the processor, allowing it to clean up resources. It is
 func (o *OwnedProcessor) Close(ctx context.Context) error {
-	o.p.CloseAsync()
-	for {
-		// Gross but will do for now until we replace these with context params.
-		if err := o.p.WaitForClose(time.Millisecond * 100); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-	}
+	return o.p.Close(ctx)
 }
 
 // ExecuteProcessors runs a set of batches through a series processors. If a

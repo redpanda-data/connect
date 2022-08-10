@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"path"
 	"sync"
-	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -424,27 +423,6 @@ func (t *Type) GetDocs(name string, ctype docs.Type) (docs.ComponentSpec, bool) 
 
 //------------------------------------------------------------------------------
 
-type oldClosable interface {
-	CloseAsync()
-	WaitForClose(timeout time.Duration) error
-}
-
-func closeWithContext(ctx context.Context, c oldClosable) error {
-	c.CloseAsync()
-	waitFor := time.Second
-	deadline, hasDeadline := ctx.Deadline()
-	if hasDeadline {
-		waitFor = time.Until(deadline)
-	}
-	err := c.WaitForClose(waitFor)
-	for err != nil && !hasDeadline {
-		err = c.WaitForClose(time.Second)
-	}
-	return err
-}
-
-//------------------------------------------------------------------------------
-
 // NewBuffer attempts to create a new buffer component from a config.
 func (t *Type) NewBuffer(conf buffer.Config) (buffer.Streamed, error) {
 	// Buffers currently never have a label
@@ -624,7 +602,7 @@ func (t *Type) StoreProcessor(ctx context.Context, name string, conf processor.C
 		// If a previous resource exists with the same name then we do NOT allow
 		// it to be replaced unless it can be successfully closed. This ensures
 		// that we do not leak connections.
-		if err := closeWithContext(ctx, p); err != nil {
+		if err := p.Close(ctx); err != nil {
 			return err
 		}
 	}
@@ -688,7 +666,8 @@ func (t *Type) StoreOutput(ctx context.Context, name string, conf output.Config)
 		// If a previous resource exists with the same name then we do NOT allow
 		// it to be replaced unless it can be successfully closed. This ensures
 		// that we do not leak connections.
-		if err := closeWithContext(ctx, o); err != nil {
+		o.TriggerStopConsuming()
+		if err := o.WaitForClose(ctx); err != nil {
 			return err
 		}
 	}
@@ -700,7 +679,7 @@ func (t *Type) StoreOutput(ctx context.Context, name string, conf output.Config)
 	tmpOutput, err := t.intoPath("output_resources").NewOutput(conf)
 	if err == nil {
 		if t.outputs[name], err = wrapOutput(tmpOutput); err != nil {
-			tmpOutput.CloseAsync()
+			tmpOutput.TriggerCloseNow()
 		}
 	}
 	if err != nil {
@@ -772,59 +751,66 @@ func (t *Type) StoreRateLimit(ctx context.Context, name string, conf ratelimit.C
 
 //------------------------------------------------------------------------------
 
-// CloseAsync triggers the shut down of all resource types that implement the
-// lifetime interface types.Closable.
-func (t *Type) CloseAsync() {
+// TriggerStopConsuming instructs the manager to stop resource inputs and
+// outputs from consuming data. This call does not block.
+func (t *Type) TriggerStopConsuming() {
 	t.resourceLock.Lock()
 	defer t.resourceLock.Unlock()
 
 	for _, c := range t.inputs {
-		c.CloseAsync()
-	}
-	for _, p := range t.processors {
-		p.CloseAsync()
+		c.TriggerStopConsuming()
 	}
 	for _, c := range t.outputs {
-		c.CloseAsync()
+		c.TriggerStopConsuming()
 	}
 }
 
-// WaitForClose blocks until either all closable resource types are shut down or
-// a timeout occurs.
-func (t *Type) WaitForClose(timeout time.Duration) error {
+// TriggerCloseNow triggers the absolute shut down of this component but should
+// not block the calling goroutine.
+func (t *Type) TriggerCloseNow() {
 	t.resourceLock.Lock()
 	defer t.resourceLock.Unlock()
 
-	tOutCtx, done := context.WithTimeout(context.Background(), timeout)
-	defer done()
+	for _, c := range t.inputs {
+		c.TriggerCloseNow()
+	}
+	for _, c := range t.outputs {
+		c.TriggerCloseNow()
+	}
+}
 
-	timesOut := time.Now().Add(timeout)
+// WaitForClose is a blocking call to wait until the component has finished
+// shutting down and cleaning up resources.
+func (t *Type) WaitForClose(ctx context.Context) error {
+	t.resourceLock.Lock()
+	defer t.resourceLock.Unlock()
+
 	for k, c := range t.inputs {
-		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+		if err := c.WaitForClose(ctx); err != nil {
 			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}
 		delete(t.inputs, k)
 	}
 	for k, c := range t.caches {
-		if err := c.Close(tOutCtx); err != nil {
+		if err := c.Close(ctx); err != nil {
 			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}
 		delete(t.caches, k)
 	}
 	for k, p := range t.processors {
-		if err := p.WaitForClose(time.Until(timesOut)); err != nil {
+		if err := p.Close(ctx); err != nil {
 			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}
 		delete(t.processors, k)
 	}
 	for k, c := range t.rateLimits {
-		if err := c.Close(tOutCtx); err != nil {
+		if err := c.Close(ctx); err != nil {
 			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}
 		delete(t.rateLimits, k)
 	}
 	for k, c := range t.outputs {
-		if err := c.WaitForClose(time.Until(timesOut)); err != nil {
+		if err := c.WaitForClose(ctx); err != nil {
 			return fmt.Errorf("resource '%s' failed to cleanly shutdown: %v", k, err)
 		}
 		delete(t.outputs, k)

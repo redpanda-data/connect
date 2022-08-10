@@ -115,15 +115,9 @@ func (a *kinesisFirehoseWriter) toRecords(msg message.Batch) ([]*firehose.Record
 
 //------------------------------------------------------------------------------
 
-// ConnectWithContext creates a new Kinesis Firehose client and ensures that the
-// target Kinesis Firehose delivery stream.
-func (a *kinesisFirehoseWriter) ConnectWithContext(ctx context.Context) error {
-	return a.Connect()
-}
-
 // Connect creates a new Kinesis Firehose client and ensures that the target
 // Kinesis Firehose delivery stream.
-func (a *kinesisFirehoseWriter) Connect() error {
+func (a *kinesisFirehoseWriter) Connect(ctx context.Context) error {
 	if a.session != nil {
 		return nil
 	}
@@ -150,13 +144,13 @@ func (a *kinesisFirehoseWriter) Connect() error {
 // stream in batches of 500. If throttling is detected, failed messages are retried
 // according to the configurable backoff settings.
 func (a *kinesisFirehoseWriter) Write(msg message.Batch) error {
-	return a.WriteWithContext(context.Background(), msg)
+	return a.WriteBatch(context.Background(), msg)
 }
 
-// WriteWithContext attempts to write message contents to a target Kinesis
+// WriteBatch attempts to write message contents to a target Kinesis
 // Firehose delivery stream in batches of 500. If throttling is detected, failed
 // messages are retried according to the configurable backoff settings.
-func (a *kinesisFirehoseWriter) WriteWithContext(ctx context.Context, msg message.Batch) error {
+func (a *kinesisFirehoseWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 	if a.session == nil {
 		return component.ErrNotConnected
 	}
@@ -233,12 +227,6 @@ func (a *kinesisFirehoseWriter) WriteWithContext(ctx context.Context, msg messag
 	return err
 }
 
-// CloseAsync begins cleaning up resources used by this reader asynchronously.
-func (a *kinesisFirehoseWriter) CloseAsync() {
-}
-
-// WaitForClose will block until either the reader is closed or a specified
-// timeout occurs.
-func (a *kinesisFirehoseWriter) WaitForClose(time.Duration) error {
+func (a *kinesisFirehoseWriter) Close(context.Context) error {
 	return nil
 }

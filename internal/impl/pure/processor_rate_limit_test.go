@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -39,7 +41,7 @@ func TestRateLimitBasic(t *testing.T) {
 		[]byte(`{"key":"1","value":"foo 3"}`),
 	})
 
-	output, res := proc.ProcessMessage(input)
+	output, res := proc.ProcessBatch(context.Background(), input)
 	if res != nil {
 		t.Fatal(res)
 	}
@@ -81,7 +83,7 @@ func TestRateLimitErroredOut(t *testing.T) {
 
 	closedChan := make(chan struct{})
 	go func() {
-		output, res := proc.ProcessMessage(input)
+		output, res := proc.ProcessBatch(context.Background(), input)
 		if res != nil {
 			t.Error(res)
 		}
@@ -96,7 +98,10 @@ func TestRateLimitErroredOut(t *testing.T) {
 		close(closedChan)
 	}()
 
-	proc.CloseAsync()
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+	assert.NoError(t, proc.Close(ctx))
+
 	select {
 	case <-closedChan:
 	case <-time.After(time.Second):
@@ -128,7 +133,7 @@ func TestRateLimitBlocked(t *testing.T) {
 
 	closedChan := make(chan struct{})
 	go func() {
-		output, res := proc.ProcessMessage(input)
+		output, res := proc.ProcessBatch(context.Background(), input)
 		if res != nil {
 			t.Error(res)
 		}
@@ -143,7 +148,10 @@ func TestRateLimitBlocked(t *testing.T) {
 		close(closedChan)
 	}()
 
-	proc.CloseAsync()
+	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+	assert.NoError(t, proc.Close(ctx))
+
 	select {
 	case <-closedChan:
 	case <-time.After(time.Second):
