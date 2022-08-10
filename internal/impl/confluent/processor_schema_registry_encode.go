@@ -348,7 +348,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 	}
 
 	var codec *goavro.Codec
-	if codec, err = goavro.NewCodecForStandardJSON(resPayload.Schema); err != nil {
+	if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
 		s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
 		return nil, 0, err
 	}
