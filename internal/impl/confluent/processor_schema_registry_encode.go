@@ -57,7 +57,7 @@ However, it is possible to instead consume documents in raw JSON format (that ma
 			Example("60s").
 			Example("1h")).
 		Field(service.NewBoolField("avro_raw_json").
-			Description("Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding).").
+			Description("Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If true the the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSON) instead of as (normal avro json)[https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec]").
 			Advanced().Default(false).Version("3.59.0")).
 		Field(service.NewTLSField("tls")).
 		Version("3.58.0")
@@ -348,25 +348,28 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 	}
 
 	var codec *goavro.Codec
-	if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
-		s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
-		return nil, 0, err
+	if s.avroRawJSON {
+		if codec, err = goavro.NewCodecForStandardJSON(resPayload.Schema); err != nil {
+			s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
+			return nil, 0, err
+		}
+	} else {
+		if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
+			s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
+			return nil, 0, err
+		}
 	}
 
 	s.logger.Tracef("codec is: %#v", codec)
 
 	return func(m *service.Message) error {
-		var datum interface{}
-		if s.avroRawJSON {
-			b, err := m.AsBytes()
-			if err != nil {
-				return err
-			}
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
 
-			if datum, _, err = codec.NativeFromTextual(b); err != nil {
-				return err
-			}
-		} else if datum, err = m.AsStructured(); err != nil {
+		datum, _, err := codec.NativeFromTextual(b)
+		if err != nil {
 			return err
 		}
 
