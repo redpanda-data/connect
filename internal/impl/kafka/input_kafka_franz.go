@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -312,7 +313,9 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 				finalOffsets[topic] = offsets
 			}
 
-			c.CommitOffsetsSync(rctx, finalOffsets, func(_ *kgo.Client, _ *kmsg.OffsetCommitRequest, _ *kmsg.OffsetCommitResponse, commitErr error) {
+			c.CommitOffsetsSync(rctx, finalOffsets, func(_ *kgo.Client, req *kmsg.OffsetCommitRequest, res *kmsg.OffsetCommitResponse, commitErr error) {
+				fmt.Printf("req: %#v\n", req)
+				fmt.Printf("res: %#v\n", res)
 				if commitErr == nil {
 					return
 				}
