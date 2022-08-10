@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.5.1 - 2022-08-10
+
+### Fixed
+
+- Reverted `kafka_franz` dependency back to `1.3.1` due to a regression in TLS/SASL commit retention.
+
 ## 4.5.0 - 2022-08-07
 
 ### Added
