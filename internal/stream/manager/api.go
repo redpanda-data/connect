@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -619,4 +620,128 @@ func (m *Type) HandleStreamReady(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusServiceUnavailable)
 	fmt.Fprintf(w, "streams %v are not connected\n", strings.Join(notReady, ", "))
+}
+
+func (m *Type) HandleDirectStreamCRUD(ctx context.Context, method, id, streamConfig string) error {
+	var requestErr, serverErr error
+
+	readConfig := func() (confOut stream.Config, lints []string, err error) {
+		confBytes := config.ReplaceEnvVariables([]byte(streamConfig))
+
+		//if r.URL.Query().Get("chilled") != "true" {
+		var node yaml.Node
+		if err = yaml.Unmarshal(confBytes, &node); err != nil {
+			return
+		}
+		lints = lintStreamConfigNode(&node)
+		for _, l := range lints {
+			m.manager.Logger().Infof("Stream '%v' config: %v\n", id, l)
+		}
+		//}
+
+		confOut = stream.NewConfig()
+		err = yaml.Unmarshal(confBytes, &confOut)
+		return
+	}
+	patchConfig := func(confIn stream.Config) (confOut stream.Config, err error) {
+		patchBytes := []byte(streamConfig)
+
+		type aliasedIn input.Config
+		type aliasedBuf buffer.Config
+		type aliasedPipe pipeline.Config
+		type aliasedOut output.Config
+
+		aliasedConf := struct {
+			Input    aliasedIn   `json:"input"`
+			Buffer   aliasedBuf  `json:"buffer"`
+			Pipeline aliasedPipe `json:"pipeline"`
+			Output   aliasedOut  `json:"output"`
+		}{
+			Input:    aliasedIn(confIn.Input),
+			Buffer:   aliasedBuf(confIn.Buffer),
+			Pipeline: aliasedPipe(confIn.Pipeline),
+			Output:   aliasedOut(confIn.Output),
+		}
+		if err = yaml.Unmarshal(patchBytes, &aliasedConf); err != nil {
+			return
+		}
+		confOut = stream.Config{
+			Input:    input.Config(aliasedConf.Input),
+			Buffer:   buffer.Config(aliasedConf.Buffer),
+			Pipeline: pipeline.Config(aliasedConf.Pipeline),
+			Output:   output.Config(aliasedConf.Output),
+		}
+		return
+	}
+
+	var conf stream.Config
+	var lints []string
+	switch method {
+	case "POST":
+		if conf, lints, requestErr = readConfig(); requestErr != nil {
+			return requestErr
+		}
+		if len(lints) > 0 {
+			errBytes, _ := json.Marshal(struct {
+				LintErrs []string `json:"lint_errors"`
+			}{
+				LintErrs: lints,
+			})
+			return fmt.Errorf("lint error(s) in config: %s", string(errBytes))
+		}
+		serverErr = m.Create(id, conf)
+	case "GET":
+		var info *StreamStatus
+		if info, serverErr = m.Read(id); serverErr == nil {
+			sanit, _ := info.Config().Sanitised()
+
+			var bodyBytes []byte
+			if bodyBytes, serverErr = json.Marshal(struct {
+				Active    bool        `json:"active"`
+				Uptime    float64     `json:"uptime"`
+				UptimeStr string      `json:"uptime_str"`
+				Config    interface{} `json:"config"`
+			}{
+				Active:    info.IsRunning(),
+				Uptime:    info.Uptime().Seconds(),
+				UptimeStr: info.Uptime().String(),
+				Config:    sanit,
+			}); serverErr != nil {
+				return serverErr
+			}
+
+			m.manager.Logger().Debugf("stream-config: %s\n", bodyBytes)
+		}
+	case "PUT":
+		if conf, lints, requestErr = readConfig(); requestErr != nil {
+			return requestErr
+		}
+		if len(lints) > 0 {
+			errBytes, _ := json.Marshal(struct {
+				LintErrs []string `json:"lint_errors"`
+			}{
+				LintErrs: lints,
+			})
+			return fmt.Errorf("lint error(s) in config: %s", string(errBytes))
+		}
+		serverErr = m.Update(ctx, id, conf)
+	case "DELETE":
+		serverErr = m.Delete(ctx, id)
+	case "PATCH":
+		var info *StreamStatus
+		if info, serverErr = m.Read(id); serverErr == nil {
+			if conf, requestErr = patchConfig(info.Config()); requestErr != nil {
+				return requestErr
+			}
+			serverErr = m.Update(ctx, id, conf)
+		}
+	default:
+		requestErr = fmt.Errorf("verb not supported: %v", method)
+	}
+
+	if serverErr != nil {
+		return serverErr
+	}
+
+	return nil
 }

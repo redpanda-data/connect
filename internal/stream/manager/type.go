@@ -92,6 +92,9 @@ type Type struct {
 	lock sync.Mutex
 }
 
+// TODO: make this read-only / thread-safe.
+var Singleton *Type
+
 // New creates a new stream manager.Type.
 func New(mgr bundle.NewManagement, opts ...func(*Type)) *Type {
 	t := &Type{
@@ -103,6 +106,9 @@ func New(mgr bundle.NewManagement, opts ...func(*Type)) *Type {
 		opt(t)
 	}
 	t.registerEndpoints(t.apiEnabled)
+
+	Singleton = t
+
 	return t
 }
 
