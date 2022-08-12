@@ -117,6 +117,16 @@ It is also possible to specify an optional custom alphabet after the length para
 root.id = nanoid(54, "abcde")
 ```
 
+### `snowflake_id`
+
+Generate a new snowflake ID each time it is invoked and prints a string representation.
+
+#### Examples
+
+```coffee
+root.id = snowflake_id()
+```
+
 ### `random_int`
 
 Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
+	"github.com/bwmarrin/snowflake"
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/segmentio/ksuid"
@@ -694,6 +695,24 @@ var _ = registerSimpleFunction(
 			panic(err)
 		}
 		return u4.String(), nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
+		FunctionCategoryGeneral, "snowflake_id",
+		"Generates a snowflake ID and prints a string representation.",
+		NewExampleSpec("", `root.id = snowflake_id()`),
+	),
+	func(_ FunctionContext) (interface{}, error) {
+		node, err := snowflake.NewNode(1)
+		if err != nil {
+			panic(err)
+		}
+
+		return node.Generate().String(), nil
 	},
 )
 

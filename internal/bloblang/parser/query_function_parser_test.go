@@ -729,6 +729,23 @@ func TestUUIDV4Function(t *testing.T) {
 	}
 }
 
+func TestSnowflakeIDFunction(t *testing.T) {
+	results := map[string]struct{}{}
+
+	for i := 0; i < 100; i++ {
+		e, perr := tryParseQuery("snowflake_id()")
+		require.Nil(t, perr)
+
+		res := query.ExecToString(e, query.FunctionContext{
+			MsgBatch: message.QuickBatch(nil),
+		})
+		if _, exists := results[res]; exists {
+			t.Errorf("Duplicate Snowflake ID generated: %v", res)
+		}
+		results[res] = struct{}{}
+	}
+}
+
 func TestTimestamps(t *testing.T) {
 	now := time.Now()
 
