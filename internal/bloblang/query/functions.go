@@ -703,7 +703,7 @@ var _ = registerSimpleFunction(
 var _ = registerSimpleFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "snowflake_id",
-		"Generates a snowflake ID and prints a string representation.",
+		"Generate a new snowflake ID each time it is invoked and prints a string representation.",
 		NewExampleSpec("", `root.id = snowflake_id()`),
 	),
 	func(_ FunctionContext) (interface{}, error) {
