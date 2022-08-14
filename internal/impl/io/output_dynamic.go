@@ -5,8 +5,8 @@ import (
 	"path"
 	"sync"
 
-	"gopkg.in/yaml.v3"
 	yamlutil "github.com/ghodss/yaml"
+	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
