@@ -49,6 +49,7 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/fatih/color v1.13.0
 	github.com/fsnotify/fsnotify v1.5.1
+	github.com/ghodss/yaml v1.0.0
 	github.com/go-redis/redis/v7 v7.4.1
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/go-stack/stack v1.8.1 // indirect

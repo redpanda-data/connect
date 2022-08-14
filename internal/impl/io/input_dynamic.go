@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"gopkg.in/yaml.v3"
+	yamlutil "github.com/ghodss/yaml"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -75,6 +76,7 @@ func newDynamicInput(conf input.Config, mgr bundle.NewManagement) (input.Streame
 				sanitConf.RemoveTypeField = true
 				if err := docs.FieldInput("input", "").SanitiseYAML(&node, sanitConf); err == nil {
 					confBytes, _ = yaml.Marshal(node)
+					confBytes, _ = yamlutil.YAMLToJSON(confBytes)
 				}
 			}
 

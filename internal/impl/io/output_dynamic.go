@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"gopkg.in/yaml.v3"
+	yamlutil "github.com/ghodss/yaml"
 
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -82,6 +83,7 @@ func newDynamicOutput(conf output.Config, mgr bundle.NewManagement) (output.Stre
 				sanitConf.RemoveTypeField = true
 				if err := docs.FieldOutput("output", "").SanitiseYAML(&node, sanitConf); err == nil {
 					confBytes, _ = yaml.Marshal(node)
+					confBytes, _ = yamlutil.YAMLToJSON(confBytes)
 				}
 			}
 
