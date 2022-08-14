@@ -71,9 +71,7 @@ func TestDynamicOutputAPI(t *testing.T) {
 	gMux.ServeHTTP(res, req)
 
 	assert.Equal(t, 200, res.Code)
-	assert.Equal(t, `label: ""
-drop: {}
-`, res.Body.String())
+	assert.Equal(t, `{"drop":{},"label":""}`, res.Body.String())
 
 	o.TriggerCloseNow()
 	require.NoError(t, o.WaitForClose(ctx))

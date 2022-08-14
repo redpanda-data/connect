@@ -68,13 +68,7 @@ generate:
 	gMux.ServeHTTP(res, req)
 
 	assert.Equal(t, 200, res.Code)
-	assert.Equal(t, `label: ""
-generate:
-    mapping: root.source = "foo"
-    interval: 100ms
-    count: 0
-    batch_size: 1
-`, res.Body.String())
+	assert.Equal(t, `{"generate":{"batch_size":1,"count":0,"interval":"100ms","mapping":"root.source = \"foo\""},"label":""}`, res.Body.String())
 
 	i.TriggerStopConsuming()
 	require.NoError(t, i.WaitForClose(ctx))
