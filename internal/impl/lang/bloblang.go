@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bwmarrin/snowflake"
 	"github.com/bxcodec/faker/v3"
 	"github.com/gosimple/slug"
 
@@ -79,6 +80,32 @@ func init() {
 
 			return func() (interface{}, error) {
 				return GetFakeValue(functionKey)
+			}, nil
+		},
+	); err != nil {
+		panic(err)
+	}
+
+	snowflakeidSpec := bloblang.NewPluginSpec().
+		Category(query.FunctionCategoryGeneral).
+		Description("Generate a new snowflake ID each time it is invoked and prints a string representation.").
+		Param(bloblang.NewInt64Param("node_id").Description("It is possible to specify the node_id.").Default(int64(1))).
+		Example("", `root.id = snowflake_id()`).
+		Example("It is possible to specify the node_id.", `root.id = snowflake_id(2)`)
+
+	if err := bloblang.RegisterFunctionV2(
+		"snowflake_id", snowflakeidSpec,
+		func(args *bloblang.ParsedParams) (bloblang.Function, error) {
+			nodeID, err := args.GetInt64("node_id")
+			if err != nil {
+				return nil, err
+			}
+			node, err := snowflake.NewNode(nodeID)
+			if err != nil {
+				return nil, err
+			}
+			return func() (interface{}, error) {
+				return node.Generate().String(), nil
 			}, nil
 		},
 	); err != nil {

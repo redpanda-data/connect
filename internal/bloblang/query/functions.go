@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
-	"github.com/bwmarrin/snowflake"
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/segmentio/ksuid"
@@ -697,38 +696,6 @@ var _ = registerSimpleFunction(
 		return u4.String(), nil
 	},
 )
-
-//------------------------------------------------------------------------------
-
-var _ = registerFunction(
-	NewFunctionSpec(
-		FunctionCategoryGeneral, "snowflake_id",
-		"Generate a new snowflake ID each time it is invoked and prints a string representation.",
-		NewExampleSpec("", `root.id = snowflake_id()`),
-		NewExampleSpec("It is possible to specify the node_id.", `root.id = snowflake_id(1)`),
-	).
-		Param(ParamInt64("node_id", "An optional node_id.").Optional()),
-	snowflakeidFunction,
-)
-
-func snowflakeidFunction(args *ParsedParams) (Function, error) {
-	nodeArg, err := args.FieldOptionalInt64("node_id")
-	if err != nil {
-		return nil, err
-	}
-
-	return ClosureFunction("function snowflake_id", func(ctx FunctionContext) (interface{}, error) {
-		nodeID := int64(1)
-		if nodeArg != nil {
-			nodeID = *nodeArg
-		}
-		node, err := snowflake.NewNode(nodeID)
-		if err != nil {
-			return nil, err
-		}
-		return node.Generate().String(), nil
-	}, nil), nil
-}
 
 //------------------------------------------------------------------------------
 

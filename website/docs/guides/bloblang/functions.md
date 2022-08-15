@@ -167,7 +167,7 @@ Generate a new snowflake ID each time it is invoked and prints a string represen
 
 #### Parameters
 
-**`node_id`** &lt;(optional) integer&gt; An optional node_id.  
+**`node_id`** &lt;integer, default `1`&gt; It is possible to specify the node_id.  
 
 #### Examples
 
@@ -179,7 +179,7 @@ root.id = snowflake_id()
 It is possible to specify the node_id.
 
 ```coffee
-root.id = snowflake_id(1)
+root.id = snowflake_id(2)
 ```
 
 ### `throw`
