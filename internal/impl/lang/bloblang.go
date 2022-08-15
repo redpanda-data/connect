@@ -88,7 +88,7 @@ func init() {
 
 	snowflakeidSpec := bloblang.NewPluginSpec().
 		Category(query.FunctionCategoryGeneral).
-		Description("Generate a new snowflake ID each time it is invoked and prints a string representation.").
+		Description("Generate a new snowflake ID each time it is invoked and prints a string representation. I.e.: 1559229974454472704").
 		Param(bloblang.NewInt64Param("node_id").Description("It is possible to specify the node_id.").Default(int64(1))).
 		Example("", `root.id = snowflake_id()`).
 		Example("It is possible to specify the node_id.", `root.id = snowflake_id(2)`)

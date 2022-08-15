@@ -163,7 +163,7 @@ root.c = range(0, -this.max, -2)
 
 ### `snowflake_id`
 
-Generate a new snowflake ID each time it is invoked and prints a string representation.
+Generate a new snowflake ID each time it is invoked and prints a string representation. I.e.: 1559229974454472704
 
 #### Parameters
 
