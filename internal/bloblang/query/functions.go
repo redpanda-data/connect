@@ -700,21 +700,35 @@ var _ = registerSimpleFunction(
 
 //------------------------------------------------------------------------------
 
-var _ = registerSimpleFunction(
+var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "snowflake_id",
 		"Generate a new snowflake ID each time it is invoked and prints a string representation.",
 		NewExampleSpec("", `root.id = snowflake_id()`),
-	),
-	func(_ FunctionContext) (interface{}, error) {
-		node, err := snowflake.NewNode(1)
-		if err != nil {
-			panic(err)
-		}
-
-		return node.Generate().String(), nil
-	},
+		NewExampleSpec("It is possible to specify the node_id.", `root.id = snowflake_id(1)`),
+	).
+		Param(ParamInt64("node_id", "An optional node_id.").Optional()),
+	snowflakeidFunction,
 )
+
+func snowflakeidFunction(args *ParsedParams) (Function, error) {
+	nodeArg, err := args.FieldOptionalInt64("node_id")
+	if err != nil {
+		return nil, err
+	}
+
+	return ClosureFunction("function snowflake_id", func(ctx FunctionContext) (interface{}, error) {
+		nodeID := int64(1)
+		if nodeArg != nil {
+			nodeID = *nodeArg
+		}
+		node, err := snowflake.NewNode(nodeID)
+		if err != nil {
+			return nil, err
+		}
+		return node.Generate().String(), nil
+	}, nil), nil
+}
 
 //------------------------------------------------------------------------------
 
