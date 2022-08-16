@@ -8,6 +8,7 @@ import (
 type AWSSQSConfig struct {
 	sess.Config         `json:",inline" yaml:",inline"`
 	URL                 string `json:"url" yaml:"url"`
+	WaitTimeSeconds     int    `json:"wait_time_seconds" yaml:"wait_time_seconds"`
 	DeleteMessage       bool   `json:"delete_message" yaml:"delete_message"`
 	ResetVisibility     bool   `json:"reset_visibility" yaml:"reset_visibility"`
 	MaxNumberOfMessages int    `json:"max_number_of_messages" yaml:"max_number_of_messages"`
@@ -18,6 +19,7 @@ func NewAWSSQSConfig() AWSSQSConfig {
 	return AWSSQSConfig{
 		Config:              sess.NewConfig(),
 		URL:                 "",
+		WaitTimeSeconds:     0,
 		DeleteMessage:       true,
 		ResetVisibility:     true,
 		MaxNumberOfMessages: 10,
