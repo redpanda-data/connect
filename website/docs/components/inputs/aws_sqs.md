@@ -46,6 +46,7 @@ input:
     delete_message: true
     reset_visibility: true
     max_number_of_messages: 10
+    wait_time_seconds: 0
     region: ""
     endpoint: ""
     credentials:
@@ -116,6 +117,14 @@ The maximum number of messages to return on one poll. Valid values: 1 to 10.
 
 Type: `int`  
 Default: `10`  
+
+### `wait_time_seconds`
+
+Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.
+
+
+Type: `int`  
+Default: `0`  
 
 ### `region`
 
