@@ -1,0 +1,62 @@
+package output
+
+import (
+	"github.com/benthosdev/benthos/v4/internal/batch/policy/batchconfig"
+	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
+	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
+	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
+	btls "github.com/benthosdev/benthos/v4/internal/tls"
+)
+
+// OpenSearchConfig contains configuration fields for the OpenSearch
+// output type.
+type OpenSearchConfig struct {
+	URLs            []string             `json:"urls" yaml:"urls"`
+	Sniff           bool                 `json:"sniff" yaml:"sniff"`
+	Healthcheck     bool                 `json:"healthcheck" yaml:"healthcheck"`
+	ID              string               `json:"id" yaml:"id"`
+	Action          string               `json:"action" yaml:"action"`
+	Index           string               `json:"index" yaml:"index"`
+	Pipeline        string               `json:"pipeline" yaml:"pipeline"`
+	Routing         string               `json:"routing" yaml:"routing"`
+	Type            string               `json:"type" yaml:"type"`
+	Timeout         string               `json:"timeout" yaml:"timeout"`
+	TLS             btls.Config          `json:"tls" yaml:"tls"`
+	Auth            auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
+	AWS             OptionalAWSConfig    `json:"aws" yaml:"aws"`
+	GzipCompression bool                 `json:"gzip_compression" yaml:"gzip_compression"`
+	MaxInFlight     int                  `json:"max_in_flight" yaml:"max_in_flight"`
+	retries.Config  `json:",inline" yaml:",inline"`
+	Batching        batchconfig.Config `json:"batching" yaml:"batching"`
+}
+
+// NewOpenSearchConfig creates a new OpenSearchConfig with default values.
+func NewOpenSearchConfig() OpenSearchConfig {
+	rConf := retries.NewConfig()
+	rConf.Backoff.InitialInterval = "1s"
+	rConf.Backoff.MaxInterval = "5s"
+	rConf.Backoff.MaxElapsedTime = "30s"
+
+	return OpenSearchConfig{
+		URLs:        []string{},
+		Sniff:       true,
+		Healthcheck: true,
+		Action:      "index",
+		ID:          `${!count("elastic_ids")}-${!timestamp_unix()}`,
+		Index:       "",
+		Pipeline:    "",
+		Type:        "",
+		Routing:     "",
+		Timeout:     "5s",
+		TLS:         btls.NewConfig(),
+		Auth:        auth.NewBasicAuthConfig(),
+		AWS: OptionalAWSConfig{
+			Enabled: false,
+			Config:  sess.NewConfig(),
+		},
+		GzipCompression: false,
+		MaxInFlight:     64,
+		Config:          rConf,
+		Batching:        batchconfig.NewConfig(),
+	}
+}

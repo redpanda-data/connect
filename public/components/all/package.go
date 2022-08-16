@@ -25,6 +25,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/nanomsg"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/nats"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/nsq"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/opensearch"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/otlp"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/prometheus"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pusher"
