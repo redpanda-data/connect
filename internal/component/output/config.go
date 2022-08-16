@@ -33,6 +33,7 @@ type Config struct {
 	DropOn             DropOnConfig            `json:"drop_on" yaml:"drop_on"`
 	Dynamic            DynamicConfig           `json:"dynamic" yaml:"dynamic"`
 	Elasticsearch      ElasticsearchConfig     `json:"elasticsearch" yaml:"elasticsearch"`
+	OpenSearch         OpenSearchConfig        `json:"opensearch" yaml:"opensearch"`
 	Fallback           TryConfig               `json:"fallback" yaml:"fallback"`
 	File               FileConfig              `json:"file" yaml:"file"`
 	GCPCloudStorage    GCPCloudStorageConfig   `json:"gcp_cloud_storage" yaml:"gcp_cloud_storage"`
@@ -91,6 +92,7 @@ func NewConfig() Config {
 		DropOn:             NewDropOnConfig(),
 		Dynamic:            NewDynamicConfig(),
 		Elasticsearch:      NewElasticsearchConfig(),
+		OpenSearch:         NewOpenSearchConfig(),
 		Fallback:           NewTryConfig(),
 		File:               NewFileConfig(),
 		GCPCloudStorage:    NewGCPCloudStorageConfig(),
