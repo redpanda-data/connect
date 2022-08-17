@@ -87,7 +87,7 @@ Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowfl
 
 ### `data_source_name`
 
-Sorry! This field is missing documentation.
+Data source name.
 
 
 Type: `string`  
