@@ -60,7 +60,7 @@ Currently only Avro schemas are supported.
 
 ### Avro JSON Format
 
-This processor creates documents formatted as [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding) when decoding Avro schemas. In this format the value of a union is encoded in JSON as follows:
+This processor creates documents formatted as [Avro JSON]((https://avro.apache.org/docs/current/specification/_print/#json-encoding) when decoding Avro schemas. In this format the value of a union is encoded in JSON as follows:
 
 - if its type is `null`, then it is encoded as a JSON `null`;
 - otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
