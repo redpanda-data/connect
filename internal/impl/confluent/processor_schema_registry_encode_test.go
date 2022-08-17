@@ -363,8 +363,8 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 	}{
 		{
 			name:   "successful message with logical types raw json",
-			input:  `{"int_time_millis":35245000,"long_time_micros":20192000000000,"long_timestamp_micros":null,"pos_0_33333333":"!"}`,
-			output: "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x00\x02\x02!",
+			input:  `{"int_time_millis":35245000,"long_time_micros":20192000000000,"long_timestamp_micros":62135596800000000,"pos_0_33333333":"!"}`,
+			output: "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
 		},
 		{
 			name:        "message doesnt match schema codec",
@@ -373,7 +373,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 		},
 		{
 			name:        "message doesnt match schema",
-			input:       `{"int_time_millis":"35245000","long_time_micros":20192000000000,"long_timestamp_micros":null,"pos_0_33333333":"!"}`,
+			input:       `{"int_time_millis":"35245000","long_time_micros":20192000000000,"long_timestamp_micros":62135596800000000,"pos_0_33333333":"!"}`,
 			errContains: "could not decode any json data in input",
 		},
 	}

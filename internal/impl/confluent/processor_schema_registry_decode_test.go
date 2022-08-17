@@ -218,8 +218,8 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		},
 		{
 			name:   "successful message with logical raw json",
-			input:  "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x00\x02\x02!",
-			output: `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":null,"pos_0_33333333":{"bytes.decimal":"!"}}`,
+			input:  "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
+			output: `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":{"long.timestamp-micros":62135596800000000},"pos_0_33333333":{"bytes.decimal":"!"}}`,
 		},
 		{
 			name:        "non-empty magic byte",
