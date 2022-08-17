@@ -96,16 +96,12 @@ func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, 
 		wg := sync.WaitGroup{}
 		wg.Add(len(pending))
 
-		var newPending []message.Batch
-		var newPendingMut sync.Mutex
+		var newPending = make([]message.Batch, len(pending))
 
-		for _, b := range pending {
-			b := b
-			transac := message.NewTransactionFunc(b.ShallowCopy(), func(ctx context.Context, err error) error {
+		for i, _ := range pending {
+			transac := message.NewTransactionFunc(pending[i].ShallowCopy(), func(ctx context.Context, err error) error {
 				if err != nil {
-					newPendingMut.Lock()
-					newPending = append(newPending, b)
-					newPendingMut.Unlock()
+					newPending[i] = pending[i]
 				}
 				wg.Done()
 				return nil
