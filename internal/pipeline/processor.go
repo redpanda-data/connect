@@ -98,7 +98,7 @@ func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, 
 
 		var newPending = make([]message.Batch, len(pending))
 
-		for i, _ := range pending {
+		for i := range pending {
 			transac := message.NewTransactionFunc(pending[i].ShallowCopy(), func(ctx context.Context, err error) error {
 				if err != nil {
 					newPending[i] = pending[i]
