@@ -5,7 +5,6 @@ package all
 
 import (
 	// Import new service packages.
-	_ "github.com/benthosdev/benthos/v4/internal/impl/awk"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/azure"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/cassandra"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/confluent"
@@ -34,6 +33,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/amqp09"
 	_ "github.com/benthosdev/benthos/v4/public/components/amqp1"
 	_ "github.com/benthosdev/benthos/v4/public/components/avro"
+	_ "github.com/benthosdev/benthos/v4/public/components/awk"
 	_ "github.com/benthosdev/benthos/v4/public/components/aws"
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/kafka"
