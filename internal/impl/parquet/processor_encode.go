@@ -82,7 +82,7 @@ func parquetSchemaConfig() *service.ConfigField {
 				"name": "bar",
 				"type": "BYTE_ARRAY",
 			},
-		}),
+		}).Description("Parquet schema."),
 	)
 }
 

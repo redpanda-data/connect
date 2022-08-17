@@ -108,7 +108,7 @@ Default: `false`
 
 ### `schema[].fields`
 
-A list of child fields.
+Parquet schema.
 
 
 Type: `array`  
