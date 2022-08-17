@@ -96,7 +96,7 @@ const testSchema = `{
 			"type":	"record",
 			"name": "address",
 			"fields": [
-				{ "name": "City", "type": "string" },
+				{ "name": "City", "type": ["null", "string"], "default": null },
 				{ "name": "State", "type": "string" }
 			]
 		}],"default":null},
@@ -198,18 +198,28 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 	}{
 		{
 			name:   "successful message",
-			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar\x02\x0edancing",
-			output: `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"MaybeHobby":{"string":"dancing"},"Name":"foo"}`,
+			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x02\x0edancing",
+			output: `{"Address":{"my.namespace.com.address":{"City":{"string":"foo"},"State":"bar"}},"MaybeHobby":{"string":"dancing"},"Name":"foo"}`,
 		},
 		{
 			name:   "successful message with null hobby",
-			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar\x00",
-			output: `{"Address":{"my.namespace.com.address":{"City":"foo","State":"bar"}},"MaybeHobby":null,"Name":"foo"}`,
+			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x00",
+			output: `{"Address":{"my.namespace.com.address":{"City":{"string":"foo"},"State":"bar"}},"MaybeHobby":null,"Name":"foo"}`,
 		},
 		{
-			name:   "successful message with logical types",
+			name:   "successful message no address and null hobby",
+			input:  "\x00\x00\x00\x00\x03\x06foo\x00\x00",
+			output: `{"Name":"foo","MaybeHobby":null,"Address": null}`,
+		},
+		{
+			name:   "successful message with logical types avro json",
 			input:  "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
 			output: `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":{"long.timestamp-micros":62135596800000000},"pos_0_33333333":{"bytes.decimal":"!"}}`,
+		},
+		{
+			name:   "successful message with logical raw json",
+			input:  "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x00\x02\x02!",
+			output: `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":null,"pos_0_33333333":{"bytes.decimal":"!"}}`,
 		},
 		{
 			name:        "non-empty magic byte",
