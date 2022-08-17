@@ -1,16 +1,28 @@
 package opensearch
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
+	"github.com/opensearch-project/opensearch-go/opensearchutil"
+
 	"github.com/cenkalti/backoff/v4"
-	"github.com/olivere/elastic/v7"
+	os "github.com/opensearch-project/opensearch-go"
+
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
+
+	"github.com/tidwall/sjson"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
@@ -29,7 +41,15 @@ import (
 	itls "github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-func notImportedAWSOptFn(conf output.OpenSearchConfig) ([]elastic.ClientOptionFunc, error) {
+// Transport is a RoundTripper that will sign requests with AWS V4 Signing
+type Transport struct {
+	Transport http.RoundTripper
+	Creds     *credentials.Credentials
+	Signer    *v4.Signer
+	Region    string
+}
+
+func notImportedAWSOptFn(roundtripper http.RoundTripper, conf output.OpenSearchConfig) (*Transport, error) {
 	if !conf.AWS.Enabled {
 		return nil, nil
 	}
@@ -40,6 +60,7 @@ func notImportedAWSOptFn(conf output.OpenSearchConfig) ([]elastic.ClientOptionFu
 var AWSOptFn = notImportedAWSOptFn
 
 func init() {
+	//TODO: use public service API, refer:output_pusher.go
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
 		return NewOpenSearch(c.OpenSearch, nm)
 	}), docs.ComponentSpec{
@@ -65,17 +86,15 @@ false for connections to succeed.`),
 			docs.FieldString("id", "The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").IsInterpolated(),
 			docs.FieldString("type", "The document mapping type. This field is required for versions of elasticsearch earlier than 6.0.0, but are invalid for versions 7.0.0 or later.").Optional().IsInterpolated(),
 			docs.FieldString("routing", "The routing key to use for the document.").IsInterpolated().Advanced(),
-			docs.FieldBool("sniff", "Prompts Benthos to sniff for brokers to connect to when establishing a connection.").Advanced(),
-			docs.FieldBool("healthcheck", "Whether to enable healthchecks.").Advanced(),
 			docs.FieldString("timeout", "The maximum time to wait before abandoning a request (and trying again).").Advanced(),
 			itls.FieldSpec(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		).WithChildren(retries.FieldSpecs()...).WithChildren(
 			auth.BasicAuthFieldSpec(),
 			policy.FieldSpec(),
-			docs.FieldObject("aws", "Enables and customises connectivity to Amazon Elastic Service.").WithChildren(
+			docs.FieldObject("aws", "Enables and customises connectivity to Amazon OpenSearch Service.").WithChildren(
 				docs.FieldSpecs{
-					docs.FieldBool("enabled", "Whether to connect to Amazon Elastic Service."),
+					docs.FieldBool("enabled", "Whether to connect to Amazon OpenSearch Service."),
 				}.Merge(sess.FieldSpecs())...,
 			).Advanced(),
 			docs.FieldBool("gzip_compression", "Enable gzip compression on the request side.").Advanced(),
@@ -91,11 +110,11 @@ false for connections to succeed.`),
 
 // NewOpenSearch creates a new OpenSearch output type.
 func NewOpenSearch(conf output.OpenSearchConfig, mgr bundle.NewManagement) (output.Streamed, error) {
-	elasticWriter, err := NewOpenSearchV2(conf, mgr)
+	openSearchWriter, err := NewOpenSearchV2(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
-	w, err := output.NewAsyncWriter("opensearch", conf.MaxInFlight, elasticWriter, mgr)
+	w, err := output.NewAsyncWriter("opensearch", conf.MaxInFlight, openSearchWriter, mgr)
 	if err != nil {
 		return w, err
 	}
@@ -107,10 +126,8 @@ type OpenSearch struct {
 	log   log.Modular
 	stats metrics.Type
 
-	urls        []string
-	sniff       bool
-	healthcheck bool
-	conf        output.OpenSearchConfig
+	urls []string
+	conf output.OpenSearchConfig
 
 	backoffCtor func() backoff.BackOff
 	timeout     time.Duration
@@ -123,17 +140,15 @@ type OpenSearch struct {
 	routingStr  *field.Expression
 	typeStr     *field.Expression
 
-	client *elastic.Client
+	client *os.Client
 }
 
 // NewOpenSearchV2 creates a new OpenSearch writer type.
 func NewOpenSearchV2(conf output.OpenSearchConfig, mgr bundle.NewManagement) (*OpenSearch, error) {
 	e := OpenSearch{
-		log:         mgr.Logger(),
-		stats:       mgr.Metrics(),
-		conf:        conf,
-		sniff:       conf.Sniff,
-		healthcheck: conf.Healthcheck,
+		log:   mgr.Logger(),
+		stats: mgr.Metrics(),
+		conf:  conf,
 	}
 
 	var err error
@@ -191,44 +206,48 @@ func (e *OpenSearch) Connect(ctx context.Context) error {
 	if e.client != nil {
 		return nil
 	}
-
-	opts := []elastic.ClientOptionFunc{
-		elastic.SetURL(e.urls...),
-		elastic.SetSniff(e.sniff),
-		elastic.SetHealthcheck(e.healthcheck),
+	boff := e.backoffCtor()
+	opts := os.Config{
+		Addresses:     e.urls,
+		RetryOnStatus: []int{502, 503, 504, 429},
+		RetryBackoff: func(attempt int) time.Duration {
+			if attempt == 1 {
+				boff.Reset()
+			}
+			return boff.NextBackOff()
+		},
+		MaxRetries: int(e.conf.MaxRetries),
 	}
-
 	if e.conf.Auth.Enabled {
-		opts = append(opts, elastic.SetBasicAuth(
-			e.conf.Auth.Username, e.conf.Auth.Password,
-		))
+		opts.Username = e.conf.Auth.Username
+		opts.Password = e.conf.Auth.Password
 	}
 
+	opts.Transport = &http.Transport{
+		ResponseHeaderTimeout: e.timeout,
+	}
 	if e.conf.TLS.Enabled {
-		opts = append(opts, elastic.SetHttpClient(&http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: e.tlsConf,
-			},
-			Timeout: e.timeout,
-		}))
+		opts.Transport = &http.Transport{
+			TLSClientConfig:       e.tlsConf,
+			ResponseHeaderTimeout: e.timeout,
+		}
 
-	} else {
-		opts = append(opts, elastic.SetHttpClient(&http.Client{
-			Timeout: e.timeout,
-		}))
 	}
 
-	awsOpts, err := AWSOptFn(e.conf)
+	awsOpts, err := AWSOptFn(opts.Transport, e.conf)
 	if err != nil {
 		return err
 	}
-	opts = append(opts, awsOpts...)
+	if awsOpts != nil {
+		opts.Transport = awsOpts
 
-	if e.conf.GzipCompression {
-		opts = append(opts, elastic.SetGzip(true))
 	}
 
-	client, err := elastic.NewClient(opts...)
+	if e.conf.GzipCompression {
+		opts.CompressRequestBody = true
+	}
+
+	client, err := os.NewClient(opts)
 	if err != nil {
 		return err
 	}
@@ -236,13 +255,6 @@ func (e *OpenSearch) Connect(ctx context.Context) error {
 	e.client = client
 	e.log.Infof("Sending messages to OpenSearch index at urls: %s\n", e.urls)
 	return nil
-}
-
-func shouldRetry(s int) bool {
-	if s >= 500 && s <= 599 {
-		return true
-	}
-	return false
 }
 
 type pendingBulkIndex struct {
@@ -268,8 +280,6 @@ func (e *OpenSearch) Write(msg message.Batch) error {
 		return component.ErrNotConnected
 	}
 
-	boff := e.backoffCtor()
-
 	requests := make([]*pendingBulkIndex, msg.Len())
 	if err := msg.Iter(func(i int, part *message.Part) error {
 		jObj, ierr := part.AsStructured()
@@ -290,63 +300,41 @@ func (e *OpenSearch) Write(msg message.Batch) error {
 	}); err != nil {
 		return err
 	}
-
-	b := e.client.Bulk()
+	start := time.Now()
+	b, _ := opensearchutil.NewBulkIndexer(opensearchutil.BulkIndexerConfig{
+		FlushInterval: time.Second * 1,
+		FlushBytes:    0,
+		Client:        e.client,
+	})
+	ctx := context.Background()
 	for _, v := range requests {
 		bulkReq, err := e.buildBulkableRequest(v)
 		if err != nil {
 			return err
 		}
-		b.Add(bulkReq)
+		_ = b.Add(ctx, *bulkReq)
 	}
 
-	lastErrReason := "no reason given"
-	for b.NumberOfActions() != 0 {
-		result, err := b.Do(context.Background())
-		if err != nil {
-			return err
-		}
-		if !result.Errors {
-			return nil
-		}
+	_ = b.Close(ctx)
 
-		var newRequests []*pendingBulkIndex
-		for i, resp := range result.Items {
-			for _, item := range resp {
-				if item.Status >= 200 && item.Status <= 299 {
-					continue
-				}
+	biStats := b.Stats()
+	dur := time.Since(start)
 
-				reason := "no reason given"
-				if item.Error != nil {
-					reason = item.Error.Reason
-					lastErrReason = fmt.Sprintf("status [%v]: %v", item.Status, reason)
-				}
-
-				e.log.Errorf("OpenSearch message '%v' rejected with status [%v]: %v\n", item.Id, item.Status, reason)
-				if !shouldRetry(item.Status) {
-					return fmt.Errorf("failed to send message '%v': %v", item.Id, reason)
-				}
-
-				// IMPORTANT: i exactly matches the index of our source requests
-				// and when we re-run our bulk request with errored requests
-				// that must remain true.
-				sourceReq := requests[i]
-				bulkReq, err := e.buildBulkableRequest(sourceReq)
-				if err != nil {
-					return err
-				}
-				b.Add(bulkReq)
-				newRequests = append(newRequests, sourceReq)
-			}
-		}
-		requests = newRequests
-
-		wait := boff.NextBackOff()
-		if wait == backoff.Stop {
-			return fmt.Errorf("retries exhausted for messages, aborting with last error reported as: %v", lastErrReason)
-		}
-		time.Sleep(wait)
+	if biStats.NumFailed > 0 {
+		e.log.Errorf(
+			"Indexed [%s] documents with [%s] errors in %s (%s docs/sec)",
+			humanize.Comma(int64(biStats.NumFlushed)),
+			humanize.Comma(int64(biStats.NumFailed)),
+			dur.Truncate(time.Millisecond),
+			humanize.Comma(int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed))),
+		)
+	} else {
+		e.log.Infof(
+			"Sucessfuly indexed [%s] documents in %s (%s docs/sec)",
+			humanize.Comma(int64(biStats.NumFlushed)),
+			dur.Truncate(time.Millisecond),
+			humanize.Comma(int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed))),
+		)
 	}
 
 	return nil
@@ -358,61 +346,109 @@ func (e *OpenSearch) Close(context.Context) error {
 }
 
 // Build a bulkable request for a given pending bulk index item.
-func (e *OpenSearch) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequest, error) {
+func (e *OpenSearch) buildBulkableRequest(p *pendingBulkIndex) (*opensearchutil.BulkIndexerItem, error) {
 	switch p.Action {
 	case "update":
-		r := elastic.NewBulkUpdateRequest().
-			Index(p.Index).
-			Routing(p.Routing).
-			Id(p.ID).
-			Doc(p.Doc)
-		if p.Type != "" {
-			r = r.Type(p.Type)
+		// opensearch util needs the body root element should be "doc"
+		doc, _ := sjson.SetOptions("", "doc", p.Doc, &sjson.Options{ReplaceInPlace: true})
+		r := &opensearchutil.BulkIndexerItem{
+			Index:  p.Index,
+			Action: "update",
+			Body:   strings.NewReader(doc),
 		}
-		return r, nil
-	case "upsert":
-		r := elastic.NewBulkUpdateRequest().
-			Index(p.Index).
-			Routing(p.Routing).
-			Id(p.ID).
-			DocAsUpsert(true).
-			Doc(p.Doc)
-		if p.Type != "" {
-			r = r.Type(p.Type)
+		if p.ID != "" {
+			r.DocumentID = p.ID
 		}
+		if p.Routing != "" {
+			r.Routing = &p.Routing
+		}
+
 		return r, nil
 	case "delete":
-		r := elastic.NewBulkDeleteRequest().
-			Index(p.Index).
-			Routing(p.Routing).
-			Id(p.ID)
-		if p.Type != "" {
-			r = r.Type(p.Type)
+		r := &opensearchutil.BulkIndexerItem{
+			Index:      p.Index,
+			DocumentID: p.ID,
+			Action:     "delete",
+		}
+		if p.Routing != "" {
+			r.Routing = &p.Routing
 		}
 		return r, nil
 	case "index":
-		r := elastic.NewBulkIndexRequest().
-			Index(p.Index).
-			Pipeline(p.Pipeline).
-			Routing(p.Routing).
-			Id(p.ID).
-			Doc(p.Doc)
-		if p.Type != "" {
-			r = r.Type(p.Type)
+		jsonData, _ := json.Marshal(p.Doc)
+		r := &opensearchutil.BulkIndexerItem{
+			Index:  p.Index,
+			Action: "index",
+			Body:   bytes.NewReader(jsonData),
+		}
+		if p.ID != "" {
+			r.DocumentID = p.ID
+		}
+		if p.Routing != "" {
+			r.Routing = &p.Routing
 		}
 		return r, nil
 	case "create":
-		r := elastic.NewBulkCreateRequest().
-			Index(p.Index).
-			Pipeline(p.Pipeline).
-			Routing(p.Routing).
-			Id(p.ID).
-			Doc(p.Doc)
-		if p.Type != "" {
-			r = r.Type(p.Type)
+		jsonData, _ := json.Marshal(p.Doc)
+		r := &opensearchutil.BulkIndexerItem{
+			Index:  p.Index,
+			Action: "create",
+			Body:   bytes.NewReader(jsonData),
+		}
+		if p.ID != "" {
+			r.DocumentID = p.ID
+		}
+		if p.Routing != "" {
+			r.Routing = &p.Routing
 		}
 		return r, nil
 	default:
 		return nil, fmt.Errorf("opensearch action '%s' is not allowed", p.Action)
 	}
+}
+
+// RoundTrip uses the underlying RoundTripper transport, but signs request first with AWS V4 Signing
+func (st Transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if h, ok := req.Header["Authorization"]; ok && len(h) > 0 && strings.HasPrefix(h[0], "AWS4") {
+		// Received a signed request, just pass it on.
+		return st.Transport.RoundTrip(req)
+	}
+
+	if strings.Contains(req.URL.RawPath, "%2C") {
+		// Escaping path
+		req.URL.RawPath = url.PathEscape(req.URL.RawPath)
+	}
+
+	now := time.Now().UTC()
+	req.Header.Set("Date", now.Format(time.RFC3339))
+
+	var err error
+	switch req.Body {
+	case nil:
+		_, err = st.Signer.Sign(req, nil, "es", st.Region, now)
+	default:
+		switch body := req.Body.(type) {
+		case io.ReadSeeker:
+			_, err = st.Signer.Sign(req, body, "es", st.Region, now)
+		default:
+			var buf []byte
+			buf, err = io.ReadAll(req.Body)
+			if err != nil {
+				return nil, err
+			}
+			req.Body = io.NopCloser(bytes.NewReader(buf))
+			_, err = st.Signer.Sign(req, bytes.NewReader(buf), "es", st.Region, time.Now().UTC())
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return st.Transport.RoundTrip(req)
+}
+
+// Read method to read the content from io.reader to string
+func Read(r io.Reader) string {
+	var b bytes.Buffer
+	_, _ = b.ReadFrom(r)
+	return b.String()
 }

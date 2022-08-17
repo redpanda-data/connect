@@ -35,6 +35,7 @@ output:
     urls: []
     index: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
+    type: ""
     max_in_flight: 64
     batching:
       count: 0
@@ -56,9 +57,8 @@ output:
     action: index
     pipeline: ""
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
+    type: ""
     routing: ""
-    sniff: true
-    healthcheck: true
     timeout: 5s
     tls:
       enabled: false
@@ -174,6 +174,15 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `string`  
 Default: `"${!count(\"elastic_ids\")}-${!timestamp_unix()}"`  
 
+### `type`
+
+The document mapping type. This field is required for versions of elasticsearch earlier than 6.0.0, but are invalid for versions 7.0.0 or later.
+This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
+
+
+Type: `string`  
+Default: `""`  
+
 ### `routing`
 
 The routing key to use for the document.
@@ -182,22 +191,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 Type: `string`  
 Default: `""`  
-
-### `sniff`
-
-Prompts Benthos to sniff for brokers to connect to when establishing a connection.
-
-
-Type: `bool`  
-Default: `true`  
-
-### `healthcheck`
-
-Whether to enable healthchecks.
-
-
-Type: `bool`  
-Default: `true`  
 
 ### `timeout`
 
@@ -515,14 +508,14 @@ processors:
 
 ### `aws`
 
-Enables and customises connectivity to Amazon Elastic Service.
+Enables and customises connectivity to Amazon OpenSearch Service.
 
 
 Type: `object`  
 
 ### `aws.enabled`
 
-Whether to connect to Amazon Elastic Service.
+Whether to connect to Amazon OpenSearch Service.
 
 
 Type: `bool`  

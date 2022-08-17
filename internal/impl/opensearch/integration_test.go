@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/olivere/elastic/v7"
+	os "github.com/opensearch-project/opensearch-go"
+	osapi "github.com/opensearch-project/opensearch-go/opensearchapi"
+	"github.com/tidwall/gjson"
+
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,23 +55,20 @@ func TestIntegrationOpenSearch(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	var client *elastic.Client
+	var client *os.Client
 	if err = pool.Retry(func() error {
-		opts := []elastic.ClientOptionFunc{
-			elastic.SetURL(fmt.Sprintf("http://localhost:%v", resource.GetPort("9200/tcp"))),
-			elastic.SetHttpClient(&http.Client{
-				Timeout: time.Second,
-			}),
-			elastic.SetSniff(false),
+		opts := os.Config{
+			Addresses: []string{fmt.Sprintf("http://localhost:%v", resource.GetPort("9200/tcp"))},
+			Transport: http.DefaultTransport,
 		}
 
 		var cerr error
-		if client, cerr = elastic.NewClient(opts...); cerr == nil {
-			_, cerr = client.
-				CreateIndex("test_conn_index").
-				Timeout("20s").
-				Body(openSearchIndex).
-				Do(context.Background())
+		if client, cerr = os.NewClient(opts); cerr == nil {
+			_, cerr = osapi.IndicesCreateRequest{
+				Index:   "test_conn_index",
+				Body:    strings.NewReader(openSearchIndex),
+				Timeout: time.Second * 20,
+			}.Do(context.Background(), client)
 		}
 		return cerr
 	}); err != nil {
@@ -83,27 +84,27 @@ output:
       - http://localhost:$PORT
     index: $ID
     id: ${!json("id")}
-    sniff: false
-    healthcheck: false
 `
 	queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
-		res, err := client.Get().
-			Index(testID).
-			Id(messageID).
-			Do(ctx)
+		res, err := osapi.GetRequest{
+			Index:      testID,
+			DocumentID: messageID,
+		}.Do(ctx, client)
 		if err != nil {
 			return "", nil, err
 		}
 
-		if !res.Found {
+		if res.StatusCode != 200 {
 			return "", nil, fmt.Errorf("document %v not found", messageID)
 		}
 
-		resBytes, err := res.Source.MarshalJSON()
+		response := Read(res.Body)
+		source := gjson.Get(response, "_source")
+
 		if err != nil {
 			return "", nil, err
 		}
-		return string(resBytes), nil, nil
+		return source.Raw, nil, nil
 	}
 
 	suite := integration.StreamTests(
@@ -123,7 +124,7 @@ func BenchmarkIntegrationOpenSearch(b *testing.B) {
 	require.NoError(b, err)
 
 	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("opensearchproject/opensearch", "2.1.0", []string{
+	resource, err := pool.Run("opensearchproject/opensearch", "2.2.0", []string{
 		"discovery.type=single-node",
 		"DISABLE_SECURITY_PLUGIN=true",
 	})
@@ -132,23 +133,20 @@ func BenchmarkIntegrationOpenSearch(b *testing.B) {
 		assert.NoError(b, pool.Purge(resource))
 	})
 
-	var client *elastic.Client
+	var client *os.Client
 	if err = pool.Retry(func() error {
-		opts := []elastic.ClientOptionFunc{
-			elastic.SetURL(fmt.Sprintf("http://localhost:%v", resource.GetPort("9200/tcp"))),
-			elastic.SetHttpClient(&http.Client{
-				Timeout: time.Second,
-			}),
-			elastic.SetSniff(false),
+		opts := os.Config{
+			Addresses: []string{fmt.Sprintf("http://localhost:%v", resource.GetPort("9200/tcp"))},
+			Transport: http.DefaultTransport,
 		}
 
 		var cerr error
-		if client, cerr = elastic.NewClient(opts...); cerr == nil {
-			_, cerr = client.
-				CreateIndex("test_conn_index").
-				Timeout("200s").
-				Body(openSearchIndex).
-				Do(context.Background())
+		if client, cerr = os.NewClient(opts); cerr == nil {
+			_, cerr = osapi.IndicesCreateRequest{
+				Index:   "test_conn_index",
+				Body:    strings.NewReader(openSearchIndex),
+				Timeout: time.Second * 20,
+			}.Do(context.Background(), client)
 		}
 		return cerr
 	}); err != nil {
@@ -164,7 +162,6 @@ output:
       - http://localhost:$PORT
     index: $ID
     id: ${!json("id")}
-    sniff: false
 `
 	suite := integration.StreamBenchs(
 		integration.StreamBenchWrite(20),

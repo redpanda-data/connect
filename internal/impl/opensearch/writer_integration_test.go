@@ -2,19 +2,25 @@ package opensearch_test
 
 import (
 	"context"
-	"encoding/json"
+
+	"github.com/tidwall/gjson"
+
+	"github.com/benthosdev/benthos/v4/internal/impl/opensearch"
+
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/olivere/elastic/v7"
+	os "github.com/opensearch-project/opensearch-go"
+	osapi "github.com/opensearch-project/opensearch-go/opensearchapi"
+
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/impl/opensearch"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -30,7 +36,7 @@ func TestIntegrationWriter(t *testing.T) {
 	}
 	pool.MaxWait = time.Second * 60
 
-	resource, err := pool.Run("opensearchproject/opensearch", "1.3.4", []string{
+	resource, err := pool.Run("opensearchproject/opensearch", "2.2.0", []string{
 		"discovery.type=single-node",
 		"DISABLE_SECURITY_PLUGIN=true",
 	})
@@ -40,19 +46,15 @@ func TestIntegrationWriter(t *testing.T) {
 
 	urls := []string{fmt.Sprintf("http://127.0.0.1:%v", resource.GetPort("9200/tcp"))}
 
-	var client *elastic.Client
+	var client *os.Client
 
 	if err = pool.Retry(func() error {
-		opts := []elastic.ClientOptionFunc{
-			elastic.SetURL(urls...),
-			elastic.SetHttpClient(&http.Client{
-				Timeout: time.Second,
-			}),
-			elastic.SetSniff(false),
+		opts := os.Config{Addresses: urls,
+			Transport: http.DefaultTransport,
 		}
 
 		var cerr error
-		client, cerr = elastic.NewClient(opts...)
+		client, cerr = os.NewClient(opts)
 
 		if cerr == nil {
 			index := `{
@@ -73,17 +75,17 @@ func TestIntegrationWriter(t *testing.T) {
 		}
 	}
 }`
-			_, cerr = client.
-				CreateIndex("test_conn_index").
-				Timeout("20s").
-				Body(index).
-				Do(context.Background())
+			_, cerr = osapi.IndicesCreateRequest{
+				Index:   "test_conn_index",
+				Body:    strings.NewReader(index),
+				Timeout: time.Second * 20,
+			}.Do(context.Background(), client)
 			if cerr == nil {
-				_, cerr = client.
-					CreateIndex("test_conn_index_2").
-					Timeout("20s").
-					Body(index).
-					Do(context.Background())
+				_, cerr = osapi.IndicesCreateRequest{
+					Index:   "test_conn_index_2",
+					Body:    strings.NewReader(index),
+					Timeout: time.Second * 20,
+				}.Do(context.Background(), client)
 			}
 
 		}
@@ -98,47 +100,46 @@ func TestIntegrationWriter(t *testing.T) {
 		}
 	}()
 
-	t.Run("TestElasticNoIndex", func(te *testing.T) {
-		testElasticNoIndex(urls, client, te)
+	t.Run("TestOpenSearchNoIndex", func(te *testing.T) {
+		testOpenSearchNoIndex(urls, client, te)
 	})
 
-	t.Run("TestElasticParallelWrites", func(te *testing.T) {
-		testElasticParallelWrites(urls, client, te)
+	t.Run("TestOpenSearchParallelWrites", func(te *testing.T) {
+		testOpenSearchParallelWrites(urls, client, te)
 	})
 
-	t.Run("TestElasticErrorHandling", func(te *testing.T) {
-		testElasticErrorHandling(urls, client, te)
+	t.Run("TestOpenSearchErrorHandling", func(te *testing.T) {
+		testOpenSearchErrorHandling(urls, te)
 	})
 
-	t.Run("TestElasticConnect", func(te *testing.T) {
-		testElasticConnect(urls, client, te)
+	t.Run("TestOpenSearchConnect", func(te *testing.T) {
+		testOpenSearchConnect(urls, client, te)
 	})
 
-	t.Run("TestElasticIndexInterpolation", func(te *testing.T) {
-		testElasticIndexInterpolation(urls, client, te)
+	t.Run("TestOpenSearchIndexInterpolation", func(te *testing.T) {
+		testOpenSearchIndexInterpolation(urls, client, te)
 	})
 
-	t.Run("TestElasticBatch", func(te *testing.T) {
-		testElasticBatch(urls, client, te)
+	t.Run("TestOpenSearchBatch", func(te *testing.T) {
+		testOpenSearchBatch(urls, client, te)
 	})
 
-	t.Run("TestElasticBatchDelete", func(te *testing.T) {
-		testElasticBatchDelete(urls, client, te)
+	t.Run("TestOpenSearchBatchDelete", func(te *testing.T) {
+		testOpenSearchBatchDelete(urls, client, te)
 	})
 
-	t.Run("TestElasticBatchIDCollision", func(te *testing.T) {
-		testElasticBatchIDCollision(urls, client, te)
+	t.Run("TestOpenSearchBatchIDCollision", func(te *testing.T) {
+		testOpenSearchBatchIDCollision(urls, client, te)
 	})
 }
 
-func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
+func testOpenSearchNoIndex(urls []string, client *os.Client, t *testing.T) {
 	conf := output.NewOpenSearchConfig()
 	conf.Index = "does_not_exist"
 	conf.ID = "foo-${!count(\"noIndexTest\")}"
 	conf.URLs = urls
 	conf.MaxRetries = 1
 	conf.Backoff.MaxElapsedTime = "1s"
-	conf.Sniff = false
 
 	m, err := opensearch.NewOpenSearchV2(conf, mock.NewManager())
 	if err != nil {
@@ -169,27 +170,26 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 	for i := 0; i < 3; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
-		get, err := client.Get().
-			Index("does_not_exist").
-			Id(id).
-			Do(context.Background())
+		get, err := osapi.IndicesExistsRequest{
+			Index: []string{"does_not_exist"},
+		}.Do(context.Background(), client)
+
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		if !get.Found {
+		if get.StatusCode != 200 {
 			t.Errorf("document %v not found", i)
 		}
 	}
 }
 
-func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing.T) {
+func testOpenSearchParallelWrites(urls []string, client *os.Client, t *testing.T) {
 	conf := output.NewOpenSearchConfig()
 	conf.Index = "new_index_parallel_writes"
 	conf.ID = "${!json(\"key\")}"
 	conf.URLs = urls
 	conf.MaxRetries = 1
 	conf.Backoff.MaxElapsedTime = "1s"
-	conf.Sniff = false
 
 	m, err := opensearch.NewOpenSearchV2(conf, mock.NewManager())
 	if err != nil {
@@ -230,35 +230,31 @@ func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing
 	wg.Wait()
 
 	for id, exp := range docs {
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
-		get, err := client.Get().
-			Index("new_index_parallel_writes").
-			Type("_doc").
-			Id(id).
-			Do(context.Background())
+		get, err := osapi.GetRequest{
+			Index:      "new_index_parallel_writes",
+			DocumentID: id,
+		}.Do(context.Background(), client)
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		if !get.Found {
+		if get.StatusCode != 200 {
 			t.Errorf("document %v not found", id)
 		} else {
-			rawBytes, err := get.Source.MarshalJSON()
-			if err != nil {
-				t.Error(err)
-			} else if act := string(rawBytes); act != exp {
+			response := opensearch.Read(get.Body)
+			source := gjson.Get(response, "_source")
+			if act := source.Raw; act != exp {
 				t.Errorf("Wrong result: %v != %v", act, exp)
 			}
 		}
 	}
 }
 
-func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.T) {
+func testOpenSearchErrorHandling(urls []string, t *testing.T) {
 	conf := output.NewOpenSearchConfig()
 	conf.Index = "test_conn_index?"
 	conf.ID = "foo-static"
 	conf.URLs = urls
 	conf.Backoff.MaxInterval = "1s"
-	conf.Sniff = false
 
 	m, err := opensearch.NewOpenSearchV2(conf, mock.NewManager())
 	if err != nil {
@@ -275,22 +271,21 @@ func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.
 		done()
 	}()
 
-	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":true}`)})); err == nil {
+	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":invalid json`)})); err == nil {
 		t.Error("Expected error")
 	}
 
-	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":"foo"}`), []byte(`{"message":"bar"}`)})); err == nil {
+	if err = m.Write(message.QuickBatch([][]byte{[]byte(`{"message":"foo}`), []byte(`{"message":"bar"}`)})); err == nil {
 		t.Error("Expected error")
 	}
 }
 
-func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
+func testOpenSearchConnect(urls []string, client *os.Client, t *testing.T) {
 	conf := output.NewOpenSearchConfig()
 	conf.Index = "test_conn_index"
 	conf.ID = "foo-${!count(\"foo\")}"
 	conf.URLs = urls
 	conf.Type = "_doc"
-	conf.Sniff = false
 
 	m, err := opensearch.NewOpenSearchV2(conf, mock.NewManager())
 	if err != nil {
@@ -322,36 +317,33 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
-		get, err := client.Get().
-			Index("test_conn_index").
-			Type("_doc").
-			Id(id).
-			Do(context.Background())
+
+		get, err := osapi.GetRequest{
+			Index:      "test_conn_index",
+			DocumentID: id,
+		}.Do(context.Background(), client)
+
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		if !get.Found {
+		if get.StatusCode != 200 {
 			t.Errorf("document %v not found", i)
 		}
 
-		var sourceBytes []byte
-		sourceBytes, err = get.Source.MarshalJSON()
-		if err != nil {
-			t.Error(err)
-		} else if exp, act := string(testMsgs[i][0]), string(sourceBytes); exp != act {
+		response := opensearch.Read(get.Body)
+		source := gjson.Get(response, "_source")
+		if exp, act := string(testMsgs[i][0]), source.Raw; exp != act {
 			t.Errorf("wrong user field returned: %v != %v", act, exp)
 		}
 	}
 }
 
-func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *testing.T) {
+func testOpenSearchIndexInterpolation(urls []string, client *os.Client, t *testing.T) {
 	conf := output.NewOpenSearchConfig()
 	conf.Index = "${!meta(\"index\")}"
 	conf.ID = "bar-${!count(\"bar\")}"
 	conf.URLs = urls
 	conf.Type = "_doc"
-	conf.Sniff = false
 
 	m, err := opensearch.NewOpenSearchV2(conf, mock.NewManager())
 	if err != nil {
@@ -385,36 +377,34 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
-		get, err := client.Get().
-			Index("test_conn_index").
-			Type("_doc").
-			Id(id).
-			Do(context.Background())
+
+		get, err := osapi.GetRequest{
+			Index:      "test_conn_index",
+			DocumentID: id,
+		}.Do(context.Background(), client)
+
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		if !get.Found {
+		if get.StatusCode != 200 {
 			t.Errorf("document %v not found", i)
 		}
 
-		var sourceBytes []byte
-		sourceBytes, err = get.Source.MarshalJSON()
+		response := opensearch.Read(get.Body)
+		source := gjson.Get(response, "_source")
 		if err != nil {
 			t.Error(err)
-		} else if exp, act := string(testMsgs[i][0]), string(sourceBytes); exp != act {
+		} else if exp, act := string(testMsgs[i][0]), source.Raw; exp != act {
 			t.Errorf("wrong user field returned: %v != %v", act, exp)
 		}
 	}
 }
 
-func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
+func testOpenSearchBatch(urls []string, client *os.Client, t *testing.T) {
 	conf := output.NewOpenSearchConfig()
 	conf.Index = "${!meta(\"index\")}"
 	conf.ID = "bar-${!count(\"bar\")}"
 	conf.URLs = urls
-	conf.Sniff = false
-	conf.Type = "_doc"
 
 	m, err := opensearch.NewOpenSearchV2(conf, mock.NewManager())
 	if err != nil {
@@ -448,37 +438,35 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
-		get, err := client.Get().
-			Index("test_conn_index").
-			Type("_doc").
-			Id(id).
-			Do(context.Background())
+
+		get, err := osapi.GetRequest{
+			Index:      "test_conn_index",
+			DocumentID: id,
+		}.Do(context.Background(), client)
+
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		if !get.Found {
+		if get.StatusCode != 200 {
 			t.Errorf("document %v not found", i)
 		}
 
-		var sourceBytes []byte
-		sourceBytes, err = get.Source.MarshalJSON()
+		response := opensearch.Read(get.Body)
+		source := gjson.Get(response, "_source")
 		if err != nil {
 			t.Error(err)
-		} else if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
+		} else if exp, act := string(testMsg[i]), source.Raw; exp != act {
 			t.Errorf("wrong user field returned: %v != %v", act, exp)
 		}
 	}
 }
 
-func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T) {
+func testOpenSearchBatchDelete(urls []string, client *os.Client, t *testing.T) {
 	conf := output.NewOpenSearchConfig()
 	conf.Index = "${!meta(\"index\")}"
-	conf.ID = "bar-${!count(\"elasticBatchDeleteMessages\")}"
-	conf.Action = "${!meta(\"elastic_action\")}"
+	conf.ID = "bar-${!count(\"openSearchBatchDeleteMessages\")}"
+	conf.Action = "${!meta(\"opensearch_action\")}"
 	conf.URLs = urls
-	conf.Sniff = false
-	conf.Type = "_doc"
 
 	m, err := opensearch.NewOpenSearchV2(conf, mock.NewManager())
 	if err != nil {
@@ -506,7 +494,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 	msg := message.QuickBatch(testMsg)
 	for i := 0; i < N; i++ {
 		msg.Get(i).MetaSet("index", "test_conn_index")
-		msg.Get(i).MetaSet("elastic_action", "index")
+		msg.Get(i).MetaSet("opensearch_action", "index")
 	}
 	if err = m.Write(msg); err != nil {
 		t.Fatal(err)
@@ -514,30 +502,30 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
-		get, err := client.Get().
-			Index("test_conn_index").
-			Type("_doc").
-			Id(id).
-			Do(context.Background())
+		get, err := osapi.GetRequest{
+			Index:      "test_conn_index",
+			DocumentID: id,
+		}.Do(context.Background(), client)
+
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		if !get.Found {
+		if get.StatusCode != 200 {
 			t.Errorf("document %v not found", i)
 		}
 
-		var sourceBytes []byte
-		sourceBytes, err = get.Source.MarshalJSON()
+		response := opensearch.Read(get.Body)
+		source := gjson.Get(response, "_source")
 		if err != nil {
 			t.Error(err)
-		} else if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
+		} else if exp, act := string(testMsg[i]), source.Raw; exp != act {
 			t.Errorf("wrong user field returned: %v != %v", act, exp)
 		}
 	}
 
-	// Set elastic_action to deleted for some message parts
+	// Set opensearch_action to deleted for some message parts
 	for i := N / 2; i < N; i++ {
-		msg.Get(i).MetaSet("elastic_action", "delete")
+		msg.Get(i).MetaSet("opensearch_action", "delete")
 	}
 
 	if err = m.Write(msg); err != nil {
@@ -547,29 +535,28 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
-		get, err := client.Get().
-			Index("test_conn_index").
-			Type("_doc").
-			Id(id).
-			Do(context.Background())
+		get, err := osapi.GetRequest{
+			Index:      "test_conn_index",
+			DocumentID: id,
+		}.Do(context.Background(), client)
+
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		partAction := msg.Get(i).MetaGet("elastic_action")
-		if partAction == "deleted" && get.Found {
+		partAction := msg.Get(i).MetaGet("opensearch_action")
+		if partAction == "deleted" && get.StatusCode == 200 {
 			t.Errorf("document %v found when it should have been deleted", i)
-		} else if partAction != "deleted" && !get.Found {
+		} else if partAction != "deleted" && get.StatusCode != 200 {
 			t.Errorf("document %v was not found", i)
 		}
 	}
 }
 
-func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testing.T) {
+func testOpenSearchBatchIDCollision(urls []string, client *os.Client, t *testing.T) {
 	conf := output.NewOpenSearchConfig()
 	conf.Index = `${!meta("index")}`
 	conf.ID = "bar-id"
 	conf.URLs = urls
-	conf.Sniff = false
 	conf.Type = "_doc"
 
 	m, err := opensearch.NewOpenSearchV2(conf, mock.NewManager())
@@ -589,7 +576,7 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 
 	N := 2
 
-	testMsg := [][]byte{}
+	var testMsg [][]byte
 	for i := 0; i < N; i++ {
 		testMsg = append(testMsg,
 			[]byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)),
@@ -604,24 +591,23 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 		t.Fatal(err)
 	}
 	for i := 0; i < N; i++ {
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
-		get, err := client.Get().
-			Index(msg.Get(i).MetaGet("index")).
-			Type("_doc").
-			Id(conf.ID).
-			Do(context.Background())
+		get, err := osapi.GetRequest{
+			Index:      msg.Get(i).MetaGet("index"),
+			DocumentID: conf.ID,
+		}.Do(context.Background(), client)
+
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", conf.ID, err)
 		}
-		if !get.Found {
+		if get.StatusCode != 200 {
 			t.Errorf("document %v not found", i)
 		}
 
-		var sourceBytes []byte
-		sourceBytes, err = get.Source.MarshalJSON()
+		response := opensearch.Read(get.Body)
+		source := gjson.Get(response, "_source")
 		if err != nil {
 			t.Error(err)
-		} else if exp, act := string(testMsg[i]), string(sourceBytes); exp != act {
+		} else if exp, act := string(testMsg[i]), source.Raw; exp != act {
 			t.Errorf("wrong user field returned: %v != %v", act, exp)
 		}
 	}
@@ -656,29 +642,26 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 	}
 
 	// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
-	get, err := client.Get().
-		Index("test_conn_index").
-		Type("_doc").
-		Id(conf.ID).
-		Do(context.Background())
+	get, err := osapi.GetRequest{
+		Index:      "test_conn_index",
+		DocumentID: conf.ID,
+	}.Do(context.Background(), client)
 
 	if err != nil {
 		t.Fatalf("Failed to get doc '%v': %v", conf.ID, err)
 	}
-	if !get.Found {
+	if get.StatusCode != 200 {
 		t.Errorf("document not found")
 	}
+	response := opensearch.Read(get.Body)
+	srcMessage := gjson.Get(response, "_source.message").String()
+	user := gjson.Get(response, "_source.user").String()
 
-	var doc struct {
-		Message string `json:"message"`
-		User    string `json:"user"`
-	}
-	err = json.Unmarshal(get.Source, &doc)
 	if err != nil {
 		t.Error(err)
-	} else if doc.User != "updated" {
-		t.Errorf("wrong user field returned: %v != %v", doc.User, "updated")
-	} else if doc.Message != "goodbye" {
-		t.Errorf("wrong message field returned: %v != %v", doc.Message, "goodbye")
+	} else if user != "updated" {
+		t.Errorf("wrong user field returned: %v != %v", user, "updated")
+	} else if srcMessage != "goodbye" {
+		t.Errorf("wrong message field returned: %v != %v", srcMessage, "goodbye")
 	}
 }

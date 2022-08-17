@@ -3,22 +3,26 @@ package aws_test
 import (
 	"context"
 	"fmt"
-	"github.com/benthosdev/benthos/v4/internal/impl/opensearch"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/olivere/elastic/v7"
+	os "github.com/opensearch-project/opensearch-go"
+	osapi "github.com/opensearch-project/opensearch-go/opensearchapi"
+	"github.com/tidwall/gjson"
+
+	"github.com/benthosdev/benthos/v4/internal/impl/opensearch"
+
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/integration"
-
-	_ "github.com/benthosdev/benthos/v4/internal/impl/elasticsearch/aws"
 )
 
-var elasticIndex = `{
+var openSearchIndex = `{
 	"settings":{
 		"number_of_shards": 1,
 		"number_of_replicas": 0
@@ -38,7 +42,7 @@ var elasticIndex = `{
 }`
 
 func TestIntegrationOpenSearchAWS(t *testing.T) {
-	t.Skip("Struggling to get localstack es to work, maybe one day")
+	t.Skip("Struggling to get localstack opensearch to work, maybe one day")
 
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -70,25 +74,24 @@ func TestIntegrationOpenSearchAWS(t *testing.T) {
 	aConf.AWS.Credentials.Secret = "xxxxx"
 	aConf.AWS.Credentials.Token = "xxxxx"
 
-	awsOpts, err := opensearch.AWSOptFn(aConf)
 	require.NoError(t, err)
 
-	var client *elastic.Client
+	var client *os.Client
 	if err = pool.Retry(func() error {
-		opts := []elastic.ClientOptionFunc{
-			elastic.SetURL(fmt.Sprintf("http://localhost:%v", servicePort)),
-			elastic.SetSniff(false),
-			elastic.SetHealthcheck(false),
+		opts := os.Config{
+			Addresses: []string{fmt.Sprintf("http://localhost:%v", servicePort)},
+			Transport: http.DefaultTransport,
 		}
-		opts = append(opts, awsOpts...)
+		opts.Transport, _ = opensearch.AWSOptFn(opts.Transport, aConf)
 
 		var cerr error
-		if client, cerr = elastic.NewClient(opts...); cerr == nil {
-			_, cerr = client.
-				CreateIndex("test_conn_index").
-				Timeout("20s").
-				Body(elasticIndex).
-				Do(context.Background())
+		if client, cerr = os.NewClient(opts); cerr == nil {
+			_, cerr = osapi.IndicesCreateRequest{
+				Index:   "test_conn_index",
+				Body:    strings.NewReader(openSearchIndex),
+				Timeout: time.Second * 20,
+			}.Do(context.Background(), client)
+
 		}
 		return cerr
 	}); err != nil {
@@ -104,8 +107,6 @@ output:
       - http://localhost:$PORT
     index: $ID
     id: ${!json("id")}
-    sniff: false
-    healthcheck: false
     aws:
       enabled: true
       endpoint: http://localhost:$PORT
@@ -116,23 +117,25 @@ output:
         token: xxxxx
 `
 	queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
-		res, err := client.Get().
-			Index(testID).
-			Id(messageID).
-			Do(ctx)
+		res, err := osapi.GetRequest{
+			Index:      testID,
+			DocumentID: messageID,
+		}.Do(ctx, client)
 		if err != nil {
 			return "", nil, err
 		}
 
-		if !res.Found {
+		if res.StatusCode != 200 {
 			return "", nil, fmt.Errorf("document %v not found", messageID)
 		}
 
-		resBytes, err := res.Source.MarshalJSON()
+		response := opensearch.Read(res.Body)
+		source := gjson.Get(response, "_source")
+
 		if err != nil {
 			return "", nil, err
 		}
-		return string(resBytes), nil, nil
+		return source.Raw, nil, nil
 	}
 
 	suite := integration.StreamTests(

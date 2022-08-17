@@ -12,8 +12,6 @@ import (
 // output type.
 type OpenSearchConfig struct {
 	URLs            []string             `json:"urls" yaml:"urls"`
-	Sniff           bool                 `json:"sniff" yaml:"sniff"`
-	Healthcheck     bool                 `json:"healthcheck" yaml:"healthcheck"`
 	ID              string               `json:"id" yaml:"id"`
 	Action          string               `json:"action" yaml:"action"`
 	Index           string               `json:"index" yaml:"index"`
@@ -38,18 +36,16 @@ func NewOpenSearchConfig() OpenSearchConfig {
 	rConf.Backoff.MaxElapsedTime = "30s"
 
 	return OpenSearchConfig{
-		URLs:        []string{},
-		Sniff:       true,
-		Healthcheck: true,
-		Action:      "index",
-		ID:          `${!count("elastic_ids")}-${!timestamp_unix()}`,
-		Index:       "",
-		Pipeline:    "",
-		Type:        "",
-		Routing:     "",
-		Timeout:     "5s",
-		TLS:         btls.NewConfig(),
-		Auth:        auth.NewBasicAuthConfig(),
+		URLs:     []string{},
+		Action:   "index",
+		ID:       `${!count("elastic_ids")}-${!timestamp_unix()}`,
+		Index:    "",
+		Pipeline: "",
+		Type:     "",
+		Routing:  "",
+		Timeout:  "5s",
+		TLS:      btls.NewConfig(),
+		Auth:     auth.NewBasicAuthConfig(),
 		AWS: OptionalAWSConfig{
 			Enabled: false,
 			Config:  sess.NewConfig(),
