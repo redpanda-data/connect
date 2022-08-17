@@ -5,7 +5,6 @@ package all
 
 import (
 	// Import new service packages.
-	_ "github.com/benthosdev/benthos/v4/internal/impl/cassandra"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/confluent"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/dgraph"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/elasticsearch"
@@ -35,6 +34,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/awk"
 	_ "github.com/benthosdev/benthos/v4/public/components/aws"
 	_ "github.com/benthosdev/benthos/v4/public/components/azure"
+	_ "github.com/benthosdev/benthos/v4/public/components/cassandra"
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/kafka"
 	_ "github.com/benthosdev/benthos/v4/public/components/memcached"
