@@ -329,7 +329,7 @@ func (e *OpenSearch) Write(msg message.Batch) error {
 			humanize.Comma(int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed))),
 		)
 	} else {
-		e.log.Infof(
+		e.log.Debugf(
 			"Sucessfuly indexed [%s] documents in %s (%s docs/sec)",
 			humanize.Comma(int64(biStats.NumFlushed)),
 			dur.Truncate(time.Millisecond),

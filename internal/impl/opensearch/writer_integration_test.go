@@ -169,7 +169,6 @@ func testOpenSearchNoIndex(urls []string, client *os.Client, t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := osapi.IndicesExistsRequest{
 			Index: []string{"does_not_exist"},
 		}.Do(context.Background(), client)
