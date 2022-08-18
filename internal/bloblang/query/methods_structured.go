@@ -2,7 +2,6 @@ package query
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,9 +9,6 @@ import (
 	"strings"
 
 	"github.com/Jeffail/gabs/v2"
-	"github.com/PaesslerAG/gval"
-	"github.com/PaesslerAG/jsonpath"
-	"github.com/generikvault/gvalstrings"
 	jsonschema "github.com/xeipuuv/gojsonschema"
 )
 
@@ -1566,41 +1562,3 @@ func mapWithout(m map[string]interface{}, paths [][]string) map[string]interface
 	}
 	return newMap
 }
-
-//------------------------------------------------------------------------------
-
-var _ = registerSimpleMethod(
-	NewMethodSpec(
-		"json_path", "Executes the given JSONPath expression on an object or array and returns the result. The JSONPath expression syntax can be found at https://goessner.net/articles/JsonPath/. For more complex logic, you can use Gval expressions (https://github.com/PaesslerAG/gval).",
-	).InCategory(
-		MethodCategoryObjectAndArray,
-		"",
-		NewExampleSpec("",
-			`root.all_names = this.json_path("$..name")`,
-			`{"name":"alice","foo":{"name":"bob"}}`,
-			`{"all_names":["alice","bob"]}`,
-			`{"thing":["this","bar",{"name":"alice"}]}`,
-			`{"all_names":["alice"]}`,
-		),
-		NewExampleSpec("",
-			`root.text_objects = this.json_path("$.body[?(@.type=='text')]")`,
-			`{"body":[{"type":"image","id":"foo"},{"type":"text","id":"bar"}]}`,
-			`{"text":[{"type":"text","id":"bar"}]}`,
-		),
-	).Param(ParamString("expression", "The JSONPath expression to execute.")),
-	func(args *ParsedParams) (simpleMethod, error) {
-		// jsonPathLanguage includes the full gval scripting language and the single quote extension
-		jsonPathLanguage := gval.Full(jsonpath.Language(), gvalstrings.SingleQuoted())
-		expressionStr, err := args.FieldString("expression")
-		if err != nil {
-			return nil, err
-		}
-		eval, err := jsonPathLanguage.NewEvaluable(expressionStr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate json path expression: %w", err)
-		}
-		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
-			return eval(context.Background(), res)
-		}, nil
-	},
-)

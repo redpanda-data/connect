@@ -18,6 +18,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/internal/impl/hdfs"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/influxdb"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/jaeger"
+	_ "github.com/benthosdev/benthos/v4/internal/impl/jsonpath"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/maxmind"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/memcached"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/mongodb"
