@@ -311,7 +311,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 Requires version 4.3.0 or newer  
 
 ```yml

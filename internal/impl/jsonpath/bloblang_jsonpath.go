@@ -32,7 +32,7 @@ func init() {
 			}).
 			Example("", `root.text_objects = this.json_path("$.body[?(@.type=='text')]")`, [2]string{
 				`{"body":[{"type":"image","id":"foo"},{"type":"text","id":"bar"}]}`,
-				`{"text_objects":[{"type":"text","id":"bar"}]}`,
+				`{"text_objects":[{"id":"bar","type":"text"}]}`,
 			}).
 			Param(bloblang.NewStringParam("expression").Description("The JSONPath expression to execute.")),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {

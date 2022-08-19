@@ -32,7 +32,7 @@ performed for each message and the message contents are replaced with the result
 			Example("scard").
 			Example("incrby").
 			Example(`${! meta("command") }`).
-			Default("")).
+			Optional()).
 		Field(service.NewBloblangField("args_mapping").
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis command.").
 			Version("4.3.0").
@@ -61,8 +61,8 @@ performed for each message and the message contents are replaced with the result
 			Default("500ms").
 			Advanced()).
 		LintRule(`root = match {
-  this.exists("operator") && this.command != "" => [ "only one of 'operator' (old style) or 'command' (new style) fields should be specified" ]
-  this.exists("args_mapping") == this.exists("operator") => [ "either args_mapping or operator must be set" ],
+  this.exists("operator") == this.exists("command") => [ "one of 'operator' (old style) or 'command' (new style) fields must be specified" ]
+  this.exists("args_mapping") && this.exists("operator") => [ "field args_mapping is invalid with an operator set" ],
 }`).
 		Example("Querying Cardinality",
 			`If given payloads containing a metadata field `+"`set_key`"+` it's possible to query and store the cardinality of the set for each message using a `+"[`branch` processor](/docs/components/processors/branch)"+` in order to augment rather than replace the message contents:`,
@@ -153,13 +153,12 @@ func newRedisProcFromConfig(conf *service.ParsedConfig, res *service.Resources) 
 		return nil, err
 	}
 
-	command, err := conf.FieldInterpolatedString("command")
-	if err != nil {
-		return nil, err
-	}
-
+	var command *service.InterpolatedString
 	var argsMapping *bloblang.Executor
-	if conf.Contains("args_mapping") {
+	if conf.Contains("command") {
+		if command, err = conf.FieldInterpolatedString("command"); err != nil {
+			return nil, err
+		}
 		if argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
 			return nil, err
 		}
@@ -176,8 +175,8 @@ func newRedisProcFromConfig(conf *service.ParsedConfig, res *service.Resources) 
 		}
 	}
 
-	if (argsMapping == nil) != (operator == nil) {
-		return nil, errors.New("either args_mapping or operator must be set")
+	if argsMapping == nil && operator == nil {
+		return nil, errors.New("either a command & args_mapping or operator must be set")
 	}
 
 	r := &redisProc{

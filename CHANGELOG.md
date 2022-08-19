@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New top-level config field `shutdown_delay` for delaying graceful termination.
 - New `snowflake_id` bloblang function.
 - Field `wait_time_seconds` added to the `aws_sqs` input.
+- New `json_path` bloblang method.
 
 ## 4.5.1 - 2022-08-10
 
