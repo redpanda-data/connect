@@ -61,6 +61,7 @@ func (i *WithPipeline) Connected() bool {
 
 // TriggerCloseNow triggers a closure of this object but does not block.
 func (i *WithPipeline) TriggerCloseNow() {
+	i.pipe.TriggerCloseNow()
 	go func() {
 		_ = i.pipe.WaitForClose(context.Background())
 		i.out.TriggerCloseNow()
