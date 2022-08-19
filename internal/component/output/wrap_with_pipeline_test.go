@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -50,8 +51,9 @@ func (m *mockOutput) WaitForClose(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 type mockPipe struct {
-	tsIn <-chan message.Transaction
-	ts   chan message.Transaction
+	tsIn      <-chan message.Transaction
+	ts        chan message.Transaction
+	closeOnce sync.Once
 }
 
 func (m *mockPipe) Consume(ts <-chan message.Transaction) error {
@@ -64,7 +66,9 @@ func (m *mockPipe) TransactionChan() <-chan message.Transaction {
 }
 
 func (m *mockPipe) TriggerCloseNow() {
-	close(m.ts)
+	m.closeOnce.Do(func() {
+		close(m.ts)
+	})
 }
 
 func (m *mockPipe) WaitForClose(ctx context.Context) error {
