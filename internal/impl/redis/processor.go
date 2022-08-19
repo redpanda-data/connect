@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -35,9 +36,9 @@ performed for each message and the message contents are replaced with the result
 		Field(service.NewBloblangField("args_mapping").
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis command.").
 			Version("4.3.0").
+			Optional().
 			Example("root = [ this.key ]").
-			Example(`root = [ meta("kafka_key"), this.count ]`).
-			Default(``)).
+			Example(`root = [ meta("kafka_key"), this.count ]`)).
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{
 			"keys":   `Returns an array of strings containing all the keys that match the pattern specified by the ` + "`key` field" + `.`,
 			"scard":  `Returns the cardinality of a set, or ` + "`0`" + ` if the key does not exist.`,
@@ -59,11 +60,10 @@ performed for each message and the message contents are replaced with the result
 			Description("The time to wait before consecutive retry attempts.").
 			Default("500ms").
 			Advanced()).
-		LintRule(`
-root = if this.contains("operator") && this.contains("command") {
-  [ "only one of 'operator' (old style) or 'command' (new style) fields should be specified" ]
-}
-`).
+		LintRule(`root = match {
+  this.exists("operator") && this.command != "" => [ "only one of 'operator' (old style) or 'command' (new style) fields should be specified" ]
+  this.exists("args_mapping") == this.exists("operator") => [ "either args_mapping or operator must be set" ],
+}`).
 		Example("Querying Cardinality",
 			`If given payloads containing a metadata field `+"`set_key`"+` it's possible to query and store the cardinality of the set for each message using a `+"[`branch` processor](/docs/components/processors/branch)"+` in order to augment rather than replace the message contents:`,
 			`
@@ -159,14 +159,31 @@ func newRedisProcFromConfig(conf *service.ParsedConfig, res *service.Resources) 
 	}
 
 	var argsMapping *bloblang.Executor
-	if testStr, _ := conf.FieldString("args_mapping"); testStr != "" {
+	if conf.Contains("args_mapping") {
 		if argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
 			return nil, err
 		}
 	}
 
+	var operator redisOperator
+	if conf.Contains("operator") {
+		operatorStr, err := conf.FieldString("operator")
+		if err != nil {
+			return nil, err
+		}
+		if operator, err = getRedisOperator(operatorStr); err != nil {
+			return nil, err
+		}
+	}
+
+	if (argsMapping == nil) != (operator == nil) {
+		return nil, errors.New("either args_mapping or operator must be set")
+	}
+
 	r := &redisProc{
 		log: res.Logger(),
+
+		operator: operator,
 
 		command:     command,
 		argsMapping: argsMapping,
@@ -178,16 +195,6 @@ func newRedisProcFromConfig(conf *service.ParsedConfig, res *service.Resources) 
 
 	if conf.Contains("key") {
 		if r.key, err = conf.FieldInterpolatedString("key"); err != nil {
-			return nil, err
-		}
-	}
-
-	if conf.Contains("operator") {
-		operatorStr, err := conf.FieldString("operator")
-		if err != nil {
-			return nil, err
-		}
-		if r.operator, err = getRedisOperator(operatorStr); err != nil {
 			return nil, err
 		}
 	}
