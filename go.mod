@@ -22,8 +22,8 @@ require (
 	github.com/Jeffail/grok v1.1.0
 	github.com/Masterminds/squirrel v1.5.2
 	github.com/OneOfOne/xxhash v1.2.8
-	github.com/PaesslerAG/gval v1.2.0 // indirect
-	github.com/PaesslerAG/jsonpath v0.1.1 // indirect
+	github.com/PaesslerAG/gval v1.2.0
+	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/Shopify/sarama v1.30.1
 	github.com/apache/pulsar-client-go v0.8.1
 	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20220524063205-c41616b2f512 // indirect
@@ -51,7 +51,7 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/fatih/color v1.13.0
 	github.com/fsnotify/fsnotify v1.5.1
-	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a // indirect
+	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
 	github.com/go-redis/redis/v7 v7.4.1
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/go-stack/stack v1.8.1 // indirect
