@@ -465,18 +465,22 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 	}
 
 	reservedFields := ReservedFieldsByType(cType)
+	_, canLabel := reservedFields["label"]
+	hasLabel := false
 	for i := 0; i < len(node.Content)-1; i += 2 {
-		if node.Content[i].Value == name || node.Content[i].Value == "type" {
+		key := node.Content[i].Value
+		if key == name || key == "type" {
 			continue
 		}
-		if node.Content[i].Value == "plugin" {
+		if key == "plugin" {
 			if nameFound || !cSpec.Plugin {
 				lints = append(lints, NewLintError(node.Content[i].Line, "plugin object is ineffective"))
 			} else {
 				lints = append(lints, cSpec.Config.LintYAML(ctx, node.Content[i+1])...)
 			}
 		}
-		spec, exists := reservedFields[node.Content[i].Value]
+		spec, exists := reservedFields[key]
+		hasLabel = hasLabel || (key == "label")
 		if exists {
 			lints = append(lints, lintYAMLFromOmit(cSpec.Config.Children, spec, node, node.Content[i+1])...)
 			lints = append(lints, spec.LintYAML(ctx, node.Content[i+1])...)
@@ -486,6 +490,10 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 				fmt.Sprintf("field %v is invalid when the component type is %v (%v)", node.Content[i].Value, name, cType),
 			))
 		}
+	}
+
+	if ctx.RequireLabels && canLabel && !hasLabel {
+		lints = append(lints, NewLintError(node.Line, fmt.Sprintf("label is required for %s", cSpec.Name)))
 	}
 
 	return lints
