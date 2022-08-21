@@ -54,7 +54,7 @@ func newStdinConsumer(conf input.STDINConfig) (*stdinConsumer, error) {
 		return nil, err
 	}
 
-	scanner, err := ctor("", os.Stdin, func(_ context.Context, err error) error {
+	scanner, err := ctor("", io.NopCloser(os.Stdin), func(_ context.Context, err error) error {
 		return nil
 	})
 	if err != nil {
