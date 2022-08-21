@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `schema_registry_encode` processor now correctly assumes Avro JSON encoded documents by default.
+- The `redis` processor `retry_period` no longer shows linting errors for duration strings.
 
 ## 4.5.1 - 2022-08-10
 

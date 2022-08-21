@@ -378,8 +378,6 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 			return err
 		}
 
-		s.logger.Tracef("datum is: %#v", datum)
-
 		binary, err := codec.BinaryFromNative(nil, datum)
 		if err != nil {
 			return err
