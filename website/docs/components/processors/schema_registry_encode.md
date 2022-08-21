@@ -80,11 +80,11 @@ For example, the union schema `["null","string","Foo"]`, where `Foo` is a record
 - the string `"a"` as `{"string": "a"}`; and
 - a `Foo` instance as `{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
 
-
-
 However, it is possible to instead consume documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSON) by setting the field [`avro_raw_json`](#avro_raw_json) to `true`.
 
-Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses in that it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if `avro_raw_json` is set to true, but when decoded they will still be the verbose format that goavro uses.
+### Known Issues
+
+Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if `avro_raw_json` is set to true, but when decoded they will still be the verbose format that goavro uses.
 
 
 ## Fields
@@ -130,7 +130,7 @@ refresh_period: 1h
 
 ### `avro_raw_json`
 
-Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If true the the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSON) instead of as [normal avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library](https://github.com/linkedin/goavro) used to encode schemas, that explains in more detail the diffrence between the two.
+Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If true the the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSON) instead of as [normal avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library](https://github.com/linkedin/goavro) used to encode schemas, that explains in more detail the difference between the two.
 
 
 Type: `bool`  

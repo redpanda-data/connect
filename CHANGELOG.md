@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
 - Field `wait_time_seconds` added to the `aws_sqs` input.
 - New `json_path` bloblang method.
 
+### Fixed
+
+- The `schema_registry_encode` processor now correctly assumes Avro JSON encoded documents by default.
+
 ## 4.5.1 - 2022-08-10
 
 ### Fixed
