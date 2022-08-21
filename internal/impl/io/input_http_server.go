@@ -292,12 +292,9 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 		p.MetaSet("http_server_user_agent", r.UserAgent())
 		p.MetaSet("http_server_request_path", r.URL.Path)
 		p.MetaSet("http_server_verb", r.Method)
-
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			return fmt.Errorf("failed to extract host from request remote addr: %s", err)
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			p.MetaSet("http_server_remote_ip", host)
 		}
-		p.MetaSet("http_server_remote_ip", host)
 
 		if r.TLS != nil {
 			var tlsVersion string
