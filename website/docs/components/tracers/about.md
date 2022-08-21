@@ -10,6 +10,8 @@ When a tracer is configured all messages will be allocated a root span during in
 Some inputs, such as `http_server` and `http_client`, are capable of extracting a root span from the source of the message (HTTP headers). This is
 a work in progress and should eventually expand so that all inputs have a way of doing so.
 
+Other inputs, such as `kafka` can be configured to extract a root span by using the `extract_tracing_map` field.
+
 A tracer config section looks like this:
 
 ```yaml
