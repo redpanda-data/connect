@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/textproto"
 	"strconv"
@@ -291,7 +292,13 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 		p.MetaSet("http_server_user_agent", r.UserAgent())
 		p.MetaSet("http_server_request_path", r.URL.Path)
 		p.MetaSet("http_server_verb", r.Method)
-		p.MetaSet("http_server_remote_ip", strings.Split(r.RemoteAddr, ":")[0])
+
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			return fmt.Errorf("failed to extract host from request remote addr: %s", err)
+		}
+		p.MetaSet("http_server_remote_ip", host)
+
 		if r.TLS != nil {
 			var tlsVersion string
 			switch r.TLS.Version {
