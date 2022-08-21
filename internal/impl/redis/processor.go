@@ -56,7 +56,7 @@ performed for each message and the message contents are replaced with the result
 			Description("The maximum number of retries before abandoning a request.").
 			Default(3).
 			Advanced()).
-		Field(service.NewIntField("retry_period").
+		Field(service.NewDurationField("retry_period").
 			Description("The time to wait before consecutive retry attempts.").
 			Default("500ms").
 			Advanced()).

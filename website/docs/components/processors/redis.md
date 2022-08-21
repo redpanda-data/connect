@@ -352,7 +352,7 @@ Default: `3`
 The time to wait before consecutive retry attempts.
 
 
-Type: `int`  
+Type: `string`  
 Default: `"500ms"`  
 
 
