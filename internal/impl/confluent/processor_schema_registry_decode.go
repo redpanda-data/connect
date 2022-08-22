@@ -43,9 +43,9 @@ For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`"
 - ` + "`null` as `null`" + `;
 - the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
 - a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.`).
-		// Field(service.NewBoolField("avro_raw_json").
-		// 	Description("Whether Avro messages should be decoded into raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding). Avro JSON contains namespaced objects for any typed or non-nil union values, e.g. a union `[\"null\",\"string\"]` field with a string value would be represented as `{\"string\":\"foo\"}`.").
-		// 	Advanced().Default(false)).
+		Field(service.NewBoolField("avro_raw_json").
+			Description("Whether Avro messages should be decoded into raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If true the the schema returned from the subject should be parsed as [standard json full](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [normal avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). Should simply be set to whatever value `avro_raw_json` was used in `schema_registry_encode` processor. If data encoded outside of benthos without the use of [goavro](https://github.com/linkedin/goavro), should almost certainly be `false`.").
+			Advanced().Default(false)).
 		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewTLSField("tls"))
 }
@@ -87,7 +87,11 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryDecoder(urlStr, tlsConf, true, logger)
+	avroRawJSON, err := conf.FieldBool("avro_raw_json")
+	if err != nil {
+		return nil, err
+	}
+	return newSchemaRegistryDecoder(urlStr, tlsConf, avroRawJSON, logger)
 }
 
 func newSchemaRegistryDecoder(urlStr string, tlsConf *tls.Config, avroRawJSON bool, logger *service.Logger) (*schemaRegistryDecoder, error) {
@@ -303,9 +307,16 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	}
 
 	var codec *goavro.Codec
-	if codec, err = goavro.NewCodecForStandardJSON(resPayload.Schema); err != nil {
-		s.logger.Errorf("failed to parse response for schema '%v': %v", id, err)
-		return nil, err
+	if s.avroRawJSON {
+		if codec, err = goavro.NewCodecForStandardJSONFull(resPayload.Schema); err != nil {
+			s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
+			return nil, err
+		}
+	} else {
+		if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
+			s.logger.Errorf("failed to parse response for schema subject '%v': %v", id, err)
+			return nil, err
+		}
 	}
 
 	decoder := func(m *service.Message) error {
@@ -319,17 +330,12 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 			return err
 		}
 
-		if s.avroRawJSON {
-			// TODO: This still encodes with Avro JSON format, needs
-			// investigation as to whether this is possible.
-			jb, err := codec.TextualFromNative(nil, native)
-			if err != nil {
-				return err
-			}
-			m.SetBytes(jb)
-		} else {
-			m.SetStructuredMut(native)
+		jb, err := codec.TextualFromNative(nil, native)
+		if err != nil {
+			return err
 		}
+		m.SetBytes(jb)
+
 		return nil
 	}
 
