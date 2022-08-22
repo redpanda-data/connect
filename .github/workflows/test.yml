@@ -38,8 +38,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-go-
 
-    - name: Build
-      run: make
+    - name: GoReleaser
+      uses: goreleaser/goreleaser-action@v2
+      with:
+        version: latest
+        args: build --snapshot --timeout 60m
 
   test:
     if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
