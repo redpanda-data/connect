@@ -7,13 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
 )
-
-//------------------------------------------------------------------------------
 
 func TestDynamicConfMgr(t *testing.T) {
 	hasher := newDynamicConfMgr()
@@ -199,34 +197,35 @@ func TestDynamicListing(t *testing.T) {
 		return nil
 	})
 
-	dAPI.Started("bar", []byte(`{"test":"sanitised"}`))
+	dAPI.Started("bar", []byte(`
+test: sanitised
+`))
 
-	request, _ := http.NewRequest("POST", "/input/foo", bytes.NewReader([]byte(`{"test":"from crud raw"}`)))
+	request, _ := http.NewRequest("POST", "/input/foo", bytes.NewReader([]byte(`
+test: from crud raw
+`)))
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected response code: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
 
-	dAPI.Started("foo", []byte(`{"test":"second sanitised"}`))
+	dAPI.Started("foo", []byte(`
+test: second sanitised
+`))
 
 	request, _ = http.NewRequest("GET", "/inputs", http.NoBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected response code: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
 
 	expSections := []string{
 		`{"bar":{"uptime":"`,
-		`","config":{"test":"sanitised"}},"foo":{"uptime":"`,
-		`","config":{"test":"second sanitised"}}}`,
+		`","config":{"test":"sanitised"}`,
+		`"foo":{"uptime":"`,
+		`","config":{"test":"second sanitised"}`,
 	}
 	res := response.Body.String()
 	for _, exp := range expSections {
-		if !strings.Contains(res, exp) {
-			t.Errorf("Response does not contain substr: %v > %v", res, exp)
-		}
+		assert.Contains(t, res, exp)
 	}
 
 	dAPI.Stopped("foo")
@@ -234,21 +233,14 @@ func TestDynamicListing(t *testing.T) {
 	request, _ = http.NewRequest("DELETE", "/input/bar", http.NoBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected response code: %v != %v", act, exp)
-	}
+	assert.Equal(t, http.StatusOK, response.Code)
 
 	dAPI.Stopped("bar")
 
 	request, _ = http.NewRequest("GET", "/inputs", http.NoBody)
 	response = httptest.NewRecorder()
 	r.ServeHTTP(response, request)
-	if exp, act := http.StatusOK, response.Code; exp != act {
-		t.Errorf("Unexpected response code: %v != %v", act, exp)
-	}
-	if exp, act := []byte(`{"foo":{"uptime":"stopped","config":{"test":"second sanitised"}}}`), response.Body.Bytes(); !reflect.DeepEqual(exp, act) {
-		t.Errorf("Wrong content on GET list: %s != %s", act, exp)
-	}
-}
+	assert.Equal(t, http.StatusOK, response.Code)
 
-//------------------------------------------------------------------------------
+	assert.Equal(t, `{"foo":{"uptime":"stopped","config":{"test":"second sanitised"},"config_raw":"\ntest: second sanitised\n"}}`, response.Body.String())
+}

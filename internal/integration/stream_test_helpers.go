@@ -490,7 +490,6 @@ func initOutput(t testing.TB, trans <-chan message.Transaction, env *streamTestE
 
 	require.NoError(t, output.Consume(trans))
 
-	require.Error(t, output.WaitForClose(env.ctx))
 	if env.sleepAfterOutput > 0 {
 		time.Sleep(env.sleepAfterOutput)
 	}

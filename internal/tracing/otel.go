@@ -2,6 +2,7 @@ package tracing
 
 import (
 	"context"
+	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -159,7 +160,7 @@ func InitSpansFromParentTextMap(prov trace.TracerProvider, operationName string,
 	c := propagation.MapCarrier{}
 	for k, v := range textMapGeneric {
 		if vStr, ok := v.(string); ok {
-			c[k] = vStr
+			c[strings.ToLower(k)] = vStr
 		}
 	}
 

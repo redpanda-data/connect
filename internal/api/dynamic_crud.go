@@ -12,9 +12,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"gopkg.in/yaml.v3"
 )
-
-//------------------------------------------------------------------------------
 
 // dynamicConfMgr maintains a map of config hashes to ids for dynamic
 // inputs/outputs and thereby tracks whether a new configuration has changed for
@@ -158,31 +157,37 @@ func (d *Dynamic) HandleList(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	type confInfo struct {
-		Uptime string          `json:"uptime"`
-		Config json.RawMessage `json:"config"`
+		Uptime    string      `json:"uptime"`
+		Config    interface{} `json:"config"`
+		ConfigRaw string      `json:"config_raw"`
 	}
 	uptimes := map[string]confInfo{}
 
 	d.idsMut.Lock()
 	for k, v := range d.ids {
 		uptimes[k] = confInfo{
-			Uptime: time.Since(v).String(),
-			Config: []byte(`null`),
+			Uptime:    time.Since(v).String(),
+			Config:    nil,
+			ConfigRaw: "",
 		}
 	}
 	d.idsMut.Unlock()
 
 	d.configsMut.Lock()
 	for k, v := range d.configs {
-		if info, exists := uptimes[k]; exists {
-			info.Config = v
-			uptimes[k] = info
-		} else {
-			uptimes[k] = confInfo{
-				Uptime: "stopped",
-				Config: v,
-			}
+		var confStructured interface{}
+		if httpErr = yaml.Unmarshal(v, &confStructured); httpErr != nil {
+			return
 		}
+		info := confInfo{
+			Uptime:    "stopped",
+			Config:    confStructured,
+			ConfigRaw: string(v),
+		}
+		if existingInfo, exists := uptimes[k]; exists {
+			info.Uptime = existingInfo.Uptime
+		}
+		uptimes[k] = info
 	}
 	d.configsMut.Unlock()
 
@@ -277,5 +282,3 @@ func (d *Dynamic) HandleCRUD(w http.ResponseWriter, r *http.Request) {
 		httpErr = fmt.Errorf("verb not supported: %v", r.Method)
 	}
 }
-
-//------------------------------------------------------------------------------

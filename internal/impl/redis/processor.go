@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -31,13 +32,13 @@ performed for each message and the message contents are replaced with the result
 			Example("scard").
 			Example("incrby").
 			Example(`${! meta("command") }`).
-			Default("")).
+			Optional()).
 		Field(service.NewBloblangField("args_mapping").
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis command.").
 			Version("4.3.0").
+			Optional().
 			Example("root = [ this.key ]").
-			Example(`root = [ meta("kafka_key"), this.count ]`).
-			Default(``)).
+			Example(`root = [ meta("kafka_key"), this.count ]`)).
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{
 			"keys":   `Returns an array of strings containing all the keys that match the pattern specified by the ` + "`key` field" + `.`,
 			"scard":  `Returns the cardinality of a set, or ` + "`0`" + ` if the key does not exist.`,
@@ -55,15 +56,14 @@ performed for each message and the message contents are replaced with the result
 			Description("The maximum number of retries before abandoning a request.").
 			Default(3).
 			Advanced()).
-		Field(service.NewIntField("retry_period").
+		Field(service.NewDurationField("retry_period").
 			Description("The time to wait before consecutive retry attempts.").
 			Default("500ms").
 			Advanced()).
-		LintRule(`
-root = if this.contains("operator") && this.contains("command") {
-  [ "only one of 'operator' (old style) or 'command' (new style) fields should be specified" ]
-}
-`).
+		LintRule(`root = match {
+  this.exists("operator") == this.exists("command") => [ "one of 'operator' (old style) or 'command' (new style) fields must be specified" ]
+  this.exists("args_mapping") && this.exists("operator") => [ "field args_mapping is invalid with an operator set" ],
+}`).
 		Example("Querying Cardinality",
 			`If given payloads containing a metadata field `+"`set_key`"+` it's possible to query and store the cardinality of the set for each message using a `+"[`branch` processor](/docs/components/processors/branch)"+` in order to augment rather than replace the message contents:`,
 			`
@@ -153,20 +153,36 @@ func newRedisProcFromConfig(conf *service.ParsedConfig, res *service.Resources) 
 		return nil, err
 	}
 
-	command, err := conf.FieldInterpolatedString("command")
-	if err != nil {
-		return nil, err
-	}
-
+	var command *service.InterpolatedString
 	var argsMapping *bloblang.Executor
-	if testStr, _ := conf.FieldString("args_mapping"); testStr != "" {
+	if conf.Contains("command") {
+		if command, err = conf.FieldInterpolatedString("command"); err != nil {
+			return nil, err
+		}
 		if argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
 			return nil, err
 		}
 	}
 
+	var operator redisOperator
+	if conf.Contains("operator") {
+		operatorStr, err := conf.FieldString("operator")
+		if err != nil {
+			return nil, err
+		}
+		if operator, err = getRedisOperator(operatorStr); err != nil {
+			return nil, err
+		}
+	}
+
+	if argsMapping == nil && operator == nil {
+		return nil, errors.New("either a command & args_mapping or operator must be set")
+	}
+
 	r := &redisProc{
 		log: res.Logger(),
+
+		operator: operator,
 
 		command:     command,
 		argsMapping: argsMapping,
@@ -178,16 +194,6 @@ func newRedisProcFromConfig(conf *service.ParsedConfig, res *service.Resources) 
 
 	if conf.Contains("key") {
 		if r.key, err = conf.FieldInterpolatedString("key"); err != nil {
-			return nil, err
-		}
-	}
-
-	if conf.Contains("operator") {
-		operatorStr, err := conf.FieldString("operator")
-		if err != nil {
-			return nil, err
-		}
-		if r.operator, err = getRedisOperator(operatorStr); err != nil {
 			return nil, err
 		}
 	}
