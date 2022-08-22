@@ -46,6 +46,8 @@ require (
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/docker/cli v20.10.12+incompatible // indirect
 	github.com/docker/docker v20.10.12+incompatible // indirect
+	github.com/dop251/goja v0.0.0-20220815083517-0c74f9139fd6
+	github.com/dop251/goja_nodejs v0.0.0-20220808115320-bac29516aae9
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/fatih/color v1.13.0
