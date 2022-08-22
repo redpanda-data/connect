@@ -50,7 +50,7 @@ However, it is possible to instead consume documents in [standard/raw JSON forma
 
 ### Known Issues
 
-Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if ` + "`avro_raw_json` is set to true" + `, but when decoded they will still be the verbose format that goavro uses.
+Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if ` + "`avro_raw_json` is set to true" + `.
 `).
 		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
@@ -62,7 +62,7 @@ Important! There is an outstanding issue in the [avro serializing library](https
 			Example("60s").
 			Example("1h")).
 		Field(service.NewBoolField("avro_raw_json").
-			Description("Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If true the the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSON) instead of as [normal avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library](https://github.com/linkedin/goavro) used to encode schemas, that explains in more detail the difference between the two.").
+			Description("Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If true the the schema returned from the subject should be parsed as [standard json full](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [normal avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library](https://github.com/linkedin/goavro) used to encode schemas, that explains in more detail the difference between the two. Important! Whatever you set `avro_raw_json` in this module (`schema_registry_encode`), in order to properly decode it you need to set the same value in `schema_registry_decode`.").
 			Advanced().Default(false).Version("3.59.0")).
 		Field(service.NewTLSField("tls")).
 		Version("3.58.0")
@@ -356,7 +356,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 
 	var codec *goavro.Codec
 	if s.avroRawJSON {
-		if codec, err = goavro.NewCodecForStandardJSON(resPayload.Schema); err != nil {
+		if codec, err = goavro.NewCodecForStandardJSONFull(resPayload.Schema); err != nil {
 			s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
 			return nil, 0, err
 		}
