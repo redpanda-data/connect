@@ -6,7 +6,6 @@ package all
 import (
 	// Import new service packages.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/jsonpath"
-	_ "github.com/benthosdev/benthos/v4/internal/impl/pusher"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/redis"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/sftp"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/snowflake"
@@ -42,6 +41,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/prometheus"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure/extended"
+	_ "github.com/benthosdev/benthos/v4/public/components/pusher"
 
 	// Import all (supported) sql drivers
 	_ "github.com/denisenkom/go-mssqldb"
