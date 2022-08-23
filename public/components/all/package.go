@@ -6,7 +6,6 @@ package all
 import (
 	// Import new service packages.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/jsonpath"
-	_ "github.com/benthosdev/benthos/v4/internal/impl/maxmind"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/mongodb"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/mqtt"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/nanomsg"
@@ -37,6 +36,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/jaeger"
 	_ "github.com/benthosdev/benthos/v4/public/components/kafka"
+	_ "github.com/benthosdev/benthos/v4/public/components/maxmind"
 	_ "github.com/benthosdev/benthos/v4/public/components/memcached"
 	_ "github.com/benthosdev/benthos/v4/public/components/nats"
 	_ "github.com/benthosdev/benthos/v4/public/components/parquet"
