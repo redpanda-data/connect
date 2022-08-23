@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - The `schema_registry_encode` processor now correctly assumes Avro JSON encoded documents by default.
 - The `redis` processor `retry_period` no longer shows linting errors for duration strings.
 - The `/inputs` and `/outputs` endpoints for dynamic inputs and outputs now correctly render configs, both structured within the JSON response and the raw config string.
+- Go API: The stream builder no longer ignores `http` configuration. Instead, the value of `http.enabled` is set to `false` by default.
 
 ## 4.5.1 - 2022-08-10
 
