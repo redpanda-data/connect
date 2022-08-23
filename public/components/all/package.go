@@ -6,9 +6,8 @@ package all
 import (
 	// Import new service packages.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/jsonpath"
-	_ "github.com/benthosdev/benthos/v4/internal/impl/statsd"
 
-	// Eventually `all` will consist only of public sub-categories
+	// Import all public sub-categories.
 	_ "github.com/benthosdev/benthos/v4/public/components/amqp09"
 	_ "github.com/benthosdev/benthos/v4/public/components/amqp1"
 	_ "github.com/benthosdev/benthos/v4/public/components/avro"
@@ -42,6 +41,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/sftp"
 	_ "github.com/benthosdev/benthos/v4/public/components/snowflake"
 	_ "github.com/benthosdev/benthos/v4/public/components/sql"
+	_ "github.com/benthosdev/benthos/v4/public/components/statsd"
 
 	// Import all (supported) sql drivers
 	_ "github.com/denisenkom/go-mssqldb"
