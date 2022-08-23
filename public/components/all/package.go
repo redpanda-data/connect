@@ -6,7 +6,6 @@ package all
 import (
 	// Import new service packages.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/jsonpath"
-	_ "github.com/benthosdev/benthos/v4/internal/impl/prometheus"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pusher"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/redis"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/sftp"
@@ -40,6 +39,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/nsq"
 	_ "github.com/benthosdev/benthos/v4/public/components/otlp"
 	_ "github.com/benthosdev/benthos/v4/public/components/parquet"
+	_ "github.com/benthosdev/benthos/v4/public/components/prometheus"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure/extended"
 
