@@ -5,7 +5,6 @@ package all
 
 import (
 	// Import new service packages.
-	_ "github.com/benthosdev/benthos/v4/internal/impl/jaeger"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/jsonpath"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/maxmind"
 	_ "github.com/benthosdev/benthos/v4/internal/impl/mongodb"
@@ -36,6 +35,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/hdfs"
 	_ "github.com/benthosdev/benthos/v4/public/components/influxdb"
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
+	_ "github.com/benthosdev/benthos/v4/public/components/jaeger"
 	_ "github.com/benthosdev/benthos/v4/public/components/kafka"
 	_ "github.com/benthosdev/benthos/v4/public/components/memcached"
 	_ "github.com/benthosdev/benthos/v4/public/components/nats"
