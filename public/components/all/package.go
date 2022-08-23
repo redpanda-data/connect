@@ -4,9 +4,6 @@
 package all
 
 import (
-	// Import new service packages.
-	_ "github.com/benthosdev/benthos/v4/internal/impl/jsonpath"
-
 	// Import all public sub-categories.
 	_ "github.com/benthosdev/benthos/v4/public/components/amqp09"
 	_ "github.com/benthosdev/benthos/v4/public/components/amqp1"
@@ -23,6 +20,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/influxdb"
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/jaeger"
+	_ "github.com/benthosdev/benthos/v4/public/components/jsonpath"
 	_ "github.com/benthosdev/benthos/v4/public/components/kafka"
 	_ "github.com/benthosdev/benthos/v4/public/components/maxmind"
 	_ "github.com/benthosdev/benthos/v4/public/components/memcached"
