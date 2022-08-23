@@ -79,9 +79,7 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 
 	logger := mgr.Logger()
 
-	requireRegistry.RegisterNativeModule("console", console.RequireWithPrinter(console.PrinterFunc(func(s string) {
-		logger.Info(s)
-	})))
+	requireRegistry.RegisterNativeModule("console", console.RequireWithPrinter(&Logger{logger}))
 
 	return &javascriptProcessor{program: program, logger: logger}, nil
 }
