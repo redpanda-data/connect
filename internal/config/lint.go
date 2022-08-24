@@ -11,9 +11,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
+// LintOptions specifies the linters that will be enabled.
+type LintOptions struct {
+	RejectDeprecated bool
+	RequireLabels    bool
+}
+
 // ReadFileLinted will attempt to read a configuration file path into a
 // structure. Returns an array of lint messages or an error.
-func ReadFileLinted(path string, rejectDeprecated bool, config *Type) ([]string, error) {
+func ReadFileLinted(path string, opts *LintOptions, config *Type) ([]string, error) {
 	configBytes, lints, err := ReadFileEnvSwap(path)
 	if err != nil {
 		return nil, err
@@ -24,7 +30,8 @@ func ReadFileLinted(path string, rejectDeprecated bool, config *Type) ([]string,
 	}
 
 	lintCtx := docs.NewLintContext()
-	lintCtx.RejectDeprecated = rejectDeprecated
+	lintCtx.RejectDeprecated = opts.RejectDeprecated
+	lintCtx.RequireLabels = opts.RequireLabels
 	newLints, err := LintBytes(lintCtx, configBytes)
 	if err != nil {
 		return nil, err
