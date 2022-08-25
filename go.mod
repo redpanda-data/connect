@@ -112,7 +112,6 @@ require (
 	github.com/tilinna/z85 v1.0.0
 	github.com/twmb/franz-go v1.7.0
 	github.com/twmb/franz-go/pkg/kmsg v1.2.0
-	github.com/twmb/go-rbtree v1.0.0 // indirect
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/vmihailenco/msgpack/v5 v5.3.5
 	github.com/xdg/scram v1.0.3
