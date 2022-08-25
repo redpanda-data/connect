@@ -151,13 +151,12 @@ Default: `""`
 
 ### `action`
 
-The action to take on the document.
+The action to take on the document. This field must resolve to one of the following action types: `create`, `index`, `update`, `upsert` or `delete`.
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 Default: `"index"`  
-Options: `create`, `index`, `update`, `upsert`, `delete`.
 
 ### `pipeline`
 

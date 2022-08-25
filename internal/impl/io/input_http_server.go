@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/textproto"
 	"strconv"
@@ -291,7 +292,10 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 		p.MetaSet("http_server_user_agent", r.UserAgent())
 		p.MetaSet("http_server_request_path", r.URL.Path)
 		p.MetaSet("http_server_verb", r.Method)
-		p.MetaSet("http_server_remote_ip", strings.Split(r.RemoteAddr, ":")[0])
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			p.MetaSet("http_server_remote_ip", host)
+		}
+
 		if r.TLS != nil {
 			var tlsVersion string
 			switch r.TLS.Version {
@@ -330,12 +334,9 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 	})
 
 	textMapGeneric := map[string]interface{}{}
-	// Go normalises headers changing the way they are capitalised, here we are converting from normalised headers to
-	// a TextMap format which is case-sensitive. To ensure propagation still happens we need to convert the headers to
-	// lowercase as that is the format expected by the OTEL libraries.
 	for k, vals := range r.Header {
 		for _, v := range vals {
-			textMapGeneric[strings.ToLower(k)] = v
+			textMapGeneric[k] = v
 		}
 	}
 

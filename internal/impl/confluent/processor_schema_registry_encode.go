@@ -35,7 +35,7 @@ Currently only Avro schemas are supported.
 
 ### Avro JSON Format
 
-By default this processor expects documents formatted as [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding) when encoding Avro schemas. In this format the value of a union is encoded in JSON as follows:
+By default this processor expects documents formatted as [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding) when encoding Avro schemas. In this format the value of a union is encoded in JSON as follows:
 
 - if its type is ` + "`null`, then it is encoded as a JSON `null`" + `;
 - otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
@@ -46,7 +46,12 @@ For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`"
 - the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
 - a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
-However, it is possible to instead consume documents in raw JSON format (that match the schema) by setting the field ` + "[`avro_raw_json`](#avro_raw_json) to `true`" + `.`).
+However, it is possible to instead consume documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSON) by setting the field ` + "[`avro_raw_json`](#avro_raw_json) to `true`" + `.
+
+### Known Issues
+
+Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if ` + "`avro_raw_json` is set to true" + `, but when decoded they will still be the verbose format that goavro uses.
+`).
 		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
 			Example("foo").
@@ -57,7 +62,7 @@ However, it is possible to instead consume documents in raw JSON format (that ma
 			Example("60s").
 			Example("1h")).
 		Field(service.NewBoolField("avro_raw_json").
-			Description("Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/spec.html#json_encoding).").
+			Description("Whether messages encoded in Avro format should be parsed as raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If true the the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSON) instead of as [normal avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library](https://github.com/linkedin/goavro) used to encode schemas, that explains in more detail the difference between the two.").
 			Advanced().Default(false).Version("3.59.0")).
 		Field(service.NewTLSField("tls")).
 		Version("3.58.0")
@@ -347,24 +352,29 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		return nil, 0, err
 	}
 
+	s.logger.Tracef("Loaded new codec for subject %v: %s", subject, resBytes)
+
 	var codec *goavro.Codec
-	if codec, err = goavro.NewCodecForStandardJSON(resPayload.Schema); err != nil {
-		s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
-		return nil, 0, err
+	if s.avroRawJSON {
+		if codec, err = goavro.NewCodecForStandardJSON(resPayload.Schema); err != nil {
+			s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
+			return nil, 0, err
+		}
+	} else {
+		if codec, err = goavro.NewCodec(resPayload.Schema); err != nil {
+			s.logger.Errorf("failed to parse response for schema subject '%v': %v", subject, err)
+			return nil, 0, err
+		}
 	}
 
 	return func(m *service.Message) error {
-		var datum interface{}
-		if s.avroRawJSON {
-			b, err := m.AsBytes()
-			if err != nil {
-				return err
-			}
+		b, err := m.AsBytes()
+		if err != nil {
+			return err
+		}
 
-			if datum, _, err = codec.NativeFromTextual(b); err != nil {
-				return err
-			}
-		} else if datum, err = m.AsStructured(); err != nil {
+		datum, _, err := codec.NativeFromTextual(b)
+		if err != nil {
 			return err
 		}
 

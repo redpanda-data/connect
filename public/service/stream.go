@@ -8,6 +8,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager"
@@ -19,6 +20,7 @@ import (
 // status checks, terminating the stream, and blocking until the stream ends.
 type Stream struct {
 	strm    *stream.Type
+	httpAPI *api.Type
 	strmMut sync.Mutex
 	shutSig *shutdown.Signaller
 	onStart func()
@@ -30,9 +32,18 @@ type Stream struct {
 	logger log.Modular
 }
 
-func newStream(conf stream.Config, mgr *manager.Type, stats metrics.Type, tracer trace.TracerProvider, logger log.Modular, onStart func()) *Stream {
+func newStream(
+	conf stream.Config,
+	httpAPI *api.Type,
+	mgr *manager.Type,
+	stats metrics.Type,
+	tracer trace.TracerProvider,
+	logger log.Modular,
+	onStart func(),
+) *Stream {
 	return &Stream{
 		conf:    conf,
+		httpAPI: httpAPI,
 		mgr:     mgr,
 		stats:   stats,
 		tracer:  tracer,
@@ -59,17 +70,16 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 		return
 	}
 
+	if s.httpAPI != nil {
+		go func() {
+			_ = s.httpAPI.ListenAndServe()
+		}()
+	}
 	go s.onStart()
+
 	select {
 	case <-s.shutSig.HasClosedChan():
-		for {
-			if err = s.StopWithin(time.Millisecond * 100); err == nil {
-				return nil
-			}
-			if ctx.Err() != nil {
-				return
-			}
-		}
+		return s.Stop(ctx)
 	case <-ctx.Done():
 	}
 	return ctx.Err()
@@ -94,7 +104,7 @@ func (s *Stream) StopWithin(timeout time.Duration) error {
 // An ungraceful shutdown increases the likelihood of processing duplicate
 // messages on the next start up, but never results in dropped messages as long
 // as the input source supports at-least-once delivery.
-func (s *Stream) Stop(ctx context.Context) error {
+func (s *Stream) Stop(ctx context.Context) (err error) {
 	s.strmMut.Lock()
 	strm := s.strm
 	s.strmMut.Unlock()
@@ -102,37 +112,69 @@ func (s *Stream) Stop(ctx context.Context) error {
 		return errors.New("stream has not been run yet")
 	}
 
-	if err := strm.Stop(ctx); err != nil {
-		// Still attempt to shut down other resources but do not block.
-		go func() {
-			s.mgr.TriggerStopConsuming()
-			s.stats.Close()
-		}()
+	stopStats := s.stats
+	closeStats := func() error {
+		if stopStats == nil {
+			return nil
+		}
+		err := stopStats.Close()
+		stopStats = nil
 		return err
 	}
 
-	s.mgr.TriggerStopConsuming()
-	if err := s.mgr.WaitForClose(ctx); err != nil {
-		// Same as above, attempt to shut down other resources but do not block.
-		s.mgr.TriggerCloseNow()
-		go s.stats.Close()
-		return err
-	}
-
-	closeTracer := func() error {
-		if shutter, ok := s.tracer.(interface {
+	stopTracer := s.tracer
+	closeTracer := func(ctx context.Context) error {
+		if stopTracer == nil {
+			return nil
+		}
+		if shutter, ok := stopTracer.(interface {
 			Shutdown(context.Context) error
 		}); ok {
-			return shutter.Shutdown(context.Background())
+			return shutter.Shutdown(ctx)
 		}
 		return nil
 	}
 
-	if err := s.stats.Close(); err != nil {
-		go func() {
-			_ = closeTracer()
-		}()
+	stopHTTP := s.httpAPI
+	closeHTTP := func(ctx context.Context) error {
+		if stopHTTP == nil {
+			return nil
+		}
+		err := s.httpAPI.Shutdown(ctx)
+		stopHTTP = nil
 		return err
 	}
-	return closeTracer()
+
+	defer func() {
+		if err == nil {
+			return
+		}
+
+		// Still attempt to shut down other resources on an error, but do not
+		// block.
+		s.mgr.TriggerStopConsuming()
+		_ = closeStats()
+		_ = closeTracer(context.Background())
+		_ = closeHTTP(context.Background())
+	}()
+
+	if err = strm.Stop(ctx); err != nil {
+		return
+	}
+
+	s.mgr.TriggerStopConsuming()
+	if err = s.mgr.WaitForClose(ctx); err != nil {
+		return
+	}
+
+	if err = closeStats(); err != nil {
+		return
+	}
+
+	if err = closeTracer(ctx); err != nil {
+		return
+	}
+
+	err = closeHTTP(ctx)
+	return
 }

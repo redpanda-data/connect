@@ -27,6 +27,19 @@ Processors have an optional field `label` that can uniquely identify them in obs
 
 Some processors have conditions whereby they might fail. Rather than throw these messages into the abyss Benthos still attempts to send these messages onwards, and has mechanisms for filtering, recovering or dead-letter queuing messages that have failed which can be read about [here][error_handling].
 
+### Error Logs
+
+Errors that occur during processing can be roughly separated into two groups; those that are unexpected intermittent errors such as connectivity problems, and those that are logical errors such as bad input data or unmatched schemas.
+
+All processing errors result in the messages being flagged as failed, [error metrics][metrics.about] increasing for the given errored processor, and debug level logs being emitted that describe the error. Only errors that are known to be intermittent are also logged at the error level.
+
+The reason for this behaviour is to prevent noisy logging in cases where logical errors are expected and will likely be [handled in config][error_handling]. However, this can also sometimes make it easy to miss logical errors in your configs when they lack error handling. If you suspect you are experiencing processing errors and do not wish to add error handling yet then a quick and easy way to expose those errors is to enable debug level logs with the cli flag `--log.level=debug` or by setting the level in config:
+
+```yaml
+logger:
+  level: DEBUG
+```
+
 ## Using Processors as Outputs
 
 It might be the case that a processor that results in a side effect, such as the [`sql_insert`][processor.sql_insert] or [`redis`][processor.redis] processors, is the only side effect of a pipeline, and therefore could be considered the output.

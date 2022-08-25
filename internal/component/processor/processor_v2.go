@@ -80,6 +80,7 @@ func (a *v2ToV1Processor) ProcessBatch(ctx context.Context, msg message.Batch) (
 		nextParts, err := a.p.Process(ctx, part)
 		if err != nil {
 			a.mError.Incr(1)
+			a.mgr.Logger().Debugf("Processor failed: %v", err)
 			MarkErr(part, span, err)
 			nextParts = append(nextParts, part)
 		}
@@ -146,6 +147,7 @@ func (a *v2BatchedToV1Processor) ProcessBatch(ctx context.Context, msg message.B
 	outputBatches, err := a.p.ProcessBatch(ctx, spans, msg)
 	if err != nil {
 		a.mError.Incr(1)
+		a.mgr.Logger().Debugf("Processor failed: %v", err)
 		_ = msg.Iter(func(i int, p *message.Part) error {
 			MarkErr(p, spans[i], err)
 			return nil

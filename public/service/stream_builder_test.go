@@ -28,6 +28,8 @@ func TestStreamBuilderDefault(t *testing.T) {
 	require.NoError(t, err)
 
 	exp := []string{
+		`http:
+    enabled: false`,
 		`input:
     label: ""
     stdin:`,
