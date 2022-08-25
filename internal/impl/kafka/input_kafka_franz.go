@@ -378,7 +378,9 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 				// be straight forward to use some checks to determine whether
 				// restarting the client is actually necessary.
 				// cl.Close()
+				fmt.Println("ERRORS length", len(errs))
 				for _, kerr := range errs {
+					fmt.Printf("ERR\n: %#v", kerr)
 					if errors.Is(kerr.Err, context.DeadlineExceeded) {
 						continue
 					}
