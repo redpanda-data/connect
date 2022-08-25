@@ -377,11 +377,8 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 				// TODO: The documentation from franz-go is top-tier, it should
 				// be straight forward to use some checks to determine whether
 				// restarting the client is actually necessary.
-				// cl.Close()
-				fmt.Println("ERRORS length", len(errs))
 				deadlineErr := false
 				for _, kerr := range errs {
-					fmt.Printf("ERR\n: %#v", kerr)
 					if errors.Is(kerr.Err, context.DeadlineExceeded) {
 						deadlineErr = true
 						continue
@@ -393,7 +390,6 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 				}
 				return
 			}
-			fmt.Println("PAST ERRORS")
 			if closeCtx.Err() != nil {
 				return
 			}
