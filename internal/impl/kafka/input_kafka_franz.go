@@ -362,7 +362,6 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		defer done()
 
 		for {
-			fmt.Println("LOOPING")
 			// Using a stall prevention context here because I've realised we
 			// might end up disabling literally all the partitions and topics
 			// we're allocated.
