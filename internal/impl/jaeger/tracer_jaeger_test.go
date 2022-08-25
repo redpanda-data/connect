@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/benthosdev/benthos/v4/internal/cli"
-	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
@@ -13,6 +11,9 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
+
+	"github.com/benthosdev/benthos/v4/internal/cli"
+	"github.com/benthosdev/benthos/v4/internal/component/tracer"
 )
 
 func TestGetAgentOps(t *testing.T) {

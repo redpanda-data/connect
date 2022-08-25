@@ -8,7 +8,6 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/amqp09"
 	_ "github.com/benthosdev/benthos/v4/public/components/amqp1"
 	_ "github.com/benthosdev/benthos/v4/public/components/avro"
-	_ "github.com/benthosdev/benthos/v4/public/components/awk"
 	_ "github.com/benthosdev/benthos/v4/public/components/aws"
 	_ "github.com/benthosdev/benthos/v4/public/components/azure"
 	_ "github.com/benthosdev/benthos/v4/public/components/cassandra"
@@ -20,7 +19,6 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/influxdb"
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/jaeger"
-	_ "github.com/benthosdev/benthos/v4/public/components/jsonpath"
 	_ "github.com/benthosdev/benthos/v4/public/components/kafka"
 	_ "github.com/benthosdev/benthos/v4/public/components/maxmind"
 	_ "github.com/benthosdev/benthos/v4/public/components/memcached"
@@ -30,7 +28,6 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/nats"
 	_ "github.com/benthosdev/benthos/v4/public/components/nsq"
 	_ "github.com/benthosdev/benthos/v4/public/components/otlp"
-	_ "github.com/benthosdev/benthos/v4/public/components/parquet"
 	_ "github.com/benthosdev/benthos/v4/public/components/prometheus"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure/extended"
@@ -40,9 +37,4 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/snowflake"
 	_ "github.com/benthosdev/benthos/v4/public/components/sql"
 	_ "github.com/benthosdev/benthos/v4/public/components/statsd"
-
-	// Import all (supported) sql drivers
-	_ "github.com/denisenkom/go-mssqldb"
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq"
 )
