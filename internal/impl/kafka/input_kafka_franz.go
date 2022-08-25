@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -271,7 +270,6 @@ func (c *checkpointTracker) removeTopicPartitions(m map[string][]int32) {
 //------------------------------------------------------------------------------
 
 func (f *franzKafkaReader) Connect(ctx context.Context) error {
-	fmt.Println("CONNECTING")
 	if f.getMsgChan() != nil {
 		return nil
 	}
@@ -315,8 +313,6 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			}
 
 			c.CommitOffsetsSync(rctx, finalOffsets, func(_ *kgo.Client, req *kmsg.OffsetCommitRequest, res *kmsg.OffsetCommitResponse, commitErr error) {
-				fmt.Printf("req: %#v\n", req)
-				fmt.Printf("res: %#v\n", res)
 				if commitErr == nil {
 					return
 				}
@@ -341,6 +337,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		clientOpts = append(clientOpts, kgo.ConsumeRegex())
 	}
 
+	f.log.Trace("Connecting to client")
 	cl, err := kgo.NewClient(clientOpts...)
 	if err != nil {
 		return err
@@ -349,7 +346,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	msgChan := make(chan msgWithAckFn)
 	go func() {
 		defer func() {
-			fmt.Println("CLOSING")
+			f.log.Trace("Closing connection to client")
 			cl.Close()
 			f.storeMsgChan(nil)
 			close(msgChan)
@@ -373,9 +370,6 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			defer done()
 
 			if errs := fetches.Errors(); len(errs) > 0 {
-				// TODO: The documentation from franz-go is top-tier, it should
-				// be straight forward to use some checks to determine whether
-				// restarting the client is actually necessary.
 				deadlineErr := false
 				for _, kerr := range errs {
 					if errors.Is(kerr.Err, context.DeadlineExceeded) {
@@ -384,6 +378,8 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 					}
 					f.log.Errorf("Kafka poll error on topic %v, partition %v: %v", kerr.Topic, kerr.Partition, kerr.Err)
 				}
+				// Do not exit if just getting expected DeadlineExceeded error, which occurs due to the
+				// stallCtx timing out after 1 second.
 				if len(errs) == 1 && deadlineErr {
 					continue
 				}
