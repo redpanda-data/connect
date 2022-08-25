@@ -310,9 +310,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 						}
 					}
 				}
-				if len(offsets) > 0 {
-					finalOffsets[topic] = offsets
-				}
+				finalOffsets[topic] = offsets
 			}
 
 			c.CommitOffsetsSync(rctx, finalOffsets, func(_ *kgo.Client, req *kmsg.OffsetCommitRequest, res *kmsg.OffsetCommitResponse, commitErr error) {
@@ -376,7 +374,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 				// TODO: The documentation from franz-go is top-tier, it should
 				// be straight forward to use some checks to determine whether
 				// restarting the client is actually necessary.
-				cl.Close()
+				// cl.Close()
 				for _, kerr := range errs {
 					if errors.Is(kerr.Err, context.DeadlineExceeded) {
 						continue
