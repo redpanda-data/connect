@@ -310,7 +310,9 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 						}
 					}
 				}
-				finalOffsets[topic] = offsets
+				if len(offsets) > 0 {
+					finalOffsets[topic] = offsets
+				}
 			}
 
 			c.CommitOffsetsSync(rctx, finalOffsets, func(_ *kgo.Client, req *kmsg.OffsetCommitRequest, res *kmsg.OffsetCommitResponse, commitErr error) {
