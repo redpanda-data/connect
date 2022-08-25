@@ -379,12 +379,17 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 				// restarting the client is actually necessary.
 				// cl.Close()
 				fmt.Println("ERRORS length", len(errs))
+				deadlineErr := false
 				for _, kerr := range errs {
 					fmt.Printf("ERR\n: %#v", kerr)
 					if errors.Is(kerr.Err, context.DeadlineExceeded) {
+						deadlineErr = true
 						continue
 					}
 					f.log.Errorf("Kafka poll error on topic %v, partition %v: %v", kerr.Topic, kerr.Partition, kerr.Err)
+				}
+				if len(errs) == 1 && deadlineErr {
+					continue
 				}
 				return
 			}
