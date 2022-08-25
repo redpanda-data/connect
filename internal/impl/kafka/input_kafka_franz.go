@@ -429,19 +429,19 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 
 			// Walk all the disabled topic partitions and check whether any of
 			// them can be resumed.
-			resumeTopicPartitions := map[string][]int32{}
-			for pausedTopic, pausedPartitions := range cl.PauseFetchPartitions(pauseTopicPartitions) {
-				for _, pausedPartition := range pausedPartitions {
-					pending := checkpoints.getPending(pausedTopic, pausedPartition)
-					if pending >= f.checkpointLimit {
-						continue
-					}
-					resumeTopicPartitions[pausedTopic] = append(resumeTopicPartitions[pausedTopic], pausedPartition)
-				}
-			}
-			if len(resumeTopicPartitions) > 0 {
-				cl.ResumeFetchPartitions(resumeTopicPartitions)
-			}
+			// resumeTopicPartitions := map[string][]int32{}
+			// for pausedTopic, pausedPartitions := range cl.PauseFetchPartitions(pauseTopicPartitions) {
+			// 	for _, pausedPartition := range pausedPartitions {
+			// 		pending := checkpoints.getPending(pausedTopic, pausedPartition)
+			// 		if pending >= f.checkpointLimit {
+			// 			continue
+			// 		}
+			// 		resumeTopicPartitions[pausedTopic] = append(resumeTopicPartitions[pausedTopic], pausedPartition)
+			// 	}
+			// }
+			// if len(resumeTopicPartitions) > 0 {
+			// 	cl.ResumeFetchPartitions(resumeTopicPartitions)
+			// }
 		}
 	}()
 
