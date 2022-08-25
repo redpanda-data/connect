@@ -110,8 +110,9 @@ require (
 	github.com/snowflakedb/gosnowflake v1.6.6
 	github.com/stretchr/testify v1.7.5
 	github.com/tilinna/z85 v1.0.0
-	github.com/twmb/franz-go v1.3.1
-	github.com/twmb/franz-go/pkg/kmsg v0.0.0-20220106200407-cfd3330d96f5
+	github.com/twmb/franz-go v1.7.0
+	github.com/twmb/franz-go/pkg/kmsg v1.2.0
+	github.com/twmb/go-rbtree v1.0.0 // indirect
 	github.com/urfave/cli/v2 v2.3.0
 	github.com/vmihailenco/msgpack/v5 v5.3.5
 	github.com/xdg/scram v1.0.3
@@ -132,7 +133,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.9.0
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0
-	golang.org/x/crypto v0.0.0-20220511200225-c6db032c6c88
+	golang.org/x/crypto v0.0.0-20220817201139-bc19a97f63c8
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
