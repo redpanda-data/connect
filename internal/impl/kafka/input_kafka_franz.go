@@ -271,6 +271,7 @@ func (c *checkpointTracker) removeTopicPartitions(m map[string][]int32) {
 //------------------------------------------------------------------------------
 
 func (f *franzKafkaReader) Connect(ctx context.Context) error {
+	fmt.Println("CONNECTING")
 	if f.getMsgChan() != nil {
 		return nil
 	}
@@ -348,6 +349,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	msgChan := make(chan msgWithAckFn)
 	go func() {
 		defer func() {
+			fmt.Println("CLOSING")
 			cl.Close()
 			f.storeMsgChan(nil)
 			close(msgChan)
@@ -360,6 +362,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		defer done()
 
 		for {
+			fmt.Println("LOOPING")
 			// Using a stall prevention context here because I've realised we
 			// might end up disabling literally all the partitions and topics
 			// we're allocated.
@@ -383,6 +386,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 				}
 				return
 			}
+			fmt.Println("PAST ERRORS")
 			if closeCtx.Err() != nil {
 				return
 			}
@@ -429,19 +433,19 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 
 			// Walk all the disabled topic partitions and check whether any of
 			// them can be resumed.
-			// resumeTopicPartitions := map[string][]int32{}
-			// for pausedTopic, pausedPartitions := range cl.PauseFetchPartitions(pauseTopicPartitions) {
-			// 	for _, pausedPartition := range pausedPartitions {
-			// 		pending := checkpoints.getPending(pausedTopic, pausedPartition)
-			// 		if pending >= f.checkpointLimit {
-			// 			continue
-			// 		}
-			// 		resumeTopicPartitions[pausedTopic] = append(resumeTopicPartitions[pausedTopic], pausedPartition)
-			// 	}
-			// }
-			// if len(resumeTopicPartitions) > 0 {
-			// 	cl.ResumeFetchPartitions(resumeTopicPartitions)
-			// }
+			resumeTopicPartitions := map[string][]int32{}
+			for pausedTopic, pausedPartitions := range cl.PauseFetchPartitions(pauseTopicPartitions) {
+				for _, pausedPartition := range pausedPartitions {
+					pending := checkpoints.getPending(pausedTopic, pausedPartition)
+					if pending >= f.checkpointLimit {
+						continue
+					}
+					resumeTopicPartitions[pausedTopic] = append(resumeTopicPartitions[pausedTopic], pausedPartition)
+				}
+			}
+			if len(resumeTopicPartitions) > 0 {
+				cl.ResumeFetchPartitions(resumeTopicPartitions)
+			}
 		}
 	}()
 
