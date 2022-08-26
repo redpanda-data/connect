@@ -502,7 +502,6 @@ func testOpenSearchBatchDelete(urls []string, client *os.Client, t *testing.T) {
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := osapi.GetRequest{
 			Index:      "test_conn_index",
 			DocumentID: id,
@@ -535,7 +534,6 @@ func testOpenSearchBatchDelete(urls []string, client *os.Client, t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := osapi.GetRequest{
 			Index:      "test_conn_index",
 			DocumentID: id,
@@ -642,7 +640,6 @@ func testOpenSearchBatchIDCollision(urls []string, client *os.Client, t *testing
 		t.Fatal(err)
 	}
 
-	// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 	get, err := osapi.GetRequest{
 		Index:      "test_conn_index",
 		DocumentID: conf.ID,
