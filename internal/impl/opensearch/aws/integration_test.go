@@ -1,15 +1,17 @@
 package aws_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
-	os "github.com/opensearch-project/opensearch-go"
-	osapi "github.com/opensearch-project/opensearch-go/opensearchapi"
+	os "github.com/opensearch-project/opensearch-go/v2"
+	osapi "github.com/opensearch-project/opensearch-go/v2/opensearchapi"
 	"github.com/tidwall/gjson"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/opensearch"
@@ -129,7 +131,7 @@ output:
 			return "", nil, fmt.Errorf("document %v not found", messageID)
 		}
 
-		response := opensearch.Read(res.Body)
+		response := read(res.Body)
 		source := gjson.Get(response, "_source")
 
 		if err != nil {
@@ -146,4 +148,14 @@ output:
 		t, template,
 		integration.StreamTestOptPort(servicePort),
 	)
+}
+
+// Read method to read the content from io.reader to string
+func read(r io.Reader) string {
+	var b bytes.Buffer
+	_, err := b.ReadFrom(r)
+	if err != nil {
+		return ""
+	}
+	return b.String()
 }

@@ -1,4 +1,4 @@
-package opensearch
+package opensearch_test
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	os "github.com/opensearch-project/opensearch-go"
-	osapi "github.com/opensearch-project/opensearch-go/opensearchapi"
+	os "github.com/opensearch-project/opensearch-go/v2"
+	osapi "github.com/opensearch-project/opensearch-go/v2/opensearchapi"
 	"github.com/tidwall/gjson"
 
 	"github.com/ory/dockertest/v3"
@@ -98,7 +98,7 @@ output:
 			return "", nil, fmt.Errorf("document %v not found", messageID)
 		}
 
-		response := Read(res.Body)
+		response := read(res.Body)
 		source := gjson.Get(response, "_source")
 
 		if err != nil {

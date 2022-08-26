@@ -1,7 +1,9 @@
 package opensearch_test
 
 import (
+	"bytes"
 	"context"
+	"io"
 
 	"github.com/tidwall/gjson"
 
@@ -14,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	os "github.com/opensearch-project/opensearch-go"
-	osapi "github.com/opensearch-project/opensearch-go/opensearchapi"
+	os "github.com/opensearch-project/opensearch-go/v2"
+	osapi "github.com/opensearch-project/opensearch-go/v2/opensearchapi"
 
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
@@ -239,7 +241,7 @@ func testOpenSearchParallelWrites(urls []string, client *os.Client, t *testing.T
 		if get.StatusCode != 200 {
 			t.Errorf("document %v not found", id)
 		} else {
-			response := opensearch.Read(get.Body)
+			response := read(get.Body)
 			source := gjson.Get(response, "_source")
 			if act := source.Raw; act != exp {
 				t.Errorf("Wrong result: %v != %v", act, exp)
@@ -329,7 +331,7 @@ func testOpenSearchConnect(urls []string, client *os.Client, t *testing.T) {
 			t.Errorf("document %v not found", i)
 		}
 
-		response := opensearch.Read(get.Body)
+		response := read(get.Body)
 		source := gjson.Get(response, "_source")
 		if exp, act := string(testMsgs[i][0]), source.Raw; exp != act {
 			t.Errorf("wrong user field returned: %v != %v", act, exp)
@@ -389,7 +391,7 @@ func testOpenSearchIndexInterpolation(urls []string, client *os.Client, t *testi
 			t.Errorf("document %v not found", i)
 		}
 
-		response := opensearch.Read(get.Body)
+		response := read(get.Body)
 		source := gjson.Get(response, "_source")
 		if err != nil {
 			t.Error(err)
@@ -450,7 +452,7 @@ func testOpenSearchBatch(urls []string, client *os.Client, t *testing.T) {
 			t.Errorf("document %v not found", i)
 		}
 
-		response := opensearch.Read(get.Body)
+		response := read(get.Body)
 		source := gjson.Get(response, "_source")
 		if err != nil {
 			t.Error(err)
@@ -513,7 +515,7 @@ func testOpenSearchBatchDelete(urls []string, client *os.Client, t *testing.T) {
 			t.Errorf("document %v not found", i)
 		}
 
-		response := opensearch.Read(get.Body)
+		response := read(get.Body)
 		source := gjson.Get(response, "_source")
 		if err != nil {
 			t.Error(err)
@@ -602,7 +604,7 @@ func testOpenSearchBatchIDCollision(urls []string, client *os.Client, t *testing
 			t.Errorf("document %v not found", i)
 		}
 
-		response := opensearch.Read(get.Body)
+		response := read(get.Body)
 		source := gjson.Get(response, "_source")
 		if err != nil {
 			t.Error(err)
@@ -652,7 +654,7 @@ func testOpenSearchBatchIDCollision(urls []string, client *os.Client, t *testing
 	if get.StatusCode != 200 {
 		t.Errorf("document not found")
 	}
-	response := opensearch.Read(get.Body)
+	response := read(get.Body)
 	srcMessage := gjson.Get(response, "_source.message").String()
 	user := gjson.Get(response, "_source.user").String()
 
@@ -663,4 +665,14 @@ func testOpenSearchBatchIDCollision(urls []string, client *os.Client, t *testing
 	} else if srcMessage != "goodbye" {
 		t.Errorf("wrong message field returned: %v != %v", srcMessage, "goodbye")
 	}
+}
+
+// Read method to read the content from io.reader to string
+func read(r io.Reader) string {
+	var b bytes.Buffer
+	_, err := b.ReadFrom(r)
+	if err != nil {
+		return ""
+	}
+	return b.String()
 }

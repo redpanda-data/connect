@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/opensearch-project/opensearch-go/opensearchutil"
+	"github.com/opensearch-project/opensearch-go/v2/opensearchutil"
 
 	"github.com/cenkalti/backoff/v4"
-	os "github.com/opensearch-project/opensearch-go"
+	os "github.com/opensearch-project/opensearch-go/v2"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
@@ -87,6 +87,8 @@ false for connections to succeed.`),
 			docs.FieldString("type", "The document mapping type. This field is required for versions of elasticsearch earlier than 6.0.0, but are invalid for versions 7.0.0 or later.").Optional().IsInterpolated(),
 			docs.FieldString("routing", "The routing key to use for the document.").IsInterpolated().Advanced(),
 			docs.FieldString("timeout", "The maximum time to wait before abandoning a request (and trying again).").Advanced(),
+			docs.FieldString("flush_interval", "The maximum time to wait before flushing a request (and trying again).").Advanced(),
+			docs.FieldString("flush_bytes", "The maximum size in buffer before flushing a request.").Advanced(),
 			itls.FieldSpec(),
 			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		).WithChildren(retries.FieldSpecs()...).WithChildren(
@@ -129,9 +131,11 @@ type OpenSearch struct {
 	urls []string
 	conf output.OpenSearchConfig
 
-	backoffCtor func() backoff.BackOff
-	timeout     time.Duration
-	tlsConf     *tls.Config
+	backoffCtor   func() backoff.BackOff
+	timeout       time.Duration
+	flushInterval time.Duration
+	flushBytes    int
+	tlsConf       *tls.Config
 
 	actionStr   *field.Expression
 	idStr       *field.Expression
@@ -302,8 +306,8 @@ func (e *OpenSearch) Write(msg message.Batch) error {
 	}
 	start := time.Now()
 	b, _ := opensearchutil.NewBulkIndexer(opensearchutil.BulkIndexerConfig{
-		FlushInterval: time.Second * 1,
-		FlushBytes:    0,
+		FlushInterval: e.flushInterval,
+		FlushBytes:    e.flushBytes,
 		Client:        e.client,
 	})
 	ctx := context.Background()
@@ -444,11 +448,4 @@ func (st Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	return st.Transport.RoundTrip(req)
-}
-
-// Read method to read the content from io.reader to string
-func Read(r io.Reader) string {
-	var b bytes.Buffer
-	_, _ = b.ReadFrom(r)
-	return b.String()
 }

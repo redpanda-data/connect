@@ -18,6 +18,8 @@ type OpenSearchConfig struct {
 	Pipeline        string               `json:"pipeline" yaml:"pipeline"`
 	Routing         string               `json:"routing" yaml:"routing"`
 	Type            string               `json:"type" yaml:"type"`
+	FlushInterval   string               `json:"flush_interval" yaml:"flush_interval"`
+	FlushBytes      string               `json:"flush_bytes" yaml:"flush_bytes"`
 	Timeout         string               `json:"timeout" yaml:"timeout"`
 	TLS             btls.Config          `json:"tls" yaml:"tls"`
 	Auth            auth.BasicAuthConfig `json:"basic_auth" yaml:"basic_auth"`
@@ -36,16 +38,18 @@ func NewOpenSearchConfig() OpenSearchConfig {
 	rConf.Backoff.MaxElapsedTime = "30s"
 
 	return OpenSearchConfig{
-		URLs:     []string{},
-		Action:   "index",
-		ID:       `${!count("elastic_ids")}-${!timestamp_unix()}`,
-		Index:    "",
-		Pipeline: "",
-		Type:     "",
-		Routing:  "",
-		Timeout:  "5s",
-		TLS:      btls.NewConfig(),
-		Auth:     auth.NewBasicAuthConfig(),
+		URLs:          []string{},
+		Action:        "index",
+		ID:            `${!count("elastic_ids")}-${!timestamp_unix()}`,
+		Index:         "",
+		Pipeline:      "",
+		Type:          "",
+		Routing:       "",
+		Timeout:       "5s",
+		FlushInterval: "30s",
+		FlushBytes:    "5242880",
+		TLS:           btls.NewConfig(),
+		Auth:          auth.NewBasicAuthConfig(),
 		AWS: OptionalAWSConfig{
 			Enabled: false,
 			Config:  sess.NewConfig(),

@@ -30,8 +30,7 @@ require (
 	github.com/apache/thrift v0.15.0 // indirect
 	github.com/armon/go-metrics v0.3.4 // indirect
 	github.com/aws/aws-lambda-go v1.28.0
-	github.com/aws/aws-sdk-go v1.42.31
-	github.com/aws/aws-sdk-go-v2 v1.15.0 // indirect
+	github.com/aws/aws-sdk-go v1.44.45
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.0 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.9.1 // indirect
 	github.com/benhoyt/goawk v1.17.1
@@ -90,7 +89,7 @@ require (
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/olivere/elastic/v7 v7.0.31
 	github.com/opencontainers/runc v1.0.3 // indirect
-	github.com/opensearch-project/opensearch-go v1.1.0
+	github.com/opensearch-project/opensearch-go/v2 v2.1.0
 	github.com/ory/dockertest/v3 v3.8.1
 	github.com/oschwald/geoip2-golang v1.5.0
 	github.com/pebbe/zmq4 v1.2.7
@@ -109,7 +108,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smira/go-statsd v1.3.2
 	github.com/snowflakedb/gosnowflake v1.6.6
-	github.com/stretchr/testify v1.7.5
+	github.com/stretchr/testify v1.8.0
 	github.com/tidwall/gjson v1.14.2
 	github.com/tidwall/sjson v1.2.5
 	github.com/tilinna/z85 v1.0.0
