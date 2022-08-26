@@ -91,7 +91,7 @@ func collectors(conf *service.ParsedConfig, name string) ([]collector, error) {
 	if err != nil {
 		return nil, err
 	}
-	collectors := make([]collector, len(list))
+	collectors := make([]collector, 0, len(list))
 	for _, pc := range list {
 		u, err := pc.FieldString("url")
 		if err != nil {

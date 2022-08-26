@@ -61,6 +61,7 @@ You can access these metadata fields using
 			docs.FieldBool("delete_message", "Whether to delete the consumed message once it is acked. Disabling allows you to handle the deletion using a different mechanism.").Advanced(),
 			docs.FieldBool("reset_visibility", "Whether to set the visibility timeout of the consumed message to zero once it is nacked. Disabling honors the preset visibility timeout specified for the queue.").AtVersion("3.58.0").Advanced(),
 			docs.FieldInt("max_number_of_messages", "The maximum number of messages to return on one poll. Valid values: 1 to 10.").Advanced(),
+			docs.FieldInt("wait_time_seconds", "Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").Advanced(),
 		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(input.NewAWSSQSConfig()),
 		Categories: []string{
 			"Services",
@@ -223,6 +224,7 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup) {
 		res, err := a.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 			QueueUrl:              aws.String(a.conf.URL),
 			MaxNumberOfMessages:   aws.Int64(int64(a.conf.MaxNumberOfMessages)),
+			WaitTimeSeconds:       aws.Int64(int64(a.conf.WaitTimeSeconds)),
 			AttributeNames:        []*string{aws.String("All")},
 			MessageAttributeNames: []*string{aws.String("All")},
 		})

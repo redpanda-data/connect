@@ -27,9 +27,9 @@ type pathLint struct {
 	err    string
 }
 
-func lintFile(path string, rejectDeprecated bool) (pathLints []pathLint) {
+func lintFile(path string, opts *config.LintOptions) (pathLints []pathLint) {
 	conf := config.New()
-	lints, err := config.ReadFileLinted(path, rejectDeprecated, &conf)
+	lints, err := config.ReadFileLinted(path, opts, &conf)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
@@ -46,7 +46,7 @@ func lintFile(path string, rejectDeprecated bool) (pathLints []pathLint) {
 	return
 }
 
-func lintMDSnippets(path string, rejectDeprecated bool) (pathLints []pathLint) {
+func lintMDSnippets(path string, opts *config.LintOptions) (pathLints []pathLint) {
 	rawBytes, err := os.ReadFile(path)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
@@ -86,7 +86,8 @@ func lintMDSnippets(path string, rejectDeprecated bool) (pathLints []pathLint) {
 			})
 		} else {
 			lintCtx := docs.NewLintContext()
-			lintCtx.RejectDeprecated = rejectDeprecated
+			lintCtx.RejectDeprecated = opts.RejectDeprecated
+			lintCtx.RequireLabels = opts.RequireLabels
 			lints, err := config.LintBytes(lintCtx, configBytes)
 			if err != nil {
 				pathLints = append(pathLints, pathLint{
@@ -131,6 +132,11 @@ files with the .yaml or .yml extension.`[1:],
 				Value: false,
 				Usage: "Print linting errors for the presence of deprecated fields.",
 			},
+			&cli.BoolFlag{
+				Name:  "labels",
+				Value: false,
+				Usage: "Print linting errors when components do not have labels.",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			targets, err := ifilepath.GlobsAndSuperPaths(c.Args().Slice(), "yaml", "yml")
@@ -142,7 +148,10 @@ files with the .yaml or .yml extension.`[1:],
 				targets = append(targets, conf)
 			}
 
-			rejectDeprecated := c.Bool("deprecated")
+			lintOpts := &config.LintOptions{
+				RejectDeprecated: c.Bool("deprecated"),
+				RequireLabels:    c.Bool("labels"),
+			}
 
 			var pathLintMut sync.Mutex
 			var pathLints []pathLint
@@ -161,9 +170,9 @@ files with the .yaml or .yml extension.`[1:],
 						}
 						var lints []pathLint
 						if path.Ext(target) == ".md" {
-							lints = lintMDSnippets(target, rejectDeprecated)
+							lints = lintMDSnippets(target, lintOpts)
 						} else {
-							lints = lintFile(target, rejectDeprecated)
+							lints = lintFile(target, lintOpts)
 						}
 						if len(lints) > 0 {
 							pathLintMut.Lock()

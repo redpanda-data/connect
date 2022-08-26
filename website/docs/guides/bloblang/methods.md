@@ -1697,6 +1697,37 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")
 # Out: {"joined_numbers":"3,8,11","joined_words":"helloworld"}
 ```
 
+### `json_path`
+
+:::caution EXPERIMENTAL
+This method is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Executes the given JSONPath expression on an object or array and returns the result. The JSONPath expression syntax can be found at https://goessner.net/articles/JsonPath/. For more complex logic, you can use Gval expressions (https://github.com/PaesslerAG/gval).
+
+#### Parameters
+
+**`expression`** &lt;string&gt; The JSONPath expression to execute.  
+
+#### Examples
+
+
+```coffee
+root.all_names = this.json_path("$..name")
+
+# In:  {"name":"alice","foo":{"name":"bob"}}
+# Out: {"all_names":["alice","bob"]}
+
+# In:  {"thing":["this","bar",{"name":"alice"}]}
+# Out: {"all_names":["alice"]}
+```
+
+```coffee
+root.text_objects = this.json_path("$.body[?(@.type=='text')]")
+
+# In:  {"body":[{"type":"image","id":"foo"},{"type":"text","id":"bar"}]}
+# Out: {"text_objects":[{"id":"bar","type":"text"}]}
+```
+
 ### `json_schema`
 
 :::caution BETA

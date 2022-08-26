@@ -389,6 +389,15 @@ func cmdService(
 		close(httpServerClosedChan)
 	}()
 
+	var exitDelay time.Duration
+	if td := conf.SystemCloseDelay; len(td) > 0 {
+		var err error
+		if exitDelay, err = time.ParseDuration(td); err != nil {
+			logger.Errorf("Failed to parse shutdown delay period string: %v\n", err)
+			return 1
+		}
+	}
+
 	var exitTimeout time.Duration
 	if tout := conf.SystemCloseTimeout; len(tout) > 0 {
 		var err error
@@ -400,6 +409,13 @@ func cmdService(
 
 	// Defer clean up.
 	defer func() {
+		if exitDelay > 0 {
+			logger.Infof("Shutdown delay is in effect for %s\n", exitDelay)
+			if err := delayShutdown(context.Background(), exitDelay); err != nil {
+				logger.Errorf("Shutdown delay failed: %s", err)
+			}
+		}
+
 		go func() {
 			_ = httpServer.Shutdown(context.Background())
 			select {
@@ -456,4 +472,24 @@ func cmdService(
 		logger.Infoln("Run context was cancelled. Shutting down the service")
 	}
 	return 0
+}
+
+func delayShutdown(ctx context.Context, duration time.Duration) error {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	delayCtx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+
+	select {
+	case <-delayCtx.Done():
+		err := delayCtx.Err()
+		if err != nil && err != context.DeadlineExceeded {
+			return err
+		}
+	case sig := <-sigChan:
+		return fmt.Errorf("shutdown delay interrupted by signal: %s", sig)
+	}
+
+	return nil
 }

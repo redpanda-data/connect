@@ -161,6 +161,27 @@ root.c = range(0, -this.max, -2)
 # Out: {"a":[0,1,2,3,4,5,6,7,8,9],"b":[0,2,4,6,8],"c":[0,-2,-4,-6,-8]}
 ```
 
+### `snowflake_id`
+
+Generate a new snowflake ID each time it is invoked and prints a string representation. I.e.: 1559229974454472704
+
+#### Parameters
+
+**`node_id`** &lt;integer, default `1`&gt; It is possible to specify the node_id.  
+
+#### Examples
+
+
+```coffee
+root.id = snowflake_id()
+```
+
+It is possible to specify the node_id.
+
+```coffee
+root.id = snowflake_id(2)
+```
+
 ### `throw`
 
 Throws an error similar to a regular mapping error. This is useful for abandoning a mapping entirely given certain conditions.

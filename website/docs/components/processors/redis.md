@@ -311,7 +311,6 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
 Requires version 4.3.0 or newer  
 
 ```yml
@@ -330,7 +329,6 @@ A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an ar
 
 
 Type: `string`  
-Default: `""`  
 Requires version 4.3.0 or newer  
 
 ```yml
@@ -354,7 +352,7 @@ Default: `3`
 The time to wait before consecutive retry attempts.
 
 
-Type: `int`  
+Type: `string`  
 Default: `"500ms"`  
 
 

@@ -36,11 +36,12 @@ import (
 // defaults of a standard Benthos configuration. Environment variable
 // interpolations are also parsed and resolved the same as regular configs.
 //
-// Benthos streams register HTTP endpoints by default that expose metrics and
-// ready checks. If your intention is to execute multiple streams in the same
-// process then it is recommended that you disable the HTTP server in config, or
-// use `SetHTTPMux` with prefixed multiplexers in order to share it across the
-// streams.
+// Streams built with a stream builder have the HTTP server for exposing metrics
+// and ready checks disabled by default, which is the only deviation away from a
+// standard Benthos default configuration. In order to enable the server set the
+// configuration field `http.enabled` to `true` explicitly, or use `SetHTTPMux`
+// in order to provide an explicit HTTP multiplexer for registering those
+// endpoints.
 type StreamBuilder struct {
 	http       api.Config
 	threads    int
@@ -67,8 +68,10 @@ type StreamBuilder struct {
 
 // NewStreamBuilder creates a new StreamBuilder.
 func NewStreamBuilder() *StreamBuilder {
+	httpConf := api.NewConfig()
+	httpConf.Enabled = false
 	return &StreamBuilder{
-		http:      api.NewConfig(),
+		http:      httpConf,
 		buffer:    buffer.NewConfig(),
 		resources: manager.NewResourceConfig(),
 		metrics:   metrics.NewConfig(),
@@ -476,6 +479,7 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 	}
 
 	sconf := config.New()
+	sconf.HTTP.Enabled = false
 	if err := node.Decode(&sconf); err != nil {
 		return err
 	}
@@ -532,6 +536,7 @@ func (s *StreamBuilder) SetFields(pathValues ...interface{}) error {
 	}
 
 	sconf := config.New()
+	sconf.HTTP.Enabled = false
 	if err := rootNode.Decode(&sconf); err != nil {
 		return err
 	}
@@ -752,6 +757,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 	}
 
 	apiMut := s.apiMut
+	var apiType *api.Type
 	if apiMut == nil {
 		var sanitNode yaml.Node
 		err := sanitNode.Encode(conf)
@@ -761,9 +767,10 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 			sanitConf.DocsProvider = env
 			_ = config.Spec().SanitiseYAML(&sanitNode, sanitConf)
 		}
-		if apiMut, err = api.New("", "", s.http, sanitNode, logger, stats); err != nil {
+		if apiType, err = api.New("", "", s.http, sanitNode, logger, stats); err != nil {
 			return nil, fmt.Errorf("unable to create stream HTTP server due to: %w. Tip: you can disable the server with `http.enabled` set to `false`, or override the configured server with SetHTTPMux", err)
 		}
+		apiMut = apiType
 	} else if hler := stats.HandlerFunc(); hler != nil {
 		apiMut.RegisterEndpoint("/stats", "Exposes service-wide metrics in the format configured.", hler)
 		apiMut.RegisterEndpoint("/metrics", "Exposes service-wide metrics in the format configured.", hler)
@@ -786,7 +793,7 @@ func (s *StreamBuilder) buildWithEnv(env *bundle.Environment) (*Stream, error) {
 		mgr.SetPipe(s.producerID, s.producerChan)
 	}
 
-	return newStream(conf.Config, mgr, stats, tracer, logger, func() {
+	return newStream(conf.Config, apiType, mgr, stats, tracer, logger, func() {
 		if err := s.runConsumerFunc(mgr); err != nil {
 			logger.Errorf("Failed to run func consumer: %v", err)
 		}

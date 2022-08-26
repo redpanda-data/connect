@@ -279,6 +279,22 @@ benthos -c ./your-config.yaml echo
 
 You can check the output of the above command to see if certain sections are missing or fields are incorrect, which allows you to pinpoint typos in the config.
 
+## Shutting down
+
+Under normal operating conditions, the Benthos process will shut down when there are no more messages produced by inputs and the final message has been processed. The shutdown procedure can also be initiated by sending the process a interrupt (`SIGINT`) or termination (`SIGTERM`) signal. There are two top-level configuration options that control the shutdown behaviour: `shutdown_timeout` and `shutdown_delay`.
+
+### Shutdown delay
+
+The `shutdown_delay` option can be used to delay the start of the shutdown procedure. This is useful for pipelines that need a short grace period to have their metrics and traces scraped. While the shutdown delay is in effect, the HTTP metrics endpoint continues to be available for scraping and any active tracers are free to flush remaining traces.
+
+The shutdown delay can be interrupted by sending the Benthos process a second OS interrupt or termination signal.
+
+### Shutdown timeout
+
+The `shutdown_timeout` option sets a hard deadline for Benthos process to gracefully terminate. If this duration is exceeded then the process is forcefully terminated and any messages that were in-flight will be dropped.
+
+This option takes effect after the `shutdown_delay` duration has passed if that is enabled.
+
 [processors]: /docs/components/processors/about
 [config-interp]: /docs/configuration/interpolation
 [config.testing]: /docs/configuration/unit_testing
