@@ -274,12 +274,12 @@ type pendingBulkIndex struct {
 // WriteBatch will attempt to write a message to OpenSearch, wait for
 // acknowledgement, and returns an error if applicable.
 func (e *OpenSearch) WriteBatch(ctx context.Context, msg message.Batch) error {
-	return e.Write(msg)
+	return e.Write(ctx, msg)
 }
 
 // Write will attempt to write a message to OpenSearch, wait for
 // acknowledgement, and returns an error if applicable.
-func (e *OpenSearch) Write(msg message.Batch) error {
+func (e *OpenSearch) Write(ctx context.Context, msg message.Batch) error {
 	if e.client == nil {
 		return component.ErrNotConnected
 	}
@@ -310,7 +310,7 @@ func (e *OpenSearch) Write(msg message.Batch) error {
 		FlushBytes:    e.flushBytes,
 		Client:        e.client,
 	})
-	ctx := context.Background()
+
 	for _, v := range requests {
 		bulkReq, err := e.buildBulkableRequest(v)
 		if err != nil {
