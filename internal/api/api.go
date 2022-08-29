@@ -197,6 +197,10 @@ func New(
 			pprof.Index,
 		)
 		t.RegisterEndpoint(
+			"/debug/pprof/goroutine", "DEBUG: Responds with a pprof-formatted goroutine profile.",
+			pprof.Index,
+		)
+		t.RegisterEndpoint(
 			"/debug/pprof/block", "DEBUG: Responds with a pprof-formatted block profile.",
 			pprof.Index,
 		)
