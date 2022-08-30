@@ -32,6 +32,7 @@ input:
     columns: []
     where: ""
     job_labels: {}
+    priority: ""
     args_mapping: ""
     prefix: ""
     suffix: ""
@@ -121,6 +122,14 @@ A list of labels to add to the query job.
 
 Type: `object`  
 Default: `{}`  
+
+### `priority`
+
+The priority with which to schedule the query.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `args_mapping`
 
