@@ -495,6 +495,7 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 // to be consumed.
 func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg message.Batch) (res *http.Response, err error) {
 	var spans []*tracing.Span
+	var currentTraceparent string
 	if sendMsg != nil {
 		spans = tracing.CreateChildSpans(h.mgr.Tracer(), "http_request", sendMsg)
 		defer func() {
@@ -502,6 +503,21 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg message.Bat
 				s.Finish()
 			}
 		}()
+
+		if len(spans) > 0 {
+			// Extract the text map information for the last span. We will propagate this further and this will become the
+			// parent of our HTTP request.
+			textMap, err := spans[len(spans)-1].TextMap()
+			if err != nil {
+				return nil, err
+			}
+
+			// If we can find a traceparent in the text map cast to string and use as the current traceparent
+			traceparent, found := textMap["traceparent"]
+			if found {
+				currentTraceparent = traceparent.(string)
+			}
+		}
 	}
 	logErr := func(e error) {
 		for _, s := range spans {
@@ -517,6 +533,13 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg message.Bat
 		logErr(err)
 		return nil, err
 	}
+
+	// If we have a current traceparent replace the traceparent header. Otherwise, we are propagating the original
+	// traceparent which will make this request be at the same level instead of it being nested.
+	if currentTraceparent != "" {
+		req.Header.Set("traceparent", currentTraceparent)
+	}
+
 	// Make sure we log the actual request URL
 	defer func() {
 		if err != nil {
