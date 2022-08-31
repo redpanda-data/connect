@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.6.0 - 2022-08-31
+
 ### Added
 
 - New `squash` bloblang method.
