@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New `snowflake_id` bloblang function.
 - Field `wait_time_seconds` added to the `aws_sqs` input.
 - New `json_path` bloblang method.
+- New `file_json_contains` predicate for unit tests.
 
 ### Fixed
 
