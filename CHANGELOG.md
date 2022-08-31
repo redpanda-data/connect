@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Field `wait_time_seconds` added to the `aws_sqs` input.
 - New `json_path` bloblang method.
 - New `file_json_contains` predicate for unit tests.
+- The `parquet_encode` processor now supports the `UTF8` logical type for columns.
 
 ### Fixed
 

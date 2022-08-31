@@ -173,6 +173,7 @@ func (e *extractConfig) extractPQValueNotRepeated(field parquet.Field, row []par
 	case parquet.Double:
 		v = value.Double()
 	case parquet.ByteArray, parquet.FixedLenByteArray:
+		// TODO: Detect UTF-8 logical type here.
 		if e.byteArrayAsStrings {
 			v = string(value.ByteArray())
 		} else {
