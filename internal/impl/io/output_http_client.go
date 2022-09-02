@@ -34,7 +34,7 @@ It's possible to propagate the response from each HTTP request back to the input
 		Config: ihttpdocs.ClientFieldSpec(true,
 			docs.FieldBool("batch_as_multipart", "Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html). If disabled messages in batches will be sent as individual requests.").Advanced(),
 			docs.FieldBool("propagate_response", "Whether responses from the server should be [propagated back](/docs/guides/sync_responses) to the input.").Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
 			docs.FieldObject(
 				"multipart", "EXPERIMENTAL: Create explicit multipart HTTP requests by specifying an array of parts to add to the request, each part specified consists of content headers and a data field that can be populated dynamically. If this field is populated it will override the default request creation behaviour.",

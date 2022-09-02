@@ -36,7 +36,7 @@ you to create a unique key for each message.`),
 				"key", "The key for each message, function interpolations can be optionally used to create a unique key per message.",
 				"benthos_list", "${!meta(\"kafka_key\")}", "${!json(\"doc.id\")}", "${!count(\"msgs\")}",
 			).IsInterpolated(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewRedisListConfig()),
 		Categories: []string{

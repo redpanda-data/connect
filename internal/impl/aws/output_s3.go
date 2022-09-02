@@ -143,7 +143,7 @@ output:
 			docs.FieldString("kms_key_id", "An optional server side encryption key.").Advanced(),
 			docs.FieldString("server_side_encryption", "An optional server side encryption algorithm.").AtVersion("3.63.0").Advanced(),
 			docs.FieldBool("force_path_style_urls", "Forces the client API to use path style URLs, which helps when connecting to custom endpoints.").Advanced(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
 			policy.FieldSpec(),
 		).WithChildren(sess.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewAmazonS3Config()),

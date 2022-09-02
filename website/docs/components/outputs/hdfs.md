@@ -71,8 +71,8 @@ Each file is written with the path specified with the 'path' field, in order to 
 ## Performance
 
 This output benefits from sending multiple messages in flight in parallel for
-improved performance. You can tune the max number of in flight messages with the
-field `max_in_flight`.
+improved performance. You can tune the max number of in flight messages (or
+message batches) with the field `max_in_flight`.
 
 ## Fields
 
@@ -123,7 +123,7 @@ path: ${!count("files")}-${!timestamp_unix_nano()}.txt
 
 ### `max_in_flight`
 
-The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of parallel message batches to have in flight at any given time.
 
 
 Type: `int`  
