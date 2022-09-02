@@ -236,7 +236,7 @@ Default: `true`
 
 ### `max_in_flight`
 
-The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of parallel message batches to have in flight at any given time.
 
 
 Type: `int`  

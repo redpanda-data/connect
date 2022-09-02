@@ -49,7 +49,7 @@ allowing you to transfer data across accounts. You can find out more
 [in this document](/docs/guides/cloud/aws).`),
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("stream", "The stream to publish messages to."),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
 		).WithChildren(sess.FieldSpecs()...).WithChildren(retries.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewKinesisFirehoseConfig()),
 		Categories: []string{

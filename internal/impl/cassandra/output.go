@@ -123,7 +123,7 @@ output:
 			).Advanced(),
 			docs.FieldString("timeout", "The client connection timeout.").AtVersion("3.63.0"),
 		).WithChildren(
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewCassandraConfig()),
 	})
