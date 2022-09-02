@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- The streams mode `/ready` endpoint no longer returns status `503` for streams that gracefully finished.
+
 ## 4.6.0 - 2022-08-31
 
 ### Added
