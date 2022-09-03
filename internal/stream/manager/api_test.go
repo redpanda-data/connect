@@ -209,10 +209,12 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
 
-	request = genRequest("GET", "/ready", nil)
-	response = httptest.NewRecorder()
-	r.ServeHTTP(response, request)
-	assert.Equal(t, http.StatusOK, response.Code)
+	assert.Eventually(t, func() bool {
+		request = genRequest("GET", "/ready", nil)
+		response = httptest.NewRecorder()
+		r.ServeHTTP(response, request)
+		return response.Code == http.StatusOK
+	}, time.Second*10, time.Millisecond*50)
 
 	request = genRequest("GET", "/streams/bar", nil)
 	response = httptest.NewRecorder()
