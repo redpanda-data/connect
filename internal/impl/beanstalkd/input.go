@@ -2,6 +2,7 @@ package beanstalkd
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -65,11 +66,12 @@ func (bs *beanstalkdReader) Connect(ctx context.Context) (err error) {
 
 	conn, err := beanstalk.Dial("tcp", bs.address)
 	if err != nil {
-		return err
+		return
 	}
 
 	bs.connection = conn
-	return nil
+	bs.log.Infof("Receiving Beanstalkd messages from address: %s\n", bs.address)
+	return
 }
 
 func (bs *beanstalkdReader) disconnect() error {
@@ -85,17 +87,37 @@ func (bs *beanstalkdReader) disconnect() error {
 	return nil
 }
 
-func (bs *beanstalkdReader) Close(ctx context.Context) (err error) {
-	err = bs.disconnect()
-	return err
-}
-
 func (bs *beanstalkdReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
-	id, body, err := bs.connection.Reserve(time.Millisecond * 200)
+	var mpStats map[string]string
+	res := make([][]byte, 0)
+
+	mpStats, err := bs.connection.Stats()
 	if err != nil {
 		return nil, nil, err
 	}
-	defer bs.connection.Delete(id)
-	
-	return message.QuickBatch([][]byte{body}), nil, nil
+
+	jobs, err := strconv.Atoi(mpStats["current-jobs-ready"])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for i := 0; i < jobs; i++ {
+		id, body, err := bs.connection.Reserve(time.Millisecond * 200)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		res = append(res, body)
+		err = bs.connection.Delete(id)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return message.QuickBatch(res), nil, nil
+}
+
+func (bs *beanstalkdReader) Close(ctx context.Context) (err error) {
+	err = bs.disconnect()
+	return
 }
