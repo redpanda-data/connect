@@ -10,6 +10,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/avro"
 	_ "github.com/benthosdev/benthos/v4/public/components/aws"
 	_ "github.com/benthosdev/benthos/v4/public/components/azure"
+	_ "github.com/benthosdev/benthos/v4/public/components/beanstalkd"
 	_ "github.com/benthosdev/benthos/v4/public/components/cassandra"
 	_ "github.com/benthosdev/benthos/v4/public/components/confluent"
 	_ "github.com/benthosdev/benthos/v4/public/components/dgraph"
