@@ -114,7 +114,9 @@ func (bs *beanstalkdReader) ReadBatch(ctx context.Context) (message.Batch, input
 		}
 	}
 
-	return message.QuickBatch(res), nil, nil
+	return message.QuickBatch(res), func(ctx context.Context, res error) error {
+		return nil
+	}, nil
 }
 
 func (bs *beanstalkdReader) Close(ctx context.Context) (err error) {
