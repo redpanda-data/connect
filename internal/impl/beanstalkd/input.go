@@ -22,10 +22,7 @@ func init() {
 		Summary: `Subscribe to a beanstalked instance.`,
 		Config: docs.FieldComponent().WithChildren(
 				docs.FieldString("tcp_address", "Beanstalkd address to connect to."),
-		).ChildDefaultAndTypesFromStruct(input.NewBeanstalkdConfig()),
-		Categories: []string{
-			"Services",
-		},
+		),
 	})
 	if err != nil {
 		panic(err)
