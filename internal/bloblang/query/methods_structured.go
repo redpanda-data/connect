@@ -338,13 +338,19 @@ Exploding objects results in an object where the keys match the target object, a
 		}
 		path := gabs.DotPathToSlice(pathRaw)
 		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+			rootMap, ok := v.(map[string]interface{})
+			if !ok {
+				return nil, NewTypeError(v, ValueObject)
+			}
+
 			target := gabs.Wrap(v).Search(path...)
+			copyFrom := mapWithout(rootMap, [][]string{path})
 
 			switch t := target.Data().(type) {
 			case []interface{}:
 				result := make([]interface{}, len(t))
 				for i, ele := range t {
-					gExploded := gabs.Wrap(IClone(v))
+					gExploded := gabs.Wrap(IClone(copyFrom))
 					_, _ = gExploded.Set(ele, path...)
 					result[i] = gExploded.Data()
 				}
@@ -352,7 +358,7 @@ Exploding objects results in an object where the keys match the target object, a
 			case map[string]interface{}:
 				result := make(map[string]interface{}, len(t))
 				for key, ele := range t {
-					gExploded := gabs.Wrap(IClone(v))
+					gExploded := gabs.Wrap(IClone(copyFrom))
 					_, _ = gExploded.Set(ele, path...)
 					result[key] = gExploded.Data()
 				}

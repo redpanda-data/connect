@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The streams mode `/ready` endpoint no longer returns status `503` for streams that gracefully finished.
+- The performance of the bloblang `.explode` method now scales linearly with the target size.
 
 ## 4.6.0 - 2022-08-31
 
