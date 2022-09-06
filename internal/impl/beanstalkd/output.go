@@ -17,12 +17,12 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(newBeanstalkdOutput), docs.ComponentSpec {
-		Name:		"beanstalkd",
-		Summary:	`Publish to a beanstalkd queue.`,
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newBeanstalkdOutput), docs.ComponentSpec{
+		Name:    "beanstalkd",
+		Summary: `Publish to a beanstalkd queue.`,
 		Config: docs.FieldComponent().WithChildren(
-				docs.FieldString("tcp_address", "The address of the target Beanstalkd server."),
-				docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldString("tcp_address", "The address of the target Beanstalkd server."),
+			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
 		).ChildDefaultAndTypesFromStruct(output.NewBeanstalkdConfig()),
 		Categories: []string{
 			"Services",
@@ -42,17 +42,17 @@ func newBeanstalkdOutput(conf output.Config, mgr bundle.NewManagement) (output.S
 }
 
 type beanstalkdWriter struct {
-	connection	*beanstalk.Conn
-	connMut		sync.RWMutex
+	connection *beanstalk.Conn
+	connMut    sync.RWMutex
 
-	log		log.Modular
-	conf	output.BeanstalkdConfig
+	log  log.Modular
+	conf output.BeanstalkdConfig
 }
 
 func newBeanstalkdWriter(conf output.BeanstalkdConfig, mgr bundle.NewManagement) (*beanstalkdWriter, error) {
-	bs := beanstalkdWriter {
-		log:	mgr.Logger(),
-		conf:	conf,
+	bs := beanstalkdWriter{
+		log:  mgr.Logger(),
+		conf: conf,
 	}
 	return &bs, nil
 }
@@ -81,7 +81,7 @@ func (bs *beanstalkdWriter) WriteBatch(ctx context.Context, msg message.Batch) e
 	}
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		_, err := conn.Put(p.AsBytes(), 2, 0, time.Second * 2)
+		_, err := conn.Put(p.AsBytes(), 2, 0, time.Second*2)
 		return err
 	})
 }

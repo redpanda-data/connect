@@ -45,8 +45,8 @@ type beanstalkdReader struct {
 	connection *beanstalk.Conn
 	bMut       sync.Mutex
 
-	conf    input.BeanstalkdConfig
-	log     log.Modular
+	conf input.BeanstalkdConfig
+	log  log.Modular
 }
 
 func newBeanstalkdReader(conf input.BeanstalkdConfig, log log.Modular) (*beanstalkdReader, error) {
