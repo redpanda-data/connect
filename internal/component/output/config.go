@@ -26,6 +26,7 @@ type Config struct {
 	AzureBlobStorage   AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
 	AzureQueueStorage  AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
 	AzureTableStorage  AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
+	Beanstalkd		   BeanstalkdConfig		   `json:"beanstalkd" yaml:"beanstalkd"`
 	Broker             BrokerConfig            `json:"broker" yaml:"broker"`
 	Cache              CacheConfig             `json:"cache" yaml:"cache"`
 	Cassandra          CassandraConfig         `json:"cassandra" yaml:"cassandra"`
