@@ -45,7 +45,6 @@ type beanstalkdReader struct {
 	connection *beanstalk.Conn
 	bMut       sync.Mutex
 
-	address string
 	conf    input.BeanstalkdConfig
 	log     log.Modular
 }
@@ -55,7 +54,6 @@ func newBeanstalkdReader(conf input.BeanstalkdConfig, log log.Modular) (*beansta
 		conf: conf,
 		log:  log,
 	}
-	bs.address = conf.Address
 
 	return &bs, nil
 }
@@ -64,13 +62,13 @@ func (bs *beanstalkdReader) Connect(ctx context.Context) (err error) {
 	bs.bMut.Lock()
 	defer bs.bMut.Unlock()
 
-	conn, err := beanstalk.Dial("tcp", bs.address)
+	conn, err := beanstalk.Dial("tcp", bs.conf.Address)
 	if err != nil {
 		return
 	}
 
 	bs.connection = conn
-	bs.log.Infof("Receiving Beanstalkd messages from address: %s\n", bs.address)
+	bs.log.Infof("Receiving Beanstalkd messages from address: %s\n", bs.conf.Address)
 	return
 }
 
