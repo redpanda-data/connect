@@ -22,7 +22,7 @@ type Config struct {
 	AWSSQS            AWSSQSConfig            `json:"aws_sqs" yaml:"aws_sqs"`
 	AzureBlobStorage  AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
 	AzureQueueStorage AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
-	Beanstalkd		  BeanstalkdConfig		  `json:"beanstalkd" yaml:"beanstalkd"`
+	Beanstalkd        BeanstalkdConfig        `json:"beanstalkd" yaml:"beanstalkd"`
 	Broker            BrokerConfig            `json:"broker" yaml:"broker"`
 	CSVFile           CSVFileConfig           `json:"csv" yaml:"csv"`
 	Dynamic           DynamicConfig           `json:"dynamic" yaml:"dynamic"`
@@ -70,7 +70,7 @@ func NewConfig() Config {
 		AWSSQS:            NewAWSSQSConfig(),
 		AzureBlobStorage:  NewAzureBlobStorageConfig(),
 		AzureQueueStorage: NewAzureQueueStorageConfig(),
-		Beanstalkd:		   NewBeanstalkdConfig(),
+		Beanstalkd:        NewBeanstalkdConfig(),
 		Broker:            NewBrokerConfig(),
 		CSVFile:           NewCSVFileConfig(),
 		Dynamic:           NewDynamicConfig(),

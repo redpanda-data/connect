@@ -18,10 +18,10 @@ import (
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(newBeanstalkdInput), docs.ComponentSpec{
-		Name:	 "beanstalkd",
+		Name:    "beanstalkd",
 		Summary: `Subscribe to a beanstalked instance.`,
 		Config: docs.FieldComponent().WithChildren(
-				docs.FieldString("tcp_address", "Beanstalkd address to connect to."),
+			docs.FieldString("tcp_address", "Beanstalkd address to connect to."),
 		).ChildDefaultAndTypesFromStruct(input.NewBeanstalkdConfig()),
 		Categories: []string{
 			"Services",
@@ -42,18 +42,18 @@ func newBeanstalkdInput(conf input.Config, mgr bundle.NewManagement) (input.Stre
 }
 
 type beanstalkdReader struct {
-	connection 	*beanstalk.Conn
-	bMut		sync.Mutex
+	connection *beanstalk.Conn
+	bMut       sync.Mutex
 
-	address		string
-	conf		input.BeanstalkdConfig
-	log			log.Modular
+	address string
+	conf    input.BeanstalkdConfig
+	log     log.Modular
 }
 
 func newBeanstalkdReader(conf input.BeanstalkdConfig, log log.Modular) (*beanstalkdReader, error) {
-	bs := beanstalkdReader {
-		conf:	conf,
-		log:	log,
+	bs := beanstalkdReader{
+		conf: conf,
+		log:  log,
 	}
 	bs.address = conf.Address
 
