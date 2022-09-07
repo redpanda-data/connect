@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- The streams mode `/ready` endpoint no longer returns status `503` for streams that gracefully finished.
+- The performance of the bloblang `.explode` method now scales linearly with the target size.
+- The `influxdb` and `logger` metrics outputs should no longer mix up tag names.
+
+## 4.6.0 - 2022-08-31
+
 ### Added
 
 - New `squash` bloblang method.
@@ -12,12 +20,15 @@ All notable changes to this project will be documented in this file.
 - New `snowflake_id` bloblang function.
 - Field `wait_time_seconds` added to the `aws_sqs` input.
 - New `json_path` bloblang method.
+- New `file_json_contains` predicate for unit tests.
+- The `parquet_encode` processor now supports the `UTF8` logical type for columns.
 
 ### Fixed
 
 - The `schema_registry_encode` processor now correctly assumes Avro JSON encoded documents by default.
 - The `redis` processor `retry_period` no longer shows linting errors for duration strings.
 - The `/inputs` and `/outputs` endpoints for dynamic inputs and outputs now correctly render configs, both structured within the JSON response and the raw config string.
+- Go API: The stream builder no longer ignores `http` configuration. Instead, the value of `http.enabled` is set to `false` by default.
 
 ## 4.5.1 - 2022-08-10
 

@@ -62,10 +62,12 @@ func encodeInfluxDBName(name string, tagNames, tagValues []string) string {
 			tags[v] = tagValues[k]
 		}
 
-		sort.Strings(tagNames)
+		tagSort := make([]string, len(tagNames))
+		copy(tagSort, tagNames)
+		sort.Strings(tagSort)
 
 		// name,tag1=value1,tag2=value\ 3
-		for _, v := range tagNames {
+		for _, v := range tagSort {
 			b.WriteString(tagEncodingSeparator)
 			b.WriteString(escape.String(v))
 			b.WriteString("=")

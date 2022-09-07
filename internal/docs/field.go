@@ -563,6 +563,9 @@ type LintContext struct {
 
 	// Reject any deprecated components or fields as linting errors.
 	RejectDeprecated bool
+
+	// Require labels for components.
+	RequireLabels bool
 }
 
 // NewLintContext creates a new linting context.
@@ -572,6 +575,7 @@ func NewLintContext() LintContext {
 		DocsProvider:     DeprecatedProvider,
 		BloblangEnv:      bloblang.GlobalEnvironment().Deactivated(),
 		RejectDeprecated: false,
+		RequireLabels:    false,
 	}
 }
 

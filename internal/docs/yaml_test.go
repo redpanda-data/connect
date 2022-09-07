@@ -632,6 +632,7 @@ func TestYAMLComponentLinting(t *testing.T) {
 		inputType        docs.Type
 		inputConf        string
 		rejectDeprecated bool
+		requireLabels    bool
 
 		res []docs.Lint
 	}
@@ -681,6 +682,17 @@ testlintfooinput:
 			rejectDeprecated: true,
 			res: []docs.Lint{
 				docs.NewLintError(4, "field foo6 is deprecated"),
+			},
+		},
+		{
+			name:      "require label",
+			inputType: docs.TypeInput,
+			inputConf: `
+testlintbarinput:
+  bar1: hello world`,
+			requireLabels: true,
+			res: []docs.Lint{
+				docs.NewLintError(2, "label is required for testlintbarinput"),
 			},
 		},
 		{
@@ -921,6 +933,7 @@ testlintfooinput:
 		t.Run(test.name, func(t *testing.T) {
 			lintCtx := docs.NewLintContext()
 			lintCtx.RejectDeprecated = test.rejectDeprecated
+			lintCtx.RequireLabels = test.requireLabels
 			lintCtx.DocsProvider = prov
 
 			var node yaml.Node

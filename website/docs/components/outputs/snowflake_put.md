@@ -114,28 +114,29 @@ This authentication mechanism allows Snowpipe functionality, but it does require
 beforehand. Please consult the [documentation](https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication)
 for details on how to set it up and assign the Public Key to your user.
 
-Note that the Snowflake documentation suggests using this command:
+Note that the Snowflake documentation [used to suggest](https://twitter.com/felipehoffa/status/1560811785606684672)
+using this command:
 
 ```shell
 openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8
 ```
 
 to generate an encrypted SSH private key. However, in this case, it uses an encryption algorithm called
-`pbeWithMD5AndDES-CBC`, which part of the PKCS#5 v1.5, which is considered insecure. Due to this, Benthos does not
-support it and, if you wish to use password-protected keys directly, you must use PKCS#5 v2.0 to encrypt them. One way
-of achieving this is to use the following command:
+`pbeWithMD5AndDES-CBC`, which is part of the PKCS#5 v1.5 and is considered insecure. Due to this, Benthos does not
+support it and, if you wish to use password-protected keys directly, you must use PKCS#5 v2.0 to encrypt them by using
+the following command (as the current Snowflake docs suggest):
 
 ```shell
 openssl genrsa 2048 | openssl pkcs8 -topk8 -v2 des3 -inform PEM -out rsa_key.p8
 ```
 
-Alternatively, you can re-encrypt an existing key using this command:
+If you have an existing key encrypted with PKCS#5 v1.5, you can re-encrypt it with PKCS#5 v2.0 using this command:
 
 ```shell
 openssl pkcs8 -in rsa_key_original.p8 -topk8 -v2 des3 -out rsa_key.p8
 ```
 
-Please consult this [documentation](https://linux.die.net/man/1/pkcs8) for details.
+Please consult [this](https://linux.die.net/man/1/pkcs8) pkcs8 command documentation for details on PKCS#5 algorithms.
 
 ### Batching
 

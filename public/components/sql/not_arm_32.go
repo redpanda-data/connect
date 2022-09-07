@@ -1,7 +1,7 @@
 //go:build !arm
 // +build !arm
 
-package all
+package sql
 
 import (
 	// Packages that should only be included in non-arm builds (for now)

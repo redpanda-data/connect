@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"runtime/pprof"
+	"sync/atomic"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -29,6 +30,7 @@ type Type struct {
 	manager bundle.NewManagement
 
 	onClose func()
+	closed  uint32
 }
 
 // New creates a new stream.Type.
@@ -37,6 +39,7 @@ func New(conf Config, mgr bundle.NewManagement, opts ...func(*Type)) (*Type, err
 		conf:    conf,
 		manager: mgr,
 		onClose: func() {},
+		closed:  0,
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -48,6 +51,11 @@ func New(conf Config, mgr bundle.NewManagement, opts ...func(*Type)) (*Type, err
 	healthCheck := func(w http.ResponseWriter, r *http.Request) {
 		inputConnected := t.inputLayer.Connected()
 		outputConnected := t.outputLayer.Connected()
+
+		if atomic.LoadUint32(&t.closed) == 1 {
+			http.Error(w, "Stream terminated", http.StatusNotFound)
+			return
+		}
 
 		if inputConnected && outputConnected {
 			_, _ = w.Write([]byte("OK"))
@@ -134,6 +142,7 @@ func (t *Type) start() (err error) {
 		for {
 			if err := out.WaitForClose(context.Background()); err == nil {
 				t.onClose()
+				atomic.StoreUint32(&t.closed, 1)
 				return
 			}
 		}
