@@ -139,10 +139,13 @@ func createLabelledPath(name string, tagNames, tagValues []string) string {
 		for k, v := range tagNames {
 			tags[v] = tagValues[k]
 		}
-		sort.Strings(tagNames)
+
+		sortedTagNames := make([]string, len(tagNames))
+		copy(sortedTagNames, tagNames)
+		sort.Strings(sortedTagNames)
 
 		b.WriteByte('{')
-		for i, v := range tagNames {
+		for i, v := range sortedTagNames {
 			if i > 0 {
 				b.WriteString(tagEncodingSeparator)
 			}

@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - The streams mode `/ready` endpoint no longer returns status `503` for streams that gracefully finished.
 - The performance of the bloblang `.explode` method now scales linearly with the target size.
+- The `influxdb` and `logger` metrics outputs should no longer mix up tag names.
 
 ## 4.6.0 - 2022-08-31
 
