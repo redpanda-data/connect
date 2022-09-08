@@ -16,6 +16,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
+	"hash/crc32"
 	"html"
 	"io"
 	"net/url"
@@ -701,9 +703,11 @@ var _ = registerSimpleMethod(
 		`
 Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method `+"[`string`][methods.string], or encoded using the method [`encode`][methods.encode]"+`, otherwise it will be base64 encoded by default.
 
-Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`"+`.
+Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`, `crc32`"+`.
 
-The following algorithms require a key, which is specified as a second argument: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`"+`.`,
+The following algorithms require a key, which is specified as a second argument: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `crc32`"+`.
+
+For `+"`crc32`"+` key should match one of the following values: `+"`IEEE` (default), `Castagnoli` and `Koopman`"+`.`,
 		NewExampleSpec("",
 			`root.h1 = this.value.hash("sha1").encode("hex")
 root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
@@ -784,6 +788,25 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 				h := xxhash.New64()
 				_, _ = h.Write(b)
 				return []byte(strconv.FormatUint(h.Sum64(), 10)), nil
+			}
+		case "crc32":
+			if len(key) == 0 {
+				key = []byte("IEEE")
+			}
+			hashFn = func(b []byte) ([]byte, error) {
+				var hasher hash.Hash
+				switch string(key) {
+				case "IEEE":
+					hasher = crc32.NewIEEE()
+				case "Castagnoli":
+					hasher = crc32.New(crc32.MakeTable(crc32.Castagnoli))
+				case "Koopman":
+					hasher = crc32.New(crc32.MakeTable(crc32.Koopman))
+				default:
+					return nil, fmt.Errorf("unsupported crc32 hash key %q", key)
+				}
+				hasher.Write(b)
+				return hasher.Sum(nil), nil
 			}
 		default:
 			return nil, fmt.Errorf("unrecognized hash type: %v", algorithmStr)
