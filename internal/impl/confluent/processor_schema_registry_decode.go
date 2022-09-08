@@ -33,7 +33,7 @@ Currently only Avro schemas are supported.
 
 ### Avro JSON Format
 
-This processor creates documents formatted as [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding) when decoding Avro schemas. In this format the value of a union is encoded in JSON as follows:
+This processor creates documents formatted as [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding) when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
 
 - if its type is ` + "`null`, then it is encoded as a JSON `null`" + `;
 - otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
@@ -42,9 +42,11 @@ For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`"
 
 - ` + "`null` as `null`" + `;
 - the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
-- a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.`).
+- a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
+
+However, it is possible to instead create documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field ` + "[`avro_raw_json`](#avro_raw_json) to `true`" + `.`).
 		Field(service.NewBoolField("avro_raw_json").
-			Description("Whether Avro messages should be decoded into raw JSON documents rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If true the the schema returned from the subject should be parsed as [standard json full](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [normal avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). Should simply be set to whatever value `avro_raw_json` was used in `schema_registry_encode` processor. If data encoded outside of benthos without the use of [goavro](https://github.com/linkedin/goavro), should almost certainly be `false`.").
+			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.").
 			Advanced().Default(false)).
 		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewTLSField("tls"))
