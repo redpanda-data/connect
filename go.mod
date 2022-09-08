@@ -82,6 +82,7 @@ require (
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
+	github.com/mattn/go-sqlite3 v1.14.15
 	github.com/microcosm-cc/bluemonday v1.0.19
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6 // indirect
