@@ -12,20 +12,20 @@ import (
 
 func beanstalkdInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-			Categories("Services").
-			Version("3.46.0").
-			Summary("Reads messages from Beanstalkd queue.").
-			Field(service.NewStringField("tcp_address").
-					Description("Beanstalkd address to connect to.").
-					Example("127.0.0.1:11300"))
+		Categories("Services").
+		Version("3.46.0").
+		Summary("Reads messages from Beanstalkd queue.").
+		Field(service.NewStringField("tcp_address").
+			Description("Beanstalkd address to connect to.").
+			Example("127.0.0.1:11300"))
 }
 
 func init() {
 	err := service.RegisterInput(
-			"beanstalkd", beanstalkdInputConfig(),
-			func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-				return newBeanstalkdReaderFromConfig(conf, mgr.Logger())
-			})
+		"beanstalkd", beanstalkdInputConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			return newBeanstalkdReaderFromConfig(conf, mgr.Logger())
+		})
 
 	if err != nil {
 		panic(err)
@@ -33,16 +33,16 @@ func init() {
 }
 
 type beanstalkdReader struct {
-	connection	*beanstalk.Conn
-	connMut		sync.Mutex
+	connection *beanstalk.Conn
+	connMut    sync.Mutex
 
-	address	string
-	log		*service.Logger
+	address string
+	log     *service.Logger
 }
 
 func newBeanstalkdReaderFromConfig(conf *service.ParsedConfig, log *service.Logger) (*beanstalkdReader, error) {
 	bs := beanstalkdReader{
-		log:  log,
+		log: log,
 	}
 
 	tcpAddr, err := conf.FieldString("tcp_address")

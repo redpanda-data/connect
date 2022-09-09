@@ -6,43 +6,34 @@ import (
 	"time"
 
 	"github.com/beanstalkd/go-beanstalk"
-/*
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
-	"github.com/benthosdev/benthos/v4/internal/message"
-	*/
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func beanstalkdOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-			Categories("Services").
-			Version("3.46.0").
-			Summary("Write messages to a Beanstalkd queue.").
-			Field(service.NewStringField("tcp_address").
-					Description("Beanstalkd address to connect to.").
-					Example("127.0.0.1:11300")).
-			Field(service.NewIntField("max_in_flight").
-					Description("The maximum number of messages to have in flight at a given time. Increase to improve throughput.").
-					Default(64))
+		Categories("Services").
+		Version("3.46.0").
+		Summary("Write messages to a Beanstalkd queue.").
+		Field(service.NewStringField("tcp_address").
+			Description("Beanstalkd address to connect to.").
+			Example("127.0.0.1:11300")).
+		Field(service.NewIntField("max_in_flight").
+			Description("The maximum number of messages to have in flight at a given time. Increase to improve throughput.").
+			Default(64))
 }
 
 func init() {
 	err := service.RegisterOutput(
-			"beanstalkd", beanstalkdOutputConfig(),
-			func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
-				maxInFlight, err := conf.FieldInt("max_in_flight")
-				if err != nil {
-					return nil, 0, err
-				}
-				w, err := newBeanstalkdWriterFromConfig(conf, mgr.Logger())
-				return w, maxInFlight, err
-			})
+		"beanstalkd", beanstalkdOutputConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+			maxInFlight, err := conf.FieldInt("max_in_flight")
+			if err != nil {
+				return nil, 0, err
+			}
+			w, err := newBeanstalkdWriterFromConfig(conf, mgr.Logger())
+			return w, maxInFlight, err
+		})
 
 	if err != nil {
 		panic(err)
@@ -54,12 +45,12 @@ type beanstalkdWriter struct {
 	connMut    sync.Mutex
 
 	address string
-	log		*service.Logger
+	log     *service.Logger
 }
 
 func newBeanstalkdWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) (*beanstalkdWriter, error) {
 	bs := beanstalkdWriter{
-		log:	log,
+		log: log,
 	}
 
 	tcpAddr, err := conf.FieldString("tcp_address")

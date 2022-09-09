@@ -1,7 +1,7 @@
 ---
 title: beanstalkd
 type: output
-status: stable
+status: experimental
 categories: ["Services"]
 ---
 
@@ -15,7 +15,12 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Publish to a beanstalkd queue.
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
+Write messages to a Beanstalkd queue.
+
+Introduced in version 3.46.0.
 
 ```yml
 # Config fields, showing default values
@@ -30,15 +35,20 @@ output:
 
 ### `tcp_address`
 
-The address of the target Beanstalkd server.
+Beanstalkd address to connect to.
 
 
 Type: `string`  
-Default: `""`  
+
+```yml
+# Examples
+
+tcp_address: 127.0.0.1:11300
+```
 
 ### `max_in_flight`
 
-The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+The maximum number of messages to have in flight at a given time. Increase to improve throughput.
 
 
 Type: `int`  

@@ -1,7 +1,7 @@
 ---
 title: beanstalkd
 type: input
-status: stable
+status: experimental
 categories: ["Services"]
 ---
 
@@ -15,7 +15,12 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Subscribe to a beanstalked instance.
+:::caution EXPERIMENTAL
+This component is experimental and therefore subject to change or removal outside of major version releases.
+:::
+Reads messages from Beanstalkd queue.
+
+Introduced in version 3.46.0.
 
 ```yml
 # Config fields, showing default values
@@ -33,6 +38,11 @@ Beanstalkd address to connect to.
 
 
 Type: `string`  
-Default: `""`  
+
+```yml
+# Examples
+
+tcp_address: 127.0.0.1:11300
+```
 
 
