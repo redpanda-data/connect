@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/beanstalkd/go-beanstalk"
-
+/*
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -14,46 +14,60 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	*/
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+func beanstalkdOutputConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+			Categories("Services").
+			Version("3.46.0").
+			Summary("Write messages to a Beanstalkd queue.").
+			Field(service.NewStringField("tcp_address").
+					Description("Beanstalkd address to connect to.").
+					Example("127.0.0.1:11300")).
+			Field(service.NewIntField("max_in_flight").
+					Description("The maximum number of messages to have in flight at a given time. Increase to improve throughput.").
+					Default(64))
+}
+
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(newBeanstalkdOutput), docs.ComponentSpec{
-		Name:    "beanstalkd",
-		Summary: `Publish to a beanstalkd queue.`,
-		Config: docs.FieldComponent().WithChildren(
-			docs.FieldString("tcp_address", "The address of the target Beanstalkd server."),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-		).ChildDefaultAndTypesFromStruct(output.NewBeanstalkdConfig()),
-		Categories: []string{
-			"Services",
-		},
-	})
+	err := service.RegisterOutput(
+			"beanstalkd", beanstalkdOutputConfig(),
+			func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+				maxInFlight, err := conf.FieldInt("max_in_flight")
+				if err != nil {
+					return nil, 0, err
+				}
+				w, err := newBeanstalkdWriterFromConfig(conf, mgr.Logger())
+				return w, maxInFlight, err
+			})
+
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newBeanstalkdOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
-	w, err := newBeanstalkdWriter(conf.Beanstalkd, mgr)
+type beanstalkdWriter struct {
+	connection *beanstalk.Conn
+	connMut    sync.Mutex
+
+	address string
+	log		*service.Logger
+}
+
+func newBeanstalkdWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) (*beanstalkdWriter, error) {
+	bs := beanstalkdWriter{
+		log:	log,
+	}
+
+	tcpAddr, err := conf.FieldString("tcp_address")
 	if err != nil {
 		return nil, err
 	}
-	return output.NewAsyncWriter("beanstalkd", conf.Beanstalkd.MaxInFlight, w, mgr)
-}
+	bs.address = tcpAddr
 
-type beanstalkdWriter struct {
-	connection *beanstalk.Conn
-	connMut    sync.RWMutex
-
-	log  log.Modular
-	conf output.BeanstalkdConfig
-}
-
-func newBeanstalkdWriter(conf output.BeanstalkdConfig, mgr bundle.NewManagement) (*beanstalkdWriter, error) {
-	bs := beanstalkdWriter{
-		log:  mgr.Logger(),
-		conf: conf,
-	}
 	return &bs, nil
 }
 
@@ -61,29 +75,31 @@ func (bs *beanstalkdWriter) Connect(ctx context.Context) error {
 	bs.connMut.Lock()
 	defer bs.connMut.Unlock()
 
-	conn, err := beanstalk.Dial("tcp", bs.conf.Address)
+	conn, err := beanstalk.Dial("tcp", bs.address)
 	if err != nil {
 		return err
 	}
 
 	bs.connection = conn
-	bs.log.Infof("Sending Beanstalkd messages to address: %s\n", bs.conf.Address)
+	bs.log.Infof("Sending Beanstalkd messages to address: %s\n", bs.address)
 	return nil
 }
 
-func (bs *beanstalkdWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
+func (bs *beanstalkdWriter) Write(ctx context.Context, msg *service.Message) error {
 	bs.connMut.Lock()
 	conn := bs.connection
 	bs.connMut.Unlock()
 
 	if conn == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
-	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
-		_, err := conn.Put(p.AsBytes(), 2, 0, time.Second*2)
+	msgBytes, err := msg.AsBytes()
+	if err != nil {
 		return err
-	})
+	}
+	_, err = conn.Put(msgBytes, 2, 0, time.Second*2)
+	return err
 }
 
 func (bs *beanstalkdWriter) Close(context.Context) error {
