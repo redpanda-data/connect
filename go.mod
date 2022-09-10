@@ -82,7 +82,6 @@ require (
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
-	github.com/mattn/go-sqlite3 v1.14.15
 	github.com/microcosm-cc/bluemonday v1.0.19
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6 // indirect
@@ -140,13 +139,20 @@ require (
 	golang.org/x/crypto v0.0.0-20220511200225-c6db032c6c88
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
+	golang.org/x/sys v0.0.0-20220909162455-aba9fc2a8ff2 // indirect
 	golang.org/x/text v0.3.7
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
+	golang.org/x/tools v0.1.12 // indirect
+	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.74.0
 	google.golang.org/grpc v1.46.2
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v3 v3.0.1
+	lukechampine.com/uint128 v1.2.0 // indirect
+	modernc.org/cc/v3 v3.38.1 // indirect
+	modernc.org/opt v0.1.3 // indirect
+	modernc.org/sqlite v1.18.2
 )
 
 go 1.16

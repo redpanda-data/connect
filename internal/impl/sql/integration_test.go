@@ -540,7 +540,7 @@ func TestIntegration(t *testing.T) {
 	t.Run("postgres", postgresIntegration)
 	t.Run("mysql", mySQLIntegration)
 	t.Run("mssql", msSQLIntegration)
-	t.Run("sqlite3", sqlite3Integration)
+	t.Run("sqlite", sqliteIntegration)
 }
 
 func clickhouseIntegration(t *testing.T) {
@@ -839,7 +839,7 @@ func msSQLIntegration(t *testing.T) {
 	testSuite(t, "mssql", dsn, createTable)
 }
 
-func sqlite3Integration(t *testing.T) {
+func sqliteIntegration(t *testing.T) {
 	t.Parallel()
 
 	var db *sql.DB
@@ -867,7 +867,7 @@ func sqlite3Integration(t *testing.T) {
 	dsn := "file:foo.db"
 
 	require.NoError(t, func() error {
-		db, err = sql.Open("sqlite3", dsn)
+		db, err = sql.Open("sqlite", dsn)
 		if err != nil {
 			return err
 		}
@@ -882,5 +882,5 @@ func sqlite3Integration(t *testing.T) {
 		return nil
 	}())
 
-	testSuite(t, "sqlite3", dsn, createTable)
+	testSuite(t, "sqlite", dsn, createTable)
 }
