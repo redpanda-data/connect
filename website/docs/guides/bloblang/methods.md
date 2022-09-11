@@ -2396,14 +2396,13 @@ Hashes a string or byte array according to a chosen algorithm and returns the re
 
 Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`, `crc32`.
 
-The following algorithms require a key, which is specified as a second argument: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `crc32`.
-
-For `crc32` key should match one of the following values: `IEEE` (default), `Castagnoli` and `Koopman`.
+The following algorithms require a key, which is specified as a second argument: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`.
 
 #### Parameters
 
 **`algorithm`** &lt;string&gt; The hasing algorithm to use.  
 **`key`** &lt;(optional) string&gt; An optional key to use.  
+**`polynomial`** &lt;string, default `"IEEE"`&gt; An optional polynomial key to use when selecting the `crc32` algorithm, otherwise ignored. Options are `IEEE` (default), `Castagnoli` and `Koopman`  
 
 #### Examples
 
@@ -2414,6 +2413,16 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")
 
 # In:  {"value":"hello world"}
 # Out: {"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}
+```
+
+The `crc32` algorithm supports options for the polynomial.
+
+```coffee
+root.h1 = this.value.hash(algorithm: "crc32", polynomial: "Castagnoli").encode("hex")
+root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex")
+
+# In:  {"value":"hello world"}
+# Out: {"h1":"c99465aa","h2":"df373d3c"}
 ```
 
 ## GeoIP

@@ -705,18 +705,23 @@ Hashes a string or byte array according to a chosen algorithm and returns the re
 
 Available algorithms are: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`, `crc32`"+`.
 
-The following algorithms require a key, which is specified as a second argument: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `crc32`"+`.
-
-For `+"`crc32`"+` key should match one of the following values: `+"`IEEE` (default), `Castagnoli` and `Koopman`"+`.`,
+The following algorithms require a key, which is specified as a second argument: `+"`hmac_sha1`, `hmac_sha256`, `hmac_sha512`"+`.`,
 		NewExampleSpec("",
 			`root.h1 = this.value.hash("sha1").encode("hex")
 root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 			`{"value":"hello world"}`,
 			`{"h1":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed","h2":"d87e5f068fa08fe90bb95bc7c8344cb809179d76"}`,
 		),
+		NewExampleSpec("The `crc32` algorithm supports options for the polynomial.",
+			`root.h1 = this.value.hash(algorithm: "crc32", polynomial: "Castagnoli").encode("hex")
+root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex")`,
+			`{"value":"hello world"}`,
+			`{"h1":"c99465aa","h2":"df373d3c"}`,
+		),
 	).
 		Param(ParamString("algorithm", "The hasing algorithm to use.")).
-		Param(ParamString("key", "An optional key to use.").Optional()),
+		Param(ParamString("key", "An optional key to use.").Optional()).
+		Param(ParamString("polynomial", "An optional polynomial key to use when selecting the `crc32` algorithm, otherwise ignored. Options are `IEEE` (default), `Castagnoli` and `Koopman`").Default("IEEE")),
 	func(args *ParsedParams) (simpleMethod, error) {
 		algorithmStr, err := args.FieldString("algorithm")
 		if err != nil {
@@ -729,6 +734,10 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 		}
 		if keyParam != nil {
 			key = []byte(*keyParam)
+		}
+		poly, err := args.FieldString("polynomial")
+		if err != nil {
+			return nil, err
 		}
 		var hashFn func([]byte) ([]byte, error)
 		switch algorithmStr {
@@ -790,12 +799,9 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 				return []byte(strconv.FormatUint(h.Sum64(), 10)), nil
 			}
 		case "crc32":
-			if len(key) == 0 {
-				key = []byte("IEEE")
-			}
 			hashFn = func(b []byte) ([]byte, error) {
 				var hasher hash.Hash
-				switch string(key) {
+				switch poly {
 				case "IEEE":
 					hasher = crc32.NewIEEE()
 				case "Castagnoli":
@@ -803,7 +809,7 @@ root.h2 = this.value.hash("hmac_sha1","static-key").encode("hex")`,
 				case "Koopman":
 					hasher = crc32.New(crc32.MakeTable(crc32.Koopman))
 				default:
-					return nil, fmt.Errorf("unsupported crc32 hash key %q", key)
+					return nil, fmt.Errorf("unsupported crc32 hash key %q", poly)
 				}
 				hasher.Write(b)
 				return hasher.Sum(nil), nil

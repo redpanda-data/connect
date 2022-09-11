@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Field `avro_raw_json` added to the `schema_registry_decode` processor.
 - Field `priority` added to the `gcp_bigquery_select` input.
+- The `hash` bloblang method now supports `crc32`.
 
 ### Fixed
 

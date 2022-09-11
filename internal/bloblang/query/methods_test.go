@@ -806,7 +806,7 @@ func TestMethods(t *testing.T) {
 		"check crc32 hash IEEE (explicit)": {
 			input: methods(
 				literalFn("hello world"),
-				method("hash", "crc32", "IEEE"),
+				method("hash", "crc32", "", "IEEE"),
 				method("encode", "hex"),
 			),
 			output: `0d4a1185`,
@@ -814,7 +814,7 @@ func TestMethods(t *testing.T) {
 		"check crc32 hash Castagnoli": {
 			input: methods(
 				literalFn("hello world"),
-				method("hash", "crc32", "Castagnoli"),
+				method("hash", "crc32", "", "Castagnoli"),
 				method("encode", "hex"),
 			),
 			output: `c99465aa`,
@@ -822,7 +822,7 @@ func TestMethods(t *testing.T) {
 		"check crc32 hash Koopman": {
 			input: methods(
 				literalFn("hello world"),
-				method("hash", "crc32", "Koopman"),
+				method("hash", "crc32", "", "Koopman"),
 				method("encode", "hex"),
 			),
 			output: `df373d3c`,
@@ -830,7 +830,7 @@ func TestMethods(t *testing.T) {
 		"check crc32 hash not supported": {
 			input: methods(
 				literalFn("hello world"),
-				method("hash", "crc32", "not-supported"),
+				method("hash", "crc32", "", "not-supported"),
 				method("encode", "hex"),
 			),
 			err: `string literal: unsupported crc32 hash key "not-supported"`,
