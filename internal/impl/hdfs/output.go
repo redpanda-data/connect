@@ -33,7 +33,7 @@ func init() {
 				"path", "The path to upload messages as, interpolation functions should be used in order to generate unique file paths.",
 				`${!count("files")}-${!timestamp_unix_nano()}.txt`,
 			).IsInterpolated(),
-			docs.FieldInt("max_in_flight", "The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewHDFSConfig()),
 		Categories: []string{

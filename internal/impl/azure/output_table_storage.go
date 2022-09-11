@@ -90,7 +90,7 @@ properties:
 				"INSERT", "INSERT_MERGE", "INSERT_REPLACE",
 			).IsInterpolated().Advanced(),
 			docs.FieldInt("max_in_flight",
-				"The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
+				"The maximum number of parallel message batches to have in flight at any given time."),
 			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewAzureTableStorageConfig()),
