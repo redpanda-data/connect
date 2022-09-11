@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"cloud.google.com/go/bigquery"
-	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/iterator"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 type mockBQIterator struct {

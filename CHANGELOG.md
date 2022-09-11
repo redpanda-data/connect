@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Field `avro_raw_json` added to the `schema_registry_decode` processor.
+- Field `priority` added to the `gcp_bigquery_select` input.
+
 ### Fixed
 
 - The streams mode `/ready` endpoint no longer returns status `503` for streams that gracefully finished.
