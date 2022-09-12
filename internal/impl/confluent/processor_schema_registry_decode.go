@@ -108,7 +108,7 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *serv
 	return newSchemaRegistryDecoder(urlStr, usernameStr, passwordStr, tlsConf, avroRawJSON, logger)
 }
 
-func newSchemaRegistryDecoder(urlStr string, usernameStr string, passwordStr string, tlsConf *tls.Config, avroRawJSON bool, logger *service.Logger) (*schemaRegistryDecoder, error) {
+func newSchemaRegistryDecoder(urlStr, usernameStr, passwordStr string, tlsConf *tls.Config, avroRawJSON bool, logger *service.Logger) (*schemaRegistryDecoder, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)

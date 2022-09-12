@@ -144,8 +144,8 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *serv
 }
 
 func newSchemaRegistryEncoder(
-	urlStr string,
-	usernameStr string,
+	urlStr,
+	usernameStr,
 	passwordStr string,
 	tlsConf *tls.Config,
 	subject *service.InterpolatedString,
