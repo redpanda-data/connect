@@ -1,11 +1,9 @@
 package beanstalkd
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
-	"github.com/beanstalkd/go-beanstalk"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,11 +27,6 @@ func TestIntegrationBeanstalkd(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		bsConn, err := beanstalk.Dial("tcp", fmt.Sprintf("localhost:%v", resource.GetPort("11300/tcp")))
-		if err != nil {
-			return err
-		}
-		bsConn.Close()
 		return nil
 	}))
 
@@ -47,13 +40,11 @@ input:
   beanstalkd:
     tcp_address: localhost:$PORT
 `
-		suite := integration.StreamTests(
-				integration.StreamTestOpenClose(),
-		)
-		suite.Run(
-				t, template,
-				integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
-				integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-				integration.StreamTestOptPort(resource.GetPort("11300/tcp")),
-		)
+	suite := integration.StreamTests(
+		integration.StreamTestSendBatch(10),
+	)
+	suite.Run(
+		t, template,
+		integration.StreamTestOptPort(resource.GetPort("11300/tcp")),
+	)
 }
