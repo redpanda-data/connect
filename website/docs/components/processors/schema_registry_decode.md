@@ -33,6 +33,8 @@ Automatically decodes and validates messages with schemas from a Confluent Schem
 label: ""
 schema_registry_decode:
   url: ""
+  username: ""
+  password: ""
 ```
 
 </TabItem>
@@ -44,6 +46,8 @@ label: ""
 schema_registry_decode:
   avro_raw_json: false
   url: ""
+  username: ""
+  password: ""
   tls:
     skip_cert_verify: false
     enable_renegotiation: false
@@ -90,6 +94,22 @@ The base URL of the schema registry service.
 
 
 Type: `string`  
+
+### `username`
+
+The basic auth username for the schema registry service.
+
+
+Type: `string`  
+Default: `""`  
+
+### `password`
+
+The basic auth password for the schema registry service.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls`
 

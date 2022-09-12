@@ -35,6 +35,8 @@ Introduced in version 3.58.0.
 label: ""
 schema_registry_encode:
   url: ""
+  username: ""
+  password: ""
   subject: ""
   refresh_period: 10m
 ```
@@ -47,6 +49,8 @@ schema_registry_encode:
 label: ""
 schema_registry_encode:
   url: ""
+  username: ""
+  password: ""
   subject: ""
   refresh_period: 10m
   avro_raw_json: false
@@ -95,6 +99,22 @@ The base URL of the schema registry service.
 
 
 Type: `string`  
+
+### `username`
+
+The basic auth username for the schema registry service.
+
+
+Type: `string`  
+Default: `""`  
+
+### `password`
+
+The basic auth password for the schema registry service.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `subject`
 
