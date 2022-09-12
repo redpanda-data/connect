@@ -17,10 +17,11 @@ import (
 
 func TestSchemaRegistryEncoderConfigParse(t *testing.T) {
 	configTests := []struct {
-		name            string
-		config          string
-		errContains     string
-		expectedBaseURL string
+		name                   string
+		config                 string
+		errContains            string
+		expectedBaseURL        string
+		expectedBasicAuthToken string
 	}{
 		{
 			name: "bad url",
@@ -44,7 +45,8 @@ subject: ${! bad interpolation }
 url: http://example.com
 subject: foo
 `,
-			expectedBaseURL: "http://example.com",
+			expectedBaseURL:        "http://example.com",
+			expectedBasicAuthToken: "",
 		},
 		{
 			name: "bad period",
@@ -61,7 +63,19 @@ refresh_period: not a duration
 url: http://example.com/v1
 subject: foo
 `,
-			expectedBaseURL: "http://example.com/v1",
+			expectedBaseURL:        "http://example.com/v1",
+			expectedBasicAuthToken: "",
+		},
+		{
+			name: "url with basic auth",
+			config: `
+url: http://example.com/v1
+username: user
+password: pass
+subject: foo
+`,
+			expectedBaseURL:        "http://example.com/v1",
+			expectedBasicAuthToken: "dXNlcjpwYXNz",
 		},
 	}
 
@@ -76,6 +90,7 @@ subject: foo
 
 			if e != nil {
 				assert.Equal(t, test.expectedBaseURL, e.schemaRegistryBaseURL.String())
+				assert.Equal(t, test.expectedBasicAuthToken, e.schemaRegistryBasicAuthToken)
 			}
 
 			if err == nil {
@@ -111,7 +126,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -193,7 +208,7 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, true, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, true, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -275,7 +290,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -352,7 +367,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, true, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, true, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -417,7 +432,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 
@@ -478,7 +493,7 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 

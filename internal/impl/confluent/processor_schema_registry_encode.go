@@ -3,6 +3,7 @@ package confluent
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -53,6 +54,8 @@ However, it is possible to instead consume documents in [standard/raw JSON forma
 Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if ` + "`avro_raw_json` is set to true" + `, though now of course non-logical types will not be in-line with the spec.
 `).
 		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
+		Field(service.NewStringField("username").Description("The basic auth username for the schema registry service.").Default("")).
+		Field(service.NewStringField("password").Description("The basic auth password for the schema registry service.").Default("")).
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).
@@ -88,7 +91,8 @@ type schemaRegistryEncoder struct {
 	avroRawJSON        bool
 	schemaRefreshAfter time.Duration
 
-	schemaRegistryBaseURL *url.URL
+	schemaRegistryBaseURL        *url.URL
+	schemaRegistryBasicAuthToken string
 
 	schemas    map[string]*cachedSchemaEncoder
 	cacheMut   sync.RWMutex
@@ -101,6 +105,14 @@ type schemaRegistryEncoder struct {
 
 func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*schemaRegistryEncoder, error) {
 	urlStr, err := conf.FieldString("url")
+	if err != nil {
+		return nil, err
+	}
+	usernameStr, err := conf.FieldString("username")
+	if err != nil {
+		return nil, err
+	}
+	passwordStr, err := conf.FieldString("password")
 	if err != nil {
 		return nil, err
 	}
@@ -128,11 +140,13 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryEncoder(urlStr, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, logger)
+	return newSchemaRegistryEncoder(urlStr, usernameStr, passwordStr, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, logger)
 }
 
 func newSchemaRegistryEncoder(
 	urlStr string,
+	usernameStr string,
+	passwordStr string,
 	tlsConf *tls.Config,
 	subject *service.InterpolatedString,
 	avroRawJSON bool,
@@ -144,15 +158,21 @@ func newSchemaRegistryEncoder(
 		return nil, fmt.Errorf("failed to parse url: %w", err)
 	}
 
+	var token string
+	if usernameStr != "" && passwordStr != "" {
+		token = base64.StdEncoding.EncodeToString([]byte(usernameStr + ":" + passwordStr))
+	}
+
 	s := &schemaRegistryEncoder{
-		schemaRegistryBaseURL: u,
-		subject:               subject,
-		avroRawJSON:           avroRawJSON,
-		schemaRefreshAfter:    schemaRefreshAfter,
-		schemas:               map[string]*cachedSchemaEncoder{},
-		shutSig:               shutdown.NewSignaller(),
-		logger:                logger,
-		nowFn:                 time.Now,
+		schemaRegistryBaseURL:        u,
+		schemaRegistryBasicAuthToken: token,
+		subject:                      subject,
+		avroRawJSON:                  avroRawJSON,
+		schemaRefreshAfter:           schemaRefreshAfter,
+		schemas:                      map[string]*cachedSchemaEncoder{},
+		shutSig:                      shutdown.NewSignaller(),
+		logger:                       logger,
+		nowFn:                        time.Now,
 	}
 
 	s.client = http.DefaultClient
@@ -302,6 +322,10 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		return nil, 0, err
 	}
 	req.Header.Add("Accept", "application/vnd.schemaregistry.v1+json")
+
+	if s.schemaRegistryBasicAuthToken != "" {
+		req.Header.Add("Authorization", "Basic "+s.schemaRegistryBasicAuthToken)
+	}
 
 	var resBytes []byte
 	for i := 0; i < 3; i++ {
