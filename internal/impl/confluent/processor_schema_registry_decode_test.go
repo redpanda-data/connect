@@ -18,10 +18,11 @@ import (
 
 func TestSchemaRegistryDecoderConfigParse(t *testing.T) {
 	configTests := []struct {
-		name            string
-		config          string
-		errContains     string
-		expectedBaseURL string
+		name                   string
+		config                 string
+		errContains            string
+		expectedBaseURL        string
+		expectedBasicAuthToken string
 	}{
 		{
 			name: "bad url",
@@ -35,7 +36,18 @@ url: huh#%#@$u*not////::example.com
 			config: `
 url: http://example.com/v1
 `,
-			expectedBaseURL: "http://example.com/v1",
+			expectedBaseURL:        "http://example.com/v1",
+			expectedBasicAuthToken: "",
+		},
+		{
+			name: "url with basic auth",
+			config: `
+url: http://example.com/v1
+username: user
+password: pass
+`,
+			expectedBaseURL:        "http://example.com/v1",
+			expectedBasicAuthToken: "dXNlcjpwYXNz",
 		},
 	}
 
@@ -50,6 +62,7 @@ url: http://example.com/v1
 
 			if e != nil {
 				assert.Equal(t, test.expectedBaseURL, e.schemaRegistryBaseURL.String())
+				assert.Equal(t, test.expectedBasicAuthToken, e.schemaRegistryBasicAuthToken)
 			}
 
 			if err == nil {
@@ -187,7 +200,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, nil, false, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, "", "", nil, false, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -290,7 +303,7 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, nil, true, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, "", "", nil, true, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -368,7 +381,7 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 		return nil, fmt.Errorf("nope")
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, nil, false, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, "", "", nil, false, nil)
 	require.NoError(t, err)
 	require.NoError(t, decoder.Close(context.Background()))
 

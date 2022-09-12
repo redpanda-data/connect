@@ -3,6 +3,7 @@ package confluent
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -49,6 +50,8 @@ However, it is possible to instead create documents in [standard/raw JSON format
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.").
 			Advanced().Default(false)).
 		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
+		Field(service.NewStringField("username").Description("The basic auth username for the schema registry service.").Default("")).
+		Field(service.NewStringField("password").Description("The basic auth password for the schema registry service.").Default("")).
 		Field(service.NewTLSField("tls"))
 }
 
@@ -70,7 +73,8 @@ type schemaRegistryDecoder struct {
 	client      *http.Client
 	avroRawJSON bool
 
-	schemaRegistryBaseURL *url.URL
+	schemaRegistryBaseURL        *url.URL
+	schemaRegistryBasicAuthToken string
 
 	schemas    map[int]*cachedSchemaDecoder
 	cacheMut   sync.RWMutex
@@ -85,6 +89,14 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
+	usernameStr, err := conf.FieldString("username")
+	if err != nil {
+		return nil, err
+	}
+	passwordStr, err := conf.FieldString("password")
+	if err != nil {
+		return nil, err
+	}
 	tlsConf, err := conf.FieldTLS("tls")
 	if err != nil {
 		return nil, err
@@ -93,21 +105,27 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryDecoder(urlStr, tlsConf, avroRawJSON, logger)
+	return newSchemaRegistryDecoder(urlStr, usernameStr, passwordStr, tlsConf, avroRawJSON, logger)
 }
 
-func newSchemaRegistryDecoder(urlStr string, tlsConf *tls.Config, avroRawJSON bool, logger *service.Logger) (*schemaRegistryDecoder, error) {
+func newSchemaRegistryDecoder(urlStr string, usernameStr string, passwordStr string, tlsConf *tls.Config, avroRawJSON bool, logger *service.Logger) (*schemaRegistryDecoder, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
 	}
 
+	var token string
+	if usernameStr != "" && passwordStr != "" {
+		token = base64.StdEncoding.EncodeToString([]byte(usernameStr + ":" + passwordStr))
+	}
+
 	s := &schemaRegistryDecoder{
-		avroRawJSON:           avroRawJSON,
-		schemaRegistryBaseURL: u,
-		schemas:               map[int]*cachedSchemaDecoder{},
-		shutSig:               shutdown.NewSignaller(),
-		logger:                logger,
+		avroRawJSON:                  avroRawJSON,
+		schemaRegistryBaseURL:        u,
+		schemaRegistryBasicAuthToken: token,
+		schemas:                      map[int]*cachedSchemaDecoder{},
+		shutSig:                      shutdown.NewSignaller(),
+		logger:                       logger,
 	}
 
 	s.client = http.DefaultClient
@@ -259,6 +277,10 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 		return nil, err
 	}
 	req.Header.Add("Accept", "application/vnd.schemaregistry.v1+json")
+
+	if s.schemaRegistryBasicAuthToken != "" {
+		req.Header.Add("Authorization", "Basic "+s.schemaRegistryBasicAuthToken)
+	}
 
 	var resBytes []byte
 	for i := 0; i < 3; i++ {
