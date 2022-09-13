@@ -11,8 +11,20 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/integration"
 )
 
+const template string = `
+output:
+  beanstalkd:
+    tcp_address: localhost:$PORT
+    max_in_flight: $MAX_IN_FLIGHT
+
+input:
+  beanstalkd:
+    tcp_address: localhost:$PORT
+`
+
 func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -29,16 +41,6 @@ func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 		return nil
 	}))
 
-	template := `
-output:
-  beanstalkd:
-    tcp_address: localhost:$PORT
-    max_in_flight: $MAX_IN_FLIGHT
-
-input:
-  beanstalkd:
-    tcp_address: localhost:$PORT
-`
 	suite := integration.StreamTests(
 		integration.StreamTestOpenClose(),
 	)
@@ -50,6 +52,7 @@ input:
 
 func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -66,16 +69,6 @@ func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
 		return nil
 	}))
 
-	template := `
-output:
-  beanstalkd:
-    tcp_address: localhost:$PORT
-    max_in_flight: $MAX_IN_FLIGHT
-
-input:
-  beanstalkd:
-    tcp_address: localhost:$PORT
-`
 	suite := integration.StreamTests(
 		integration.StreamTestSendBatch(10),
 	)
@@ -87,6 +80,7 @@ input:
 
 func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -103,16 +97,6 @@ func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
 		return nil
 	}))
 
-	template := `
-output:
-  beanstalkd:
-    tcp_address: localhost:$PORT
-    max_in_flight: $MAX_IN_FLIGHT
-
-input:
-  beanstalkd:
-    tcp_address: localhost:$PORT
-`
 	suite := integration.StreamTests(
 		integration.StreamTestStreamSequential(100),
 	)
@@ -124,6 +108,7 @@ input:
 
 func TestIntegrationBeanstalkdStreamParallel(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -140,16 +125,6 @@ func TestIntegrationBeanstalkdStreamParallel(t *testing.T) {
 		return nil
 	}))
 
-	template := `
-output:
-  beanstalkd:
-    tcp_address: localhost:$PORT
-    max_in_flight: $MAX_IN_FLIGHT
-
-input:
-  beanstalkd:
-    tcp_address: localhost:$PORT
-`
 	suite := integration.StreamTests(
 		integration.StreamTestStreamParallel(100),
 	)
