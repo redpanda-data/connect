@@ -18,7 +18,7 @@ type componentOptions struct {
 }
 
 func doComponents(specs []docs.ComponentSpec, opts *componentOptions) ([]ast.Decl, error) {
-	fields := make([]interface{}, 0, len(specs))
+	fields := make([]any, 0, len(specs))
 
 	for _, v := range specs {
 		field, err := doComponentSpec(v)
@@ -28,7 +28,7 @@ func doComponents(specs []docs.ComponentSpec, opts *componentOptions) ([]ast.Dec
 		fields = append(fields, field)
 	}
 
-	var addons []interface{}
+	var addons []any
 	if opts.canLabel {
 		addons = append(
 			addons,

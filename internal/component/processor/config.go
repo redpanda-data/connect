@@ -38,7 +38,7 @@ type Config struct {
 	Metric       MetricConfig       `json:"metric" yaml:"metric"`
 	MongoDB      MongoDBConfig      `json:"mongodb" yaml:"mongodb"`
 	Noop         struct{}           `json:"noop" yaml:"noop"`
-	Plugin       interface{}        `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Plugin       any                `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	Parallel     ParallelConfig     `json:"parallel" yaml:"parallel"`
 	ParseLog     ParseLogConfig     `json:"parse_log" yaml:"parse_log"`
 	Protobuf     ProtobufConfig     `json:"protobuf" yaml:"protobuf"`

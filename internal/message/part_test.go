@@ -27,14 +27,14 @@ func TestPartBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := map[string]interface{}{"hello": "world"}, jObj; !reflect.DeepEqual(exp, act) {
+	if exp, act := map[string]any{"hello": "world"}, jObj; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	p.data.rawBytes = nil
 	if jObj, err = p.AsStructuredMut(); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := map[string]interface{}{"hello": "world"}, jObj; !reflect.DeepEqual(exp, act) {
+	if exp, act := map[string]any{"hello": "world"}, jObj; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
@@ -46,7 +46,7 @@ func TestPartBasic(t *testing.T) {
 		t.Errorf("Expected error from bad JSON")
 	}
 
-	p.SetStructured(map[string]interface{}{
+	p.SetStructured(map[string]any{
 		"foo": "bar",
 	})
 	if exp, act := `{"foo":"bar"}`, string(p.AsBytes()); exp != act {
@@ -94,7 +94,7 @@ func TestPartCopyDirtyJSON(t *testing.T) {
 		"baz": 3,
 	}
 	bytesExp := `{"bar":2,"baz":3,"foo":1}`
-	genExp := map[string]interface{}{
+	genExp := map[string]any{
 		"foo": float64(1),
 		"bar": float64(2),
 		"baz": float64(3),
@@ -125,7 +125,7 @@ func TestPartCopyDirtyJSON(t *testing.T) {
 
 func TestPartJSONMarshal(t *testing.T) {
 	p := NewPart(nil)
-	p.SetStructured(map[string]interface{}{
+	p.SetStructured(map[string]any{
 		"foo": "contains <some> tags & 😊 emojis",
 	})
 	if exp, act := `{"foo":"contains <some> tags & 😊 emojis"}`, string(p.AsBytes()); exp != act {

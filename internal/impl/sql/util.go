@@ -4,22 +4,22 @@ import (
 	"database/sql"
 )
 
-func sqlRowsToArray(rows *sql.Rows) ([]interface{}, error) {
+func sqlRowsToArray(rows *sql.Rows) ([]any, error) {
 	columnNames, err := rows.Columns()
 	if err != nil {
 		return nil, err
 	}
-	jArray := []interface{}{}
+	jArray := []any{}
 	for rows.Next() {
-		values := make([]interface{}, len(columnNames))
-		valuesWrapped := make([]interface{}, len(columnNames))
+		values := make([]any, len(columnNames))
+		valuesWrapped := make([]any, len(columnNames))
 		for i := range values {
 			valuesWrapped[i] = &values[i]
 		}
 		if err := rows.Scan(valuesWrapped...); err != nil {
 			return nil, err
 		}
-		jObj := map[string]interface{}{}
+		jObj := map[string]any{}
 		for i, v := range values {
 			switch t := v.(type) {
 			case string:
@@ -44,20 +44,20 @@ func sqlRowsToArray(rows *sql.Rows) ([]interface{}, error) {
 	return jArray, nil
 }
 
-func sqlRowToMap(rows *sql.Rows) (map[string]interface{}, error) {
+func sqlRowToMap(rows *sql.Rows) (map[string]any, error) {
 	columnNames, err := rows.Columns()
 	if err != nil {
 		return nil, err
 	}
-	values := make([]interface{}, len(columnNames))
-	valuesWrapped := make([]interface{}, len(columnNames))
+	values := make([]any, len(columnNames))
+	valuesWrapped := make([]any, len(columnNames))
 	for i := range values {
 		valuesWrapped[i] = &values[i]
 	}
 	if err := rows.Scan(valuesWrapped...); err != nil {
 		return nil, err
 	}
-	jObj := map[string]interface{}{}
+	jObj := map[string]any{}
 	for i, v := range values {
 		switch t := v.(type) {
 		case string:

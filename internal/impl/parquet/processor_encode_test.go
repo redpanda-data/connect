@@ -325,7 +325,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 	}
 
 	t.Run("all together", func(t *testing.T) {
-		var expected []interface{}
+		var expected []any
 
 		var inBatch service.MessageBatch
 		for _, test := range tests {

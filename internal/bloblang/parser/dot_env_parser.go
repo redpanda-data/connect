@@ -36,7 +36,7 @@ func dotEnvParser() Func {
 		}
 		vars := map[string]string{}
 		for _, line := range res.Payload.(DelimitedResult).Primary {
-			sequence, _ := line.([]interface{})
+			sequence, _ := line.([]any)
 			if len(sequence) == 6 {
 				key := sequence[0].(string)
 				value, _ := sequence[4].(string)

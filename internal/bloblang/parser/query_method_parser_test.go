@@ -531,7 +531,7 @@ func TestMethodMaps(t *testing.T) {
 
 	tests := map[string]struct {
 		input    string
-		output   interface{}
+		output   any
 		err      string
 		maps     map[string]query.Function
 		messages []easyMsg

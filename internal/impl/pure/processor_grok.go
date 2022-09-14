@@ -162,7 +162,7 @@ func addGrokPatternsFromPath(path string, patterns map[string]string) error {
 func (g *grokProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
 	body := msg.AsBytes()
 
-	var values map[string]interface{}
+	var values map[string]any
 	for _, compiler := range g.gparsers {
 		var err error
 		if values, err = compiler.ParseTyped(body); err != nil {

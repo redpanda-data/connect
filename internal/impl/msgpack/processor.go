@@ -44,7 +44,7 @@ func strToMsgPackOperator(opStr string) (msgPackOperator, error) {
 				return nil, err
 			}
 
-			var jObj interface{}
+			var jObj any
 			if err := msgpack.Unmarshal(mBytes, &jObj); err != nil {
 				return nil, fmt.Errorf("failed to convert MsgPack document to JSON: %v", err)
 			}

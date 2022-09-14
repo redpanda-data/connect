@@ -50,11 +50,11 @@ func (s *Span) Finish() {
 }
 
 // TextMap attempts to inject a span into a map object in text map format.
-func (s *Span) TextMap() (map[string]interface{}, error) {
+func (s *Span) TextMap() (map[string]any, error) {
 	c := propagation.MapCarrier{}
 	otel.GetTextMapPropagator().Inject(s.ctx, c)
 
-	spanMapGeneric := make(map[string]interface{}, len(c))
+	spanMapGeneric := make(map[string]any, len(c))
 	for k, v := range c {
 		spanMapGeneric[k] = v
 	}

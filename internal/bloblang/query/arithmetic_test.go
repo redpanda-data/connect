@@ -23,9 +23,9 @@ func TestArithmeticNumberDegradation(t *testing.T) {
 
 	testCases := []struct {
 		name   string
-		left   interface{}
-		right  interface{}
-		result interface{}
+		left   any
+		right  any
+		result any
 		err    string
 	}{
 		{
@@ -119,10 +119,10 @@ func TestArithmeticNumberDegradation(t *testing.T) {
 func TestArithmeticComparisons(t *testing.T) {
 	testCases := []struct {
 		name        string
-		left        interface{}
-		right       interface{}
+		left        any
+		right       any
 		op          ArithmeticOperator
-		result      interface{}
+		result      any
 		errContains string
 	}{
 		{
@@ -281,21 +281,21 @@ func TestArithmetic(t *testing.T) {
 		require.NoError(t, err)
 		return fn
 	}
-	function := func(name string, args ...interface{}) Function {
+	function := func(name string, args ...any) Function {
 		t.Helper()
 		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
-	opaqueLit := func(v interface{}) Function {
-		return ClosureFunction("foobar", func(ctx FunctionContext) (interface{}, error) {
+	opaqueLit := func(v any) Function {
+		return ClosureFunction("foobar", func(ctx FunctionContext) (any, error) {
 			return v, nil
 		}, nil)
 	}
 
 	tests := map[string]struct {
 		input    Function
-		output   interface{}
+		output   any
 		err      error
 		messages []easyMsg
 		index    int
@@ -717,10 +717,10 @@ func TestArithmetic(t *testing.T) {
 		"compare maps": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction("", map[string]interface{}{
+					NewLiteralFunction("", map[string]any{
 						"foo": "bar",
 					}),
-					NewLiteralFunction("", map[string]interface{}{
+					NewLiteralFunction("", map[string]any{
 						"foo": "bar",
 					}),
 				},
@@ -733,10 +733,10 @@ func TestArithmetic(t *testing.T) {
 		"compare maps neg": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction("", map[string]interface{}{
+					NewLiteralFunction("", map[string]any{
 						"foo": "bar",
 					}),
-					NewLiteralFunction("", map[string]interface{}{
+					NewLiteralFunction("", map[string]any{
 						"foo": "baz",
 					}),
 				},
@@ -749,8 +749,8 @@ func TestArithmetic(t *testing.T) {
 		"compare slices": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction("", []interface{}{"foo", 10}),
-					NewLiteralFunction("", []interface{}{"foo", 10}),
+					NewLiteralFunction("", []any{"foo", 10}),
+					NewLiteralFunction("", []any{"foo", 10}),
 				},
 				[]ArithmeticOperator{
 					ArithmeticEq,
@@ -761,8 +761,8 @@ func TestArithmetic(t *testing.T) {
 		"compare slices different lens": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction("", []interface{}{"foo", 10, false}),
-					NewLiteralFunction("", []interface{}{"foo", 10}),
+					NewLiteralFunction("", []any{"foo", 10, false}),
+					NewLiteralFunction("", []any{"foo", 10}),
 				},
 				[]ArithmeticOperator{
 					ArithmeticEq,
@@ -773,8 +773,8 @@ func TestArithmetic(t *testing.T) {
 		"compare slices different values": {
 			input: arithmetic(
 				[]Function{
-					NewLiteralFunction("", []interface{}{"foo", 11}),
-					NewLiteralFunction("", []interface{}{"foo", 10}),
+					NewLiteralFunction("", []any{"foo", 11}),
+					NewLiteralFunction("", []any{"foo", 10}),
 				},
 				[]ArithmeticOperator{
 					ArithmeticEq,
@@ -821,14 +821,14 @@ func TestArithmeticTargets(t *testing.T) {
 		require.NoError(t, err)
 		return fn
 	}
-	function := func(name string, args ...interface{}) Function {
+	function := func(name string, args ...any) Function {
 		t.Helper()
 		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
-	opaqueLit := func(v interface{}) Function {
-		return ClosureFunction("", func(ctx FunctionContext) (interface{}, error) {
+	opaqueLit := func(v any) Function {
+		return ClosureFunction("", func(ctx FunctionContext) (any, error) {
 			return v, nil
 		}, nil)
 	}

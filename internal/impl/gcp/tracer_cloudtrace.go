@@ -28,7 +28,7 @@ func init() {
 		Config: docs.FieldObject("", "").WithChildren(
 			docs.FieldString("project", "The google project with Cloud Trace API enabled. If this is ommitted then the Google Cloud SDK will attempt auto-detect it from the environment.").HasDefault(""),
 			docs.FieldFloat("sampling_ratio", "Sets the ratio of traces to sample. Tuning the sampling ratio is recommended for high-volume production workloads.", 1.0).HasDefault(1.0),
-			docs.FieldString("tags", "A map of tags to add to tracing spans.").Map().Advanced().HasDefault(map[string]interface{}{}),
+			docs.FieldString("tags", "A map of tags to add to tracing spans.").Map().Advanced().HasDefault(map[string]any{}),
 			docs.FieldString("flush_interval", "The period of time between each flush of tracing spans.").HasDefault(""),
 		),
 	})

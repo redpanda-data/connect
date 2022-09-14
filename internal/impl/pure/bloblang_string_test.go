@@ -13,30 +13,30 @@ func TestParseUrlencoded(t *testing.T) {
 	testCases := []struct {
 		name   string
 		method string
-		target interface{}
-		args   []interface{}
-		exp    interface{}
+		target any
+		args   []any
+		exp    any
 	}{
 		{
 			name:   "simple parsing",
 			method: "parse_form_url_encoded",
 			target: "username=example",
-			args:   []interface{}{},
-			exp:    map[string]interface{}{"username": "example"},
+			args:   []any{},
+			exp:    map[string]any{"username": "example"},
 		},
 		{
 			name:   "parsing multiple values under the same key",
 			method: "parse_form_url_encoded",
 			target: "usernames=userA&usernames=userB",
-			args:   []interface{}{},
-			exp:    map[string]interface{}{"usernames": []string{"userA", "userB"}},
+			args:   []any{},
+			exp:    map[string]any{"usernames": []string{"userA", "userB"}},
 		},
 		{
 			name:   "decodes data correctly",
 			method: "parse_form_url_encoded",
 			target: "email=example%40email.com",
-			args:   []interface{}{},
-			exp:    map[string]interface{}{"email": "example@email.com"},
+			args:   []any{},
+			exp:    map[string]any{"email": "example@email.com"},
 		},
 	}
 
@@ -44,7 +44,7 @@ func TestParseUrlencoded(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			targetClone := query.IClone(test.target)
-			argsClone := query.IClone(test.args).([]interface{})
+			argsClone := query.IClone(test.args).([]any)
 
 			fn, err := query.InitMethodHelper(test.method, query.NewLiteralFunction("", targetClone), argsClone...)
 			require.NoError(t, err)

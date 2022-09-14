@@ -29,7 +29,7 @@ func TestConcurrentMutationsFromNil(t *testing.T) {
 			local.MetaDelete("foo")
 
 			local.SetBytes([]byte(`new thing`))
-			local.SetStructuredMut(map[string]interface{}{
+			local.SetStructuredMut(map[string]any{
 				"foo": "bar",
 			})
 
@@ -52,7 +52,7 @@ func TestConcurrentMutationsFromStructured(t *testing.T) {
 	source := newMessageBytes(nil)
 	source.MetaSet("foo", "foo1")
 	source.MetaSet("bar", "bar1")
-	source.SetStructuredMut(map[string]interface{}{
+	source.SetStructuredMut(map[string]any{
 		"foo": "bar",
 	})
 

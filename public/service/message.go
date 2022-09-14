@@ -120,7 +120,7 @@ func (m *Message) AsBytes() ([]byte, error) {
 // It is NOT safe to mutate the contents of the returned value if it is a
 // reference type (slice or map). In order to safely mutate the structured
 // contents of a message use AsStructuredMut.
-func (m *Message) AsStructured() (interface{}, error) {
+func (m *Message) AsStructured() (any, error) {
 	return m.part.AsStructured()
 }
 
@@ -131,7 +131,7 @@ func (m *Message) AsStructured() (interface{}, error) {
 // It is safe to mutate the contents of the returned value even if it is a
 // reference type (slice or map), as the structured contents will be lazily deep
 // cloned if it is still owned by an upstream component.
-func (m *Message) AsStructuredMut() (interface{}, error) {
+func (m *Message) AsStructuredMut() (any, error) {
 	v, err := m.part.AsStructuredMut()
 	if err != nil {
 		return nil, err
@@ -154,7 +154,7 @@ func (m *Message) SetBytes(b []byte) {
 // The provided structure is considered read-only, which means subsequent
 // processors will need to fully clone the structure in order to perform
 // mutations on the data.
-func (m *Message) SetStructured(i interface{}) {
+func (m *Message) SetStructured(i any) {
 	m.part.SetStructured(i)
 }
 
@@ -167,7 +167,7 @@ func (m *Message) SetStructured(i interface{}) {
 //
 // The provided structure is considered mutable, which means subsequent
 // processors might mutate the structure without performing a deep copy.
-func (m *Message) SetStructuredMut(i interface{}) {
+func (m *Message) SetStructuredMut(i any) {
 	m.part.SetStructuredMut(i)
 }
 

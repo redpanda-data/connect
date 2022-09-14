@@ -20,8 +20,8 @@ type ParamDefinition struct {
 	// IsOptional is implicit when there's a DefaultValue. However, there are
 	// times when a parameter is used to change behaviour without having a
 	// default.
-	IsOptional   bool         `json:"is_optional,omitempty"`
-	DefaultValue *interface{} `json:"default,omitempty"`
+	IsOptional   bool `json:"is_optional,omitempty"`
+	DefaultValue *any `json:"default,omitempty"`
 }
 
 func (d ParamDefinition) validate() error {
@@ -106,7 +106,7 @@ func (d ParamDefinition) Optional() ParamDefinition {
 
 // Default adds a default value to a parameter, also making it implicitly
 // optional.
-func (d ParamDefinition) Default(v interface{}) ParamDefinition {
+func (d ParamDefinition) Default(v any) ParamDefinition {
 	d.DefaultValue = &v
 	return d
 }
@@ -124,7 +124,7 @@ func (d ParamDefinition) PrettyDefault() string {
 	return string(b)
 }
 
-func (d ParamDefinition) parseArgValue(v interface{}) (interface{}, error) {
+func (d ParamDefinition) parseArgValue(v any) (any, error) {
 	switch d.ValueType {
 	case ValueInt:
 		return IGetInt(v)
@@ -140,11 +140,11 @@ func (d ParamDefinition) parseArgValue(v interface{}) (interface{}, error) {
 	case ValueBool:
 		return IGetBool(v)
 	case ValueArray:
-		if _, isArray := v.([]interface{}); isArray {
+		if _, isArray := v.([]any); isArray {
 			return v, nil
 		}
 	case ValueObject:
-		if _, isObj := v.(map[string]interface{}); isObj {
+		if _, isObj := v.(map[string]any); isObj {
 			return v, nil
 		}
 	case ValueQuery:
@@ -197,7 +197,7 @@ func (p Params) Add(def ParamDefinition) Params {
 
 // PopulateNameless returns a set of populated arguments from a list of nameless
 // parameters.
-func (p Params) PopulateNameless(args ...interface{}) (*ParsedParams, error) {
+func (p Params) PopulateNameless(args ...any) (*ParsedParams, error) {
 	procParams, err := p.processNameless(args)
 	if err != nil {
 		return nil, err
@@ -213,7 +213,7 @@ func (p Params) PopulateNameless(args ...interface{}) (*ParsedParams, error) {
 
 // PopulateNamed returns a set of populated arguments from a map of named
 // parameters.
-func (p Params) PopulateNamed(args map[string]interface{}) (*ParsedParams, error) {
+func (p Params) PopulateNamed(args map[string]any) (*ParsedParams, error) {
 	procParams, err := p.processNamed(args)
 	if err != nil {
 		return nil, err
@@ -251,7 +251,7 @@ type dynamicArgIndex struct {
 	fn    Function
 }
 
-func (p Params) gatherDynamicArgs(args []interface{}) (dynArgs []dynamicArgIndex) {
+func (p Params) gatherDynamicArgs(args []any) (dynArgs []dynamicArgIndex) {
 	if p.Variadic {
 		for i, arg := range args {
 			if fn, isFn := arg.(Function); isFn {
@@ -271,7 +271,7 @@ func (p Params) gatherDynamicArgs(args []interface{}) (dynArgs []dynamicArgIndex
 	return
 }
 
-func expandLiteralArgs(args []interface{}) {
+func expandLiteralArgs(args []any) {
 	for i, dArg := range args {
 		if lit, isLit := dArg.(*Literal); isLit {
 			args[i] = lit.Value
@@ -281,7 +281,7 @@ func expandLiteralArgs(args []interface{}) {
 
 // processNameless attempts to validate a list of unnamed arguments, and
 // populates elements with default values if they are omitted.
-func (p Params) processNameless(args []interface{}) ([]interface{}, error) {
+func (p Params) processNameless(args []any) ([]any, error) {
 	if p.Variadic {
 		expandLiteralArgs(args)
 		return args, nil
@@ -293,13 +293,13 @@ func (p Params) processNameless(args []interface{}) ([]interface{}, error) {
 
 	newArgs := args
 	if len(newArgs) != len(p.Definitions) {
-		newArgs = make([]interface{}, len(p.Definitions))
+		newArgs = make([]any, len(p.Definitions))
 		copy(newArgs, args)
 	}
 
 	var missingParams []string
 	for i, param := range p.Definitions {
-		var v interface{}
+		var v any
 		if len(args) > i {
 			v = newArgs[i]
 		} else if param.DefaultValue != nil {
@@ -339,12 +339,12 @@ func (p Params) processNameless(args []interface{}) ([]interface{}, error) {
 
 // processNamed attempts to validate a map of named arguments, and populates
 // elements with default values if they are omitted.
-func (p Params) processNamed(args map[string]interface{}) ([]interface{}, error) {
+func (p Params) processNamed(args map[string]any) ([]any, error) {
 	if p.Variadic {
 		return nil, errors.New("named arguments are not supported")
 	}
 
-	newArgs := make([]interface{}, len(p.Definitions))
+	newArgs := make([]any, len(p.Definitions))
 
 	var missingParams []string
 	for i, param := range p.Definitions {
@@ -416,7 +416,7 @@ func (p Params) processNamed(args map[string]interface{}) ([]interface{}, error)
 type ParsedParams struct {
 	source  Params
 	dynArgs []dynamicArgIndex
-	values  []interface{}
+	values  []any
 }
 
 // dynamic returns any argument functions that must be evaluated at query time.
@@ -441,7 +441,7 @@ func (p *ParsedParams) ResolveDynamic(ctx FunctionContext) (*ParsedParams, error
 	if len(p.dynArgs) == 0 {
 		return p, nil
 	}
-	newValues := make([]interface{}, len(p.values))
+	newValues := make([]any, len(p.values))
 	copy(newValues, p.values)
 	for i, dyn := range p.dynArgs {
 		var sourceDef ParamDefinition
@@ -466,7 +466,7 @@ func (p *ParsedParams) ResolveDynamic(ctx FunctionContext) (*ParsedParams, error
 }
 
 // Raw returns the arguments as a generic slice.
-func (p *ParsedParams) Raw() []interface{} {
+func (p *ParsedParams) Raw() []any {
 	if p == nil {
 		return nil
 	}
@@ -474,7 +474,7 @@ func (p *ParsedParams) Raw() []interface{} {
 }
 
 // Index returns an argument value at a given index.
-func (p *ParsedParams) Index(i int) (interface{}, error) {
+func (p *ParsedParams) Index(i int) (any, error) {
 	if i < 0 || len(p.values) <= i {
 		return nil, fmt.Errorf("parameter index %v out of bounds", i)
 	}
@@ -482,7 +482,7 @@ func (p *ParsedParams) Index(i int) (interface{}, error) {
 }
 
 // Field returns an argument value with a given name.
-func (p *ParsedParams) Field(n string) (interface{}, error) {
+func (p *ParsedParams) Field(n string) (any, error) {
 	index, ok := p.source.nameToIndex[n]
 	if !ok {
 		return nil, fmt.Errorf("parameter %v not found", n)
@@ -494,12 +494,12 @@ func (p *ParsedParams) Field(n string) (interface{}, error) {
 }
 
 // FieldArray returns an array value with a given name.
-func (p *ParsedParams) FieldArray(n string) ([]interface{}, error) {
+func (p *ParsedParams) FieldArray(n string) ([]any, error) {
 	v, err := p.Field(n)
 	if err != nil {
 		return nil, err
 	}
-	a, ok := v.([]interface{})
+	a, ok := v.([]any)
 	if !ok {
 		return nil, NewTypeError(v, ValueArray)
 	}
@@ -507,7 +507,7 @@ func (p *ParsedParams) FieldArray(n string) ([]interface{}, error) {
 }
 
 // FieldOptionalArray returns an optional array value with a given name.
-func (p *ParsedParams) FieldOptionalArray(n string) (*[]interface{}, error) {
+func (p *ParsedParams) FieldOptionalArray(n string) (*[]any, error) {
 	v, err := p.Field(n)
 	if err != nil {
 		return nil, err
@@ -515,7 +515,7 @@ func (p *ParsedParams) FieldOptionalArray(n string) (*[]interface{}, error) {
 	if v == nil {
 		return nil, nil
 	}
-	a, ok := v.([]interface{})
+	a, ok := v.([]any)
 	if !ok {
 		return nil, NewTypeError(v, ValueArray)
 	}

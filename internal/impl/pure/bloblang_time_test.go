@@ -13,8 +13,8 @@ func TestTimestampMethods(t *testing.T) {
 	tests := []struct {
 		name               string
 		mapping            string
-		input              interface{}
-		output             interface{}
+		input              any
+		output             any
 		parseErrorContains string
 		execErrorContains  string
 	}{
@@ -185,8 +185,8 @@ func TestTimestampMethodsOld(t *testing.T) {
 	tests := []struct {
 		name               string
 		mapping            string
-		input              interface{}
-		output             interface{}
+		input              any
+		output             any
 		parseErrorContains string
 		execErrorContains  string
 	}{

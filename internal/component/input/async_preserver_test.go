@@ -325,7 +325,7 @@ func TestAsyncPreserverMutateThenNack(t *testing.T) {
 	defer cancel()
 
 	msg := message.NewPart(nil)
-	msg.SetStructuredMut(map[string]interface{}{
+	msg.SetStructuredMut(map[string]any{
 		"hello": "world",
 	})
 
@@ -393,7 +393,7 @@ func TestAsyncPreserverMutateThenNack(t *testing.T) {
 
 	mStruct, err := msgOne.Get(0).AsStructuredMut()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"hello": "world",
 	}, mStruct)
 
@@ -413,7 +413,7 @@ func TestAsyncPreserverMutateThenNack(t *testing.T) {
 
 	mStruct, err = msgTwo.Get(0).AsStructuredMut()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"hello": "world",
 	}, mStruct)
 

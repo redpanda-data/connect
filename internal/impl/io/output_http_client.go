@@ -38,7 +38,7 @@ It's possible to propagate the response from each HTTP request back to the input
 			policy.FieldSpec(),
 			docs.FieldObject(
 				"multipart", "EXPERIMENTAL: Create explicit multipart HTTP requests by specifying an array of parts to add to the request, each part specified consists of content headers and a data field that can be populated dynamically. If this field is populated it will override the default request creation behaviour.",
-			).Array().Advanced().HasDefault([]interface{}{}).WithChildren(
+			).Array().Advanced().HasDefault([]any{}).WithChildren(
 				docs.FieldInterpolatedString("content_type", "The content type of the individual message part.", "application/bin").HasDefault(""),
 				docs.FieldInterpolatedString("content_disposition", "The content disposition of the individual message part.", `form-data; name="bin"; filename='${! meta("AttachmentName") }`).HasDefault(""),
 				docs.FieldInterpolatedString("body", "The body of the individual message part.", `${! json("data.part1") }`).HasDefault(""),

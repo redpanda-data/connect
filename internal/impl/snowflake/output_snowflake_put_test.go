@@ -27,7 +27,7 @@ type MockDB struct {
 	QueriesCount int
 }
 
-func (db *MockDB) ExecContext(ctx context.Context, query string, _ ...interface{}) (sql.Result, error) {
+func (db *MockDB) ExecContext(ctx context.Context, query string, _ ...any) (sql.Result, error) {
 	db.Queries = append(db.Queries, query)
 	db.QueriesCount++
 

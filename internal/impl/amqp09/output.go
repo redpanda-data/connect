@@ -60,7 +60,7 @@ The fields 'key' and 'type' can be dynamically set using function interpolations
 				[]string{"amqp://guest:guest@127.0.0.1:5672/"},
 				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},
 				[]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"},
-			).Array().AtVersion("3.58.0").HasDefault([]interface{}{}),
+			).Array().AtVersion("3.58.0").HasDefault([]any{}),
 			docs.FieldString("exchange", "An AMQP exchange to publish to.").HasDefault(""),
 			docs.FieldObject("exchange_declare", "Optionally declare the target exchange (passive).").WithChildren(
 				docs.FieldBool("enabled", "Whether to declare the exchange.").HasDefault(false),

@@ -38,65 +38,65 @@ func TestLiteralParserErrors(t *testing.T) {
 func TestLiteralParser(t *testing.T) {
 	tests := map[string]struct {
 		mapping  string
-		result   interface{}
+		result   any
 		parseErr string
 		err      string
-		value    *interface{}
+		value    *any
 	}{
 		"basic map": {
 			mapping: `{"foo":"bar"}`,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"foo": "bar",
 			},
 		},
 		"basic map trailing comma": {
 			mapping: `{"foo":"bar",}`,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"foo": "bar",
 			},
 		},
 		"dynamic map": {
 			mapping: `{"foo":(5 + 5)}`,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"foo": int64(10),
 			},
 		},
 		"dynamic map trailing comma": {
 			mapping: `{"foo":(5 + 5),}`,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"foo": int64(10),
 			},
 		},
 		"dynamic map dynamic key": {
 			mapping: `{("foobar".uppercase()):5}`,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"FOOBAR": int64(5),
 			},
 		},
 		"dynamic map nested": {
 			mapping: `{"foo":{"bar":(5 + 5)}}`,
-			result: map[string]interface{}{
-				"foo": map[string]interface{}{
+			result: map[string]any{
+				"foo": map[string]any{
 					"bar": int64(10),
 				},
 			},
 		},
 		"dynamic array": {
 			mapping: `["foo",(5 + 5),null]`,
-			result: []interface{}{
+			result: []any{
 				"foo", int64(10), nil,
 			},
 		},
 		"dynamic array trailing comma": {
 			mapping: `["foo",(5 + 5),null,]`,
-			result: []interface{}{
+			result: []any{
 				"foo", int64(10), nil,
 			},
 		},
 		"dynamic array nested": {
 			mapping: `["foo",[(5 + 5),"bar"],null]`,
-			result: []interface{}{
-				"foo", []interface{}{int64(10), "bar"}, nil,
+			result: []any{
+				"foo", []any{int64(10), "bar"}, nil,
 			},
 		},
 		"bad array element": {
@@ -128,7 +128,7 @@ func TestLiteralParser(t *testing.T) {
 
 			result, err := q.Exec(query.FunctionContext{
 				Index: 0, MsgBatch: message.QuickBatch(nil),
-			}.WithValueFunc(func() *interface{} { return test.value }))
+			}.WithValueFunc(func() *any { return test.value }))
 			if len(test.err) > 0 {
 				assert.EqualError(t, err, test.err)
 			} else {

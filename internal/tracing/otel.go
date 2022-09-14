@@ -164,7 +164,7 @@ func InitSpanFromParent(prov trace.TracerProvider, operationName string, parent 
 
 // InitSpansFromParentTextMap obtains a span parent reference from a text map
 // and creates child spans for each message.
-func InitSpansFromParentTextMap(prov trace.TracerProvider, operationName string, textMapGeneric map[string]interface{}, msg message.Batch) error {
+func InitSpansFromParentTextMap(prov trace.TracerProvider, operationName string, textMapGeneric map[string]any, msg message.Batch) error {
 	c := propagation.MapCarrier{}
 	for k, v := range textMapGeneric {
 		if vStr, ok := v.(string); ok {

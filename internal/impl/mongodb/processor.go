@@ -262,7 +262,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			return fmt.Errorf("failed to generate documentVal")
 		}
 
-		var docJSON, filterJSON, hintJSON interface{}
+		var docJSON, filterJSON, hintJSON any
 
 		if filterValWanted {
 			if filterJSON, err = filterVal.AsStructured(); err != nil {
@@ -321,7 +321,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 				Hint:   hintJSON,
 			}
 		case client.OperationFindOne:
-			var decoded interface{}
+			var decoded any
 			err := collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded)
 			if err != nil {
 				if err == mongo.ErrNoDocuments {

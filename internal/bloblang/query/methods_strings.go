@@ -47,7 +47,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			return IToBytes(v), nil
 		}, nil
 	},
@@ -68,7 +68,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return cases.Title(language.English).String(t), nil
@@ -162,7 +162,7 @@ var _ = registerSimpleMethod(
 			return nil, fmt.Errorf("unrecognized encoding type: %v", schemeStr)
 		}
 
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var res string
 			var err error
 			switch t := v.(type) {
@@ -243,7 +243,7 @@ var _ = registerSimpleMethod(
 			return nil, fmt.Errorf("unrecognized encoding type: %v", schemeStr)
 		}
 
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var res []byte
 			var err error
 			switch t := v.(type) {
@@ -330,7 +330,7 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")`,
 		default:
 			return nil, fmt.Errorf("unrecognized encryption type: %v", schemeStr)
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var res string
 			var err error
 			switch t := v.(type) {
@@ -415,7 +415,7 @@ root.decrypted = this.value.decode("hex").decrypt_aes("ctr", $key, $vector).stri
 		default:
 			return nil, fmt.Errorf("unrecognized decryption type: %v", schemeStr)
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var res []byte
 			var err error
 			switch t := v.(type) {
@@ -446,7 +446,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return html.EscapeString(s), nil
 		}), nil
 	},
@@ -476,7 +476,7 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return int64(strings.Index(t, substring)), nil
@@ -503,7 +503,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return html.UnescapeString(s), nil
 		}), nil
 	},
@@ -524,7 +524,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return url.QueryEscape(s), nil
 		}), nil
 	},
@@ -545,7 +545,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return url.QueryUnescape(s)
 		}), nil
 	},
@@ -566,8 +566,8 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			arr, ok := v.([]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			arr, ok := v.([]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
 			}
@@ -599,9 +599,9 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			dir, file := filepath.Split(s)
-			return []interface{}{dir, file}, nil
+			return []any{dir, file}, nil
 		}), nil
 	},
 )
@@ -621,7 +621,7 @@ var _ = registerSimpleMethod(
 		),
 	).VariadicParams(),
 	func(args *ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return fmt.Sprintf(s, args.Raw()...), nil
 		}), nil
 	},
@@ -648,7 +648,7 @@ root.t2 = this.v2.has_prefix("foo")`,
 			return nil, err
 		}
 		prefixB := []byte(prefix)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return strings.HasPrefix(t, prefix), nil
@@ -681,7 +681,7 @@ root.t2 = this.v2.has_suffix("foo")`,
 			return nil, err
 		}
 		suffixB := []byte(suffix)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return strings.HasSuffix(t, suffix), nil
@@ -817,7 +817,7 @@ root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex
 		default:
 			return nil, fmt.Errorf("unrecognized hash type: %v", algorithmStr)
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var res []byte
 			var err error
 			switch t := v.(type) {
@@ -857,8 +857,8 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")`,
 		if delimArg != nil {
 			delim = *delimArg
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			slice, ok := v.([]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			slice, ok := v.([]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
 			}
@@ -897,7 +897,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return strings.ToUpper(t), nil
@@ -925,7 +925,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return strings.ToLower(t), nil
@@ -956,7 +956,7 @@ var _ = registerSimpleMethod(
 )
 
 func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	return func(v any, ctx FunctionContext) (any, error) {
 		var csvBytes []byte
 		switch t := v.(type) {
 		case string:
@@ -976,7 +976,7 @@ func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
 			return nil, errors.New("zero records were parsed")
 		}
 
-		records := make([]interface{}, 0, len(strRecords)-1)
+		records := make([]any, 0, len(strRecords)-1)
 		headers := strRecords[0]
 		if len(headers) == 0 {
 			return nil, fmt.Errorf("no headers found on first row")
@@ -985,7 +985,7 @@ func parseCSVMethod(*ParsedParams) (simpleMethod, error) {
 			if len(headers) != len(strRecord) {
 				return nil, fmt.Errorf("record on line %v: record mismatch with headers", j)
 			}
-			obj := make(map[string]interface{}, len(strRecord))
+			obj := make(map[string]any, len(strRecord))
 			for i, r := range strRecord {
 				obj[headers[i]] = r
 			}
@@ -1011,7 +1011,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var jsonBytes []byte
 			switch t := v.(type) {
 			case string:
@@ -1021,7 +1021,7 @@ var _ = registerSimpleMethod(
 			default:
 				return nil, NewTypeError(v, ValueString)
 			}
-			var jObj interface{}
+			var jObj any
 			if err := json.Unmarshal(jsonBytes, &jObj); err != nil {
 				return nil, fmt.Errorf("failed to parse value as JSON: %w", err)
 			}
@@ -1043,7 +1043,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var yamlBytes []byte
 			switch t := v.(type) {
 			case string:
@@ -1053,7 +1053,7 @@ var _ = registerSimpleMethod(
 			default:
 				return nil, NewTypeError(v, ValueString)
 			}
-			var sObj interface{}
+			var sObj any
 			if err := yaml.Unmarshal(yamlBytes, &sObj); err != nil {
 				return nil, fmt.Errorf("failed to parse value as YAML: %w", err)
 			}
@@ -1081,7 +1081,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			return yaml.Marshal(v)
 		}, nil
 	},
@@ -1129,7 +1129,7 @@ var _ = registerSimpleMethod(
 		if indentOpt != nil {
 			indent = *indentOpt
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			b, err := json.Marshal(v)
 			if err != nil {
 				return nil, err
@@ -1164,7 +1164,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				runes := []rune(t)
@@ -1200,7 +1200,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return strconv.Quote(s), nil
 		}), nil
 	},
@@ -1221,7 +1221,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return stringMethod(func(s string) (interface{}, error) {
+		return stringMethod(func(s string) (any, error) {
 			return strconv.Unquote(s)
 		}), nil
 	},
@@ -1263,7 +1263,7 @@ func replaceAllImpl(args *ParsedParams) (simpleMethod, error) {
 		return nil, err
 	}
 	oldB, newB := []byte(oldStr), []byte(newStr)
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	return func(v any, ctx FunctionContext) (any, error) {
 		switch t := v.(type) {
 		case string:
 			return strings.ReplaceAll(t, oldStr, newStr), nil
@@ -1327,7 +1327,7 @@ func replaceAllManyImpl(args *ParsedParams) (simpleMethod, error) {
 		replacePairsBytes = append(replacePairsBytes, [2][]byte{[]byte(from), []byte(to)})
 	}
 
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	return func(v any, ctx FunctionContext) (any, error) {
 		switch t := v.(type) {
 		case string:
 			for _, pair := range replacePairs {
@@ -1367,18 +1367,18 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			var result []interface{}
+		return func(v any, ctx FunctionContext) (any, error) {
+			var result []any
 			switch t := v.(type) {
 			case string:
 				matches := re.FindAllString(t, -1)
-				result = make([]interface{}, 0, len(matches))
+				result = make([]any, 0, len(matches))
 				for _, str := range matches {
 					result = append(result, str)
 				}
 			case []byte:
 				matches := re.FindAll(t, -1)
-				result = make([]interface{}, 0, len(matches))
+				result = make([]any, 0, len(matches))
 				for _, str := range matches {
 					result = append(result, string(str))
 				}
@@ -1413,14 +1413,14 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			var result []interface{}
+		return func(v any, ctx FunctionContext) (any, error) {
+			var result []any
 			switch t := v.(type) {
 			case string:
 				groupMatches := re.FindAllStringSubmatch(t, -1)
-				result = make([]interface{}, 0, len(groupMatches))
+				result = make([]any, 0, len(groupMatches))
 				for _, matches := range groupMatches {
-					r := make([]interface{}, 0, len(matches))
+					r := make([]any, 0, len(matches))
 					for _, str := range matches {
 						r = append(r, str)
 					}
@@ -1428,9 +1428,9 @@ var _ = registerSimpleMethod(
 				}
 			case []byte:
 				groupMatches := re.FindAllSubmatch(t, -1)
-				result = make([]interface{}, 0, len(groupMatches))
+				result = make([]any, 0, len(groupMatches))
 				for _, matches := range groupMatches {
-					r := make([]interface{}, 0, len(matches))
+					r := make([]any, 0, len(matches))
 					for _, str := range matches {
 						r = append(r, string(str))
 					}
@@ -1478,8 +1478,8 @@ var _ = registerSimpleMethod(
 				groups[i] = fmt.Sprintf("%v", i)
 			}
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			result := make(map[string]interface{}, len(groups))
+		return func(v any, ctx FunctionContext) (any, error) {
+			result := make(map[string]any, len(groups))
 			switch t := v.(type) {
 			case string:
 				groupMatches := re.FindStringSubmatch(t)
@@ -1535,14 +1535,14 @@ var _ = registerSimpleMethod(
 				groups[i] = fmt.Sprintf("%v", i)
 			}
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			var result []interface{}
+		return func(v any, ctx FunctionContext) (any, error) {
+			var result []any
 			switch t := v.(type) {
 			case string:
 				reMatches := re.FindAllStringSubmatch(t, -1)
-				result = make([]interface{}, 0, len(reMatches))
+				result = make([]any, 0, len(reMatches))
 				for _, matches := range reMatches {
-					obj := make(map[string]interface{}, len(groups))
+					obj := make(map[string]any, len(groups))
 					for i, match := range matches {
 						key := groups[i]
 						obj[key] = match
@@ -1551,9 +1551,9 @@ var _ = registerSimpleMethod(
 				}
 			case []byte:
 				reMatches := re.FindAllSubmatch(t, -1)
-				result = make([]interface{}, 0, len(reMatches))
+				result = make([]any, 0, len(reMatches))
 				for _, matches := range reMatches {
-					obj := make(map[string]interface{}, len(groups))
+					obj := make(map[string]any, len(groups))
 					for i, match := range matches {
 						key := groups[i]
 						obj[key] = match
@@ -1593,7 +1593,7 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var result bool
 			switch t := v.(type) {
 			case string:
@@ -1648,7 +1648,7 @@ func reReplaceAllImpl(args *ParsedParams) (simpleMethod, error) {
 		return nil, err
 	}
 	withBytes := []byte(with)
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	return func(v any, ctx FunctionContext) (any, error) {
 		var result string
 		switch t := v.(type) {
 		case string:
@@ -1682,18 +1682,18 @@ var _ = registerSimpleMethod(
 			return nil, err
 		}
 		delimB := []byte(delim)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				bits := strings.Split(t, delim)
-				vals := make([]interface{}, 0, len(bits))
+				vals := make([]any, 0, len(bits))
 				for _, b := range bits {
 					vals = append(vals, b)
 				}
 				return vals, nil
 			case []byte:
 				bits := bytes.Split(t, delimB)
-				vals := make([]interface{}, 0, len(bits))
+				vals := make([]any, 0, len(bits))
 				for _, b := range bits {
 					vals = append(vals, b)
 				}
@@ -1724,7 +1724,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			return IToString(v), nil
 		}, nil
 	},
@@ -1765,7 +1765,7 @@ var _ = registerSimpleMethod(
 			}
 			p = p.AllowElements(tagStrs...)
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return p.Sanitize(t), nil
@@ -1797,7 +1797,7 @@ root.description = this.description.trim()`,
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				if cutset == nil {

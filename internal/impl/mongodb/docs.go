@@ -32,8 +32,8 @@ func writeConcernDocs() docs.FieldSpecs {
 	}
 }
 
-func mapExamples() []interface{} {
-	examples := []interface{}{"root.a = this.foo\nroot.b = this.bar"}
+func mapExamples() []any {
+	examples := []any{"root.a = this.foo\nroot.b = this.bar"}
 	return examples
 }
 

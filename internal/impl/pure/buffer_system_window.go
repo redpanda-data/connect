@@ -275,7 +275,7 @@ func (w *systemWindowBuffer) getTimestamp(i int, batch service.MessageBatch) (ts
 		return
 	}
 
-	var tsValue interface{}
+	var tsValue any
 	if tsValue, err = tsValueMsg.AsStructured(); err != nil {
 		if tsBytes, _ := tsValueMsg.AsBytes(); len(tsBytes) > 0 {
 			tsValue = string(tsBytes)

@@ -23,7 +23,7 @@ type mockBQIterator struct {
 	errIdx int
 }
 
-func (ti *mockBQIterator) Next(dst interface{}) error {
+func (ti *mockBQIterator) Next(dst any) error {
 	if ti.err != nil && ti.idx == ti.errIdx {
 		return ti.err
 	}

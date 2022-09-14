@@ -11,7 +11,7 @@ import (
 
 // LintBloblangMapping is function for linting a config field expected to be a
 // bloblang mapping.
-func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
+func LintBloblangMapping(ctx LintContext, line, col int, v any) []Lint {
 	str, ok := v.(string)
 	if !ok {
 		return nil
@@ -34,7 +34,7 @@ func LintBloblangMapping(ctx LintContext, line, col int, v interface{}) []Lint {
 
 // LintBloblangField is function for linting a config field expected to be an
 // interpolation string.
-func LintBloblangField(ctx LintContext, line, col int, v interface{}) []Lint {
+func LintBloblangField(ctx LintContext, line, col int, v any) []Lint {
 	str, ok := v.(string)
 	if !ok {
 		return nil

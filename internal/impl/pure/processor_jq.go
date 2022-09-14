@@ -136,8 +136,8 @@ func newJQ(conf processor.JQConfig, mgr bundle.NewManagement) (*jqProc, error) {
 	return j, nil
 }
 
-func (j *jqProc) getPartMetadata(part *message.Part) map[string]interface{} {
-	metadata := map[string]interface{}{}
+func (j *jqProc) getPartMetadata(part *message.Part) map[string]any {
+	metadata := map[string]any{}
 	_ = part.MetaIter(func(k, v string) error {
 		metadata[k] = v
 		return nil
@@ -145,7 +145,7 @@ func (j *jqProc) getPartMetadata(part *message.Part) map[string]interface{} {
 	return metadata
 }
 
-func (j *jqProc) getPartValue(part *message.Part, raw bool) (obj interface{}, err error) {
+func (j *jqProc) getPartValue(part *message.Part, raw bool) (obj any, err error) {
 	if raw {
 		return string(part.AsBytes()), nil
 	}
@@ -163,7 +163,7 @@ func (j *jqProc) Process(ctx context.Context, msg *message.Part) ([]*message.Par
 	}
 	metadata := j.getPartMetadata(msg)
 
-	var emitted []interface{}
+	var emitted []any
 	iter := j.code.Run(in, metadata)
 	for {
 		out, ok := iter.Next()
@@ -208,7 +208,7 @@ func (*jqProc) Close(ctx context.Context) error {
 	return nil
 }
 
-func (j *jqProc) marshalRaw(values []interface{}) ([]byte, error) {
+func (j *jqProc) marshalRaw(values []any) ([]byte, error) {
 	buf := bytes.NewBufferString("")
 
 	for index, el := range values {

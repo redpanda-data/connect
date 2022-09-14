@@ -44,11 +44,11 @@ func TestHandlerAsync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var res interface{}
-	if res, err = h.Handle(context.Background(), map[string]interface{}{"foo": "bar"}); err != nil {
+	var res any
+	if res, err = h.Handle(context.Background(), map[string]any{"foo": "bar"}); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := map[string]interface{}{"message": "request successful"}, res; !reflect.DeepEqual(exp, act) {
+	if exp, act := map[string]any{"message": "request successful"}, res; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong sync response: %v != %v", exp, act)
 	}
 	if exp, act := [][]byte{[]byte(`{"foo":"bar"}`)}, results; !reflect.DeepEqual(exp, act) {
@@ -69,11 +69,11 @@ func TestHandlerSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var res interface{}
-	if res, err = h.Handle(context.Background(), map[string]interface{}{"foo": "bar"}); err != nil {
+	var res any
+	if res, err = h.Handle(context.Background(), map[string]any{"foo": "bar"}); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := map[string]interface{}{"foo": "bar"}, res; !reflect.DeepEqual(exp, act) {
+	if exp, act := map[string]any{"foo": "bar"}, res; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong sync response: %v != %v", exp, act)
 	}
 
@@ -97,14 +97,14 @@ func TestHandlerSyncBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var res interface{}
-	if res, err = h.Handle(context.Background(), map[string]interface{}{"foo": "bar"}); err != nil {
+	var res any
+	if res, err = h.Handle(context.Background(), map[string]any{"foo": "bar"}); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := []interface{}{
-		map[string]interface{}{"foo": "bar"},
-		map[string]interface{}{"foo": "bar"},
-		map[string]interface{}{"foo": "bar"},
+	if exp, act := []any{
+		map[string]any{"foo": "bar"},
+		map[string]any{"foo": "bar"},
+		map[string]any{"foo": "bar"},
 	}, res; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong sync response: %v != %v", exp, act)
 	}
@@ -134,14 +134,14 @@ func TestHandlerSyncBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var res interface{}
-	if res, err = h.Handle(context.Background(), map[string]interface{}{"foo": "bar"}); err != nil {
+	var res any
+	if res, err = h.Handle(context.Background(), map[string]any{"foo": "bar"}); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := []interface{}{
-		[]interface{}{map[string]interface{}{"foo": "bar"}},
-		[]interface{}{map[string]interface{}{"foo": "bar"}},
-		[]interface{}{map[string]interface{}{"foo": "bar"}},
+	if exp, act := []any{
+		[]any{map[string]any{"foo": "bar"}},
+		[]any{map[string]any{"foo": "bar"}},
+		[]any{map[string]any{"foo": "bar"}},
 	}, res; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong sync response: %v != %v", exp, act)
 	}
@@ -187,11 +187,11 @@ func TestHandlerCombined(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var res interface{}
-	if res, err = h.Handle(context.Background(), map[string]interface{}{"foo": "bar"}); err != nil {
+	var res any
+	if res, err = h.Handle(context.Background(), map[string]any{"foo": "bar"}); err != nil {
 		t.Fatal(err)
 	}
-	if exp, act := map[string]interface{}{"foo": "bar"}, res; !reflect.DeepEqual(exp, act) {
+	if exp, act := map[string]any{"foo": "bar"}, res; !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong sync response: %v != %v", exp, act)
 	}
 	if exp, act := [][]byte{[]byte(`{"foo":"bar"}`)}, results; !reflect.DeepEqual(exp, act) {

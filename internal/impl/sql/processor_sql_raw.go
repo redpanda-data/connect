@@ -191,7 +191,7 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 
 	batch = batch.Copy()
 	for i, msg := range batch {
-		var args []interface{}
+		var args []any
 		if s.argsMapping != nil {
 			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
 			if err != nil {
@@ -208,7 +208,7 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 			}
 
 			var ok bool
-			if args, ok = iargs.([]interface{}); !ok {
+			if args, ok = iargs.([]any); !ok {
 				s.logger.Debugf("Mapping returned non-array result: %T", iargs)
 				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 				continue

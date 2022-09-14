@@ -20,7 +20,7 @@ func TestExpressionsParser(t *testing.T) {
 		input    string
 		output   string
 		messages []easyMsg
-		value    *interface{}
+		value    *any
 		index    int
 	}{
 		"match literals": {
@@ -273,12 +273,12 @@ func TestExpressionsParser(t *testing.T) {
 
 			res := query.ExecToString(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
-			}.WithValueFunc(func() *interface{} { return test.value }))
+			}.WithValueFunc(func() *any { return test.value }))
 
 			assert.Equal(t, test.output, res)
 			res = string(query.ExecToBytes(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
-			}.WithValueFunc(func() *interface{} { return test.value })))
+			}.WithValueFunc(func() *any { return test.value })))
 			assert.Equal(t, test.output, res)
 		})
 	}

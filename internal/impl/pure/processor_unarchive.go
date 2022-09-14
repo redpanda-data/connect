@@ -165,7 +165,7 @@ func jsonDocumentsUnarchive(part *service.Message) (service.MessageBatch, error)
 	var parts service.MessageBatch
 	dec := json.NewDecoder(bytes.NewReader(pBytes))
 	for {
-		var m interface{}
+		var m any
 		if err := dec.Decode(&m); err == io.EOF {
 			break
 		} else if err != nil {
@@ -184,7 +184,7 @@ func jsonArrayUnarchive(part *service.Message) (service.MessageBatch, error) {
 		return nil, fmt.Errorf("failed to parse message into JSON array: %v", err)
 	}
 
-	jArray, ok := jDoc.([]interface{})
+	jArray, ok := jDoc.([]any)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse message into JSON array: invalid type '%T'", jDoc)
 	}
@@ -204,7 +204,7 @@ func jsonMapUnarchive(part *service.Message) (service.MessageBatch, error) {
 		return nil, fmt.Errorf("failed to parse message into JSON map: %v", err)
 	}
 
-	jMap, ok := jDoc.(map[string]interface{})
+	jMap, ok := jDoc.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse message into JSON map: invalid type '%T'", jDoc)
 	}
@@ -258,7 +258,7 @@ func csvUnarchive(part *service.Message) (service.MessageBatch, error) {
 			break
 		}
 
-		obj := make(map[string]interface{}, len(records))
+		obj := make(map[string]any, len(records))
 		for i, r := range records {
 			obj[headers[i]] = r
 		}

@@ -21,7 +21,7 @@ func NewRetryConfig() RetryConfig {
 }
 
 type dummyRetryConfig struct {
-	Output         interface{} `json:"output" yaml:"output"`
+	Output         any `json:"output" yaml:"output"`
 	retries.Config `json:",inline" yaml:",inline"`
 }
 
@@ -38,7 +38,7 @@ func (r RetryConfig) MarshalJSON() ([]byte, error) {
 }
 
 // MarshalYAML prints an empty object instead of nil.
-func (r RetryConfig) MarshalYAML() (interface{}, error) {
+func (r RetryConfig) MarshalYAML() (any, error) {
 	dummy := dummyRetryConfig{
 		Output: r.Output,
 		Config: r.Config,

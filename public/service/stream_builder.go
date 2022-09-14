@@ -106,8 +106,8 @@ func (s *StreamBuilder) SetThreads(n int) {
 
 // PrintLogger is a simple Print based interface implemented by custom loggers.
 type PrintLogger interface {
-	Printf(format string, v ...interface{})
-	Println(v ...interface{})
+	Printf(format string, v ...any)
+	Println(v ...any)
 }
 
 // SetPrintLogger sets a custom logger supporting a simple Print based interface
@@ -492,7 +492,7 @@ func (s *StreamBuilder) SetYAML(conf string) error {
 // dot path to a value. The argument must be a variadic list of pairs, where the
 // first element is a string containing the target field dot path, and the
 // second element is a typed value to set the field to.
-func (s *StreamBuilder) SetFields(pathValues ...interface{}) error {
+func (s *StreamBuilder) SetFields(pathValues ...any) error {
 	if s.producerChan != nil {
 		return errors.New("attempted to override config after adding a func producer")
 	}

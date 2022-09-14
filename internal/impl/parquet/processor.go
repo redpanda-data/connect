@@ -194,7 +194,7 @@ func (s *parquetProcessor) processBatchReader(ctx context.Context, batch service
 
 		buf := buffer.NewBufferFileFromBytes(mBytes)
 
-		var schema interface{}
+		var schema any
 		if s.schema != nil {
 			schema = *s.schema
 		}

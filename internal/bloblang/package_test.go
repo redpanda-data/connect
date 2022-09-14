@@ -15,15 +15,15 @@ import (
 func TestMappings(t *testing.T) {
 	tests := map[string]struct {
 		mapping           string
-		input             interface{}
-		output            interface{}
+		input             any
+		output            any
 		assignmentTargets []mapping.TargetPath
 		queryTargets      []query.TargetPath
 	}{
 		"basic query": {
 			mapping: `root = this.foo
 			let bar = $baz | this.bar.baz`,
-			input: map[string]interface{}{
+			input: map[string]any{
 				"foo": "bar",
 			},
 			output: "bar",
@@ -42,10 +42,10 @@ func TestMappings(t *testing.T) {
 				this.bar == "bruh" => this.baz.buz,
 				_ => $foo
 			}`,
-			input: map[string]interface{}{
-				"foo": map[string]interface{}{
+			input: map[string]any{
+				"foo": map[string]any{
 					"bar": "bruh",
-					"baz": map[string]interface{}{
+					"baz": map[string]any{
 						"buz": "the result",
 					},
 				},
@@ -65,11 +65,11 @@ func TestMappings(t *testing.T) {
 			mapping: `root.foo.bar = "this"
 			root.foo = "that"
 			root.baz.buz.0.bev = "then this"`,
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo": "that",
-				"baz": map[string]interface{}{
-					"buz": map[string]interface{}{
-						"0": map[string]interface{}{
+				"baz": map[string]any{
+					"buz": map[string]any{
+						"0": map[string]any{
 							"bev": "then this",
 						},
 					},
@@ -87,17 +87,17 @@ root = this
 root.first = root
 root.second = root
 `,
-			input: map[string]interface{}{
+			input: map[string]any{
 				"foo": "bar",
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo": "bar",
-				"first": map[string]interface{}{
+				"first": map[string]any{
 					"foo": "bar",
 				},
-				"second": map[string]interface{}{
+				"second": map[string]any{
 					"foo": "bar",
-					"first": map[string]interface{}{
+					"first": map[string]any{
 						"foo": "bar",
 					},
 				},
@@ -122,10 +122,10 @@ map foo {
 root = this
 root.meow = this.apply("foo") 
 `,
-			input: map[string]interface{}{
+			input: map[string]any{
 				"foo": "bar",
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo":  "bar",
 				"meow": "hello world",
 			},
@@ -157,7 +157,7 @@ root.meow = this.apply("foo")
 			res, err := m.Exec(query.FunctionContext{
 				MsgBatch: message.QuickBatch(nil),
 				Maps:     m.Maps(),
-				Vars:     map[string]interface{}{},
+				Vars:     map[string]any{},
 			}.WithValue(test.input))
 			require.NoError(t, err)
 			assert.Equal(t, test.output, res)
@@ -168,18 +168,18 @@ root.meow = this.apply("foo")
 func TestMappingParallelExecution(t *testing.T) {
 	tests := map[string]struct {
 		mapping string
-		input   interface{}
-		output  interface{}
+		input   any
+		output  any
 	}{
 		"basic query using vars": {
 			mapping: `let tmp = this.foo.uppercase()
 			root.first = $tmp
 			let tmp = this.foo.lowercase()
 			root.second = $tmp`,
-			input: map[string]interface{}{
+			input: map[string]any{
 				"foo": "HELLO world",
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"first":  "HELLO WORLD",
 				"second": "hello world",
 			},

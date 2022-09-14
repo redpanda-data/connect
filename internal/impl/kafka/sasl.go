@@ -56,8 +56,8 @@ func saslField() *service.ConfigField {
 		Description("Specify one or more methods of SASL authentication. SASL is tried in order; if the broker supports the first mechanism, all connections will use that mechanism. If the first mechanism fails, the client will pick the first supported mechanism. If the broker does not support any client mechanisms, connections will fail.").
 		Advanced().Optional().
 		Example(
-			[]interface{}{
-				map[string]interface{}{
+			[]any{
+				map[string]any{
 					"mechanism": "SCRAM-SHA-512",
 					"username":  "foo",
 					"password":  "bar",

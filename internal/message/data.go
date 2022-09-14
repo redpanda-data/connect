@@ -14,7 +14,7 @@ type messageData struct {
 
 	// Mutable when readOnlyStructured = false
 	readOnlyStructured bool
-	structured         interface{} // Sometimes mutable
+	structured         any // Sometimes mutable
 
 	// Mutable when readOnlyMeta = false
 	readOnlyMeta bool
@@ -49,7 +49,7 @@ func (m *messageData) AsBytes() []byte {
 	return m.rawBytes
 }
 
-func (m *messageData) SetStructured(jObj interface{}) {
+func (m *messageData) SetStructured(jObj any) {
 	m.rawBytes = nil
 	if jObj == nil {
 		m.rawBytes = []byte(`null`)
@@ -60,12 +60,12 @@ func (m *messageData) SetStructured(jObj interface{}) {
 	m.readOnlyStructured = true
 }
 
-func (m *messageData) SetStructuredMut(jObj interface{}) {
+func (m *messageData) SetStructuredMut(jObj any) {
 	m.SetStructured(jObj)
 	m.readOnlyStructured = false
 }
 
-func (m *messageData) AsStructured() (interface{}, error) {
+func (m *messageData) AsStructured() (any, error) {
 	if m.structured != nil {
 		return m.structured, nil
 	}
@@ -96,7 +96,7 @@ func (m *messageData) AsStructured() (interface{}, error) {
 	return nil, err
 }
 
-func (m *messageData) AsStructuredMut() (interface{}, error) {
+func (m *messageData) AsStructuredMut() (any, error) {
 	if m.readOnlyStructured {
 		if m.structured != nil {
 			var err error
@@ -153,7 +153,7 @@ func (m *messageData) DeepCopy() *messageData {
 		copy(bytesCopy, m.rawBytes)
 	}
 
-	var structuredCopy interface{}
+	var structuredCopy any
 	if m.structured != nil {
 		structuredCopy, _ = CopyJSON(m.structured)
 	}

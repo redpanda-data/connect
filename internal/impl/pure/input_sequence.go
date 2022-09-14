@@ -185,14 +185,14 @@ func (j *joinedMessage) ToMsg() message.Batch {
 	return msg
 }
 
-type messageJoinerCollisionFn func(dest, source interface{}) interface{}
+type messageJoinerCollisionFn func(dest, source any) any
 
 func getMessageJoinerCollisionFn(name string) (messageJoinerCollisionFn, error) {
 	switch name {
 	case "array":
-		return func(dest, source interface{}) interface{} {
-			destArr, destIsArray := dest.([]interface{})
-			sourceArr, sourceIsArray := source.([]interface{})
+		return func(dest, source any) any {
+			destArr, destIsArray := dest.([]any)
+			sourceArr, sourceIsArray := source.([]any)
 			if destIsArray {
 				if sourceIsArray {
 					return append(destArr, sourceArr...)
@@ -200,16 +200,16 @@ func getMessageJoinerCollisionFn(name string) (messageJoinerCollisionFn, error) 
 				return append(destArr, source)
 			}
 			if sourceIsArray {
-				return append(append([]interface{}{}, dest), sourceArr...)
+				return append(append([]any{}, dest), sourceArr...)
 			}
-			return []interface{}{dest, source}
+			return []any{dest, source}
 		}, nil
 	case "replace":
-		return func(dest, source interface{}) interface{} {
+		return func(dest, source any) any {
 			return source
 		}, nil
 	case "keep":
-		return func(dest, source interface{}) interface{} {
+		return func(dest, source any) any {
 			return dest
 		}, nil
 	}
@@ -231,9 +231,9 @@ func (m *messageJoiner) Add(msg message.Batch, lastInSequence bool, fn func(msg 
 	}
 
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		var incomingObj map[string]interface{}
+		var incomingObj map[string]any
 		if jData, err := p.AsStructuredMut(); err == nil {
-			incomingObj, _ = jData.(map[string]interface{})
+			incomingObj, _ = jData.(map[string]any)
 		}
 		if incomingObj == nil {
 			// Messages that aren't structured objects are dropped.

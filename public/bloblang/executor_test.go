@@ -11,8 +11,8 @@ func TestExecutorQuery(t *testing.T) {
 	tests := []struct {
 		name        string
 		mapping     string
-		input       interface{}
-		output      interface{}
+		input       any
+		output      any
 		errContains string
 	}{
 		{
@@ -34,10 +34,10 @@ root = $foo`,
 		{
 			name:    "not mapped",
 			mapping: `root = if false { "not this" }`,
-			input: map[string]interface{}{
+			input: map[string]any{
 				"hello": "world",
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"hello": "world",
 			},
 		},
@@ -69,9 +69,9 @@ func TestExecutorOverlay(t *testing.T) {
 	tests := []struct {
 		name        string
 		mapping     string
-		overlay     interface{}
-		input       interface{}
-		output      interface{}
+		overlay     any
+		input       any
+		output      any
 		errContains string
 	}{
 		{
@@ -93,8 +93,8 @@ root = $foo`,
 		{
 			name:    "set nested field from nil",
 			mapping: `root.foo.bar = "hello world"`,
-			output: map[string]interface{}{
-				"foo": map[string]interface{}{
+			output: map[string]any{
+				"foo": map[string]any{
 					"bar": "hello world",
 				},
 			},
@@ -108,11 +108,11 @@ root = $foo`,
 		{
 			name:    "set nested field from object",
 			mapping: `root.foo.bar = "hello world"`,
-			overlay: map[string]interface{}{
+			overlay: map[string]any{
 				"baz": "started with this",
 			},
-			output: map[string]interface{}{
-				"foo": map[string]interface{}{
+			output: map[string]any{
+				"foo": map[string]any{
 					"bar": "hello world",
 				},
 				"baz": "started with this",
@@ -121,10 +121,10 @@ root = $foo`,
 		{
 			name:    "not mapped",
 			mapping: `root = if false { "not this" }`,
-			overlay: map[string]interface{}{
+			overlay: map[string]any{
 				"hello": "world",
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"hello": "world",
 			},
 		},
@@ -162,20 +162,20 @@ root.baz = this.input
 	`)
 	require.NoError(t, err)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"foo": "not init",
 		"bar": "meow meow",
 		"baz": "from input",
 	}
 
-	res, err := m.Query(map[string]interface{}{
+	res, err := m.Query(map[string]any{
 		"input": "from input",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, expected, res)
 
 	// Run it again and make sure our variables were reset.
-	res, err = m.Query(map[string]interface{}{
+	res, err = m.Query(map[string]any{
 		"input": "from input 2",
 	})
 	expected["baz"] = "from input 2"
@@ -192,25 +192,25 @@ root.baz = this.input
 	`)
 	require.NoError(t, err)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"started": "with this",
 		"foo":     "not init",
 		"bar":     "meow meow",
 		"baz":     "from input",
 	}
 
-	var onto interface{} = map[string]interface{}{
+	var onto any = map[string]any{
 		"started": "with this",
 	}
 
-	err = m.Overlay(map[string]interface{}{
+	err = m.Overlay(map[string]any{
 		"input": "from input",
 	}, &onto)
 	require.NoError(t, err)
 	assert.Equal(t, expected, onto)
 
 	// Run it again and make sure our variables were reset.
-	err = m.Overlay(map[string]interface{}{
+	err = m.Overlay(map[string]any{
 		"input": "from input 2",
 	}, &onto)
 	require.NoError(t, err)

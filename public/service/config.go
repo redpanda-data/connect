@@ -189,7 +189,7 @@ func (c *ConfigField) Deprecated() *ConfigField {
 // Default specifies a default value that this field will assume if it is
 // omitted from a provided config. Fields that do not have a default value are
 // considered mandatory, and so parsing a config will fail in their absence.
-func (c *ConfigField) Default(v interface{}) *ConfigField {
+func (c *ConfigField) Default(v any) *ConfigField {
 	c.field = c.field.HasDefault(v)
 	return c
 }
@@ -204,7 +204,7 @@ func (c *ConfigField) Optional() *ConfigField {
 
 // Example adds an example value to the field which will be shown when printing
 // documentation for the component config spec.
-func (c *ConfigField) Example(e interface{}) *ConfigField {
+func (c *ConfigField) Example(e any) *ConfigField {
 	c.field.Examples = append(c.field.Examples, e)
 	return c
 }
@@ -464,7 +464,7 @@ func (c *ConfigView) RenderDocs() ([]byte, error) {
 		"processor":  {},
 	}[string(c.component.Type)]
 
-	conf := map[string]interface{}{
+	conf := map[string]any{
 		"type": c.component.Name,
 	}
 	for k, v := range docs.ReservedFieldsByType(c.component.Type) {
@@ -487,7 +487,7 @@ func (c *ConfigView) RenderDocs() ([]byte, error) {
 type ParsedConfig struct {
 	hiddenPath []string
 	mgr        bundle.NewManagement
-	generic    interface{}
+	generic    any
 }
 
 // Namespace returns a version of the parsed config at a given field namespace.
@@ -503,7 +503,7 @@ func (p *ParsedConfig) Namespace(path ...string) *ParsedConfig {
 // Field accesses a field from the parsed config by its name and returns the
 // value if the field is found and a boolean indicating whether it was found.
 // Nested fields can be accessed by specifing the series of field names.
-func (p *ParsedConfig) field(path ...string) (interface{}, bool) {
+func (p *ParsedConfig) field(path ...string) (any, bool) {
 	gObj := gabs.Wrap(p.generic).S(p.hiddenPath...)
 	if exists := gObj.Exists(path...); !exists {
 		return nil, false
@@ -527,7 +527,7 @@ func (p *ParsedConfig) Contains(path ...string) bool {
 
 // FieldAny accesses a field from the parsed config by its name that can assume
 // any value type. If the field is not found an error is returned.
-func (p *ParsedConfig) FieldAny(path ...string) (interface{}, error) {
+func (p *ParsedConfig) FieldAny(path ...string) (any, error) {
 	v, exists := p.field(path...)
 	if !exists {
 		return "", fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
@@ -544,7 +544,7 @@ func (p *ParsedConfig) FieldAnyList(path ...string) ([]*ParsedConfig, error) {
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iList, ok := v.([]interface{})
+	iList, ok := v.([]any)
 	if !ok {
 		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.fullDotPath(path...), v)
 	}
@@ -599,7 +599,7 @@ func (p *ParsedConfig) FieldStringList(path ...string) ([]string, error) {
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iList, ok := v.([]interface{})
+	iList, ok := v.([]any)
 	if !ok {
 		if sList, ok := v.([]string); ok {
 			return sList, nil
@@ -623,7 +623,7 @@ func (p *ParsedConfig) FieldStringMap(path ...string) (map[string]string, error)
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iMap, ok := v.(map[string]interface{})
+	iMap, ok := v.(map[string]any)
 	if !ok {
 		if sMap, ok := v.(map[string]string); ok {
 			return sMap, nil
@@ -661,7 +661,7 @@ func (p *ParsedConfig) FieldIntList(path ...string) ([]int, error) {
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iList, ok := v.([]interface{})
+	iList, ok := v.([]any)
 	if !ok {
 		if sList, ok := v.([]int); ok {
 			return sList, nil
@@ -687,7 +687,7 @@ func (p *ParsedConfig) FieldIntMap(path ...string) (map[string]int, error) {
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iMap, ok := v.(map[string]interface{})
+	iMap, ok := v.(map[string]any)
 	if !ok {
 		if sMap, ok := v.(map[string]int); ok {
 			return sMap, nil
@@ -744,7 +744,7 @@ func (p *ParsedConfig) FieldObjectList(path ...string) ([]*ParsedConfig, error) 
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iList, ok := v.([]interface{})
+	iList, ok := v.([]any)
 	if !ok {
 		return nil, fmt.Errorf("expected field '%v' to be a list, got %T", p.fullDotPath(path...), v)
 	}

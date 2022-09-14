@@ -75,7 +75,7 @@ output:
 			docs.FieldProcessor(
 				"processors",
 				"A list of [processors](/docs/components/processors/about) to execute on the newly formed group.",
-			).HasDefault([]interface{}{}).Array(),
+			).HasDefault([]any{}).Array(),
 		),
 	})
 	if err != nil {

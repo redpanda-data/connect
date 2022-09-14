@@ -116,13 +116,13 @@ c:
 	generic, err := spec.YAMLToMap(&node, docs.ToValueConfig{})
 	require.NoError(t, err)
 
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"a": "setavalue",
 		"b": 11,
-		"c": map[string]interface{}{
+		"c": map[string]any{
 			"d": true,
 			"e": "evalue",
-			"f": map[string]interface{}{
+			"f": map[string]any{
 				"g": 22,
 				"h": "sethvalue",
 				"i": 23.1,
@@ -136,7 +136,7 @@ func TestFieldsNodeToMapTypeCoercion(t *testing.T) {
 		name   string
 		spec   docs.FieldSpecs
 		yaml   string
-		result interface{}
+		result any
 	}{
 		{
 			name: "string fields",
@@ -162,15 +162,15 @@ f:
  "2": false
  "3": 10
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": "no",
 				"b": "false",
 				"c": "10",
 				"d": "30.4",
-				"e": []interface{}{
+				"e": []any{
 					"no", "false", "10",
 				},
-				"f": map[string]interface{}{
+				"f": map[string]any{
 					"1": "no", "2": "false", "3": "10",
 				},
 			},
@@ -197,14 +197,14 @@ e:
  "2": false
  "3": true
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": false,
 				"b": false,
 				"c": true,
-				"d": []interface{}{
+				"d": []any{
 					false, false, true,
 				},
-				"e": map[string]interface{}{
+				"e": map[string]any{
 					"1": false, "2": false, "3": true,
 				},
 			},
@@ -231,14 +231,14 @@ e:
  "2": -12
  "3": 13.4
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": 11,
 				"b": -12,
 				"c": 13,
-				"d": []interface{}{
+				"d": []any{
 					11, -12, 13,
 				},
-				"e": map[string]interface{}{
+				"e": map[string]any{
 					"1": 11, "2": -12, "3": 13,
 				},
 			},
@@ -265,14 +265,14 @@ e:
  "2": -12
  "3": 13.4
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": 11.0,
 				"b": -12.0,
 				"c": 13.4,
-				"d": []interface{}{
+				"d": []any{
 					11.0, -12.0, 13.4,
 				},
-				"e": map[string]interface{}{
+				"e": map[string]any{
 					"1": 11.0, "2": -12.0, "3": 13.4,
 				},
 			},
@@ -292,13 +292,13 @@ foo:
     - bar: bar1
     - bar: bar2
 `,
-			result: map[string]interface{}{
-				"foo": map[string]interface{}{
-					"eles": []interface{}{
-						map[string]interface{}{
+			result: map[string]any{
+				"foo": map[string]any{
+					"eles": []any{
+						map[string]any{
 							"bar": "bar1",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"bar": "bar2",
 						},
 					},
@@ -322,13 +322,13 @@ foo:
     second:
       bar: bar2
 `,
-			result: map[string]interface{}{
-				"foo": map[string]interface{}{
-					"eles": map[string]interface{}{
-						"first": map[string]interface{}{
+			result: map[string]any{
+				"foo": map[string]any{
+					"eles": map[string]any{
+						"first": map[string]any{
 							"bar": "bar1",
 						},
-						"second": map[string]interface{}{
+						"second": map[string]any{
 							"bar": "bar2",
 						},
 					},
@@ -347,7 +347,7 @@ b:
   bloblang: 'root = "hello world"'
 c: true
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": "adefault",
 				"b": &yaml.Node{
 					Kind:   yaml.MappingNode,
@@ -387,9 +387,9 @@ b:
   - bloblang: 'root = "hello world"'
 c: true
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": "adefault",
-				"b": []interface{}{
+				"b": []any{
 					&yaml.Node{
 						Kind:   yaml.MappingNode,
 						Tag:    "!!map",
@@ -430,9 +430,9 @@ b:
     bloblang: 'root = "hello world"'
 c: true
 `,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"a": "adefault",
-				"b": map[string]interface{}{
+				"b": map[string]any{
 					"foo": &yaml.Node{
 						Kind:   yaml.MappingNode,
 						Tag:    "!!map",
@@ -473,10 +473,10 @@ foo:
   -
     - bar3
 `,
-			result: map[string]interface{}{
-				"foo": []interface{}{
-					[]interface{}{"bar1", "bar2"},
-					[]interface{}{"bar3"},
+			result: map[string]any{
+				"foo": []any{
+					[]any{"bar1", "bar2"},
+					[]any{"bar3"},
 				},
 			},
 		},
@@ -492,15 +492,15 @@ foo: [[3,4],[5]]
 bar: [[3.3,4.4],[5.5]]
 baz: [[true,false],[true]]
 `,
-			result: map[string]interface{}{
-				"foo": []interface{}{
-					[]interface{}{3, 4}, []interface{}{5},
+			result: map[string]any{
+				"foo": []any{
+					[]any{3, 4}, []any{5},
 				},
-				"bar": []interface{}{
-					[]interface{}{3.3, 4.4}, []interface{}{5.5},
+				"bar": []any{
+					[]any{3.3, 4.4}, []any{5.5},
 				},
-				"baz": []interface{}{
-					[]interface{}{true, false}, []interface{}{true},
+				"baz": []any{
+					[]any{true, false}, []any{true},
 				},
 			},
 		},
@@ -591,7 +591,7 @@ func TestYAMLComponentLinting(t *testing.T) {
 			Name: fmt.Sprintf("testlintfoo%v", string(t)),
 			Type: t,
 			Config: docs.FieldComponent().WithChildren(
-				docs.FieldString("foo1", "").LinterFunc(func(ctx docs.LintContext, line, col int, v interface{}) []docs.Lint {
+				docs.FieldString("foo1", "").LinterFunc(func(ctx docs.LintContext, line, col int, v any) []docs.Lint {
 					if v == "lint me please" {
 						return []docs.Lint{
 							docs.NewLintError(line, "this is a custom lint"),
@@ -599,7 +599,7 @@ func TestYAMLComponentLinting(t *testing.T) {
 					}
 					return nil
 				}).Optional(),
-				docs.FieldString("foo2", "").Advanced().OmitWhen(func(field, parent interface{}) (string, bool) {
+				docs.FieldString("foo2", "").Advanced().OmitWhen(func(field, parent any) (string, bool) {
 					if field == "drop me" {
 						return "because foo", true
 					}

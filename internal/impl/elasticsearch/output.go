@@ -249,7 +249,7 @@ type pendingBulkIndex struct {
 	Pipeline string
 	Routing  string
 	Type     string
-	Doc      interface{}
+	Doc      any
 	ID       string
 }
 

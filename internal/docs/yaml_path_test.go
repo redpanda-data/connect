@@ -436,7 +436,7 @@ pipeline:
 			} else {
 				require.NoError(t, err)
 
-				var iinput, ioutput interface{}
+				var iinput, ioutput any
 				require.NoError(t, input.Decode(&iinput))
 				require.NoError(t, yaml.Unmarshal([]byte(test.output), &ioutput))
 				assert.Equal(t, ioutput, iinput)
@@ -632,7 +632,7 @@ input:
 			} else {
 				require.NoError(t, err)
 
-				var expected, actual interface{}
+				var expected, actual any
 				require.NoError(t, output.Decode(&actual))
 				require.NoError(t, yaml.Unmarshal([]byte(test.output), &expected))
 				assert.Equal(t, expected, actual)

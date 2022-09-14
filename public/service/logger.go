@@ -18,7 +18,7 @@ func newReverseAirGapLogger(l log.Modular) *Logger {
 }
 
 // Tracef logs a trace message using fmt.Sprintf when args are specified.
-func (l *Logger) Tracef(template string, args ...interface{}) {
+func (l *Logger) Tracef(template string, args ...any) {
 	if l == nil {
 		return
 	}
@@ -34,7 +34,7 @@ func (l *Logger) Trace(message string) {
 }
 
 // Debugf logs a debug message using fmt.Sprintf when args are specified.
-func (l *Logger) Debugf(template string, args ...interface{}) {
+func (l *Logger) Debugf(template string, args ...any) {
 	if l == nil {
 		return
 	}
@@ -50,7 +50,7 @@ func (l *Logger) Debug(message string) {
 }
 
 // Infof logs an info message using fmt.Sprintf when args are specified.
-func (l *Logger) Infof(template string, args ...interface{}) {
+func (l *Logger) Infof(template string, args ...any) {
 	if l == nil {
 		return
 	}
@@ -66,7 +66,7 @@ func (l *Logger) Info(message string) {
 }
 
 // Warnf logs a warning message using fmt.Sprintf when args are specified.
-func (l *Logger) Warnf(template string, args ...interface{}) {
+func (l *Logger) Warnf(template string, args ...any) {
 	if l == nil {
 		return
 	}
@@ -82,7 +82,7 @@ func (l *Logger) Warn(message string) {
 }
 
 // Errorf logs an error message using fmt.Sprintf when args are specified.
-func (l *Logger) Errorf(template string, args ...interface{}) {
+func (l *Logger) Errorf(template string, args ...any) {
 	if l == nil {
 		return
 	}
@@ -100,7 +100,7 @@ func (l *Logger) Error(message string) {
 // With adds a variadic set of fields to a logger. Each field must consist
 // of a string key and a value of any type. An odd number of key/value pairs
 // will therefore result in malformed log messages, but should never panic.
-func (l *Logger) With(keyValuePairs ...interface{}) *Logger {
+func (l *Logger) With(keyValuePairs ...any) *Logger {
 	if l == nil {
 		return nil
 	}

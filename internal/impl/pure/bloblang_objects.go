@@ -19,7 +19,7 @@ func init() {
 				},
 			),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			return bloblang.ArrayMethod(func(i []interface{}) (interface{}, error) {
+			return bloblang.ArrayMethod(func(i []any) (any, error) {
 				root := gabs.New()
 				for _, v := range i {
 					if err := root.Merge(gabs.Wrap(v)); err != nil {

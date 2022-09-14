@@ -54,13 +54,13 @@ It is also possible to target processors in a separate file by prefixing the tar
 		docs.FieldAnything(
 			"mocks",
 			"An optional map of processors to mock. Keys should contain either a label or a JSON pointer of a processor that should be mocked. Values should contain a processor definition, which will replace the mocked processor. Most of the time you'll want to use a `bloblang` processor here, and use it to create a result that emulates the target processor.",
-			map[string]interface{}{
-				"get_foobar_api": map[string]interface{}{
+			map[string]any{
+				"get_foobar_api": map[string]any{
 					"bloblang": "root = content().string() + \" this is some mock content\"",
 				},
 			},
-			map[string]interface{}{
-				"/pipeline/processors/1": map[string]interface{}{
+			map[string]any{
+				"/pipeline/processors/1": map[string]any{
 					"bloblang": "root = content().string() + \" this is some mock content\"",
 				},
 			},
@@ -69,9 +69,9 @@ It is also possible to target processors in a separate file by prefixing the tar
 			"input_batch", "Define a batch of messages to feed into your test, specify either an `input_batch` or a series of `input_batches`.",
 		).Array().Optional().WithChildren(
 			docs.FieldString("content", "The raw content of the input message.").HasDefault(""),
-			docs.FieldAnything(`json_content`, "Sets the raw content of the message to a JSON document matching the structure of the value.", map[string]interface{}{
+			docs.FieldAnything(`json_content`, "Sets the raw content of the message to a JSON document matching the structure of the value.", map[string]any{
 				"foo": "foo value",
-				"bar": []interface{}{"element1", 10},
+				"bar": []any{"element1", 10},
 			},
 			).Optional(),
 			docs.FieldString(
@@ -85,9 +85,9 @@ It is also possible to target processors in a separate file by prefixing the tar
 			"input_batches", "Define a series of batches of messages to feed into your test, specify either an `input_batch` or a series of `input_batches`.",
 		).ArrayOfArrays().Optional().WithChildren(
 			docs.FieldString("content", "The raw content of the input message.").HasDefault(""),
-			docs.FieldAnything(`json_content`, "Sets the raw content of the message to a JSON document matching the structure of the value.", map[string]interface{}{
+			docs.FieldAnything(`json_content`, "Sets the raw content of the message to a JSON document matching the structure of the value.", map[string]any{
 				"foo": "foo value",
-				"bar": []interface{}{"element1", 10},
+				"bar": []any{"element1", 10},
 			},
 			).Optional(),
 			docs.FieldString(
@@ -112,7 +112,7 @@ It is also possible to target processors in a separate file by prefixing the tar
 			docs.FieldString(
 				`metadata_equals`,
 				"Checks a map of metadata keys to values against the metadata stored in the message. If there is a value mismatch between a key of the condition versus the message metadata this condition will fail.",
-				map[string]interface{}{
+				map[string]any{
 					"example_key": "example metadata value",
 				},
 			).Map().Optional(),
@@ -129,12 +129,12 @@ It is also possible to target processors in a separate file by prefixing the tar
 			docs.FieldAnything(
 				`json_equals`,
 				"Checks that both the message and the condition are valid JSON documents, and that they are structurally equivalent. Will ignore formatting and ordering differences.",
-				map[string]interface{}{"key": "value"},
+				map[string]any{"key": "value"},
 			).Optional(),
 			docs.FieldString(
 				`json_contains`,
 				"Checks that both the message and the condition are valid JSON documents, and that the message is a superset of the condition.",
-				map[string]interface{}{"key": "value"},
+				map[string]any{"key": "value"},
 			).Optional(),
 			docs.FieldString(
 				`file_json_contains`,

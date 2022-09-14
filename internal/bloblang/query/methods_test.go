@@ -22,7 +22,7 @@ func TestMethods(t *testing.T) {
 		meta    map[string]string
 	}
 
-	literalFn := func(val interface{}) Function {
+	literalFn := func(val any) Function {
 		fn := NewLiteralFunction("", val)
 		return fn
 	}
@@ -33,7 +33,7 @@ func TestMethods(t *testing.T) {
 		fn := NewLiteralFunction("", gObj.Data())
 		return fn
 	}
-	function := func(name string, args ...interface{}) Function {
+	function := func(name string, args ...any) Function {
 		t.Helper()
 		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestMethods(t *testing.T) {
 
 	type easyMethod struct {
 		name string
-		args []interface{}
+		args []any
 	}
 	methods := func(fn Function, methods ...easyMethod) Function {
 		t.Helper()
@@ -65,14 +65,14 @@ func TestMethods(t *testing.T) {
 		}
 		return fn
 	}
-	method := func(name string, args ...interface{}) easyMethod {
+	method := func(name string, args ...any) easyMethod {
 		return easyMethod{name: name, args: args}
 	}
 
 	tests := map[string]struct {
 		input    Function
-		value    *interface{}
-		output   interface{}
+		value    *any
+		output   any
 		err      string
 		messages []easyMsg
 		index    int
@@ -135,13 +135,13 @@ func TestMethods(t *testing.T) {
 				literalFn("foo,bar,baz\n1,2,3\n4,5,6"),
 				method("parse_csv"),
 			),
-			output: []interface{}{
-				map[string]interface{}{
+			output: []any{
+				map[string]any{
 					"foo": "1",
 					"bar": "2",
 					"baz": "3",
 				},
-				map[string]interface{}{
+				map[string]any{
 					"foo": "4",
 					"bar": "5",
 					"baz": "6",
@@ -153,7 +153,7 @@ func TestMethods(t *testing.T) {
 				literalFn("foo,bar,baz"),
 				method("parse_csv"),
 			),
-			output: []interface{}{},
+			output: []any{},
 		},
 		"check parse csv 3": {
 			input: methods(
@@ -223,22 +223,22 @@ func TestMethods(t *testing.T) {
 				jsonFn(`{"a":"first","b":"second"}`),
 				method("without", "a"),
 			),
-			output: map[string]interface{}{"b": "second"},
+			output: map[string]any{"b": "second"},
 		},
 		"check without double": {
 			input: methods(
 				jsonFn(`{"a":"first","b":"second","c":"third"}`),
 				method("without", "a", "c"),
 			),
-			output: map[string]interface{}{"b": "second"},
+			output: map[string]any{"b": "second"},
 		},
 		"check without nested": {
 			input: methods(
 				jsonFn(`{"inner":{"a":"first","b":"second","c":"third"}}`),
 				method("without", "inner.a", "inner.c", "thisdoesntexist"),
 			),
-			output: map[string]interface{}{
-				"inner": map[string]interface{}{"b": "second"},
+			output: map[string]any{
+				"inner": map[string]any{"b": "second"},
 			},
 		},
 		"check without combination": {
@@ -246,9 +246,9 @@ func TestMethods(t *testing.T) {
 				jsonFn(`{"d":"fourth","e":"fifth","inner":{"a":"first","b":"second","c":"third"}}`),
 				method("without", "d", "inner.a", "inner.c"),
 			),
-			output: map[string]interface{}{
+			output: map[string]any{
 				"e":     "fifth",
-				"inner": map[string]interface{}{"b": "second"},
+				"inner": map[string]any{"b": "second"},
 			},
 		},
 		"check without nested not object": {
@@ -256,7 +256,7 @@ func TestMethods(t *testing.T) {
 				jsonFn(`{"a":"first","b":"second","c":"third"}`),
 				method("without", "a", "c.foo"),
 			),
-			output: map[string]interface{}{
+			output: map[string]any{
 				"b": "second",
 				"c": "third",
 			},
@@ -266,11 +266,11 @@ func TestMethods(t *testing.T) {
 				jsonFn(`[{"v":"a"},{"v":"b"},{"v":"c"},{"v":"b"},{"v":"d"},{"v":"a"}]`),
 				method("unique", NewFieldFunction("v")),
 			),
-			output: []interface{}{
-				map[string]interface{}{"v": "a"},
-				map[string]interface{}{"v": "b"},
-				map[string]interface{}{"v": "c"},
-				map[string]interface{}{"v": "d"},
+			output: []any{
+				map[string]any{"v": "a"},
+				map[string]any{"v": "b"},
+				map[string]any{"v": "c"},
+				map[string]any{"v": "d"},
 			},
 		},
 		"check unique bad": {
@@ -292,21 +292,21 @@ func TestMethods(t *testing.T) {
 				jsonFn(`[3.0,5,3,4,5.1,5]`),
 				method("unique"),
 			),
-			output: []interface{}{3.0, 5.0, 4.0, 5.1},
+			output: []any{3.0, 5.0, 4.0, 5.1},
 		},
 		"check unique strings": {
 			input: methods(
 				jsonFn(`["a","b","c","b","d","a"]`),
 				method("unique"),
 			),
-			output: []interface{}{"a", "b", "c", "d"},
+			output: []any{"a", "b", "c", "d"},
 		},
 		"check unique mixed": {
 			input: methods(
 				jsonFn(`[3.0,"a","5",3,"b",5,"c","b",5.0,"d","a"]`),
 				method("unique"),
 			),
-			output: []interface{}{3.0, "a", "5", "b", 5.0, "c", "d"},
+			output: []any{3.0, "a", "5", "b", 5.0, "c", "d"},
 		},
 		"check html escape query": {
 			input: methods(
@@ -347,7 +347,7 @@ func TestMethods(t *testing.T) {
 				jsonFn(`[3,22,13,7,30]`),
 				method("sort", arithmetic(NewFieldFunction("left"), NewFieldFunction("right"), ArithmeticGt)),
 			),
-			output: []interface{}{30.0, 22.0, 13.0, 7.0, 3.0},
+			output: []any{30.0, 22.0, 13.0, 7.0, 3.0},
 		},
 		"check sort error": {
 			input: methods(
@@ -361,7 +361,7 @@ func TestMethods(t *testing.T) {
 				jsonFn(`["c","a","f","z"]`),
 				method("sort", arithmetic(NewFieldFunction("left"), NewFieldFunction("right"), ArithmeticGt)),
 			),
-			output: []interface{}{"z", "f", "c", "a"},
+			output: []any{"z", "f", "c", "a"},
 		},
 		"check join": {
 			input: methods(
@@ -410,9 +410,9 @@ func TestMethods(t *testing.T) {
 				literalFn("-axxb-ab-"),
 				method("re_find_all_submatch", "a(x*)b"),
 			),
-			output: []interface{}{
-				[]interface{}{"axxb", "xx"},
-				[]interface{}{"ab", ""},
+			output: []any{
+				[]any{"axxb", "xx"},
+				[]any{"ab", ""},
 			},
 		},
 		"check regexp find all submatch bytes": {
@@ -421,9 +421,9 @@ func TestMethods(t *testing.T) {
 				method("re_find_all_submatch", "a(x*)b"),
 			),
 			messages: []easyMsg{{content: `-axxb-ab-`}},
-			output: []interface{}{
-				[]interface{}{"axxb", "xx"},
-				[]interface{}{"ab", ""},
+			output: []any{
+				[]any{"axxb", "xx"},
+				[]any{"ab", ""},
 			},
 		},
 		"check regexp find all": {
@@ -431,7 +431,7 @@ func TestMethods(t *testing.T) {
 				literalFn("paranormal"),
 				method("re_find_all", "a."),
 			),
-			output: []interface{}{"ar", "an", "al"},
+			output: []any{"ar", "an", "al"},
 		},
 		"check regexp find all bytes": {
 			input: methods(
@@ -439,7 +439,7 @@ func TestMethods(t *testing.T) {
 				method("re_find_all", "a."),
 			),
 			messages: []easyMsg{{content: `paranormal`}},
-			output:   []interface{}{"ar", "an", "al"},
+			output:   []any{"ar", "an", "al"},
 		},
 		"check type": {
 			input: methods(
@@ -669,7 +669,7 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `["foo",["bar","baz"],"buz"]`},
 			},
-			output: []interface{}{
+			output: []any{
 				"foo", "bar", "baz", "buz",
 			},
 		},
@@ -681,7 +681,7 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `[]`},
 			},
-			output: []interface{}{},
+			output: []any{},
 		},
 		"check flatten 3": {
 			input: methods(
@@ -691,7 +691,7 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `["foo","bar","baz","buz"]`},
 			},
-			output: []interface{}{
+			output: []any{
 				"foo", "bar", "baz", "buz",
 			},
 		},
@@ -703,7 +703,7 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `{"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}`},
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo.0.bar": "1",
 				"foo.2.bar": "2",
 			},
@@ -716,7 +716,7 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `{"foo":[{"bar":"1"},{"bar":{}},{"bar":"2"},{"bar":[]}]}`},
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo.0.bar": "1",
 				"foo.1.bar": struct{}{},
 				"foo.2.bar": "2",
@@ -974,8 +974,8 @@ func TestMethods(t *testing.T) {
 				NewFieldFunction(""),
 				method("quote"),
 			),
-			value: func() *interface{} {
-				var s interface{} = linebreakStr
+			value: func() *any {
+				var s any = linebreakStr
 				return &s
 			}(),
 			output: `"foo\nbar\nbaz"`,
@@ -985,8 +985,8 @@ func TestMethods(t *testing.T) {
 				NewFieldFunction(""),
 				method("quote"),
 			),
-			value: func() *interface{} {
-				var s interface{} = []byte(linebreakStr)
+			value: func() *any {
+				var s any = []byte(linebreakStr)
 				return &s
 			}(),
 			output: `"foo\nbar\nbaz"`,
@@ -996,8 +996,8 @@ func TestMethods(t *testing.T) {
 				NewFieldFunction(""),
 				method("unquote"),
 			),
-			value: func() *interface{} {
-				var s interface{} = "\"foo\\nbar\\nbaz\""
+			value: func() *any {
+				var s any = "\"foo\\nbar\\nbaz\""
 				return &s
 			}(),
 			output: linebreakStr,
@@ -1007,8 +1007,8 @@ func TestMethods(t *testing.T) {
 				NewFieldFunction(""),
 				method("unquote"),
 			),
-			value: func() *interface{} {
-				var s interface{} = []byte("\"foo\\nbar\\nbaz\"")
+			value: func() *any {
+				var s any = []byte("\"foo\\nbar\\nbaz\"")
 				return &s
 			}(),
 			output: linebreakStr,
@@ -1086,7 +1086,7 @@ func TestMethods(t *testing.T) {
 				literalFn("foo,bar,baz"),
 				method("split", ","),
 			),
-			output: []interface{}{"foo", "bar", "baz"},
+			output: []any{"foo", "bar", "baz"},
 		},
 		"check split bytes": {
 			input: methods(
@@ -1096,7 +1096,7 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `foo,bar,baz,`},
 			},
-			output: []interface{}{[]byte("foo"), []byte("bar"), []byte("baz"), []byte("")},
+			output: []any{[]byte("foo"), []byte("bar"), []byte("baz"), []byte("")},
 		},
 		"check slice": {
 			input: methods(
@@ -1166,7 +1166,7 @@ func TestMethods(t *testing.T) {
 				jsonFn(`["foo","bar","baz"]`),
 				method("slice", 0.0, 30.0),
 			),
-			output: []interface{}{"foo", "bar", "baz"},
+			output: []any{"foo", "bar", "baz"},
 		},
 		"check slice invalid": {
 			input: methods(
@@ -1180,7 +1180,7 @@ func TestMethods(t *testing.T) {
 				jsonFn(`["foo","bar","baz","buz"]`),
 				method("slice", 1.0, 3.0),
 			),
-			output: []interface{}{"bar", "baz"},
+			output: []any{"bar", "baz"},
 		},
 		"check regexp match": {
 			input: methods(
@@ -1228,7 +1228,7 @@ func TestMethods(t *testing.T) {
 				literalFn("{\"foo\":\"bar\"}"),
 				method("parse_json"),
 			),
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo": "bar",
 			},
 		},
@@ -1244,7 +1244,7 @@ func TestMethods(t *testing.T) {
 				jsonFn(`["foo"]`),
 				method("append", "bar", "baz"),
 			),
-			output: []interface{}{
+			output: []any{
 				"foo", "bar", "baz",
 			},
 		},
@@ -1256,8 +1256,8 @@ func TestMethods(t *testing.T) {
 					method("append", NewFieldFunction("")),
 				)),
 			),
-			output: []interface{}{
-				"foo", []interface{}{"foo"},
+			output: []any{
+				"foo", []any{"foo"},
 			},
 		},
 		"check enumerated": {
@@ -1265,16 +1265,16 @@ func TestMethods(t *testing.T) {
 				jsonFn(`["foo","bar","baz"]`),
 				method("enumerated"),
 			),
-			output: []interface{}{
-				map[string]interface{}{
+			output: []any{
+				map[string]any{
 					"index": int64(0),
 					"value": "foo",
 				},
-				map[string]interface{}{
+				map[string]any{
 					"index": int64(1),
 					"value": "bar",
 				},
-				map[string]interface{}{
+				map[string]any{
 					"index": int64(2),
 					"value": "baz",
 				},
@@ -1285,7 +1285,7 @@ func TestMethods(t *testing.T) {
 				jsonFn(`{"foo":"val1"}`),
 				method("merge", jsonFn(`{"bar":"val2"}`)),
 			),
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo": "val1",
 				"bar": "val2",
 			},
@@ -1301,10 +1301,10 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `{"bar":{"second":"val2","third":6},"foo":{"first":"val1","third":3}}`},
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"first":  "val1",
 				"second": "val2",
-				"third":  []interface{}{jn(3), jn(6)},
+				"third":  []any{jn(3), jn(6)},
 			},
 		},
 		"check merge 3": {
@@ -1318,12 +1318,12 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `{"bar":{"second":"val2","third":6},"foo":{"first":"val1","third":3}}`},
 			},
-			output: map[string]interface{}{
-				"foo": map[string]interface{}{
+			output: map[string]any{
+				"foo": map[string]any{
 					"first": "val1",
 					"third": jn(3),
 				},
-				"bar": map[string]interface{}{
+				"bar": map[string]any{
 					"second": "val2",
 					"third":  jn(6),
 				},
@@ -1342,10 +1342,10 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `{"bar":{"second":"val2","third":[6]},"foo":{"first":"val1","third":[3]}}`},
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"first":  "val1",
 				"second": "val2",
-				"third":  []interface{}{jn(3), jn(6)},
+				"third":  []any{jn(3), jn(6)},
 			},
 		},
 		"check merge 5": {
@@ -1360,10 +1360,10 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `{"bar":{"second":"val2","third":[6]},"foo":{"first":"val1","third":[3]}}`},
 			},
-			output: map[string]interface{}{
-				"first":  []interface{}{"val1", "val1"},
+			output: map[string]any{
+				"first":  []any{"val1", "val1"},
 				"second": "val2",
-				"third":  []interface{}{jn(3), jn(6), jn(3)},
+				"third":  []any{jn(3), jn(6), jn(3)},
 			},
 		},
 		"check merge arrays": {
@@ -1374,17 +1374,17 @@ func TestMethods(t *testing.T) {
 			messages: []easyMsg{
 				{content: `{}`},
 			},
-			output: []interface{}{"foo"},
+			output: []any{"foo"},
 		},
 		"check merge arrays 2": {
 			input: methods(
 				jsonFn(`["foo"]`),
-				method("merge", []interface{}{"bar", "baz"}),
+				method("merge", []any{"bar", "baz"}),
 			),
 			messages: []easyMsg{
 				{content: `{}`},
 			},
-			output: []interface{}{"foo", "bar", "baz"},
+			output: []any{"foo", "bar", "baz"},
 		},
 		"check contains array": {
 			input: methods(
@@ -1466,7 +1466,7 @@ func TestMethods(t *testing.T) {
 					method("uppercase"),
 				)),
 			),
-			output: []interface{}{"FOO", "BAR"},
+			output: []any{"FOO", "BAR"},
 		},
 		"check map each 2": {
 			input: methods(
@@ -1477,7 +1477,7 @@ func TestMethods(t *testing.T) {
 					method("uppercase"),
 				)),
 			),
-			output: []interface{}{"(FOO)", "(BAR)"},
+			output: []any{"(FOO)", "(BAR)"},
 		},
 		"check map each object": {
 			input: methods(
@@ -1487,7 +1487,7 @@ func TestMethods(t *testing.T) {
 					method("uppercase"),
 				)),
 			),
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo": "HELLO WORLD",
 				"bar": "THIS IS ASH",
 			},
@@ -1501,7 +1501,7 @@ func TestMethods(t *testing.T) {
 					ArithmeticGt,
 				)),
 			),
-			output: []interface{}{14.0, 11.0},
+			output: []any{14.0, 11.0},
 		},
 		"check filter object": {
 			input: methods(
@@ -1511,7 +1511,7 @@ func TestMethods(t *testing.T) {
 					method("contains", "!"),
 				)),
 			),
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo": "hello ! world",
 				"baz": "im cool!",
 			},
@@ -1563,7 +1563,7 @@ func TestMethods(t *testing.T) {
 				method("sort"),
 			),
 			messages: []easyMsg{{content: `{}`}},
-			output:   []interface{}{"bar", "foo"},
+			output:   []any{"bar", "foo"},
 		},
 		"check keys empty": {
 			input: methods(
@@ -1571,7 +1571,7 @@ func TestMethods(t *testing.T) {
 				method("keys"),
 			),
 			messages: []easyMsg{{content: `{}`}},
-			output:   []interface{}{},
+			output:   []any{},
 		},
 		"check keys function": {
 			input: methods(
@@ -1580,7 +1580,7 @@ func TestMethods(t *testing.T) {
 				method("sort"),
 			),
 			messages: []easyMsg{{content: `{"bar":2,"foo":1}`}},
-			output:   []interface{}{"bar", "foo"},
+			output:   []any{"bar", "foo"},
 		},
 		"check keys error": {
 			input: methods(
@@ -1598,7 +1598,7 @@ func TestMethods(t *testing.T) {
 				method("sort"),
 			),
 			messages: []easyMsg{{content: `{}`}},
-			output:   []interface{}{1.0, 2.0},
+			output:   []any{1.0, 2.0},
 		},
 		"check values empty": {
 			input: methods(
@@ -1606,7 +1606,7 @@ func TestMethods(t *testing.T) {
 				method("values"),
 			),
 			messages: []easyMsg{{content: `{}`}},
-			output:   []interface{}{},
+			output:   []any{},
 		},
 		"check values function": {
 			input: methods(
@@ -1615,7 +1615,7 @@ func TestMethods(t *testing.T) {
 				method("sort"),
 			),
 			messages: []easyMsg{{content: `{"bar":2,"foo":1}`}},
-			output:   []interface{}{jn(1), jn(2)},
+			output:   []any{jn(1), jn(2)},
 		},
 		"check values error": {
 			input: methods(
@@ -1790,14 +1790,14 @@ func TestMethods(t *testing.T) {
 		},
 		"check any bad mapping": {
 			input: methods(
-				literalFn([]interface{}{false, "bar", true}),
+				literalFn([]any{false, "bar", true}),
 				method("any", NewFieldFunction("")),
 			),
 			err: "array literal: element 1: expected bool value, got string (\"bar\")",
 		},
 		"check any true": {
 			input: methods(
-				literalFn([]interface{}{"foo", "bar", "baz"}),
+				literalFn([]any{"foo", "bar", "baz"}),
 				method("any", arithmetic(
 					NewFieldFunction(""),
 					NewLiteralFunction("", "bar"),
@@ -1808,7 +1808,7 @@ func TestMethods(t *testing.T) {
 		},
 		"check any false": {
 			input: methods(
-				literalFn([]interface{}{"foo", "buz", "baz"}),
+				literalFn([]any{"foo", "buz", "baz"}),
 				method("any", arithmetic(
 					NewFieldFunction(""),
 					NewLiteralFunction("", "bar"),
@@ -1819,7 +1819,7 @@ func TestMethods(t *testing.T) {
 		},
 		"check any empty": {
 			input: methods(
-				literalFn([]interface{}{}),
+				literalFn([]any{}),
 				method("any", arithmetic(
 					NewFieldFunction(""),
 					NewLiteralFunction("", 9.0),
@@ -1830,7 +1830,7 @@ func TestMethods(t *testing.T) {
 		},
 		"check all true": {
 			input: methods(
-				literalFn([]interface{}{10.0, 11.0, 12.0}),
+				literalFn([]any{10.0, 11.0, 12.0}),
 				method("all", arithmetic(
 					NewFieldFunction(""),
 					NewLiteralFunction("", 9.0),
@@ -1841,7 +1841,7 @@ func TestMethods(t *testing.T) {
 		},
 		"check all false": {
 			input: methods(
-				literalFn([]interface{}{10.0, 8.0, 12.0}),
+				literalFn([]any{10.0, 8.0, 12.0}),
 				method("all", arithmetic(
 					NewFieldFunction(""),
 					NewLiteralFunction("", 9.0),
@@ -1852,7 +1852,7 @@ func TestMethods(t *testing.T) {
 		},
 		"check all empty": {
 			input: methods(
-				literalFn([]interface{}{}),
+				literalFn([]any{}),
 				method("all", arithmetic(
 					NewFieldFunction(""),
 					NewLiteralFunction("", 9.0),
@@ -1863,7 +1863,7 @@ func TestMethods(t *testing.T) {
 		},
 		"check all bad mapping": {
 			input: methods(
-				literalFn([]interface{}{true, "bar", false}),
+				literalFn([]any{true, "bar", false}),
 				method("all", NewFieldFunction("")),
 			),
 			err: "array literal: element 1: expected bool value, got string (\"bar\")",
@@ -1908,7 +1908,7 @@ func TestMethods(t *testing.T) {
 			output: int64(5),
 		},
 		"check replace_many string": {
-			input: methods(literalFn("<i>hello</i> <b>world</b>"), method("replace_all_many", []interface{}{
+			input: methods(literalFn("<i>hello</i> <b>world</b>"), method("replace_all_many", []any{
 				"<b>", "BOLD",
 				"</b>", "!BOLD",
 				"<i>", "ITA",
@@ -1917,7 +1917,7 @@ func TestMethods(t *testing.T) {
 			output: "ITAhello!ITA BOLDworld!BOLD",
 		},
 		"check replace_many bytes": {
-			input: methods(literalFn([]byte("<i>hello</i> <b>world</b>")), method("replace_all_many", []interface{}{
+			input: methods(literalFn([]byte("<i>hello</i> <b>world</b>")), method("replace_all_many", []any{
 				"<b>", "BOLD",
 				"</b>", "!BOLD",
 				"<i>", "ITA",
@@ -1978,7 +1978,7 @@ func TestMethods(t *testing.T) {
 					Maps:     map[string]Function{},
 					Index:    test.index,
 					MsgBatch: msg,
-				}.WithValueFunc(func() *interface{} { return test.value }))
+				}.WithValueFunc(func() *any { return test.value }))
 				if len(test.err) > 0 {
 					require.EqualError(t, err, test.err)
 				} else {
@@ -2000,13 +2000,13 @@ func TestMethods(t *testing.T) {
 }
 
 func TestMethodTargets(t *testing.T) {
-	function := func(name string, args ...interface{}) Function {
+	function := func(name string, args ...any) Function {
 		t.Helper()
 		fn, err := InitFunctionHelper(name, args...)
 		require.NoError(t, err)
 		return fn
 	}
-	method := func(fn Function, name string, args ...interface{}) Function {
+	method := func(fn Function, name string, args ...any) Function {
 		t.Helper()
 		fn, err := InitMethodHelper(name, fn, args...)
 		require.NoError(t, err)

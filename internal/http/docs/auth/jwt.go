@@ -14,11 +14,11 @@ import (
 
 // JWTConfig holds the configuration parameters for an JWT exchange.
 type JWTConfig struct {
-	Enabled        bool                   `json:"enabled" yaml:"enabled"`
-	Claims         jwt.MapClaims          `json:"claims" yaml:"claims"`
-	Headers        map[string]interface{} `json:"headers" yaml:"headers"`
-	SigningMethod  string                 `json:"signing_method" yaml:"signing_method"`
-	PrivateKeyFile string                 `json:"private_key_file" yaml:"private_key_file"`
+	Enabled        bool           `json:"enabled" yaml:"enabled"`
+	Claims         jwt.MapClaims  `json:"claims" yaml:"claims"`
+	Headers        map[string]any `json:"headers" yaml:"headers"`
+	SigningMethod  string         `json:"signing_method" yaml:"signing_method"`
+	PrivateKeyFile string         `json:"private_key_file" yaml:"private_key_file"`
 
 	// internal private fields
 	rsaKeyMx *sync.Mutex
@@ -30,8 +30,8 @@ func NewJWTConfig() JWTConfig {
 	var privKey *rsa.PrivateKey
 	return JWTConfig{
 		Enabled:        false,
-		Claims:         map[string]interface{}{},
-		Headers:        map[string]interface{}{},
+		Claims:         map[string]any{},
+		Headers:        map[string]any{},
 		SigningMethod:  "",
 		PrivateKeyFile: "",
 		rsaKeyMx:       &sync.Mutex{},

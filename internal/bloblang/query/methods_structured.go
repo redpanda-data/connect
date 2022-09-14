@@ -32,8 +32,8 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
-			arr, ok := res.([]interface{})
+		return func(res any, ctx FunctionContext) (any, error) {
+			arr, ok := res.([]any)
 			if !ok {
 				return nil, NewTypeError(res, ValueArray)
 			}
@@ -78,8 +78,8 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
-			arr, ok := res.([]interface{})
+		return func(res any, ctx FunctionContext) (any, error) {
+			arr, ok := res.([]any)
 			if !ok {
 				return nil, NewTypeError(res, ValueArray)
 			}
@@ -124,12 +124,12 @@ var _ = registerSimpleMethod(
 	).VariadicParams(),
 	func(args *ParsedParams) (simpleMethod, error) {
 		argsList := args.Raw()
-		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
-			arr, ok := res.([]interface{})
+		return func(res any, ctx FunctionContext) (any, error) {
+			arr, ok := res.([]any)
 			if !ok {
 				return nil, NewTypeError(res, ValueArray)
 			}
-			copied := make([]interface{}, 0, len(arr)+len(argsList))
+			copied := make([]any, 0, len(arr)+len(argsList))
 			copied = append(copied, arr...)
 			return append(copied, argsList...), nil
 		}, nil
@@ -161,7 +161,7 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			gObj := gabs.Wrap(v)
 			if includeEmpty {
 				return gObj.FlattenIncludeEmpty()
@@ -209,11 +209,11 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		compareFn := func(compareLeft interface{}) bool {
+		compareFn := func(compareLeft any) bool {
 			return ICompare(compareRight, compareLeft)
 		}
 		if compareRightNum, err := IGetNumber(compareRight); err == nil {
-			compareFn = func(compareLeft interface{}) bool {
+			compareFn = func(compareLeft any) bool {
 				if leftAsNum, err := IGetNumber(compareLeft); err == nil {
 					return leftAsNum == compareRightNum
 				}
@@ -222,19 +222,19 @@ var _ = registerSimpleMethod(
 		}
 		sub := IToString(compareRight)
 		bsub := IToBytes(compareRight)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				return strings.Contains(t, sub), nil
 			case []byte:
 				return bytes.Contains(t, bsub), nil
-			case []interface{}:
+			case []any:
 				for _, compareLeft := range t {
 					if compareFn(compareLeft) {
 						return true, nil
 					}
 				}
-			case map[string]interface{}:
+			case map[string]any:
 				for _, compareLeft := range t {
 					if compareFn(compareLeft) {
 						return true, nil
@@ -263,14 +263,14 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			arr, ok := v.([]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			arr, ok := v.([]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
 			}
-			enumerated := make([]interface{}, 0, len(arr))
+			enumerated := make([]any, 0, len(arr))
 			for i, ele := range arr {
-				enumerated = append(enumerated, map[string]interface{}{
+				enumerated = append(enumerated, map[string]any{
 					"index": int64(i),
 					"value": ele,
 				})
@@ -302,7 +302,7 @@ var _ = registerSimpleMethod(
 			return nil, err
 		}
 		path := gabs.DotPathToSlice(pathStr)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			return gabs.Wrap(v).Exists(path...), nil
 		}, nil
 	},
@@ -337,8 +337,8 @@ Exploding objects results in an object where the keys match the target object, a
 			return nil, err
 		}
 		path := gabs.DotPathToSlice(pathRaw)
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			rootMap, ok := v.(map[string]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			rootMap, ok := v.(map[string]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueObject)
 			}
@@ -347,16 +347,16 @@ Exploding objects results in an object where the keys match the target object, a
 			copyFrom := mapWithout(rootMap, [][]string{path})
 
 			switch t := target.Data().(type) {
-			case []interface{}:
-				result := make([]interface{}, len(t))
+			case []any:
+				result := make([]any, len(t))
 				for i, ele := range t {
 					gExploded := gabs.Wrap(IClone(copyFrom))
 					_, _ = gExploded.Set(ele, path...)
 					result[i] = gExploded.Data()
 				}
 				return result, nil
-			case map[string]interface{}:
-				result := make(map[string]interface{}, len(t))
+			case map[string]any:
+				result := make(map[string]any, len(t))
 				for key, ele := range t {
 					gExploded := gabs.Wrap(IClone(copyFrom))
 					_, _ = gExploded.Set(ele, path...)
@@ -396,11 +396,11 @@ When filtering objects the mapping query argument is provided a context with a f
 		if err != nil {
 			return nil, err
 		}
-		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
-			var resValue interface{}
+		return func(res any, ctx FunctionContext) (any, error) {
+			var resValue any
 			switch t := res.(type) {
-			case []interface{}:
-				newSlice := make([]interface{}, 0, len(t))
+			case []any:
+				newSlice := make([]any, 0, len(t))
 				for _, v := range t {
 					f, err := mapFn.Exec(ctx.WithValue(v))
 					if err != nil {
@@ -411,10 +411,10 @@ When filtering objects the mapping query argument is provided a context with a f
 					}
 				}
 				resValue = newSlice
-			case map[string]interface{}:
-				newMap := make(map[string]interface{}, len(t))
+			case map[string]any:
+				newMap := make(map[string]any, len(t))
 				for k, v := range t {
-					var ctxMap interface{} = map[string]interface{}{
+					var ctxMap any = map[string]any{
 						"key":   k,
 						"value": v,
 					}
@@ -450,15 +450,15 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			array, isArray := v.([]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			array, isArray := v.([]any)
 			if !isArray {
 				return nil, NewTypeError(v, ValueArray)
 			}
-			result := make([]interface{}, 0, len(array))
+			result := make([]any, 0, len(array))
 			for _, child := range array {
 				switch t := child.(type) {
-				case []interface{}:
+				case []any:
 					result = append(result, t...)
 				default:
 					result = append(result, t)
@@ -504,15 +504,15 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
-			resArray, ok := res.([]interface{})
+		return func(res any, ctx FunctionContext) (any, error) {
+			resArray, ok := res.([]any)
 			if !ok {
 				return nil, NewTypeError(res, ValueArray)
 			}
 
 			tally := IClone(foldTallyStart)
 			for _, v := range resArray {
-				newV, mapErr := foldFn.Exec(ctx.WithValue(map[string]interface{}{
+				newV, mapErr := foldFn.Exec(ctx.WithValue(map[string]any{
 					"tally": tally,
 					"value": v,
 				}))
@@ -550,9 +550,9 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch array := v.(type) {
-			case []interface{}:
+			case []any:
 				i := int(index)
 				if i < 0 {
 					i = len(array) + i
@@ -614,7 +614,7 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse json schema definition: %w", err)
 		}
-		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(res any, ctx FunctionContext) (any, error) {
 			result, err := schema.Validate(jsonschema.NewGoLoader(res))
 			if err != nil {
 				return nil, err
@@ -653,9 +653,9 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			if m, ok := v.(map[string]interface{}); ok {
-				keys := make([]interface{}, 0, len(m))
+		return func(v any, ctx FunctionContext) (any, error) {
+			if m, ok := v.(map[string]any); ok {
+				keys := make([]any, 0, len(m))
 				for k := range m {
 					keys = append(keys, k)
 				}
@@ -683,11 +683,11 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			if m, ok := v.(map[string]interface{}); ok {
-				keyValues := make([]interface{}, 0, len(m))
+		return func(v any, ctx FunctionContext) (any, error) {
+			if m, ok := v.(map[string]any); ok {
+				keyValues := make([]any, 0, len(m))
 				for k, v := range m {
-					keyValues = append(keyValues, map[string]interface{}{
+					keyValues = append(keyValues, map[string]any{
 						"key":   k,
 						"value": v,
 					})
@@ -722,16 +722,16 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			var length int64
 			switch t := v.(type) {
 			case string:
 				length = int64(len(t))
 			case []byte:
 				length = int64(len(t))
-			case []interface{}:
+			case []any:
 				length = int64(len(t))
-			case map[string]interface{}:
+			case map[string]any:
 				length = int64(len(t))
 			default:
 				return nil, NewTypeError(v, ValueString, ValueArray, ValueObject)
@@ -772,12 +772,12 @@ Apply a mapping to each value of an object and replace the value with the result
 		if err != nil {
 			return nil, err
 		}
-		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
-			var resValue interface{}
+		return func(res any, ctx FunctionContext) (any, error) {
+			var resValue any
 			var err error
 			switch t := res.(type) {
-			case []interface{}:
-				newSlice := make([]interface{}, 0, len(t))
+			case []any:
+				newSlice := make([]any, 0, len(t))
 				for i, v := range t {
 					newV, mapErr := mapFn.Exec(ctx.WithValue(v))
 					if mapErr != nil {
@@ -792,10 +792,10 @@ Apply a mapping to each value of an object and replace the value with the result
 					}
 				}
 				resValue = newSlice
-			case map[string]interface{}:
-				newMap := make(map[string]interface{}, len(t))
+			case map[string]any:
+				newMap := make(map[string]any, len(t))
 				for k, v := range t {
-					var ctxMap interface{} = map[string]interface{}{
+					var ctxMap any = map[string]any{
 						"key":   k,
 						"value": v,
 					}
@@ -846,15 +846,15 @@ var _ = registerSimpleMethod(
 		if err != nil {
 			return nil, err
 		}
-		return func(res interface{}, ctx FunctionContext) (interface{}, error) {
-			obj, ok := res.(map[string]interface{})
+		return func(res any, ctx FunctionContext) (any, error) {
+			obj, ok := res.(map[string]any)
 			if !ok {
 				return nil, NewTypeError(res, ValueObject)
 			}
 
-			newMap := make(map[string]interface{}, len(obj))
+			newMap := make(map[string]any, len(obj))
 			for k, v := range obj {
-				var ctxVal interface{} = k
+				var ctxVal any = k
 				newKey, mapErr := mapFn.Exec(ctx.WithValue(ctxVal))
 				if mapErr != nil {
 					return nil, mapErr
@@ -897,21 +897,21 @@ func mergeMethod(target Function, args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ClosureFunction("method merge", func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method merge", func(ctx FunctionContext) (any, error) {
 		mergeInto, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		mergeFrom := IClone(mergeFromSource)
-		if root, isArray := mergeInto.([]interface{}); isArray {
-			if rhs, isAlsoArray := mergeFrom.([]interface{}); isAlsoArray {
+		if root, isArray := mergeInto.([]any); isArray {
+			if rhs, isAlsoArray := mergeFrom.([]any); isAlsoArray {
 				return append(root, rhs...), nil
 			}
 			return append(root, mergeFrom), nil
 		}
 
-		if _, isObject := mergeInto.(map[string]interface{}); !isObject {
+		if _, isObject := mergeInto.(map[string]any); !isObject {
 			return nil, NewTypeErrorFrom(target.Annotation(), mergeInto, ValueObject, ValueArray)
 		}
 
@@ -947,21 +947,21 @@ func assignMethod(target Function, args *ParsedParams) (Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ClosureFunction("method assign", func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method assign", func(ctx FunctionContext) (any, error) {
 		assignInto, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		assignFrom := IClone(assignFromSource)
-		if root, isArray := assignInto.([]interface{}); isArray {
-			if rhs, isAlsoArray := assignFrom.([]interface{}); isAlsoArray {
+		if root, isArray := assignInto.([]any); isArray {
+			if rhs, isAlsoArray := assignFrom.([]any); isAlsoArray {
 				return append(root, rhs...), nil
 			}
 			return append(root, assignFrom), nil
 		}
 
-		if _, isObject := assignInto.(map[string]interface{}); !isObject {
+		if _, isObject := assignInto.(map[string]any); !isObject {
 			return nil, NewTypeErrorFrom(target.Annotation(), assignInto, ValueObject, ValueArray)
 		}
 
@@ -976,7 +976,7 @@ func assignMethod(target Function, args *ParsedParams) (Function, error) {
 	}, target.QueryTargets), nil
 }
 
-func assigner(destination, source interface{}) interface{} {
+func assigner(destination, source any) any {
 	return source
 }
 
@@ -1010,17 +1010,17 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+		return func(v any, ctx FunctionContext) (any, error) {
 			switch t := v.(type) {
 			case string:
 				if t == "" {
 					return nil, errors.New("string value is empty")
 				}
-			case []interface{}:
+			case []any:
 				if len(t) == 0 {
 					return nil, errors.New("array value is empty")
 				}
-			case map[string]interface{}:
+			case map[string]any:
 				if len(t) == 0 {
 					return nil, errors.New("object value is empty")
 				}
@@ -1060,7 +1060,7 @@ var _ = registerMethod(
 )
 
 func sortMethod(target Function, args *ParsedParams) (Function, error) {
-	compareFn := func(ctx FunctionContext, values []interface{}, i, j int) (bool, error) {
+	compareFn := func(ctx FunctionContext, values []any, i, j int) (bool, error) {
 		switch values[i].(type) {
 		case float64, int, int64, uint64, json.Number:
 			lhs, err := IGetNumber(values[i])
@@ -1092,8 +1092,8 @@ func sortMethod(target Function, args *ParsedParams) (Function, error) {
 	}
 
 	if mapFn != nil {
-		compareFn = func(ctx FunctionContext, values []interface{}, i, j int) (bool, error) {
-			var ctxValue interface{} = map[string]interface{}{
+		compareFn = func(ctx FunctionContext, values []any, i, j int) (bool, error) {
+			var ctxValue any = map[string]any{
 				"left":  values[i],
 				"right": values[j],
 			}
@@ -1114,13 +1114,13 @@ func sortMethod(target Function, args *ParsedParams) (Function, error) {
 		targets = aggregateTargetPaths(target, mapFn)
 	}
 
-	return ClosureFunction("method sort", func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method sort", func(ctx FunctionContext) (any, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if m, ok := v.([]interface{}); ok {
-			values := make([]interface{}, 0, len(m))
+		if m, ok := v.([]any); ok {
+			values := make([]any, 0, len(m))
 			values = append(values, m...)
 
 			sort.Slice(values, func(i, j int) bool {
@@ -1161,8 +1161,8 @@ func sortByMethod(target Function, args *ParsedParams) (Function, error) {
 		return nil, err
 	}
 
-	compareFn := func(ctx FunctionContext, values []interface{}, i, j int) (bool, error) {
-		var leftValue, rightValue interface{}
+	compareFn := func(ctx FunctionContext, values []any, i, j int) (bool, error) {
+		var leftValue, rightValue any
 		var err error
 
 		if leftValue, err = mapFn.Exec(ctx.WithValue(values[i])); err != nil {
@@ -1197,13 +1197,13 @@ func sortByMethod(target Function, args *ParsedParams) (Function, error) {
 		return false, fmt.Errorf("sort_by element %v: %w", i, ErrFrom(NewTypeError(leftValue, ValueNumber, ValueString), mapFn))
 	}
 
-	return ClosureFunction("method sort_by", func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method sort_by", func(ctx FunctionContext) (any, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if m, ok := v.([]interface{}); ok {
-			values := make([]interface{}, 0, len(m))
+		if m, ok := v.([]any); ok {
+			values := make([]any, 0, len(m))
 			values = append(values, m...)
 
 			sort.Slice(values, func(i, j int) bool {
@@ -1304,7 +1304,7 @@ func sliceMethod(args *ParsedParams) (simpleMethod, error) {
 		}
 		return
 	}
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
+	return func(v any, ctx FunctionContext) (any, error) {
 		switch t := v.(type) {
 		case string:
 			start, end, err := getBounds(int64(len(t)))
@@ -1318,7 +1318,7 @@ func sliceMethod(args *ParsedParams) (simpleMethod, error) {
 				return nil, err
 			}
 			return t[start:end], nil
-		case []interface{}:
+		case []any:
 			start, end, err := getBounds(int64(len(t)))
 			if err != nil {
 				return nil, err
@@ -1347,7 +1347,7 @@ var _ = registerMethod(
 )
 
 func sumMethod(target Function, _ *ParsedParams) (Function, error) {
-	return ClosureFunction("method sum", func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method sum", func(ctx FunctionContext) (any, error) {
 		v, err := target.Exec(ctx)
 		if err != nil {
 			return nil, err
@@ -1355,7 +1355,7 @@ func sumMethod(target Function, _ *ParsedParams) (Function, error) {
 		switch t := ISanitize(v).(type) {
 		case float64, int64, uint64, json.Number:
 			return v, nil
-		case []interface{}:
+		case []any:
 			var total float64
 			for i, v := range t {
 				n, nErr := IGetNumber(v)
@@ -1401,8 +1401,8 @@ func uniqueMethod(args *ParsedParams) (simpleMethod, error) {
 	if err != nil {
 		return nil, err
 	}
-	return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-		slice, ok := v.([]interface{})
+	return func(v any, ctx FunctionContext) (any, error) {
+		slice, ok := v.([]any)
 		if !ok {
 			return nil, NewTypeError(v, ValueArray)
 		}
@@ -1432,7 +1432,7 @@ func uniqueMethod(args *ParsedParams) (simpleMethod, error) {
 			return !exists
 		}
 
-		uniqueSlice := make([]interface{}, 0, len(slice))
+		uniqueSlice := make([]any, 0, len(slice))
 		for i, v := range slice {
 			check := v
 			if emitFn != nil {
@@ -1491,9 +1491,9 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			if m, ok := v.(map[string]interface{}); ok {
-				values := make([]interface{}, 0, len(m))
+		return func(v any, ctx FunctionContext) (any, error) {
+			if m, ok := v.(map[string]any); ok {
+				values := make([]any, 0, len(m))
 				for _, e := range m {
 					values = append(values, e)
 				}
@@ -1529,8 +1529,8 @@ If a key within a nested path does not exist or is not an object then it is not 
 			}
 			excludeList = append(excludeList, gabs.DotPathToSlice(argStr))
 		}
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			m, ok := v.(map[string]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			m, ok := v.(map[string]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueObject)
 			}
@@ -1539,8 +1539,8 @@ If a key within a nested path does not exist or is not an object then it is not 
 	},
 )
 
-func mapWithout(m map[string]interface{}, paths [][]string) map[string]interface{} {
-	newMap := make(map[string]interface{}, len(m))
+func mapWithout(m map[string]any, paths [][]string) map[string]any {
+	newMap := make(map[string]any, len(m))
 	for k, v := range m {
 		excluded := false
 		var nestedExclude [][]string
@@ -1555,7 +1555,7 @@ func mapWithout(m map[string]interface{}, paths [][]string) map[string]interface
 		}
 		if !excluded {
 			if len(nestedExclude) > 0 {
-				vMap, ok := v.(map[string]interface{})
+				vMap, ok := v.(map[string]any)
 				if ok {
 					newMap[k] = mapWithout(vMap, nestedExclude)
 				} else {

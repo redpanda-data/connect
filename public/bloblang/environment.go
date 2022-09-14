@@ -79,7 +79,7 @@ func (e *Environment) RegisterMethod(name string, ctor MethodConstructor) error 
 		if err != nil {
 			return nil, err
 		}
-		return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (interface{}, error) {
+		return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (any, error) {
 			v, err := target.Exec(ctx)
 			if err != nil {
 				return nil, err
@@ -133,7 +133,7 @@ func (e *Environment) RegisterMethodV2(name string, spec *PluginSpec, ctor Metho
 				return query.NewLiteralFunction("method "+name, v), nil
 			}
 		}
-		return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (interface{}, error) {
+		return query.ClosureFunction("method "+name, func(ctx query.FunctionContext) (any, error) {
 			v, err := target.Exec(ctx)
 			if err != nil {
 				return nil, err
@@ -154,7 +154,7 @@ func (e *Environment) RegisterFunction(name string, ctor FunctionConstructor) er
 		if err != nil {
 			return nil, err
 		}
-		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (interface{}, error) {
+		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (any, error) {
 			return fn()
 		}, nil), nil
 	})
@@ -202,7 +202,7 @@ func (e *Environment) RegisterFunctionV2(name string, spec *PluginSpec, ctor Fun
 			}
 			return query.NewLiteralFunction("function "+name, v), nil
 		}
-		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (interface{}, error) {
+		return query.ClosureFunction("function "+name, func(ctx query.FunctionContext) (any, error) {
 			return fn()
 		}, nil), nil
 	})

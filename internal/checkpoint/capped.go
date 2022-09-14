@@ -32,7 +32,7 @@ func NewCapped(capacity int64) *Capped {
 }
 
 // Highest returns the current highest checkpoint.
-func (c *Capped) Highest() interface{} {
+func (c *Capped) Highest() any {
 	c.cond.L.Lock()
 	defer c.cond.L.Unlock()
 	return c.t.Highest()
@@ -42,7 +42,7 @@ func (c *Capped) Highest() interface{} {
 // marked as resolved. While it is cached no higher valued offset will ever be
 // committed. If the provided value is lower than an already provided value an
 // error is returned.
-func (c *Capped) Track(ctx context.Context, payload interface{}, batchSize int64) (func() interface{}, error) {
+func (c *Capped) Track(ctx context.Context, payload any, batchSize int64) (func() any, error) {
 	c.cond.L.Lock()
 	defer c.cond.L.Unlock()
 
@@ -69,7 +69,7 @@ func (c *Capped) Track(ctx context.Context, payload interface{}, batchSize int64
 
 	resolveFn := c.t.Track(payload, batchSize)
 
-	return func() interface{} {
+	return func() any {
 		c.cond.L.Lock()
 		defer c.cond.L.Unlock()
 

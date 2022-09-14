@@ -173,7 +173,7 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 	defer s.dbMut.RUnlock()
 
 	for i := range batch {
-		var args []interface{}
+		var args []any
 		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
 		if err != nil {
 			return err
@@ -185,7 +185,7 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 		}
 
 		var ok bool
-		if args, ok = iargs.([]interface{}); !ok {
+		if args, ok = iargs.([]any); !ok {
 			return fmt.Errorf("mapping returned non-array result: %T", iargs)
 		}
 

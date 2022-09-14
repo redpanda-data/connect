@@ -14,10 +14,10 @@ func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.Field
 	httpSpecs := docs.FieldSpecs{
 		docs.FieldString("url", "The URL to connect to.").IsInterpolated(),
 		docs.FieldString("verb", "A verb to connect with", "POST", "GET", "DELETE"),
-		docs.FieldString("headers", "A map of headers to add to the request.", map[string]interface{}{
+		docs.FieldString("headers", "A map of headers to add to the request.", map[string]any{
 			"Content-Type": "application/octet-stream",
 			"traceparent":  `${! tracing_span().traceparent }`,
-		}).IsInterpolated().Map().HasDefault(map[string]interface{}{}),
+		}).IsInterpolated().Map().HasDefault(map[string]any{}),
 		docs.FieldObject("metadata", "Specify optional matching rules to determine which metadata keys should be added to the HTTP request as headers.").Advanced().
 			WithChildren(metadata.IncludeFilterDocs()...),
 	}
@@ -43,8 +43,8 @@ func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.Field
 	httpSpecs = append(httpSpecs, extraChildren...)
 
 	return docs.FieldComponent().WithChildren(httpSpecs...).
-		LinterFunc((func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
-			if _, ok := value.(map[string]interface{}); !ok {
+		LinterFunc((func(ctx docs.LintContext, line, col int, value any) []docs.Lint {
+			if _, ok := value.(map[string]any); !ok {
 				return nil
 			}
 			gObj := gabs.Wrap(value)

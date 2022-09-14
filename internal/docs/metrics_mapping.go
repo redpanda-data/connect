@@ -3,7 +3,7 @@ package docs
 // MetricsMappingFieldSpec is a field spec that describes a Bloblang mapping for
 // renaming metrics.
 func MetricsMappingFieldSpec(name string) FieldSpec {
-	examples := []interface{}{
+	examples := []any{
 		`this.replace("input", "source").replace("output", "sink")`,
 		`root = if ![
   "input_received",

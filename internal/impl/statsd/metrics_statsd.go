@@ -40,7 +40,7 @@ type wrappedDatadogLogger struct {
 	log log.Modular
 }
 
-func (s wrappedDatadogLogger) Printf(msg string, args ...interface{}) {
+func (s wrappedDatadogLogger) Printf(msg string, args ...any) {
 	s.log.Warnf(fmt.Sprintf(msg, args...))
 }
 

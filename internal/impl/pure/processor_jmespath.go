@@ -92,7 +92,7 @@ func newJMESPath(conf processor.JMESPathConfig, mgr bundle.NewManagement) (proce
 	return j, nil
 }
 
-func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err error) {
+func safeSearch(part any, j *jmespath.JMESPath) (res any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("jmespath panic: %v", r)
@@ -102,15 +102,15 @@ func safeSearch(part interface{}, j *jmespath.JMESPath) (res interface{}, err er
 }
 
 // JMESPath doesn't like json.Number so we walk the tree and replace them.
-func clearNumbers(v interface{}) (interface{}, bool) {
+func clearNumbers(v any) (any, bool) {
 	switch t := v.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		for k, v := range t {
 			if nv, ok := clearNumbers(v); ok {
 				t[k] = nv
 			}
 		}
-	case []interface{}:
+	case []any:
 		for i, v := range t {
 			if nv, ok := clearNumbers(v); ok {
 				t[i] = nv
@@ -138,7 +138,7 @@ func (p *jmespathProc) Process(ctx context.Context, msg *message.Part) ([]*messa
 		jsonPart = v
 	}
 
-	var result interface{}
+	var result any
 	if result, err = safeSearch(jsonPart, p.query); err != nil {
 		p.log.Debugf("Failed to search json: %v\n", err)
 		return nil, err

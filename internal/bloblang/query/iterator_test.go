@@ -9,7 +9,7 @@ import (
 )
 
 func TestIteratorMethods(t *testing.T) {
-	literalFn := func(val interface{}) Function {
+	literalFn := func(val any) Function {
 		fn := NewLiteralFunction("", val)
 		return fn
 	}
@@ -31,7 +31,7 @@ func TestIteratorMethods(t *testing.T) {
 	}
 	type easyMethod struct {
 		name string
-		args []interface{}
+		args []any
 	}
 	methods := func(fn Function, methods ...easyMethod) Function {
 		t.Helper()
@@ -42,14 +42,14 @@ func TestIteratorMethods(t *testing.T) {
 		}
 		return fn
 	}
-	method := func(name string, args ...interface{}) easyMethod {
+	method := func(name string, args ...any) easyMethod {
 		return easyMethod{name: name, args: args}
 	}
 
 	tests := map[string]struct {
 		input  Function
-		value  *interface{}
-		output interface{}
+		value  *any
+		output any
 		err    string
 	}{
 		"check map each": {
@@ -61,7 +61,7 @@ func TestIteratorMethods(t *testing.T) {
 				require.NoError(t, err)
 				return fn
 			}(),
-			output: []interface{}{"FOO", "BAR"},
+			output: []any{"FOO", "BAR"},
 		},
 		"check map each 2": {
 			input: func() Function {
@@ -75,7 +75,7 @@ func TestIteratorMethods(t *testing.T) {
 				require.NoError(t, err)
 				return fn
 			}(),
-			output: []interface{}{"(FOO)", "(BAR)"},
+			output: []any{"(FOO)", "(BAR)"},
 		},
 		"check map each object": {
 			input: func() Function {
@@ -88,7 +88,7 @@ func TestIteratorMethods(t *testing.T) {
 				require.NoError(t, err)
 				return fn
 			}(),
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo": "HELLO WORLD",
 				"bar": "THIS IS ASH",
 			},
@@ -105,7 +105,7 @@ func TestIteratorMethods(t *testing.T) {
 				require.NoError(t, err)
 				return fn
 			}(),
-			output: []interface{}{14.0, 11.0},
+			output: []any{14.0, 11.0},
 		},
 		"check filter object": {
 			input: func() Function {
@@ -118,7 +118,7 @@ func TestIteratorMethods(t *testing.T) {
 				require.NoError(t, err)
 				return fn
 			}(),
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo": "hello ! world",
 				"baz": "im cool!",
 			},
@@ -132,7 +132,7 @@ func TestIteratorMethods(t *testing.T) {
 
 			res, err := test.input.Exec(FunctionContext{
 				Maps: map[string]Function{},
-			}.WithValueFunc(func() *interface{} { return test.value }))
+			}.WithValueFunc(func() *any { return test.value }))
 			if len(test.err) > 0 {
 				require.EqualError(t, err, test.err)
 			} else {
@@ -145,14 +145,14 @@ func TestIteratorMethods(t *testing.T) {
 
 func filterFunction() Function {
 	i := 0
-	return ClosureFunction("", func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("", func(ctx FunctionContext) (any, error) {
 		i++
 		return i%100 == 0, nil
 	}, nil)
 }
 
 func benchFilterIter(b *testing.B, n, m int) {
-	startingArray := make([]interface{}, n)
+	startingArray := make([]any, n)
 	for i := range startingArray {
 		startingArray[i] = fmt.Sprintf("foo%v", i)
 	}
@@ -177,7 +177,7 @@ func benchFilterIter(b *testing.B, n, m int) {
 }
 
 func benchFilterNoIter(b *testing.B, n, m int) {
-	startingArray := make([]interface{}, n)
+	startingArray := make([]any, n)
 	for i := range startingArray {
 		startingArray[i] = fmt.Sprintf("foo%v", i)
 	}

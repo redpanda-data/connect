@@ -12,9 +12,9 @@ import (
 // Deprecated: Do not add new components here. Instead, use the public plugin
 // APIs. Examples can be found in: ./internal/impl
 type Config struct {
-	Label  string      `json:"label" yaml:"label"`
-	Type   string      `json:"type" yaml:"type"`
-	Plugin interface{} `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Label  string `json:"label" yaml:"label"`
+	Type   string `json:"type" yaml:"type"`
+	Plugin any    `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.

@@ -40,7 +40,7 @@ func init() {
 				// "remote", "The sampler consults Jaeger agent for the appropriate sampling strategy to use in the current service.",
 			).HasDefault("const"),
 			docs.FieldFloat("sampler_param", "A parameter to use for sampling. This field is unused for some sampling types.").Advanced().HasDefault(1.0),
-			docs.FieldString("tags", "A map of tags to add to tracing spans.").Map().Advanced().HasDefault(map[string]interface{}{}),
+			docs.FieldString("tags", "A map of tags to add to tracing spans.").Map().Advanced().HasDefault(map[string]any{}),
 			docs.FieldString("flush_interval", "The period of time between each flush of tracing spans.").HasDefault(""),
 		),
 	})

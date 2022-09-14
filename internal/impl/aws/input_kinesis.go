@@ -159,7 +159,7 @@ func newKinesisReader(conf input.AWSKinesisConfig, mgr bundle.NewManagement) (*k
 		return nil, err
 	}
 	k.boffPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return k.backoffCtor()
 		},
 	}

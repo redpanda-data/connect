@@ -145,10 +145,10 @@ func (e *Executor) MapOnto(part *message.Part, index int, msg Message) (*message
 }
 
 func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message) (*message.Part, error) {
-	var valuePtr *interface{}
+	var valuePtr *any
 	var parseErr error
 
-	lazyValue := func() *interface{} {
+	lazyValue := func() *any {
 		if valuePtr == nil && parseErr == nil {
 			if jObj, err := reference.Get(index).AsStructured(); err == nil {
 				valuePtr = &jObj
@@ -164,7 +164,7 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 	}
 
 	var newPart *message.Part
-	var newValue interface{} = query.Nothing(nil)
+	var newValue any = query.Nothing(nil)
 
 	if appendTo == nil {
 		newPart = reference.Get(index).ShallowCopy()
@@ -175,7 +175,7 @@ func (e *Executor) mapPart(appendTo *message.Part, index int, reference Message)
 		}
 	}
 
-	vars := map[string]interface{}{}
+	vars := map[string]any{}
 
 	for _, stmt := range e.statements {
 		res, err := stmt.query.Exec(query.FunctionContext{
@@ -264,13 +264,13 @@ func (e *Executor) AssignmentTargets() []TargetPath {
 }
 
 // Exec this function with a context struct.
-func (e *Executor) Exec(ctx query.FunctionContext) (interface{}, error) {
+func (e *Executor) Exec(ctx query.FunctionContext) (any, error) {
 	ctx, stackCount := ctx.IncrStackCount()
 	if stackCount > e.maxMapStacks {
 		return nil, &errStacks{annotation: e.annotation, maxStacks: e.maxMapStacks}
 	}
 
-	var newObj interface{} = query.Nothing(nil)
+	var newObj any = query.Nothing(nil)
 	ctx.NewValue = &newObj
 
 	for _, stmt := range e.statements {

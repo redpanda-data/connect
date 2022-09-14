@@ -157,9 +157,9 @@ func (d *Dynamic) HandleList(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	type confInfo struct {
-		Uptime    string      `json:"uptime"`
-		Config    interface{} `json:"config"`
-		ConfigRaw string      `json:"config_raw"`
+		Uptime    string `json:"uptime"`
+		Config    any    `json:"config"`
+		ConfigRaw string `json:"config_raw"`
 	}
 	uptimes := map[string]confInfo{}
 
@@ -175,7 +175,7 @@ func (d *Dynamic) HandleList(w http.ResponseWriter, r *http.Request) {
 
 	d.configsMut.Lock()
 	for k, v := range d.configs {
-		var confStructured interface{}
+		var confStructured any
 		if httpErr = yaml.Unmarshal(v, &confStructured); httpErr != nil {
 			return
 		}

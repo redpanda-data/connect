@@ -37,13 +37,13 @@ func Register() error {
 			if parserErr != nil {
 				return nil, parserErr
 			}
-			return query.ClosureFunction("method bloblang", func(ctx query.FunctionContext) (interface{}, error) {
+			return query.ClosureFunction("method bloblang", func(ctx query.FunctionContext) (any, error) {
 				v, err := target.Exec(ctx)
 				if err != nil {
 					return nil, err
 				}
 				return exec.Exec(query.FunctionContext{
-					Vars:     map[string]interface{}{},
+					Vars:     map[string]any{},
 					Maps:     exec.Maps(),
 					MsgBatch: message.QuickBatch(nil),
 				}.WithValue(v))

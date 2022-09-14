@@ -46,7 +46,7 @@ func TestFunctionExamples(t *testing.T) {
 
 				for j, io := range e.Results {
 					msg := message.Batch{message.NewPart([]byte(io[0]))}
-					textMap := map[string]interface{}{
+					textMap := map[string]any{
 						"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
 					}
 					otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}))

@@ -119,7 +119,7 @@ args_mapping: 'root = [ "foo*" ]'
 	actI, err := resMsgs[0][0].AsStructured()
 	require.NoError(t, err)
 
-	actS, ok := actI.([]interface{})
+	actS, ok := actI.([]any)
 	require.True(t, ok)
 
 	actStrs := make([]string, 0, len(actS))
@@ -308,7 +308,7 @@ key: foo*
 	actI, err := resMsgs[0][0].AsStructured()
 	require.NoError(t, err)
 
-	actS, ok := actI.([]interface{})
+	actS, ok := actI.([]any)
 	require.True(t, ok)
 
 	actStrs := make([]string, 0, len(actS))

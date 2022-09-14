@@ -13,7 +13,7 @@ func TestChar(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -51,7 +51,7 @@ func TestNotChar(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -95,7 +95,7 @@ func TestInSet(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -144,7 +144,7 @@ func TestNotInSet(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -188,7 +188,7 @@ func TestEmptyLine(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -227,7 +227,7 @@ func TestInRange(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -443,7 +443,7 @@ func TestSnakeCase(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       string
 	}{
@@ -509,7 +509,7 @@ func TestTerm(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -547,7 +547,7 @@ func TestUntilTerm(t *testing.T) {
 	tests := map[string]struct {
 		parser    Func
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -620,7 +620,7 @@ func TestSequence(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -645,17 +645,17 @@ func TestSequence(t *testing.T) {
 		"matches all": {
 			input:     "abcdef",
 			remaining: "",
-			result:    []interface{}{"abc", "def"},
+			result:    []any{"abc", "def"},
 		},
 		"matches some": {
 			input:     "abcdef and this",
 			remaining: " and this",
-			result:    []interface{}{"abc", "def"},
+			result:    []any{"abc", "def"},
 		},
 		"matches only one": {
 			input:     "abcdefabcdef",
 			remaining: "abcdef",
-			result:    []interface{}{"abc", "def"},
+			result:    []any{"abc", "def"},
 		},
 	}
 
@@ -674,7 +674,7 @@ func TestAllOf(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -689,27 +689,27 @@ func TestAllOf(t *testing.T) {
 		"matches first": {
 			input:     "abcNo",
 			remaining: "No",
-			result:    []interface{}{"abc"},
+			result:    []any{"abc"},
 		},
 		"matches some of second": {
 			input:     "abcabNo",
 			remaining: "abNo",
-			result:    []interface{}{"abc"},
+			result:    []any{"abc"},
 		},
 		"matches all": {
 			input:     "abcabc",
 			remaining: "",
-			result:    []interface{}{"abc", "abc"},
+			result:    []any{"abc", "abc"},
 		},
 		"matches some": {
 			input:     "abcabc and this",
 			remaining: " and this",
-			result:    []interface{}{"abc", "abc"},
+			result:    []any{"abc", "abc"},
 		},
 		"matches all of these": {
 			input:     "abcabcabcabcdef and this",
 			remaining: "def and this",
-			result:    []interface{}{"abc", "abc", "abc", "abc"},
+			result:    []any{"abc", "abc", "abc", "abc"},
 		},
 	}
 
@@ -728,7 +728,7 @@ func TestDelimited(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -754,16 +754,16 @@ func TestDelimited(t *testing.T) {
 			input:     "abc#abc",
 			remaining: "",
 			result: DelimitedResult{
-				Primary:   []interface{}{"abc", "abc"},
-				Delimiter: []interface{}{"#"},
+				Primary:   []any{"abc", "abc"},
+				Delimiter: []any{"#"},
 			},
 		},
 		"matches some": {
 			input:     "abc#abc and this",
 			remaining: " and this",
 			result: DelimitedResult{
-				Primary:   []interface{}{"abc", "abc"},
-				Delimiter: []interface{}{"#"},
+				Primary:   []any{"abc", "abc"},
+				Delimiter: []any{"#"},
 			},
 		},
 	}
@@ -783,7 +783,7 @@ func TestDelimitedPattern(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -803,7 +803,7 @@ func TestDelimitedPattern(t *testing.T) {
 		"matches first": {
 			input:     "#abc!No",
 			remaining: "No",
-			result:    []interface{}{"abc"},
+			result:    []any{"abc"},
 		},
 		"matches some of second": {
 			input:     "#abc,abNo",
@@ -818,17 +818,17 @@ func TestDelimitedPattern(t *testing.T) {
 		"matches all": {
 			input:     "#abc,abc!",
 			remaining: "",
-			result:    []interface{}{"abc", "abc"},
+			result:    []any{"abc", "abc"},
 		},
 		"matches some": {
 			input:     "#abc,abc! and this",
 			remaining: " and this",
-			result:    []interface{}{"abc", "abc"},
+			result:    []any{"abc", "abc"},
 		},
 		"matches all of these": {
 			input:     "#abc,abc,abc,abc!def and this",
 			remaining: "def and this",
-			result:    []interface{}{"abc", "abc", "abc", "abc"},
+			result:    []any{"abc", "abc", "abc", "abc"},
 		},
 	}
 
@@ -847,7 +847,7 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -867,12 +867,12 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 		"matches first": {
 			input:     "#abc!No",
 			remaining: "No",
-			result:    []interface{}{"abc"},
+			result:    []any{"abc"},
 		},
 		"matches first trailing": {
 			input:     "#abc,!No",
 			remaining: "No",
-			result:    []interface{}{"abc"},
+			result:    []any{"abc"},
 		},
 		"matches some of second": {
 			input:     "#abc,abNo",
@@ -887,22 +887,22 @@ func TestDelimitedPatternAllowTrailing(t *testing.T) {
 		"matches all": {
 			input:     "#abc,abc!",
 			remaining: "",
-			result:    []interface{}{"abc", "abc"},
+			result:    []any{"abc", "abc"},
 		},
 		"matches all trailing": {
 			input:     "#abc,abc,!",
 			remaining: "",
-			result:    []interface{}{"abc", "abc"},
+			result:    []any{"abc", "abc"},
 		},
 		"matches some": {
 			input:     "#abc,abc! and this",
 			remaining: " and this",
-			result:    []interface{}{"abc", "abc"},
+			result:    []any{"abc", "abc"},
 		},
 		"matches all of these": {
 			input:     "#abc,abc,abc,abc!def and this",
 			remaining: "def and this",
-			result:    []interface{}{"abc", "abc", "abc", "abc"},
+			result:    []any{"abc", "abc", "abc", "abc"},
 		},
 	}
 
@@ -1059,7 +1059,7 @@ func TestMatch(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -1210,7 +1210,7 @@ func TestOptional(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -1230,7 +1230,7 @@ func TestOptional(t *testing.T) {
 		"full string": {
 			input:     "abcdef",
 			remaining: "",
-			result:    []interface{}{"abc", "def"},
+			result:    []any{"abc", "def"},
 		},
 	}
 
@@ -1249,7 +1249,7 @@ func TestNumber(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -1303,7 +1303,7 @@ func TestBoolean(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -1352,7 +1352,7 @@ func TestQuotedString(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -1406,7 +1406,7 @@ func TestQuotedMultilineString(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -1476,7 +1476,7 @@ func TestArray(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -1485,22 +1485,22 @@ func TestArray(t *testing.T) {
 		},
 		"empty array": {
 			input:     "[] and this",
-			result:    []interface{}{},
+			result:    []any{},
 			remaining: " and this",
 		},
 		"empty array with whitespace": {
 			input:     "[ \t] and this",
-			result:    []interface{}{},
+			result:    []any{},
 			remaining: " and this",
 		},
 		"single element array": {
 			input:     `[ "foo" ] and this`,
-			result:    []interface{}{"foo"},
+			result:    []any{"foo"},
 			remaining: " and this",
 		},
 		"tailing comma array": {
 			input:     `[ "foo", ] and this`,
-			result:    []interface{}{"foo"},
+			result:    []any{"foo"},
 			remaining: ` and this`,
 		},
 		"random stuff array": {
@@ -1515,7 +1515,7 @@ func TestArray(t *testing.T) {
 		},
 		"multiple elements array": {
 			input:     `[ "foo", false,5.2] and this`,
-			result:    []interface{}{"foo", false, float64(5.2)},
+			result:    []any{"foo", false, float64(5.2)},
 			remaining: " and this",
 		},
 		"multiple elements array line broken": {
@@ -1525,12 +1525,12 @@ func TestArray(t *testing.T) {
 	"bar",
 	[true,false]
 ] and this`,
-			result:    []interface{}{"foo", nil, "bar", []interface{}{true, false}},
+			result:    []any{"foo", nil, "bar", []any{true, false}},
 			remaining: " and this",
 		},
 		"multiple elements array line broken windows style": {
 			input:     "[\r\n  \"foo\",\r\n  null,\r\n  \"bar\",\r\n  [true,false]\r\n] and this",
-			result:    []interface{}{"foo", nil, "bar", []interface{}{true, false}},
+			result:    []any{"foo", nil, "bar", []any{true, false}},
 			remaining: " and this",
 		},
 		"multiple elements array comments": {
@@ -1541,7 +1541,7 @@ func TestArray(t *testing.T) {
 	"bar",
 	[true,false] # and this
 ] and this`,
-			result:    []interface{}{"foo", nil, "bar", []interface{}{true, false}},
+			result:    []any{"foo", nil, "bar", []any{true, false}},
 			remaining: " and this",
 		},
 	}
@@ -1561,7 +1561,7 @@ func TestObject(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -1570,17 +1570,17 @@ func TestObject(t *testing.T) {
 		},
 		"empty object": {
 			input:     "{} and this",
-			result:    map[string]interface{}{},
+			result:    map[string]any{},
 			remaining: " and this",
 		},
 		"empty object with whitespace": {
 			input:     "{ \t} and this",
-			result:    map[string]interface{}{},
+			result:    map[string]any{},
 			remaining: " and this",
 		},
 		"single value object": {
 			input:     `{"foo":"bar"} and this`,
-			result:    map[string]interface{}{"foo": "bar"},
+			result:    map[string]any{"foo": "bar"},
 			remaining: " and this",
 		},
 		"unfinished item object": {
@@ -1600,12 +1600,12 @@ func TestObject(t *testing.T) {
 		},
 		"multiple values object": {
 			input:     `{ "foo":true, "bar":5.2 } and this`,
-			result:    map[string]interface{}{"foo": true, "bar": 5.2},
+			result:    map[string]any{"foo": true, "bar": 5.2},
 			remaining: " and this",
 		},
 		"multiple values trailing comma object": {
 			input:     `{ "foo":true, "bar":5.2, } and this`,
-			result:    map[string]interface{}{"foo": true, "bar": 5.2},
+			result:    map[string]any{"foo": true, "bar": 5.2},
 			remaining: " and this",
 		},
 		"multiple values object line broken": {
@@ -1616,11 +1616,11 @@ func TestObject(t *testing.T) {
 		"three",
 	"quz":   [true,false]
 } and this`,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"foo": int64(2),
 				"bar": nil,
 				"baz": "three",
-				"quz": []interface{}{true, false},
+				"quz": []any{true, false},
 			},
 			remaining: " and this",
 		},
@@ -1636,11 +1636,11 @@ func TestObject(t *testing.T) {
 		"three",
 	"quz":   [true,false] # woah!
 } and this`,
-			result: map[string]interface{}{
+			result: map[string]any{
 				"foo": int64(2),
 				"bar": nil,
 				"baz": "three",
-				"quz": []interface{}{true, false},
+				"quz": []any{true, false},
 			},
 			remaining: " and this",
 		},
@@ -1661,7 +1661,7 @@ func TestSpacesAndTabs(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -1710,7 +1710,7 @@ func TestNewline(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{
@@ -1768,7 +1768,7 @@ func TestAnyOf(t *testing.T) {
 
 	tests := map[string]struct {
 		input     string
-		result    interface{}
+		result    any
 		remaining string
 		err       *Error
 	}{

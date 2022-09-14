@@ -75,7 +75,7 @@ limit: 100000
 	defer block.Close(ctx)
 
 	inMsg := service.NewMessage(nil)
-	inMsg.SetStructuredMut(map[string]interface{}{
+	inMsg.SetStructuredMut(map[string]any{
 		"hello": "world",
 	})
 
@@ -93,7 +93,7 @@ limit: 100000
 
 	outStruct, err := outBatch[0].AsStructuredMut()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"hello": "world",
 	}, outStruct)
 
@@ -104,7 +104,7 @@ limit: 100000
 
 	inStruct, err := inMsg.AsStructured()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"hello": "world",
 		"moo":   "quack",
 	}, inStruct)

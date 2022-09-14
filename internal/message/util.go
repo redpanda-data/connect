@@ -21,9 +21,9 @@ func GetAllBytes(m Batch) [][]byte {
 
 //------------------------------------------------------------------------------
 
-func cloneMap(oldMap map[string]interface{}) (map[string]interface{}, error) {
+func cloneMap(oldMap map[string]any) (map[string]any, error) {
 	var err error
-	newMap := make(map[string]interface{}, len(oldMap))
+	newMap := make(map[string]any, len(oldMap))
 	for k, v := range oldMap {
 		if newMap[k], err = cloneGeneric(v); err != nil {
 			return nil, err
@@ -32,9 +32,9 @@ func cloneMap(oldMap map[string]interface{}) (map[string]interface{}, error) {
 	return newMap, nil
 }
 
-func cloneCheekyMap(oldMap map[interface{}]interface{}) (map[interface{}]interface{}, error) {
+func cloneCheekyMap(oldMap map[any]any) (map[any]any, error) {
 	var err error
-	newMap := make(map[interface{}]interface{}, len(oldMap))
+	newMap := make(map[any]any, len(oldMap))
 	for k, v := range oldMap {
 		if newMap[k], err = cloneGeneric(v); err != nil {
 			return nil, err
@@ -43,9 +43,9 @@ func cloneCheekyMap(oldMap map[interface{}]interface{}) (map[interface{}]interfa
 	return newMap, nil
 }
 
-func cloneSlice(oldSlice []interface{}) ([]interface{}, error) {
+func cloneSlice(oldSlice []any) ([]any, error) {
 	var err error
-	newSlice := make([]interface{}, len(oldSlice))
+	newSlice := make([]any, len(oldSlice))
 	for i, v := range oldSlice {
 		if newSlice[i], err = cloneGeneric(v); err != nil {
 			return nil, err
@@ -56,13 +56,13 @@ func cloneSlice(oldSlice []interface{}) ([]interface{}, error) {
 
 // cloneGeneric is a utility function that recursively copies a generic
 // structure usually resulting from a JSON parse.
-func cloneGeneric(root interface{}) (interface{}, error) {
+func cloneGeneric(root any) (any, error) {
 	switch t := root.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return cloneMap(t)
-	case map[interface{}]interface{}:
+	case map[any]any:
 		return cloneCheekyMap(t)
-	case []interface{}:
+	case []any:
 		return cloneSlice(t)
 	case string, []byte, json.Number, uint64, int, int64, float64, bool, json.RawMessage:
 		return t, nil
@@ -70,7 +70,7 @@ func cloneGeneric(root interface{}) (interface{}, error) {
 		// Oops, this means we have 'dirty' types within the JSON object. Our
 		// only way to fallback is to marshal/unmarshal the structure, gross!
 		if b, err := json.Marshal(root); err == nil {
-			var rootCopy interface{}
+			var rootCopy any
 			if err = json.Unmarshal(b, &rootCopy); err == nil {
 				return rootCopy, nil
 			}
@@ -81,6 +81,6 @@ func cloneGeneric(root interface{}) (interface{}, error) {
 
 // CopyJSON recursively creates a deep copy of a JSON structure extracted from a
 // message part.
-func CopyJSON(root interface{}) (interface{}, error) {
+func CopyJSON(root any) (any, error) {
 	return cloneGeneric(root)
 }

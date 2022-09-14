@@ -143,7 +143,7 @@ func (p *ParsedConfig) FieldBatchPolicy(path ...string) (conf BatchPolicy, err e
 		return
 	}
 
-	procsArray, ok := procsNode.([]interface{})
+	procsArray, ok := procsNode.([]any)
 	if !ok {
 		err = fmt.Errorf("field 'processors' returned unexpected value, expected array, got %T", procsNode)
 		return

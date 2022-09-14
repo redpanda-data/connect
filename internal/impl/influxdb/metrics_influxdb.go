@@ -45,7 +45,7 @@ func init() {
 					"hostname": "localhost",
 					"zone":     "danger",
 				},
-			).Map().Advanced().HasDefault(map[string]interface{}{}),
+			).Map().Advanced().HasDefault(map[string]any{}),
 			docs.FieldString("retention_policy", "Sets the retention policy for each write.").Advanced().HasDefault(""),
 			docs.FieldString("write_consistency", "[any|one|quorum|all] sets write consistency when available.").Advanced().HasDefault(""),
 		),
@@ -221,20 +221,20 @@ func (i *influxDBMetrics) publishRegistry() error {
 	return i.client.Write(points)
 }
 
-func getMetricValues(i interface{}) map[string]interface{} {
-	var values map[string]interface{}
+func getMetricValues(i any) map[string]any {
+	var values map[string]any
 	switch metric := i.(type) {
 	case metrics.Counter:
-		values = make(map[string]interface{}, 1)
+		values = make(map[string]any, 1)
 		values["count"] = metric.Count()
 	case metrics.Gauge:
-		values = make(map[string]interface{}, 1)
+		values = make(map[string]any, 1)
 		values["value"] = metric.Value()
 	case metrics.GaugeFloat64:
-		values = make(map[string]interface{}, 1)
+		values = make(map[string]any, 1)
 		values["value"] = metric.Value()
 	case metrics.Timer:
-		values = make(map[string]interface{}, 14)
+		values = make(map[string]any, 14)
 		t := metric.Snapshot()
 		ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 		values["count"] = t.Count()
@@ -252,7 +252,7 @@ func getMetricValues(i interface{}) map[string]interface{} {
 		values["15m.rate"] = t.Rate15()
 		values["mean.rate"] = t.RateMean()
 	case metrics.Histogram:
-		values = make(map[string]interface{}, 10)
+		values = make(map[string]any, 10)
 		t := metric.Snapshot()
 		ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 		values["count"] = t.Count()
@@ -269,13 +269,13 @@ func getMetricValues(i interface{}) map[string]interface{} {
 	return values
 }
 
-func (i *influxDBMetrics) getAllMetrics() map[string]map[string]interface{} {
-	data := make(map[string]map[string]interface{})
-	i.registry.Each(func(name string, metric interface{}) {
+func (i *influxDBMetrics) getAllMetrics() map[string]map[string]any {
+	data := make(map[string]map[string]any)
+	i.registry.Each(func(name string, metric any) {
 		values := getMetricValues(metric)
 		data[name] = values
 	})
-	i.runtimeRegistry.Each(func(name string, metric interface{}) {
+	i.runtimeRegistry.Each(func(name string, metric any) {
 		values := getMetricValues(metric)
 		data[name] = values
 	})

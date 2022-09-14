@@ -208,8 +208,8 @@ func (a *azureTableStorageWriter) WriteBatch(wctx context.Context, msg message.B
 	return a.execBatch(wctx, writeReqs)
 }
 
-func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg message.Batch) map[string]interface{} {
-	properties := make(map[string]interface{})
+func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg message.Batch) map[string]any {
+	properties := make(map[string]any)
 	if len(a.properties) == 0 {
 		err := json.Unmarshal(p.AsBytes(), &properties)
 		if err != nil {
@@ -217,7 +217,7 @@ func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg mess
 		}
 		for property, v := range properties {
 			switch v.(type) {
-			case []interface{}, map[string]interface{}:
+			case []any, map[string]any:
 				m, err := json.Marshal(v)
 				if err != nil {
 					a.log.Errorf("error marshaling property: %v.", property)

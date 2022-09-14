@@ -170,7 +170,7 @@ func (proc *bigQuerySelectProcessor) ProcessBatch(ctx context.Context, batch ser
 	for i, msg := range batch {
 		outBatch = append(outBatch, msg)
 
-		var args []interface{}
+		var args []any
 		if argsMapping != nil {
 			resMsg, err := batch.BloblangQuery(i, argsMapping)
 			if err != nil {
@@ -185,7 +185,7 @@ func (proc *bigQuerySelectProcessor) ProcessBatch(ctx context.Context, batch ser
 			}
 
 			var ok bool
-			if args, ok = iargs.([]interface{}); !ok {
+			if args, ok = iargs.([]any); !ok {
 				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 				continue
 			}

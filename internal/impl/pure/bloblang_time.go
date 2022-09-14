@@ -42,7 +42,7 @@ func init() {
 			return nil, err
 		}
 		dur := time.Duration(iDur)
-		return bloblang.TimestampMethod(func(t time.Time) (interface{}, error) {
+		return bloblang.TimestampMethod(func(t time.Time) (any, error) {
 			return t.Round(dur), nil
 		}), nil
 	}
@@ -74,7 +74,7 @@ func init() {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
 		}
-		return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
+		return bloblang.TimestampMethod(func(target time.Time) (any, error) {
 			return target.In(timezone), nil
 		}), nil
 	}
@@ -105,7 +105,7 @@ func init() {
 		)
 
 	parseDurCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-		return bloblang.StringMethod(func(s string) (interface{}, error) {
+		return bloblang.StringMethod(func(s string) (any, error) {
 			d, err := time.ParseDuration(s)
 			if err != nil {
 				return nil, err
@@ -146,7 +146,7 @@ func init() {
 		)
 
 	parseDurISOCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-		return bloblang.StringMethod(func(s string) (interface{}, error) {
+		return bloblang.StringMethod(func(s string) (any, error) {
 			// No need to normalise the output since we need it expressed as nanoseconds.
 			d, err := period.Parse(s, false)
 			if err != nil {
@@ -190,7 +190,7 @@ The input format is defined by showing how the reference time, defined to be Mon
 			if err != nil {
 				return nil, err
 			}
-			return bloblang.StringMethod(func(s string) (interface{}, error) {
+			return bloblang.StringMethod(func(s string) (any, error) {
 				ut, err := time.Parse(layout, s)
 				if err != nil {
 					return nil, err
@@ -244,7 +244,7 @@ The input format is defined by showing how the reference time, defined to be Mon
 			if err != nil {
 				return nil, err
 			}
-			return bloblang.StringMethod(func(s string) (interface{}, error) {
+			return bloblang.StringMethod(func(s string) (any, error) {
 				ut, err := timefmt.Parse(s, layout)
 				if err != nil {
 					return nil, err
@@ -331,7 +331,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 				return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
 			}
 		}
-		return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
+		return bloblang.TimestampMethod(func(target time.Time) (any, error) {
 			if timezone != nil {
 				target = target.In(timezone)
 			}
@@ -404,7 +404,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 				return nil, fmt.Errorf("failed to parse timezone location name: %w", err)
 			}
 		}
-		return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
+		return bloblang.TimestampMethod(func(target time.Time) (any, error) {
 			if timezone != nil {
 				target = target.In(timezone)
 			}
@@ -438,7 +438,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 		)
 
 	formatTSUnixCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-		return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
+		return bloblang.TimestampMethod(func(target time.Time) (any, error) {
 			return target.Unix(), nil
 		}), nil
 	}
@@ -469,7 +469,7 @@ The output format is defined by showing how the reference time, defined to be Mo
 		)
 
 	formatTSUnixNanoCtor := func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-		return bloblang.TimestampMethod(func(target time.Time) (interface{}, error) {
+		return bloblang.TimestampMethod(func(target time.Time) (any, error) {
 			return target.UnixNano(), nil
 		}), nil
 	}

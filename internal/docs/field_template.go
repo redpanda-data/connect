@@ -87,7 +87,7 @@ func (f FieldSpec) FlattenChildrenForDocs() []FieldSpecCtx {
 			if len(v.Examples) > 0 {
 				newV.ExamplesMarshalled = make([]string, len(v.Examples))
 				for i, e := range v.Examples {
-					exampleBytes, err := marshalYAML(map[string]interface{}{
+					exampleBytes, err := marshalYAML(map[string]any{
 						v.Name: e,
 					})
 					if err == nil {

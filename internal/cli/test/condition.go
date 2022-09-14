@@ -319,7 +319,7 @@ func (m MetadataEqualsCondition) Check(p *message.Part) error {
 func yamlNodeToTestString(n *yaml.Node, tgt *string) error {
 	switch n.Kind {
 	case yaml.SequenceNode:
-		var aval []interface{}
+		var aval []any
 		err := n.Decode(&aval)
 		if err != nil {
 			return err
@@ -328,7 +328,7 @@ func yamlNodeToTestString(n *yaml.Node, tgt *string) error {
 		*tgt = bytes.NewBuffer(bval).String()
 		return err
 	case yaml.MappingNode:
-		var mval map[string]interface{}
+		var mval map[string]any
 		err := n.Decode(&mval)
 		if err != nil {
 			return err

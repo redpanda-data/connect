@@ -104,9 +104,9 @@ func newDynamoDBPartiQL(
 	}
 }
 
-func cleanNulls(v interface{}) {
+func cleanNulls(v any) {
 	switch t := v.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		for k, v := range t {
 			if v == nil {
 				delete(t, k)
@@ -114,7 +114,7 @@ func cleanNulls(v interface{}) {
 				cleanNulls(v)
 			}
 		}
-	case []interface{}:
+	case []any:
 		for _, v := range t {
 			cleanNulls(v)
 		}
@@ -170,7 +170,7 @@ func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.Messag
 				batch[i].SetError(fmt.Errorf("failed to encode PartiQL result: %v", err))
 				continue
 			}
-			var resMap interface{}
+			var resMap any
 			if err := json.Unmarshal(itemBytes, &resMap); err != nil {
 				batch[i].SetError(fmt.Errorf("failed to decode PartiQL result: %v", err))
 				continue

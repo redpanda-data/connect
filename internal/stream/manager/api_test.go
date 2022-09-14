@@ -40,7 +40,7 @@ func router(m *manager.Type) *mux.Router {
 	return router
 }
 
-func genRequest(verb, url string, payload interface{}) *http.Request {
+func genRequest(verb, url string, payload any) *http.Request {
 	var body io.Reader
 
 	if payload != nil {
@@ -63,7 +63,7 @@ func genRequest(verb, url string, payload interface{}) *http.Request {
 	return req
 }
 
-func genYAMLRequest(verb, url string, payload interface{}) *http.Request {
+func genYAMLRequest(verb, url string, payload any) *http.Request {
 	var body io.Reader
 
 	if payload != nil {
@@ -103,10 +103,10 @@ func parseListBody(data *bytes.Buffer) listBody {
 }
 
 type getBody struct {
-	Active    bool        `json:"active"`
-	Uptime    float64     `json:"uptime"`
-	UptimeStr string      `json:"uptime_str"`
-	Config    interface{} `json:"config"`
+	Active    bool    `json:"active"`
+	Uptime    float64 `json:"uptime"`
+	UptimeStr string  `json:"uptime_str"`
+	Config    any     `json:"config"`
 }
 
 func parseGetBody(t *testing.T, data *bytes.Buffer) getBody {
@@ -167,15 +167,15 @@ func TestTypeAPIBadMethods(t *testing.T) {
 	}
 }
 
-func harmlessConf() interface{} {
-	return map[string]interface{}{
-		"input": map[string]interface{}{
-			"generate": map[string]interface{}{
+func harmlessConf() any {
+	return map[string]any{
+		"input": map[string]any{
+			"generate": map[string]any{
 				"mapping": "root = deleted()",
 			},
 		},
-		"output": map[string]interface{}{
-			"drop": map[string]interface{}{},
+		"output": map[string]any{
+			"drop": map[string]any{},
 		},
 	}
 }
@@ -247,7 +247,7 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	info = parseGetBody(t, response.Body)
 	assert.True(t, info.Active)
 
-	assert.Equal(t, map[string]interface{}{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
+	assert.Equal(t, map[string]any{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
 
 	request = genRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -269,13 +269,13 @@ func TestTypeAPIBasicOperations(t *testing.T) {
 	}()
 	_ = os.Setenv(testVar, `root.meow = 5`)
 
-	request = genRequest("POST", "/streams/fooEnv?chilled=true", map[string]interface{}{
-		"input": map[string]interface{}{
-			"generate": map[string]interface{}{
+	request = genRequest("POST", "/streams/fooEnv?chilled=true", map[string]any{
+		"input": map[string]any{
+			"generate": map[string]any{
 				"mapping": "${__TEST_INPUT_MAPPING}",
 			},
 		},
-		"output": map[string]interface{}{
+		"output": map[string]any{
 			"type": "drop",
 		},
 	})
@@ -320,9 +320,9 @@ func TestTypeAPIPatch(t *testing.T) {
 	r.ServeHTTP(response, request)
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 
-	patchConf := map[string]interface{}{
-		"input": map[string]interface{}{
-			"generate": map[string]interface{}{
+	patchConf := map[string]any{
+		"input": map[string]any{
+			"generate": map[string]any{
 				"interval": "2s",
 			},
 		},
@@ -406,7 +406,7 @@ func TestTypeAPIBasicOperationsYAML(t *testing.T) {
 
 	info = parseGetBody(t, response.Body)
 	require.True(t, info.Active)
-	assert.Equal(t, map[string]interface{}{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
+	assert.Equal(t, map[string]any{}, gabs.Wrap(info.Config).S("buffer", "memory").Data())
 
 	request = genYAMLRequest("DELETE", "/streams/foo", conf)
 	response = httptest.NewRecorder()
@@ -491,7 +491,7 @@ func TestTypeAPISetStreams(t *testing.T) {
 	bazConf := harmlessConf()
 	_, _ = gabs.Wrap(bazConf).Set("root = this.BAZ_ONE", "input", "generate", "mapping")
 
-	streamsBody := map[string]interface{}{}
+	streamsBody := map[string]any{}
 	streamsBody["bar"] = barConf
 	streamsBody["bar2"] = bar2Conf
 	streamsBody["baz"] = bazConf

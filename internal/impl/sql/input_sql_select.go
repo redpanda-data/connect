@@ -192,15 +192,15 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 
 	s.connSettings.apply(db)
 
-	var args []interface{}
+	var args []any
 	if s.argsMapping != nil {
-		var iargs interface{}
+		var iargs any
 		if iargs, err = s.argsMapping.Query(nil); err != nil {
 			return err
 		}
 
 		var ok bool
-		if args, ok = iargs.([]interface{}); !ok {
+		if args, ok = iargs.([]any); !ok {
 			err = fmt.Errorf("mapping returned non-array result: %T", iargs)
 			return
 		}

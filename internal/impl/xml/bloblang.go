@@ -44,7 +44,7 @@ Attempts to parse a string as an XML document and returns a structured result, w
 			if castOpt != nil {
 				cast = *castOpt
 			}
-			return bloblang.BytesMethod(func(xmlBytes []byte) (interface{}, error) {
+			return bloblang.BytesMethod(func(xmlBytes []byte) (any, error) {
 				xmlObj, err := ToMap(xmlBytes, cast)
 				if err != nil {
 					return nil, fmt.Errorf("failed to parse value as XML: %w", err)
