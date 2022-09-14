@@ -2,11 +2,13 @@ package beanstalkd
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/beanstalkd/go-beanstalk"
 
+	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -14,9 +16,9 @@ func beanstalkdInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
 		Version("3.46.0").
-		Summary("Reads messages from Beanstalkd queue.").
-		Field(service.NewStringField("tcp_address").
-			Description("Beanstalkd address to connect to.").
+		Summary("Reads messages from a Beanstalkd queue.").
+		Field(service.NewStringField("address").
+			Description("An address to connect to.").
 			Example("127.0.0.1:11300"))
 }
 
@@ -45,7 +47,7 @@ func newBeanstalkdReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 		log: log,
 	}
 
-	tcpAddr, err := conf.FieldString("tcp_address")
+	tcpAddr, err := conf.FieldString("address")
 	if err != nil {
 		return nil, err
 	}
@@ -86,22 +88,21 @@ func (bs *beanstalkdReader) Read(ctx context.Context) (*service.Message, service
 		return nil, nil, service.ErrNotConnected
 	}
 
-	for {
-		id, body, err := bs.connection.Reserve(time.Millisecond * 200)
-		if err != nil {
-			return nil, nil, err
+	id, body, err := bs.connection.Reserve(time.Millisecond * 200)
+	if err != nil {
+		if errors.Is(err, beanstalk.ErrTimeout) {
+			err = component.ErrTimeout
 		}
-
-		err = bs.connection.Delete(id)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		msg := service.NewMessage(body)
-		return msg, func(ctx context.Context, res error) error {
-			return nil
-		}, nil
+		return nil, nil, err
 	}
+
+	msg := service.NewMessage(body)
+	return msg, func(ctx context.Context, res error) error {
+		if res == nil {
+			return bs.connection.Delete(id)
+		}
+		return bs.connection.Release(id, 2, time.Millisecond*200)
+	}, nil
 }
 
 func (bs *beanstalkdReader) Close(ctx context.Context) (err error) {

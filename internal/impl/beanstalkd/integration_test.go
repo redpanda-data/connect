@@ -14,12 +14,12 @@ import (
 const template string = `
 output:
   beanstalkd:
-    tcp_address: localhost:$PORT
+    address: localhost:$PORT
     max_in_flight: $MAX_IN_FLIGHT
 
 input:
   beanstalkd:
-    tcp_address: localhost:$PORT
+    address: localhost:$PORT
 `
 
 func TestIntegrationBeanstalkdOpenClose(t *testing.T) {

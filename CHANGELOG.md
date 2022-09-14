@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - The `hash` bloblang method now supports `crc32`.
 - New `tracing_span` bloblang function.
 - All `sql` components now support SQLite.
+- New `beanstalkd` input and output.
 
 ### Fixed
 

@@ -27,15 +27,15 @@ Introduced in version 3.46.0.
 output:
   label: ""
   beanstalkd:
-    tcp_address: ""
+    address: ""
     max_in_flight: 64
 ```
 
 ## Fields
 
-### `tcp_address`
+### `address`
 
-Beanstalkd address to connect to.
+An address to connect to.
 
 
 Type: `string`  
@@ -43,7 +43,7 @@ Type: `string`
 ```yml
 # Examples
 
-tcp_address: 127.0.0.1:11300
+address: 127.0.0.1:11300
 ```
 
 ### `max_in_flight`
