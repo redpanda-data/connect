@@ -35,6 +35,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.15.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.0 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.9.1 // indirect
+	github.com/beanstalkd/go-beanstalk v0.1.0
 	github.com/benhoyt/goawk v1.17.1
 	github.com/bradfitz/gomemcache v0.0.0-20220106215444-fb4bf637b56d
 	github.com/bwmarrin/snowflake v0.3.0
