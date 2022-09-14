@@ -9,7 +9,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql").
+var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite").
 	Description("A database [driver](#drivers) to use.")
 
 var dsnField = service.NewStringField("dsn").
@@ -25,6 +25,7 @@ The following is a list of supported drivers, their placeholder style, and their
 ` + "| `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |" + `
 ` + "| `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |" + `
 ` + "| `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |" + `
+` + "| `sqlite` | `file:/path/to/filename.db[?param&=value1&...]` |" + `
 
 Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.`).
 	Example("clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60").
@@ -62,6 +63,7 @@ func rawQueryField() *service.ConfigField {
 ` + "| `mysql` | Question mark |" + `
 ` + "| `postgres` | Dollar sign |" + `
 ` + "| `mssql` | Question mark |" + `
+` + "| `sqlite` | Question mark |" + `
 `)
 }
 

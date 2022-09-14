@@ -101,7 +101,7 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Options: `mysql`, `postgres`, `clickhouse`, `mssql`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`.
 
 ### `dsn`
 
@@ -117,6 +117,7 @@ The following is a list of supported drivers, their placeholder style, and their
 | `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |
 | `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |
 | `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |
+| `sqlite` | `file:/path/to/filename.db[?param&=value1&...]` |
 
 Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
 

@@ -73,7 +73,7 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Options: `mysql`, `postgres`, `clickhouse`, `mssql`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`.
 
 ### `data_source_name`
 
@@ -92,6 +92,7 @@ The query to execute. The style of placeholder to use depends on the driver, som
 | `mysql` | Question mark |
 | `postgres` | Dollar sign |
 | `mssql` | Question mark |
+| `sqlite` | Question mark |
 
 
 Type: `string`  
