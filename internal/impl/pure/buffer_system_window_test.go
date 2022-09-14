@@ -610,7 +610,7 @@ func TestSystemWindowOwnership(t *testing.T) {
 		"ts":    10,
 	})
 
-	err = w.WriteBatch(ctx, service.MessageBatch{inMsg}, func(ctx context.Context, err error) error {
+	err = w.WriteBatch(ctx, service.MessageBatch{inMsg}, func(ctx context.Context, _ error) error {
 		inStruct, err := inMsg.AsStructuredMut()
 		require.NoError(t, err)
 		_, err = gabs.Wrap(inStruct).Set("quack", "moo")

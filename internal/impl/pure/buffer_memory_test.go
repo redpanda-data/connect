@@ -79,7 +79,7 @@ limit: 100000
 		"hello": "world",
 	})
 
-	require.NoError(t, block.WriteBatch(ctx, service.MessageBatch{inMsg}, func(ctx context.Context, err error) error {
+	require.NoError(t, block.WriteBatch(ctx, service.MessageBatch{inMsg}, func(ctx context.Context, _ error) error {
 		inStruct, err := inMsg.AsStructuredMut()
 		require.NoError(t, err)
 		_, err = gabs.Wrap(inStruct).Set("quack", "moo")

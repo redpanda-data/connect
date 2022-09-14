@@ -373,7 +373,6 @@ type avroOCFReader struct {
 	avroCodec    *goavro.Codec
 	decoder      avroDecoder
 	logicalTypes bool
-	marshaler    string
 	sourceAck    ReaderAckFn
 
 	mut      sync.Mutex
@@ -397,7 +396,7 @@ func newAvroOCFReader(conf ReaderConfig, marshaler string, r io.ReadCloser, ackF
 		}
 		a.pending++
 		m := service.NewMessage(nil)
-		if a.logicalTypes == false {
+		if !a.logicalTypes {
 			m.SetStructured(datum)
 			mp, err := m.AsBytes()
 			if err != nil {
