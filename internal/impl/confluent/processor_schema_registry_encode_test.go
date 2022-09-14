@@ -70,8 +70,10 @@ subject: foo
 			name: "url with basic auth",
 			config: `
 url: http://example.com/v1
-username: user
-password: pass
+basic_auth:
+  enabled: true
+  username: user
+  password: pass
 subject: foo
 `,
 			expectedBaseURL:        "http://example.com/v1",
@@ -126,7 +128,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -208,7 +210,7 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, true, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, true, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -290,7 +292,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -367,7 +369,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, true, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, true, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -432,7 +434,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 
@@ -493,7 +495,7 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 

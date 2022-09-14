@@ -43,8 +43,10 @@ url: http://example.com/v1
 			name: "url with basic auth",
 			config: `
 url: http://example.com/v1
-username: user
-password: pass
+basic_auth:
+  enabled: true
+  username: user
+  password: pass
 `,
 			expectedBaseURL:        "http://example.com/v1",
 			expectedBasicAuthToken: "dXNlcjpwYXNz",
@@ -200,7 +202,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, "", "", nil, false, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, false, "", "", nil, false, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -303,7 +305,7 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, "", "", nil, true, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, false, "", "", nil, true, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -381,7 +383,7 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 		return nil, fmt.Errorf("nope")
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, "", "", nil, false, nil)
+	decoder, err := newSchemaRegistryDecoder(urlStr, false, "", "", nil, false, nil)
 	require.NoError(t, err)
 	require.NoError(t, decoder.Close(context.Background()))
 

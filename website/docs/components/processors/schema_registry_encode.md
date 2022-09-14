@@ -35,8 +35,6 @@ Introduced in version 3.58.0.
 label: ""
 schema_registry_encode:
   url: ""
-  username: ""
-  password: ""
   subject: ""
   refresh_period: 10m
 ```
@@ -49,8 +47,10 @@ schema_registry_encode:
 label: ""
 schema_registry_encode:
   url: ""
-  username: ""
-  password: ""
+  basic_auth:
+    enabled: false
+    username: ""
+    password: ""
   subject: ""
   refresh_period: 10m
   avro_raw_json: false
@@ -65,31 +65,7 @@ schema_registry_encode:
 </TabItem>
 </Tabs>
 
-Encodes messages automatically from schemas obtains from a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by polling the service for the latest schema version for target subjects.
-
-If a message fails to encode under the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
-
-Currently only Avro schemas are supported.
-
-### Avro JSON Format
-
-By default this processor expects documents formatted as [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding) when encoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
-
-- if its type is `null`, then it is encoded as a JSON `null`;
-- otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
-
-For example, the union schema `["null","string","Foo"]`, where `Foo` is a record name, would encode:
-
-- `null` as `null`;
-- the string `"a"` as `{"string": "a"}`; and
-- a `Foo` instance as `{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
-
-However, it is possible to instead consume documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field [`avro_raw_json`](#avro_raw_json) to `true`.
-
-### Known Issues
-
-Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if `avro_raw_json` is set to true, though now of course non-logical types will not be in-line with the spec.
-
+Enable basic authentication
 
 ## Fields
 
@@ -100,17 +76,32 @@ The base URL of the schema registry service.
 
 Type: `string`  
 
-### `username`
+### `basic_auth`
 
-The basic auth username for the schema registry service.
+Allows you to specify basic authentication.
+
+
+Type: `object`  
+
+### `basic_auth.enabled`
+
+Whether to use basic authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `basic_auth.username`
+
+Username required to authenticate.
 
 
 Type: `string`  
 Default: `""`  
 
-### `password`
+### `basic_auth.password`
 
-The basic auth password for the schema registry service.
+Password required to authenticate.
 
 
 Type: `string`  

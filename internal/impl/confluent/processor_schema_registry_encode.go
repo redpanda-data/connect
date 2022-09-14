@@ -54,8 +54,19 @@ However, it is possible to instead consume documents in [standard/raw JSON forma
 Important! There is an outstanding issue in the [avro serializing library](https://github.com/linkedin/goavro) that benthos uses which means it [doesn't encode logical types correctly](https://github.com/linkedin/goavro/issues/252). It's still possible to encode logical types that are in-line with the spec if ` + "`avro_raw_json` is set to true" + `, though now of course non-logical types will not be in-line with the spec.
 `).
 		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
-		Field(service.NewStringField("username").Description("The basic auth username for the schema registry service.").Default("")).
-		Field(service.NewStringField("password").Description("The basic auth password for the schema registry service.").Default("")).
+		Field(service.NewObjectField("basic_auth",
+			service.NewBoolField("enabled").
+				Description("Whether to use basic authentication in requests.").
+				Default(false),
+			service.NewStringField("username").
+				Description("Username required to authenticate.").
+				Default(""),
+			service.NewStringField("password").
+				Description("Password required to authenticate.").
+				Default("")).
+			Advanced().
+			Description("Allows you to specify basic authentication."),
+		).Description("Enable basic authentication").
 		Field(service.NewInterpolatedStringField("subject").Description("The schema subject to derive schemas from.").
 			Example("foo").
 			Example(`${! meta("kafka_topic") }`)).
@@ -108,11 +119,15 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	usernameStr, err := conf.FieldString("username")
+	basicAuthEnabledBool, err := conf.FieldBool("basic_auth", "enabled")
 	if err != nil {
 		return nil, err
 	}
-	passwordStr, err := conf.FieldString("password")
+	usernameStr, err := conf.FieldString("basic_auth", "username")
+	if err != nil {
+		return nil, err
+	}
+	passwordStr, err := conf.FieldString("basic_auth", "password")
 	if err != nil {
 		return nil, err
 	}
@@ -140,11 +155,12 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryEncoder(urlStr, usernameStr, passwordStr, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, logger)
+	return newSchemaRegistryEncoder(urlStr, basicAuthEnabledBool, usernameStr, passwordStr, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, logger)
 }
 
 func newSchemaRegistryEncoder(
-	urlStr,
+	urlStr string,
+	basicAuthEnabledBool bool,
 	usernameStr,
 	passwordStr string,
 	tlsConf *tls.Config,
@@ -159,7 +175,7 @@ func newSchemaRegistryEncoder(
 	}
 
 	var token string
-	if usernameStr != "" && passwordStr != "" {
+	if basicAuthEnabledBool == true {
 		token = base64.StdEncoding.EncodeToString([]byte(usernameStr + ":" + passwordStr))
 	}
 

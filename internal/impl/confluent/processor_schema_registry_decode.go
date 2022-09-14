@@ -50,8 +50,19 @@ However, it is possible to instead create documents in [standard/raw JSON format
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.").
 			Advanced().Default(false)).
 		Field(service.NewStringField("url").Description("The base URL of the schema registry service.")).
-		Field(service.NewStringField("username").Description("The basic auth username for the schema registry service.").Default("")).
-		Field(service.NewStringField("password").Description("The basic auth password for the schema registry service.").Default("")).
+		Field(service.NewObjectField("basic_auth",
+			service.NewBoolField("enabled").
+				Description("Whether to use basic authentication in requests.").
+				Default(false),
+			service.NewStringField("username").
+				Description("Username required to authenticate.").
+				Default(""),
+			service.NewStringField("password").
+				Description("Password required to authenticate.").
+				Default("")).
+			Advanced().
+			Description("Allows you to specify basic authentication."),
+		).Description("Enable basic authentication").
 		Field(service.NewTLSField("tls"))
 }
 
@@ -89,11 +100,15 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	usernameStr, err := conf.FieldString("username")
+	basicAuthEnabledBool, err := conf.FieldBool("basic_auth", "enabled")
 	if err != nil {
 		return nil, err
 	}
-	passwordStr, err := conf.FieldString("password")
+	usernameStr, err := conf.FieldString("basic_auth", "username")
+	if err != nil {
+		return nil, err
+	}
+	passwordStr, err := conf.FieldString("basic_auth", "password")
 	if err != nil {
 		return nil, err
 	}
@@ -105,17 +120,17 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryDecoder(urlStr, usernameStr, passwordStr, tlsConf, avroRawJSON, logger)
+	return newSchemaRegistryDecoder(urlStr, basicAuthEnabledBool, usernameStr, passwordStr, tlsConf, avroRawJSON, logger)
 }
 
-func newSchemaRegistryDecoder(urlStr, usernameStr, passwordStr string, tlsConf *tls.Config, avroRawJSON bool, logger *service.Logger) (*schemaRegistryDecoder, error) {
+func newSchemaRegistryDecoder(urlStr string, basicAuthEnabledBool bool, usernameStr, passwordStr string, tlsConf *tls.Config, avroRawJSON bool, logger *service.Logger) (*schemaRegistryDecoder, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
 	}
 
 	var token string
-	if usernameStr != "" && passwordStr != "" {
+	if basicAuthEnabledBool == true {
 		token = base64.StdEncoding.EncodeToString([]byte(usernameStr + ":" + passwordStr))
 	}
 
