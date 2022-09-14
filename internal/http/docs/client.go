@@ -16,6 +16,7 @@ func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.Field
 		docs.FieldString("verb", "A verb to connect with", "POST", "GET", "DELETE"),
 		docs.FieldString("headers", "A map of headers to add to the request.", map[string]interface{}{
 			"Content-Type": "application/octet-stream",
+			"traceparent":  `${! tracing_span().traceparent }`,
 		}).IsInterpolated().Map().HasDefault(map[string]interface{}{}),
 		docs.FieldObject("metadata", "Specify optional matching rules to determine which metadata keys should be added to the HTTP request as headers.").Advanced().
 			WithChildren(metadata.IncludeFilterDocs()...),

@@ -208,6 +208,7 @@ Default: `{}`
 
 headers:
   Content-Type: application/octet-stream
+  traceparent: ${! tracing_span().traceparent }
 ```
 
 ### `metadata`
