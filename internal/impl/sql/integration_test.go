@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"os"
 	"regexp"
 	"runtime"
 	"strings"
@@ -539,6 +540,7 @@ func TestIntegration(t *testing.T) {
 	t.Run("postgres", postgresIntegration)
 	t.Run("mysql", mySQLIntegration)
 	t.Run("mssql", msSQLIntegration)
+	t.Run("sqlite", sqliteIntegration)
 }
 
 func clickhouseIntegration(t *testing.T) {
@@ -835,4 +837,50 @@ func msSQLIntegration(t *testing.T) {
 	}))
 
 	testSuite(t, "mssql", dsn, createTable)
+}
+
+func sqliteIntegration(t *testing.T) {
+	t.Parallel()
+
+	var db *sql.DB
+	var err error
+	t.Cleanup(func() {
+		os.Remove("./foo.db")
+
+		if db != nil {
+			db.Close()
+		}
+	})
+
+	createTable := func(name string) error {
+		_, err := db.Exec(fmt.Sprintf(`create table %v (
+  foo varchar(50) not null,
+  bar integer not null,
+  baz varchar(50) not null,
+  primary key (foo)
+		);`, name))
+		return err
+	}
+
+	os.Remove("./foo.db")
+
+	dsn := "file:foo.db"
+
+	require.NoError(t, func() error {
+		db, err = sql.Open("sqlite", dsn)
+		if err != nil {
+			return err
+		}
+		if err = db.Ping(); err != nil {
+			db.Close()
+			db = nil
+			return err
+		}
+		if err := createTable("footable"); err != nil {
+			return err
+		}
+		return nil
+	}())
+
+	testSuite(t, "sqlite", dsn, createTable)
 }
