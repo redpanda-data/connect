@@ -112,26 +112,26 @@ Find out more about Bloblang at: https://benthos.dev/docs/guides/bloblang/about`
 
 type execCache struct {
 	msg  message.Batch
-	vars map[string]interface{}
+	vars map[string]any
 }
 
 func newExecCache() *execCache {
 	return &execCache{
 		msg:  message.QuickBatch([][]byte{[]byte(nil)}),
-		vars: map[string]interface{}{},
+		vars: map[string]any{},
 	}
 }
 
 func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutput bool, input []byte) (string, error) {
 	e.msg.Get(0).SetBytes(input)
 
-	var valuePtr *interface{}
+	var valuePtr *any
 	var parseErr error
 
-	lazyValue := func() *interface{} {
+	lazyValue := func() *any {
 		if valuePtr == nil && parseErr == nil {
 			if rawInput {
-				var value interface{} = input
+				var value any = input
 				valuePtr = &value
 			} else {
 				if jObj, err := e.msg.Get(0).AsStructured(); err == nil {
@@ -152,7 +152,7 @@ func (e *execCache) executeMapping(exec *mapping.Executor, rawInput, prettyOutpu
 		delete(e.vars, k)
 	}
 
-	var result interface{} = query.Nothing(nil)
+	var result any = query.Nothing(nil)
 	err := exec.ExecOnto(query.FunctionContext{
 		Maps:     exec.Maps(),
 		Vars:     e.vars,

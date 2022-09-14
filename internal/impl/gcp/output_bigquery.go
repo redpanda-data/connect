@@ -188,7 +188,7 @@ For the CSV format when the field `+"`csv.header`"+` is specified a header row w
 		Field(service.NewObjectField("csv",
 			service.NewStringListField("header").
 				Description("A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header.").
-				Default([]interface{}{}),
+				Default([]any{}),
 			service.NewStringField("field_delimiter").
 				Description("The separator for fields in a CSV file, used when reading or exporting data.").
 				Default(","),

@@ -361,7 +361,7 @@ func TestCSVReaderStrict(t *testing.T) {
 
 	require.NoError(t, f.Connect(context.Background()))
 
-	for _, exp := range []interface{}{
+	for _, exp := range []any{
 		`{"header1":"foo1","header2":"foo2","header3":"foo3"}`,
 		errors.New("record on line 3: wrong number of fields"),
 		`{"header1":"baz1","header2":"baz2","header3":"baz3"}`,

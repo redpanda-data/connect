@@ -333,7 +333,7 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 		return nil
 	})
 
-	textMapGeneric := map[string]interface{}{}
+	textMapGeneric := map[string]any{}
 	for k, vals := range r.Header {
 		for _, v := range vals {
 			textMapGeneric[k] = v

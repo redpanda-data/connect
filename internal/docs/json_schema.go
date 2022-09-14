@@ -1,8 +1,8 @@
 package docs
 
 // JSONSchema serializes a field spec into a JSON schema structure.
-func (f FieldSpec) JSONSchema() interface{} {
-	spec := map[string]interface{}{}
+func (f FieldSpec) JSONSchema() any {
+	spec := map[string]any{}
 	switch f.Kind {
 	case Kind2DArray:
 		innerField := f
@@ -18,7 +18,7 @@ func (f FieldSpec) JSONSchema() interface{} {
 		innerField := f
 		innerField.Kind = KindScalar
 		spec["type"] = "object"
-		spec["patternProperties"] = map[string]interface{}{
+		spec["patternProperties"] = map[string]any{
 			".": innerField.JSONSchema(),
 		}
 	default:
@@ -66,8 +66,8 @@ func (f FieldSpec) JSONSchema() interface{} {
 }
 
 // JSONSchema serializes a field spec into a JSON schema structure.
-func (f FieldSpecs) JSONSchema() map[string]interface{} {
-	spec := map[string]interface{}{}
+func (f FieldSpecs) JSONSchema() map[string]any {
+	spec := map[string]any{}
 	for _, field := range f {
 		spec[field.Name] = field.JSONSchema()
 	}

@@ -11,7 +11,7 @@ import (
 func TestTypeError(t *testing.T) {
 	tests := map[string]struct {
 		from   string
-		actual interface{}
+		actual any
 		types  []ValueType
 		exp    string
 	}{
@@ -52,12 +52,12 @@ func TestTypeError(t *testing.T) {
 			exp:    `expected number value, got bool (false)`,
 		},
 		"want num get array": {
-			actual: []interface{}{"foo"},
+			actual: []any{"foo"},
 			types:  []ValueType{ValueNumber},
 			exp:    `expected number value, got array`,
 		},
 		"want num get object": {
-			actual: map[string]interface{}{"foo": "bar"},
+			actual: map[string]any{"foo": "bar"},
 			types:  []ValueType{ValueNumber},
 			exp:    `expected number value, got object`,
 		},
@@ -108,8 +108,8 @@ func TestErrorFromError(t *testing.T) {
 func TestTypeMismatchError(t *testing.T) {
 	tests := map[string]struct {
 		operator string
-		left     interface{}
-		right    interface{}
+		left     any
+		right    any
 		exp      string
 	}{
 		"string to number": {
@@ -121,7 +121,7 @@ func TestTypeMismatchError(t *testing.T) {
 		"bool to array": {
 			operator: "compare",
 			left:     false,
-			right:    []interface{}{"foo"},
+			right:    []any{"foo"},
 			exp:      `cannot compare types bool (from left thing) and array (from right thing)`,
 		},
 	}

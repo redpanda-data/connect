@@ -16,9 +16,9 @@ func TestMutationCreateCrossfire(t *testing.T) {
 	tCtx := context.Background()
 
 	inMsg := service.NewMessage(nil)
-	inMsg.SetStructuredMut(map[string]interface{}{
-		"foo": map[string]interface{}{
-			"bar": map[string]interface{}{
+	inMsg.SetStructuredMut(map[string]any{
+		"foo": map[string]any{
+			"bar": map[string]any{
 				"baz": "original value",
 				"qux": "dont change",
 			},

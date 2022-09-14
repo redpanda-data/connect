@@ -32,7 +32,7 @@ func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 		field = field.WithChildren(FieldsFromYAML(node)...)
 		field.Type = FieldTypeObject
 		if len(field.Children) == 0 {
-			var defaultI interface{} = map[string]interface{}{}
+			var defaultI any = map[string]any{}
 			field.Default = &defaultI
 		}
 	case yaml.SequenceNode:
@@ -47,17 +47,17 @@ func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 				var defaultArray []string
 				_ = node.Decode(&defaultArray)
 
-				var defaultI interface{} = defaultArray
+				var defaultI any = defaultArray
 				field.Default = &defaultI
 			case FieldTypeInt:
 				var defaultArray []int64
 				_ = node.Decode(&defaultArray)
 
-				var defaultI interface{} = defaultArray
+				var defaultI any = defaultArray
 				field.Default = &defaultI
 			}
 		} else {
-			var defaultI interface{} = []interface{}{}
+			var defaultI any = []any{}
 			field.Default = &defaultI
 		}
 	case yaml.ScalarNode:
@@ -68,7 +68,7 @@ func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 			var defaultBool bool
 			_ = node.Decode(&defaultBool)
 
-			var defaultI interface{} = defaultBool
+			var defaultI any = defaultBool
 			field.Default = &defaultI
 		case "!!int":
 			field.Type = FieldTypeInt
@@ -76,7 +76,7 @@ func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 			var defaultInt int64
 			_ = node.Decode(&defaultInt)
 
-			var defaultI interface{} = defaultInt
+			var defaultI any = defaultInt
 			field.Default = &defaultI
 		case "!!float":
 			field.Type = FieldTypeFloat
@@ -84,7 +84,7 @@ func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 			var defaultFloat float64
 			_ = node.Decode(&defaultFloat)
 
-			var defaultI interface{} = defaultFloat
+			var defaultI any = defaultFloat
 			field.Default = &defaultI
 		default:
 			field.Type = FieldTypeString
@@ -92,7 +92,7 @@ func FieldFromYAML(name string, node *yaml.Node) FieldSpec {
 			var defaultStr string
 			_ = node.Decode(&defaultStr)
 
-			var defaultI interface{} = defaultStr
+			var defaultI any = defaultStr
 			field.Default = &defaultI
 		}
 	}
@@ -631,7 +631,7 @@ func (f FieldSpec) ToYAML(recurse bool) (*yaml.Node, error) {
 		return &node, nil
 	}
 	if f.Kind == KindArray || f.Kind == Kind2DArray {
-		s := []interface{}{}
+		s := []any{}
 		if err := node.Encode(s); err != nil {
 			return nil, err
 		}
@@ -639,7 +639,7 @@ func (f FieldSpec) ToYAML(recurse bool) (*yaml.Node, error) {
 		if len(f.Children) > 0 && recurse {
 			return f.Children.ToYAML()
 		}
-		s := map[string]interface{}{}
+		s := map[string]any{}
 		if err := node.Encode(s); err != nil {
 			return nil, err
 		}
@@ -707,7 +707,7 @@ type ToValueConfig struct {
 
 // YAMLToValue converts a yaml node into a generic value by referencing the
 // expected type.
-func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}, error) {
+func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (any, error) {
 	node = unwrapDocumentNode(node)
 
 	switch f.Kind {
@@ -717,7 +717,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}
 		}
 		subSpec := f.Array()
 
-		var s []interface{}
+		var s []any
 		for i := 0; i < len(node.Content); i++ {
 			v, err := subSpec.YAMLToValue(node.Content[i], conf)
 			if err != nil {
@@ -732,7 +732,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}
 		}
 		subSpec := f.Scalar()
 
-		var s []interface{}
+		var s []any
 		for i := 0; i < len(node.Content); i++ {
 			v, err := subSpec.YAMLToValue(node.Content[i], conf)
 			if err != nil {
@@ -747,7 +747,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}
 		}
 		subSpec := f.Scalar()
 
-		m := map[string]interface{}{}
+		m := map[string]any{}
 		for i := 0; i < len(node.Content)-1; i += 2 {
 			var err error
 			if m[node.Content[i].Value], err = subSpec.YAMLToValue(node.Content[i+1], conf); err != nil {
@@ -782,7 +782,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}
 		}
 		return b, nil
 	case FieldTypeUnknown:
-		var i interface{}
+		var i any
 		if err := node.Decode(&i); err != nil {
 			return nil, err
 		}
@@ -795,7 +795,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}
 		// We don't know what the field actually is (likely a component
 		// type), so if we we can either decode into a generic interface
 		// or return the raw node itself.
-		var v interface{}
+		var v any
 		if err := node.Decode(&v); err != nil {
 			return nil, err
 		}
@@ -807,7 +807,7 @@ func (f FieldSpec) YAMLToValue(node *yaml.Node, conf ToValueConfig) (interface{}
 // YAMLToMap converts a yaml node into a generic map structure by referencing
 // expected fields, adding default values to the map when the node does not
 // contain them.
-func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]interface{}, error) {
+func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]any, error) {
 	node = unwrapDocumentNode(node)
 
 	pendingFieldsMap := map[string]FieldSpec{}
@@ -815,7 +815,7 @@ func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]i
 		pendingFieldsMap[field.Name] = field
 	}
 
-	resultMap := map[string]interface{}{}
+	resultMap := map[string]any{}
 
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		fieldName := node.Content[i].Value
@@ -827,7 +827,7 @@ func (f FieldSpecs) YAMLToMap(node *yaml.Node, conf ToValueConfig) (map[string]i
 				return nil, fmt.Errorf("field '%v': %w", fieldName, err)
 			}
 		} else {
-			var v interface{}
+			var v any
 			if err := node.Content[i+1].Decode(&v); err != nil {
 				return nil, err
 			}

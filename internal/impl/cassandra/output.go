@@ -280,7 +280,7 @@ func (c *cassandraWriter) writeBatch(session *gocql.Session, msg message.Batch) 
 	return nil
 }
 
-func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]interface{}, error) {
+func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]any, error) {
 	if c.argsMapping != nil {
 		// We've got an "args_mapping" field, extract values from there.
 		part, err := c.argsMapping.MapPart(index, msg)
@@ -293,7 +293,7 @@ func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]interface{}, 
 			return nil, fmt.Errorf("parsing bloblang mapping result as json: %w", err)
 		}
 
-		j, ok := jraw.([]interface{})
+		j, ok := jraw.([]any)
 		if !ok {
 			return nil, fmt.Errorf("expected bloblang mapping result to be []interface{} but was %T", jraw)
 		}
@@ -306,7 +306,7 @@ func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]interface{}, 
 
 	// If we've been given the "args" field, extract values from there.
 	if len(c.args) > 0 {
-		values := make([]interface{}, 0, len(c.args))
+		values := make([]any, 0, len(c.args))
 		for _, arg := range c.args {
 			values = append(values, stringValue(arg.String(index, msg)))
 		}
@@ -432,7 +432,7 @@ func (s stringValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
 }
 
 type genericValue struct {
-	v interface{}
+	v any
 }
 
 // We get typed values out of mappings. However, gocql performs type checking

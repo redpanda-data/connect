@@ -101,7 +101,7 @@ func newRedisCache(
 		prefix:     prefix,
 		client:     client,
 		boffPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				bo := *backOff
 				bo.Reset()
 				return &bo

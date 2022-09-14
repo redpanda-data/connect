@@ -30,12 +30,12 @@ func init() {
 	if err := bloblang.RegisterMethodV2(
 		"parse_msgpack", msgpackParseSpec,
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			return func(v interface{}) (interface{}, error) {
+			return func(v any) (any, error) {
 				b, err := query.IGetBytes(v)
 				if err != nil {
 					return nil, err
 				}
-				var jObj interface{}
+				var jObj any
 				if err := msgpack.Unmarshal(b, &jObj); err != nil {
 					return nil, err
 				}
@@ -65,7 +65,7 @@ func init() {
 	if err := bloblang.RegisterMethodV2(
 		"format_msgpack", msgpackFormatSpec,
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			return func(v interface{}) (interface{}, error) {
+			return func(v any) (any, error) {
 				return msgpack.Marshal(v)
 			}, nil
 		},

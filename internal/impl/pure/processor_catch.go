@@ -53,13 +53,13 @@ actions (such as logging/metrics) are required before dropping them.
 
 More information about error handling can be found [here](/docs/configuration/error_handling).`,
 		Config: docs.FieldProcessor("", "").Array().
-			LinterFunc(func(ctx docs.LintContext, line, col int, value interface{}) []docs.Lint {
-				childProcs, ok := value.([]interface{})
+			LinterFunc(func(ctx docs.LintContext, line, col int, value any) []docs.Lint {
+				childProcs, ok := value.([]any)
 				if !ok {
 					return nil
 				}
 				for _, child := range childProcs {
-					childObj, ok := child.(map[string]interface{})
+					childObj, ok := child.(map[string]any)
 					if !ok {
 						continue
 					}

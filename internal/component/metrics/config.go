@@ -20,7 +20,7 @@ type Config struct {
 	Prometheus    PrometheusConfig `json:"prometheus" yaml:"prometheus"`
 	Statsd        StatsdConfig     `json:"statsd" yaml:"statsd"`
 	Logger        LoggerConfig     `json:"logger" yaml:"logger"`
-	Plugin        interface{}      `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Plugin        any              `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.

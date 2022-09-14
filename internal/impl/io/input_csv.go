@@ -299,15 +299,15 @@ func (r *csvReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAc
 
 		part := message.NewPart(nil)
 
-		var structured interface{}
+		var structured any
 		if len(headers) == 0 || len(headers) < len(records) {
-			slice := make([]interface{}, 0, len(records))
+			slice := make([]any, 0, len(records))
 			for _, r := range records {
 				slice = append(slice, r)
 			}
 			structured = slice
 		} else {
-			obj := make(map[string]interface{}, len(records))
+			obj := make(map[string]any, len(records))
 			for i, r := range records {
 				obj[headers[i]] = r
 			}

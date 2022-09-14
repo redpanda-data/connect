@@ -96,7 +96,7 @@ type FieldSpec struct {
 	IsOptional bool `json:"is_optional,omitempty"`
 
 	// Default value of the field.
-	Default *interface{} `json:"default,omitempty"`
+	Default *any `json:"default,omitempty"`
 
 	// Interpolation indicates that the field supports interpolation
 	// functions.
@@ -106,7 +106,7 @@ type FieldSpec struct {
 	Bloblang bool `json:"bloblang,omitempty"`
 
 	// Examples is a slice of optional example values for a field.
-	Examples []interface{} `json:"examples,omitempty"`
+	Examples []any `json:"examples,omitempty"`
 
 	// AnnotatedOptions for this field. Each option should have a summary.
 	AnnotatedOptions [][2]string `json:"annotated_options,omitempty"`
@@ -124,7 +124,7 @@ type FieldSpec struct {
 	// a field.
 	Linter string `json:"linter,omitempty"`
 
-	omitWhenFn   func(field, parent interface{}) (why string, shouldOmit bool)
+	omitWhenFn   func(field, parent any) (why string, shouldOmit bool)
 	customLintFn LintFunc
 }
 
@@ -196,7 +196,7 @@ func (f FieldSpec) Scalar() FieldSpec {
 }
 
 // HasDefault returns a new FieldSpec that specifies a default value.
-func (f FieldSpec) HasDefault(v interface{}) FieldSpec {
+func (f FieldSpec) HasDefault(v any) FieldSpec {
 	f.Default = &v
 	return f
 }
@@ -251,7 +251,7 @@ func (f FieldSpec) WithChildren(children ...FieldSpec) FieldSpec {
 // OmitWhen specifies a custom func that, when provided a generic config struct,
 // returns a boolean indicating when the field can be safely omitted from a
 // config.
-func (f FieldSpec) OmitWhen(fn func(field, parent interface{}) (why string, shouldOmit bool)) FieldSpec {
+func (f FieldSpec) OmitWhen(fn func(field, parent any) (why string, shouldOmit bool)) FieldSpec {
 	f.omitWhenFn = fn
 	return f
 }
@@ -293,16 +293,16 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 
 	m, err := env.NewMapping(blobl)
 	if err != nil {
-		f.customLintFn = func(ctx LintContext, line, col int, value interface{}) (lints []Lint) {
+		f.customLintFn = func(ctx LintContext, line, col int, value any) (lints []Lint) {
 			return []Lint{NewLintError(line, fmt.Sprintf("Field lint mapping itself failed to parse: %v", err))}
 		}
 		return f
 	}
 
 	f.Linter = blobl
-	f.customLintFn = func(ctx LintContext, line, col int, value interface{}) (lints []Lint) {
+	f.customLintFn = func(ctx LintContext, line, col int, value any) (lints []Lint) {
 		res, err := m.Exec(query.FunctionContext{
-			Vars:     map[string]interface{}{},
+			Vars:     map[string]any{},
 			Maps:     map[string]query.Function{},
 			MsgBatch: message.QuickBatch(nil),
 		}.WithValue(value))
@@ -310,7 +310,7 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 			return []Lint{NewLintError(line, err.Error())}
 		}
 		switch t := res.(type) {
-		case []interface{}:
+		case []any:
 			for _, e := range t {
 				if what, _ := e.(string); len(what) > 0 {
 					lints = append(lints, NewLintError(line, what))
@@ -331,7 +331,7 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 // because some fields express options that are only a subset due to deprecated
 // functionality.
 func (f FieldSpec) lintOptions() FieldSpec {
-	f.customLintFn = func(ctx LintContext, line, col int, value interface{}) []Lint {
+	f.customLintFn = func(ctx LintContext, line, col int, value any) []Lint {
 		str, ok := value.(string)
 		if !ok {
 			return nil
@@ -361,7 +361,7 @@ func (f FieldSpec) getLintFunc() LintFunc {
 	}
 	if f.Interpolated {
 		if fn != nil {
-			fn = func(ctx LintContext, line, col int, value interface{}) []Lint {
+			fn = func(ctx LintContext, line, col int, value any) []Lint {
 				lints := f.customLintFn(ctx, line, col, value)
 				moreLints := LintBloblangField(ctx, line, col, value)
 				return append(lints, moreLints...)
@@ -372,7 +372,7 @@ func (f FieldSpec) getLintFunc() LintFunc {
 	}
 	if f.Bloblang {
 		if fn != nil {
-			fn = func(ctx LintContext, line, col int, value interface{}) []Lint {
+			fn = func(ctx LintContext, line, col int, value any) []Lint {
 				lints := f.customLintFn(ctx, line, col, value)
 				moreLints := LintBloblangMapping(ctx, line, col, value)
 				return append(lints, moreLints...)
@@ -385,88 +385,88 @@ func (f FieldSpec) getLintFunc() LintFunc {
 }
 
 // FieldAnything returns a field spec for any typed field.
-func FieldAnything(name, description string, examples ...interface{}) FieldSpec {
+func FieldAnything(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeUnknown)
 }
 
 // FieldObject returns a field spec for an object typed field.
-func FieldObject(name, description string, examples ...interface{}) FieldSpec {
+func FieldObject(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeObject)
 }
 
 // FieldString returns a field spec for a common string typed field.
-func FieldString(name, description string, examples ...interface{}) FieldSpec {
+func FieldString(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeString)
 }
 
 // FieldInterpolatedString returns a field spec for a string typed field
 // supporting dynamic interpolated functions.
-func FieldInterpolatedString(name, description string, examples ...interface{}) FieldSpec {
+func FieldInterpolatedString(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeString).IsInterpolated()
 }
 
 // FieldBloblang returns a field spec for a string typed field containing a
 // Bloblang mapping.
-func FieldBloblang(name, description string, examples ...interface{}) FieldSpec {
+func FieldBloblang(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeString).IsBloblang()
 }
 
 // FieldInt returns a field spec for a common int typed field.
-func FieldInt(name, description string, examples ...interface{}) FieldSpec {
+func FieldInt(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeInt)
 }
 
 // FieldFloat returns a field spec for a common float typed field.
-func FieldFloat(name, description string, examples ...interface{}) FieldSpec {
+func FieldFloat(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeFloat)
 }
 
 // FieldBool returns a field spec for a common bool typed field.
-func FieldBool(name, description string, examples ...interface{}) FieldSpec {
+func FieldBool(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeBool)
 }
 
 // FieldInput returns a field spec for an input typed field.
-func FieldInput(name, description string, examples ...interface{}) FieldSpec {
+func FieldInput(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeInput)
 }
 
 // FieldProcessor returns a field spec for a processor typed field.
-func FieldProcessor(name, description string, examples ...interface{}) FieldSpec {
+func FieldProcessor(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeProcessor)
 }
 
 // FieldOutput returns a field spec for an output typed field.
-func FieldOutput(name, description string, examples ...interface{}) FieldSpec {
+func FieldOutput(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeOutput)
 }
 
 // FieldBuffer returns a field spec for a buffer typed field.
-func FieldBuffer(name, description string, examples ...interface{}) FieldSpec {
+func FieldBuffer(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeBuffer)
 }
 
 // FieldCache returns a field spec for a cache typed field.
-func FieldCache(name, description string, examples ...interface{}) FieldSpec {
+func FieldCache(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeCache)
 }
 
 // FieldRateLimit returns a field spec for a rate limit typed field.
-func FieldRateLimit(name, description string, examples ...interface{}) FieldSpec {
+func FieldRateLimit(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeRateLimit)
 }
 
 // FieldMetrics returns a field spec for a metrics typed field.
-func FieldMetrics(name, description string, examples ...interface{}) FieldSpec {
+func FieldMetrics(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeMetrics)
 }
 
 // FieldTracer returns a field spec for a tracer typed field.
-func FieldTracer(name, description string, examples ...interface{}) FieldSpec {
+func FieldTracer(name, description string, examples ...any) FieldSpec {
 	return newField(name, description, examples...).HasType(FieldTypeTracer)
 }
 
-func newField(name, description string, examples ...interface{}) FieldSpec {
+func newField(name, description string, examples ...any) FieldSpec {
 	return FieldSpec{
 		Name:        name,
 		Description: description,
@@ -580,7 +580,7 @@ func NewLintContext() LintContext {
 }
 
 // LintFunc is a common linting function for field values.
-type LintFunc func(ctx LintContext, line, col int, value interface{}) []Lint
+type LintFunc func(ctx LintContext, line, col int, value any) []Lint
 
 // LintLevel describes the severity level of a linting error.
 type LintLevel int
@@ -621,18 +621,18 @@ func (f FieldSpec) needsDefault() bool {
 	return true
 }
 
-func getDefault(pathName string, field FieldSpec) (interface{}, error) {
+func getDefault(pathName string, field FieldSpec) (any, error) {
 	if field.Default != nil {
 		// TODO: Should be deep copy here?
 		return *field.Default, nil
 	} else if field.Kind == KindArray {
-		return []interface{}{}, nil
+		return []any{}, nil
 	} else if field.Kind == Kind2DArray {
-		return []interface{}{}, nil
+		return []any{}, nil
 	} else if field.Kind == KindMap {
-		return map[string]interface{}{}, nil
+		return map[string]any{}, nil
 	} else if len(field.Children) > 0 {
-		m := map[string]interface{}{}
+		m := map[string]any{}
 		for _, v := range field.Children {
 			defV, err := getDefault(pathName+"."+v.Name, v)
 			if err == nil {

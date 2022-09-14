@@ -31,7 +31,7 @@ func init() {
 			if conf.byteArrayAsStrings, err = args.GetBool("byte_array_as_string"); err != nil {
 				return nil, err
 			}
-			return func(v interface{}) (interface{}, error) {
+			return func(v any) (any, error) {
 				b, err := query.IGetBytes(v)
 				if err != nil {
 					return nil, err
@@ -41,7 +41,7 @@ func init() {
 				pRdr := parquet.NewReader(rdr)
 
 				rowBuf := make([]parquet.Row, 10)
-				var result []interface{}
+				var result []any
 
 				schema := pRdr.Schema()
 				for {
@@ -56,7 +56,7 @@ func init() {
 					for i := 0; i < n; i++ {
 						row := rowBuf[i]
 
-						mappedData := map[string]interface{}{}
+						mappedData := map[string]any{}
 						_, _ = conf.extractPQValueGroup(schema.Fields(), row, mappedData, 0, 0)
 
 						result = append(result, mappedData)

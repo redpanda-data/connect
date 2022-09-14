@@ -10,7 +10,7 @@ func extractConfig(
 	nm bundle.NewManagement,
 	spec *ConfigSpec,
 	componentName string,
-	pluginConfig, componentConfig interface{},
+	pluginConfig, componentConfig any,
 ) (*ParsedConfig, error) {
 	if pluginConfig != nil {
 		return spec.configFromNode(nm, pluginConfig.(*yaml.Node))

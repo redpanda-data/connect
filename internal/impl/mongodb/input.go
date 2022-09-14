@@ -94,7 +94,7 @@ func newMongoInput(conf *service.ParsedConfig) (service.Input, error) {
 }
 
 type mongoInput struct {
-	query     interface{}
+	query     any
 	config    client.Config
 	client    *mongo.Client
 	cursor    *mongo.Cursor
@@ -134,7 +134,7 @@ func (m *mongoInput) Read(ctx context.Context) (*service.Message, service.AckFun
 	if !m.cursor.Next(ctx) {
 		return nil, nil, service.ErrEndOfInput
 	}
-	var result map[string]interface{}
+	var result map[string]any
 	err := m.cursor.Decode(&result)
 	if err != nil {
 		return nil, nil, err

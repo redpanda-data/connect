@@ -32,7 +32,7 @@ already exists it will be changed.`,
 			"Utility",
 		},
 		Config: docs.FieldComponent().WithChildren(
-			docs.FieldInput("inputs", "A map of inputs to statically create.").Map().HasDefault(map[string]interface{}{}),
+			docs.FieldInput("inputs", "A map of inputs to statically create.").Map().HasDefault(map[string]any{}),
 			docs.FieldString("prefix", "A path prefix for HTTP endpoints that are registered.").HasDefault(""),
 		),
 	})

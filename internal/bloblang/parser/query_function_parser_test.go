@@ -24,13 +24,13 @@ func TestFunctionQueries(t *testing.T) {
 		input    string
 		output   string
 		messages []easyMsg
-		value    *interface{}
+		value    *any
 		index    int
 	}{
 		"without method": {
 			input: `this.without("bar","baz")`,
-			value: func() *interface{} {
-				var v interface{} = map[string]interface{}{
+			value: func() *any {
+				var v any = map[string]any{
 					"foo": 1.0,
 					"bar": 2.0,
 					"baz": 3.0,
@@ -41,8 +41,8 @@ func TestFunctionQueries(t *testing.T) {
 		},
 		"without method trailing comma": {
 			input: `this.without("bar","baz",)`,
-			value: func() *interface{} {
-				var v interface{} = map[string]interface{}{
+			value: func() *any {
+				var v any = map[string]any{
 					"foo": 1.0,
 					"bar": 2.0,
 					"baz": 3.0,
@@ -463,24 +463,24 @@ bar""")`,
 		"field root": {
 			input:  `this`,
 			output: `test`,
-			value: func() *interface{} {
-				var v interface{} = "test"
+			value: func() *any {
+				var v any = "test"
 				return &v
 			}(),
 		},
 		"field root null": {
 			input:  `this`,
 			output: `null`,
-			value: func() *interface{} {
-				var v interface{}
+			value: func() *any {
+				var v any
 				return &v
 			}(),
 		},
 		"field map": {
 			input:  `this.foo`,
 			output: `hello world`,
-			value: func() *interface{} {
-				var v interface{} = map[string]interface{}{
+			value: func() *any {
+				var v any = map[string]any{
 					"foo": "hello world",
 				}
 				return &v
@@ -489,9 +489,9 @@ bar""")`,
 		"field literal": {
 			input:  `this.foo.bar`,
 			output: `hello world`,
-			value: func() *interface{} {
-				var v interface{} = map[string]interface{}{
-					"foo": map[string]interface{}{
+			value: func() *any {
+				var v any = map[string]any{
+					"foo": map[string]any{
 						"bar": "hello world",
 					},
 				}
@@ -529,16 +529,16 @@ bar""")`,
 		"field literal root": {
 			input:  `this`,
 			output: `test`,
-			value: func() *interface{} {
-				var v interface{} = "test"
+			value: func() *any {
+				var v any = "test"
 				return &v
 			}(),
 		},
 		"field literal root 2": {
 			input:  `this.foo`,
 			output: `test`,
-			value: func() *interface{} {
-				var v interface{} = map[string]interface{}{
+			value: func() *any {
+				var v any = map[string]any{
 					"foo": "test",
 				}
 				return &v
@@ -547,8 +547,8 @@ bar""")`,
 		"field quoted literal": {
 			input:  `this."foo.bar"`,
 			output: `test`,
-			value: func() *interface{} {
-				var v interface{} = map[string]interface{}{
+			value: func() *any {
+				var v any = map[string]any{
 					"foo.bar": "test",
 				}
 				return &v
@@ -557,9 +557,9 @@ bar""")`,
 		"field quoted literal extended": {
 			input:  `this."foo.bar".baz`,
 			output: `test`,
-			value: func() *interface{} {
-				var v interface{} = map[string]interface{}{
-					"foo.bar": map[string]interface{}{
+			value: func() *any {
+				var v any = map[string]any{
+					"foo.bar": map[string]any{
 						"baz": "test",
 					},
 				}
@@ -676,12 +676,12 @@ bar""")`,
 
 			res := query.ExecToString(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
-			}.WithValueFunc(func() *interface{} { return test.value }))
+			}.WithValueFunc(func() *any { return test.value }))
 
 			assert.Equal(t, test.output, res)
 			res = string(query.ExecToBytes(e, query.FunctionContext{
 				Index: test.index, MsgBatch: msg,
-			}.WithValueFunc(func() *interface{} { return test.value })))
+			}.WithValueFunc(func() *any { return test.value })))
 			assert.Equal(t, test.output, res)
 		})
 	}

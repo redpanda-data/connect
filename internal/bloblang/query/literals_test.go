@@ -7,22 +7,22 @@ import (
 )
 
 func TestLiterals(t *testing.T) {
-	mustVal := func(i interface{}, err error) interface{} {
+	mustVal := func(i any, err error) any {
 		t.Helper()
 		require.NoError(t, err)
 		return i
 	}
 
 	tests := map[string]struct {
-		input   interface{}
-		value   interface{}
-		output  interface{}
+		input   any
+		value   any
+		output  any
 		err     error
 		targets []TargetPath
 	}{
 		"dynamic object values": {
 			input: mustVal(NewMapLiteral(
-				[][2]interface{}{
+				[][2]any{
 					{"test1", NewFieldFunction("first")},
 					{"test2", NewFieldFunction("second")},
 					{"deleteme", Delete(nil)},
@@ -30,11 +30,11 @@ func TestLiterals(t *testing.T) {
 					{"test3", "static"},
 				},
 			)),
-			value: map[string]interface{}{
+			value: map[string]any{
 				"first":  "foo",
 				"second": "bar",
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"test1": "foo",
 				"test2": "bar",
 				"test3": "static",
@@ -46,16 +46,16 @@ func TestLiterals(t *testing.T) {
 		},
 		"dynamic object keys and values": {
 			input: mustVal(NewMapLiteral(
-				[][2]interface{}{
+				[][2]any{
 					{NewFieldFunction("first"), NewFieldFunction("second")},
 					{"test2", "static"},
 				},
 			)),
-			value: map[string]interface{}{
+			value: map[string]any{
 				"first":  "foo",
 				"second": "bar",
 			},
-			output: map[string]interface{}{
+			output: map[string]any{
 				"foo":   "bar",
 				"test2": "static",
 			},
@@ -66,20 +66,20 @@ func TestLiterals(t *testing.T) {
 		},
 		"object literal function keys and values": {
 			input: mustVal(NewMapLiteral(
-				[][2]interface{}{
+				[][2]any{
 					{NewLiteralFunction("", "first"), NewLiteralFunction("", "second")},
 					{NewLiteralFunction("", "third"), NewLiteralFunction("", "fourth")},
 				},
 			)),
-			value: map[string]interface{}{},
-			output: map[string]interface{}{
+			value: map[string]any{},
+			output: map[string]any{
 				"first": "second",
 				"third": "fourth",
 			},
 		},
 		"static object": {
 			input: mustVal(NewMapLiteral(
-				[][2]interface{}{
+				[][2]any{
 					{"test1", "static1"},
 					{"test2", "static2"},
 					{"deleteme", Delete(nil)},
@@ -87,7 +87,7 @@ func TestLiterals(t *testing.T) {
 					{"test3", "static3"},
 				},
 			)),
-			output: map[string]interface{}{
+			output: map[string]any{
 				"test1": "static1",
 				"test2": "static2",
 				"test3": "static3",
@@ -102,11 +102,11 @@ func TestLiterals(t *testing.T) {
 				Nothing(nil),
 				NewLiteralFunction("", "static literal"),
 			),
-			value: map[string]interface{}{
+			value: map[string]any{
 				"first":  "foo",
 				"second": "bar",
 			},
-			output: []interface{}{
+			output: []any{
 				"foo",
 				"bar",
 				"static",
@@ -125,7 +125,7 @@ func TestLiterals(t *testing.T) {
 				Nothing(nil),
 				"static3",
 			),
-			output: []interface{}{
+			output: []any{
 				"static1",
 				"static2",
 				"static3",

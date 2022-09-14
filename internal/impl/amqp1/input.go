@@ -367,10 +367,10 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 			MessageID: msg.Properties.MessageID,
 			ReplyTo:   &replyTo,
 		},
-		ApplicationProperties: map[string]interface{}{
+		ApplicationProperties: map[string]any{
 			"operation": "com.microsoft:renew-lock",
 		},
-		Value: map[string]interface{}{
+		Value: map[string]any{
 			"lock-tokens": []amqp.UUID{*lockToken},
 		},
 	}
@@ -388,7 +388,7 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 		return time.Time{}, fmt.Errorf("unsuccessful status code %d, message %s", statusCode, result.ApplicationProperties["statusDescription"])
 	}
 
-	values, ok := result.Value.(map[string]interface{})
+	values, ok := result.Value.(map[string]any)
 	if !ok {
 		return time.Time{}, errors.New("missing value in response message")
 	}
@@ -401,7 +401,7 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 	return expirations[0], nil
 }
 
-func amqpSetMetadata(p *message.Part, k string, v interface{}) {
+func amqpSetMetadata(p *message.Part, k string, v any) {
 	var metaValue string
 	var metaKey = strings.ReplaceAll(k, "-", "_")
 

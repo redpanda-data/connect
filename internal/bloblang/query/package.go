@@ -12,7 +12,7 @@ import (
 // ErrRecoverable represents a function execution error that can optionally be
 // recovered into a zero-value.
 type ErrRecoverable struct {
-	Recovered interface{}
+	Recovered any
 	Err       error
 }
 
@@ -61,17 +61,17 @@ type MetaMsg interface {
 // reference.
 type FunctionContext struct {
 	Maps     map[string]Function
-	Vars     map[string]interface{}
+	Vars     map[string]any
 	Index    int
 	MsgBatch MessageBatch
 
 	// Reference new message being mapped
 	NewMeta  MetaMsg
-	NewValue *interface{}
+	NewValue *any
 
-	valueFn    func() *interface{}
-	value      *interface{}
-	nextValue  *interface{}
+	valueFn    func() *any
+	value      *any
+	nextValue  *any
 	namedValue *namedContextValue
 
 	// Used to track how many maps we've entered.
@@ -80,7 +80,7 @@ type FunctionContext struct {
 
 type namedContextValue struct {
 	name  string
-	value interface{}
+	value any
 	next  *namedContextValue
 }
 
@@ -93,7 +93,7 @@ func (ctx FunctionContext) IncrStackCount() (FunctionContext, int) {
 }
 
 // NamedValue returns the value of a named context if it exists.
-func (ctx FunctionContext) NamedValue(name string) (interface{}, bool) {
+func (ctx FunctionContext) NamedValue(name string) (any, bool) {
 	current := ctx.namedValue
 	for current != nil {
 		if current.name == name {
@@ -105,7 +105,7 @@ func (ctx FunctionContext) NamedValue(name string) (interface{}, bool) {
 }
 
 // WithNamedValue returns a FunctionContext with a named value.
-func (ctx FunctionContext) WithNamedValue(name string, value interface{}) FunctionContext {
+func (ctx FunctionContext) WithNamedValue(name string, value any) FunctionContext {
 	previous := ctx.namedValue
 	ctx.namedValue = &namedContextValue{
 		name:  name,
@@ -117,7 +117,7 @@ func (ctx FunctionContext) WithNamedValue(name string, value interface{}) Functi
 
 // Value returns a lazily evaluated context value. A context value is not always
 // available and can therefore be nil.
-func (ctx FunctionContext) Value() *interface{} {
+func (ctx FunctionContext) Value() *any {
 	if ctx.value != nil {
 		return ctx.value
 	}
@@ -128,13 +128,13 @@ func (ctx FunctionContext) Value() *interface{} {
 }
 
 // WithValueFunc returns a function context with a new value func.
-func (ctx FunctionContext) WithValueFunc(fn func() *interface{}) FunctionContext {
+func (ctx FunctionContext) WithValueFunc(fn func() *any) FunctionContext {
 	ctx.valueFn = fn
 	return ctx
 }
 
 // WithValue returns a function context with a new value.
-func (ctx FunctionContext) WithValue(value interface{}) FunctionContext {
+func (ctx FunctionContext) WithValue(value any) FunctionContext {
 	ctx.nextValue = ctx.value
 	ctx.value = &value
 	return ctx
@@ -145,7 +145,7 @@ func (ctx FunctionContext) WithValue(value interface{}) FunctionContext {
 // absolute root value function then the context returned is unchanged. If there
 // is no current default value then a nil value is returned and the context
 // returned is unchanged.
-func (ctx FunctionContext) PopValue() (*interface{}, FunctionContext) {
+func (ctx FunctionContext) PopValue() (*any, FunctionContext) {
 	retValue := ctx.Value()
 
 	if ctx.nextValue != nil {

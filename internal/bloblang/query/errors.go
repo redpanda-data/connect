@@ -65,13 +65,13 @@ func (t *TypeError) Error() string {
 }
 
 // NewTypeError creates a new type error.
-func NewTypeError(value interface{}, exp ...ValueType) *TypeError {
+func NewTypeError(value any, exp ...ValueType) *TypeError {
 	return NewTypeErrorFrom("", value, exp...)
 }
 
 // NewTypeErrorFrom creates a new type error with an annotation of the query
 // that provided the wrong type.
-func NewTypeErrorFrom(from string, value interface{}, exp ...ValueType) *TypeError {
+func NewTypeErrorFrom(from string, value any, exp ...ValueType) *TypeError {
 	valueStr := ""
 	valueType := ITypeOf(value)
 	switch valueType {
@@ -142,7 +142,7 @@ func (t *TypeMismatch) Error() string {
 }
 
 // NewTypeMismatch creates a new type mismatch error.
-func NewTypeMismatch(operation string, lfn, rfn Function, left, right interface{}) *TypeMismatch {
+func NewTypeMismatch(operation string, lfn, rfn Function, left, right any) *TypeMismatch {
 	return &TypeMismatch{
 		Lfn:       lfn,
 		Rfn:       rfn,

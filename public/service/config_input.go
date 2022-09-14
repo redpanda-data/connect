@@ -63,7 +63,7 @@ func (p *ParsedConfig) FieldInputList(path ...string) ([]*OwnedInput, error) {
 		return nil, fmt.Errorf("field '%v' was not found in the config", strings.Join(path, "."))
 	}
 
-	fieldArray, ok := field.([]interface{})
+	fieldArray, ok := field.([]any)
 	if !ok {
 		return nil, fmt.Errorf("unexpected value, expected array, got %T", field)
 	}

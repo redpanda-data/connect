@@ -68,7 +68,7 @@ pipeline:
 
 
 `,
-		Config: docs.FieldProcessor("", "").Array().HasDefault([]interface{}{}),
+		Config: docs.FieldProcessor("", "").Array().HasDefault([]any{}),
 	})
 	if err != nil {
 		panic(err)

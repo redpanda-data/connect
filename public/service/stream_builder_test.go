@@ -586,14 +586,14 @@ func TestStreamBuilderSetFields(t *testing.T) {
 	tests := []struct {
 		name        string
 		input       string
-		args        []interface{}
+		args        []any
 		output      string
 		errContains string
 	}{
 		{
 			name:  "odd number of args",
 			input: `{}`,
-			args: []interface{}{
+			args: []any{
 				"just a field",
 			},
 			errContains: "odd number of pathValues",
@@ -601,7 +601,7 @@ func TestStreamBuilderSetFields(t *testing.T) {
 		{
 			name:  "a path isnt a string",
 			input: `{}`,
-			args: []interface{}{
+			args: []any{
 				10, "hello world",
 			},
 			errContains: "should be a string",
@@ -613,7 +613,7 @@ input:
   generate:
     mapping: 'root = deleted()'
 `,
-			args: []interface{}{
+			args: []any{
 				"input.generate.unknown_field", "baz",
 			},
 			errContains: "field not recognised",
@@ -625,7 +625,7 @@ input:
   generate:
     mapping: 'root = deleted()'
 `,
-			args: []interface{}{
+			args: []any{
 				"input.label", "foo",
 				"output.label", "foo",
 			},
@@ -638,7 +638,7 @@ input:
   file:
     paths: [ foo, bar ]
 `,
-			args: []interface{}{
+			args: []any{
 				"input.file.paths.1", "baz",
 			},
 			output: `
@@ -654,7 +654,7 @@ input:
   file:
     paths: [ foo, bar ]
 `,
-			args: []interface{}{
+			args: []any{
 				"input.file.paths.-", "baz",
 				"input.file.paths.-", "buz",
 				"input.file.paths.-", "bev",
@@ -672,7 +672,7 @@ input:
   generate:
     mapping: 'root = deleted()'
 `,
-			args: []interface{}{
+			args: []any{
 				"pipeline.processors.-.bloblang", `root = "meow"`,
 			},
 			output: `

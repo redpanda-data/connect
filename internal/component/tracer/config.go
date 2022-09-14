@@ -21,7 +21,7 @@ type Config struct {
 	Jaeger     JaegerConfig     `json:"jaeger" yaml:"jaeger"`
 	CloudTrace CloudTraceConfig `json:"gcp_cloudtrace" yaml:"gcp_cloudtrace"`
 	None       struct{}         `json:"none" yaml:"none"`
-	Plugin     interface{}      `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Plugin     any              `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 }
 
 // NewConfig returns a configuration struct fully populated with default values.

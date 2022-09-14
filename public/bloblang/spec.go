@@ -67,7 +67,7 @@ func (d ParamDefinition) Optional() ParamDefinition {
 
 // Default adds a default value to a parameter, also making it implicitly
 // optional.
-func (d ParamDefinition) Default(v interface{}) ParamDefinition {
+func (d ParamDefinition) Default(v any) ParamDefinition {
 	d.def = d.def.Default(v)
 	return d
 }
@@ -216,7 +216,7 @@ type ParsedParams struct {
 
 // Get an argument value with a given name and return it boxed within an empty
 // interface.
-func (p *ParsedParams) Get(name string) (interface{}, error) {
+func (p *ParsedParams) Get(name string) (any, error) {
 	return p.par.Field(name)
 }
 

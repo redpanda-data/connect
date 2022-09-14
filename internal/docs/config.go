@@ -31,7 +31,7 @@ func ValidateLabel(label string) error {
 
 var labelField = FieldString(
 	"label", "An optional label to use as an identifier for observability data such as metrics and logging.",
-).OmitWhen(func(field, parent interface{}) (string, bool) {
+).OmitWhen(func(field, parent any) (string, bool) {
 	gObj := gabs.Wrap(parent)
 	if typeStr, exists := gObj.S("type").Data().(string); exists && typeStr == "resource" {
 		return "label field should be omitted when pointing to a resource", true
@@ -40,7 +40,7 @@ var labelField = FieldString(
 		return "label field should be omitted when pointing to a resource", true
 	}
 	return "", false
-}).AtVersion("3.44.0").LinterFunc(func(ctx LintContext, line, col int, v interface{}) []Lint {
+}).AtVersion("3.44.0").LinterFunc(func(ctx LintContext, line, col int, v any) []Lint {
 	l, _ := v.(string)
 	if l == "" {
 		return nil
@@ -67,8 +67,8 @@ func ReservedFieldsByType(t Type) map[string]FieldSpec {
 		"plugin": FieldObject("plugin", ""),
 	}
 	if t == TypeInput || t == TypeOutput {
-		m["processors"] = FieldProcessor("processors", "").Array().OmitWhen(func(field, _ interface{}) (string, bool) {
-			if arr, ok := field.([]interface{}); ok && len(arr) == 0 {
+		m["processors"] = FieldProcessor("processors", "").Array().OmitWhen(func(field, _ any) (string, bool) {
+			if arr, ok := field.([]any); ok && len(arr) == 0 {
 				return "field processors is empty and can be removed", true
 			}
 			return "", false
@@ -126,8 +126,8 @@ func DefaultTypeOf(t Type) string {
 
 // GetInferenceCandidate checks a generic config structure for a component and
 // returns either the inferred type name or an error if one cannot be inferred.
-func GetInferenceCandidate(docProvider Provider, t Type, raw interface{}) (string, ComponentSpec, error) {
-	m, ok := raw.(map[string]interface{})
+func GetInferenceCandidate(docProvider Provider, t Type, raw any) (string, ComponentSpec, error) {
+	m, ok := raw.(map[string]any)
 	if !ok {
 		return "", ComponentSpec{}, fmt.Errorf("invalid config value %T, expected object", raw)
 	}

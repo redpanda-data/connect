@@ -302,11 +302,11 @@ func (s *sqsTargetReader) Close(ctx context.Context) error {
 	return err
 }
 
-func digStrsFromSlices(slice []interface{}) []string {
+func digStrsFromSlices(slice []any) []string {
 	var strs []string
 	for _, v := range slice {
 		switch t := v.(type) {
-		case []interface{}:
+		case []any:
 			strs = append(strs, digStrsFromSlices(t)...)
 		case string:
 			strs = append(strs, t)
@@ -338,14 +338,14 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 	switch t := gObj.Path(s.conf.SQS.KeyPath).Data().(type) {
 	case string:
 		keys = []string{t}
-	case []interface{}:
+	case []any:
 		keys = digStrsFromSlices(t)
 	}
 	if len(s.conf.SQS.BucketPath) > 0 {
 		switch t := gObj.Path(s.conf.SQS.BucketPath).Data().(type) {
 		case string:
 			buckets = []string{t}
-		case []interface{}:
+		case []any:
 			buckets = digStrsFromSlices(t)
 		}
 	}

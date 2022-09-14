@@ -53,7 +53,7 @@ func (q QueryResolver) ResolveString(index int, msg Message, escaped bool) strin
 		Index:    index,
 		MsgBatch: msg,
 		NewMeta:  msg.Get(index),
-	}.WithValueFunc(func() *interface{} {
+	}.WithValueFunc(func() *any {
 		if jObj, err := msg.Get(index).AsStructured(); err == nil {
 			return &jObj
 		}
@@ -70,7 +70,7 @@ func (q QueryResolver) ResolveBytes(index int, msg Message, escaped bool) []byte
 		Index:    index,
 		MsgBatch: msg,
 		NewMeta:  msg.Get(index),
-	}.WithValueFunc(func() *interface{} {
+	}.WithValueFunc(func() *any {
 		if jObj, err := msg.Get(index).AsStructured(); err == nil {
 			return &jObj
 		}

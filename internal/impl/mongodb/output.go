@@ -295,7 +295,7 @@ func (m *Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 			return fmt.Errorf("failed to generate documentVal")
 		}
 
-		var docJSON, filterJSON, hintJSON interface{}
+		var docJSON, filterJSON, hintJSON any
 
 		if filterValWanted {
 			if filterJSON, err = filterVal.AsStructured(); err != nil {

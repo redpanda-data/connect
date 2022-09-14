@@ -9,7 +9,7 @@ import (
 // for a parsed component.
 //
 // TODO: V5 Remove this eventually.
-func ComponentFieldsFromConf(conf interface{}) (inferred map[string]FieldSpecs) {
+func ComponentFieldsFromConf(conf any) (inferred map[string]FieldSpecs) {
 	inferred = map[string]FieldSpecs{}
 
 	componentNodes := map[string]yaml.Node{}
@@ -30,7 +30,7 @@ func ComponentFieldsFromConf(conf interface{}) (inferred map[string]FieldSpecs) 
 }
 
 // FieldsFromConf attempts to infer field documents from a config struct.
-func FieldsFromConf(conf interface{}) FieldSpecs {
+func FieldsFromConf(conf any) FieldSpecs {
 	var node yaml.Node
 	if err := node.Encode(conf); err != nil {
 		return FieldSpecs{}
@@ -43,7 +43,7 @@ func FieldsFromConf(conf interface{}) FieldSpecs {
 // struct.
 //
 // TODO: V5 Remove this eventually.
-func (f FieldSpec) ChildDefaultAndTypesFromStruct(conf interface{}) FieldSpec {
+func (f FieldSpec) ChildDefaultAndTypesFromStruct(conf any) FieldSpec {
 	var node yaml.Node
 	if err := node.Encode(conf); err != nil {
 		return f

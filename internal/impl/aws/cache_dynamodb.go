@@ -156,7 +156,7 @@ func newDynamodbCache(
 		ttlKey:         ttlKey,
 		ttl:            ttl,
 		boffPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				bo := *backOff
 				bo.Reset()
 				return &bo

@@ -96,7 +96,7 @@ func TestInputIntegration(t *testing.T) {
 		return mongoClient.Database(dbName).CreateCollection(context.Background(), collName)
 	}))
 	coll := mongoClient.Database(dbName).Collection(collName)
-	sampleData := []interface{}{
+	sampleData := []any{
 		bson.M{
 			"name": "John",
 			"age":  15,
@@ -155,7 +155,7 @@ query: |
 		},
 		"aggregate": {
 			query: func(coll *mongo.Collection) (*mongo.Cursor, error) {
-				return coll.Aggregate(context.Background(), []interface{}{
+				return coll.Aggregate(context.Background(), []any{
 					bson.M{
 						"$match": bson.M{
 							"age": bson.M{
@@ -207,7 +207,7 @@ func testInput(port string, controlQuery func(collection *mongo.Collection) (cur
 	controlColl := controlConn.Database("TestDB").Collection("TestCollection")
 	controlCur, err := controlQuery(controlColl)
 	require.NoError(t, err)
-	var wantResults []map[string]interface{}
+	var wantResults []map[string]any
 	err = controlCur.All(controlCtx, &wantResults)
 	require.NoError(t, err)
 	var wantMsgs []*service.Message

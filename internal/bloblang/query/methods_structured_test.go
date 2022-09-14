@@ -11,36 +11,36 @@ func TestMethodImmutability(t *testing.T) {
 	testCases := []struct {
 		name   string
 		method string
-		target interface{}
-		args   []interface{}
-		exp    interface{}
+		target any
+		args   []any
+		exp    any
 	}{
 		{
 			name:   "merge arrays",
 			method: "merge",
-			target: []interface{}{"foo", "bar"},
-			args: []interface{}{
-				[]interface{}{"baz", "buz"},
+			target: []any{"foo", "bar"},
+			args: []any{
+				[]any{"baz", "buz"},
 			},
-			exp: []interface{}{"foo", "bar", "baz", "buz"},
+			exp: []any{"foo", "bar", "baz", "buz"},
 		},
 		{
 			name:   "merge into an array",
 			method: "merge",
-			target: []interface{}{"foo", "bar"},
-			args: []interface{}{
-				map[string]interface{}{"baz": "buz"},
+			target: []any{"foo", "bar"},
+			args: []any{
+				map[string]any{"baz": "buz"},
 			},
-			exp: []interface{}{"foo", "bar", map[string]interface{}{"baz": "buz"}},
+			exp: []any{"foo", "bar", map[string]any{"baz": "buz"}},
 		},
 		{
 			name:   "merge objects",
 			method: "merge",
-			target: map[string]interface{}{"foo": "bar"},
-			args: []interface{}{
-				map[string]interface{}{"baz": "buz"},
+			target: map[string]any{"foo": "bar"},
+			args: []any{
+				map[string]any{"baz": "buz"},
 			},
-			exp: map[string]interface{}{
+			exp: map[string]any{
 				"foo": "bar",
 				"baz": "buz",
 			},
@@ -48,12 +48,12 @@ func TestMethodImmutability(t *testing.T) {
 		{
 			name:   "merge collision",
 			method: "merge",
-			target: map[string]interface{}{"foo": "bar", "baz": "buz"},
-			args: []interface{}{
-				map[string]interface{}{"foo": "qux"},
+			target: map[string]any{"foo": "bar", "baz": "buz"},
+			args: []any{
+				map[string]any{"foo": "qux"},
 			},
-			exp: map[string]interface{}{
-				"foo": []interface{}{"bar", "qux"},
+			exp: map[string]any{
+				"foo": []any{"bar", "qux"},
 				"baz": "buz",
 			},
 		},
@@ -61,29 +61,29 @@ func TestMethodImmutability(t *testing.T) {
 		{
 			name:   "assign arrays",
 			method: "assign",
-			target: []interface{}{"foo", "bar"},
-			args: []interface{}{
-				[]interface{}{"baz", "buz"},
+			target: []any{"foo", "bar"},
+			args: []any{
+				[]any{"baz", "buz"},
 			},
-			exp: []interface{}{"foo", "bar", "baz", "buz"},
+			exp: []any{"foo", "bar", "baz", "buz"},
 		},
 		{
 			name:   "assign into an array",
 			method: "assign",
-			target: []interface{}{"foo", "bar"},
-			args: []interface{}{
-				map[string]interface{}{"baz": "buz"},
+			target: []any{"foo", "bar"},
+			args: []any{
+				map[string]any{"baz": "buz"},
 			},
-			exp: []interface{}{"foo", "bar", map[string]interface{}{"baz": "buz"}},
+			exp: []any{"foo", "bar", map[string]any{"baz": "buz"}},
 		},
 		{
 			name:   "assign objects",
 			method: "assign",
-			target: map[string]interface{}{"foo": "bar"},
-			args: []interface{}{
-				map[string]interface{}{"baz": "buz"},
+			target: map[string]any{"foo": "bar"},
+			args: []any{
+				map[string]any{"baz": "buz"},
 			},
-			exp: map[string]interface{}{
+			exp: map[string]any{
 				"foo": "bar",
 				"baz": "buz",
 			},
@@ -91,11 +91,11 @@ func TestMethodImmutability(t *testing.T) {
 		{
 			name:   "assign collision",
 			method: "assign",
-			target: map[string]interface{}{"foo": "bar", "baz": "buz"},
-			args: []interface{}{
-				map[string]interface{}{"foo": "qux"},
+			target: map[string]any{"foo": "bar", "baz": "buz"},
+			args: []any{
+				map[string]any{"foo": "qux"},
 			},
-			exp: map[string]interface{}{
+			exp: map[string]any{
 				"foo": "qux",
 				"baz": "buz",
 			},
@@ -104,22 +104,22 @@ func TestMethodImmutability(t *testing.T) {
 		{
 			name:   "contains object positive",
 			method: "contains",
-			target: []interface{}{
-				map[string]interface{}{"foo": "bar"},
+			target: []any{
+				map[string]any{"foo": "bar"},
 			},
-			args: []interface{}{
-				map[string]interface{}{"foo": "bar"},
+			args: []any{
+				map[string]any{"foo": "bar"},
 			},
 			exp: true,
 		},
 		{
 			name:   "contains object negative",
 			method: "contains",
-			target: []interface{}{
-				map[string]interface{}{"foo": "bar"},
+			target: []any{
+				map[string]any{"foo": "bar"},
 			},
-			args: []interface{}{
-				map[string]interface{}{"baz": "buz"},
+			args: []any{
+				map[string]any{"baz": "buz"},
 			},
 			exp: false,
 		},
@@ -129,7 +129,7 @@ func TestMethodImmutability(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			targetClone := IClone(test.target)
-			argsClone := IClone(test.args).([]interface{})
+			argsClone := IClone(test.args).([]any)
 
 			fn, err := InitMethodHelper(test.method, NewLiteralFunction("", targetClone), argsClone...)
 			require.NoError(t, err)

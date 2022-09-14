@@ -216,7 +216,7 @@ func newRedisKeysOperator() redisOperator {
 			return err
 		}
 
-		iRes := make([]interface{}, 0, len(res))
+		iRes := make([]any, 0, len(res))
 		for _, v := range res {
 			iRes = append(iRes, v)
 		}
@@ -318,7 +318,7 @@ func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.Mess
 		return err
 	}
 
-	args, ok := iargs.([]interface{})
+	args, ok := iargs.([]any)
 	if !ok {
 		return fmt.Errorf("mapping returned non-array result: %T", iargs)
 	}
@@ -336,7 +336,7 @@ func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.Mess
 	}
 
 	command := inBatch.InterpolatedString(index, r.command)
-	args = append([]interface{}{command}, args...)
+	args = append([]any{command}, args...)
 
 	res, err := r.client.DoContext(ctx, args...).Result()
 	for i := 0; i <= r.retries && err != nil; i++ {

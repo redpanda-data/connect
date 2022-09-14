@@ -116,7 +116,7 @@ func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Messa
 		for i := 0; i < n; i++ {
 			row := rowBuf[i]
 
-			mappedData := map[string]interface{}{}
+			mappedData := map[string]any{}
 			_, _ = s.eConf.extractPQValueGroup(schema.Fields(), row, mappedData, 0, 0)
 
 			newMsg := msg.Copy()
@@ -139,12 +139,12 @@ type extractConfig struct {
 }
 
 func (e *extractConfig) extractPQValueNotRepeated(field parquet.Field, row []parquet.Value, defLevel, repLevel int) (
-	extracted interface{}, // The next value extracted from row
+	extracted any, // The next value extracted from row
 	highestDefLevel int, // The highest definition value seen from the extracted value
 	remaining []parquet.Value, // The remaining rows
 ) {
 	if len(field.Fields()) > 0 {
-		nested := map[string]interface{}{}
+		nested := map[string]any{}
 		highestDefLevel, row = e.extractPQValueGroup(field.Fields(), row, nested, defLevel, repLevel)
 		return nested, highestDefLevel, row
 	}
@@ -156,7 +156,7 @@ func (e *extractConfig) extractPQValueNotRepeated(field parquet.Field, row []par
 		return nil, value.RepetitionLevel(), row
 	}
 
-	var v interface{}
+	var v any
 	switch value.Kind() {
 	case parquet.Boolean:
 		v = value.Boolean()
@@ -189,7 +189,7 @@ func (e *extractConfig) extractPQValueNotRepeated(field parquet.Field, row []par
 }
 
 func (e *extractConfig) extractPQValueMaybeRepeated(field parquet.Field, row []parquet.Value, defLevel, repLevel int) (
-	extracted interface{}, // The next value extracted from row
+	extracted any, // The next value extracted from row
 	highestDefLevel int, // The highest definition value seen from the extracted value
 	remaining []parquet.Value, // The remaining rows
 ) {
@@ -198,8 +198,8 @@ func (e *extractConfig) extractPQValueMaybeRepeated(field parquet.Field, row []p
 	}
 
 	repLevel++
-	var elements []interface{}
-	var next interface{}
+	var elements []any
+	var next any
 
 	// The value is repeated zero or more times, but irrespective of that we
 	// always process one value. If the definition level of the returned fields
@@ -232,7 +232,7 @@ func (e *extractConfig) extractPQValueMaybeRepeated(field parquet.Field, row []p
 func (e *extractConfig) extractPQValueGroup(
 	fields []parquet.Field,
 	row []parquet.Value,
-	values map[string]interface{},
+	values map[string]any,
 	defLevel, repLevel int,
 ) (
 	highestDefLevel int, // The highest definition value seen from the extracted value
@@ -251,7 +251,7 @@ func (e *extractConfig) extractPQValueGroup(
 				continue
 			}
 
-			nestedValues := map[string]interface{}{}
+			nestedValues := map[string]any{}
 			if tmpHighestDefLevel, row = e.extractPQValueGroup(
 				field.Fields(), row,
 				nestedValues,

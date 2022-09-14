@@ -629,7 +629,7 @@ func (a *csvReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, err
 
 	a.pending++
 
-	obj := make(map[string]interface{}, len(records))
+	obj := make(map[string]any, len(records))
 	for i, r := range records {
 		obj[a.headers[i]] = r
 	}

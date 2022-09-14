@@ -137,7 +137,7 @@ func registerMethod(spec MethodSpec, ctor MethodCtor) struct{} {
 
 // InitMethodHelper attempts to initialise a method by its name, target function
 // and arguments, this is convenient for writing tests.
-func InitMethodHelper(name string, target Function, args ...interface{}) (Function, error) {
+func InitMethodHelper(name string, target Function, args ...any) (Function, error) {
 	spec, ok := AllMethods.specs[name]
 	if !ok {
 		return nil, badMethodErr(name)
@@ -157,7 +157,7 @@ func MethodDocs() []MethodSpec {
 //------------------------------------------------------------------------------
 
 func disabledMethod(name string) Function {
-	return ClosureFunction("method "+name, func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method "+name, func(ctx FunctionContext) (any, error) {
 		return nil, errors.New("this method has been disabled")
 	}, func(ctx TargetsContext) (TargetsContext, []TargetPath) { return ctx, nil })
 }
@@ -167,7 +167,7 @@ func wrapMethodCtorWithDynamicArgs(name string, target Function, args *ParsedPar
 	if len(fns) == 0 {
 		return fn(target, args)
 	}
-	return ClosureFunction("method "+name, func(ctx FunctionContext) (interface{}, error) {
+	return ClosureFunction("method "+name, func(ctx FunctionContext) (any, error) {
 		newArgs, err := args.ResolveDynamic(ctx)
 		if err != nil {
 			return nil, err

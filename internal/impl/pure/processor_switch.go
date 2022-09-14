@@ -47,7 +47,7 @@ At the end of switch processing the resulting batch will follow the same orderin
 			docs.FieldProcessor(
 				"processors",
 				"A list of [processors](/docs/components/processors/about/) to execute on a message.",
-			).HasDefault([]interface{}{}).Array(),
+			).HasDefault([]any{}).Array(),
 			docs.FieldBool(
 				"fallthrough",
 				"Indicates whether, if this case passes for a message, the next case should also be executed.",

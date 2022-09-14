@@ -173,7 +173,7 @@ func newDynamoDBWriter(conf output.DynamoDBConfig, mgr bundle.NewManagement) (*d
 		return nil, err
 	}
 	db.boffPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return db.backoffCtor()
 		},
 	}
@@ -205,9 +205,9 @@ func (d *dynamoDBWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func walkJSON(root interface{}) *dynamodb.AttributeValue {
+func walkJSON(root any) *dynamodb.AttributeValue {
 	switch v := root.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		m := make(map[string]*dynamodb.AttributeValue, len(v))
 		for k, v2 := range v {
 			m[k] = walkJSON(v2)
@@ -215,7 +215,7 @@ func walkJSON(root interface{}) *dynamodb.AttributeValue {
 		return &dynamodb.AttributeValue{
 			M: m,
 		}
-	case []interface{}:
+	case []any:
 		l := make([]*dynamodb.AttributeValue, len(v))
 		for i, v2 := range v {
 			l[i] = walkJSON(v2)
@@ -257,7 +257,7 @@ func walkJSON(root interface{}) *dynamodb.AttributeValue {
 	}
 }
 
-func jsonToMap(path string, root interface{}) (*dynamodb.AttributeValue, error) {
+func jsonToMap(path string, root any) (*dynamodb.AttributeValue, error) {
 	gObj := gabs.Wrap(root)
 	if len(path) > 0 {
 		gObj = gObj.Path(path)

@@ -111,7 +111,7 @@ func newS3Cache(bucket, contentType string, backOff *backoff.ExponentialBackOff,
 		contentType: contentType,
 
 		boffPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				bo := *backOff
 				bo.Reset()
 				return &bo

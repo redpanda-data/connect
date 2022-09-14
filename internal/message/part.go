@@ -96,14 +96,14 @@ func (p *Part) AsBytes() []byte {
 // AsStructuredMut returns the structured format of the message if already set,
 // or attempts to parse the raw bytes as a JSON document if not. The returned
 // structure is mutable and therefore safe to mutate directly.
-func (p *Part) AsStructuredMut() (interface{}, error) {
+func (p *Part) AsStructuredMut() (any, error) {
 	return p.data.AsStructuredMut()
 }
 
 // AsStructured returns the structured format of the message if already set, or
 // attempts to parse the raw bytes as a JSON document if not. The returned
 // structure should be considered read-only and therefore not be mutated.
-func (p *Part) AsStructured() (interface{}, error) {
+func (p *Part) AsStructured() (any, error) {
 	return p.data.AsStructured()
 }
 
@@ -116,14 +116,14 @@ func (p *Part) SetBytes(data []byte) *Part {
 // SetStructuredMut sets the value of the message to a structured value, this
 // value is mutable and subsequent mutations will be performed directly on the
 // provided data.
-func (p *Part) SetStructuredMut(jObj interface{}) {
+func (p *Part) SetStructuredMut(jObj any) {
 	p.data.SetStructuredMut(jObj)
 }
 
 // SetStructured sets the value of the message to a structured value, this
 // value is read-only and subsequent mutations will require cloning of the
 // entire data structure.
-func (p *Part) SetStructured(jObj interface{}) {
+func (p *Part) SetStructured(jObj any) {
 	p.data.SetStructured(jObj)
 }
 

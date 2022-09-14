@@ -398,7 +398,7 @@ type awkProc struct {
 	codec     string
 	program   *parser.Program
 	log       log.Modular
-	functions map[string]interface{}
+	functions map[string]any
 }
 
 func newAWKProc(conf processor.AWKConfig, mgr bundle.NewManagement) (processor.V2, error) {
@@ -415,7 +415,7 @@ func newAWKProc(conf processor.AWKConfig, mgr bundle.NewManagement) (processor.V
 	default:
 		return nil, fmt.Errorf("unrecognised codec: %v", conf.Codec)
 	}
-	functionOverrides := make(map[string]interface{}, len(awkFunctionsMap))
+	functionOverrides := make(map[string]any, len(awkFunctionsMap))
 	for k, v := range awkFunctionsMap {
 		functionOverrides[k] = v
 	}
@@ -481,7 +481,7 @@ func getTime(dateStr, format string) (time.Time, error) {
 	return time.Parse(format, dateStr)
 }
 
-var awkFunctionsMap = map[string]interface{}{
+var awkFunctionsMap = map[string]any{
 	"timestamp_unix": func(dateStr string, format string) (int64, error) {
 		ts, err := getTime(dateStr, format)
 		if err != nil {
@@ -594,11 +594,11 @@ var awkFunctionsMap = map[string]interface{}{
 
 //------------------------------------------------------------------------------
 
-func flattenForAWK(path string, data interface{}) map[string]string {
+func flattenForAWK(path string, data any) map[string]string {
 	m := map[string]string{}
 
 	switch t := data.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		for k, v := range t {
 			newPath := k
 			if len(path) > 0 {
@@ -608,7 +608,7 @@ func flattenForAWK(path string, data interface{}) map[string]string {
 				m[k2] = v2
 			}
 		}
-	case []interface{}:
+	case []any:
 		for _, ele := range t {
 			for k, v := range flattenForAWK(path, ele) {
 				m[k] = v
@@ -626,9 +626,9 @@ func flattenForAWK(path string, data interface{}) map[string]string {
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
 func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Part, error) {
-	var mutableJSONPart interface{}
+	var mutableJSONPart any
 
-	customFuncs := make(map[string]interface{}, len(a.functions))
+	customFuncs := make(map[string]any, len(a.functions))
 	for k, v := range a.functions {
 		customFuncs[k] = v
 	}
@@ -671,7 +671,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 		gPart := gabs.Wrap(jsonPart)
 		return gPart, nil
 	}
-	setJSON := func(path string, v interface{}) (int, error) {
+	setJSON := func(path string, v any) (int, error) {
 		gPart, err := getJSON()
 		if err != nil {
 			return 0, err
@@ -692,7 +692,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 	customFuncs["json_set_bool"] = func(path string, v bool) (int, error) {
 		return setJSON(path, v)
 	}
-	arrayAppendJSON := func(path string, v interface{}) (int, error) {
+	arrayAppendJSON := func(path string, v any) (int, error) {
 		gPart, err := getJSON()
 		if err != nil {
 			return 0, err
@@ -730,7 +730,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 		switch t := gObj.Path(path).Data().(type) {
 		case string:
 			return len(t), nil
-		case []interface{}:
+		case []any:
 			return len(t), nil
 		}
 		return 0, nil
@@ -754,9 +754,9 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 			return "string", nil
 		case bool:
 			return "bool", nil
-		case []interface{}:
+		case []any:
 			return "array", nil
-		case map[string]interface{}:
+		case map[string]any:
 			return "object", nil
 		case nil:
 			return "null", nil

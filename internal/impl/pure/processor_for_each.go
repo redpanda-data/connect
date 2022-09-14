@@ -35,7 +35,7 @@ on individual message parts of a batch instead.
 
 Please note that most processors already process per message of a batch, and
 this processor is not needed in those cases.`,
-		Config: docs.FieldProcessor("", "").Array().HasDefault([]interface{}{}),
+		Config: docs.FieldProcessor("", "").Array().HasDefault([]any{}),
 	})
 	if err != nil {
 		panic(err)

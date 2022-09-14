@@ -102,7 +102,7 @@ func newMemcachedCache(
 		prefix:     prefix,
 		defaultTTL: defaultTTL,
 		boffPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				bo := *backOff
 				bo.Reset()
 				return &bo

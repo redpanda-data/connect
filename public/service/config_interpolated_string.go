@@ -58,7 +58,7 @@ func (p *ParsedConfig) FieldInterpolatedStringMap(path ...string) (map[string]*I
 	if !exists {
 		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
 	}
-	iMap, ok := v.(map[string]interface{})
+	iMap, ok := v.(map[string]any)
 	if !ok {
 		if sMap, ok := v.(map[string]string); ok {
 			iMap := make(map[string]*InterpolatedString, len(sMap))

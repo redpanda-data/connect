@@ -89,7 +89,7 @@ outputs.`,
 			docs.FieldString("pattern", "The brokering pattern to use.").HasOptions(
 				"fan_out", "fan_out_sequential", "round_robin", "greedy",
 			).HasDefault("fan_out"),
-			docs.FieldOutput("outputs", "A list of child outputs to broker.").Array().HasDefault([]interface{}{}),
+			docs.FieldOutput("outputs", "A list of child outputs to broker.").Array().HasDefault([]any{}),
 			policy.FieldSpec(),
 		),
 		Categories: []string{

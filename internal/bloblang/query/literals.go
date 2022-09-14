@@ -7,15 +7,15 @@ import (
 var _ Function = &mapLiteral{}
 
 type mapLiteral struct {
-	keyValues [][2]interface{}
+	keyValues [][2]any
 }
 
 // NewMapLiteral creates a map literal from a slice of key/value pairs. If all
 // keys and values are static then a static map[string]interface{} value is
 // returned. However, if any keys or values are dynamic a Function is returned.
-func NewMapLiteral(values [][2]interface{}) (interface{}, error) {
+func NewMapLiteral(values [][2]any) (any, error) {
 	isDynamic := false
-	staticValues := make(map[string]interface{}, len(values))
+	staticValues := make(map[string]any, len(values))
 	for i, kv := range values {
 		var key string
 		switch t := kv[0].(type) {
@@ -64,18 +64,18 @@ func (m *mapLiteral) Annotation() string {
 	return "object literal"
 }
 
-func (m *mapLiteral) Exec(ctx FunctionContext) (interface{}, error) {
-	dynMap := make(map[string]interface{}, len(m.keyValues))
+func (m *mapLiteral) Exec(ctx FunctionContext) (any, error) {
+	dynMap := make(map[string]any, len(m.keyValues))
 	for _, kv := range m.keyValues {
 		var key string
-		var value interface{}
+		var value any
 
 		var err error
 		switch t := kv[0].(type) {
 		case string:
 			key = t
 		case Function:
-			var keyI interface{}
+			var keyI any
 			if keyI, err = t.Exec(ctx); err != nil {
 				return nil, fmt.Errorf("failed to resolve key: %w", err)
 			}
@@ -129,14 +129,14 @@ func (m *mapLiteral) QueryTargets(ctx TargetsContext) (TargetsContext, []TargetP
 var _ Function = &arrayLiteral{}
 
 type arrayLiteral struct {
-	values []interface{}
+	values []any
 }
 
 // NewArrayLiteral creates an array literal from a slice of values. If all
 // values are static then a static []interface{} value is returned. However, if
 // any values are dynamic a Function is returned.
-func NewArrayLiteral(values ...interface{}) interface{} {
-	var expandedValues []interface{}
+func NewArrayLiteral(values ...any) any {
+	var expandedValues []any
 	isDynamic := false
 	for _, v := range values {
 		switch t := v.(type) {
@@ -164,8 +164,8 @@ func (a *arrayLiteral) Annotation() string {
 	return "array literal"
 }
 
-func (a *arrayLiteral) Exec(ctx FunctionContext) (interface{}, error) {
-	dynArray := make([]interface{}, 0, len(a.values))
+func (a *arrayLiteral) Exec(ctx FunctionContext) (any, error) {
+	dynArray := make([]any, 0, len(a.values))
 	for _, v := range a.values {
 		if fn, isFunction := v.(Function); isFunction {
 			var err error

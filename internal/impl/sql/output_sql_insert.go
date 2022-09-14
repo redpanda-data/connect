@@ -223,7 +223,7 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 	}
 
 	for i := range batch {
-		var args []interface{}
+		var args []any
 		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
 		if err != nil {
 			return err
@@ -235,7 +235,7 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 		}
 
 		var ok bool
-		if args, ok = iargs.([]interface{}); !ok {
+		if args, ok = iargs.([]any); !ok {
 			return fmt.Errorf("mapping returned non-array result: %T", iargs)
 		}
 

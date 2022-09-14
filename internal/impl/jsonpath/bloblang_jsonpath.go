@@ -44,7 +44,7 @@ func init() {
 			if err != nil {
 				return nil, fmt.Errorf("failed to evaluate json path expression: %w", err)
 			}
-			return func(v interface{}) (interface{}, error) {
+			return func(v any) (any, error) {
 				return eval(context.Background(), v)
 			}, nil
 		}); err != nil {

@@ -12,13 +12,13 @@ func TestTypedMethods(t *testing.T) {
 	testCases := []struct {
 		name string
 		fn   Method
-		in   interface{}
-		exp  interface{}
+		in   any
+		exp  any
 		err  string
 	}{
 		{
 			name: "bad int64",
-			fn: Int64Method(func(i int64) (interface{}, error) {
+			fn: Int64Method(func(i int64) (any, error) {
 				return i, nil
 			}),
 			in:  "not an int",
@@ -26,7 +26,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "good int64",
-			fn: Int64Method(func(i int64) (interface{}, error) {
+			fn: Int64Method(func(i int64) (any, error) {
 				return i * 2, nil
 			}),
 			in:  5,
@@ -34,7 +34,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "bad float64",
-			fn: Float64Method(func(f float64) (interface{}, error) {
+			fn: Float64Method(func(f float64) (any, error) {
 				return f, nil
 			}),
 			in:  "not a float",
@@ -42,7 +42,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "good float64",
-			fn: Float64Method(func(f float64) (interface{}, error) {
+			fn: Float64Method(func(f float64) (any, error) {
 				return f * 2, nil
 			}),
 			in:  5.0,
@@ -50,7 +50,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "bad string",
-			fn: StringMethod(func(s string) (interface{}, error) {
+			fn: StringMethod(func(s string) (any, error) {
 				return s, nil
 			}),
 			in:  5,
@@ -58,7 +58,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "good string",
-			fn: StringMethod(func(s string) (interface{}, error) {
+			fn: StringMethod(func(s string) (any, error) {
 				return "yep: " + s, nil
 			}),
 			in:  "hey",
@@ -66,7 +66,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "bad bytes",
-			fn: BytesMethod(func(s []byte) (interface{}, error) {
+			fn: BytesMethod(func(s []byte) (any, error) {
 				return s, nil
 			}),
 			in:  5,
@@ -74,7 +74,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "good bytes",
-			fn: BytesMethod(func(s []byte) (interface{}, error) {
+			fn: BytesMethod(func(s []byte) (any, error) {
 				return append([]byte("yep: "), s...), nil
 			}),
 			in:  []byte("hey"),
@@ -82,7 +82,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "bad bool",
-			fn: BoolMethod(func(b bool) (interface{}, error) {
+			fn: BoolMethod(func(b bool) (any, error) {
 				return b, nil
 			}),
 			in:  "nope",
@@ -90,7 +90,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "good bool",
-			fn: BoolMethod(func(b bool) (interface{}, error) {
+			fn: BoolMethod(func(b bool) (any, error) {
 				return !b, nil
 			}),
 			in:  true,
@@ -98,7 +98,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "bad object",
-			fn: ObjectMethod(func(o map[string]interface{}) (interface{}, error) {
+			fn: ObjectMethod(func(o map[string]any) (any, error) {
 				return o, nil
 			}),
 			in:  5,
@@ -106,7 +106,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "bad array",
-			fn: ArrayMethod(func(a []interface{}) (interface{}, error) {
+			fn: ArrayMethod(func(a []any) (any, error) {
 				return a, nil
 			}),
 			in:  5,
@@ -114,7 +114,7 @@ func TestTypedMethods(t *testing.T) {
 		},
 		{
 			name: "bad timestamp",
-			fn: TimestampMethod(func(t time.Time) (interface{}, error) {
+			fn: TimestampMethod(func(t time.Time) (any, error) {
 				return t, nil
 			}),
 			in:  "not a timestamp",

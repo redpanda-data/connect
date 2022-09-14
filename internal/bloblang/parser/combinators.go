@@ -12,7 +12,7 @@ import (
 
 // Result represents the result of a parser given an input.
 type Result struct {
-	Payload   interface{}
+	Payload   any
 	Err       *Error
 	Remaining []rune
 }
@@ -23,7 +23,7 @@ type Func func([]rune) Result
 //------------------------------------------------------------------------------
 
 // Success creates a result with a payload from successful parsing.
-func Success(payload interface{}, remaining []rune) Result {
+func Success(payload any, remaining []rune) Result {
 	return Result{
 		Payload:   payload,
 		Remaining: remaining,
@@ -322,9 +322,9 @@ func Object() Func {
 			return res
 		}
 
-		values := map[string]interface{}{}
-		for _, sequenceValue := range res.Payload.([]interface{}) {
-			slice := sequenceValue.([]interface{})
+		values := map[string]any{}
+		for _, sequenceValue := range res.Payload.([]any) {
+			slice := sequenceValue.([]any)
 			values[slice[0].(string)] = slice[4]
 		}
 
@@ -360,7 +360,7 @@ func JoinStringPayloads(p Func) Func {
 		}
 
 		var buf bytes.Buffer
-		slice, _ := res.Payload.([]interface{})
+		slice, _ := res.Payload.([]any)
 
 		for _, v := range slice {
 			str, _ := v.(string)
@@ -496,7 +496,7 @@ func UntilFail(parser Func) Func {
 		if res.Err != nil {
 			return res
 		}
-		results := []interface{}{res.Payload}
+		results := []any{res.Payload}
 		for {
 			if res = parser(res.Remaining); res.Err != nil {
 				return Success(results, res.Remaining)
@@ -525,7 +525,7 @@ func DelimitedPattern(
 			return res
 		}
 
-		results := []interface{}{}
+		results := []any{}
 
 		if res = primary(res.Remaining); res.Err != nil {
 			if resStop := stop(res.Remaining); resStop.Err == nil {
@@ -564,8 +564,8 @@ func DelimitedPattern(
 // parser, containing a slice of primary parser payloads and a slice of
 // delimited parser payloads.
 type DelimitedResult struct {
-	Primary   []interface{}
-	Delimiter []interface{}
+	Primary   []any
+	Delimiter []any
 }
 
 // Delimited attempts to parse one or more primary parsers, where after the
@@ -601,7 +601,7 @@ func Delimited(primary, delimiter Func) Func {
 // results or an error if any parser fails.
 func Sequence(parsers ...Func) Func {
 	return func(input []rune) Result {
-		results := make([]interface{}, 0, len(parsers))
+		results := make([]any, 0, len(parsers))
 		res := Result{
 			Remaining: input,
 		}

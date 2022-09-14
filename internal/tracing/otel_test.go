@@ -13,7 +13,7 @@ import (
 
 func TestInitSpansFromParentTextMap(t *testing.T) {
 	t.Run("it will update the context for each message in the batch", func(t *testing.T) {
-		textMap := map[string]interface{}{
+		textMap := map[string]any{
 			"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
 		}
 

@@ -605,7 +605,7 @@ func TestSystemWindowOwnership(t *testing.T) {
 	require.NoError(t, err)
 
 	inMsg := service.NewMessage(nil)
-	inMsg.SetStructuredMut(map[string]interface{}{
+	inMsg.SetStructuredMut(map[string]any{
 		"hello": "world",
 		"ts":    10,
 	})
@@ -626,7 +626,7 @@ func TestSystemWindowOwnership(t *testing.T) {
 
 	outStruct, err := outBatch[0].AsStructuredMut()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"hello": "world",
 		"ts":    10,
 	}, outStruct)
@@ -638,7 +638,7 @@ func TestSystemWindowOwnership(t *testing.T) {
 
 	inStruct, err := inMsg.AsStructured()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"hello": "world",
 		"moo":   "quack",
 		"ts":    10,

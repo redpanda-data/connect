@@ -203,7 +203,7 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 	}
 
 	for i, msg := range batch {
-		var args []interface{}
+		var args []any
 		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
 		if err != nil {
 			s.logger.Debugf("Arguments mapping failed: %v", err)
@@ -219,7 +219,7 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		}
 
 		var ok bool
-		if args, ok = iargs.([]interface{}); !ok {
+		if args, ok = iargs.([]any); !ok {
 			s.logger.Debugf("Mapping returned non-array result: %T", iargs)
 			msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 			continue

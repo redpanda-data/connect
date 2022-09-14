@@ -162,7 +162,7 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 		inp.client = wrapBQClient(client, inp.logger)
 	}
 
-	var args []interface{}
+	var args []any
 	argsMapping := inp.config.argsMapping
 
 	if argsMapping != nil {
@@ -171,7 +171,7 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 			return err
 		}
 
-		checkedArgs, ok := rawArgs.([]interface{})
+		checkedArgs, ok := rawArgs.([]any)
 		if !ok {
 			return fmt.Errorf("mapping returned non-array result: %T", rawArgs)
 		}

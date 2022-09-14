@@ -86,7 +86,7 @@ func newRistrettoCache(defaultTTL time.Duration, retriesEnabled bool, backOff *b
 		cache:          cache,
 		retriesEnabled: retriesEnabled,
 		boffPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				bo := *backOff
 				bo.Reset()
 				return &bo

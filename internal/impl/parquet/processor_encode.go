@@ -73,12 +73,12 @@ func parquetSchemaConfig() *service.ConfigField {
 			Description("The type of the column, only applicable for leaf columns with no child fields. Some logical types can be specified here such as UTF8.").Optional(),
 		service.NewBoolField("repeated").Description("Whether the field is repeated.").Default(false),
 		service.NewBoolField("optional").Description("Whether the field is optional.").Default(false),
-		service.NewAnyListField("fields").Description("A list of child fields.").Optional().Example([]interface{}{
-			map[string]interface{}{
+		service.NewAnyListField("fields").Description("A list of child fields.").Optional().Example([]any{
+			map[string]any{
 				"name": "foo",
 				"type": "INT64",
 			},
-			map[string]interface{}{
+			map[string]any{
 				"name": "bar",
 				"type": "BYTE_ARRAY",
 			},
@@ -210,7 +210,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service
 			return nil, err
 		}
 
-		obj, isObj := ms.(map[string]interface{})
+		obj, isObj := ms.(map[string]any)
 		if !isObj {
 			return nil, fmt.Errorf("unable to encode message type %T as parquet row", ms)
 		}
@@ -244,14 +244,14 @@ type inserterConfig struct {
 	parentMissing bool
 }
 
-func (c *inserterConfig) toPQValue(f parquet.Field, data interface{}, defLevel, repLevel int) (parquet.Row, error) {
+func (c *inserterConfig) toPQValue(f parquet.Field, data any, defLevel, repLevel int) (parquet.Row, error) {
 	if f.Repeated() {
 		repLevel++
 
-		var arr []interface{}
+		var arr []any
 		if data != nil {
 			var isArray bool
-			if arr, isArray = data.([]interface{}); !isArray {
+			if arr, isArray = data.([]any); !isArray {
 				return nil, fmt.Errorf("expected array, got %T", data)
 			}
 		}
@@ -270,12 +270,12 @@ func (c *inserterConfig) toPQValue(f parquet.Field, data interface{}, defLevel, 
 	return c.toPQValueNotRepeated(f, data, defLevel, repLevel)
 }
 
-func (c *inserterConfig) toPQValueNotRepeated(f parquet.Field, data interface{}, defLevel, repLevel int) (parquet.Row, error) {
+func (c *inserterConfig) toPQValueNotRepeated(f parquet.Field, data any, defLevel, repLevel int) (parquet.Row, error) {
 	if len(f.Fields()) > 0 {
-		var obj map[string]interface{}
+		var obj map[string]any
 		if data != nil {
 			var isObj bool
-			if obj, isObj = data.(map[string]interface{}); !isObj {
+			if obj, isObj = data.(map[string]any); !isObj {
 				return nil, fmt.Errorf("expected object, got %T", data)
 			}
 		}
@@ -358,7 +358,7 @@ func (c *inserterConfig) toPQValueNotRepeated(f parquet.Field, data interface{},
 	return parquet.Row{leafValue}, nil
 }
 
-func (c *inserterConfig) toPQValuesRepeated(field parquet.Field, data []interface{}, defLevel, repLevel int) (parquet.Row, error) {
+func (c *inserterConfig) toPQValuesRepeated(field parquet.Field, data []any, defLevel, repLevel int) (parquet.Row, error) {
 	if len(data) == 0 {
 		if c.firstRepOf == nil {
 			c.firstRepOf = &repLevel
@@ -403,7 +403,7 @@ func (c *inserterConfig) toPQValuesRepeated(field parquet.Field, data []interfac
 // https://www.waitingforcode.com/apache-parquet/nested-data-representation-parquet/read
 // https://stackoverflow.com/questions/43568132/dremel-repetition-and-definition-level
 // https://blog.twitter.com/engineering/en_us/a/2013/dremel-made-simple-with-parquet
-func (c *inserterConfig) toPQValuesGroup(fields []parquet.Field, data map[string]interface{}, defLevel, repLevel int) (row parquet.Row, err error) {
+func (c *inserterConfig) toPQValuesGroup(fields []parquet.Field, data map[string]any, defLevel, repLevel int) (row parquet.Row, err error) {
 	for _, f := range fields {
 		v, err := c.toPQValue(f, data[f.Name()], defLevel, repLevel)
 		if err != nil {

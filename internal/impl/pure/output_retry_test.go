@@ -345,7 +345,7 @@ func TestRetryMutations(t *testing.T) {
 	defer done()
 
 	inMsg := message.NewPart(nil)
-	inMsg.SetStructuredMut(map[string]interface{}{
+	inMsg.SetStructuredMut(map[string]any{
 		"hello": "world",
 	})
 
@@ -355,7 +355,7 @@ func TestRetryMutations(t *testing.T) {
 		inStruct, err := inMsg.AsStructuredMut()
 		require.NoError(t, err)
 
-		assert.Equal(t, map[string]interface{}{
+		assert.Equal(t, map[string]any{
 			"hello": "world",
 		}, inStruct)
 
@@ -378,7 +378,7 @@ func TestRetryMutations(t *testing.T) {
 
 		outStruct, err := ts.Payload.Get(0).AsStructuredMut()
 		require.NoError(t, err)
-		assert.Equal(t, map[string]interface{}{
+		assert.Equal(t, map[string]any{
 			"hello": "world",
 		}, outStruct)
 
@@ -395,7 +395,7 @@ func TestRetryMutations(t *testing.T) {
 
 	inStruct, err := inMsg.AsStructured()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"hello": "world",
 		"moo":   "quack",
 	}, inStruct)

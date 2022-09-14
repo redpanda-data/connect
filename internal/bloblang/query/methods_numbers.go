@@ -18,7 +18,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			var v float64
 			if f != nil {
 				v = *f
@@ -44,7 +44,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			if f != nil {
 				return int64(math.Ceil(*f)), nil
 			}
@@ -69,7 +69,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			if f != nil {
 				return int64(math.Floor(*f)), nil
 			}
@@ -93,7 +93,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			var v float64
 			if f != nil {
 				v = *f
@@ -119,7 +119,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			var v float64
 			if f != nil {
 				v = *f
@@ -153,8 +153,8 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			arr, ok := v.([]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			arr, ok := v.([]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
 			}
@@ -196,8 +196,8 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return func(v interface{}, ctx FunctionContext) (interface{}, error) {
-			arr, ok := v.([]interface{})
+		return func(v any, ctx FunctionContext) (any, error) {
+			arr, ok := v.([]any)
 			if !ok {
 				return nil, NewTypeError(v, ValueArray)
 			}
@@ -234,7 +234,7 @@ var _ = registerSimpleMethod(
 		),
 	),
 	func(*ParsedParams) (simpleMethod, error) {
-		return numberMethod(func(f *float64, i *int64, ui *uint64) (interface{}, error) {
+		return numberMethod(func(f *float64, i *int64, ui *uint64) (any, error) {
 			if f != nil {
 				return int64(math.Round(*f)), nil
 			}

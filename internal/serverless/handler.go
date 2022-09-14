@@ -41,7 +41,7 @@ func (h *Handler) Close(tout time.Duration) error {
 
 // Handle is a request/response func that injects a payload into the underlying
 // Benthos pipeline and returns a result.
-func (h *Handler) Handle(ctx context.Context, obj interface{}) (interface{}, error) {
+func (h *Handler) Handle(ctx context.Context, obj any) (any, error) {
 	part := message.NewPart(nil)
 	part.SetStructuredMut(obj)
 	msg := message.Batch{part}
@@ -68,12 +68,12 @@ func (h *Handler) Handle(ctx context.Context, obj interface{}) (interface{}, err
 
 	resultBatches := store.Get()
 	if len(resultBatches) == 0 {
-		return map[string]interface{}{"message": "request successful"}, nil
+		return map[string]any{"message": "request successful"}, nil
 	}
 
-	lambdaResults := make([][]interface{}, len(resultBatches))
+	lambdaResults := make([][]any, len(resultBatches))
 	for i, batch := range resultBatches {
-		batchResults := make([]interface{}, batch.Len())
+		batchResults := make([]any, batch.Len())
 		if err := batch.Iter(func(j int, p *message.Part) error {
 			var merr error
 			if batchResults[j], merr = p.AsStructured(); merr != nil {
@@ -93,7 +93,7 @@ func (h *Handler) Handle(ctx context.Context, obj interface{}) (interface{}, err
 		return lambdaResults[0], nil
 	}
 
-	genBatchOfBatches := make([]interface{}, len(lambdaResults))
+	genBatchOfBatches := make([]any, len(lambdaResults))
 	for i, b := range lambdaResults {
 		genBatchOfBatches[i] = b
 	}

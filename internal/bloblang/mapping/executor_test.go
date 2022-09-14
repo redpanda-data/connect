@@ -22,7 +22,7 @@ func TestAssignments(t *testing.T) {
 		return &k
 	}
 
-	initFunc := func(name string, args ...interface{}) query.Function {
+	initFunc := func(name string, args ...any) query.Function {
 		t.Helper()
 		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestAssignments(t *testing.T) {
 		},
 		"append array at root": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", []interface{}{})),
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", []any{})),
 				NewStatement(nil, NewJSONAssignment("-"), query.NewLiteralFunction("", "foo")),
 				NewStatement(nil, NewJSONAssignment("-"), query.NewLiteralFunction("", "bar")),
 				NewStatement(nil, NewJSONAssignment("-"), query.NewLiteralFunction("", "baz")),
@@ -64,7 +64,7 @@ func TestAssignments(t *testing.T) {
 		},
 		"append array at root nested": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", []interface{}{})),
+				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", []any{})),
 				NewStatement(nil, NewJSONAssignment("-", "A"), query.NewLiteralFunction("", "foo")),
 				NewStatement(nil, NewJSONAssignment("-", "B"), query.NewLiteralFunction("", "bar")),
 				NewStatement(nil, NewJSONAssignment("-", "C"), query.NewLiteralFunction("", "baz")),
@@ -147,7 +147,7 @@ func TestAssignments(t *testing.T) {
 		},
 		"meta set all": {
 			mapping: NewExecutor("", nil, nil,
-				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("", map[string]interface{}{
+				NewStatement(nil, NewMetaAssignment(nil), query.NewLiteralFunction("", map[string]any{
 					"new1": "value1",
 					"new2": "value2",
 				})),
@@ -279,7 +279,7 @@ func TestAssignments(t *testing.T) {
 }
 
 func TestTargets(t *testing.T) {
-	function := func(name string, args ...interface{}) query.Function {
+	function := func(name string, args ...any) query.Function {
 		t.Helper()
 		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
@@ -346,7 +346,7 @@ func TestExec(t *testing.T) {
 		return &k
 	}
 
-	function := func(name string, args ...interface{}) query.Function {
+	function := func(name string, args ...any) query.Function {
 		t.Helper()
 		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)
@@ -355,8 +355,8 @@ func TestExec(t *testing.T) {
 
 	tests := map[string]struct {
 		mapping      *Executor
-		input        interface{}
-		output       interface{}
+		input        any
+		output       any
 		outputString string
 		err          string
 	}{
@@ -384,15 +384,15 @@ func TestExec(t *testing.T) {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
 			),
-			input:        map[string]interface{}{"bar": "baz"},
-			output:       map[string]interface{}{"foo": "baz"},
+			input:        map[string]any{"bar": "baz"},
+			output:       map[string]any{"foo": "baz"},
 			outputString: `{"foo":"baz"}`,
 		},
 		"failed get": {
 			mapping: NewExecutor("", nil, nil,
 				NewStatement(nil, NewJSONAssignment("foo"), function("json", "bar.baz")),
 			),
-			input:        map[string]interface{}{"nope": "baz"},
+			input:        map[string]any{"nope": "baz"},
 			err:          "failed assignment (line 0): target message part does not exist",
 			outputString: "",
 		},
@@ -401,7 +401,7 @@ func TestExec(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("does.not.exist")),
 			),
 			input:        `{"message":"hello world"}`,
-			output:       map[string]interface{}{"foo": nil},
+			output:       map[string]any{"foo": nil},
 			outputString: `{"foo":null}`,
 		},
 		"null get and set root": {
@@ -417,7 +417,7 @@ func TestExec(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment(), query.NewLiteralFunction("", "hello world")),
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewFieldFunction("bar")),
 			),
-			input: map[string]interface{}{"bar": "baz"},
+			input: map[string]any{"bar": "baz"},
 			err:   "failed to assign result (line 0): unable to set target path foo as the value of the root was a non-object type (string)",
 		},
 		"colliding set at path": {
@@ -425,7 +425,7 @@ func TestExec(t *testing.T) {
 				NewStatement(nil, NewJSONAssignment("foo"), query.NewLiteralFunction("", "hello world")),
 				NewStatement(nil, NewJSONAssignment("foo", "bar"), query.NewFieldFunction("bar")),
 			),
-			input: map[string]interface{}{"bar": "baz"},
+			input: map[string]any{"bar": "baz"},
 			err:   "failed to assign result (line 0): unable to set target path foo.bar as the value of foo was a non-object type (string)",
 		},
 	}
@@ -459,7 +459,7 @@ func TestQueries(t *testing.T) {
 		Meta    map[string]string
 	}
 
-	initFunc := func(name string, args ...interface{}) query.Function {
+	initFunc := func(name string, args ...any) query.Function {
 		t.Helper()
 		fn, err := query.InitFunctionHelper(name, args...)
 		require.NoError(t, err)

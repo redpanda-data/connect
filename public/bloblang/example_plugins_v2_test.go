@@ -30,7 +30,7 @@ func Example_bloblangFunctionPluginV2() {
 				return nil, err
 			}
 
-			return func() (interface{}, error) {
+			return func() (any, error) {
 				return left*right + 0.02, nil
 			}, nil
 		}); err != nil {
@@ -50,7 +50,7 @@ root.num_cd = multiply_but_always_slightly_wrong(this.c, this.d)
 		panic(err)
 	}
 
-	res, err := exe.Query(map[string]interface{}{
+	res, err := exe.Query(map[string]any{
 		"a": 1.2, "b": 2.6, "c": 5.3, "d": 8.2,
 	})
 	if err != nil {
@@ -86,7 +86,7 @@ func Example_bloblangMethodPluginV2() {
 			return nil, err
 		}
 
-		return bloblang.StringMethod(func(s string) (interface{}, error) {
+		return bloblang.StringMethod(func(s string) (any, error) {
 			return prefix + s + suffix, nil
 		}), nil
 	}); err != nil {
@@ -98,12 +98,12 @@ func Example_bloblangMethodPluginV2() {
 
 	if err := bloblang.RegisterMethodV2("sometimes_reverse", reverseSpec, func(*bloblang.ParsedParams) (bloblang.Method, error) {
 		rand := rand.New(rand.NewSource(0))
-		return bloblang.ArrayMethod(func(in []interface{}) (interface{}, error) {
+		return bloblang.ArrayMethod(func(in []any) (any, error) {
 			if rand.Int()%3 == 0 {
 				// Whoopsie
 				return in, nil
 			}
-			out := make([]interface{}, len(in))
+			out := make([]any, len(in))
 			copy(out, in)
 			for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
 				out[i], out[j] = out[j], out[i]
@@ -127,9 +127,9 @@ root.reversed = this.names.sometimes_reverse()
 		panic(err)
 	}
 
-	res, err := exe.Query(map[string]interface{}{
+	res, err := exe.Query(map[string]any{
 		"summary": "quack",
-		"names":   []interface{}{"denny", "pixie", "olaf", "jen", "spuz"},
+		"names":   []any{"denny", "pixie", "olaf", "jen", "spuz"},
 	})
 	if err != nil {
 		panic(err)

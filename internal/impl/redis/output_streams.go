@@ -124,8 +124,8 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 		return component.ErrNotConnected
 	}
 
-	partToMap := func(p *message.Part) map[string]interface{} {
-		values := map[string]interface{}{}
+	partToMap := func(p *message.Part) map[string]any {
+		values := map[string]any{}
 		_ = r.metaFilter.Iter(p, func(k, v string) error {
 			values[k] = v
 			return nil

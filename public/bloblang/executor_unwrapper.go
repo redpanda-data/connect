@@ -11,6 +11,6 @@ func (e executorUnwrapper) Unwrap() *mapping.Executor {
 }
 
 // XUnwrapper is for internal use only, do not use this.
-func (e *Executor) XUnwrapper() interface{} {
+func (e *Executor) XUnwrapper() any {
 	return executorUnwrapper{child: e.exec}
 }

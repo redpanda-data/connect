@@ -150,13 +150,13 @@ func (r *redisHashWriter) Connect(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 func walkForHashFields(
-	msg message.Batch, index int, fields map[string]interface{},
+	msg message.Batch, index int, fields map[string]any,
 ) error {
 	jVal, err := msg.Get(index).AsStructured()
 	if err != nil {
 		return err
 	}
-	jObj, ok := jVal.(map[string]interface{})
+	jObj, ok := jVal.(map[string]any)
 	if !ok {
 		return fmt.Errorf("expected JSON object, found '%T'", jVal)
 	}
@@ -177,7 +177,7 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		key := r.keyStr.String(i, msg)
-		fields := map[string]interface{}{}
+		fields := map[string]any{}
 		if r.conf.WalkMetadata {
 			_ = p.MetaIter(func(k, v string) error {
 				fields[k] = v

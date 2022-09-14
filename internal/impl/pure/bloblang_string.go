@@ -20,7 +20,7 @@ func init() {
 				},
 			),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
-			return bloblang.StringMethod(func(data string) (interface{}, error) {
+			return bloblang.StringMethod(func(data string) (any, error) {
 				values, err := url.ParseQuery(data)
 				if err != nil {
 					return nil, fmt.Errorf("failed to parse value as url-encoded data: %w", err)
@@ -32,8 +32,8 @@ func init() {
 	}
 }
 
-func urlValuesToMap(values url.Values) map[string]interface{} {
-	root := make(map[string]interface{})
+func urlValuesToMap(values url.Values) map[string]any {
+	root := make(map[string]any)
 
 	for k, v := range values {
 		if len(v) == 1 {

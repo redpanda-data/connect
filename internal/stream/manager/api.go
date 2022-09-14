@@ -360,10 +360,10 @@ func (m *Type) HandleStreamCRUD(w http.ResponseWriter, r *http.Request) {
 
 			var bodyBytes []byte
 			if bodyBytes, serverErr = json.Marshal(struct {
-				Active    bool        `json:"active"`
-				Uptime    float64     `json:"uptime"`
-				UptimeStr string      `json:"uptime_str"`
-				Config    interface{} `json:"config"`
+				Active    bool    `json:"active"`
+				Uptime    float64 `json:"uptime"`
+				UptimeStr string  `json:"uptime_str"`
+				Config    any     `json:"config"`
 			}{
 				Active:    info.IsRunning(),
 				Uptime:    info.Uptime().Seconds(),
@@ -564,7 +564,7 @@ func (m *Type) HandleStreamStats(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		var info *StreamStatus
 		if info, serverErr = m.Read(id); serverErr == nil {
-			values := map[string]interface{}{}
+			values := map[string]any{}
 			for k, v := range info.metrics.GetCounters() {
 				values[k] = v
 			}

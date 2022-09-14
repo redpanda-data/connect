@@ -77,7 +77,7 @@ You can access these metadata fields using
 				[]string{"amqp://guest:guest@127.0.0.1:5672/"},
 				[]string{"amqp://127.0.0.1:5672/,amqp://127.0.0.2:5672/"},
 				[]string{"amqp://127.0.0.1:5672/", "amqp://127.0.0.2:5672/"},
-			).Array().AtVersion("3.58.0").HasDefault([]interface{}{}),
+			).Array().AtVersion("3.58.0").HasDefault([]any{}),
 			docs.FieldString("queue", "An AMQP queue to consume from.").HasDefault(""),
 			docs.FieldObject("queue_declare", `
 Allows you to passively declare the target queue. If the queue already exists
@@ -89,8 +89,8 @@ then the declaration passively verifies that they match the target fields.`,
 			).Advanced(),
 			docs.FieldObject("bindings_declare",
 				"Allows you to passively declare bindings for the target queue.",
-				[]interface{}{
-					map[string]interface{}{
+				[]any{
+					map[string]any{
 						"exchange": "foo",
 						"key":      "bar",
 					},
@@ -98,10 +98,10 @@ then the declaration passively verifies that they match the target fields.`,
 			).Array().WithChildren(
 				docs.FieldString("exchange", "The exchange of the declared binding.").HasDefault(""),
 				docs.FieldString("key", "The key of the declared binding.").HasDefault(""),
-			).Advanced().HasDefault([]interface{}{}),
+			).Advanced().HasDefault([]any{}),
 			docs.FieldString("consumer_tag", "A consumer tag.").HasDefault(""),
 			docs.FieldBool("auto_ack", "Acknowledge messages automatically as they are consumed rather than waiting for acknowledgments from downstream. This can improve throughput and prevent the pipeline from blocking but at the cost of eliminating delivery guarantees.").Advanced().HasDefault(false),
-			docs.FieldString("nack_reject_patterns", "A list of regular expression patterns whereby if a message that has failed to be delivered by Benthos has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.", []string{"^reject me please:.+$"}).Array().Advanced().AtVersion("3.64.0").HasDefault([]interface{}{}),
+			docs.FieldString("nack_reject_patterns", "A list of regular expression patterns whereby if a message that has failed to be delivered by Benthos has an error that matches it will be dropped (or delivered to a dead-letter queue if one exists). By default failed messages are nacked with requeue enabled.", []string{"^reject me please:.+$"}).Array().Advanced().AtVersion("3.64.0").HasDefault([]any{}),
 			docs.FieldInt("prefetch_count", "The maximum number of pending messages to have consumed at a time.").HasDefault(10),
 			docs.FieldInt("prefetch_size", "The maximum amount of pending messages measured in bytes to have consumed at a time.").Advanced().HasDefault(0),
 			btls.FieldSpec(),
@@ -265,7 +265,7 @@ func (a *amqp09Reader) disconnect() error {
 
 //------------------------------------------------------------------------------
 
-func amqpSetMetadata(p *message.Part, k string, v interface{}) {
+func amqpSetMetadata(p *message.Part, k string, v any) {
 	var metaValue string
 	var metaKey = strings.ReplaceAll(k, "-", "_")
 

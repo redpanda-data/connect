@@ -30,7 +30,7 @@ func aFunction(pCtx Context) Func {
 		if res.Err != nil {
 			return res
 		}
-		res.Payload = field.NewQueryResolver(res.Payload.([]interface{})[2].(query.Function))
+		res.Payload = field.NewQueryResolver(res.Payload.([]any)[2].(query.Function))
 		return res
 	}
 }
@@ -44,7 +44,7 @@ func escapedBlock(input []rune) Result {
 	if res.Err != nil {
 		return res
 	}
-	res.Payload = field.StaticResolver("${!" + res.Payload.([]interface{})[1].(string) + "}")
+	res.Payload = field.StaticResolver("${!" + res.Payload.([]any)[1].(string) + "}")
 	return res
 }
 

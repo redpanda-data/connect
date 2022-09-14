@@ -88,7 +88,7 @@ func New(
 	version string,
 	dateBuilt string,
 	conf Config,
-	wholeConf interface{},
+	wholeConf any,
 	log log.Modular,
 	stats metrics.Type,
 	opts ...OptFunc,
@@ -132,7 +132,7 @@ func New(
 	}
 
 	handlePrintJSONConfig := func(w http.ResponseWriter, r *http.Request) {
-		var g interface{}
+		var g any
 		var err error
 		if node, ok := wholeConf.(yaml.Node); ok {
 			err = node.Decode(&g)

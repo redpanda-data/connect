@@ -38,8 +38,8 @@ These values can be overridden during execution, at which point the configured T
 			Default("60s")).
 		Field(service.NewStringMapField("init_values").
 			Description("A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.").
-			Default(map[string]interface{}{}).
-			Example(map[string]interface{}{
+			Default(map[string]any{}).
+			Example(map[string]any{
 				"Nickelback":       "1995",
 				"Spice Girls":      "1994",
 				"The Human League": "1977",

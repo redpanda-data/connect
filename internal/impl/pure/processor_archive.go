@@ -168,7 +168,7 @@ func concatenateArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Me
 }
 
 func jsonArrayArchive(hFunc headerFunc, msg service.MessageBatch) (*service.Message, error) {
-	var array []interface{}
+	var array []any
 
 	for _, part := range msg {
 		doc, jerr := part.AsStructuredMut()
@@ -254,7 +254,7 @@ func (f fakeInfo) ModTime() time.Time {
 func (f fakeInfo) IsDir() bool {
 	return false
 }
-func (f fakeInfo) Sys() interface{} {
+func (f fakeInfo) Sys() any {
 	return nil
 }
 

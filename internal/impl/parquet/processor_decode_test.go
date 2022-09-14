@@ -175,7 +175,7 @@ func TestParquetDecodeProcessor(t *testing.T) {
 	}
 
 	t.Run("all together", func(t *testing.T) {
-		var expected, actual []interface{}
+		var expected, actual []any
 
 		buf := bytes.NewBuffer(nil)
 		pWtr := parquet.NewWriter(buf, parquet.SchemaOf(testPM{}))

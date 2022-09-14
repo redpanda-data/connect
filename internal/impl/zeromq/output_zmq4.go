@@ -181,7 +181,7 @@ func (z *zmqOutput) WriteBatch(_ context.Context, batch service.MessageBatch) er
 		return service.ErrNotConnected
 	}
 
-	var parts []interface{}
+	var parts []any
 	for _, m := range batch {
 		b, err := m.AsBytes()
 		if err != nil {

@@ -19,12 +19,12 @@ import (
 
 // FieldConfig describes a configuration field used in the template.
 type FieldConfig struct {
-	Name        string       `yaml:"name"`
-	Description string       `yaml:"description"`
-	Type        *string      `yaml:"type,omitempty"`
-	Kind        *string      `yaml:"kind,omitempty"`
-	Default     *interface{} `yaml:"default,omitempty"`
-	Advanced    bool         `yaml:"advanced"`
+	Name        string  `yaml:"name"`
+	Description string  `yaml:"description"`
+	Type        *string `yaml:"type,omitempty"`
+	Kind        *string `yaml:"kind,omitempty"`
+	Default     *any    `yaml:"default,omitempty"`
+	Advanced    bool    `yaml:"advanced"`
 }
 
 // TestConfig defines a unit test for the template.
@@ -124,7 +124,7 @@ func (c Config) compile() (*compiled, error) {
 }
 
 func diffYAMLNodesAsJSON(expNode, actNode *yaml.Node) (string, error) {
-	var iexp, iact interface{}
+	var iexp, iact any
 	if err := expNode.Decode(&iexp); err != nil {
 		return "", fmt.Errorf("failed to marshal expected %w", err)
 	}
@@ -266,6 +266,6 @@ func ConfigSpec() docs.FieldSpecs {
 			docs.FieldString("name", "A name to identify the test."),
 			docs.FieldObject("config", "A configuration to run this test with, the config resulting from applying the template with this config will be linted."),
 			docs.FieldObject("expected", "An optional configuration describing the expected result of applying the template, when specified the result will be diffed and any mismatching fields will be reported as a test error.").Optional(),
-		).HasDefault([]interface{}{}),
+		).HasDefault([]any{}),
 	}
 }

@@ -48,7 +48,7 @@ type Config struct {
 	NATS               NATSConfig              `json:"nats" yaml:"nats"`
 	NATSStream         NATSStreamConfig        `json:"nats_stream" yaml:"nats_stream"`
 	NSQ                NSQConfig               `json:"nsq" yaml:"nsq"`
-	Plugin             interface{}             `json:"plugin,omitempty" yaml:"plugin,omitempty"`
+	Plugin             any                     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	RedisHash          RedisHashConfig         `json:"redis_hash" yaml:"redis_hash"`
 	RedisList          RedisListConfig         `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub        RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`

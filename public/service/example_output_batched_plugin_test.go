@@ -19,7 +19,7 @@ func (b *batchOfJSONWriter) Connect(ctx context.Context) error {
 }
 
 func (b *batchOfJSONWriter) WriteBatch(ctx context.Context, msgs service.MessageBatch) error {
-	var messageObjs []interface{}
+	var messageObjs []any
 	for _, msg := range msgs {
 		msgObj, err := msg.AsStructured()
 		if err != nil {
@@ -27,7 +27,7 @@ func (b *batchOfJSONWriter) WriteBatch(ctx context.Context, msgs service.Message
 		}
 		messageObjs = append(messageObjs, msgObj)
 	}
-	outBytes, err := json.Marshal(map[string]interface{}{
+	outBytes, err := json.Marshal(map[string]any{
 		"count":   len(msgs),
 		"objects": messageObjs,
 	})

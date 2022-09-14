@@ -29,14 +29,14 @@ func FieldSpec() docs.FieldSpec {
 
 		docs.FieldObject(
 			"client_certs", "A list of client certificates to use. For each certificate either the fields `cert` and `key`, or `cert_file` and `key_file` should be specified, but not both.",
-			[]interface{}{
-				map[string]interface{}{
+			[]any{
+				map[string]any{
 					"cert": "foo",
 					"key":  "bar",
 				},
 			},
-			[]interface{}{
-				map[string]interface{}{
+			[]any{
+				map[string]any{
 					"cert_file": "./example.pem",
 					"key_file":  "./example.key",
 				},

@@ -383,7 +383,7 @@ func calculatePublicKeyFingerprint(privateKey *rsa.PrivateKey) (string, error) {
 }
 
 type dbI interface {
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	Close() error
 }
 

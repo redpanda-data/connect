@@ -88,7 +88,7 @@ func TestMessageQuery(t *testing.T) {
 
 	s, err := g1.AsStructured()
 	assert.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{"foo": "bar"}, s)
+	assert.Equal(t, map[string]any{"foo": "bar"}, s)
 
 	m, ok := g1.MetaGet("foo")
 	assert.True(t, ok)
@@ -123,14 +123,14 @@ func TestMessageMutate(t *testing.T) {
 	_, err := g1.AsStructured()
 	assert.Error(t, err)
 
-	g1.SetStructured(map[string]interface{}{
+	g1.SetStructured(map[string]any{
 		"foo": "bar",
 	})
 	assert.Equal(t, "not a json doc", string(p.AsBytes()))
 
 	s, err := g1.AsStructured()
 	assert.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"foo": "bar",
 	}, s)
 
@@ -175,7 +175,7 @@ func TestNewMessageMutate(t *testing.T) {
 	_, err := g1.AsStructured()
 	assert.Error(t, err)
 
-	g1.SetStructured(map[string]interface{}{
+	g1.SetStructured(map[string]any{
 		"foo": "bar",
 	})
 	g0Bytes, err := g0.AsBytes()
@@ -184,7 +184,7 @@ func TestNewMessageMutate(t *testing.T) {
 
 	s, err := g1.AsStructuredMut()
 	assert.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"foo": "bar",
 	}, s)
 
@@ -223,7 +223,7 @@ func TestNewMessageMutate(t *testing.T) {
 
 func TestMessageMapping(t *testing.T) {
 	part := NewMessage(nil)
-	part.SetStructured(map[string]interface{}{
+	part.SetStructured(map[string]any{
 		"content": "hello world",
 	})
 
@@ -235,19 +235,19 @@ func TestMessageMapping(t *testing.T) {
 
 	resI, err := res.AsStructured()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"new_content": "HELLO WORLD",
 	}, resI)
 }
 
 func TestMessageBatchMapping(t *testing.T) {
 	partOne := NewMessage(nil)
-	partOne.SetStructured(map[string]interface{}{
+	partOne.SetStructured(map[string]any{
 		"content": "hello world 1",
 	})
 
 	partTwo := NewMessage(nil)
-	partTwo.SetStructured(map[string]interface{}{
+	partTwo.SetStructured(map[string]any{
 		"content": "hello world 2",
 	})
 
@@ -259,14 +259,14 @@ func TestMessageBatchMapping(t *testing.T) {
 
 	resI, err := res.AsStructured()
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"new_content": "hello world 1 - hello world 2",
 	}, resI)
 }
 
 func BenchmarkMessageMappingNew(b *testing.B) {
 	part := NewMessage(nil)
-	part.SetStructured(map[string]interface{}{
+	part.SetStructured(map[string]any{
 		"content": "hello world",
 	})
 
@@ -282,7 +282,7 @@ func BenchmarkMessageMappingNew(b *testing.B) {
 
 		resI, err := res.AsStructured()
 		require.NoError(b, err)
-		assert.Equal(b, map[string]interface{}{
+		assert.Equal(b, map[string]any{
 			"new_content": "HELLO WORLD",
 		}, resI)
 	}
@@ -290,7 +290,7 @@ func BenchmarkMessageMappingNew(b *testing.B) {
 
 func BenchmarkMessageMappingOld(b *testing.B) {
 	part := message.NewPart(nil)
-	part.SetStructured(map[string]interface{}{
+	part.SetStructured(map[string]any{
 		"content": "hello world",
 	})
 
@@ -308,7 +308,7 @@ func BenchmarkMessageMappingOld(b *testing.B) {
 
 		resI, err := res.AsStructuredMut()
 		require.NoError(b, err)
-		assert.Equal(b, map[string]interface{}{
+		assert.Equal(b, map[string]any{
 			"new_content": "HELLO WORLD",
 		}, resI)
 	}
