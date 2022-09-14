@@ -15,8 +15,8 @@ func beanstalkdOutputConfig() *service.ConfigSpec {
 		Categories("Services").
 		Version("3.46.0").
 		Summary("Write messages to a Beanstalkd queue.").
-		Field(service.NewStringField("tcp_address").
-			Description("Beanstalkd address to connect to.").
+		Field(service.NewStringField("address").
+			Description("An address to connect to.").
 			Example("127.0.0.1:11300")).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of messages to have in flight at a given time. Increase to improve throughput.").
@@ -53,7 +53,7 @@ func newBeanstalkdWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		log: log,
 	}
 
-	tcpAddr, err := conf.FieldString("tcp_address")
+	tcpAddr, err := conf.FieldString("address")
 	if err != nil {
 		return nil, err
 	}

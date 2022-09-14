@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-Reads messages from Beanstalkd queue.
+Reads messages from a Beanstalkd queue.
 
 Introduced in version 3.46.0.
 
@@ -27,14 +27,14 @@ Introduced in version 3.46.0.
 input:
   label: ""
   beanstalkd:
-    tcp_address: ""
+    address: ""
 ```
 
 ## Fields
 
-### `tcp_address`
+### `address`
 
-Beanstalkd address to connect to.
+An address to connect to.
 
 
 Type: `string`  
@@ -42,7 +42,7 @@ Type: `string`
 ```yml
 # Examples
 
-tcp_address: 127.0.0.1:11300
+address: 127.0.0.1:11300
 ```
 
 
