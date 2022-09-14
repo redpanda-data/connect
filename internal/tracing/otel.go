@@ -20,6 +20,14 @@ const (
 func GetSpan(p *message.Part) *Span {
 	ctx := message.GetContext(p)
 	t := trace.SpanFromContext(ctx)
+	return otelSpan(ctx, t)
+}
+
+// GetActiveSpan returns a span attached to a message part. Returns nil if the
+// part doesn't have a span attached or it is inactive.
+func GetActiveSpan(p *message.Part) *Span {
+	ctx := message.GetContext(p)
+	t := trace.SpanFromContext(ctx)
 	if !t.IsRecording() {
 		return nil
 	}
@@ -29,7 +37,7 @@ func GetSpan(p *message.Part) *Span {
 // CreateChildSpan takes a message part, extracts an existing span if there is
 // one and returns child span.
 func CreateChildSpan(prov trace.TracerProvider, operationName string, part *message.Part) *Span {
-	span := GetSpan(part)
+	span := GetActiveSpan(part)
 	if span == nil {
 		ctx, t := prov.Tracer(name).Start(context.Background(), operationName)
 		span = otelSpan(ctx, t)
@@ -87,7 +95,7 @@ func WithChildSpans(prov trace.TracerProvider, operationName string, msg message
 func WithSiblingSpans(prov trace.TracerProvider, operationName string, msg message.Batch) message.Batch {
 	parts := make([]*message.Part, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
-		otSpan := GetSpan(part)
+		otSpan := GetActiveSpan(part)
 		if otSpan == nil {
 			ctx, t := prov.Tracer(name).Start(context.Background(), operationName)
 			otSpan = otelSpan(ctx, t)
@@ -129,7 +137,7 @@ func InitSpans(prov trace.TracerProvider, operationName string, msg message.Batc
 // InitSpan sets up an OpenTracing span on a message part if one does not
 // already exist.
 func InitSpan(prov trace.TracerProvider, operationName string, part *message.Part) *message.Part {
-	if GetSpan(part) != nil {
+	if GetActiveSpan(part) != nil {
 		return part
 	}
 	ctx, _ := prov.Tracer(name).Start(context.Background(), operationName)
@@ -147,7 +155,7 @@ func InitSpansFromParent(prov trace.TracerProvider, operationName string, parent
 // InitSpanFromParent sets up an OpenTracing span as children of a parent
 // span on a message part if one does not already exist.
 func InitSpanFromParent(prov trace.TracerProvider, operationName string, parent *Span, part *message.Part) *message.Part {
-	if GetSpan(part) != nil {
+	if GetActiveSpan(part) != nil {
 		return part
 	}
 	ctx, _ := prov.Tracer(name).Start(parent.ctx, operationName)
@@ -175,7 +183,7 @@ func InitSpansFromParentTextMap(prov trace.TracerProvider, operationName string,
 // FinishSpans calls Finish on all message parts containing a span.
 func FinishSpans(msg message.Batch) {
 	for _, p := range msg {
-		if span := GetSpan(p); span != nil {
+		if span := GetActiveSpan(p); span != nil {
 			span.unwrap().End()
 		}
 	}

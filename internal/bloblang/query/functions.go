@@ -12,6 +12,8 @@ import (
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/segmentio/ksuid"
+
+	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
 type fieldFunction struct {
@@ -222,6 +224,27 @@ var _ = registerSimpleFunction(
 	),
 	func(ctx FunctionContext) (interface{}, error) {
 		return ctx.MsgBatch.Get(ctx.Index).AsBytes(), nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
+		FunctionCategoryMessage, "tracing_span",
+		"Provides the message tracing span [(created via Open Telemetry APIs)](/docs/components/tracers/about) as an object serialised via text map formatting. The returned value will be `null` if the message does not have a span.",
+		NewExampleSpec("",
+			`root.headers.traceparent = tracing_span().traceparent`,
+			`{"some_stuff":"just can't be explained by science"}`,
+			`{"headers":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"}}`,
+		),
+	).Experimental(),
+	func(fCtx FunctionContext) (interface{}, error) {
+		span := tracing.GetSpan(fCtx.MsgBatch.Get(fCtx.Index))
+		if span == nil {
+			return nil, nil
+		}
+		return span.TextMap()
 	},
 )
 

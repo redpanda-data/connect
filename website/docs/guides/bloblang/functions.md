@@ -351,6 +351,23 @@ The key parameter is optional and if omitted the entire metadata contents are re
 root.all_metadata = root_meta()
 ```
 
+### `tracing_span`
+
+:::caution EXPERIMENTAL
+This function is experimental and therefore breaking changes could be made to it outside of major version releases.
+:::
+Provides the message tracing span [(created via Open Telemetry APIs)](/docs/components/tracers/about) as an object serialised via text map formatting. The returned value will be `null` if the message does not have a span.
+
+#### Examples
+
+
+```coffee
+root.headers.traceparent = tracing_span().traceparent
+
+# In:  {"some_stuff":"just can't be explained by science"}
+# Out: {"headers":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"}}
+```
+
 ## Environment
 
 ### `env`
