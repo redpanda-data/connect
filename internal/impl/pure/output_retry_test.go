@@ -351,7 +351,7 @@ func TestRetryMutations(t *testing.T) {
 
 	inBatch := message.Batch{inMsg}
 	select {
-	case readChan <- message.NewTransactionFunc(inBatch, func(ctx context.Context, err error) error {
+	case readChan <- message.NewTransactionFunc(inBatch, func(ctx context.Context, _ error) error {
 		inStruct, err := inMsg.AsStructuredMut()
 		require.NoError(t, err)
 

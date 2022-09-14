@@ -44,7 +44,6 @@ type AsyncWriter struct {
 
 	typeStr     string
 	maxInflight int
-	noCancel    bool
 	writer      AsyncSink
 
 	injectTracingMap *mapping.Executor
