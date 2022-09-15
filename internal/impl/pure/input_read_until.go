@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -73,7 +74,7 @@ input:
 type readUntilInput struct {
 	conf input.ReadUntilConfig
 
-	wrapped input.Streamed
+	wrapped atomic.Pointer[input.Streamed]
 	check   *mapping.Executor
 
 	wrapperMgr bundle.NewManagement
@@ -115,12 +116,12 @@ func newReadUntilInput(conf input.Config, mgr bundle.NewManagement, log log.Modu
 
 		log:          log,
 		stats:        stats,
-		wrapped:      wrapped,
 		check:        check,
 		transactions: make(chan message.Transaction),
 
 		shutSig: shutdown.NewSignaller(),
 	}
+	rdr.wrapped.Store(&wrapped)
 
 	go rdr.loop()
 	return rdr, nil
@@ -128,10 +129,10 @@ func newReadUntilInput(conf input.Config, mgr bundle.NewManagement, log log.Modu
 
 func (r *readUntilInput) loop() {
 	defer func() {
-		if r.wrapped != nil {
-			r.wrapped.TriggerStopConsuming()
-			r.wrapped.TriggerCloseNow()
-			_ = r.wrapped.WaitForClose(context.Background())
+		if wrapped := r.wrapped.Load(); wrapped != nil {
+			(*wrapped).TriggerStopConsuming()
+			(*wrapped).TriggerCloseNow()
+			_ = (*wrapped).WaitForClose(context.Background())
 		}
 
 		close(r.transactions)
@@ -151,18 +152,21 @@ func (r *readUntilInput) loop() {
 
 runLoop:
 	for !r.shutSig.ShouldCloseAtLeisure() {
-		if r.wrapped == nil {
+		wrapped := r.wrapped.Load()
+		if wrapped == nil {
 			if r.conf.Restart {
 				select {
 				case <-time.After(restartBackoff.NextBackOff()):
 				case <-r.shutSig.CloseAtLeisureChan():
 					return
 				}
-				var err error
-				if r.wrapped, err = r.wrapperMgr.NewInput(*r.conf.Input); err != nil {
+				nextInput, err := r.wrapperMgr.NewInput(*r.conf.Input)
+				if err != nil {
 					r.log.Errorf("Failed to create input '%v': %v\n", r.conf.Input.Type, err)
 					return
 				}
+				wrapped = &nextInput
+				r.wrapped.Store(wrapped)
 			} else {
 				return
 			}
@@ -170,9 +174,9 @@ runLoop:
 
 		var tran message.Transaction
 		select {
-		case tran, open = <-r.wrapped.TransactionChan():
+		case tran, open = <-(*wrapped).TransactionChan():
 			if !open {
-				r.wrapped = nil
+				r.wrapped.Store(nil)
 				continue runLoop
 			}
 			restartBackoff.Reset()
@@ -232,7 +236,10 @@ func (r *readUntilInput) TransactionChan() <-chan message.Transaction {
 // Connected returns a boolean indicating whether this input is currently
 // connected to its target.
 func (r *readUntilInput) Connected() bool {
-	return r.wrapped.Connected()
+	if wrapped := r.wrapped.Load(); wrapped != nil {
+		return (*wrapped).Connected()
+	}
+	return false
 }
 
 func (r *readUntilInput) TriggerStopConsuming() {
