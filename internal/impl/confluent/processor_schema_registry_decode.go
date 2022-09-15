@@ -130,7 +130,7 @@ func newSchemaRegistryDecoder(urlStr string, basicAuthEnabledBool bool, username
 	}
 
 	var token string
-	if basicAuthEnabledBool == true {
+	if basicAuthEnabledBool {
 		token = base64.StdEncoding.EncodeToString([]byte(usernameStr + ":" + passwordStr))
 	}
 
