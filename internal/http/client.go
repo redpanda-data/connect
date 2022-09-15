@@ -293,6 +293,10 @@ func (h *Client) waitForAccess(ctx context.Context) bool {
 // CreateRequest forms an *http.Request from a message to be sent as the body,
 // and also a message used to form headers (they can be the same).
 func (h *Client) CreateRequest(sendMsg, refMsg message.Batch) (req *http.Request, err error) {
+	if refMsg == nil {
+		refMsg = sendMsg
+	}
+
 	var overrideContentType string
 	var body io.Reader
 	if len(h.multipart) > 0 {
@@ -496,7 +500,7 @@ func (h *Client) checkStatus(code int) (succeeded bool, retStrat retryStrategy) 
 func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg message.Batch) (res *http.Response, err error) {
 	var spans []*tracing.Span
 	if sendMsg != nil {
-		spans = tracing.CreateChildSpans(h.mgr.Tracer(), "http_request", sendMsg)
+		sendMsg, spans = tracing.WithChildSpans(h.mgr.Tracer(), "http_request", sendMsg)
 		defer func() {
 			for _, s := range spans {
 				s.Finish()
