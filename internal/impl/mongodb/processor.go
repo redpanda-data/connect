@@ -233,7 +233,7 @@ func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2
 // resulting messages or a response to be sent back to the message source.
 func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, batch message.Batch) ([]message.Batch, error) {
 	writeModelsMap := map[*mongo.Collection][]mongo.WriteModel{}
-	processor.IteratePartsWithSpanV2(m.tracer, "mongodb", nil, batch, func(i int, s *tracing.Span, p *message.Part) error {
+	_ = batch.Iter(func(i int, p *message.Part) error {
 		var err error
 		var filterVal, documentVal *message.Part
 		var upsertVal, filterValWanted, documentValWanted bool

@@ -130,7 +130,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 
 	if h.asMultipart || msg.Len() == 1 {
 		// Easy, just do a single request.
-		resultMsg, err := h.client.Send(context.Background(), msg, msg)
+		resultMsg, err := h.client.Send(context.Background(), msg, nil)
 		if err != nil {
 			var codeStr string
 			var hErr component.ErrUnexpectedHTTPRes
@@ -169,7 +169,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 		_ = msg.Iter(func(i int, p *message.Part) error {
 			tmpMsg := message.QuickBatch(nil)
 			tmpMsg = append(tmpMsg, p)
-			result, err := h.client.Send(context.Background(), tmpMsg, tmpMsg)
+			result, err := h.client.Send(context.Background(), tmpMsg, nil)
 			if err != nil {
 				h.log.Errorf("HTTP request to '%v' failed: %v", h.rawURL, err)
 
@@ -208,7 +208,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 			go func() {
 				for index := range reqChan {
 					tmpMsg := message.Batch{msg.Get(index)}
-					result, err := h.client.Send(context.Background(), tmpMsg, tmpMsg)
+					result, err := h.client.Send(context.Background(), tmpMsg, nil)
 					if err == nil && result.Len() != 1 {
 						err = fmt.Errorf("unexpected response size: %v", result.Len())
 					}

@@ -128,7 +128,9 @@ func (m *Stream) inputLoop() {
 		}
 
 		batchLen := tr.Payload.Len()
-		err := m.buffer.Write(closeAtLeisureCtx, tracing.WithSiblingSpans(m.tracer, m.typeStr, tr.Payload), ackFunc)
+
+		writeBatch, _ := tracing.WithSiblingSpans(m.tracer, m.typeStr, tr.Payload)
+		err := m.buffer.Write(closeAtLeisureCtx, writeBatch, ackFunc)
 		if err == nil {
 			mReceivedCount.Incr(int64(batchLen))
 			mReceivedBatchCount.Incr(1)

@@ -75,7 +75,7 @@ func (a *v2ToV1Processor) ProcessBatch(ctx context.Context, msg message.Batch) (
 
 	newParts := make([]*message.Part, 0, msg.Len())
 	_ = msg.Iter(func(i int, part *message.Part) error {
-		span := tracing.CreateChildSpan(a.mgr.Tracer(), a.typeStr, part)
+		_, span := tracing.WithChildSpan(a.mgr.Tracer(), a.typeStr, part)
 
 		nextParts, err := a.p.Process(ctx, part)
 		if err != nil {
@@ -142,7 +142,7 @@ func (a *v2BatchedToV1Processor) ProcessBatch(ctx context.Context, msg message.B
 	a.mBatchReceived.Incr(1)
 
 	tStarted := time.Now()
-	spans := tracing.CreateChildSpans(a.mgr.Tracer(), a.typeStr, msg)
+	_, spans := tracing.WithChildSpans(a.mgr.Tracer(), a.typeStr, msg)
 
 	outputBatches, err := a.p.ProcessBatch(ctx, spans, msg)
 	if err != nil {

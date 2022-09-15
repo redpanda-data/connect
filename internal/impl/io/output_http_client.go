@@ -120,7 +120,7 @@ func (h *httpClientWriter) Connect(ctx context.Context) error {
 }
 
 func (h *httpClientWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
-	resultMsg, err := h.client.Send(ctx, msg, msg)
+	resultMsg, err := h.client.Send(ctx, msg, nil)
 	if err == nil && h.conf.PropagateResponse {
 		parts := make([]*message.Part, resultMsg.Len())
 		_ = resultMsg.Iter(func(i int, p *message.Part) error {

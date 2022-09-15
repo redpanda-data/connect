@@ -221,7 +221,7 @@ func (w *AsyncWriter) loop() {
 			}
 
 			w.log.Tracef("Attempting to write %v messages to '%v'.\n", ts.Payload.Len(), w.typeStr)
-			spans := tracing.CreateChildSpans(w.tracer, traceName, ts.Payload)
+			_, spans := tracing.WithChildSpans(w.tracer, traceName, ts.Payload)
 			w.injectSpans(ts.Payload, spans)
 
 			latency, err := w.latencyMeasuringWrite(closeLeisureCtx, ts.Payload)
