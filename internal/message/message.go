@@ -148,7 +148,8 @@ func DeserializeBytes(b []byte) ([][]byte, error) {
 
 	b = b[4:]
 
-	var parts [][]byte
+	parts := make([][]byte, numParts)
+
 	for i := uint32(0); i < numParts; i++ {
 		if len(b) < 4 {
 			return nil, ErrBadMessageBytes
@@ -160,7 +161,7 @@ func DeserializeBytes(b []byte) ([][]byte, error) {
 			return nil, ErrBadMessageBytes
 		}
 
-		parts = append(parts, b[:partSize])
+		parts[i] = b[:partSize]
 		b = b[partSize:]
 	}
 	return parts, nil
