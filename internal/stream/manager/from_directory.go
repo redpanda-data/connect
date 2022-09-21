@@ -58,7 +58,7 @@ func LoadStreamConfigsFromDirectory(replaceEnvVars bool, dir string) (map[string
 		}
 
 		conf := config.New()
-		if _, readerr := config.ReadFileLinted(path, &config.LintOptions{}, &conf); readerr != nil {
+		if _, readerr := config.ReadFileLinted(path, config.LintOptions{}, &conf); readerr != nil {
 			// TODO: Read and report linting errors.
 			return readerr
 		}

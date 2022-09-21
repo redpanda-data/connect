@@ -188,9 +188,9 @@ cache_resources:
 	lints, err := rdr.Read(&conf)
 	require.NoError(t, err)
 	require.Len(t, lints, 3)
-	assert.Contains(t, lints[0], "/main.yaml: line 3: field meow1 ")
-	assert.Contains(t, lints[1], "/res1.yaml: line 5: field meow2 ")
-	assert.Contains(t, lints[2], "/res2.yaml: line 5: field meow3 ")
+	assert.Contains(t, lints[0], "/main.yaml(3,1) field meow1 ")
+	assert.Contains(t, lints[1], "/res1.yaml(5,1) field meow2 ")
+	assert.Contains(t, lints[2], "/res2.yaml(5,1) field meow3 ")
 
 	assert.Equal(t, "generate", conf.Input.Type)
 	assert.Equal(t, `root = "meow"`, conf.Input.Generate.Mapping)

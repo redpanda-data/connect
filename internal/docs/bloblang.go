@@ -25,11 +25,11 @@ func LintBloblangMapping(ctx LintContext, line, col int, v any) []Lint {
 	}
 	if mErr, ok := err.(*parser.Error); ok {
 		bline, bcol := parser.LineAndColOf([]rune(str), mErr.Input)
-		lint := NewLintError(line+bline-1, mErr.ErrorAtPositionStructured("", []rune(str)))
+		lint := NewLintError(line+bline-1, LintBadBloblang, mErr.ErrorAtPositionStructured("", []rune(str)))
 		lint.Column = col + bcol
 		return []Lint{lint}
 	}
-	return []Lint{NewLintError(line, err.Error())}
+	return []Lint{NewLintError(line, LintBadBloblang, err.Error())}
 }
 
 // LintBloblangField is function for linting a config field expected to be an
@@ -48,11 +48,11 @@ func LintBloblangField(ctx LintContext, line, col int, v any) []Lint {
 	}
 	if mErr, ok := err.(*parser.Error); ok {
 		bline, bcol := parser.LineAndColOf([]rune(str), mErr.Input)
-		lint := NewLintError(line+bline-1, mErr.ErrorAtPositionStructured("", []rune(str)))
+		lint := NewLintError(line+bline-1, LintBadBloblang, mErr.ErrorAtPositionStructured("", []rune(str)))
 		lint.Column = col + bcol
 		return []Lint{lint}
 	}
-	return []Lint{NewLintError(line, err.Error())}
+	return []Lint{NewLintError(line, LintBadBloblang, err.Error())}
 }
 
 type functionCategory struct {

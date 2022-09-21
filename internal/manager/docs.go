@@ -14,7 +14,7 @@ func lintResource(ctx docs.LintContext, line, col int, v any) []docs.Lint {
 	label, _ := gObj.S("label").Data().(string)
 	if label == "" {
 		return []docs.Lint{
-			docs.NewLintError(line, "The label field for resources must be unique and not empty"),
+			docs.NewLintError(line, docs.LintBadLabel, "The label field for resources must be unique and not empty"),
 		}
 	}
 	return nil

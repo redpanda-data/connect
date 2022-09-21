@@ -103,8 +103,12 @@ func readResource(path string, conf *manager.ResourceConfig) (lints []string, er
 	}()
 
 	var confBytes []byte
-	if confBytes, lints, err = ReadFileEnvSwap(path); err != nil {
+	var dLints []docs.Lint
+	if confBytes, dLints, err = ReadFileEnvSwap(path); err != nil {
 		return
+	}
+	for _, l := range dLints {
+		lints = append(lints, l.Error())
 	}
 
 	var rawNode yaml.Node
@@ -116,7 +120,7 @@ func readResource(path string, conf *manager.ResourceConfig) (lints []string, er
 			tdocs.ConfigSpec(),
 		}, manager.Spec()...)
 		for _, lint := range allowTest.LintYAML(docs.NewLintContext(), &rawNode) {
-			lints = append(lints, fmt.Sprintf("resource file %v: line %v: %v", path, lint.Line, lint.What))
+			lints = append(lints, fmt.Sprintf("%v%v", path, lint.Error()))
 		}
 	}
 

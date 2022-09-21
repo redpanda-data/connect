@@ -230,8 +230,12 @@ func (r *Reader) readMain(conf *Type) (lints []string, err error) {
 	var rawNode yaml.Node
 	var confBytes []byte
 	if r.mainPath != "" {
-		if confBytes, lints, err = ReadFileEnvSwap(r.mainPath); err != nil {
+		var dLints []docs.Lint
+		if confBytes, dLints, err = ReadFileEnvSwap(r.mainPath); err != nil {
 			return
+		}
+		for _, l := range dLints {
+			lints = append(lints, l.Error())
 		}
 		if err = yaml.Unmarshal(confBytes, &rawNode); err != nil {
 			return
@@ -256,12 +260,9 @@ func (r *Reader) readMain(conf *Type) (lints []string, err error) {
 	}
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
-		lintFilePrefix := ""
-		if r.mainPath != "" {
-			lintFilePrefix = fmt.Sprintf("%v: ", r.mainPath)
-		}
+		lintFilePrefix := r.mainPath
 		for _, lint := range confSpec.LintYAML(docs.NewLintContext(), &rawNode) {
-			lints = append(lints, fmt.Sprintf("%vline %v: %v", lintFilePrefix, lint.Line, lint.What))
+			lints = append(lints, fmt.Sprintf("%v%v", lintFilePrefix, lint.Error()))
 		}
 	}
 

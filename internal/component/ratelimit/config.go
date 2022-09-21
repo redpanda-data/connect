@@ -1,8 +1,6 @@
 package ratelimit
 
 import (
-	"fmt"
-
 	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -38,18 +36,18 @@ func (conf *Config) UnmarshalYAML(value *yaml.Node) error {
 
 	err := value.Decode(&aliased)
 	if err != nil {
-		return fmt.Errorf("line %v: %v", value.Line, err)
+		return docs.NewLintError(value.Line, docs.LintFailedRead, err.Error())
 	}
 
 	var spec docs.ComponentSpec
 	if aliased.Type, spec, err = docs.GetInferenceCandidateFromYAML(docs.DeprecatedProvider, docs.TypeRateLimit, value); err != nil {
-		return fmt.Errorf("line %v: %w", value.Line, err)
+		return docs.NewLintError(value.Line, docs.LintComponentMissing, err.Error())
 	}
 
 	if spec.Plugin {
 		pluginNode, err := docs.GetPluginConfigYAML(aliased.Type, value)
 		if err != nil {
-			return fmt.Errorf("line %v: %v", value.Line, err)
+			return docs.NewLintError(value.Line, docs.LintFailedRead, err.Error())
 		}
 		aliased.Plugin = &pluginNode
 	} else {

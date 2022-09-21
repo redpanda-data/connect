@@ -294,7 +294,7 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 	m, err := env.NewMapping(blobl)
 	if err != nil {
 		f.customLintFn = func(ctx LintContext, line, col int, value any) (lints []Lint) {
-			return []Lint{NewLintError(line, fmt.Sprintf("Field lint mapping itself failed to parse: %v", err))}
+			return []Lint{NewLintError(line, LintCustom, fmt.Sprintf("Field lint mapping itself failed to parse: %v", err))}
 		}
 		return f
 	}
@@ -307,18 +307,18 @@ func (f FieldSpec) LinterBlobl(blobl string) FieldSpec {
 			MsgBatch: message.QuickBatch(nil),
 		}.WithValue(value))
 		if err != nil {
-			return []Lint{NewLintError(line, err.Error())}
+			return []Lint{NewLintError(line, LintCustom, err.Error())}
 		}
 		switch t := res.(type) {
 		case []any:
 			for _, e := range t {
 				if what, _ := e.(string); len(what) > 0 {
-					lints = append(lints, NewLintError(line, what))
+					lints = append(lints, NewLintError(line, LintCustom, what))
 				}
 			}
 		case string:
 			if len(t) > 0 {
-				lints = append(lints, NewLintError(line, t))
+				lints = append(lints, NewLintError(line, LintCustom, t))
 			}
 		}
 		return
@@ -349,7 +349,7 @@ func (f FieldSpec) lintOptions() FieldSpec {
 				}
 			}
 		}
-		return []Lint{NewLintError(line, fmt.Sprintf("value %v is not a valid option for this field", str))}
+		return []Lint{NewLintError(line, LintInvalidOption, fmt.Sprintf("value %v is not a valid option for this field", str))}
 	}
 	return f
 }
@@ -591,22 +591,88 @@ const (
 	LintWarning LintLevel = iota
 )
 
+// LintType is a discrete linting type.
+type LintType int
+
+const (
+	// LintCustom means a custom linting rule failed.
+	LintCustom LintType = iota
+
+	// LintFailedRead means a configuration could not be read.
+	LintFailedRead LintType = iota
+
+	// LintInvalidOption means the field value was not one of the explicit list
+	// of options.
+	LintInvalidOption LintType = iota
+
+	// LintBadLabel means the label contains invalid characters.
+	LintBadLabel LintType = iota
+
+	// LintMissingLabel means the label is missing when required.
+	LintMissingLabel LintType = iota
+
+	// LintDuplicateLabel means the label collides with another label.
+	LintDuplicateLabel LintType = iota
+
+	// LintBadBloblang means the field contains invalid Bloblang.
+	LintBadBloblang LintType = iota
+
+	// LintShouldOmit means the field should be omitted.
+	LintShouldOmit LintType = iota
+
+	// LintComponentMissing means a component value was expected but the type is
+	// missing.
+	LintComponentMissing LintType = iota
+
+	// LintComponentNotFound means the specified component value is not
+	// recognised.
+	LintComponentNotFound LintType = iota
+
+	// LintUnknown means the field is unknown.
+	LintUnknown LintType = iota
+
+	// LintMissing means a field was required but missing.
+	LintMissing LintType = iota
+
+	// LintExpectedArray means an array value was expected but something else
+	// was provided.
+	LintExpectedArray LintType = iota
+
+	// LintExpectedObject means an object value was expected but something else
+	// was provided.
+	LintExpectedObject LintType = iota
+
+	// LintExpectedScalar means a scalar value was expected but something else
+	// was provided.
+	LintExpectedScalar LintType = iota
+
+	// LintDeprecated means a field is deprecated and should not be used.
+	LintDeprecated LintType = iota
+)
+
 // Lint describes a single linting issue found with a Benthos config.
 type Lint struct {
 	Line   int
-	Column int // Optional, omitted from lint report unless >= 1
+	Column int // Optional, set to 1 by default
 	Level  LintLevel
+	Type   LintType
 	What   string
 }
 
 // NewLintError returns an error lint.
-func NewLintError(line int, msg string) Lint {
-	return Lint{Line: line, Level: LintError, What: msg}
+func NewLintError(line int, t LintType, msg string) Lint {
+	return Lint{Line: line, Column: 1, Level: LintError, Type: t, What: msg}
 }
 
 // NewLintWarning returns a warning lint.
-func NewLintWarning(line int, msg string) Lint {
-	return Lint{Line: line, Level: LintWarning, What: msg}
+func NewLintWarning(line int, t LintType, msg string) Lint {
+	return Lint{Line: line, Column: 1, Level: LintWarning, Type: t, What: msg}
+}
+
+// Error returns a formatted string explaining the lint error prefixed with its
+// location within the file.
+func (l Lint) Error() string {
+	return fmt.Sprintf("(%v,%v) %v", l.Line, l.Column, l.What)
 }
 
 //------------------------------------------------------------------------------

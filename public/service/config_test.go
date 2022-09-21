@@ -62,7 +62,7 @@ c:
     e: evalue
 `,
 			lints: []docs.Lint{
-				docs.NewLintError(2, "field not_real not recognised"),
+				docs.NewLintError(2, docs.LintUnknown, "field not_real not recognised"),
 			},
 		},
 		{
@@ -79,7 +79,7 @@ c:
     e: evalue
 `,
 			lints: []docs.Lint{
-				docs.NewLintError(4, "field not_real not recognised"),
+				docs.NewLintError(4, docs.LintUnknown, "field not_real not recognised"),
 			},
 		},
 	}

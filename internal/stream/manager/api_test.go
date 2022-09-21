@@ -610,7 +610,7 @@ func TestTypeAPIStreamsLinting(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
 
-	expLints := `{"lint_errors":["stream 'bar': line 15: field generate is invalid when the component type is inproc (input)","stream 'foo': line 10: field inproc is invalid when the component type is drop (output)"]}`
+	expLints := `{"lint_errors":["stream 'bar': (15,1) field generate is invalid when the component type is inproc (input)","stream 'foo': (10,1) field inproc is invalid when the component type is drop (output)"]}`
 	assert.Equal(t, expLints, response.Body.String())
 
 	request, err = http.NewRequest("POST", "/streams?chilled=true", bytes.NewReader(body))
@@ -683,7 +683,7 @@ func TestTypeAPILinting(t *testing.T) {
 	r.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusBadRequest, response.Code)
 
-	expLints := `{"lint_errors":["line 9: field inproc is invalid when the component type is drop (output)","line 11: field cache_resources not recognised"]}`
+	expLints := `{"lint_errors":["(9,1) field inproc is invalid when the component type is drop (output)","(11,1) field cache_resources not recognised"]}`
 	assert.Equal(t, expLints, response.Body.String())
 
 	request, err = http.NewRequest("POST", "/streams/foo?chilled=true", bytes.NewReader(body))
@@ -709,7 +709,7 @@ func TestResourceAPILinting(t *testing.T) {
   nope: nah
   compaction_interval: 1s`,
 			lints: []string{
-				"line 3: field nope not recognised",
+				"(3,1) field nope not recognised",
 			},
 		},
 		{
@@ -719,7 +719,7 @@ func TestResourceAPILinting(t *testing.T) {
   mapping: root = deleted()
   nope: nah`,
 			lints: []string{
-				"line 3: field nope not recognised",
+				"(3,1) field nope not recognised",
 			},
 		},
 		{
@@ -730,7 +730,7 @@ func TestResourceAPILinting(t *testing.T) {
     drop: {}
   nope: nah`,
 			lints: []string{
-				"line 4: field nope not recognised",
+				"(4,1) field nope not recognised",
 			},
 		},
 		{
@@ -740,7 +740,7 @@ func TestResourceAPILinting(t *testing.T) {
   size: 10
   nope: nah`,
 			lints: []string{
-				"line 3: field nope not recognised",
+				"(3,1) field nope not recognised",
 			},
 		},
 		{
@@ -750,7 +750,7 @@ func TestResourceAPILinting(t *testing.T) {
   count: 10
   nope: nah`,
 			lints: []string{
-				"line 3: field nope not recognised",
+				"(3,1) field nope not recognised",
 			},
 		},
 	}

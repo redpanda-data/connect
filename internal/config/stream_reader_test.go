@@ -50,8 +50,8 @@ cache_resources:
 	require.NoError(t, err)
 
 	require.Len(t, lints, 2)
-	assert.Contains(t, lints[0], "/first.yaml: line 3: field meow1 ")
-	assert.Contains(t, lints[1], "/second.yaml: line 6: field cache_resources not recognised")
+	assert.Contains(t, lints[0], "/first.yaml(3,1) field meow1 ")
+	assert.Contains(t, lints[1], "/second.yaml(6,1) field cache_resources not recognised")
 
 	require.Len(t, streamConfs, 2)
 
