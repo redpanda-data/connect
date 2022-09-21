@@ -462,8 +462,17 @@ func cmdService(
 
 	// Wait for termination signal
 	select {
-	case <-sigChan:
-		logger.Infoln("Received SIGTERM, the service is closing")
+	case sig := <-sigChan:
+		var sigName string
+		switch sig {
+		case os.Interrupt:
+			sigName = "SIGINT"
+		case syscall.SIGTERM:
+			sigName = "SIGTERM"
+		default:
+			sigName = sig.String()
+		}
+		logger.Infof("Received %s, the service is closing", sigName)
 	case <-dataStreamClosedChan:
 		logger.Infoln("Pipeline has terminated. Shutting down the service")
 	case <-httpServerClosedChan:
