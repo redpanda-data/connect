@@ -116,7 +116,7 @@ type Lint struct {
 
 // Error returns an error string.
 func (l Lint) Error() string {
-	return fmt.Sprintf("%v:%v: %v", l.Line, l.Column, l.What)
+	return fmt.Sprintf("(%v,%v) %v", l.Line, l.Column, l.What)
 }
 
 // LintError is an error type that represents one or more configuration file
