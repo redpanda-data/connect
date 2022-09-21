@@ -53,7 +53,7 @@ func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.Field
 			metaPatternCount, _ := gObj.ArrayCountP("extract_headers.include_patterns")
 			if copyResponseHeadersSet && copyResponseHeaders && (metaPrefixCount > 0 || metaPatternCount > 0) {
 				return []docs.Lint{
-					docs.NewLintError(line, "Cannot use extract_headers when copy_response_headers is true."),
+					docs.NewLintError(line, docs.LintCustom, "Cannot use extract_headers when copy_response_headers is true."),
 				}
 			}
 			return nil

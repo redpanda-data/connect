@@ -70,7 +70,7 @@ More information about error handling can be found [here](/docs/configuration/er
 					}
 					if _, exists := childObj["try"]; exists {
 						return []docs.Lint{
-							docs.NewLintError(line, "`catch` block contains a `try` block which will never execute due to errors only being cleared at the end of the `catch`, for more information about nesting `try` within `catch` read: https://www.benthos.dev/docs/components/processors/try#nesting-within-a-catch-block"),
+							docs.NewLintError(line, docs.LintCustom, "`catch` block contains a `try` block which will never execute due to errors only being cleared at the end of the `catch`, for more information about nesting `try` within `catch` read: https://www.benthos.dev/docs/components/processors/try#nesting-within-a-catch-block"),
 						}
 					}
 				}

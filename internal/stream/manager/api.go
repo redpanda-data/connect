@@ -85,7 +85,7 @@ func (c ConfigSet) UnmarshalYAML(value *yaml.Node) error {
 
 func lintStreamConfigNode(node *yaml.Node) (lints []string) {
 	for _, dLint := range stream.Spec().LintYAML(docs.NewLintContext(), node) {
-		lints = append(lints, fmt.Sprintf("line %v: %v", dLint.Line, dLint.What))
+		lints = append(lints, dLint.Error())
 	}
 	return
 }
@@ -516,7 +516,7 @@ func (m *Type) HandleResourceCRUD(w http.ResponseWriter, r *http.Request) {
 
 		if r.URL.Query().Get("chilled") != "true" {
 			for _, l := range docs.LintYAML(docs.NewLintContext(), docType, &node) {
-				lints = append(lints, fmt.Sprintf("line %v: %v", l.Line, l.What))
+				lints = append(lints, l.Error())
 				m.manager.Logger().Infof("Resource '%v' config: %v\n", id, l)
 			}
 		}

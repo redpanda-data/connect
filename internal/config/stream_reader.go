@@ -46,8 +46,12 @@ func ReadStreamFile(path string) (conf stream.Config, lints []string, err error)
 	conf = stream.NewConfig()
 
 	var confBytes []byte
-	if confBytes, lints, err = ReadFileEnvSwap(path); err != nil {
+	var dLints []docs.Lint
+	if confBytes, dLints, err = ReadFileEnvSwap(path); err != nil {
 		return
+	}
+	for _, l := range dLints {
+		lints = append(lints, l.Error())
 	}
 
 	var rawNode yaml.Node
@@ -60,7 +64,7 @@ func ReadStreamFile(path string) (conf stream.Config, lints []string, err error)
 
 	if !bytes.HasPrefix(confBytes, []byte("# BENTHOS LINT DISABLE")) {
 		for _, lint := range confSpec.LintYAML(docs.NewLintContext(), &rawNode) {
-			lints = append(lints, fmt.Sprintf("%v: line %v: %v", path, lint.Line, lint.What))
+			lints = append(lints, fmt.Sprintf("%v%v", path, lint.Error()))
 		}
 	}
 

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -22,19 +23,25 @@ var yellow = color.New(color.FgYellow).SprintFunc()
 
 type pathLint struct {
 	source string
-	line   int
-	lint   string
-	err    string
+	lint   docs.Lint
 }
 
-func lintFile(path string, opts *config.LintOptions) (pathLints []pathLint) {
+func lintFile(path string, opts config.LintOptions) (pathLints []pathLint) {
 	conf := config.New()
 	lints, err := config.ReadFileLinted(path, opts, &conf)
 	if err != nil {
-		pathLints = append(pathLints, pathLint{
-			source: path,
-			err:    err.Error(),
-		})
+		var l docs.Lint
+		if errors.As(err, &l) {
+			pathLints = append(pathLints, pathLint{
+				source: path,
+				lint:   l,
+			})
+		} else {
+			pathLints = append(pathLints, pathLint{
+				source: path,
+				lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
+			})
+		}
 		return
 	}
 	for _, l := range lints {
@@ -46,12 +53,12 @@ func lintFile(path string, opts *config.LintOptions) (pathLints []pathLint) {
 	return
 }
 
-func lintMDSnippets(path string, opts *config.LintOptions) (pathLints []pathLint) {
+func lintMDSnippets(path string, opts config.LintOptions) (pathLints []pathLint) {
 	rawBytes, err := os.ReadFile(path)
 	if err != nil {
 		pathLints = append(pathLints, pathLint{
 			source: path,
-			err:    err.Error(),
+			lint:   docs.NewLintError(1, docs.LintFailedRead, err.Error()),
 		})
 		return
 	}
@@ -68,8 +75,7 @@ func lintMDSnippets(path string, opts *config.LintOptions) (pathLints []pathLint
 		if endOfSnippet == -1 {
 			pathLints = append(pathLints, pathLint{
 				source: path,
-				line:   snippetLine,
-				err:    "markdown snippet not terminated",
+				lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, "markdown snippet not terminated"),
 			})
 			return
 		}
@@ -79,27 +85,31 @@ func lintMDSnippets(path string, opts *config.LintOptions) (pathLints []pathLint
 		configBytes := rawBytes[nextSnippet : endOfSnippet-len(endTag)]
 
 		if err := yaml.Unmarshal(configBytes, &conf); err != nil {
-			pathLints = append(pathLints, pathLint{
-				source: path,
-				line:   snippetLine,
-				err:    err.Error(),
-			})
+			var l docs.Lint
+			if errors.As(err, &l) {
+				l.Line += snippetLine - 1
+				pathLints = append(pathLints, pathLint{
+					source: path,
+					lint:   l,
+				})
+			} else {
+				pathLints = append(pathLints, pathLint{
+					source: path,
+					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err.Error()),
+				})
+			}
 		} else {
-			lintCtx := docs.NewLintContext()
-			lintCtx.RejectDeprecated = opts.RejectDeprecated
-			lintCtx.RequireLabels = opts.RequireLabels
-			lints, err := config.LintBytes(lintCtx, configBytes)
+			lints, err := config.LintBytes(opts, configBytes)
 			if err != nil {
 				pathLints = append(pathLints, pathLint{
 					source: path,
-					line:   snippetLine,
-					err:    err.Error(),
+					lint:   docs.NewLintError(snippetLine, docs.LintFailedRead, err.Error()),
 				})
 			}
 			for _, l := range lints {
+				l.Line += snippetLine - 1
 				pathLints = append(pathLints, pathLint{
 					source: path,
-					line:   snippetLine,
 					lint:   l,
 				})
 			}
@@ -148,7 +158,7 @@ files with the .yaml or .yml extension.`[1:],
 				targets = append(targets, conf)
 			}
 
-			lintOpts := &config.LintOptions{
+			lintOpts := config.LintOptions{
 				RejectDeprecated: c.Bool("deprecated"),
 				RequireLabels:    c.Bool("labels"),
 			}
@@ -187,14 +197,11 @@ files with the .yaml or .yml extension.`[1:],
 				os.Exit(0)
 			}
 			for _, lint := range pathLints {
-				message := yellow(lint.lint)
-				if len(lint.err) > 0 {
-					message = red(lint.err)
-				}
-				if lint.line > 0 {
-					fmt.Fprintf(os.Stderr, "%v: from snippet at line %v: %v\n", lint.source, lint.line, message)
+				lintText := fmt.Sprintf("%v%v\n", lint.source, lint.lint.Error())
+				if lint.lint.Type == docs.LintFailedRead || lint.lint.Type == docs.LintComponentMissing {
+					fmt.Fprint(os.Stderr, red(lintText))
 				} else {
-					fmt.Fprintf(os.Stderr, "%v: %v\n", lint.source, message)
+					fmt.Fprint(os.Stderr, yellow(lintText))
 				}
 			}
 			os.Exit(1)

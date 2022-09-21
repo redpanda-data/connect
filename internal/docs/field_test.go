@@ -36,22 +36,22 @@ func TestBloblLinter(t *testing.T) {
 			name:  "Single type lint",
 			input: "",
 			expected: []Lint{
-				{What: "expected non-empty string, got empty string"},
+				NewLintError(0, LintCustom, "expected non-empty string, got empty string"),
 			},
 		},
 		{
 			name:  "One lint",
 			input: `hello meow world`,
 			expected: []Lint{
-				{What: "no cats allowed"},
+				NewLintError(0, LintCustom, "no cats allowed"),
 			},
 		},
 		{
 			name:  "Two lints",
 			input: `hello woof world`,
 			expected: []Lint{
-				{What: "no dogs allowed"},
-				{What: "no noise allowed"},
+				NewLintError(0, LintCustom, "no dogs allowed"),
+				NewLintError(0, LintCustom, "no noise allowed"),
 			},
 		},
 	}

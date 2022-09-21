@@ -164,7 +164,7 @@ func (c Config) Test() ([]string, error) {
 			return nil, fmt.Errorf("test '%v': %w", test.Name, err)
 		}
 		for _, lint := range docs.LintYAML(docs.NewLintContext(), docs.Type(c.Type), outConf) {
-			failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: line %v: %v", test.Name, lint.Line, lint.What))
+			failures = append(failures, fmt.Sprintf("test '%v': lint error in resulting config: %v", test.Name, lint.Error()))
 		}
 		if len(test.Expected.Content) > 0 {
 			diff, err := diffYAMLNodesAsJSON(&test.Expected, outConf)
@@ -181,7 +181,7 @@ func (c Config) Test() ([]string, error) {
 }
 
 // ReadConfig attempts to read a template configuration file.
-func ReadConfig(path string) (conf Config, lints []string, err error) {
+func ReadConfig(path string) (conf Config, lints []docs.Lint, err error) {
 	var templateBytes []byte
 	if templateBytes, err = os.ReadFile(path); err != nil {
 		return
@@ -196,11 +196,7 @@ func ReadConfig(path string) (conf Config, lints []string, err error) {
 		return
 	}
 
-	for _, l := range ConfigSpec().LintYAML(docs.NewLintContext(), &node) {
-		if l.Level == docs.LintError {
-			lints = append(lints, fmt.Sprintf("line %v: %v", l.Line, l.What))
-		}
-	}
+	lints = ConfigSpec().LintYAML(docs.NewLintContext(), &node)
 	return
 }
 

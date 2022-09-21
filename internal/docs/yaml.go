@@ -380,7 +380,7 @@ func (f FieldSpecs) SanitiseYAML(node *yaml.Node, conf SanitiseConfig) error {
 func lintYAMLFromOmit(parentSpec FieldSpecs, lintTargetSpec FieldSpec, parent, node *yaml.Node) []Lint {
 	why, shouldOmit := lintTargetSpec.shouldOmitYAML(parentSpec, node, parent)
 	if shouldOmit {
-		return []Lint{NewLintError(node.Line, why)}
+		return []Lint{NewLintError(node.Line, LintShouldOmit, why)}
 	}
 	return nil
 }
@@ -411,15 +411,6 @@ func customLintFromYAML(ctx LintContext, spec FieldSpec, node *yaml.Node) []Lint
 // LintYAML takes a yaml.Node and a config spec and returns a list of linting
 // errors found in the config.
 func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
-	if cType == "condition" {
-		if ctx.RejectDeprecated {
-			return []Lint{
-				NewLintError(node.Line, "condition components are deprecated, use bloblang mappings instead when `check` fields or other alternatives are available"),
-			}
-		}
-		return nil
-	}
-
 	node = unwrapDocumentNode(node)
 
 	var lints []Lint
@@ -440,19 +431,19 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		}
 		var err error
 		if name, _, err = getInferenceCandidateFromList(ctx.DocsProvider, cType, keys); err != nil {
-			lints = append(lints, NewLintWarning(node.Line, "unable to infer component type"))
+			lints = append(lints, NewLintWarning(node.Line, LintComponentMissing, "unable to infer component type"))
 			return lints
 		}
 	}
 
 	cSpec, exists := ctx.DocsProvider.GetDocs(name, cType)
 	if !exists {
-		lints = append(lints, NewLintWarning(node.Line, fmt.Sprintf("failed to obtain docs for %v type %v", cType, name)))
+		lints = append(lints, NewLintWarning(node.Line, LintComponentNotFound, fmt.Sprintf("failed to obtain docs for %v type %v", cType, name)))
 		return lints
 	}
 
 	if ctx.RejectDeprecated && cSpec.Status == StatusDeprecated {
-		lints = append(lints, NewLintError(node.Line, fmt.Sprintf("component %v is deprecated", cSpec.Name)))
+		lints = append(lints, NewLintError(node.Line, LintDeprecated, fmt.Sprintf("component %v is deprecated", cSpec.Name)))
 	}
 
 	nameFound := false
@@ -474,7 +465,7 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		}
 		if key == "plugin" {
 			if nameFound || !cSpec.Plugin {
-				lints = append(lints, NewLintError(node.Content[i].Line, "plugin object is ineffective"))
+				lints = append(lints, NewLintError(node.Content[i].Line, LintShouldOmit, "plugin object is ineffective"))
 			} else {
 				lints = append(lints, cSpec.Config.LintYAML(ctx, node.Content[i+1])...)
 			}
@@ -487,13 +478,14 @@ func LintYAML(ctx LintContext, cType Type, node *yaml.Node) []Lint {
 		} else {
 			lints = append(lints, NewLintError(
 				node.Content[i].Line,
+				LintUnknown,
 				fmt.Sprintf("field %v is invalid when the component type is %v (%v)", node.Content[i].Value, name, cType),
 			))
 		}
 	}
 
 	if ctx.RequireLabels && canLabel && !hasLabel {
-		lints = append(lints, NewLintError(node.Line, fmt.Sprintf("label is required for %s", cSpec.Name)))
+		lints = append(lints, NewLintError(node.Line, LintMissingLabel, fmt.Sprintf("label is required for %s", cSpec.Name)))
 	}
 
 	return lints
@@ -507,7 +499,7 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 	var lints []Lint
 
 	if ctx.RejectDeprecated && f.IsDeprecated {
-		lints = append(lints, NewLintError(node.Line, fmt.Sprintf("field %v is deprecated", f.Name)))
+		lints = append(lints, NewLintError(node.Line, LintDeprecated, fmt.Sprintf("field %v is deprecated", f.Name)))
 	}
 
 	// Execute custom linters, if the kind is non-scalar this means we execute
@@ -519,7 +511,7 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 	switch f.Kind {
 	case Kind2DArray:
 		if node.Kind != yaml.SequenceNode {
-			lints = append(lints, NewLintError(node.Line, "expected array value"))
+			lints = append(lints, NewLintError(node.Line, LintExpectedArray, "expected array value"))
 			return lints
 		}
 		for i := 0; i < len(node.Content); i++ {
@@ -528,7 +520,7 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		return lints
 	case KindArray:
 		if node.Kind != yaml.SequenceNode {
-			lints = append(lints, NewLintError(node.Line, "expected array value"))
+			lints = append(lints, NewLintError(node.Line, LintExpectedArray, "expected array value"))
 			return lints
 		}
 		for i := 0; i < len(node.Content); i++ {
@@ -537,7 +529,7 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		return lints
 	case KindMap:
 		if node.Kind != yaml.MappingNode {
-			lints = append(lints, NewLintError(node.Line, "expected object value"))
+			lints = append(lints, NewLintError(node.Line, LintExpectedObject, "expected object value"))
 			return lints
 		}
 		for i := 0; i < len(node.Content)-1; i += 2 {
@@ -561,11 +553,11 @@ func (f FieldSpec) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 	// TODO: Do proper checking for bool and number types.
 	case FieldTypeBool, FieldTypeString, FieldTypeInt, FieldTypeFloat:
 		if node.Kind == yaml.MappingNode || node.Kind == yaml.SequenceNode {
-			lints = append(lints, NewLintError(node.Line, fmt.Sprintf("expected %v value", f.Type)))
+			lints = append(lints, NewLintError(node.Line, LintExpectedScalar, fmt.Sprintf("expected %v value", f.Type)))
 		}
 	case FieldTypeObject:
 		if node.Kind != yaml.MappingNode && node.Kind != yaml.AliasNode {
-			lints = append(lints, NewLintError(node.Line, "expected object value"))
+			lints = append(lints, NewLintError(node.Line, LintExpectedObject, "expected object value"))
 		}
 	}
 	return lints
@@ -581,7 +573,7 @@ func (f FieldSpecs) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 			// TODO: Actually lint through aliases
 			return nil
 		}
-		lints = append(lints, NewLintError(node.Line, "expected object value"))
+		lints = append(lints, NewLintError(node.Line, LintExpectedObject, "expected object value"))
 		return lints
 	}
 
@@ -594,7 +586,7 @@ func (f FieldSpecs) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 		spec, exists := specNames[node.Content[i].Value]
 		if !exists {
 			if node.Content[i+1].Kind != yaml.AliasNode {
-				lints = append(lints, NewLintError(node.Content[i].Line, fmt.Sprintf("field %v not recognised", node.Content[i].Value)))
+				lints = append(lints, NewLintError(node.Content[i].Line, LintUnknown, fmt.Sprintf("field %v not recognised", node.Content[i].Value)))
 			}
 			continue
 		}
@@ -610,7 +602,7 @@ func (f FieldSpecs) LintYAML(ctx LintContext, node *yaml.Node) []Lint {
 			!isCore &&
 			remaining.Kind == KindScalar &&
 			len(remaining.Children) == 0 {
-			lints = append(lints, NewLintError(node.Line, fmt.Sprintf("field %v is required", name)))
+			lints = append(lints, NewLintError(node.Line, LintMissing, fmt.Sprintf("field %v is required", name)))
 		}
 	}
 	return lints

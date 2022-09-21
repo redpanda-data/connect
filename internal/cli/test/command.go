@@ -11,6 +11,7 @@ import (
 	yaml "gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
@@ -87,10 +88,10 @@ func GetTestTargets(targetPaths []string, testSuffix string) (map[string]Definit
 
 // Lints the config target of a test definition and either returns linting
 // errors (false for failed) or returns an error.
-func lintTarget(path, testSuffix string) ([]string, error) {
+func lintTarget(path, testSuffix string) ([]docs.Lint, error) {
 	confPath, _ := GetPathPair(path, testSuffix)
 	dummyConf := config.New()
-	lints, err := config.ReadFileLinted(confPath, &config.LintOptions{}, &dummyConf)
+	lints, err := config.ReadFileLinted(confPath, config.LintOptions{}, &dummyConf)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +116,7 @@ func RunAll(paths []string, testSuffix string, lint bool, logger log.Modular, re
 
 	type failedTarget struct {
 		target string
-		lints  []string
+		lints  []docs.Lint
 		cases  []CaseFailure
 	}
 	fails := []failedTarget{}
@@ -127,7 +128,7 @@ func RunAll(paths []string, testSuffix string, lint bool, logger log.Modular, re
 	sort.Strings(targetPaths)
 
 	for _, target := range targetPaths {
-		var lints []string
+		var lints []docs.Lint
 		var failCases []CaseFailure
 		if lint {
 			if lints, err = lintTarget(target, testSuffix); err != nil {

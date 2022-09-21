@@ -33,9 +33,9 @@ func TestComponentExamples(t *testing.T) {
 		dec.KnownFields(true)
 		assert.NoError(t, dec.Decode(&s), "%v:%v:%v", componentType, typeName, title)
 
-		lintCtx := docs.NewLintContext()
-		lintCtx.RejectDeprecated = !deprecated
-		lints, err := config.LintBytes(lintCtx, []byte(conf))
+		lints, err := config.LintBytes(config.LintOptions{
+			RejectDeprecated: !deprecated,
+		}, []byte(conf))
 		assert.NoError(t, err, "%v:%v:%v", componentType, typeName, title)
 		for _, lint := range lints {
 			t.Errorf("%v %v:%v:%v", lint, componentType, typeName, title)
