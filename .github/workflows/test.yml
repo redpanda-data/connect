@@ -4,7 +4,7 @@ on:
   push:
   pull_request:
   schedule:
-    - cron: '0,30 * * * *' # Every 30 mins
+    - cron: '0 0/2 * * *' # Every two hours
 
 jobs:
   cross-build:
