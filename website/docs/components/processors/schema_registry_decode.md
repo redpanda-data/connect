@@ -44,6 +44,10 @@ label: ""
 schema_registry_decode:
   avro_raw_json: false
   url: ""
+  basic_auth:
+    enabled: false
+    username: ""
+    password: ""
   tls:
     skip_cert_verify: false
     enable_renegotiation: false
@@ -55,24 +59,7 @@ schema_registry_decode:
 </TabItem>
 </Tabs>
 
-Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
-
-Currently only Avro schemas are supported.
-
-### Avro JSON Format
-
-This processor creates documents formatted as [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding) when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
-
-- if its type is `null`, then it is encoded as a JSON `null`;
-- otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
-
-For example, the union schema `["null","string","Foo"]`, where `Foo` is a record name, would encode:
-
-- `null` as `null`;
-- the string `"a"` as `{"string": "a"}`; and
-- a `Foo` instance as `{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
-
-However, it is possible to instead create documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field [`avro_raw_json`](#avro_raw_json) to `true`.
+Enable basic authentication
 
 ## Fields
 
@@ -90,6 +77,37 @@ The base URL of the schema registry service.
 
 
 Type: `string`  
+
+### `basic_auth`
+
+Allows you to specify basic authentication.
+
+
+Type: `object`  
+
+### `basic_auth.enabled`
+
+Whether to use basic authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `basic_auth.username`
+
+Username required to authenticate.
+
+
+Type: `string`  
+Default: `""`  
+
+### `basic_auth.password`
+
+Password required to authenticate.
+
+
+Type: `string`  
+Default: `""`  
 
 ### `tls`
 
