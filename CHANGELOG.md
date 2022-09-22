@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New `tracing_span` bloblang function.
 - All `sql` components now support SQLite.
 - New `beanstalkd` input and output.
+- Field `json_marshal_mode` added to the `mongodb` input.
 
 ### Fixed
 
