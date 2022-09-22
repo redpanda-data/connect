@@ -212,14 +212,14 @@ func TestParquetDecodeProcessor(t *testing.T) {
 type decodeCompressionTest struct {
 	Foo string
 	Bar int64
-	Baz string
+	Baz []byte
 }
 
 func TestDecodeCompressionStringParsing(t *testing.T) {
 	input := decodeCompressionTest{
 		Foo: "foo value",
 		Bar: 2,
-		Baz: "baz value",
+		Baz: []byte("baz value"),
 	}
 
 	buf := bytes.NewBuffer(nil)
@@ -227,9 +227,6 @@ func TestDecodeCompressionStringParsing(t *testing.T) {
 	pWtr := parquet.NewWriter(buf, parquet.SchemaOf(decodeCompressionTest{}))
 	require.NoError(t, pWtr.Write(input))
 	require.NoError(t, pWtr.Close())
-
-	expectedDataBytes, err := json.Marshal(input)
-	require.NoError(t, err)
 
 	reader, err := newParquetDecodeProcessor(nil, &extractConfig{
 		byteArrayAsStrings: true,
@@ -244,7 +241,7 @@ func TestDecodeCompressionStringParsing(t *testing.T) {
 	actualDataBytes, err := readerResBatch[0].AsBytes()
 	require.NoError(t, err)
 
-	assert.JSONEq(t, string(expectedDataBytes), string(actualDataBytes))
+	assert.JSONEq(t, `{"Foo":"foo value", "Bar":2, "Baz":"baz value"}`, string(actualDataBytes))
 
 	// Without string extraction
 
@@ -261,14 +258,14 @@ func TestDecodeCompressionStringParsing(t *testing.T) {
 	actualDataBytes, err = readerResBatch[0].AsBytes()
 	require.NoError(t, err)
 
-	assert.JSONEq(t, `{"Foo":"Zm9vIHZhbHVl", "Bar":2, "Baz":"YmF6IHZhbHVl"}`, string(actualDataBytes))
+	assert.JSONEq(t, `{"Foo":"foo value", "Bar":2, "Baz":"YmF6IHZhbHVl"}`, string(actualDataBytes))
 }
 
 func TestDecodeCompression(t *testing.T) {
 	input := decodeCompressionTest{
 		Foo: "foo value this is large enough aaaaaaaa bbbbbbbb cccccccccc that compression actually helps",
 		Bar: 2,
-		Baz: "baz value this is large enough aaaaaaaa bbbbbbbb cccccccccc that compression actually helps",
+		Baz: []byte("baz value this is large enough aaaaaaaa bbbbbbbb cccccccccc that compression actually helps"),
 	}
 
 	bufUncompressed := bytes.NewBuffer(nil)
@@ -286,9 +283,6 @@ func TestDecodeCompression(t *testing.T) {
 	assert.NotEqual(t, bufCompressed.String(), bufUncompressed.String())
 	assert.Less(t, bufCompressed.Len(), bufUncompressed.Len())
 
-	expectedDataBytes, err := json.Marshal(input)
-	require.NoError(t, err)
-
 	reader, err := newParquetDecodeProcessor(nil, &extractConfig{
 		byteArrayAsStrings: true,
 	})
@@ -302,5 +296,5 @@ func TestDecodeCompression(t *testing.T) {
 	actualDataBytes, err := readerResBatch[0].AsBytes()
 	require.NoError(t, err)
 
-	assert.JSONEq(t, string(expectedDataBytes), string(actualDataBytes))
+	assert.JSONEq(t, `{"Foo":"foo value this is large enough aaaaaaaa bbbbbbbb cccccccccc that compression actually helps", "Bar":2, "Baz":"baz value this is large enough aaaaaaaa bbbbbbbb cccccccccc that compression actually helps"}`, string(actualDataBytes))
 }

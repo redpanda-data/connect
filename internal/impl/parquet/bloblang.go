@@ -19,7 +19,7 @@ func init() {
 		Category("Parsing").
 		Description("Decodes a [Parquet file](https://parquet.apache.org/docs/) into an array of objects, one for each row within the file.").
 		Param(bloblang.NewBoolParam("byte_array_as_string").
-			Description("Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices. Enabling this field makes serialising the data as JSON more intuitive as `[]byte` values are serialised as base64 encoded strings by default.").Default(false)).
+			Description("Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices in all cases. Values with a logical type of UTF8 will automatically be extracted as strings irrespective of this parameter. Enabling this field makes serialising the data as JSON more intuitive as `[]byte` values are serialised as base64 encoded strings by default.").Default(false)).
 		Example("", `root = content().parse_parquet()`).
 		Example("", `root = content().parse_parquet(byte_array_as_string: true)`)
 
