@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - All `sql` components now support SQLite.
 - New `beanstalkd` input and output.
 - Field `json_marshal_mode` added to the `mongodb` input.
+- The `schema_registry_encode` and `schema_registry_decode` processors now support basic authentication.
 
 ### Fixed
 
