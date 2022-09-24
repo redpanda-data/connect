@@ -255,7 +255,7 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 			}
 		}
 
-		return err
+		return nil
 	})
 }
 
