@@ -619,7 +619,7 @@ func (a *csvReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, err
 	defer a.mut.Unlock()
 
 	if err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			a.finished = true
 		} else {
 			_ = a.sourceAck(ctx, err)
@@ -798,7 +798,7 @@ func (a *chunkerReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn,
 	defer a.mut.Unlock()
 
 	if err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			a.finished = true
 		} else {
 			_ = a.sourceAck(ctx, err)
@@ -883,7 +883,7 @@ func (a *tarReader) Next(ctx context.Context) ([]*message.Part, ReaderAckFn, err
 		return []*message.Part{message.NewPart(fileBuf.Bytes())}, a.ack, nil
 	}
 
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		a.finished = true
 	} else {
 		_ = a.sourceAck(ctx, err)

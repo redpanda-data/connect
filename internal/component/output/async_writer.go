@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -146,7 +147,7 @@ func (w *AsyncWriter) loop() {
 	initConnection := func() bool {
 		for {
 			if err := w.writer.Connect(closeLeisureCtx); err != nil {
-				if w.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
+				if w.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
 					return false
 				}
 				w.log.Errorf("Failed to connect to %v: %v\n", w.typeStr, err)
@@ -227,14 +228,14 @@ func (w *AsyncWriter) loop() {
 			latency, err := w.latencyMeasuringWrite(closeLeisureCtx, ts.Payload)
 
 			// If our writer says it is not connected.
-			if err == component.ErrNotConnected {
+			if errors.Is(err, component.ErrNotConnected) {
 				latency, err = connectLoop(ts.Payload)
 			} else if err != nil {
 				mError.Incr(1)
 			}
 
 			// Close immediately if our writer is closed.
-			if err == component.ErrTypeClosed {
+			if errors.Is(err, component.ErrTypeClosed) {
 				return
 			}
 

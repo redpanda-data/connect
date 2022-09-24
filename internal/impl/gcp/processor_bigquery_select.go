@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"cloud.google.com/go/bigquery"
@@ -230,7 +231,7 @@ func consumeIterator(iter bigqueryIterator) ([]map[string]bigquery.Value, error)
 	for {
 		var row map[string]bigquery.Value
 		err := iter.Next(&row)
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {

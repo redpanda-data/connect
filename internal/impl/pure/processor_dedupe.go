@@ -117,7 +117,7 @@ func (d *dedupeProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, ba
 			err = cerr
 		}
 		if err != nil {
-			if err == component.ErrKeyAlreadyExists {
+			if errors.Is(err, component.ErrKeyAlreadyExists) {
 				spans[i].LogKV(
 					"event", "dropped",
 					"type", "deduplicated",

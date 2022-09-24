@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -337,7 +338,7 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 	for {
 		msgs, err := natsSub.Fetch(1, nats.Context(ctx))
 		if err != nil {
-			if err == nats.ErrTimeout || err == context.DeadlineExceeded {
+			if errors.Is(err, nats.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 				// NATS enforces its own context that might time out faster than the original context
 				// Let's check if it was the original context that timed out
 				select {

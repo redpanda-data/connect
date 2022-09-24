@@ -2,6 +2,7 @@ package input
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -66,7 +67,7 @@ func (p *AsyncPreserver) Connect(ctx context.Context) error {
 	// If our source has finished but we still have messages in flight then
 	// we act like we're still open. Read will be called and we can either
 	// return the pending messages or wait for them.
-	if err == component.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
+	if errors.Is(err, component.ErrTypeClosed) && atomic.LoadInt64(&p.pendingMessages) > 0 {
 		atomic.StoreInt32(&p.inputClosed, 1)
 		err = nil
 	}
@@ -181,7 +182,7 @@ func (p *AsyncPreserver) ReadBatch(ctx context.Context) (message.Batch, AsyncAck
 	if err != nil {
 		// If our source has finished but we still have messages in flight then
 		// we block, ideally until the messages are acked.
-		if err == component.ErrTypeClosed && atomic.LoadInt64(&p.pendingMessages) > 0 {
+		if errors.Is(err, component.ErrTypeClosed) && atomic.LoadInt64(&p.pendingMessages) > 0 {
 			// The context is cancelled either when new pending messages are
 			// ready, or when the upstream component cancels. If the former
 			// occurs then we still return the cancelled error and let Read get

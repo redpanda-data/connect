@@ -3,6 +3,7 @@ package io
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net/http"
 	"net/url"
 	"sync"
@@ -145,7 +146,7 @@ func (w *websocketWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 		w.lock.Lock()
 		w.client = nil
 		w.lock.Unlock()
-		if err == websocket.ErrCloseSent {
+		if errors.Is(err, websocket.ErrCloseSent) {
 			return component.ErrNotConnected
 		}
 		return err

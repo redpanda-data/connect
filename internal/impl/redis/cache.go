@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -123,7 +124,7 @@ func (r *redisCache) Get(ctx context.Context, key string) ([]byte, error) {
 		if err == nil {
 			return []byte(res), nil
 		}
-		if err == redis.Nil {
+		if errors.Is(err, redis.Nil) {
 			return nil, service.ErrKeyNotFound
 		}
 

@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -78,7 +79,7 @@ func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessag
 
 	resolveFn, err := a.checkpointer.Track(ctx, a.batchedSequence, int64(a.flushedMessage.Len()))
 	if err != nil {
-		if err == component.ErrTimeout {
+		if errors.Is(err, component.ErrTimeout) {
 			err = nil
 		}
 		return asyncMessage{}, err

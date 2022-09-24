@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -408,7 +409,7 @@ func (h *Client) ParseResponse(res *http.Response) (resMsg message.Batch, err er
 			for {
 				var p *multipart.Part
 				if p, err = mr.NextPart(); err != nil {
-					if err == io.EOF {
+					if errors.Is(err, io.EOF) {
 						err = nil
 						break
 					}

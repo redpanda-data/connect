@@ -194,7 +194,7 @@ func (s *nanomsgReader) ReadBatch(ctx context.Context) (message.Batch, input.Asy
 	}
 	data, err := socket.Recv()
 	if err != nil {
-		if err == mangos.ErrRecvTimeout {
+		if errors.Is(err, mangos.ErrRecvTimeout) {
 			return nil, nil, component.ErrTimeout
 		}
 		return nil, nil, err

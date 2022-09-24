@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -147,7 +148,7 @@ func (n *natsStreamWriter) WriteBatch(ctx context.Context, msg message.Batch) er
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		err := conn.Publish(n.conf.Subject, p.AsBytes())
-		if err == stan.ErrConnectionClosed {
+		if errors.Is(err, stan.ErrConnectionClosed) {
 			conn.Close()
 			n.connMut.Lock()
 			n.stanConn = nil

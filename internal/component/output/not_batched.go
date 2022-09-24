@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/benthosdev/benthos/v4/internal/batch"
@@ -122,7 +123,7 @@ func (n *notBatchedOutput) loop() {
 		} else {
 			var res error
 			if err := n.breakMessageOut(tran.Payload); err != nil {
-				if err == component.ErrTypeClosed {
+				if errors.Is(err, component.ErrTypeClosed) {
 					return
 				}
 				res = err
