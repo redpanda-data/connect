@@ -257,14 +257,22 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 		}
 
 		if isMerge {
+			defer g.removeTempFile(ctx, src)
+		}
+
+		if errs != nil {
+			return errs
+		}
+
+		if isMerge {
 			dst := client.Bucket(g.conf.Bucket).Object(outputPath)
 
 			if aerr := g.appendToFile(ctx, src, dst); aerr != nil {
-				errs = multierr.Append(errs, err)
+				return aerr
 			}
 		}
 
-		return errs
+		return nil
 	})
 }
 
@@ -281,14 +289,16 @@ func (g *gcpCloudStorageOutput) Close(context.Context) error {
 	return err
 }
 
-func (g *gcpCloudStorageOutput) appendToFile(ctx context.Context, source, dest *storage.ObjectHandle) error {
-	_, err := dest.ComposerFrom(dest, source).Run(ctx)
-
-	// Remove the temporary file used for the merge
-	g.log.Tracef("remove the temporary file used for the merge %q", source.ObjectName())
-	if err := source.Delete(ctx); err != nil {
-		g.log.Errorf("Failed to delete temporary file used for merging: %v", err)
-	}
+func (g *gcpCloudStorageOutput) appendToFile(ctx context.Context, src, dst *storage.ObjectHandle) error {
+	_, err := dst.ComposerFrom(dst, src).Run(ctx)
 
 	return err
+}
+
+func (g *gcpCloudStorageOutput) removeTempFile(ctx context.Context, src *storage.ObjectHandle) {
+	// Remove the temporary file used for the merge
+	g.log.Tracef("remove the temporary file used for the merge %q", src.ObjectName())
+	if err := src.Delete(ctx); err != nil {
+		g.log.Errorf("Failed to delete temporary file used for merging: %v", err)
+	}
 }
