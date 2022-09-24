@@ -234,6 +234,8 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 			dir := path.Dir(outputPath)
 			tempFileName := fmt.Sprintf("%s.tmp", tempUUID.String())
 			tempPath = path.Join(dir, tempFileName)
+
+			g.log.Tracef("creating temporary file for the merge %q", tempPath)
 		}
 
 		src := client.Bucket(g.conf.Bucket).Object(tempPath)
