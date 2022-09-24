@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"sync"
@@ -210,7 +211,7 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 
 		isMerge := false
 		var tempPath string
-		if err == storage.ErrObjectNotExist || g.conf.CollisionMode == output.GCPCloudStorageOverwriteCollisionMode {
+		if errors.Is(err, storage.ErrObjectNotExist) || g.conf.CollisionMode == output.GCPCloudStorageOverwriteCollisionMode {
 			tempPath = outputPath
 		} else {
 			isMerge = true
