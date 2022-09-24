@@ -329,7 +329,7 @@ func (w *systemWindowBuffer) WriteBatch(ctx context.Context, msgBatch service.Me
 		}
 
 		// Don't add messages older than our current window start.
-		if !ts.After(w.latestFlushedWindowEnd) {
+		if !ts.After(w.latestFlushedWindowEnd) { //nolint: gocritic
 			continue
 		}
 
@@ -366,8 +366,8 @@ func (w *systemWindowBuffer) flushWindow(ctx context.Context, start, end time.Ti
 	newPending := make([]*tsMessage, 0, len(w.pending))
 	newOldest := w.clock()
 	for _, pending := range w.pending {
-		flush := !pending.ts.Before(start) && !pending.ts.After(end)
-		preserve := !pending.ts.Before(nextStart)
+		flush := !pending.ts.Before(start) && !pending.ts.After(end) //nolint: gocritic
+		preserve := !pending.ts.Before(nextStart)                    //nolint: gocritic
 
 		if flush {
 			tmpMsg := pending.m.Copy()

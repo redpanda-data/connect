@@ -86,8 +86,7 @@ type namedContextValue struct {
 
 // IncrStackCount increases the count stored in the function context of how many
 // maps we've entered and returns the current count.
-
-func (ctx FunctionContext) IncrStackCount() (FunctionContext, int) {
+func (ctx FunctionContext) IncrStackCount() (FunctionContext, int) { //nolint: gocritic // Ignore unnamedResult false positive
 	ctx.stackCount++
 	return ctx, ctx.stackCount
 }

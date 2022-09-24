@@ -428,7 +428,7 @@ type checkpointTester struct {
 	resolvers    map[int64]func() any
 }
 
-func newCheckpointTester(t *testing.T, capacity int64, timeout time.Duration) (*checkpointTester, func()) {
+func newCheckpointTester(t *testing.T, capacity int64, timeout time.Duration) (*checkpointTester, func()) { //nolint: gocritic // Ignore unnamedResult false positive
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 
 	return &checkpointTester{
