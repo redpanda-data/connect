@@ -18,8 +18,10 @@ import (
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
 )
 
-var red = color.New(color.FgRed).SprintFunc()
-var yellow = color.New(color.FgYellow).SprintFunc()
+var (
+	red    = color.New(color.FgRed).SprintFunc()
+	yellow = color.New(color.FgYellow).SprintFunc()
+)
 
 type pathLint struct {
 	source string

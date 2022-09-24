@@ -58,7 +58,7 @@ This input adds the following metadata fields to each message:
 			Description("Whether listed topics should be interpretted as regular expression patterns for matching multiple topics.").
 			Default(false)).
 		Field(service.NewStringField("consumer_group").
-			Description("A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically commited and resumed under this name.")).
+			Description("A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name.")).
 		Field(service.NewIntField("checkpoint_limit").
 			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
 			Default(1024).
@@ -84,7 +84,6 @@ func init() {
 			}
 			return service.AutoRetryNacks(rdr), nil
 		})
-
 	if err != nil {
 		panic(err)
 	}

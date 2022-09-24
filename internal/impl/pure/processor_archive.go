@@ -242,18 +242,23 @@ type fakeInfo struct {
 func (f fakeInfo) Name() string {
 	return f.name
 }
+
 func (f fakeInfo) Size() int64 {
 	return f.size
 }
+
 func (f fakeInfo) Mode() os.FileMode {
 	return f.mode
 }
+
 func (f fakeInfo) ModTime() time.Time {
 	return time.Now()
 }
+
 func (f fakeInfo) IsDir() bool {
 	return false
 }
+
 func (f fakeInfo) Sys() any {
 	return nil
 }

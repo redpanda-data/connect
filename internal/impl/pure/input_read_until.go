@@ -71,7 +71,7 @@ input:
 	}
 }
 
-// TODO: Replace with atomic.Pointer
+// TODO: Replace with atomic.Pointer.
 type wrappedInput struct {
 	i input.Streamed
 	m sync.Mutex

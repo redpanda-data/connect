@@ -13,10 +13,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-var (
-	// ErrBrokerNoInputs is returned when creating a broker with zero inputs.
-	ErrBrokerNoInputs = errors.New("attempting to create broker input type with no inputs")
-)
+// ErrBrokerNoInputs is returned when creating a broker with zero inputs.
+var ErrBrokerNoInputs = errors.New("attempting to create broker input type with no inputs")
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(newBrokerInput), docs.ComponentSpec{

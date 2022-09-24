@@ -59,9 +59,11 @@ metrics:
 
 //------------------------------------------------------------------------------
 
-const maxCloudWatchMetrics = 20
-const maxCloudWatchValues = 150
-const maxCloudWatchDimensions = 10
+const (
+	maxCloudWatchMetrics    = 20
+	maxCloudWatchValues     = 150
+	maxCloudWatchDimensions = 10
+)
 
 type cloudWatchDatum struct {
 	MetricName string

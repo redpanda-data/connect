@@ -8,7 +8,7 @@ type PrintFormatter interface {
 
 //------------------------------------------------------------------------------
 
-// Logger level constants
+// Logger level constants.
 const (
 	LogOff   int = 0
 	LogFatal int = 1

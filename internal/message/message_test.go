@@ -19,7 +19,6 @@ func TestMessageSerialization(t *testing.T) {
 	}
 
 	m2, err := FromBytes(SerializeBytes(input))
-
 	if err != nil {
 		t.Error(err)
 		return

@@ -597,7 +597,6 @@ func receiveBatch(
 	return b
 }
 
-// nolint:gocritic // Ignore unnamedResult false positive
 func receiveBatchNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (message.Batch, func(context.Context, error) error) {
 	t.Helper()
 
@@ -613,7 +612,6 @@ func receiveBatchNoRes(ctx context.Context, t testing.TB, tranChan <-chan messag
 	return tran.Payload, tran.Ack
 }
 
-// nolint:gocritic // Ignore unnamedResult false positive
 func receiveMessageNoRes(ctx context.Context, t testing.TB, tranChan <-chan message.Transaction) (*message.Part, func(context.Context, error) error) {
 	t.Helper()
 

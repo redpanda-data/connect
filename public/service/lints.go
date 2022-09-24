@@ -9,7 +9,7 @@ import (
 )
 
 // LintType is a discrete linting type.
-// NOTE: These should be kept in sync with ./internal/docs/field.go:586
+// NOTE: These should be kept in sync with ./internal/docs/field.go:586.
 type LintType int
 
 const (

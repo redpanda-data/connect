@@ -7,7 +7,7 @@ import (
 	"io"
 )
 
-// Contains underlying allocated data for messages
+// Contains underlying allocated data for messages.
 type messageData struct {
 	rawBytes []byte // Contents are always read-only
 	err      error

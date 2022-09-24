@@ -58,7 +58,7 @@ tracer:
 
 ### `project`
 
-The google project with Cloud Trace API enabled. If this is ommitted then the Google Cloud SDK will attempt auto-detect it from the environment.
+The google project with Cloud Trace API enabled. If this is omitted then the Google Cloud SDK will attempt auto-detect it from the environment.
 
 
 Type: `string`  

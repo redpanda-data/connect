@@ -597,7 +597,7 @@ func (h *Client) SendToResponse(ctx context.Context, sendMsg, refMsg message.Bat
 	return res, nil
 }
 
-// UnexpectedErr get error body
+// UnexpectedErr get error body.
 func UnexpectedErr(res *http.Response) error {
 	body, err := io.ReadAll(res.Body)
 	if err != nil {

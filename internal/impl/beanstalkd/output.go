@@ -34,7 +34,6 @@ func init() {
 			w, err := newBeanstalkdWriterFromConfig(conf, mgr.Logger())
 			return w, maxInFlight, err
 		})
-
 	if err != nil {
 		panic(err)
 	}

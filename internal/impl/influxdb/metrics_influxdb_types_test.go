@@ -29,7 +29,6 @@ func Test_encodeInfluxDBName(t *testing.T) {
 }
 
 func Test_decodeInfluxDBName(t *testing.T) {
-
 	type test struct {
 		desc      string
 		name      string
@@ -65,7 +64,6 @@ func Test_decodeInfluxDBName(t *testing.T) {
 				} else {
 					t.Errorf("expected to find '%s' in resulting tags", v)
 				}
-
 			}
 		})
 	}

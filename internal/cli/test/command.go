@@ -16,10 +16,12 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
-var green = color.New(color.FgGreen).SprintFunc()
-var red = color.New(color.FgRed).SprintFunc()
-var yellow = color.New(color.FgYellow).SprintFunc()
-var blue = color.New(color.FgBlue).SprintFunc()
+var (
+	green  = color.New(color.FgGreen).SprintFunc()
+	red    = color.New(color.FgRed).SprintFunc()
+	yellow = color.New(color.FgYellow).SprintFunc()
+	blue   = color.New(color.FgBlue).SprintFunc()
+)
 
 //------------------------------------------------------------------------------
 

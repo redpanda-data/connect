@@ -241,7 +241,7 @@ func main() {
 	}
 }
 `)
-	f := func(formatSend string, formatRecv string, extra bool) {
+	f := func(formatSend, formatRecv string, extra bool) {
 		conf := processor.NewConfig()
 		conf.Type = "subprocess"
 		conf.Subprocess.Name = "go"

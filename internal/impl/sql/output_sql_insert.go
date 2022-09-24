@@ -84,7 +84,6 @@ func init() {
 			out, err = newSQLInsertOutputFromConfig(conf, mgr.Logger())
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}

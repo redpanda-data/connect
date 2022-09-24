@@ -113,7 +113,6 @@ func (w *websocketWriter) Connect(ctx context.Context) error {
 		}
 		if client, _, err = dialer.Dial(w.conf.URL, headers); err != nil {
 			return err
-
 		}
 	} else if client, _, err = websocket.DefaultDialer.Dial(w.conf.URL, headers); err != nil {
 		return err

@@ -138,7 +138,6 @@ func loadKeyPair(cert, key []byte, password string) (tls.Certificate, error) {
 // Load returns a TLS certificate, based on either file paths in the
 // config or the raw certs as strings.
 func (c *ClientCertConfig) Load() (tls.Certificate, error) {
-
 	if c.CertFile != "" || c.KeyFile != "" {
 		if c.CertFile == "" {
 			return tls.Certificate{}, errors.New("missing cert_file field in client certificate config")

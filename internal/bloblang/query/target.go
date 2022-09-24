@@ -5,7 +5,7 @@ package query
 // the context, etc.
 type TargetType int
 
-// TargetTypes
+// TargetTypes.
 const (
 	TargetMetadata TargetType = iota
 	TargetValue
@@ -14,7 +14,7 @@ const (
 )
 
 // TargetPath represents a target type and segmented path that a query function
-// references. An empty path indicates the root of the type is targetted.
+// references. An empty path indicates the root of the type is targeted.
 type TargetPath struct {
 	Type TargetType
 	Path []string
@@ -44,7 +44,7 @@ func aggregateTargetPaths(fns ...Function) func(ctx TargetsContext) (TargetsCont
 
 // TargetsContext describes the current Bloblang execution environment from the
 // perspective of a particular query function in a way that allows it to
-// determine which values it is targetting and the origins of those values.
+// determine which values it is targeting and the origins of those values.
 //
 // The environment consists of named maps that are globally accessible, the
 // current value that is being executed upon by methods (when applicable), the

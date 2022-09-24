@@ -482,14 +482,14 @@ func getTime(dateStr, format string) (time.Time, error) {
 }
 
 var awkFunctionsMap = map[string]any{
-	"timestamp_unix": func(dateStr string, format string) (int64, error) {
+	"timestamp_unix": func(dateStr, format string) (int64, error) {
 		ts, err := getTime(dateStr, format)
 		if err != nil {
 			return 0, err
 		}
 		return ts.Unix(), nil
 	},
-	"timestamp_unix_nano": func(dateStr string, format string) (int64, error) {
+	"timestamp_unix_nano": func(dateStr, format string) (int64, error) {
 		ts, err := getTime(dateStr, format)
 		if err != nil {
 			return 0, err

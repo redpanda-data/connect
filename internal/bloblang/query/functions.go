@@ -266,8 +266,10 @@ root.id = count("bloblang_function_example")`,
 	countFunction,
 )
 
-var counters = map[string]int64{}
-var countersMux = &sync.Mutex{}
+var (
+	counters    = map[string]int64{}
+	countersMux = &sync.Mutex{}
+)
 
 func countFunction(args *ParsedParams) (Function, error) {
 	name, err := args.FieldString("name")

@@ -13,7 +13,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-// Designed to contain all manner of structured data nasties
+// Designed to contain all manner of structured data nasties.
 type testPM struct {
 	ID       int64
 	Foo      testPMFoo

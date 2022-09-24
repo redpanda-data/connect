@@ -61,7 +61,7 @@ func GlobsAndSuperPaths(paths []string, extensions ...string) ([]string, error) 
 // hasMeta reports whether path contains any of the magic characters
 // recognized by Match.
 //
-// Taken from path/filepath/match.go
+// Taken from path/filepath/match.go.
 func hasMeta(path string) bool {
 	magicChars := `*?[`
 	if runtime.GOOS != "windows" {

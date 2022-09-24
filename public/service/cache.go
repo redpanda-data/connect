@@ -57,7 +57,7 @@ type batchedCache interface {
 
 //------------------------------------------------------------------------------
 
-// Implements types.Cache
+// Implements types.Cache.
 type airGapCache struct {
 	c  Cache
 	cm batchedCache
@@ -119,7 +119,7 @@ func (a *airGapCache) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// Implements Cache around a types.Cache
+// Implements Cache around a types.Cache.
 type reverseAirGapCache struct {
 	c cache.V1
 }

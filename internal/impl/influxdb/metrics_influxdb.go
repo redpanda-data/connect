@@ -324,7 +324,7 @@ func (i *influxDBMetrics) GetTimerVec(path string, n ...string) imetrics.StatTim
 
 func (i *influxDBMetrics) GetGauge(path string) imetrics.StatGauge {
 	encodedName := encodeInfluxDBName(path, nil, nil)
-	var result = i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
+	result := i.registry.GetOrRegister(encodedName, func() metrics.Gauge {
 		return influxDBGauge{
 			metrics.NewGauge(),
 		}

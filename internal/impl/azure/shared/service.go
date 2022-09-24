@@ -27,7 +27,7 @@ func GetQueueServiceURL(storageAccount, storageAccessKey, storageConnectionStrin
 	if storageAccount == "" && storageConnectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
-	var endpointExp = azQueueEndpointExp
+	endpointExp := azQueueEndpointExp
 	var err error
 	if storageConnectionString != "" {
 		if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {

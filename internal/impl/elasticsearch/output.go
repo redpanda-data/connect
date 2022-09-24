@@ -209,7 +209,6 @@ func (e *Elasticsearch) Connect(ctx context.Context) error {
 			},
 			Timeout: e.timeout,
 		}))
-
 	} else {
 		opts = append(opts, elastic.SetHttpClient(&http.Client{
 			Timeout: e.timeout,

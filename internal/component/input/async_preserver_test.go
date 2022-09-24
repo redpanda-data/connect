@@ -679,7 +679,8 @@ func TestAsyncPreserverBatchError(t *testing.T) {
 				[]byte("baz"),
 				[]byte("buz"),
 				[]byte("bev"),
-			})}
+			}),
+		}
 		select {
 		case readerImpl.readChan <- nil:
 		case <-time.After(time.Second):
@@ -742,7 +743,8 @@ func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
 				[]byte("baz"),
 				[]byte("buz"),
 				[]byte("bev"),
-			})}
+			}),
+		}
 		select {
 		case readerImpl.readChan <- nil:
 		case <-time.After(time.Second):

@@ -16,7 +16,7 @@ type TracingEventType string
 //
 // Experimental: This type may change outside of major version releases.
 var (
-	// Note: must match up with ./internal/bundle/tracing/events.go
+	// Note: must match up with ./internal/bundle/tracing/events.go.
 	TracingEventProduce TracingEventType = "PRODUCE"
 	TracingEventConsume TracingEventType = "CONSUME"
 	TracingEventDelete  TracingEventType = "DELETE"
@@ -38,7 +38,7 @@ func convertTracingEventType(t tracing.EventType) TracingEventType {
 	return TracingEventUnknown
 }
 
-// TracingEvent represents a single event that occured within the stream.
+// TracingEvent represents a single event that occurred within the stream.
 //
 // Experimental: This type may change outside of major version releases.
 type TracingEvent struct {

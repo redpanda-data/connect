@@ -80,7 +80,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newJetStreamReaderFromConfig(conf, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}

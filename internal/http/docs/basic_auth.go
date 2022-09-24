@@ -22,7 +22,7 @@ const (
 	scryptKeyLen = 32
 )
 
-// BasicAuth contains the configuration fields for the HTTP BasicAuth
+// BasicAuth contains the configuration fields for the HTTP BasicAuth.
 type BasicAuth struct {
 	Enabled      bool   `json:"enabled" yaml:"enabled"`
 	Username     string `json:"username" yaml:"username"`
@@ -32,7 +32,7 @@ type BasicAuth struct {
 	Salt         string `json:"salt" yaml:"salt"`
 }
 
-// NewBasicAuth returns a BasicAuth with default values
+// NewBasicAuth returns a BasicAuth with default values.
 func NewBasicAuth() BasicAuth {
 	return BasicAuth{
 		Enabled:      false,
@@ -44,7 +44,7 @@ func NewBasicAuth() BasicAuth {
 	}
 }
 
-// Validate confirms that the BasicAuth is properly configured
+// Validate confirms that the BasicAuth is properly configured.
 func (b BasicAuth) Validate() error {
 	if !b.Enabled {
 		return nil
@@ -100,7 +100,7 @@ func (b BasicAuth) WrapHandler(next http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
-// BasicAuthFieldSpec returns the spec for an HTTP BasicAuth component
+// BasicAuthFieldSpec returns the spec for an HTTP BasicAuth component.
 func BasicAuthFieldSpec() docs.FieldSpec {
 	return docs.FieldObject("basic_auth", "Allows you to enforce and customise basic authentication for requests to the HTTP server.").WithChildren(
 		docs.FieldBool("enabled", "Enable basic authentication").HasDefault(false),
