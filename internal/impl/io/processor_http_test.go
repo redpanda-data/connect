@@ -27,9 +27,9 @@ func TestHTTPClientRetries(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "http"
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
-	conf.HTTP.Config.Retry = "1ms"
-	conf.HTTP.Config.NumRetries = 3
+	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
+	conf.HTTP.OldConfig.Retry = "1ms"
+	conf.HTTP.OldConfig.NumRetries = 3
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -79,7 +79,7 @@ func TestHTTPClientBasic(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "http"
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -149,7 +149,7 @@ func TestHTTPClientEmptyResponse(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "http"
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -201,7 +201,7 @@ func TestHTTPClientEmpty404Response(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "http"
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {
@@ -242,7 +242,7 @@ func TestHTTPClientBasicWithMetadata(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "http"
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
 	conf.HTTP.ExtractMetadata.IncludePatterns = []string{".*"}
 
 	h, err := mock.NewManager().NewProcessor(conf)
@@ -281,7 +281,7 @@ func TestHTTPClientSerial(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "http"
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	require.NoError(t, err)
@@ -321,7 +321,7 @@ func TestHTTPClientParallel(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "http"
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
 	conf.HTTP.Parallel = true
 
 	h, err := mock.NewManager().NewProcessor(conf)
@@ -371,9 +371,9 @@ func TestHTTPClientParallelError(t *testing.T) {
 
 	conf := processor.NewConfig()
 	conf.Type = "http"
-	conf.HTTP.Config.URL = ts.URL + "/testpost"
+	conf.HTTP.OldConfig.URL = ts.URL + "/testpost"
 	conf.HTTP.Parallel = true
-	conf.HTTP.Config.NumRetries = 0
+	conf.HTTP.OldConfig.NumRetries = 0
 
 	h, err := mock.NewManager().NewProcessor(conf)
 	if err != nil {

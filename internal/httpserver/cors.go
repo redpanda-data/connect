@@ -1,4 +1,4 @@
-package docs
+package httpserver
 
 import (
 	"errors"
@@ -9,15 +9,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-// ServerCORS contains configuration for allowing CORS headers.
-type ServerCORS struct {
+// CORSConfig contains struct configuration for allowing CORS headers.
+type CORSConfig struct {
 	Enabled        bool     `json:"enabled" yaml:"enabled"`
 	AllowedOrigins []string `json:"allowed_origins" yaml:"allowed_origins"`
 }
 
-// NewServerCORS returns a new server CORS config with default fields.
-func NewServerCORS() ServerCORS {
-	return ServerCORS{
+// NewServerCORSConfig returns a new server CORS config with default fields.
+func NewServerCORSConfig() CORSConfig {
+	return CORSConfig{
 		Enabled:        false,
 		AllowedOrigins: []string{},
 	}
@@ -25,7 +25,7 @@ func NewServerCORS() ServerCORS {
 
 // WrapHandler wraps a provided HTTP handler with middleware that enables CORS
 // requests (when configured).
-func (conf ServerCORS) WrapHandler(handler http.Handler) (http.Handler, error) {
+func (conf CORSConfig) WrapHandler(handler http.Handler) (http.Handler, error) {
 	if !conf.Enabled {
 		return handler, nil
 	}

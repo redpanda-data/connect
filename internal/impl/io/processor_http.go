@@ -10,8 +10,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/http"
-	ihttpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
@@ -70,7 +69,7 @@ When all retry attempts for a message are exhausted the processor cancels the
 attempt. These failed messages will continue through the pipeline unchanged, but
 can be dropped or placed in a dead letter queue according to your config, you
 can read about these patterns [here](/docs/configuration/error_handling).`,
-		Config: ihttpdocs.ClientFieldSpec(false,
+		Config: httpclient.OldFieldSpec(false,
 			docs.FieldBool("batch_as_multipart", "Send message batches as a single request using [RFC1341](https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html).").Advanced().HasDefault(false),
 			docs.FieldBool("parallel", "When processing batched messages, whether to send messages of the batch in parallel, otherwise they are sent serially.").HasDefault(false)).ChildDefaultAndTypesFromStruct(processor.NewHTTPConfig()),
 		Examples: []docs.AnnotatedExample{
@@ -98,7 +97,7 @@ pipeline:
 }
 
 type httpProc struct {
-	client      *http.Client
+	client      *httpclient.Client
 	asMultipart bool
 	parallel    bool
 	rawURL      string
@@ -114,12 +113,7 @@ func newHTTPProc(conf processor.HTTPConfig, mgr bundle.NewManagement) (processor
 	}
 
 	var err error
-	if g.client, err = http.NewClient(
-		conf.Config,
-		http.OptSetLogger(mgr.Logger()),
-		http.OptSetStats(mgr.Metrics()),
-		http.OptSetManager(mgr),
-	); err != nil {
+	if g.client, err = httpclient.NewClientFromOldConfig(conf.OldConfig, mgr); err != nil {
 		return nil, err
 	}
 	return g, nil
@@ -130,7 +124,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 
 	if h.asMultipart || msg.Len() == 1 {
 		// Easy, just do a single request.
-		resultMsg, err := h.client.Send(context.Background(), msg, nil)
+		resultMsg, err := h.client.Send(context.Background(), msg)
 		if err != nil {
 			var codeStr string
 			var hErr component.ErrUnexpectedHTTPRes
@@ -169,7 +163,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 		_ = msg.Iter(func(i int, p *message.Part) error {
 			tmpMsg := message.QuickBatch(nil)
 			tmpMsg = append(tmpMsg, p)
-			result, err := h.client.Send(context.Background(), tmpMsg, nil)
+			result, err := h.client.Send(context.Background(), tmpMsg)
 			if err != nil {
 				h.log.Errorf("HTTP request to '%v' failed: %v", h.rawURL, err)
 
@@ -208,7 +202,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 			go func() {
 				for index := range reqChan {
 					tmpMsg := message.Batch{msg.Get(index)}
-					result, err := h.client.Send(context.Background(), tmpMsg, nil)
+					result, err := h.client.Send(context.Background(), tmpMsg)
 					if err == nil && result.Len() != 1 {
 						err = fmt.Errorf("unexpected response size: %v", result.Len())
 					}

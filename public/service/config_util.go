@@ -4,7 +4,21 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/docs"
 )
+
+type fieldUnwrapper struct {
+	child docs.FieldSpec
+}
+
+func (f fieldUnwrapper) Unwrap() docs.FieldSpec {
+	return f.child
+}
+
+// XUnwrapper is for internal use only, do not use this.
+func (c *ConfigField) XUnwrapper() any {
+	return fieldUnwrapper{child: c.field}
+}
 
 func extractConfig(
 	nm bundle.NewManagement,

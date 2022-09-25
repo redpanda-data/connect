@@ -3,6 +3,7 @@ package io
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -13,8 +14,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/http"
-	ihttpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -30,7 +30,7 @@ func httpClientInputSpec() docs.FieldSpec {
 		docs.FieldInt("max_buffer", "Must be larger than the largest line of the stream.").Advanced(),
 	}
 
-	return ihttpdocs.ClientFieldSpec(false,
+	return httpclient.OldFieldSpec(false,
 		docs.FieldString("payload", "An optional payload to deliver for each request."),
 		docs.FieldBool("drop_empty_bodies", "Whether empty payloads received from the target server should be dropped.").Advanced(),
 		docs.FieldObject(
@@ -101,8 +101,7 @@ rate_limit_resources:
 type httpClientInput struct {
 	conf input.HTTPClientConfig
 
-	client       *http.Client
-	payload      message.Batch
+	client       *httpclient.Client
 	prevResponse message.Batch
 
 	codecCtor codec.ReaderConstructor
@@ -126,24 +125,18 @@ func newHTTPClientInput(conf input.HTTPClientConfig, mgr bundle.NewManagement) (
 		}
 	}
 
-	payload := message.QuickBatch(nil)
-	if len(conf.Payload) > 0 {
-		payload = message.QuickBatch([][]byte{[]byte(conf.Payload)})
+	payloadExpr, err := mgr.BloblEnvironment().NewField(conf.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse payload expression: %w", err)
 	}
 
-	client, err := http.NewClient(
-		conf.Config,
-		http.OptSetManager(mgr),
-		http.OptSetLogger(mgr.Logger()),
-		http.OptSetStats(mgr.Metrics()),
-	)
+	client, err := httpclient.NewClientFromOldConfig(conf.OldConfig, mgr, httpclient.WithExplicitBody(payloadExpr))
 	if err != nil {
 		return nil, err
 	}
 
 	return &httpClientInput{
 		conf:         conf,
-		payload:      payload,
 		prevResponse: message.QuickBatch(nil),
 		client:       client,
 
@@ -163,7 +156,7 @@ func (h *httpClientInput) Connect(ctx context.Context) (err error) {
 		return nil
 	}
 
-	res, err := h.client.SendToResponse(context.Background(), h.payload, h.prevResponse)
+	res, err := h.client.SendToResponse(context.Background(), h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
 			err = component.ErrTimeout
@@ -255,7 +248,7 @@ func (h *httpClientInput) readStreamed(ctx context.Context) (message.Batch, inpu
 }
 
 func (h *httpClientInput) readNotStreamed(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
-	msg, err := h.client.Send(ctx, h.payload, h.prevResponse)
+	msg, err := h.client.Send(ctx, h.prevResponse)
 	if err != nil {
 		if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
 			err = component.ErrTimeout

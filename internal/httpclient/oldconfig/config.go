@@ -1,13 +1,12 @@
-package docs
+package oldconfig
 
 import (
-	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
 	"github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-// Config is a configuration struct for an HTTP client.
-type Config struct {
+// OldConfig is a configuration struct for an HTTP client.
+type OldConfig struct {
 	URL             string                       `json:"url" yaml:"url"`
 	Verb            string                       `json:"verb" yaml:"verb"`
 	Headers         map[string]string            `json:"headers" yaml:"headers"`
@@ -23,13 +22,13 @@ type Config struct {
 	SuccessfulOn    []int                        `json:"successful_on" yaml:"successful_on"`
 	TLS             tls.Config                   `json:"tls" yaml:"tls"`
 	ProxyURL        string                       `json:"proxy_url" yaml:"proxy_url"`
-	auth.Config     `json:",inline" yaml:",inline"`
-	OAuth2          auth.OAuth2Config `json:"oauth2" yaml:"oauth2"`
+	AuthConfig      `json:",inline" yaml:",inline"`
+	OAuth2          OAuth2Config `json:"oauth2" yaml:"oauth2"`
 }
 
-// NewConfig creates a new Config with default values.
-func NewConfig() Config {
-	return Config{
+// NewOldConfig creates a new Config with default values.
+func NewOldConfig() OldConfig {
+	return OldConfig{
 		URL:             "",
 		Verb:            "POST",
 		Headers:         map[string]string{},
@@ -43,7 +42,7 @@ func NewConfig() Config {
 		DropOn:          []int{},
 		SuccessfulOn:    []int{},
 		TLS:             tls.NewConfig(),
-		Config:          auth.NewConfig(),
-		OAuth2:          auth.NewOAuth2Config(),
+		AuthConfig:      NewAuthConfig(),
+		OAuth2:          NewOAuth2Config(),
 	}
 }
