@@ -9,7 +9,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite").
+var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle").
 	Description("A database [driver](#drivers) to use.")
 
 var dsnField = service.NewStringField("dsn").
@@ -26,11 +26,13 @@ The following is a list of supported drivers, their placeholder style, and their
 ` + "| `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |" + `
 ` + "| `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |" + `
 ` + "| `sqlite` | `file:/path/to/filename.db[?param&=value1&...]` |" + `
+` + "| `oracle` | `[username[:password]@][netloc][:port]/service_name?server=server2&server=server3` |" + `
 
 Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.`).
 	Example("clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60").
 	Example("foouser:foopassword@tcp(localhost:3306)/foodb").
-	Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")
+	Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable").
+	Example("oracle://foouser:foopass@localhost:1521/service_name")
 
 func connFields() []*service.ConfigField {
 	return []*service.ConfigField{
@@ -64,6 +66,7 @@ func rawQueryField() *service.ConfigField {
 ` + "| `postgres` | Dollar sign |" + `
 ` + "| `mssql` | Question mark |" + `
 ` + "| `sqlite` | Question mark |" + `
+` + "| `oracle` | Colon |" + `
 `)
 }
 
