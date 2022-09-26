@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - The `influxdb` and `logger` metrics outputs should no longer mix up tag names.
 - Fix a potential race condition in the `read_until` connect check on terminated input.
 - The `parse_parquet` bloblang method and `parquet_decode` processor now automatically parse `BYTE_ARRAY` values as strings when the logical type is UTF8.
+- The `gcp_cloud_storage` output now correctly cleans up temporary files on error conditions when the collision mode is set to append.
 
 ## 4.6.0 - 2022-08-31
 
