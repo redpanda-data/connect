@@ -147,6 +147,8 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service
 	s.builder = squirrel.Select(columns...).From(tableStr)
 	if driverStr == "postgres" || driverStr == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
+	} else if driverStr == "oracle" {
+		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
 	}
 
 	if conf.Contains("prefix") {
