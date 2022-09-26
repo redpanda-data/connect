@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,13 +16,14 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
+var noopReqSign = func(*http.Request) error { return nil }
+
 func TestSchemaRegistryEncoderConfigParse(t *testing.T) {
 	configTests := []struct {
-		name                   string
-		config                 string
-		errContains            string
-		expectedBaseURL        string
-		expectedBasicAuthToken string
+		name            string
+		config          string
+		errContains     string
+		expectedBaseURL string
 	}{
 		{
 			name: "bad url",
@@ -45,8 +47,7 @@ subject: ${! bad interpolation }
 url: http://example.com
 subject: foo
 `,
-			expectedBaseURL:        "http://example.com",
-			expectedBasicAuthToken: "",
+			expectedBaseURL: "http://example.com",
 		},
 		{
 			name: "bad period",
@@ -63,8 +64,7 @@ refresh_period: not a duration
 url: http://example.com/v1
 subject: foo
 `,
-			expectedBaseURL:        "http://example.com/v1",
-			expectedBasicAuthToken: "",
+			expectedBaseURL: "http://example.com/v1",
 		},
 		{
 			name: "url with basic auth",
@@ -76,8 +76,7 @@ basic_auth:
   password: pass
 subject: foo
 `,
-			expectedBaseURL:        "http://example.com/v1",
-			expectedBasicAuthToken: "dXNlcjpwYXNz",
+			expectedBaseURL: "http://example.com/v1",
 		},
 	}
 
@@ -89,10 +88,8 @@ subject: foo
 			require.NoError(t, err)
 
 			e, err := newSchemaRegistryEncoderFromConfig(conf, nil)
-
 			if e != nil {
 				assert.Equal(t, test.expectedBaseURL, e.schemaRegistryBaseURL.String())
-				assert.Equal(t, test.expectedBasicAuthToken, e.schemaRegistryBasicAuthToken)
 			}
 
 			if err == nil {
@@ -128,7 +125,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -210,7 +207,7 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, true, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -292,7 +289,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -369,7 +366,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, true, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -434,7 +431,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 
@@ -495,7 +492,7 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, false, "", "", nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, nil)
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 

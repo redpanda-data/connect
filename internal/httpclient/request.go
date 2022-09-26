@@ -26,19 +26,9 @@ type MultipartExpressions struct {
 	Body               *field.Expression
 }
 
-// RequestSigners is a slice of closures configured to enrich requests with
-// various functions, usually authentication.
-type RequestSigners []func(req *http.Request) error
-
-// Sign a request with all signers.
-func (r RequestSigners) Sign(req *http.Request) error {
-	for _, s := range r {
-		if err := s(req); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// RequestSigner is a closure configured to enrich requests with various
+// functions, usually authentication.
+type RequestSigner func(req *http.Request) error
 
 // RequestCreator creates *http.Request types from messages based on various
 // configurable parameters.
@@ -47,7 +37,7 @@ type RequestCreator struct {
 	explicitBody       *field.Expression
 	explicitMultiparts []MultipartExpressions
 
-	reqSigners RequestSigners
+	reqSigner RequestSigner
 
 	url              *field.Expression
 	host             *field.Expression
@@ -64,13 +54,9 @@ type RequestOpt func(r *RequestCreator)
 // service style parses, but it'll take a while so we have this for now.
 func RequestCreatorFromOldConfig(conf oldconfig.OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*RequestCreator, error) {
 	r := &RequestCreator{
-		reqSigners: RequestSigners{
-			conf.OAuth.Sign,
-			conf.JWT.Sign,
-			conf.BasicAuth.Sign,
-		},
-		verb:    conf.Verb,
-		headers: map[string]*field.Expression{},
+		reqSigner: conf.AuthConfig.Sign,
+		verb:      conf.Verb,
+		headers:   map[string]*field.Expression{},
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -238,7 +224,7 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 		req.Header.Add("Content-Type", overrideContentType)
 	}
 
-	if err = r.reqSigners.Sign(req); err != nil {
+	if err = r.reqSigner(req); err != nil {
 		return
 	}
 
@@ -260,6 +246,6 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 		req.Header.Add("Content-Type", overrideContentType)
 	}
 
-	err = r.reqSigners.Sign(req)
+	err = r.reqSigner(req)
 	return
 }

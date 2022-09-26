@@ -3,6 +3,7 @@ package httpclient
 import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/docs/interop"
+	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -28,6 +29,19 @@ func OldAuthFieldSpecsExpanded() docs.FieldSpecs {
 		interop.Unwrap(oAuth2FieldSpec()),
 		interop.Unwrap(jwtFieldSpec()),
 		interop.Unwrap(basicAuthField()),
+	}
+}
+
+//------------------------------------------------------------------------------
+
+// AuthFields returns a list of config field specs for all basic, header based,
+// HTTP authentication types. The configuration of these fields is possible to
+// implement by enriching HTTP requests and does not interfere with the client.
+func AuthFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		oAuthFieldSpec(),
+		basicAuthField(),
+		jwtFieldSpec(),
 	}
 }
 
@@ -125,4 +139,109 @@ func jwtFieldSpec() *service.ConfigField {
 	).
 		Description("BETA: Allows you to specify JWT authentication.").
 		Advanced()
+}
+
+//------------------------------------------------------------------------------
+
+// AuthSignerFromParsed takes a parsed config which is expected to contain
+// fields from AuthFields, and returns a RequestSigner that implements the
+// configured authentication strategies by enriching a request directly.
+func AuthSignerFromParsed(conf *service.ParsedConfig) (RequestSigner, error) {
+	oldConf, err := authConfFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
+	return oldConf.Sign, nil
+}
+
+func authConfFromParsed(conf *service.ParsedConfig) (oldConf oldconfig.AuthConfig, err error) {
+	oldConf = oldconfig.NewAuthConfig()
+	if oldConf.OAuth, err = oauthFromParsed(conf); err != nil {
+		return
+	}
+	if oldConf.BasicAuth, err = basicAuthFromParsed(conf); err != nil {
+		return
+	}
+	if oldConf.JWT, err = jwtAuthFromParsed(conf); err != nil {
+		return
+	}
+	return
+}
+
+func oauthFromParsed(conf *service.ParsedConfig) (res oldconfig.OAuthConfig, err error) {
+	res = oldconfig.NewOAuthConfig()
+	if !conf.Contains("oauth") {
+		return
+	}
+	conf = conf.Namespace("oauth")
+	if res.Enabled, err = conf.FieldBool("enabled"); err != nil {
+		return
+	}
+	if res.ConsumerKey, err = conf.FieldString("consumer_key"); err != nil {
+		return
+	}
+	if res.ConsumerSecret, err = conf.FieldString("consumer_secret"); err != nil {
+		return
+	}
+	if res.AccessToken, err = conf.FieldString("access_token"); err != nil {
+		return
+	}
+	if res.AccessTokenSecret, err = conf.FieldString("access_token_secret"); err != nil {
+		return
+	}
+	return
+}
+
+func basicAuthFromParsed(conf *service.ParsedConfig) (res oldconfig.BasicAuthConfig, err error) {
+	res = oldconfig.NewBasicAuthConfig()
+	if !conf.Contains("basic_auth") {
+		return
+	}
+	conf = conf.Namespace("basic_auth")
+	if res.Enabled, err = conf.FieldBool("enabled"); err != nil {
+		return
+	}
+	if res.Username, err = conf.FieldString("username"); err != nil {
+		return
+	}
+	if res.Password, err = conf.FieldString("password"); err != nil {
+		return
+	}
+	return
+}
+
+func jwtAuthFromParsed(conf *service.ParsedConfig) (res oldconfig.JWTConfig, err error) {
+	res = oldconfig.NewJWTConfig()
+	if !conf.Contains("jwt") {
+		return
+	}
+	conf = conf.Namespace("jwt")
+	if res.Enabled, err = conf.FieldBool("enabled"); err != nil {
+		return
+	}
+	var claimsConfs map[string]*service.ParsedConfig
+	if claimsConfs, err = conf.FieldAnyMap("claims"); err != nil {
+		return
+	}
+	for k, v := range claimsConfs {
+		if res.Claims[k], err = v.FieldAny(); err != nil {
+			return
+		}
+	}
+	var headersConfs map[string]*service.ParsedConfig
+	if headersConfs, err = conf.FieldAnyMap("headers"); err != nil {
+		return
+	}
+	for k, v := range headersConfs {
+		if res.Headers[k], err = v.FieldAny(); err != nil {
+			return
+		}
+	}
+	if res.SigningMethod, err = conf.FieldString("signing_method"); err != nil {
+		return
+	}
+	if res.PrivateKeyFile, err = conf.FieldString("private_key_file"); err != nil {
+		return
+	}
+	return
 }

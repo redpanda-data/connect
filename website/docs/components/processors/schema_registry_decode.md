@@ -44,10 +44,22 @@ label: ""
 schema_registry_decode:
   avro_raw_json: false
   url: ""
+  oauth:
+    enabled: false
+    consumer_key: ""
+    consumer_secret: ""
+    access_token: ""
+    access_token_secret: ""
   basic_auth:
     enabled: false
     username: ""
     password: ""
+  jwt:
+    enabled: false
+    private_key_file: ""
+    signing_method: ""
+    claims: {}
+    headers: {}
   tls:
     skip_cert_verify: false
     enable_renegotiation: false
@@ -59,7 +71,24 @@ schema_registry_decode:
 </TabItem>
 </Tabs>
 
-Enable basic authentication
+Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
+
+Currently only Avro schemas are supported.
+
+### Avro JSON Format
+
+This processor creates documents formatted as [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding) when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
+
+- if its type is `null`, then it is encoded as a JSON `null`;
+- otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
+
+For example, the union schema `["null","string","Foo"]`, where `Foo` is a record name, would encode:
+
+- `null` as `null`;
+- the string `"a"` as `{"string": "a"}`; and
+- a `Foo` instance as `{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
+
+However, it is possible to instead create documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field [`avro_raw_json`](#avro_raw_json) to `true`.
 
 ## Fields
 
@@ -78,12 +107,61 @@ The base URL of the schema registry service.
 
 Type: `string`  
 
+### `oauth`
+
+Allows you to specify open authentication via OAuth version 1.
+
+
+Type: `object`  
+Requires version 4.7.0 or newer  
+
+### `oauth.enabled`
+
+Whether to use OAuth version 1 in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `oauth.consumer_key`
+
+A value used to identify the client to the service provider.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.consumer_secret`
+
+A secret used to establish ownership of the consumer key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.access_token`
+
+A value used to gain access to the protected resources on behalf of the user.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.access_token_secret`
+
+A secret provided in order to establish ownership of a given access token.
+
+
+Type: `string`  
+Default: `""`  
+
 ### `basic_auth`
 
 Allows you to specify basic authentication.
 
 
 Type: `object`  
+Requires version 4.7.0 or newer  
 
 ### `basic_auth.enabled`
 
@@ -95,7 +173,7 @@ Default: `false`
 
 ### `basic_auth.username`
 
-Username required to authenticate.
+A username to authenticate as.
 
 
 Type: `string`  
@@ -103,11 +181,57 @@ Default: `""`
 
 ### `basic_auth.password`
 
-Password required to authenticate.
+A password to authenticate with.
 
 
 Type: `string`  
 Default: `""`  
+
+### `jwt`
+
+BETA: Allows you to specify JWT authentication.
+
+
+Type: `object`  
+Requires version 4.7.0 or newer  
+
+### `jwt.enabled`
+
+Whether to use JWT authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `jwt.private_key_file`
+
+A file with the PEM encoded via PKCS1 or PKCS8 as private key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt.signing_method`
+
+A method used to sign the token such as RS256, RS384 or RS512.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt.claims`
+
+A value used to identify the claims that issued the JWT.
+
+
+Type: `object`  
+
+### `jwt.headers`
+
+Add optional key/value headers to the JWT.
+
+
+Type: `object`  
 
 ### `tls`
 

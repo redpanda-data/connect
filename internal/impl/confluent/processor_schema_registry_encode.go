@@ -3,7 +3,6 @@ package confluent
 import (
 	"context"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -18,13 +17,15 @@ import (
 
 	"github.com/linkedin/goavro/v2"
 
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func schemaRegistryEncoderConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
+	spec := service.NewConfigSpec().
 		// Stable(). TODO
+		Version("3.58.0").
 		Categories("Parsing", "Integration").
 		Summary("Automatically encodes and validates messages with schemas from a Confluent Schema Registry service.").
 		Description(`
@@ -77,9 +78,13 @@ Important! There is an outstanding issue in the [avro serializing library](https
 			Example("1h")).
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether messages encoded in Avro format should be parsed as normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be parsed as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between standard json and avro json.").
-			Advanced().Default(false).Version("3.59.0")).
-		Field(service.NewTLSField("tls")).
-		Version("3.58.0")
+			Advanced().Default(false).Version("3.59.0"))
+
+	for _, f := range httpclient.AuthFields() {
+		spec = spec.Field(f.Version("4.7.0"))
+	}
+
+	return spec.Field(service.NewTLSField("tls"))
 }
 
 func init() {
@@ -102,8 +107,8 @@ type schemaRegistryEncoder struct {
 	avroRawJSON        bool
 	schemaRefreshAfter time.Duration
 
-	schemaRegistryBaseURL        *url.URL
-	schemaRegistryBasicAuthToken string
+	schemaRegistryBaseURL *url.URL
+	requestSigner         httpclient.RequestSigner
 
 	schemas    map[string]*cachedSchemaEncoder
 	cacheMut   sync.RWMutex
@@ -116,18 +121,6 @@ type schemaRegistryEncoder struct {
 
 func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*schemaRegistryEncoder, error) {
 	urlStr, err := conf.FieldString("url")
-	if err != nil {
-		return nil, err
-	}
-	basicAuthEnabledBool, err := conf.FieldBool("basic_auth", "enabled")
-	if err != nil {
-		return nil, err
-	}
-	usernameStr, err := conf.FieldString("basic_auth", "username")
-	if err != nil {
-		return nil, err
-	}
-	passwordStr, err := conf.FieldString("basic_auth", "password")
 	if err != nil {
 		return nil, err
 	}
@@ -151,18 +144,20 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if refreshTicker < time.Second {
 		refreshTicker = time.Second
 	}
+	authSigner, err := httpclient.AuthSignerFromParsed(conf)
+	if err != nil {
+		return nil, err
+	}
 	tlsConf, err := conf.FieldTLS("tls")
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryEncoder(urlStr, basicAuthEnabledBool, usernameStr, passwordStr, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, logger)
+	return newSchemaRegistryEncoder(urlStr, authSigner, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, logger)
 }
 
 func newSchemaRegistryEncoder(
 	urlStr string,
-	basicAuthEnabledBool bool,
-	usernameStr,
-	passwordStr string,
+	reqSigner httpclient.RequestSigner,
 	tlsConf *tls.Config,
 	subject *service.InterpolatedString,
 	avroRawJSON bool,
@@ -174,21 +169,16 @@ func newSchemaRegistryEncoder(
 		return nil, fmt.Errorf("failed to parse url: %w", err)
 	}
 
-	var token string
-	if basicAuthEnabledBool {
-		token = base64.StdEncoding.EncodeToString([]byte(usernameStr + ":" + passwordStr))
-	}
-
 	s := &schemaRegistryEncoder{
-		schemaRegistryBaseURL:        u,
-		schemaRegistryBasicAuthToken: token,
-		subject:                      subject,
-		avroRawJSON:                  avroRawJSON,
-		schemaRefreshAfter:           schemaRefreshAfter,
-		schemas:                      map[string]*cachedSchemaEncoder{},
-		shutSig:                      shutdown.NewSignaller(),
-		logger:                       logger,
-		nowFn:                        time.Now,
+		schemaRegistryBaseURL: u,
+		requestSigner:         reqSigner,
+		subject:               subject,
+		avroRawJSON:           avroRawJSON,
+		schemaRefreshAfter:    schemaRefreshAfter,
+		schemas:               map[string]*cachedSchemaEncoder{},
+		shutSig:               shutdown.NewSignaller(),
+		logger:                logger,
+		nowFn:                 time.Now,
 	}
 
 	s.client = http.DefaultClient
@@ -338,9 +328,8 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		return nil, 0, err
 	}
 	req.Header.Add("Accept", "application/vnd.schemaregistry.v1+json")
-
-	if s.schemaRegistryBasicAuthToken != "" {
-		req.Header.Add("Authorization", "Basic "+s.schemaRegistryBasicAuthToken)
+	if err := s.requestSigner(req); err != nil {
+		return nil, 0, err
 	}
 
 	var resBytes []byte
