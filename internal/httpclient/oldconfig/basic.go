@@ -1,8 +1,6 @@
-package auth
+package oldconfig
 
 import "net/http"
-
-//------------------------------------------------------------------------------
 
 // BasicAuthConfig contains fields for setting basic authentication in HTTP
 // requests.
@@ -31,5 +29,3 @@ func (basic BasicAuthConfig) Sign(req *http.Request) error {
 	}
 	return nil
 }
-
-//------------------------------------------------------------------------------

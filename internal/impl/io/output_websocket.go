@@ -16,7 +16,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
@@ -31,7 +31,7 @@ func init() {
 		Config: docs.FieldComponent().WithChildren(
 			docs.FieldString("url", "The URL to connect to."),
 			btls.FieldSpec(),
-		).WithChildren(auth.FieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewWebsocketConfig()),
+		).WithChildren(httpclient.OldAuthFieldSpecs()...).ChildDefaultAndTypesFromStruct(output.NewWebsocketConfig()),
 		Categories: []string{
 			"Network",
 		},

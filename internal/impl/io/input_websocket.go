@@ -15,7 +15,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/input/processors"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	btls "github.com/benthosdev/benthos/v4/internal/tls"
@@ -32,7 +32,7 @@ func init() {
 			docs.FieldString("url", "The URL to connect to.", "ws://localhost:4195/get/ws"),
 			docs.FieldString("open_message", "An optional message to send to the server upon connection.").Advanced(),
 			btls.FieldSpec(),
-		).WithChildren(auth.FieldSpecs()...).ChildDefaultAndTypesFromStruct(input.NewWebsocketConfig()),
+		).WithChildren(httpclient.OldAuthFieldSpecs()...).ChildDefaultAndTypesFromStruct(input.NewWebsocketConfig()),
 		Categories: []string{
 			"Network",
 		},

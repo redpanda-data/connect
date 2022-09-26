@@ -1,4 +1,4 @@
-package docs
+package httpserver
 
 import (
 	"crypto/md5"
@@ -22,8 +22,8 @@ const (
 	scryptKeyLen = 32
 )
 
-// BasicAuth contains the configuration fields for the HTTP BasicAuth
-type BasicAuth struct {
+// BasicAuthConfig contains struct based fields for basic authentication.
+type BasicAuthConfig struct {
 	Enabled      bool   `json:"enabled" yaml:"enabled"`
 	Username     string `json:"username" yaml:"username"`
 	PasswordHash string `json:"password_hash" yaml:"password_hash"`
@@ -32,9 +32,9 @@ type BasicAuth struct {
 	Salt         string `json:"salt" yaml:"salt"`
 }
 
-// NewBasicAuth returns a BasicAuth with default values
-func NewBasicAuth() BasicAuth {
-	return BasicAuth{
+// NewBasicAuthConfig returns a BasicAuthConfig with default values.
+func NewBasicAuthConfig() BasicAuthConfig {
+	return BasicAuthConfig{
 		Enabled:      false,
 		Username:     "",
 		PasswordHash: "",
@@ -45,7 +45,7 @@ func NewBasicAuth() BasicAuth {
 }
 
 // Validate confirms that the BasicAuth is properly configured
-func (b BasicAuth) Validate() error {
+func (b BasicAuthConfig) Validate() error {
 	if !b.Enabled {
 		return nil
 	}
@@ -73,7 +73,7 @@ func (b BasicAuth) Validate() error {
 
 // WrapHandler wraps the provided HTTP handler with middleware that enforces
 // BasicAuth if it's enabled.
-func (b BasicAuth) WrapHandler(next http.HandlerFunc) http.HandlerFunc {
+func (b BasicAuthConfig) WrapHandler(next http.HandlerFunc) http.HandlerFunc {
 	if !b.Enabled {
 		return next
 	}
@@ -112,7 +112,7 @@ func BasicAuthFieldSpec() docs.FieldSpec {
 	).Advanced()
 }
 
-func (b BasicAuth) matches(user, pass string) (bool, error) {
+func (b BasicAuthConfig) matches(user, pass string) (bool, error) {
 	expectedPassHash, err := base64.StdEncoding.DecodeString(b.PasswordHash)
 	if err != nil {
 		return false, err
@@ -124,7 +124,7 @@ func (b BasicAuth) matches(user, pass string) (bool, error) {
 	return (userMatch && passMatch), nil
 }
 
-func (b BasicAuth) compareHashAndPassword(hashedPassword, password []byte) bool {
+func (b BasicAuthConfig) compareHashAndPassword(hashedPassword, password []byte) bool {
 	switch b.Algorithm {
 	case "md5":
 		v := md5.Sum(password)

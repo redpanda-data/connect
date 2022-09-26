@@ -39,6 +39,15 @@ func NewAnyListField(name string) *ConfigField {
 	}
 }
 
+// NewAnyMapField describes a new config field consisting of a map of values
+// that can assume any value type without triggering a config parse or linting
+// error.
+func NewAnyMapField(name string) *ConfigField {
+	return &ConfigField{
+		field: docs.FieldAnything(name, "").Map(),
+	}
+}
+
 // NewStringField describes a new string type config field.
 func NewStringField(name string) *ConfigField {
 	return &ConfigField{
@@ -556,6 +565,29 @@ func (p *ParsedConfig) FieldAnyList(path ...string) ([]*ParsedConfig, error) {
 		}
 	}
 	return sList, nil
+}
+
+// FieldAnyMap accesses a field that is an object of arbitrary keys and any
+// values from the parsed config by its name and returns a map of *ParsedConfig
+// types, where each one represents an object or value in the map. Returns an
+// error if the field is not found, or is not an object.
+func (p *ParsedConfig) FieldAnyMap(path ...string) (map[string]*ParsedConfig, error) {
+	v, exists := p.field(path...)
+	if !exists {
+		return nil, fmt.Errorf("field '%v' was not found in the config", p.fullDotPath(path...))
+	}
+	iMap, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("expected field '%v' to be a string map, got %T", p.fullDotPath(path...), v)
+	}
+	sMap := make(map[string]*ParsedConfig, len(iMap))
+	for k, v := range iMap {
+		sMap[k] = &ParsedConfig{
+			mgr:     p.mgr,
+			generic: v,
+		}
+	}
+	return sMap, nil
 }
 
 // FieldString accesses a string field from the parsed config by its name. If

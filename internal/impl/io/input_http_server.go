@@ -28,7 +28,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	httpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/httpserver"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	imetadata "github.com/benthosdev/benthos/v4/internal/metadata"
@@ -39,7 +39,7 @@ import (
 )
 
 func init() {
-	corsSpec := httpdocs.ServerCORSFieldSpec()
+	corsSpec := httpserver.ServerCORSFieldSpec()
 	corsSpec.Description += " Only valid with a custom `address`."
 
 	err := bundle.AllInputs.Add(processors.WrapConstructor(newHTTPServerInput), docs.ComponentSpec{
