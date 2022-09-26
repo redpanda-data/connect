@@ -68,7 +68,7 @@ func drainIter(iter Iterator) ([]any, error) {
 	for {
 		v, err := iter.Next()
 		if err != nil {
-			if err == errEndOfIter {
+			if errors.Is(err, errEndOfIter) {
 				return arr, nil
 			}
 			return nil, err

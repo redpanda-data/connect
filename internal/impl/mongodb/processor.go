@@ -324,7 +324,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, spans []*tracing.Span, bat
 			var decoded any
 			err := collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded)
 			if err != nil {
-				if err == mongo.ErrNoDocuments {
+				if errors.Is(err, mongo.ErrNoDocuments) {
 					return err
 				}
 				m.log.Errorf("Error decoding mongo db result, filter = %v: %s", filterJSON, err)

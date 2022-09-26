@@ -231,7 +231,7 @@ func (r *csvReader) Connect(ctx context.Context) error {
 
 	handle, err := r.handleCtor(ctx)
 	if err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return component.ErrTypeClosed
 		}
 		return err
@@ -251,7 +251,7 @@ func (r *csvReader) Connect(ctx context.Context) error {
 func (r *csvReader) readNext(reader *csv.Reader) ([]string, error) {
 	records, err := reader.Read()
 	if err != nil && (r.strict || len(records) == 0) {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			r.mut.Lock()
 			r.scanner = nil
 			r.headers = nil

@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"cloud.google.com/go/bigquery"
@@ -201,7 +202,7 @@ func (inp *bigQuerySelectInput) Read(ctx context.Context) (*service.Message, ser
 
 	var row map[string]bigquery.Value
 	err := inp.iterator.Next(&row)
-	if err == iterator.Done {
+	if errors.Is(err, iterator.Done) {
 		return nil, nil, service.ErrEndOfInput
 	}
 	if err != nil {

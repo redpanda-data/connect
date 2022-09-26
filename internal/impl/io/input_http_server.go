@@ -269,7 +269,7 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 		for {
 			var p *multipart.Part
 			if p, err = mr.NextPart(); err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
 				return nil, err
