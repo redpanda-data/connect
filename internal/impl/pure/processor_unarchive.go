@@ -64,7 +64,7 @@ func tarUnarchive(part *service.Message) (service.MessageBatch, error) {
 	// Iterate through the files in the archive.
 	for {
 		h, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			// end of tar archive
 			break
 		}
@@ -166,7 +166,7 @@ func jsonDocumentsUnarchive(part *service.Message) (service.MessageBatch, error)
 	dec := json.NewDecoder(bytes.NewReader(pBytes))
 	for {
 		var m any
-		if err := dec.Decode(&m); err == io.EOF {
+		if err := dec.Decode(&m); errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return nil, err

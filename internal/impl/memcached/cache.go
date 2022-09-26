@@ -218,7 +218,7 @@ func (m *memcachedCache) Delete(ctx context.Context, key string) error {
 
 	for {
 		err := m.mc.Delete(m.prefix + key)
-		if err == memcache.ErrCacheMiss {
+		if errors.Is(err, memcache.ErrCacheMiss) {
 			return nil
 		}
 

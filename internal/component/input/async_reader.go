@@ -2,6 +2,7 @@ package input
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -96,7 +97,7 @@ func (r *AsyncReader) loop() {
 	initConnection := func() bool {
 		for {
 			if err := r.reader.Connect(closeAtLeisureCtx); err != nil {
-				if r.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
+				if r.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
 					return false
 				}
 				r.mgr.Logger().Errorf("Failed to connect to %v: %v\n", r.typeStr, err)
@@ -122,7 +123,7 @@ func (r *AsyncReader) loop() {
 		msg, ackFn, err := r.reader.ReadBatch(closeAtLeisureCtx)
 
 		// If our reader says it is not connected.
-		if err == component.ErrNotConnected {
+		if errors.Is(err, component.ErrNotConnected) {
 			mLostConn.Incr(1)
 			atomic.StoreInt32(&r.connected, 0)
 
@@ -135,7 +136,7 @@ func (r *AsyncReader) loop() {
 		}
 
 		// Close immediately if our reader is closed.
-		if r.shutSig.ShouldCloseAtLeisure() || err == component.ErrTypeClosed {
+		if r.shutSig.ShouldCloseAtLeisure() || errors.Is(err, component.ErrTypeClosed) {
 			return
 		}
 

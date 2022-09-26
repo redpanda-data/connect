@@ -84,7 +84,7 @@ func (m *messageData) AsStructured() (any, error) {
 	}
 
 	var dummy json.RawMessage
-	if err := dec.Decode(&dummy); err == io.EOF {
+	if err := dec.Decode(&dummy); errors.Is(err, io.EOF) {
 		return m.structured, nil
 	}
 

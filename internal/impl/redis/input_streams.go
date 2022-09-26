@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -332,7 +333,7 @@ func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
 func (r *redisStreamsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	msg, err := r.read()
 	if err != nil {
-		if err == component.ErrTimeout {
+		if errors.Is(err, component.ErrTimeout) {
 			// Allow for one more attempt in case we asked for backlog.
 			select {
 			case <-ctx.Done():

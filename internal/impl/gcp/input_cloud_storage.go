@@ -146,7 +146,7 @@ func newGCPCloudStorageTargetReader(
 	it := bucket.Objects(ctx, &storage.Query{Prefix: conf.Prefix})
 	for count := 0; count < maxGCPCloudStorageListObjectsResults; count++ {
 		obj, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		} else if err != nil {
 			return nil, fmt.Errorf("failed to list objects: %v", err)
@@ -169,7 +169,7 @@ func (r *gcpCloudStorageTargetReader) Pop(ctx context.Context) (*gcpCloudStorage
 
 		for count := 0; count < maxGCPCloudStorageListObjectsResults; count++ {
 			obj, err := r.startAfter.Next()
-			if err == iterator.Done {
+			if errors.Is(err, iterator.Done) {
 				break
 			} else if err != nil {
 				return nil, fmt.Errorf("failed to list objects: %v", err)

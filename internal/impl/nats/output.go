@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -158,7 +159,7 @@ func (n *natsWriter) Write(msg message.Batch) error {
 			}
 		}
 		err := conn.PublishMsg(nMsg)
-		if err == nats.ErrConnectionClosed {
+		if errors.Is(err, nats.ErrConnectionClosed) {
 			conn.Close()
 			n.connMut.Lock()
 			n.natsConn = nil
