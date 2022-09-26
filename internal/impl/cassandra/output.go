@@ -270,7 +270,7 @@ func (c *cassandraWriter) writeRow(session *gocql.Session, msg message.Batch) er
 }
 
 func (c *cassandraWriter) writeAsyncBatch(session *gocql.Session, msg message.Batch) error {
-	var countErr atomic.Int32
+	var countErr int32
 	var lastErr atomic.Value
 	var wg sync.WaitGroup
 
@@ -287,7 +287,7 @@ func (c *cassandraWriter) writeAsyncBatch(session *gocql.Session, msg message.Ba
 			if err := session.Query(c.conf.Query, values...).Exec(); err != nil {
 				c.log.Errorf("error on async batch write #%d: %v", i, err)
 
-				countErr.Add(1)
+				atomic.AddInt32(&countErr, 1)
 
 				lastErr.Store(err)
 			}
@@ -300,11 +300,11 @@ func (c *cassandraWriter) writeAsyncBatch(session *gocql.Session, msg message.Ba
 
 	wg.Wait()
 
-	if nerr := countErr.Load(); nerr == 1 {
+	if countErr == 1 {
 		return lastErr.Load().(error)
-	} else if nerr > 1 {
+	} else if countErr > 1 {
 		return fmt.Errorf("several async queries return error (%d of %d), such as: %v",
-			nerr, msg.Len(), lastErr.Load().(error))
+			countErr, msg.Len(), lastErr.Load().(error))
 	}
 
 	return nil
