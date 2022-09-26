@@ -54,6 +54,18 @@ schema_registry_encode:
   subject: ""
   refresh_period: 10m
   avro_raw_json: false
+  oauth:
+    enabled: false
+    consumer_key: ""
+    consumer_secret: ""
+    access_token: ""
+    access_token_secret: ""
+  jwt:
+    enabled: false
+    private_key_file: ""
+    signing_method: ""
+    claims: {}
+    headers: {}
   tls:
     skip_cert_verify: false
     enable_renegotiation: false
@@ -82,6 +94,7 @@ Allows you to specify basic authentication.
 
 
 Type: `object`  
+Requires version 4.7.0 or newer  
 
 ### `basic_auth.enabled`
 
@@ -93,7 +106,7 @@ Default: `false`
 
 ### `basic_auth.username`
 
-Username required to authenticate.
+A username to authenticate as.
 
 
 Type: `string`  
@@ -101,7 +114,7 @@ Default: `""`
 
 ### `basic_auth.password`
 
-Password required to authenticate.
+A password to authenticate with.
 
 
 Type: `string`  
@@ -147,6 +160,100 @@ Whether messages encoded in Avro format should be parsed as normal JSON ("json t
 Type: `bool`  
 Default: `false`  
 Requires version 3.59.0 or newer  
+
+### `oauth`
+
+Allows you to specify open authentication via OAuth version 1.
+
+
+Type: `object`  
+Requires version 4.7.0 or newer  
+
+### `oauth.enabled`
+
+Whether to use OAuth version 1 in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `oauth.consumer_key`
+
+A value used to identify the client to the service provider.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.consumer_secret`
+
+A secret used to establish ownership of the consumer key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.access_token`
+
+A value used to gain access to the protected resources on behalf of the user.
+
+
+Type: `string`  
+Default: `""`  
+
+### `oauth.access_token_secret`
+
+A secret provided in order to establish ownership of a given access token.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt`
+
+BETA: Allows you to specify JWT authentication.
+
+
+Type: `object`  
+Requires version 4.7.0 or newer  
+
+### `jwt.enabled`
+
+Whether to use JWT authentication in requests.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `jwt.private_key_file`
+
+A file with the PEM encoded via PKCS1 or PKCS8 as private key.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt.signing_method`
+
+A method used to sign the token such as RS256, RS384 or RS512.
+
+
+Type: `string`  
+Default: `""`  
+
+### `jwt.claims`
+
+A value used to identify the claims that issued the JWT.
+
+
+Type: `object`  
+
+### `jwt.headers`
+
+Add optional key/value headers to the JWT.
+
+
+Type: `object`  
 
 ### `tls`
 
