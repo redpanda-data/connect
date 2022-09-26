@@ -1,4 +1,4 @@
-package auth
+package oldconfig
 
 import (
 	"crypto/hmac"
@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"time"
 )
-
-//------------------------------------------------------------------------------
 
 // OAuthConfig holds the configuration parameters for an OAuth exchange.
 type OAuthConfig struct {
@@ -100,5 +98,3 @@ func (oauth OAuthConfig) computeHMAC(
 	}
 	return base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
 }
-
-//------------------------------------------------------------------------------

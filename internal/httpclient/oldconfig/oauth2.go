@@ -1,4 +1,4 @@
-package auth
+package oldconfig
 
 import (
 	"context"
@@ -6,8 +6,6 @@ import (
 
 	"golang.org/x/oauth2/clientcredentials"
 )
-
-//------------------------------------------------------------------------------
 
 // OAuth2Config holds the configuration parameters for an OAuth2 exchange.
 type OAuth2Config struct {

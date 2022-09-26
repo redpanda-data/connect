@@ -1,4 +1,4 @@
-package docs
+package httpserver
 
 import (
 	"net/http"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestAPIEnableCORS(t *testing.T) {
-	conf := NewServerCORS()
+	conf := NewServerCORSConfig()
 	conf.Enabled = true
 	conf.AllowedOrigins = []string{"*"}
 
@@ -34,7 +34,7 @@ func TestAPIEnableCORS(t *testing.T) {
 }
 
 func TestAPIEnableCORSOrigins(t *testing.T) {
-	conf := NewServerCORS()
+	conf := NewServerCORSConfig()
 	conf.Enabled = true
 	conf.AllowedOrigins = []string{"foo", "bar"}
 
@@ -78,7 +78,7 @@ func TestAPIEnableCORSOrigins(t *testing.T) {
 }
 
 func TestAPIEnableCORSNoHeaders(t *testing.T) {
-	conf := NewServerCORS()
+	conf := NewServerCORSConfig()
 	conf.Enabled = true
 
 	_, err := conf.WrapHandler(http.NewServeMux())

@@ -21,7 +21,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output/batcher"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
+	"github.com/benthosdev/benthos/v4/internal/httpclient"
 	sess "github.com/benthosdev/benthos/v4/internal/impl/aws/session"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -69,7 +69,7 @@ false for connections to succeed.`),
 			itls.FieldSpec(),
 			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 		).WithChildren(retries.FieldSpecs()...).WithChildren(
-			auth.BasicAuthFieldSpec(),
+			httpclient.OldBasicAuthFieldSpec(),
 			policy.FieldSpec(),
 			docs.FieldObject("aws", "Enables and customises connectivity to Amazon Elastic Service.").WithChildren(
 				docs.FieldSpecs{

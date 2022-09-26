@@ -1,16 +1,15 @@
-package docs
+package httpclient
 
 import (
 	"github.com/Jeffail/gabs/v2"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/internal/http/docs/auth"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
 	"github.com/benthosdev/benthos/v4/internal/tls"
 )
 
-// ClientFieldSpec returns a field spec for an http client component.
-func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.FieldSpec {
+// OldFieldSpec returns a field spec for an http client component.
+func OldFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.FieldSpec {
 	httpSpecs := docs.FieldSpecs{
 		docs.FieldString("url", "The URL to connect to.").IsInterpolated(),
 		docs.FieldString("verb", "A verb to connect with", "POST", "GET", "DELETE"),
@@ -27,7 +26,7 @@ func ClientFieldSpec(forOutput bool, extraChildren ...docs.FieldSpec) docs.Field
 		extractHeadersDesc = "Specify which response headers should be added to resulting synchronous response messages as metadata. Header keys are lowercased before matching, so ensure that your patterns target lowercased versions of the header keys that you expect. This field is not applicable unless `propagate_response` is set to `true`."
 	}
 
-	httpSpecs = append(httpSpecs, auth.FieldSpecsExpanded()...)
+	httpSpecs = append(httpSpecs, OldAuthFieldSpecsExpanded()...)
 	httpSpecs = append(httpSpecs, tls.FieldSpec(),
 		docs.FieldObject("extract_headers", extractHeadersDesc).WithChildren(metadata.IncludeFilterDocs()...).Advanced(),
 		docs.FieldString("rate_limit", "An optional [rate limit](/docs/components/rate_limits/about) to throttle requests by."),

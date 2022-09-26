@@ -21,14 +21,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
-	httpdocs "github.com/benthosdev/benthos/v4/internal/http/docs"
+	"github.com/benthosdev/benthos/v4/internal/httpserver"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
-	corsSpec := httpdocs.ServerCORSFieldSpec()
+	corsSpec := httpserver.ServerCORSFieldSpec()
 	corsSpec.Description += " Only valid with a custom `address`."
 
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(conf output.Config, nm bundle.NewManagement) (output.Streamed, error) {

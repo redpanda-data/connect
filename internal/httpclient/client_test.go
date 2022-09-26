@@ -1,4 +1,4 @@
-package http
+package httpclient
 
 import (
 	"bytes"
@@ -19,13 +19,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/http/docs"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
-
-//------------------------------------------------------------------------------
 
 func TestHTTPClientRetries(t *testing.T) {
 	var reqCount uint32
@@ -35,32 +32,32 @@ func TestHTTPClientRetries(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.Retry = "1ms"
 	conf.NumRetries = 3
 
-	h, err := NewClient(conf)
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 	defer h.Close(context.Background())
 
 	out := message.QuickBatch([][]byte{[]byte("test")})
-	_, err = h.Send(context.Background(), out, out)
+	_, err = h.Send(context.Background(), out)
 	assert.Error(t, err)
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&reqCount))
 }
 
 func TestHTTPClientBadRequest(t *testing.T) {
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = "htp://notvalid:1111"
 	conf.Verb = "notvalid\n"
 	conf.NumRetries = 3
 
-	h, err := NewClient(conf)
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	out := message.QuickBatch([][]byte{[]byte("test")})
-	_, err = h.Send(context.Background(), out, out)
+	_, err = h.Send(context.Background(), out)
 	assert.Error(t, err)
 }
 
@@ -81,17 +78,17 @@ func TestHTTPClientSendBasic(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewClient(conf)
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", i)
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 
-		_, err = h.Send(context.Background(), testMsg, testMsg)
+		_, err = h.Send(context.Background(), testMsg)
 		require.NoError(t, err)
 
 		select {
@@ -114,15 +111,15 @@ func TestHTTPClientBadContentType(t *testing.T) {
 	}))
 	t.Cleanup(ts.Close)
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewClient(conf)
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	testMsg := message.QuickBatch([][]byte{[]byte("hello world")})
 
-	res, err := h.Send(context.Background(), testMsg, testMsg)
+	res, err := h.Send(context.Background(), testMsg)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, res.Len())
@@ -136,16 +133,16 @@ func TestHTTPClientDropOn(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.DropOn = []int{400}
 
-	h, err := NewClient(conf)
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	testMsg := message.QuickBatch([][]byte{[]byte(`{"bar":"baz"}`)})
 
-	_, err = h.Send(context.Background(), testMsg, testMsg)
+	_, err = h.Send(context.Background(), testMsg)
 	require.Error(t, err)
 }
 
@@ -158,15 +155,15 @@ func TestHTTPClientSuccessfulOn(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.SuccessfulOn = []int{400}
 
-	h, err := NewClient(conf)
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	testMsg := message.QuickBatch([][]byte{[]byte(`{"bar":"baz"}`)})
-	resMsg, err := h.Send(context.Background(), testMsg, testMsg)
+	resMsg, err := h.Send(context.Background(), testMsg)
 	require.NoError(t, err)
 
 	assert.Equal(t, `{"foo":"bar"}`, string(resMsg.Get(0).AsBytes()))
@@ -195,20 +192,20 @@ func TestHTTPClientSendInterpolate(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL + `/${! json("foo.bar") }`
 	conf.Headers["static"] = "foo"
 	conf.Headers["dynamic"] = `hdr-${!json("foo.baz")}`
 	conf.Headers["Host"] = "simpleHost.com"
 
-	h, err := NewClient(conf, OptSetLogger(log.Noop()), OptSetStats(metrics.Noop()))
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf(`{"test":%v,"foo":{"bar":"firstvar","baz":"secondvar"}}`, i)
 		testMsg := message.QuickBatch([][]byte{[]byte(testStr)})
 
-		_, err = h.Send(context.Background(), testMsg, testMsg)
+		_, err = h.Send(context.Background(), testMsg)
 		require.NoError(t, err)
 
 		select {
@@ -257,10 +254,10 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewClient(conf)
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	for i := 0; i < nTestLoops; i++ {
@@ -270,7 +267,7 @@ func TestHTTPClientSendMultipart(t *testing.T) {
 			[]byte(testStr + "PART-B"),
 		})
 
-		_, err = h.Send(context.Background(), testMsg, testMsg)
+		_, err = h.Send(context.Background(), testMsg)
 		require.NoError(t, err)
 
 		select {
@@ -297,15 +294,15 @@ func TestHTTPClientReceive(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewClient(conf)
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", j)
-		resMsg, err := h.Send(context.Background(), nil, nil)
+		resMsg, err := h.Send(context.Background(), nil)
 		require.NoError(t, err)
 
 		assert.Equal(t, 1, resMsg.Len())
@@ -332,11 +329,11 @@ bar_b: %v
 	}))
 	defer ts.Close()
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 	conf.Metadata.IncludePrefixes = []string{"foo_"}
 
-	h, err := NewClient(conf)
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	sendMsg := message.QuickBatch([][]byte{[]byte("hello world")})
@@ -346,7 +343,7 @@ bar_b: %v
 	part.MetaSet("bar_a", "bar a value")
 	part.MetaSet("bar_b", "bar b value")
 
-	resMsg, err := h.Send(context.Background(), sendMsg, sendMsg)
+	resMsg, err := h.Send(context.Background(), sendMsg)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, resMsg.Len())
@@ -366,7 +363,7 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL
 
 	for _, tt := range []struct {
@@ -390,12 +387,12 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 	} {
 		conf.ExtractMetadata.IncludePrefixes = tt.includePrefixes
 		conf.ExtractMetadata.IncludePatterns = tt.includePatterns
-		h, err := NewClient(conf)
+		h, err := NewClientFromOldConfig(conf, mock.NewManager())
 		if err != nil {
 			t.Fatalf("%s: %s", tt.name, err)
 		}
 
-		resMsg, err := h.Send(context.Background(), nil, nil)
+		resMsg, err := h.Send(context.Background(), nil)
 		if err != nil {
 			t.Fatalf("%s: %s", tt.name, err)
 		}
@@ -449,15 +446,15 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	conf := docs.NewConfig()
+	conf := oldconfig.NewOldConfig()
 	conf.URL = ts.URL + "/testpost"
 
-	h, err := NewClient(conf)
+	h, err := NewClientFromOldConfig(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	for i := 0; i < nTestLoops; i++ {
 		testStr := fmt.Sprintf("test%v", j)
-		resMsg, err := h.Send(context.Background(), nil, nil)
+		resMsg, err := h.Send(context.Background(), nil)
 		require.NoError(t, err)
 
 		assert.Equal(t, 2, resMsg.Len())

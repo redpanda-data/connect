@@ -1,4 +1,4 @@
-package auth
+package oldconfig
 
 import (
 	"crypto/rsa"
@@ -9,8 +9,6 @@ import (
 
 	"github.com/golang-jwt/jwt"
 )
-
-//------------------------------------------------------------------------------
 
 // JWTConfig holds the configuration parameters for an JWT exchange.
 type JWTConfig struct {
@@ -98,5 +96,3 @@ func (j JWTConfig) parsePrivateKey() error {
 
 	return nil
 }
-
-//------------------------------------------------------------------------------
