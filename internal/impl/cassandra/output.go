@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gocql/gocql"
@@ -104,6 +105,10 @@ output:
 			docs.FieldBool(
 				"disable_initial_host_lookup",
 				"If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.",
+			).Advanced(),
+			docs.FieldBool(
+				"async_batch",
+				"If enabled the driver will not perform an unlogged batch, but execute each query in a dedicated goroutine.",
 			).Advanced(),
 			docs.FieldString("query", "A query to execute for each message."),
 			docs.FieldBloblang(
@@ -244,7 +249,12 @@ func (c *cassandraWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 	if msg.Len() == 1 {
 		return c.writeRow(session, msg)
 	}
-	return c.writeBatch(session, msg)
+
+	if c.conf.AsyncBatch {
+		return c.writeAsyncBatch(session, msg)
+	}
+
+	return c.writeSyncBatch(session, msg)
 }
 
 func (c *cassandraWriter) writeRow(session *gocql.Session, msg message.Batch) error {
@@ -259,7 +269,48 @@ func (c *cassandraWriter) writeRow(session *gocql.Session, msg message.Batch) er
 	return nil
 }
 
-func (c *cassandraWriter) writeBatch(session *gocql.Session, msg message.Batch) error {
+func (c *cassandraWriter) writeAsyncBatch(session *gocql.Session, msg message.Batch) error {
+	var countErr atomic.Int32
+	var lastErr atomic.Value
+	var wg sync.WaitGroup
+
+	if err := msg.Iter(func(i int, p *message.Part) error {
+		values, err := c.mapArgs(msg, i)
+		if err != nil {
+			return fmt.Errorf("parsing args for part: %d: %w", i, err)
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			if err := session.Query(c.conf.Query, values...).Exec(); err != nil {
+				c.log.Errorf("error on async batch write #%d: %v", i, err)
+
+				countErr.Add(1)
+
+				lastErr.Store(err)
+			}
+		}()
+
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	wg.Wait()
+
+	if nerr := countErr.Load(); nerr == 1 {
+		return lastErr.Load().(error)
+	} else if nerr > 1 {
+		return fmt.Errorf("several async queries return error (%d of %d), such as: %v",
+			nerr, msg.Len(), lastErr.Load().(error))
+	}
+
+	return nil
+}
+
+func (c *cassandraWriter) writeSyncBatch(session *gocql.Session, msg message.Batch) error {
 	batch := session.NewBatch(gocql.UnloggedBatch)
 
 	if err := msg.Iter(func(i int, p *message.Part) error {

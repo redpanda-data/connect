@@ -66,6 +66,7 @@ output:
       username: ""
       password: ""
     disable_initial_host_lookup: false
+    async_batch: false
     query: ""
     args_mapping: ""
     consistency: QUORUM
@@ -335,6 +336,14 @@ Default: `""`
 ### `disable_initial_host_lookup`
 
 If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.
+
+
+Type: `bool`  
+Default: `false`  
+
+### `async_batch`
+
+If enabled the driver will not perform an unlogged batch, but execute each query in a dedicated goroutine.
 
 
 Type: `bool`  

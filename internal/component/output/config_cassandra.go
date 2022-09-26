@@ -27,6 +27,7 @@ type CassandraConfig struct {
 	// TODO: V4 Remove this and replace with explicit values.
 	retries.Config `json:",inline" yaml:",inline"`
 	MaxInFlight    int                `json:"max_in_flight" yaml:"max_in_flight"`
+	AsyncBatch     bool               `json:"async_batch" yaml:"async_batch"`
 	Batching       batchconfig.Config `json:"batching" yaml:"batching"`
 }
 
