@@ -12,7 +12,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
 
-// jsonPathLanguage includes the full gval scripting language and the single quote extension
+// jsonPathLanguage includes the full gval scripting language and the single quote extension.
 var jsonPathLanguage = gval.Full(jsonpath.Language(), gvalstrings.SingleQuoted())
 
 func init() {
