@@ -44,7 +44,7 @@ func NewBasicAuthConfig() BasicAuthConfig {
 	}
 }
 
-// Validate confirms that the BasicAuth is properly configured
+// Validate confirms that the BasicAuth is properly configured.
 func (b BasicAuthConfig) Validate() error {
 	if !b.Enabled {
 		return nil
