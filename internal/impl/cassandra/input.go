@@ -3,6 +3,7 @@ package cassandra
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/gocql/gocql"
 
@@ -11,13 +12,13 @@ import (
 
 func cassandraConfigSpec() *service.ConfigSpec {
 		return service.NewConfigSpec().
-				Version("3.46.0").
 				Categories("Services").
 				Summary("Executes a find query and creates a message for each row received.").
 				Field(service.NewStringListField("addresses").
 						Description("A list of Cassandra nodes to connect to.")).
 				Field(service.NewStringField("query").
-						Description("A query to execute."))
+						Description("A query to execute.")).
+				Field(service.NewStringField("timeout"))
 }
 
 func init() {
@@ -40,15 +41,25 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 		if err != nil {
 				return nil, err
 		}
+		tout, err := conf.FieldString("timeout")
+		if err != nil {
+				return nil, err
+		}
+		timeout, err := time.ParseDuration(tout)
+		if err != nil {
+				return nil, err
+		}
 		return service.AutoRetryNacks(&cassandraInput{
 				addresses:	addrs,
 				query:		query,
+				timeout:	timeout,
 		}), nil
 }
 
 type cassandraInput struct {
 		addresses	[]string
 		query		string
+		timeout		time.Duration
 
 		session		*gocql.Session
 		iter		*gocql.Iter
@@ -61,6 +72,8 @@ func (c *cassandraInput) Connect(ctx context.Context) error {
 
 		var err error
 		conn := gocql.NewCluster(c.addresses...)
+		
+		conn.Timeout = c.timeout
 
 		session, err := conn.CreateSession()
 		if err != nil {
