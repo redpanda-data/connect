@@ -224,7 +224,7 @@ func (c *cassandraWriter) Connect(ctx context.Context) error {
 	if tout := c.conf.Timeout; len(tout) > 0 {
 		var err error
 		if conn.Timeout, err = time.ParseDuration(tout); err != nil {
-			return fmt.Errorf("failed to parse timeout string: %v", err)
+			return fmt.Errorf("failed to parse timeout string: %w", err)
 		}
 	}
 	session, err := conn.CreateSession()
@@ -303,8 +303,9 @@ func (c *cassandraWriter) writeAsyncBatch(session *gocql.Session, msg message.Ba
 	if countErr == 1 {
 		return lastErr.Load().(error)
 	} else if countErr > 1 {
-		return fmt.Errorf("several async queries return error (%d of %d), such as: %v",
-			countErr, msg.Len(), lastErr.Load().(error))
+		err, _ := lastErr.Load().(error)
+		return fmt.Errorf("several async queries return error (%d of %d), such as: %w",
+			countErr, msg.Len(), err)
 	}
 
 	return nil
