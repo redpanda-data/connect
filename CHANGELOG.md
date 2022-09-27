@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.7.0 - 2022-09-27
+
 ### Added
 
 - Field `avro_raw_json` added to the `schema_registry_decode` processor.
