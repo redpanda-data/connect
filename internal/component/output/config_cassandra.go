@@ -54,6 +54,7 @@ func NewCassandraConfig() CassandraConfig {
 		Timeout:                  "600ms",
 		Config:                   rConf,
 		MaxInFlight:              64,
+		AsyncBatch:               false,
 		Batching:                 batchconfig.NewConfig(),
 	}
 }
