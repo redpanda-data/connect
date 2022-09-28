@@ -15,7 +15,7 @@ import (
 func beanstalkdInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Version("3.46.0").
+		Version("4.7.0").
 		Summary("Reads messages from a Beanstalkd queue.").
 		Field(service.NewStringField("address").
 			Description("An address to connect to.").
