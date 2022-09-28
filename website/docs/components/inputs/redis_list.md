@@ -55,6 +55,7 @@ input:
       client_certs: []
     key: ""
     timeout: 5s
+    checkpoint_limit: 0
 ```
 
 </TabItem>
@@ -268,5 +269,13 @@ The length of time to poll for new messages before reattempting.
 
 Type: `string`  
 Default: `"5s"`  
+
+### `checkpoint_limit`
+
+Sets a limit on the number of messages that can be in either a prefetched or in-processing state. Default value implies no limit. Notice that that there are caveats to imposing this limit. If you have a batch policy at the output level, then messages won't be acked until the batch is flushed. If you don't allow the input to consume enough messages to trigger the batch, then it will stall.
+
+
+Type: `int`  
+Default: `0`  
 
 
