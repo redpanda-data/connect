@@ -1,8 +1,12 @@
+// Package sql brings in the sql components and _all_ officially supported
+// drivers. In order to hand-pick which drivers are included import
+// github.com/benthosdev/benthos/v4/public/components/sql/base instead along
+// with the specific drivers you want.
 package sql
 
 import (
-	// Bring in the internal plugin definitions.
-	_ "github.com/benthosdev/benthos/v4/internal/impl/sql"
+	// Bring in the base plugin definitions.
+	_ "github.com/benthosdev/benthos/v4/public/components/sql/base"
 
 	// Import all (supported) sql drivers.
 	_ "github.com/denisenkom/go-mssqldb"

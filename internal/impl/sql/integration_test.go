@@ -847,8 +847,6 @@ func msSQLIntegration(t *testing.T) {
 }
 
 func sqliteIntegration(t *testing.T) {
-	t.Skip("Broken for now...")
-
 	t.Parallel()
 
 	testDBFile := filepath.Join(t.TempDir(), "foo.db")
@@ -891,7 +889,20 @@ func sqliteIntegration(t *testing.T) {
 		return nil
 	}())
 
-	testSuite(t, "sqlite", dsn, createTable)
+	// Custom suite without parallel test.
+	for _, fn := range []testFn{
+		testBatchProcessorBasic,
+		testBatchInputOutputBatch,
+		testBatchInputOutputRaw,
+		testRawProcessorsBasic,
+		testDeprecatedProcessorsBasic,
+	} {
+		tableName, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 40)
+		require.NoError(t, err)
+
+		require.NoError(t, createTable(tableName), tableName)
+		fn(t, "sqlite", dsn, tableName)
+	}
 }
 
 func oracleIntegration(t *testing.T) {
