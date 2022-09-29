@@ -9,10 +9,11 @@ which runs Amazon Linux on the `x86_64` architecture.
 The `benthos-lambda-al2` distribution supports the `provided.al2` runtime,
 which runs Amazon Linux 2 on either the `x86_64` or `arm64` architecture.
 
-:::info Want to keep things boring?
-Get deployed quickly with this production-ready project template: [makenew/serverless-benthos].
-
-Or, if you need a deployable build with custom plugins: [makenew/benthos-plugin].
+:::info Looking for something less manual?
+Rather than bundle the distribution and configs yourself,
+check out [makenew/serverless-benthos], which makes quick work of deploying 
+a Benthos serverless project on AWS Lambda.
+For custom plugins there is [makenew/benthos-plugin].
 :::
 
 It uses the same configuration format as a regular Benthos instance, which can be
