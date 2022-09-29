@@ -136,7 +136,6 @@ And then run it with `make lint`.
 ## Plugins
 
 It's pretty easy to write your own custom plugins for Benthos in Go, for information check out [the API docs][godoc-url], and for inspiration there's an [example repo][plugin-repo] demonstrating a variety of plugin implementations.
-Distribute and deploy your plugin quickly with this [production-ready project template][makenew/benthos-plugin].
 
 ## Extra Plugins
 
@@ -206,5 +205,3 @@ Contributions are welcome, please [read the guidelines](CONTRIBUTING.md), come a
 
 [golangci-lint]: https://golangci-lint.run/
 [jaeger]: https://www.jaegertracing.io/
-
-[makenew/benthos-plugin]: https://github.com/makenew/benthos-plugin
