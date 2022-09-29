@@ -63,6 +63,59 @@ output:
 	assert.Equal(t, "drop", updatedConf.Output.Type)
 }
 
+func TestReaderStreamWatching(t *testing.T) {
+
+	confDir := t.TempDir()
+	// Create an empty config file in the config folder
+	confFilePath := filepath.Join(confDir, "main.yaml")
+	require.NoError(t, os.WriteFile(confFilePath, []byte{}, 0o644))
+
+	streamsDir := t.TempDir()
+
+	rdr := NewReader(
+		confFilePath,
+		nil,
+		OptSetStreamPaths(filepath.Join(streamsDir, "*.yaml")),
+	)
+	rdr.changeDelayPeriod = 1 * time.Millisecond
+	rdr.changeFlushPeriod = 1 * time.Millisecond
+
+	changeChan := make(chan struct{})
+	var updatedConf stream.Config
+
+	require.NoError(t, rdr.SubscribeStreamChanges(func(id string, conf stream.Config) bool {
+		updatedConf = conf
+		close(changeChan)
+		return true
+	}))
+
+	// Watch for configuration changes
+	testMgr, err := manager.New(manager.NewResourceConfig())
+	rdr.ReadStreams(map[string]stream.Config{})
+	require.NoError(t, err)
+	require.NoError(t, rdr.BeginFileWatching(testMgr, true))
+
+	streamFilePath := filepath.Join(streamsDir, "main.yaml")
+	dummyConfig := []byte(`
+	input:
+	  generate: {}
+	output:
+	  drop: {}
+	`)
+	// Create new stream config
+	require.NoError(t, os.WriteFile(streamFilePath, dummyConfig, 0o644))
+
+	// Wait for the config watcher to reload the config
+	select {
+	case <-changeChan:
+	case <-time.After(100 * time.Millisecond):
+		require.FailNow(t, "Expected a config change to be triggered")
+	}
+
+	assert.Equal(t, "generate", updatedConf.Input.Type)
+	assert.Equal(t, "drop", updatedConf.Output.Type)
+}
+
 func TestReaderFileWatchingSymlinkReplace(t *testing.T) {
 	dummyConfig := []byte(`
 input:
