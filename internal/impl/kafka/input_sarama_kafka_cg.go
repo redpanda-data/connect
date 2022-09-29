@@ -73,7 +73,7 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 			}
 
 			latestOffset = data.Offset
-			part := dataToPart(claim.HighWaterMarkOffset(), data)
+			part := dataToPart(claim.HighWaterMarkOffset(), data, k.conf.MultiHeader)
 
 			if batchPolicy.Add(part) {
 				nextTimedBatchChan = nil
