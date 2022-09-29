@@ -23,6 +23,10 @@ func cassandraConfigSpec() *service.ConfigSpec {
 						Optional()).
 				Field(service.NewStringField("query").
 						Description("A query to execute.")).
+				Field(service.NewIntField("max_retries").
+						Description("The maximum number of retries before giving up on a request.").
+						Advanced()).
+				Field(service.NewInternalField(FieldBackoff())).
 				Field(service.NewStringField("timeout").
 						Description("").
 						Advanced().
@@ -35,6 +39,13 @@ func FieldAuth() docs.FieldSpec {
 				docs.FieldBool("enabled", "Whether to use password authentication").Optional(),
 				docs.FieldString("username", "A username").Optional(),
 				docs.FieldString("password", "A password").Optional(),
+		).Advanced()
+}
+
+func FieldBackoff() docs.FieldSpec {
+		return docs.FieldObject("backoff", "Control time intervals between retry attempts.").WithChildren(
+				docs.FieldString("initial_interval", "The initial period to wait between retry attempts.").Optional(),
+				docs.FieldString("max_interval", "The maximum period to wait between retry attempts.").Optional(),
 		).Advanced()
 }
 
@@ -73,6 +84,16 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 				return nil, err
 		}
 
+		retries, err := conf.FieldInt("max_retries")
+		if err != nil {
+				return nil, err
+		}
+
+		backoff, err := BackoffFromParsedConfig(conf.Namespace("backoff"))
+		if err != nil {
+			return nil, err
+		}
+
 		tout, err := conf.FieldString("timeout")
 		if err != nil {
 				return nil, err
@@ -87,36 +108,67 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 				auth:		pAuth,
 				disableIHL: disable,
 				query:		query,
+				maxRetries: retries,
+				backoff:	backoff,
 				timeout:	timeout,
 		}), nil
 }
 
 func NewAuth() PasswordAuthenticator {
-	return PasswordAuthenticator{
-		Enabled:	false,
-		Username:	"",
-		Password:	"",
-	}
+		return PasswordAuthenticator{
+				Enabled:	false,
+				Username:	"",
+				Password:	"",
+		}
+}
+
+func NewBackoff() Backoff {
+		return Backoff{
+			InitInterval:	0,
+			MaxInterval:	0,
+		}
 }
 
 func AuthFromParsedConfig(p *service.ParsedConfig) (pa PasswordAuthenticator, err error) {
-	pa = NewAuth()
-	if p.Contains("enabled") {
-		if pa.Enabled, err = p.FieldBool("enabled"); err != nil {
-			return pa, err
+		pa = NewAuth()
+		if p.Contains("enabled") {
+				if pa.Enabled, err = p.FieldBool("enabled"); err != nil {
+						return pa, err
+				}
 		}
-	}
-	if p.Contains("username") {
-		if pa.Username, err = p.FieldString("username"); err != nil {
-			return pa, err
+		if p.Contains("username") {
+				if pa.Username, err = p.FieldString("username"); err != nil {
+						return pa, err
+				}
 		}
-	}
-	if p.Contains("password") {
-		if pa.Password, err = p.FieldString("password"); err != nil {
-			return pa, err
+		if p.Contains("password") {
+				if pa.Password, err = p.FieldString("password"); err != nil {
+						return pa, err
+				}
 		}
-	}
-	return pa, nil
+		return pa, nil
+}
+
+func BackoffFromParsedConfig(p *service.ParsedConfig) (b Backoff, err error) {
+		b = NewBackoff()
+		var init, max string
+		if p.Contains("initial_interval") {
+				if init, err = p.FieldString("initial_interval"); err != nil {
+						return b, err
+				}
+				if b.InitInterval, err = time.ParseDuration(init); err != nil {
+						return b, err
+				}
+		}
+		if p.Contains("max_interval") {
+				if max, err = p.FieldString("max_interval"); err != nil {
+						return b, err
+				}
+				if b.MaxInterval, err = time.ParseDuration(max); err != nil {
+						return b, err
+				}
+		}
+		return b, nil
 }
 
 type PasswordAuthenticator struct {
@@ -125,11 +177,18 @@ type PasswordAuthenticator struct {
 		Password	string
 }
 
+type Backoff struct {
+		InitInterval	time.Duration
+		MaxInterval		time.Duration
+}
+
 type cassandraInput struct {
 		addresses	[]string
 		auth		PasswordAuthenticator
 		disableIHL	bool
 		query		string
+		maxRetries	int
+		backoff		Backoff
 		timeout		time.Duration
 
 		session		*gocql.Session
@@ -151,6 +210,13 @@ func (c *cassandraInput) Connect(ctx context.Context) error {
 		}
 		
 		conn.DisableInitialHostLookup = c.disableIHL
+
+		conn.RetryPolicy = &decorator{
+				NumRetries: int(c.maxRetries),
+				Min:		c.backoff.InitInterval,
+				Max:		c.backoff.MaxInterval,
+		}
+
 		conn.Timeout = c.timeout
 
 		session, err := conn.CreateSession()
