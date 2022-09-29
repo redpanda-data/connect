@@ -20,16 +20,17 @@ func cassandraConfigSpec() *service.ConfigSpec {
 				Field(service.NewInternalField(FieldAuth())).
 				Field(service.NewBoolField("disable_initial_host_lookup").
 						Description("If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.").
+						Advanced().
 						Optional()).
 				Field(service.NewStringField("query").
 						Description("A query to execute.")).
 				Field(service.NewIntField("max_retries").
 						Description("The maximum number of retries before giving up on a request.").
-						Advanced()).
+						Advanced().
+						Optional()).
 				Field(service.NewInternalField(FieldBackoff())).
 				Field(service.NewStringField("timeout").
 						Description("").
-						Advanced().
 						Default("600ms").
 						Example("600ms"))
 }
@@ -84,9 +85,12 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 				return nil, err
 		}
 
-		retries, err := conf.FieldInt("max_retries")
-		if err != nil {
-				return nil, err
+		var retries int
+		if conf.Contains("max_retries") {
+				retries, err = conf.FieldInt("max_retries")
+				if err != nil {
+						return nil, err
+				}
 		}
 
 		backoff, err := BackoffFromParsedConfig(conf.Namespace("backoff"))
