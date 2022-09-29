@@ -78,5 +78,5 @@ func newSQLDeprecatedOutputFromConfig(conf *service.ParsedConfig, logger *servic
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawOutput(logger, driverStr, dsnStr, queryStatic, argsMapping, connSettings), nil
+	return newSQLRawOutput(logger, driverStr, dsnStr, queryStatic, nil, argsMapping, connSettings), nil
 }
