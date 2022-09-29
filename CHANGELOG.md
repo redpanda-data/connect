@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- All `sql` components now support Oracle DB.
+
 ### Fixed
 
 - All SQL components now accept an empty or unspecified `args_mapping` as an alias for no arguments.

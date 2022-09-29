@@ -109,7 +109,7 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`.
 
 ### `dsn`
 
@@ -126,6 +126,7 @@ The following is a list of supported drivers, their placeholder style, and their
 | `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |
 | `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |
 | `sqlite` | `file:/path/to/filename.db[?param&=value1&...]` |
+| `oracle` | `[username[:password]@][netloc][:port]/service_name?server=server2&server=server3` |
 
 Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
 
@@ -140,6 +141,8 @@ dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=
 dsn: foouser:foopassword@tcp(localhost:3306)/foodb
 
 dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
+
+dsn: oracle://foouser:foopass@localhost:1521/service_name
 ```
 
 ### `query`
@@ -153,6 +156,7 @@ The query to execute. The style of placeholder to use depends on the driver, som
 | `postgres` | Dollar sign |
 | `mssql` | Question mark |
 | `sqlite` | Question mark |
+| `oracle` | Colon |
 
 
 Type: `string`  
