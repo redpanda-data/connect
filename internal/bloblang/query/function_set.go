@@ -23,8 +23,10 @@ func NewFunctionSet() *FunctionSet {
 	}
 }
 
-var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
-var nameRegexp = regexp.MustCompile(nameRegexpRaw)
+var (
+	nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
+	nameRegexp    = regexp.MustCompile(nameRegexpRaw)
+)
 
 // Add a new function to this set by providing a spec (name and documentation),
 // a constructor to be called for each instantiation of the function, and

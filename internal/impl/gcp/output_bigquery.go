@@ -229,7 +229,6 @@ func init() {
 			output, err = newGCPBigQueryOutput(gconf, mgr.Logger())
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -293,7 +292,7 @@ func newGCPBigQueryOutput(
 	return g, nil
 }
 
-// convertToIso converts a utf-8 byte encoding to iso-8859-1 byte encoding
+// convertToIso converts a utf-8 byte encoding to iso-8859-1 byte encoding.
 func convertToIso(value []byte) (result []byte, err error) {
 	return charmap.ISO8859_1.NewEncoder().Bytes(value)
 }

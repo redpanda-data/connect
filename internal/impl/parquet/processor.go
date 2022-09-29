@@ -92,7 +92,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return newParquetProcessorFromConfig(conf, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -114,7 +113,6 @@ func getCompressionType(str string) (parquet.CompressionCodec, error) {
 		return parquet.CompressionCodec_ZSTD, nil
 	}
 	return parquet.CompressionCodec_UNCOMPRESSED, fmt.Errorf("unknown compression type: %v", str)
-
 }
 
 func newParquetProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*parquetProcessor, error) {

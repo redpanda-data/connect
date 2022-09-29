@@ -11,12 +11,14 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/impl/sftp/shared"
 	"github.com/benthosdev/benthos/v4/internal/integration"
 
-	// Bring in memory cache
+	// Bring in memory cache.
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 )
 
-var sftpUsername = "foo"
-var sftpPassword = "pass"
+var (
+	sftpUsername = "foo"
+	sftpPassword = "pass"
+)
 
 func TestIntegrationSFTP(t *testing.T) {
 	integration.CheckSkip(t)

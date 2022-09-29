@@ -235,7 +235,7 @@ func (c *ConfigField) Version(v string) *ConfigField {
 // ensures the value contains only lowercase values we might add the following
 // linting rule:
 //
-// `root = if this.lowercase() != this { [ "field must be lowercase" ] }`
+// `root = if this.lowercase() != this { [ "field must be lowercase" ] }`.
 func (c *ConfigField) LintRule(blobl string) *ConfigField {
 	c.field = c.field.LinterBlobl(blobl)
 	return c
@@ -418,7 +418,7 @@ func (c *ConfigSpec) EncodeJSON(v []byte) error {
 // root = match {
 // this.exists("meow") && this.exists("woof") => [ "both `+"`meow`"+` and `+"`woof`"+` can't be set simultaneously" ],
 // this.exists("reticulation") && (!this.exists("splines") || this.splines == "") => [ "`+"`splines`"+` is required when setting `+"`reticulation`"+`" ],
-// }
+// }.
 func (c *ConfigSpec) LintRule(blobl string) *ConfigSpec {
 	c.component.Config = c.component.Config.LinterBlobl(blobl)
 	return c
@@ -511,7 +511,7 @@ func (p *ParsedConfig) Namespace(path ...string) *ParsedConfig {
 
 // Field accesses a field from the parsed config by its name and returns the
 // value if the field is found and a boolean indicating whether it was found.
-// Nested fields can be accessed by specifing the series of field names.
+// Nested fields can be accessed by specifying the series of field names.
 func (p *ParsedConfig) field(path ...string) (any, bool) {
 	gObj := gabs.Wrap(p.generic).S(p.hiddenPath...)
 	if exists := gObj.Exists(path...); !exists {

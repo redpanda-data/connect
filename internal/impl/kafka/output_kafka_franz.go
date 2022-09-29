@@ -89,7 +89,6 @@ func init() {
 			output, err = newFranzKafkaWriterFromConfig(conf, mgr.Logger())
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}

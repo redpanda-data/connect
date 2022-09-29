@@ -981,7 +981,6 @@ func newRexExpSplitReader(conf ReaderConfig, r io.ReadCloser, regex string, ackF
 	}
 
 	compiled, err := regexp.Compile(regex)
-
 	if err != nil {
 		return nil, err
 	}

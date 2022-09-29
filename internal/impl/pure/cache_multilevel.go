@@ -55,7 +55,6 @@ func init() {
 			}
 			return newMultilevelCache(levels, mgr, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}

@@ -387,7 +387,6 @@ func TestCSVReaderStrict(t *testing.T) {
 }
 
 func TestLazyQuotes(t *testing.T) {
-
 	tests := []struct {
 		name        string
 		lazyQuotes  bool

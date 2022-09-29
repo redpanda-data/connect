@@ -162,11 +162,13 @@ type metricProcessor struct {
 	handler func(string, int, message.Batch) error
 }
 
-type labels []label
-type label struct {
-	name  string
-	value *field.Expression
-}
+type (
+	labels []label
+	label  struct {
+		name  string
+		value *field.Expression
+	}
+)
 
 func (l *label) val(index int, msg message.Batch) string {
 	return l.value.String(index, msg)

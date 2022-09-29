@@ -380,8 +380,10 @@ func IToNumber(v any) (float64, error) {
 	return 0, NewTypeError(v, ValueNumber)
 }
 
-const maxUint = ^uint64(0)
-const maxInt = maxUint >> 1
+const (
+	maxUint = ^uint64(0)
+	maxInt  = maxUint >> 1
+)
 
 // IToInt takes a boxed value and attempts to extract a number (int64) from it
 // or parse one.
@@ -461,7 +463,7 @@ func IClone(root any) any {
 // - The types exactly match and have the same value
 // - The types are both either a string or byte slice and the underlying data is the same
 // - The types are both numerical and have the same value
-// - Both types are a matching slice or map containing values matching these same conditions
+// - Both types are a matching slice or map containing values matching these same conditions.
 func ICompare(left, right any) bool {
 	if left == nil && right == nil {
 		return true

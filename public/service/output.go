@@ -71,7 +71,7 @@ type BatchOutput interface {
 
 //------------------------------------------------------------------------------
 
-// Implements output.AsyncSink
+// Implements output.AsyncSink.
 type airGapWriter struct {
 	w Output
 }
@@ -98,7 +98,7 @@ func (a *airGapWriter) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// Implements output.AsyncSink
+// Implements output.AsyncSink.
 type airGapBatchWriter struct {
 	w BatchOutput
 }

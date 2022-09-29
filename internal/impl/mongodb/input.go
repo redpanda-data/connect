@@ -11,7 +11,7 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-// mongodb input component allowed operations
+// mongodb input component allowed operations.
 const (
 	FindInputOperation      = "find"
 	AggregateInputOperation = "aggregate"

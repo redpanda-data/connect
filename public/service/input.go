@@ -97,7 +97,7 @@ type BatchInput interface {
 
 //------------------------------------------------------------------------------
 
-// Implements input.AsyncReader
+// Implements input.AsyncReader.
 type airGapReader struct {
 	r Input
 }
@@ -137,7 +137,7 @@ func (a *airGapReader) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// Implements input.AsyncReader
+// Implements input.AsyncReader.
 type airGapBatchReader struct {
 	r BatchInput
 }

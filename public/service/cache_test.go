@@ -56,7 +56,6 @@ func (c *closableCache) Add(ctx context.Context, key string, value []byte, ttl *
 		b: value, ttl: ttl,
 	}
 	return nil
-
 }
 
 func (c *closableCache) Delete(ctx context.Context, key string) error {
@@ -342,7 +341,6 @@ func (c *closableCacheType) Add(ctx context.Context, key string, value []byte, t
 		b: value, ttl: ttl,
 	}
 	return nil
-
 }
 
 func (c *closableCacheType) Delete(ctx context.Context, key string) error {

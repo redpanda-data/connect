@@ -192,7 +192,8 @@ func expectFromRetry(
 	resReturn error,
 	tChan <-chan message.Transaction,
 	t *testing.T,
-	responsesSlice ...string) {
+	responsesSlice ...string,
+) {
 	t.Helper()
 
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)

@@ -330,7 +330,7 @@ func uuidFromLockTokenBytes(bytes []byte) (*amqp.UUID, error) {
 		return nil, fmt.Errorf("invalid lock token, token was not 16 bytes long")
 	}
 
-	var swapIndex = func(indexOne, indexTwo int, array *[16]byte) {
+	swapIndex := func(indexOne, indexTwo int, array *[16]byte) {
 		array[indexOne], array[indexTwo] = array[indexTwo], array[indexOne]
 	}
 
@@ -403,7 +403,7 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 
 func amqpSetMetadata(p *message.Part, k string, v any) {
 	var metaValue string
-	var metaKey = strings.ReplaceAll(k, "-", "_")
+	metaKey := strings.ReplaceAll(k, "-", "_")
 
 	switch v := v.(type) {
 	case bool:

@@ -390,7 +390,6 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg message.Batch) error {
 		msgs = append(msgs, nextMsg)
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}

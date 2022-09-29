@@ -281,20 +281,20 @@ e:
 			name: "recurse array of objects",
 			spec: docs.FieldSpecs{
 				docs.FieldObject("foo", "").WithChildren(
-					docs.FieldObject("eles", "").Array().WithChildren(
+					docs.FieldObject("eels", "").Array().WithChildren(
 						docs.FieldString("bar", "").HasDefault("default"),
 					),
 				),
 			},
 			yaml: `
 foo:
-  eles:
+  eels:
     - bar: bar1
     - bar: bar2
 `,
 			result: map[string]any{
 				"foo": map[string]any{
-					"eles": []any{
+					"eels": []any{
 						map[string]any{
 							"bar": "bar1",
 						},
@@ -309,14 +309,14 @@ foo:
 			name: "recurse map of objects",
 			spec: docs.FieldSpecs{
 				docs.FieldObject("foo", "").WithChildren(
-					docs.FieldObject("eles", "").Map().WithChildren(
+					docs.FieldObject("eels", "").Map().WithChildren(
 						docs.FieldString("bar", "").HasDefault("default"),
 					),
 				),
 			},
 			yaml: `
 foo:
-  eles:
+  eels:
     first:
       bar: bar1
     second:
@@ -324,7 +324,7 @@ foo:
 `,
 			result: map[string]any{
 				"foo": map[string]any{
-					"eles": map[string]any{
+					"eels": map[string]any{
 						"first": map[string]any{
 							"bar": "bar1",
 						},

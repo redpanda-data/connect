@@ -206,7 +206,7 @@ func (c ContentJSONEqualsCondition) Check(p *message.Part) error {
 
 // ContentJSONContainsCondition is a string condition that tests the string against
 // the contents of a message using JSON comparison and is true if the expected
-// and actual documents are both valid JSON, and the actual is a superset of the expected
+// and actual documents are both valid JSON, and the actual is a superset of the expected.
 type ContentJSONContainsCondition string
 
 // Check this condition against a message part.
@@ -315,7 +315,7 @@ func (m MetadataEqualsCondition) Check(p *message.Part) error {
 // complex nodes are converted to a JSON representation
 // assumption is that only the subset of YAML compatible
 // with JSON will be present; decode errors will trigger
-// if this is not the case
+// if this is not the case.
 func yamlNodeToTestString(n *yaml.Node, tgt *string) error {
 	switch n.Kind {
 	case yaml.SequenceNode:

@@ -32,7 +32,7 @@ generated with the [nsc tool](https://docs.nats.io/nats-tools/nsc).
 More details [here](https://docs.nats.io/developing-with-nats/security/creds).`
 }
 
-// FieldSpec returns documentation authentication specs for NATS components
+// FieldSpec returns documentation authentication specs for NATS components.
 func FieldSpec() docs.FieldSpec {
 	return docs.FieldObject("auth", "Optional configuration of NATS authentication parameters.").WithChildren(
 		docs.FieldString("nkey_file", "An optional file containing a NKey seed.", "./seed.nk").Optional(),

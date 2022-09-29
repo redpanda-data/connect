@@ -39,7 +39,7 @@ type V2Batched interface {
 
 //------------------------------------------------------------------------------
 
-// Implements V1
+// Implements V1.
 type v2ToV1Processor struct {
 	typeStr string
 	p       V2
@@ -108,7 +108,7 @@ func (a *v2ToV1Processor) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// Implements types.Processor
+// Implements types.Processor.
 type v2BatchedToV1Processor struct {
 	typeStr string
 	p       V2Batched

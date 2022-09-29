@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Copied from ./internal/config/format.go
+// Copied from ./internal/config/format.go.
 func marshalYAML(v any) ([]byte, error) {
 	var cbytes bytes.Buffer
 	enc := yaml.NewEncoder(&cbytes)

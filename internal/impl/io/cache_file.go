@@ -30,7 +30,6 @@ func init() {
 			}
 			return f, nil
 		})
-
 	if err != nil {
 		panic(err)
 	}
