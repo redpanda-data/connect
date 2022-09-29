@@ -204,30 +204,32 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 
 	for i, msg := range batch {
 		var args []any
-		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
-		if err != nil {
-			s.logger.Debugf("Arguments mapping failed: %v", err)
-			msg.SetError(err)
-			continue
-		}
+		if s.argsMapping != nil {
+			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
+			if err != nil {
+				s.logger.Debugf("Arguments mapping failed: %v", err)
+				msg.SetError(err)
+				continue
+			}
 
-		iargs, err := resMsg.AsStructured()
-		if err != nil {
-			s.logger.Debugf("Mapping returned non-structured result: %v", err)
-			msg.SetError(fmt.Errorf("mapping returned non-structured result: %w", err))
-			continue
-		}
+			iargs, err := resMsg.AsStructured()
+			if err != nil {
+				s.logger.Debugf("Mapping returned non-structured result: %v", err)
+				msg.SetError(fmt.Errorf("mapping returned non-structured result: %w", err))
+				continue
+			}
 
-		var ok bool
-		if args, ok = iargs.([]any); !ok {
-			s.logger.Debugf("Mapping returned non-array result: %T", iargs)
-			msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
-			continue
+			var ok bool
+			if args, ok = iargs.([]any); !ok {
+				s.logger.Debugf("Mapping returned non-array result: %T", iargs)
+				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
+				continue
+			}
 		}
 
 		if tx == nil {
 			insertBuilder = insertBuilder.Values(args...)
-		} else if _, err = stmt.Exec(args...); err != nil {
+		} else if _, err := stmt.Exec(args...); err != nil {
 			return nil, err
 		}
 	}

@@ -174,22 +174,24 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 
 	for i := range batch {
 		var args []any
-		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
-		if err != nil {
-			return err
+		if s.argsMapping != nil {
+			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
+			if err != nil {
+				return err
+			}
+
+			iargs, err := resMsg.AsStructured()
+			if err != nil {
+				return err
+			}
+
+			var ok bool
+			if args, ok = iargs.([]any); !ok {
+				return fmt.Errorf("mapping returned non-array result: %T", iargs)
+			}
 		}
 
-		iargs, err := resMsg.AsStructured()
-		if err != nil {
-			return err
-		}
-
-		var ok bool
-		if args, ok = iargs.([]any); !ok {
-			return fmt.Errorf("mapping returned non-array result: %T", iargs)
-		}
-
-		if _, err = s.db.ExecContext(ctx, s.queryStatic, args...); err != nil {
+		if _, err := s.db.ExecContext(ctx, s.queryStatic, args...); err != nil {
 			return err
 		}
 	}
