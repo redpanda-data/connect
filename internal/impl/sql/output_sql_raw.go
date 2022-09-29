@@ -21,6 +21,10 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
+		Field(service.NewBoolField("unsafe_dynamic_query").
+			Description("Whether to enable [interpolation functions](/docs/configuration/interpolation/#bloblang-queries) in the query. Great care should be made to ensure your queries are defended against injection attacks.").
+			Advanced().
+			Default(false)).
 		Field(service.NewBloblangField("args_mapping").
 			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
@@ -84,6 +88,7 @@ type sqlRawOutput struct {
 	dbMut  sync.RWMutex
 
 	queryStatic string
+	queryDyn    *service.InterpolatedString
 
 	argsMapping *bloblang.Executor
 
@@ -109,6 +114,15 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, logger *service.Logge
 		return nil, err
 	}
 
+	var queryDyn *service.InterpolatedString
+	if unsafeDyn, err := conf.FieldBool("unsafe_dynamic_query"); err != nil {
+		return nil, err
+	} else if unsafeDyn {
+		if queryDyn, err = conf.FieldInterpolatedString("query"); err != nil {
+			return nil, err
+		}
+	}
+
 	var argsMapping *bloblang.Executor
 	if conf.Contains("args_mapping") {
 		if argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
@@ -120,13 +134,14 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, logger *service.Logge
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawOutput(logger, driverStr, dsnStr, queryStatic, argsMapping, connSettings), nil
+	return newSQLRawOutput(logger, driverStr, dsnStr, queryStatic, queryDyn, argsMapping, connSettings), nil
 }
 
 func newSQLRawOutput(
 	logger *service.Logger,
 	driverStr, dsnStr string,
 	queryStatic string,
+	queryDyn *service.InterpolatedString,
 	argsMapping *bloblang.Executor,
 	connSettings connSettings,
 ) *sqlRawOutput {
@@ -136,6 +151,7 @@ func newSQLRawOutput(
 		driver:       driverStr,
 		dsn:          dsnStr,
 		queryStatic:  queryStatic,
+		queryDyn:     queryDyn,
 		argsMapping:  argsMapping,
 		connSettings: connSettings,
 	}
@@ -191,7 +207,12 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 			}
 		}
 
-		if _, err := s.db.ExecContext(ctx, s.queryStatic, args...); err != nil {
+		queryStr := s.queryStatic
+		if s.queryDyn != nil {
+			queryStr = batch.InterpolatedString(i, s.queryDyn)
+		}
+
+		if _, err := s.db.ExecContext(ctx, queryStr, args...); err != nil {
 			return err
 		}
 	}

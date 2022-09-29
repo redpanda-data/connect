@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - All SQL components now accept an empty or unspecified `args_mapping` as an alias for no arguments.
+- Field `unsafe_dynamic_query` added to the `sql_raw` output.
 
 ## 4.7.0 - 2022-09-27
 

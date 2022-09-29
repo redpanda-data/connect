@@ -55,6 +55,7 @@ output:
     driver: ""
     dsn: ""
     query: ""
+    unsafe_dynamic_query: false
     args_mapping: ""
     max_in_flight: 64
     conn_max_idle_time: ""
@@ -161,6 +162,14 @@ Type: `string`
 
 query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 ```
+
+### `unsafe_dynamic_query`
+
+Whether to enable [interpolation functions](/docs/configuration/interpolation/#bloblang-queries) in the query. Great care should be made to ensure your queries are defended against injection attacks.
+
+
+Type: `bool`  
+Default: `false`  
 
 ### `args_mapping`
 
