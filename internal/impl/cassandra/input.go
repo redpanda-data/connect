@@ -23,7 +23,11 @@ func cassandraConfigSpec() *service.ConfigSpec {
 						Optional()).
 				Field(service.NewStringField("query").
 						Description("A query to execute.")).
-				Field(service.NewStringField("timeout"))
+				Field(service.NewStringField("timeout").
+						Description("").
+						Advanced().
+						Default("600ms").
+						Example("600ms"))
 }
 
 func FieldAuth() docs.FieldSpec {
@@ -68,6 +72,7 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 		if err != nil {
 				return nil, err
 		}
+
 		tout, err := conf.FieldString("timeout")
 		if err != nil {
 				return nil, err
