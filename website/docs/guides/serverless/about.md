@@ -7,10 +7,11 @@ Currently the only supported serverless deployment of Benthos is for
 [AWS Lambda][lambda], if you are interested in other platforms please
 [raise an issue](https://github.com/benthosdev/benthos/issues).
 
-:::info Want to keep things boring?
-Get deployed quickly with this production-ready project template: [makenew/serverless-benthos].
-
-Or, if you need a deployable build with custom plugins: [makenew/benthos-plugin].
+:::info Looking for something less manual?
+Rather than bundle the distribution and configs yourself,
+check out [makenew/serverless-benthos], which makes quick work of deploying 
+a Benthos serverless project on AWS Lambda.
+For custom plugins there is [makenew/benthos-plugin].
 :::
 
 ## Platforms
