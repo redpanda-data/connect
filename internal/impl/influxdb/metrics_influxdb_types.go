@@ -9,7 +9,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 )
 
-// not sure if this is necessary yet
+// not sure if this is necessary yet.
 var tagEncodingSeparator = ","
 
 type influxDBGauge struct {

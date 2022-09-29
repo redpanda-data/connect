@@ -96,7 +96,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 // Processor stores or retrieves data from a mongo db for each message of a
-// batch
+// batch.
 type Processor struct {
 	conf   processor.MongoDBConfig
 	log    log.Modular

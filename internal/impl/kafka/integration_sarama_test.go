@@ -261,7 +261,6 @@ input:
 			integration.StreamTestOptVarThree("false"),
 		)
 	})
-
 }
 
 func TestIntegrationSaramaOld(t *testing.T) {

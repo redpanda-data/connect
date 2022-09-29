@@ -200,7 +200,7 @@ output:
     fields:
       content: ${! content() }
 `
-		hashGetFn := func(ctx context.Context, testID string, id string) (string, []string, error) {
+		hashGetFn := func(ctx context.Context, testID, id string) (string, []string, error) {
 			client := redis.NewClient(&redis.Options{
 				Addr:    fmt.Sprintf("localhost:%v", resource.GetPort("6379/tcp")),
 				Network: "tcp",

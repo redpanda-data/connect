@@ -6,7 +6,7 @@ import (
 )
 
 // Namespaced wraps a child metrics exporter and exposes a Type API that
-// adds namespacing labels and name prefixes to new
+// adds namespacing labels and name prefixes to new.
 type Namespaced struct {
 	labels   map[string]string
 	mappings []*Mapping

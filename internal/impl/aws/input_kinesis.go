@@ -91,9 +91,7 @@ Use the ` + "`batching`" + ` fields to configure an optional [batching policy](/
 
 //------------------------------------------------------------------------------
 
-var (
-	awsKinesisDefaultLimit = int64(10e3)
-)
+var awsKinesisDefaultLimit = int64(10e3)
 
 type asyncMessage struct {
 	msg   message.Batch

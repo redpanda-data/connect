@@ -206,7 +206,7 @@ type Writer struct {
 	shutSig *shutdown.Signaller
 }
 
-// Connect attempts to establish a connection to the target mongo DB
+// Connect attempts to establish a connection to the target mongo DB.
 func (m *Writer) Connect(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

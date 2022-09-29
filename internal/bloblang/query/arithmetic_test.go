@@ -269,6 +269,7 @@ func TestArithmeticComparisons(t *testing.T) {
 		})
 	}
 }
+
 func TestArithmetic(t *testing.T) {
 	type easyMsg struct {
 		content string

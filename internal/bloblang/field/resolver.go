@@ -17,7 +17,7 @@ type Resolver interface {
 //------------------------------------------------------------------------------
 
 // StaticResolver is a Resolver implementation that simply returns a static
-// string
+// string.
 type StaticResolver string
 
 // ResolveString returns a string.

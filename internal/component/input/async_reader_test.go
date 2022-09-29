@@ -109,6 +109,7 @@ type asyncReaderCantConnect struct{}
 func (r asyncReaderCantConnect) Connect(ctx context.Context) error {
 	return component.ErrNotConnected
 }
+
 func (r asyncReaderCantConnect) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	return nil, nil, component.ErrNotConnected
 }
@@ -136,6 +137,7 @@ func (r *asyncReaderCantRead) Connect(ctx context.Context) error {
 	r.connected++
 	return nil
 }
+
 func (r *asyncReaderCantRead) ReadBatch(ctx context.Context) (message.Batch, input.AsyncAckFn, error) {
 	return nil, nil, component.ErrNotConnected
 }

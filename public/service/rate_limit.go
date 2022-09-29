@@ -27,7 +27,7 @@ func newAirGapRateLimit(c RateLimit, stats metrics.Type) ratelimit.V1 {
 
 //------------------------------------------------------------------------------
 
-// Implements RateLimit around a types.RateLimit
+// Implements RateLimit around a types.RateLimit.
 type reverseAirGapRateLimit struct {
 	r ratelimit.V1
 }

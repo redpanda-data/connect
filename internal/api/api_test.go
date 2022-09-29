@@ -104,38 +104,54 @@ func TestAPIBasicAuth(t *testing.T) {
 	}
 
 	tests := []testCase{
-		{name: "validAuth", enabled: true, algorithm: "sha256",
+		{
+			name: "validAuth", enabled: true, algorithm: "sha256",
 			correctUser: "myuser", correctPass: secret256,
 			givenUser: "myuser", givenPass: "secret",
-			expectedErr: assert.NoError, expectedCode: http.StatusOK},
-		{name: "validAuthMD5", enabled: true, algorithm: "md5",
+			expectedErr: assert.NoError, expectedCode: http.StatusOK,
+		},
+		{
+			name: "validAuthMD5", enabled: true, algorithm: "md5",
 			correctUser: "myuser", correctPass: secretMD5,
 			givenUser: "myuser", givenPass: "secret",
-			expectedErr: assert.NoError, expectedCode: http.StatusOK},
-		{name: "validAuthBcrypt", enabled: true, algorithm: "bcrypt",
+			expectedErr: assert.NoError, expectedCode: http.StatusOK,
+		},
+		{
+			name: "validAuthBcrypt", enabled: true, algorithm: "bcrypt",
 			correctUser: "myuser", correctPass: secretBcrypt,
 			givenUser: "myuser", givenPass: "secret",
-			expectedErr: assert.NoError, expectedCode: http.StatusOK},
-		{name: "validAuthScrypt", enabled: true, algorithm: "scrypt",
+			expectedErr: assert.NoError, expectedCode: http.StatusOK,
+		},
+		{
+			name: "validAuthScrypt", enabled: true, algorithm: "scrypt",
 			correctUser: "myuser", correctPass: secretScrypt,
 			givenUser: "myuser", givenPass: "secret",
-			expectedErr: assert.NoError, expectedCode: http.StatusOK},
-		{name: "invalidAuth", enabled: true, algorithm: "sha256",
+			expectedErr: assert.NoError, expectedCode: http.StatusOK,
+		},
+		{
+			name: "invalidAuth", enabled: true, algorithm: "sha256",
 			correctUser: "myuser", correctPass: secret256,
 			givenUser: "myuser", givenPass: "wrong",
-			expectedErr: assert.NoError, expectedCode: http.StatusUnauthorized},
-		{name: "noAuthGiven", enabled: true, algorithm: "sha256",
+			expectedErr: assert.NoError, expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name: "noAuthGiven", enabled: true, algorithm: "sha256",
 			correctUser: "myuser", correctPass: secret256,
 			givenUser: "", givenPass: "", expectedErr: assert.NoError,
-			expectedCode: http.StatusUnauthorized},
-		{name: "disabledAuthWrong", enabled: false, algorithm: "sha256",
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name: "disabledAuthWrong", enabled: false, algorithm: "sha256",
 			correctUser: "myuser", correctPass: secret256,
 			givenUser: "myuser", givenPass: "wrong",
-			expectedErr: assert.NoError, expectedCode: http.StatusOK},
-		{name: "disabledAuthNoneGiven", enabled: false, algorithm: "sha256",
+			expectedErr: assert.NoError, expectedCode: http.StatusOK,
+		},
+		{
+			name: "disabledAuthNoneGiven", enabled: false, algorithm: "sha256",
 			correctUser: "myuser", correctPass: secret256,
 			givenUser: "", givenPass: "",
-			expectedErr: assert.NoError, expectedCode: http.StatusOK},
+			expectedErr: assert.NoError, expectedCode: http.StatusOK,
+		},
 	}
 
 	for _, tc := range tests {

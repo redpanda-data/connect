@@ -79,9 +79,11 @@ func (n noopLogger) SubLogger(fields plog.Fields) plog.Logger {
 func (n noopLogger) WithFields(fields plog.Fields) plog.Entry {
 	return n
 }
+
 func (n noopLogger) WithField(name string, value any) plog.Entry {
 	return n
 }
+
 func (n noopLogger) WithError(err error) plog.Entry {
 	return n
 }

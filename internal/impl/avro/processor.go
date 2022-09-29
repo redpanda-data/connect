@@ -160,7 +160,6 @@ func loadSchema(schemaPath string) (string, error) {
 	c := &http.Client{Transport: t}
 
 	response, err := c.Get(schemaPath)
-
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +167,6 @@ func loadSchema(schemaPath string) (string, error) {
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
-
 	if err != nil {
 		return "", err
 	}

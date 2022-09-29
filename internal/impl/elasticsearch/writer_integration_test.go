@@ -84,7 +84,6 @@ func TestIntegrationWriter(t *testing.T) {
 					Body(index).
 					Do(context.Background())
 			}
-
 		}
 		return cerr
 	}); err != nil {
@@ -167,7 +166,7 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+
 		get, err := client.Get().
 			Index("does_not_exist").
 			Id(id).
@@ -660,7 +659,6 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 		Type("_doc").
 		Id(conf.ID).
 		Do(context.Background())
-
 	if err != nil {
 		t.Fatalf("Failed to get doc '%v': %v", conf.ID, err)
 	}

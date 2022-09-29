@@ -13,11 +13,9 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-var (
-	// ErrBrokerNoOutputs is returned when creating a Broker type with zero
-	// outputs.
-	ErrBrokerNoOutputs = errors.New("attempting to create broker output type with no outputs")
-)
+// ErrBrokerNoOutputs is returned when creating a Broker type with zero
+// outputs.
+var ErrBrokerNoOutputs = errors.New("attempting to create broker output type with no outputs")
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(newBroker), docs.ComponentSpec{

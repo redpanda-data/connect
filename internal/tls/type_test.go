@@ -48,7 +48,6 @@ func CreateCertificates() (certPem, keyPem []byte) {
 }
 
 func CreateCertificatesWithEncryptedKey(password string) (certPem, keyPem []byte) {
-
 	certPem, keyPem = CreateCertificates()
 	decodedKey, _ := pem.Decode(keyPem)
 
@@ -87,7 +86,6 @@ func TestCertificateFileWithEncryptedKey(t *testing.T) {
 }
 
 func TestCertificateWithEncryptedKey(t *testing.T) {
-
 	cert, key := CreateCertificatesWithEncryptedKey("benthos")
 
 	c := ClientCertConfig{
@@ -100,7 +98,6 @@ func TestCertificateWithEncryptedKey(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to load certificate %s", err)
 	}
-
 }
 
 func TestCertificateFileWithEncryptedKeyAndWrongPassword(t *testing.T) {
@@ -127,7 +124,6 @@ func TestCertificateFileWithEncryptedKeyAndWrongPassword(t *testing.T) {
 }
 
 func TestEncryptedKeyWithWrongPassword(t *testing.T) {
-
 	cert, key := CreateCertificatesWithEncryptedKey("benthos")
 
 	c := ClientCertConfig{
@@ -163,8 +159,8 @@ func TestCertificateFileWithNoEncryption(t *testing.T) {
 		t.Errorf("Failed to load certificate %s", err)
 	}
 }
-func TestCertificateWithNoEncryption(t *testing.T) {
 
+func TestCertificateWithNoEncryption(t *testing.T) {
 	cert, key := CreateCertificates()
 
 	c := ClientCertConfig{

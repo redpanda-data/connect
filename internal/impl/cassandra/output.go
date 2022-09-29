@@ -411,7 +411,7 @@ func (d *decorator) GetRetryType(err error) gocql.RetryType {
 			return gocql.RetryNextHost
 		}
 		return gocql.Retry
-	// write timeout - uncertain whetever write was succesful or not
+	// write timeout - uncertain whetever write was successful or not
 	case *gocql.RequestErrWriteTimeout:
 		if t.Received > 0 {
 			return gocql.Ignore
@@ -423,8 +423,10 @@ func (d *decorator) GetRetryType(err error) gocql.RetryType {
 }
 
 func formatCassandraInt64(x int64) []byte {
-	return []byte{byte(x >> 56), byte(x >> 48), byte(x >> 40), byte(x >> 32),
-		byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x)}
+	return []byte{
+		byte(x >> 56), byte(x >> 48), byte(x >> 40), byte(x >> 32),
+		byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x),
+	}
 }
 
 func formatCassandraInt32(x int32) []byte {

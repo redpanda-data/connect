@@ -33,19 +33,19 @@ const (
 	defaultJWTTimeout = 60 * time.Second
 )
 
-// CompressionType represents the compression used for the payloads sent to Snowflake
+// CompressionType represents the compression used for the payloads sent to Snowflake.
 type CompressionType string
 
 const (
-	// CompressionTypeNone No compression
+	// CompressionTypeNone No compression.
 	CompressionTypeNone CompressionType = "NONE"
-	// CompressionTypeAuto Automatic compression (gzip)
+	// CompressionTypeAuto Automatic compression (gzip).
 	CompressionTypeAuto CompressionType = "AUTO"
-	// CompressionTypeGzip Gzip compression
+	// CompressionTypeGzip Gzip compression.
 	CompressionTypeGzip CompressionType = "GZIP"
-	// CompressionTypeDeflate Deflate compression using zlib algorithm (with zlib header, RFC1950)
+	// CompressionTypeDeflate Deflate compression using zlib algorithm (with zlib header, RFC1950).
 	CompressionTypeDeflate CompressionType = "DEFLATE"
-	// CompressionTypeRawDeflate Deflate compression using flate algorithm (without header, RFC1951)
+	// CompressionTypeRawDeflate Deflate compression using flate algorithm (without header, RFC1951).
 	CompressionTypeRawDeflate CompressionType = "RAW_DEFLATE"
 )
 
@@ -317,7 +317,6 @@ func init() {
 			output, err = newSnowflakeWriterFromConfig(conf, mgr.Logger(), mgr.Metrics())
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}

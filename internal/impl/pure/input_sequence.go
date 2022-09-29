@@ -102,7 +102,7 @@ BBB,Emma,28
 CCC,Geri,45
 ` + "```" + `
 
-And the second file called "hobbies.ndjson" contains JSON documents, one per line, that associate an identifer with an array of hobbies. However, these data objects are in a nested format:
+And the second file called "hobbies.ndjson" contains JSON documents, one per line, that associate an identifier with an array of hobbies. However, these data objects are in a nested format:
 
 ` + "```json" + `
 {"document":{"uuid":"CCC","hobbies":[{"type":"pokemon go"}]}}

@@ -273,7 +273,7 @@ func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
 //------------------------------------------------------------------------------
 
 // ForStream returns a variant of this manager to be used by a particular stream
-// identifer, where APIs registered will be namespaced by that id.
+// identifier, where APIs registered will be namespaced by that id.
 func (t *Type) ForStream(id string) bundle.NewManagement {
 	return t.forStream(id)
 }
@@ -357,7 +357,7 @@ func (t *Type) SetPipe(name string, tran <-chan message.Transaction) {
 	t.pipeLock.Unlock()
 }
 
-// GetPipe attempts to obtain and return a named output Pipe
+// GetPipe attempts to obtain and return a named output Pipe.
 func (t *Type) GetPipe(name string) (<-chan message.Transaction, error) {
 	t.pipeLock.RLock()
 	pipe, exists := t.pipes[name]

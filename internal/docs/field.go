@@ -209,7 +209,7 @@ func (f FieldSpec) AtVersion(v string) FieldSpec {
 }
 
 // HasAnnotatedOptions returns a new FieldSpec that specifies a specific list of
-// annotated options. Either
+// annotated options. Either.
 func (f FieldSpec) HasAnnotatedOptions(options ...string) FieldSpec {
 	if len(f.Options) > 0 {
 		panic("cannot combine annotated and non-annotated options for a field")
@@ -487,7 +487,7 @@ func FieldComponent() FieldSpec {
 //
 // - Whether the field has a default value
 // - Whether the field was explicitly marked as optional
-// - Whether the field is an object with children, none of which are required
+// - Whether the field is an object with children, none of which are required.
 func (f FieldSpec) CheckRequired() bool {
 	if f.IsOptional {
 		return false
@@ -585,7 +585,7 @@ type LintFunc func(ctx LintContext, line, col int, value any) []Lint
 // LintLevel describes the severity level of a linting error.
 type LintLevel int
 
-// Lint levels
+// Lint levels.
 const (
 	LintError   LintLevel = iota
 	LintWarning LintLevel = iota

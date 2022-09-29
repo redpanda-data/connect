@@ -41,7 +41,7 @@ func InferStreamID(dir, path string) (string, error) {
 	return id, nil
 }
 
-// ReadStreamFile attempts to read a stream config and returns the result
+// ReadStreamFile attempts to read a stream config and returns the result.
 func ReadStreamFile(path string) (conf stream.Config, lints []string, err error) {
 	conf = stream.NewConfig()
 

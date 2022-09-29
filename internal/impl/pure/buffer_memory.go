@@ -57,7 +57,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchBuffer, error) {
 			return newMemoryBufferFromConfig(conf, mgr)
 		})
-
 	if err != nil {
 		panic(err)
 	}

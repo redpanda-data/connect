@@ -86,8 +86,7 @@ type namedContextValue struct {
 
 // IncrStackCount increases the count stored in the function context of how many
 // maps we've entered and returns the current count.
-// nolint:gocritic // Ignore unnamedResult false positive
-func (ctx FunctionContext) IncrStackCount() (FunctionContext, int) {
+func (ctx FunctionContext) IncrStackCount() (FunctionContext, int) { //nolint: gocritic // Ignore unnamedResult false positive
 	ctx.stackCount++
 	return ctx, ctx.stackCount
 }
@@ -160,7 +159,7 @@ func (ctx FunctionContext) PopValue() (*any, FunctionContext) {
 
 //------------------------------------------------------------------------------
 
-// ExecToString returns a string from a function exection.
+// ExecToString returns a string from a function execution.
 func ExecToString(fn Function, ctx FunctionContext) string {
 	v, err := fn.Exec(ctx)
 	if err != nil {
@@ -172,7 +171,7 @@ func ExecToString(fn Function, ctx FunctionContext) string {
 	return IToString(v)
 }
 
-// ExecToBytes returns a byte slice from a function exection.
+// ExecToBytes returns a byte slice from a function execution.
 func ExecToBytes(fn Function, ctx FunctionContext) []byte {
 	v, err := fn.Exec(ctx)
 	if err != nil {

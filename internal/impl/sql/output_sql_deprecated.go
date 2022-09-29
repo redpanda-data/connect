@@ -43,7 +43,6 @@ func init() {
 			out, err = newSQLDeprecatedOutputFromConfig(conf, mgr.Logger())
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}

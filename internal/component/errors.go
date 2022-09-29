@@ -24,7 +24,7 @@ func ErrInvalidType(typeStr, tried string) error {
 	}
 }
 
-// Errors used throughout the codebase
+// Errors used throughout the codebase.
 var (
 	ErrTimeout    = errors.New("action timed out")
 	ErrTypeClosed = errors.New("type was closed")
@@ -42,7 +42,7 @@ var (
 
 //------------------------------------------------------------------------------
 
-// Manager errors
+// Manager errors.
 var (
 	ErrInputNotFound     = errors.New("input not found")
 	ErrCacheNotFound     = errors.New("cache not found")
@@ -56,7 +56,7 @@ var (
 
 //------------------------------------------------------------------------------
 
-// Buffer errors
+// Buffer errors.
 var (
 	ErrMessageTooLarge = errors.New("message body larger than buffer space")
 )

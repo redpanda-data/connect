@@ -252,7 +252,6 @@ func init() {
 				logger: mgr.Logger(),
 			})
 		})
-
 	if err != nil {
 		panic(err)
 	}

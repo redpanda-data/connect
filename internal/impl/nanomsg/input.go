@@ -22,7 +22,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
-	// Import all transport types
+	// Import all transport types.
 	_ "go.nanomsg.org/mangos/v3/transport/all"
 )
 

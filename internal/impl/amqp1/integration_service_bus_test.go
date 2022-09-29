@@ -125,7 +125,6 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	defer cancel()
 	_, _, err = m.ReadBatch(readCtx)
 	assert.Error(t, err, "got unexpected message (redelivery?)")
-
 }
 
 func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {

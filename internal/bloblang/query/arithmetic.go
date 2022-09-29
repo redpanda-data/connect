@@ -54,7 +54,7 @@ func (o ArithmeticOperator) String() string {
 	return ""
 }
 
-type arithmeticOpFunc func(lhs Function, rhs Function, l, r any) (any, error)
+type arithmeticOpFunc func(lhs, rhs Function, l, r any) (any, error)
 
 func arithmeticFunc(lhs, rhs Function, op arithmeticOpFunc) (Function, error) {
 	annotation := rhs.Annotation()
@@ -90,8 +90,10 @@ func arithmeticFunc(lhs, rhs Function, op arithmeticOpFunc) (Function, error) {
 // a value by zero.
 var ErrDivideByZero = errors.New("attempted to divide by zero")
 
-type intArithmeticFunc func(left, right int64) (int64, error)
-type floatArithmeticFunc func(left, right float64) (float64, error)
+type (
+	intArithmeticFunc   func(left, right int64) (int64, error)
+	floatArithmeticFunc func(left, right float64) (float64, error)
+)
 
 // Takes two arithmetic funcs, one for integer values and one for float values
 // and returns a generic arithmetic func. If both values can be represented as

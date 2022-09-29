@@ -36,7 +36,6 @@ func init() {
 			return nil, err
 		}
 		return output.OnlySinglePayloads(w), nil
-
 	}), docs.ComponentSpec{
 		Name: "amqp_0_9",
 		Summary: `
@@ -323,7 +322,7 @@ func (a *amqp09Writer) Close(context.Context) error {
 	return a.disconnect()
 }
 
-// reDial connection to amqp with one or more fallback URLs
+// reDial connection to amqp with one or more fallback URLs.
 func (a *amqp09Writer) reDial(urls []string) (conn *amqp.Connection, err error) {
 	for _, u := range urls {
 		conn, err = a.dial(u)
@@ -338,7 +337,7 @@ func (a *amqp09Writer) reDial(urls []string) (conn *amqp.Connection, err error) 
 	return nil, err
 }
 
-// dial attempts to connect to amqp URL
+// dial attempts to connect to amqp URL.
 func (a *amqp09Writer) dial(amqpURL string) (conn *amqp.Connection, err error) {
 	u, err := url.Parse(amqpURL)
 	if err != nil {
