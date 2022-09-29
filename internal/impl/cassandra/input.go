@@ -18,17 +18,20 @@ func cassandraConfigSpec() *service.ConfigSpec {
 				Field(service.NewStringListField("addresses").
 						Description("A list of Cassandra nodes to connect to.")).
 				Field(service.NewInternalField(FieldAuth())).
+				Field(service.NewBoolField("disable_initial_host_lookup").
+						Description("If enabled the driver will not attempt to get host info from the system.peers table. This can speed up queries but will mean that data_centre, rack and token information will not be available.").
+						Optional()).
 				Field(service.NewStringField("query").
 						Description("A query to execute.")).
 				Field(service.NewStringField("timeout"))
 }
 
 func FieldAuth() docs.FieldSpec {
-	return docs.FieldObject("password_authenticator", "Optional configuration of Cassandra authentication parameters.").WithChildren(
-			docs.FieldBool("enabled", "Whether to use password authentication").Optional(),
-			docs.FieldString("username", "A username").Optional(),
-			docs.FieldString("password", "A password").Optional(),
-	).Advanced()
+		return docs.FieldObject("password_authenticator", "Optional configuration of Cassandra authentication parameters.").WithChildren(
+				docs.FieldBool("enabled", "Whether to use password authentication").Optional(),
+				docs.FieldString("username", "A username").Optional(),
+				docs.FieldString("password", "A password").Optional(),
+		).Advanced()
 }
 
 func init() {
@@ -53,6 +56,14 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 				return nil, err
 		}
 
+		var disable bool
+		if conf.Contains("disable_initial_host_lookup") {
+				disable, err = conf.FieldBool("disable_initial_host_lookup")
+				if err != nil {
+						return nil, err
+				}
+		}
+
 		query, err := conf.FieldString("query")
 		if err != nil {
 				return nil, err
@@ -69,6 +80,7 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 		return service.AutoRetryNacks(&cassandraInput{
 				addresses:	addrs,
 				auth:		pAuth,
+				disableIHL: disable,
 				query:		query,
 				timeout:	timeout,
 		}), nil
@@ -111,6 +123,7 @@ type PasswordAuthenticator struct {
 type cassandraInput struct {
 		addresses	[]string
 		auth		PasswordAuthenticator
+		disableIHL	bool
 		query		string
 		timeout		time.Duration
 
@@ -132,6 +145,7 @@ func (c *cassandraInput) Connect(ctx context.Context) error {
 			}
 		}
 		
+		conn.DisableInitialHostLookup = c.disableIHL
 		conn.Timeout = c.timeout
 
 		session, err := conn.CreateSession()
