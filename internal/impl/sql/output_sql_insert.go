@@ -224,24 +224,26 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 
 	for i := range batch {
 		var args []any
-		resMsg, err := batch.BloblangQuery(i, s.argsMapping)
-		if err != nil {
-			return err
-		}
+		if s.argsMapping != nil {
+			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
+			if err != nil {
+				return err
+			}
 
-		iargs, err := resMsg.AsStructured()
-		if err != nil {
-			return err
-		}
+			iargs, err := resMsg.AsStructured()
+			if err != nil {
+				return err
+			}
 
-		var ok bool
-		if args, ok = iargs.([]any); !ok {
-			return fmt.Errorf("mapping returned non-array result: %T", iargs)
+			var ok bool
+			if args, ok = iargs.([]any); !ok {
+				return fmt.Errorf("mapping returned non-array result: %T", iargs)
+			}
 		}
 
 		if tx == nil {
 			insertBuilder = insertBuilder.Values(args...)
-		} else if _, err = stmt.Exec(args...); err != nil {
+		} else if _, err := stmt.Exec(args...); err != nil {
 			return err
 		}
 	}
