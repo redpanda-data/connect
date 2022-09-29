@@ -399,9 +399,15 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 
 		for key, values := range headers {
 			json := gabs.New()
-			json.Array("r")
+			_, err := json.Array("r")
+			if err != nil {
+				panic(err)
+			}
 			for _, s := range values {
-				json.ArrayAppend(s, "r")
+				err := json.ArrayAppend(s, "r")
+				if err != nil {
+					panic(err)
+				}
 			}
 			part.MetaSet(key, json.Path("r").String())
 		}

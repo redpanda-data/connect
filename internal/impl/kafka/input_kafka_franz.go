@@ -465,15 +465,20 @@ func recordToMessage(record *kgo.Record, multiHeader bool) *service.Message {
 		var headers = map[string][]string{}
 
 		for _, hdr := range record.Headers {
-			var key = string(hdr.Key)
-			headers[key] = append(headers[key], string(hdr.Value))
+			headers[hdr.Key] = append(headers[hdr.Key], string(hdr.Value))
 		}
 
 		for key, values := range headers {
 			json := gabs.New()
-			json.Array("r")
+			_, err := json.Array("r")
+			if err != nil {
+				panic(err)
+			}
 			for _, s := range values {
-				json.ArrayAppend(s, "r")
+				err := json.ArrayAppend(s, "r")
+				if err != nil {
+					panic(err)
+				}
 			}
 			msg.MetaSet(key, json.Path("r").String())
 		}

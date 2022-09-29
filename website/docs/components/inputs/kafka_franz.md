@@ -64,6 +64,7 @@ input:
       root_cas_file: ""
       client_certs: []
     sasl: []
+    multi_header: false
 ```
 
 </TabItem>
@@ -440,5 +441,13 @@ An external ID to provide when assuming a role.
 
 Type: `string`  
 Default: `""`  
+
+### `multi_header`
+
+Put all headers into a JSON array, so that duplicate headers can be read
+
+
+Type: `bool`  
+Default: `false`  
 
 
