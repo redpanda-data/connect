@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 	"go.uber.org/multierr"
@@ -336,6 +334,7 @@ func (inp *sqlOutboxInput) processOutboxItems(ctx context.Context, tx *sql.Tx) (
 		// and tells us if there was an error processing them.
 		var walker func(fn func(messageIndex int, err error) bool)
 
+		var werr *service.BatchError
 		if err == nil {
 			// If there were no errors then we'll create a walker that doesn't report
 			// errors for any message in the batch.
@@ -347,11 +346,11 @@ func (inp *sqlOutboxInput) processOutboxItems(ctx context.Context, tx *sql.Tx) (
 					}
 				}
 			}
-		} else if werr, ok := err.(batch.WalkableError); ok {
+		} else if ok := errors.As(err, &werr); ok {
 			// If we did get a granular batch.WalkableError then lets proxy it.
 
 			walker = func(fn func(int, error) bool) {
-				werr.WalkParts(func(i int, p *message.Part, err error) bool {
+				werr.WalkMessages(func(i int, p *service.Message, err error) bool {
 					return fn(i, err)
 				})
 			}

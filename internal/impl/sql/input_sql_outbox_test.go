@@ -3,14 +3,11 @@ package sql
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/benthosdev/benthos/v4/internal/batch"
-	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/stretchr/testify/require"
 )
@@ -30,30 +27,6 @@ const testOutboxConfig = `
   item_count: 10
   rate_limit: outbox_poll_rate
 `
-
-type testWalkableError struct{ errs []error }
-
-func (e *testWalkableError) WalkParts(fn func(int, *message.Part, error) bool) {
-	for i, err := range e.errs {
-		if cont := fn(i, message.NewPart([]byte("test message")), err); !cont {
-			return
-		}
-	}
-}
-func (e *testWalkableError) IndexedErrors() int {
-	return len(e.errs)
-}
-func (e *testWalkableError) Error() string {
-	fails := 0
-	for _, err := range e.errs {
-		if err != nil {
-			fails++
-		}
-	}
-	return fmt.Sprintf("%d out of %d message have errors", fails, len(e.errs))
-}
-
-var _ batch.WalkableError = &testWalkableError{}
 
 func buildTestInput() (*sqlOutboxInput, error) {
 	spec := sqlOutboxInputConfig()
@@ -219,15 +192,13 @@ WHERE id in \(\$1\)
 	err = inp.Connect(ctx)
 	require.NoError(t, err)
 
-	_, ack, err := inp.ReadBatch(ctx)
+	batch, ack, err := inp.ReadBatch(ctx)
 	require.NoError(t, err)
 
-	berrs := testWalkableError{errs: []error{
-		nil,
-		errors.New("simulated failure"),
-		nil,
-	}}
-	err = ack(ctx, &berrs)
+	berrs := service.NewBatchError(batch, errors.New("mock batch error"))
+	berrs.Failed(1, errors.New("simulated failure"))
+
+	err = ack(ctx, berrs)
 	require.NoError(t, err)
 
 	err = mock.ExpectationsWereMet()
