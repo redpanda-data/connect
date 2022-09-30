@@ -508,7 +508,7 @@ Default: `256`
 
 ### `multi_header`
 
-Decode all headers into a JSON array, so that duplicate headers can be read
+Put all headers into JSON arrays with the suffix _multi, so that duplicate headers can be read
 
 
 Type: `bool`  

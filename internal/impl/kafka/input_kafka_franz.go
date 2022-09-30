@@ -74,7 +74,7 @@ This input adds the following metadata fields to each message:
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
 		Field(saslField()).
-		Field(service.NewBoolField("multi_header").Description("Put all headers into a JSON array, so that duplicate headers can be read").Default(false).Advanced())
+		Field(service.NewBoolField("multi_header").Description("Put all headers into JSON arrays with the suffix _multi, so that duplicate headers can be read").Default(false).Advanced())
 }
 
 func init() {
@@ -480,12 +480,11 @@ func recordToMessage(record *kgo.Record, multiHeader bool) *service.Message {
 					panic(err)
 				}
 			}
-			msg.MetaSet(key, json.Path("r").String())
+			msg.MetaSet(key+"_multi", json.Path("r").String())
 		}
-	} else {
-		for _, hdr := range record.Headers {
-			msg.MetaSet(hdr.Key, string(hdr.Value))
-		}
+	}
+	for _, hdr := range record.Headers {
+		msg.MetaSet(hdr.Key, string(hdr.Value))
 	}
 	return msg
 }

@@ -103,7 +103,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				docs.FieldString("rebalance_timeout", "A period after which rebalancing is abandoned if unresolved.").Advanced(),
 			).Advanced(),
 			docs.FieldInt("fetch_buffer_cap", "The maximum number of unprocessed messages to fetch at a given time.").Advanced(),
-			docs.FieldBool("multi_header", "Decode all headers into a JSON array, so that duplicate headers can be read").Advanced(),
+			docs.FieldBool("multi_header", "Put all headers into JSON arrays with the suffix _multi, so that duplicate headers can be read").Advanced(),
 			func() docs.FieldSpec {
 				b := policy.FieldSpec()
 				b.IsAdvanced = true
@@ -409,12 +409,11 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 					panic(err)
 				}
 			}
-			part.MetaSet(key, json.Path("r").String())
+			part.MetaSet(key+"_multi", json.Path("r").String())
 		}
-	} else {
-		for _, hdr := range data.Headers {
-			part.MetaSet(string(hdr.Key), string(hdr.Value))
-		}
+	}
+	for _, hdr := range data.Headers {
+		part.MetaSet(string(hdr.Key), string(hdr.Value))
 	}
 
 	lag := highestOffset - data.Offset - 1
