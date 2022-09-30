@@ -224,28 +224,6 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 		req.Header.Add("Content-Type", overrideContentType)
 	}
 
-	if err = r.reqSigner(req); err != nil {
-		return
-	}
-
-	for k, v := range r.headers {
-		req.Header.Add(k, v.String(0, refBatch))
-	}
-	if len(refBatch) > 0 {
-		_ = r.metaInsertFilter.Iter(refBatch[0], func(k, v string) error {
-			req.Header.Add(k, v)
-			return nil
-		})
-	}
-
-	if r.host != nil {
-		req.Host = r.host.String(0, refBatch)
-	}
-	if overrideContentType != "" {
-		req.Header.Del("Content-Type")
-		req.Header.Add("Content-Type", overrideContentType)
-	}
-
 	err = r.reqSigner(req)
 	return
 }
