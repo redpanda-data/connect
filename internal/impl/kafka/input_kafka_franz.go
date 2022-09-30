@@ -74,7 +74,7 @@ This input adds the following metadata fields to each message:
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
 		Field(saslField()).
-		Field(service.NewBoolField("multi_header").Description("Put all headers into JSON arrays with the suffix _multi, so that duplicate headers can be read").Default(false).Advanced())
+		Field(service.NewBoolField("multi_header").Description("Decode headers into an extra set of `meta` keys with the suffix `_multi`, containing strings of JSON arrays so that duplicate header values can be accessed. These can be used from bloblang with code like `meta(\"key_multi\").parse_json().contains(\"foo\")`").Default(false).Advanced())
 }
 
 func init() {

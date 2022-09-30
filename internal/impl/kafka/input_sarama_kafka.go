@@ -103,7 +103,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				docs.FieldString("rebalance_timeout", "A period after which rebalancing is abandoned if unresolved.").Advanced(),
 			).Advanced(),
 			docs.FieldInt("fetch_buffer_cap", "The maximum number of unprocessed messages to fetch at a given time.").Advanced(),
-			docs.FieldBool("multi_header", "Put all headers into JSON arrays with the suffix _multi, so that duplicate headers can be read").Advanced(),
+			docs.FieldBool("multi_header", "Decode headers into an extra set of `meta` keys with the suffix `_multi`, containing strings of JSON arrays so that duplicate header values can be accessed. These can be used from bloblang with code like `meta(\"key_multi\").parse_json().contains(\"foo\")`").Advanced(),
 			func() docs.FieldSpec {
 				b := policy.FieldSpec()
 				b.IsAdvanced = true
