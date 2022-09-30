@@ -45,8 +45,8 @@ func TestIntegrationCassandra(t *testing.T) {
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
 		if session == nil {
-			conn := gocql.NewCluster("172.17.0.2")
-			timeout, rerr := time.ParseDuration("2000ms")
+			conn := gocql.NewCluster(fmt.Sprintf("localhost:%v", resource.GetPort("9042/tcp")))
+			timeout, rerr := time.ParseDuration("5000ms")
 			if err != nil {
 				return rerr
 			}
@@ -62,11 +62,9 @@ func TestIntegrationCassandra(t *testing.T) {
 			_ = session.Query(
 				"CREATE KEYSPACE IF NOT EXISTS testspace WITH replication = {'class':'SimpleStrategy','replication_factor':1};",
 			).WithContext(ctx).Exec()
-			time.Sleep(time.Second)
 			rerr = session.Query(
 				"CREATE TABLE IF NOT EXISTS testspace.testtable (id int primary key, content text, created_at timestamp);",
 			).WithContext(ctx).Exec()
-			time.Sleep(time.Second)
 		}
 		return rerr
 	}))
@@ -76,7 +74,7 @@ func TestIntegrationCassandra(t *testing.T) {
 output:
   cassandra:
     addresses:
-      - 172.17.0.2
+      - localhost:$PORT
     query: 'INSERT INTO testspace.table$ID JSON ?'
     args_mapping: 'root = [ this ]'
 `
@@ -92,11 +90,11 @@ output:
 		}
 		suite := integration.StreamTests(
 			integration.StreamTestOutputOnlySendSequential(10, queryGetFn),
-	//		integration.StreamTestOutputOnlySendBatch(10, queryGetFn),
+			integration.StreamTestOutputOnlySendBatch(10, queryGetFn),
 		)
 		suite.Run(
 			t, template,
-	//		integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
+			integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
 			integration.StreamTestOptSleepAfterInput(time.Second*10),
 			integration.StreamTestOptSleepAfterOutput(time.Second*10),
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
@@ -107,8 +105,6 @@ output:
 						vars.ID,
 					),
 				).Exec())
-
-				time.Sleep(time.Second * 5)
 			}),
 		)
 	})
