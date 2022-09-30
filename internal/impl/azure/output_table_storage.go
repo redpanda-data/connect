@@ -293,18 +293,12 @@ func (a *azureTableStorageWriter) addToBatch(batch []aztables.TransactionAction,
 	}
 	var err error
 	switch strings.ToUpper(insertType) {
-	case "ADD":
+	case "INSERT":
 		batch, err = appendFunc(batch, aztables.TransactionTypeAdd, entity)
-	case "INSERT", "INSERT_MERGE", "INSERTMERGE":
+	case "INSERT_MERGE":
 		batch, err = appendFunc(batch, aztables.TransactionTypeInsertMerge, entity)
-	case "INSERT_REPLACE", "INSERTREPLACE":
+	case "INSERT_REPLACE":
 		batch, err = appendFunc(batch, aztables.TransactionTypeInsertReplace, entity)
-	case "UPDATE", "UPDATE_MERGE", "UPDATEMERGE":
-		batch, err = appendFunc(batch, aztables.TransactionTypeUpdateMerge, entity)
-	case "UPDATE_REPLACE", "UPDATEREPLACE":
-		batch, err = appendFunc(batch, aztables.TransactionTypeUpdateReplace, entity)
-	case "DELETE":
-		batch, err = appendFunc(batch, aztables.TransactionTypeDelete, entity)
 	default:
 		return batch, fmt.Errorf("invalid insert type")
 	}
