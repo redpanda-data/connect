@@ -89,3 +89,4 @@ You can read more about batching [in this document][batching].
 [processor.split]: /docs/components/processors/split
 [processor.dedupe]: /docs/components/processors/dedupe
 [processor.for_each]: /docs/components/processors/for_each
+[metrics.about]: /docs/components/metrics/about
