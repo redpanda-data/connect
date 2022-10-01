@@ -63,6 +63,39 @@ input:
 </TabItem>
 </Tabs>
 
+## Examples
+
+<Tabs defaultValue="Minimal Select (Cassandra/Scylla)" values={[
+{ label: 'Minimal Select (Cassandra/Scylla)', value: 'Minimal Select (Cassandra/Scylla)', },
+]}>
+
+<TabItem value="Minimal Select (Cassandra/Scylla)">
+
+
+Let's presume that we have 3 Cassandra nodes, like in this tutorial by Sebastian Sigl from freeCodeCamp:
+
+https://www.freecodecamp.org/news/the-apache-cassandra-beginner-tutorial/
+
+Then if we want to select everything from the table users_by_country, we should use the configuration below.
+If we specify the stdin output, the result will look like:
+
+{"age":23,"country":"UK","first_name":"Bob","last_name":"Sandler","user_email":"bob@email.com"}
+
+This configuration also works for Scylla.
+
+
+```yaml
+input:
+  cassandra:
+    addresses:
+      - 172.17.0.2
+    query:
+      'SELECT * FROM learn_cassandra.users_by_country'
+```
+
+</TabItem>
+</Tabs>
+
 ## Fields
 
 ### `addresses`
