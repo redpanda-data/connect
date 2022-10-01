@@ -17,6 +17,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofrs/uuid"
@@ -412,6 +413,7 @@ type snowflakeWriter struct {
 	publicKeyFingerprint string
 	dsn                  string
 
+	connMut       sync.Mutex
 	uuidGenerator uuidGenI
 	httpClient    httpClientI
 	nowFn         func() time.Time
@@ -670,6 +672,12 @@ func (s *snowflakeWriter) callSnowpipe(ctx context.Context, snowpipe, requestID,
 }
 
 func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+	s.connMut.Lock()
+	defer s.connMut.Unlock()
+	if s.db == nil {
+		return service.ErrNotConnected
+	}
+
 	type File struct {
 		Stage    string
 		Snowpipe string
@@ -722,5 +730,8 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 }
 
 func (s *snowflakeWriter) Close(ctx context.Context) error {
+	s.connMut.Lock()
+	defer s.connMut.Unlock()
+
 	return s.db.Close()
 }

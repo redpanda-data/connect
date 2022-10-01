@@ -15,7 +15,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
@@ -64,8 +63,6 @@ type fileWriter struct {
 	handleMut  sync.Mutex
 	handlePath string
 	handle     codec.Writer
-
-	shutSig *shutdown.Signaller
 }
 
 func newFileWriter(pathStr, codecStr string, mgr bundle.NewManagement) (*fileWriter, error) {
@@ -82,7 +79,6 @@ func newFileWriter(pathStr, codecStr string, mgr bundle.NewManagement) (*fileWri
 		codecConf: codecConf,
 		path:      path,
 		log:       mgr.Logger(),
-		shutSig:   shutdown.NewSignaller(),
 	}, nil
 }
 
