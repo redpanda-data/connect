@@ -152,8 +152,9 @@ func TestParquetDecodeProcessor(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			buf := bytes.NewBuffer(nil)
 
-			pWtr := parquet.NewWriter(buf, parquet.SchemaOf(testPM{}))
-			require.NoError(t, pWtr.Write(test.input))
+			pWtr := parquet.NewGenericWriter[testPM](buf)
+			_, err := pWtr.Write([]testPM{test.input})
+			require.NoError(t, err)
 			require.NoError(t, pWtr.Close())
 
 			expectedDataBytes, err := json.Marshal(test.input)
@@ -178,10 +179,11 @@ func TestParquetDecodeProcessor(t *testing.T) {
 		var expected, actual []any
 
 		buf := bytes.NewBuffer(nil)
-		pWtr := parquet.NewWriter(buf, parquet.SchemaOf(testPM{}))
+		pWtr := parquet.NewGenericWriter[testPM](buf)
 
 		for _, test := range tests {
-			require.NoError(t, pWtr.Write(test.input))
+			_, err := pWtr.Write([]testPM{test.input})
+			require.NoError(t, err)
 			require.NoError(t, pWtr.Close())
 
 			expected = append(expected, test.input)
@@ -224,8 +226,10 @@ func TestDecodeCompressionStringParsing(t *testing.T) {
 
 	buf := bytes.NewBuffer(nil)
 
-	pWtr := parquet.NewWriter(buf, parquet.SchemaOf(decodeCompressionTest{}))
-	require.NoError(t, pWtr.Write(input))
+	pWtr := parquet.NewGenericWriter[decodeCompressionTest](buf)
+
+	_, err := pWtr.Write([]decodeCompressionTest{input})
+	require.NoError(t, err)
 	require.NoError(t, pWtr.Close())
 
 	reader, err := newParquetDecodeProcessor(nil, &extractConfig{
@@ -271,12 +275,14 @@ func TestDecodeCompression(t *testing.T) {
 	bufUncompressed := bytes.NewBuffer(nil)
 	bufCompressed := bytes.NewBuffer(nil)
 
-	pWtr := parquet.NewWriter(bufCompressed, parquet.SchemaOf(decodeCompressionTest{}), parquet.Compression(&parquet.Zstd))
-	require.NoError(t, pWtr.Write(input))
+	pWtr := parquet.NewGenericWriter[decodeCompressionTest](bufCompressed, parquet.Compression(&parquet.Zstd))
+	_, err := pWtr.Write([]decodeCompressionTest{input})
+	require.NoError(t, err)
 	require.NoError(t, pWtr.Close())
 
-	pWtr = parquet.NewWriter(bufUncompressed, parquet.SchemaOf(decodeCompressionTest{}))
-	require.NoError(t, pWtr.Write(input))
+	pWtr = parquet.NewGenericWriter[decodeCompressionTest](bufUncompressed)
+	_, err = pWtr.Write([]decodeCompressionTest{input})
+	require.NoError(t, err)
 	require.NoError(t, pWtr.Close())
 
 	// Check that compression actually happened
