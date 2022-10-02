@@ -125,6 +125,7 @@ output:
       ]
     batching:
       count: 500
+      period: 1s
 ```
 
 </TabItem>
@@ -141,6 +142,7 @@ output:
     args_mapping: 'root = [ this ]'
     batching:
       count: 500
+      period: 1s
 ```
 
 </TabItem>
