@@ -7,14 +7,12 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gocql/gocql"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
-	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -67,6 +65,7 @@ output:
       ]
     batching:
       count: 500
+      period: 1s
 `,
 			},
 			{
@@ -81,6 +80,7 @@ output:
     args_mapping: 'root = [ this ]'
     batching:
       count: 500
+      period: 1s
 `,
 			},
 		},
@@ -144,7 +144,6 @@ type cassandraWriter struct {
 	session  *gocql.Session
 	connLock sync.RWMutex
 
-	args        []*field.Expression
 	argsMapping *mapping.Executor
 }
 
@@ -252,15 +251,11 @@ func (c *cassandraWriter) writeRow(session *gocql.Session, msg message.Batch) er
 	if err != nil {
 		return fmt.Errorf("parsing args: %w", err)
 	}
-
-	if err := session.Query(c.conf.Query, values...).Exec(); err != nil {
-		return err
-	}
-	return nil
+	return session.Query(c.conf.Query, values...).Exec()
 }
 
 func (c *cassandraWriter) writeBatch(session *gocql.Session, msg message.Batch) error {
-	batch := session.NewBatch(gocql.UnloggedBatch)
+	batch := session.NewBatch(gocql.LoggedBatch)
 
 	if err := msg.Iter(func(i int, p *message.Part) error {
 		values, err := c.mapArgs(msg, i)
@@ -273,11 +268,7 @@ func (c *cassandraWriter) writeBatch(session *gocql.Session, msg message.Batch) 
 		return err
 	}
 
-	err := session.ExecuteBatch(batch)
-	if err != nil {
-		return err
-	}
-	return nil
+	return session.ExecuteBatch(batch)
 }
 
 func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]any, error) {
@@ -303,16 +294,6 @@ func (c *cassandraWriter) mapArgs(msg message.Batch, index int) ([]any, error) {
 		}
 		return j, nil
 	}
-
-	// If we've been given the "args" field, extract values from there.
-	if len(c.args) > 0 {
-		values := make([]any, 0, len(c.args))
-		for _, arg := range c.args {
-			values = append(values, stringValue(arg.String(index, msg)))
-		}
-		return values, nil
-	}
-
 	return nil, nil
 }
 
@@ -368,69 +349,6 @@ func (d *decorator) GetRetryType(err error) gocql.RetryType {
 	default:
 		return gocql.Rethrow
 	}
-}
-
-func formatCassandraInt64(x int64) []byte {
-	return []byte{
-		byte(x >> 56), byte(x >> 48), byte(x >> 40), byte(x >> 32),
-		byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x),
-	}
-}
-
-func formatCassandraInt32(x int32) []byte {
-	return []byte{byte(x >> 24), byte(x >> 16), byte(x >> 8), byte(x)}
-}
-
-type stringValue string
-
-// All of our argument values are string types due to interpolation. However,
-// gocql performs type checking and unfortunately does not like timestamp and
-// some other values as strings:
-// https://github.com/gocql/gocql/blob/5913df4d474e0b2492a129d17bbb3c04537a15cd/marshal.go#L1160
-//
-// In order to work around this we manually marshal some types.
-func (s stringValue) MarshalCQL(info gocql.TypeInfo) ([]byte, error) {
-	switch info.Type() {
-	case gocql.TypeTimestamp:
-		t, err := time.Parse(time.RFC3339Nano, string(s))
-		if err == nil {
-			if t.IsZero() {
-				return []byte{}, nil
-			}
-			x := t.UTC().Unix()*1e3 + int64(t.UTC().Nanosecond()/1e6)
-			return formatCassandraInt64(x), nil
-		}
-		x, err := strconv.ParseInt(string(s), 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse time value '%v': expected either an ISO 8601 string or unix epoch in seconds", s)
-		}
-		return formatCassandraInt64(x * 1e3), nil
-	case gocql.TypeTime:
-		x, err := strconv.ParseInt(string(s), 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse time value '%v': expected milliseconds", s)
-		}
-		return formatCassandraInt64(x), nil
-	case gocql.TypeBoolean:
-		if s == "true" {
-			return []byte{1}, nil
-		} else if s == "false" {
-			return []byte{0}, nil
-		}
-	case gocql.TypeFloat:
-		f, err := strconv.ParseFloat(string(s), 32)
-		if err != nil {
-			return nil, err
-		}
-		return formatCassandraInt32(int32(math.Float32bits(float32(f)))), nil
-	case gocql.TypeDouble:
-		f, err := strconv.ParseFloat(string(s), 64)
-		if err != nil {
-			return nil, err
-		}
-		return formatCassandraInt64(int64(math.Float64bits(f))), nil
-	}
-	return gocql.Marshal(info, string(s))
 }
 
 type genericValue struct {

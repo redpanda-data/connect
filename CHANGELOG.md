@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Upgraded `kafka` input and output underlying sarama client library to fix a regression introduced in 4.7.0 where `The requested offset is outside the range of offsets maintained by the server for the given topic/partition` errors would prevent consumption of partitions.
+- The `cassandra` output now inserts logged batches of data rather than the less efficient (and unnecessary) unlogged form.
 
 ## 4.8.0 - 2022-09-30
 
