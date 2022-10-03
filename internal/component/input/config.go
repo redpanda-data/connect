@@ -39,7 +39,6 @@ type Config struct {
 	NSQ               NSQConfig               `json:"nsq" yaml:"nsq"`
 	Plugin            any                     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	ReadUntil         ReadUntilConfig         `json:"read_until" yaml:"read_until"`
-	RedisList         RedisListConfig         `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub       RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`
 	RedisStreams      RedisStreamsConfig      `json:"redis_streams" yaml:"redis_streams"`
 	Resource          string                  `json:"resource" yaml:"resource"`
@@ -86,7 +85,6 @@ func NewConfig() Config {
 		NSQ:               NewNSQConfig(),
 		Plugin:            nil,
 		ReadUntil:         NewReadUntilConfig(),
-		RedisList:         NewRedisListConfig(),
 		RedisPubSub:       NewRedisPubSubConfig(),
 		RedisStreams:      NewRedisStreamsConfig(),
 		Resource:          "",

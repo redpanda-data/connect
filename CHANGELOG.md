@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `parquet` input for reading a batch of Parquet files from disk.
+- Field `max_in_flight` added to the `redis_list` input.
 
 ### Fixed
 
