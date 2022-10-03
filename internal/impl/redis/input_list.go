@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"github.com/go-redis/redis/v7"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -26,6 +28,7 @@ Pops messages from the beginning of a Redis list using the BLPop command.`,
 		Config: docs.FieldComponent().WithChildren(old.ConfigDocs()...).WithChildren(
 			docs.FieldString("key", "The key of a list to read from."),
 			docs.FieldString("timeout", "The length of time to poll for new messages before reattempting.").Advanced(),
+			docs.FieldInt("checkpoint_limit", "Sets a limit on the number of messages that can be in either a prefetched or in-processing state. Default value implies no limit. Notice that that there are caveats to imposing this limit. If you have a batch policy at the output level, then messages won't be acked until the batch is flushed. If you don't allow the input to consume enough messages to trigger the batch, then it will stall.").Advanced(),
 		).ChildDefaultAndTypesFromStruct(input.NewRedisListConfig()),
 		Categories: []string{
 			"Services",
@@ -48,8 +51,11 @@ type redisListReader struct {
 	client redis.UniversalClient
 	cMut   sync.Mutex
 
-	conf    input.RedisListConfig
-	timeout time.Duration
+	conf            input.RedisListConfig
+	timeout         time.Duration
+	checkpointLimit int
+
+	ackSema *semaphore.Weighted
 
 	log log.Modular
 }
@@ -66,6 +72,9 @@ func newRedisListReader(conf input.RedisListConfig, log log.Modular) (*redisList
 			return nil, fmt.Errorf("failed to parse timeout string: %v", err)
 		}
 	}
+
+	r.checkpointLimit = conf.CheckpointLimit
+	r.ackSema = semaphore.NewWeighted(int64(r.checkpointLimit))
 
 	if _, err := clientFromConfig(conf.Config); err != nil {
 		return nil, err
@@ -106,6 +115,14 @@ func (r *redisListReader) ReadBatch(ctx context.Context) (message.Batch, input.A
 		return nil, nil, component.ErrNotConnected
 	}
 
+	ackFn := func(ctx context.Context, err error) error { return nil }
+	if r.checkpointLimit > 0 {
+		if err := r.ackSema.Acquire(ctx, 1); err != nil {
+			return nil, nil, fmt.Errorf("could not acquire ack semaphore: %v", err)
+		}
+		ackFn = func(ctx context.Context, err error) error { r.ackSema.Release(1); return nil }
+	}
+
 	res, err := client.BLPop(r.timeout, r.conf.Key).Result()
 
 	if err != nil && err != redis.Nil {
@@ -118,9 +135,7 @@ func (r *redisListReader) ReadBatch(ctx context.Context) (message.Batch, input.A
 		return nil, nil, component.ErrTimeout
 	}
 
-	return message.QuickBatch([][]byte{[]byte(res[1])}), func(ctx context.Context, err error) error {
-		return nil
-	}, nil
+	return message.QuickBatch([][]byte{[]byte(res[1])}), ackFn, nil
 }
 
 func (r *redisListReader) disconnect() error {
