@@ -18,9 +18,8 @@ func sqlRawInputConfig() *service.ConfigSpec {
 		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
 		Field(driverField).
 		Field(dsnField).
-		Field(service.NewStringField("query").
-			Description("query").
-			Example("query")).
+		Field(rawQueryField().
+			Example("SELECT * FROM footable WHERE user_id = $1;")).
 		Field(service.NewBloblangField("args_mapping").
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of columns specified.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
@@ -169,12 +168,12 @@ func (s *sqlRawInput) Read(ctx context.Context) (*service.Message, service.AckFu
 		return nil, nil, err
 	}
 
-	array_rows, newerror := sqlRowToMap(s.rows)
+	arrayRows, newerror := sqlRowToMap(s.rows)
 	if newerror != nil {
 		return nil, nil, newerror
 	}
 
-	msg.SetStructured(array_rows)
+	msg.SetStructured(arrayRows)
 
 	return msg, func(ctx context.Context, err error) error {
 		// Nacks are handled by AutoRetryNacks because we don't have an explicit
