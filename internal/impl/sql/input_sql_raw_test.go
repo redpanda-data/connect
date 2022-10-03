@@ -14,8 +14,6 @@ func TestSQLRawInputEmptyShutdown(t *testing.T) {
 driver: meow
 dsn: woof
 table: quack
-columns: [ foo, bar, baz ]
-where: foo = ?
 query: "select * from quack"
 args_mapping: 'root = [ this.id ]'
 `
