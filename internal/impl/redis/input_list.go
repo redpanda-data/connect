@@ -24,7 +24,7 @@ func redisListInputConfig() *service.ConfigSpec {
 	return spec.
 		Field(service.NewStringField("key").
 			Description("The key of a list to read from.")).
-		Field(service.NewInputMaxInFlightField()).
+		Field(service.NewInputMaxInFlightField().Version("4.9.0")).
 		Field(service.NewDurationField("timeout").
 			Description("The length of time to poll for new messages before reattempting.").
 			Default("5s").

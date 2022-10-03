@@ -256,6 +256,7 @@ Optionally sets a limit on the number of messages that can be flowing through a 
 
 Type: `int`  
 Default: `0`  
+Requires version 4.9.0 or newer  
 
 ### `timeout`
 

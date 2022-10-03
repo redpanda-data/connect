@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.9.0 - 2022-10-03
+
 ### Added
 
 - New `parquet` input for reading a batch of Parquet files from disk.
