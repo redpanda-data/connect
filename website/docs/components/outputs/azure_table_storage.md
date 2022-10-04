@@ -65,7 +65,7 @@ output:
     partition_key: ""
     row_key: ""
     properties: {}
-    transaction_type: ""
+    transaction_type: INSERT
     max_in_flight: 64
     timeout: 5s
     batching:
@@ -213,7 +213,7 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 
 
 Type: `string`  
-Default: `""`  
+Default: `"INSERT"`  
 
 ```yml
 # Examples

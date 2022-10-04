@@ -176,7 +176,7 @@ func newAzureTableStorageWriter(conf output.AzureTableStorageConfig, mgr bundle.
 	if a.rowKey, err = mgr.BloblEnvironment().NewField(conf.RowKey); err != nil {
 		return nil, fmt.Errorf("failed to parse row key expression: %v", err)
 	}
-	if conf.TransactionType == "" {
+	if conf.InsertType != "" {
 		if a.transactionType, err = mgr.BloblEnvironment().NewField(conf.InsertType); err != nil {
 			return nil, fmt.Errorf("failed to parse transaction type expression: %v", err)
 		}
