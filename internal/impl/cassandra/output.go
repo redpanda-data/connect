@@ -149,6 +149,7 @@ type cassandraWriter struct {
 	connLock sync.RWMutex
 
 	argsMapping *mapping.Executor
+	batchType   gocql.BatchType
 }
 
 func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (*cassandraWriter, error) {
@@ -172,6 +173,10 @@ func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (
 	}
 	if err = c.parseArgs(mgr); err != nil {
 		return nil, fmt.Errorf("parsing args: %w", err)
+	}
+	c.batchType = gocql.UnloggedBatch
+	if c.conf.LoggedBatch {
+		c.batchType = gocql.LoggedBatch
 	}
 
 	return &c, nil
@@ -259,11 +264,7 @@ func (c *cassandraWriter) writeRow(session *gocql.Session, msg message.Batch) er
 }
 
 func (c *cassandraWriter) writeBatch(session *gocql.Session, msg message.Batch) error {
-	batchType := gocql.UnloggedBatch
-	if c.conf.LoggedBatch {
-		batchType = gocql.LoggedBatch
-	}
-	batch := session.NewBatch(batchType)
+	batch := session.NewBatch(c.batchType)
 
 	if err := msg.Iter(func(i int, p *message.Part) error {
 		values, err := c.mapArgs(msg, i)
