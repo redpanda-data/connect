@@ -16,11 +16,10 @@ func TestMockWalkableError(t *testing.T) {
 	}
 
 	batchError := errors.New("simulated error")
-	err := MockWalkableError(batch, batchError,
-		errors.New("a error"),
-		errors.New("b error"),
-		errors.New("c error"),
-	)
+	err := NewBatchError(batch, batchError).
+		Failed(0, errors.New("a error")).
+		Failed(1, errors.New("b error")).
+		Failed(2, errors.New("c error"))
 
 	require.Equal(t, err.IndexedErrors(), len(batch), "indexed errors did not match size of batch")
 	require.Equal(t, err.Error(), batchError.Error(), "headline error is not propagated")
@@ -40,14 +39,13 @@ func TestMockWalkableError_ExcessErrors(t *testing.T) {
 	}
 
 	batchError := errors.New("simulated error")
-	err := MockWalkableError(batch, batchError,
-		errors.New("a error"),
-		errors.New("b error"),
-		errors.New("c error"),
-		errors.New("d error"),
-	)
+	err := NewBatchError(batch, batchError).
+		Failed(0, errors.New("a error")).
+		Failed(1, errors.New("b error")).
+		Failed(2, errors.New("c error")).
+		Failed(3, errors.New("d error"))
 
-	require.Equal(t, err.IndexedErrors(), len(batch), "indexed errors did not match size of batch")
+	require.Equal(t, len(batch), err.IndexedErrors(), "indexed errors did not match size of batch")
 }
 
 func TestMockWalkableError_OmitSuccessfulMessages(t *testing.T) {
@@ -58,11 +56,9 @@ func TestMockWalkableError_OmitSuccessfulMessages(t *testing.T) {
 	}
 
 	batchError := errors.New("simulated error")
-	err := MockWalkableError(batch, batchError,
-		errors.New("a error"),
-		nil,
-		errors.New("c error"),
-	)
+	err := NewBatchError(batch, batchError).
+		Failed(0, errors.New("a error")).
+		Failed(2, errors.New("c error"))
 
 	require.Equal(t, err.IndexedErrors(), 2, "indexed errors did not match size of batch")
 }

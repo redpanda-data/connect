@@ -223,7 +223,7 @@ func TestNotBatchedBreakOutMessagesErrors(t *testing.T) {
 		err := res
 		require.Error(t, err)
 
-		walkable, ok := err.(batch.WalkableError)
+		walkable, ok := err.(*batch.Error)
 		require.True(t, ok)
 
 		errs := map[int]string{}
@@ -282,7 +282,7 @@ func TestNotBatchedBreakOutMessagesErrorsAsync(t *testing.T) {
 		err := res
 		require.Error(t, err)
 
-		walkable, ok := err.(batch.WalkableError)
+		walkable, ok := err.(*batch.Error)
 		require.True(t, ok)
 
 		errs := map[int]string{}

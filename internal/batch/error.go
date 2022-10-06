@@ -29,12 +29,15 @@ func NewError(msg message.Batch, err error) *Error {
 }
 
 // Failed stores an error state for a particular message of a batch. Returns a
-// pointer to the underlying error, allowing with method to be chained.
+// pointer to the underlying error, allowing the method to be chained.
 //
 // If Failed is not called then all messages are assumed to have failed. If it
 // is called at least once then all message indexes that aren't explicitly
 // failed are assumed to have been processed successfully.
 func (e *Error) Failed(i int, err error) *Error {
+	if len(e.source) <= i {
+		return e
+	}
 	if e.partErrors == nil {
 		e.partErrors = make(map[int]error)
 	}
@@ -46,14 +49,6 @@ func (e *Error) Failed(i int, err error) *Error {
 // for the batch.
 func (e *Error) IndexedErrors() int {
 	return len(e.partErrors)
-}
-
-// WalkableError is an interface implemented by batch errors that allows you to
-// walk the messages of the batch and dig into the individual errors.
-type WalkableError interface {
-	WalkParts(fn func(int, *message.Part, error) bool)
-	IndexedErrors() int
-	error
 }
 
 // WalkParts applies a closure to each message that was part of the request that

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	ibatch "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -171,13 +170,8 @@ func (a *airGapBatchReader) ReadBatch(ctx context.Context) (message.Batch, input
 		mBatch[i] = p.part
 	}
 	return mBatch, func(c context.Context, r error) error {
-		werr, isWalkableErr := r.(ibatch.WalkableError)
-		wrappedResult := r
-		if isWalkableErr {
-			wrappedResult = &WalkableError{wrapped: werr}
-		}
-
-		return ackFn(c, wrappedResult)
+		r = toPublicBatchError(r)
+		return ackFn(c, r)
 	}, nil
 }
 
@@ -220,7 +214,10 @@ func (r *ResourceInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, e
 		b = append(b, newMessageFromPart(part))
 		return nil
 	})
-	return b, tran.Ack, nil
+	return b, func(c context.Context, r error) error {
+		r = fromPublicBatchError(r)
+		return tran.Ack(c, r)
+	}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -257,7 +254,10 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 		b = append(b, newMessageFromPart(part))
 		return nil
 	})
-	return b, tran.Ack, nil
+	return b, func(c context.Context, r error) error {
+		r = fromPublicBatchError(r)
+		return tran.Ack(c, r)
+	}, nil
 }
 
 // Close the input.

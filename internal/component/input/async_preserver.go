@@ -87,7 +87,7 @@ func (p *AsyncPreserver) wrapBatchAckFn(m asyncPreserverResend) (message.Batch, 
 	return trackedMsg, func(ctx context.Context, res error) error {
 		if res != nil {
 			resendMsg := m.msg
-			if walkable, ok := res.(batch.WalkableError); ok && walkable.IndexedErrors() < m.msg.Len() {
+			if walkable, ok := res.(*batch.Error); ok && walkable.IndexedErrors() < m.msg.Len() {
 				resendMsg = message.QuickBatch(nil)
 				walkable.WalkParts(func(i int, p *message.Part, e error) bool {
 					if e == nil {
