@@ -115,6 +115,10 @@ output:
 			).HasOptions(
 				"ANY", "ONE", "TWO", "THREE", "QUORUM", "ALL", "LOCAL_QUORUM", "EACH_QUORUM", "LOCAL_ONE",
 			).Advanced(),
+			docs.FieldBool(
+				"logged_batch",
+				"If enabled the driver will perform a logged batch.",
+			).Advanced(),
 			docs.FieldInt("max_retries", "The maximum number of retries before giving up on a request.").Advanced(),
 			docs.FieldObject("backoff", "Control time intervals between retry attempts.").WithChildren(
 				docs.FieldString("initial_interval", "The initial period to wait between retry attempts."),
@@ -255,7 +259,11 @@ func (c *cassandraWriter) writeRow(session *gocql.Session, msg message.Batch) er
 }
 
 func (c *cassandraWriter) writeBatch(session *gocql.Session, msg message.Batch) error {
-	batch := session.NewBatch(gocql.LoggedBatch)
+	batchType := gocql.UnloggedBatch
+	if c.conf.LoggedBatch {
+		batchType = gocql.LoggedBatch
+	}
+	batch := session.NewBatch(batchType)
 
 	if err := msg.Iter(func(i int, p *message.Part) error {
 		values, err := c.mapArgs(msg, i)
