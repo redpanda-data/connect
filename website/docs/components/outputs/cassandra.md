@@ -69,6 +69,7 @@ output:
     query: ""
     args_mapping: ""
     consistency: QUORUM
+    logged_batch: true
     max_retries: 3
     backoff:
       initial_interval: 1s
@@ -367,6 +368,14 @@ The consistency level to use.
 Type: `string`  
 Default: `"QUORUM"`  
 Options: `ANY`, `ONE`, `TWO`, `THREE`, `QUORUM`, `ALL`, `LOCAL_QUORUM`, `EACH_QUORUM`, `LOCAL_ONE`.
+
+### `logged_batch`
+
+If enabled the driver will perform a logged batch.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `max_retries`
 
