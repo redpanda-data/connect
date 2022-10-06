@@ -13,6 +13,7 @@ linters-settings:
   errcheck:
     exclude-functions:
       - (*github.com/benthosdev/benthos/v4/internal/batch.Error).Failed
+      - (*github.com/benthosdev/benthos/v4/public/service.BatchError).Failed
   gocritic:
     enabled-tags:
       - diagnostic
