@@ -156,7 +156,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 
 	rows, err := s.db.QueryContext(ctx, s.queryStatic, args...)
 	if err != nil {
-		s.logger.Debugf("Failed to run query: %v", err)
+		s.logger.Warnf("Failed to run query: %v", err)
 	} else {
 		// this is only re-assigned so linting will be happy : \. Will throw error if s.rows
 		// is immediately assigned straight out of QueryContext
