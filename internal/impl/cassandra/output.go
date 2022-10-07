@@ -117,7 +117,7 @@ output:
 			).Advanced(),
 			docs.FieldBool(
 				"logged_batch",
-				"If enabled the driver will perform a logged batch.",
+				"If enabled the driver will perform a logged batch. Disabling this prompts unlogged batches to be used instead, which are less efficient but necessary for alternative storages that do not support logged batches.",
 			).Advanced(),
 			docs.FieldInt("max_retries", "The maximum number of retries before giving up on a request.").Advanced(),
 			docs.FieldObject("backoff", "Control time intervals between retry attempts.").WithChildren(
