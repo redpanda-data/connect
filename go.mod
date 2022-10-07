@@ -6,8 +6,8 @@ require (
 	cloud.google.com/go/storage v1.27.0
 	cuelang.org/go v0.4.2
 	github.com/Azure/azure-sdk-for-go v61.1.0+incompatible
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.22.0
-	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v0.6.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.1.4
+	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v1.0.1
 	github.com/Azure/azure-storage-queue-go v0.0.0-20191125232315-636801874cdd
 	github.com/Azure/go-amqp v0.17.0
 	github.com/Azure/go-autorest/autorest v0.11.23
@@ -127,7 +127,7 @@ require (
 	github.com/99designs/keyring v1.2.0 // indirect
 	github.com/AthenZ/athenz v1.10.43 // indirect
 	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/internal v0.9.2 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.0.0 // indirect
 	github.com/Azure/azure-storage-blob-go v0.14.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect

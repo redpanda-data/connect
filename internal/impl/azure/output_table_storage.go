@@ -254,7 +254,7 @@ func (a *azureTableStorageWriter) execBatch(ctx context.Context, writeReqs map[s
 						if !strings.Contains(tErr.Error(), "TableNotFound") {
 							return err
 						}
-						if _, err = table.Create(ctx, nil); err != nil {
+						if _, err = table.CreateTable(ctx, nil); err != nil {
 							return err
 						}
 						if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
