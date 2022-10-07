@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
+
 	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
-	"sync"
 )
 
 func sqlRawInputConfig() *service.ConfigSpec {
@@ -54,7 +55,7 @@ func init() {
 	err := service.RegisterInput(
 		"sql_raw", sqlRawInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			i, err := newSqlRawInputFromConfig(conf, mgr.Logger())
+			i, err := newSQLRawInputFromConfig(conf, mgr.Logger())
 			if err != nil {
 				return nil, err
 			}
@@ -85,7 +86,7 @@ type sqlRawInput struct {
 	shutSig *shutdown.Signaller
 }
 
-func newSqlRawInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawInput, error) {
+func newSQLRawInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawInput, error) {
 	s := &sqlRawInput{
 		logger:  logger,
 		shutSig: shutdown.NewSignaller(),
@@ -153,9 +154,13 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 		}
 	}
 
-	s.rows, err = s.db.QueryContext(ctx, s.queryStatic, args...)
+	rows, err := s.db.QueryContext(ctx, s.queryStatic, args...)
 	if err != nil {
 		s.logger.Debugf("Failed to run query: %v", err)
+	} else {
+		// this is only re-assigned so linting will be happy : \. Will throw error if s.rows
+		// is immediately assigned straight out of QueryContext
+		s.rows = rows
 	}
 
 	return nil

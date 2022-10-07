@@ -24,7 +24,7 @@ args_mapping: 'root = [ this.id ]'
 	selectConfig, err := spec.ParseYAML(conf, env)
 	require.NoError(t, err)
 
-	selectInput, err := newSqlRawInputFromConfig(selectConfig, nil)
+	selectInput, err := newSQLRawInputFromConfig(selectConfig, nil)
 	require.NoError(t, err)
 	require.NoError(t, selectInput.Close(context.Background()))
 }
