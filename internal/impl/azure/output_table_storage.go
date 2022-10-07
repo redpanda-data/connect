@@ -77,22 +77,23 @@ properties:
 				"storage_connection_string",
 				"A storage account connection string. This field is required if `storage_account` and `storage_access_key` are not set.",
 			),
-			docs.FieldString("table_name", "The table to store messages into.",
-				`${!meta("kafka_topic")}`,
-			).IsInterpolated(),
-			docs.FieldString("partition_key", "The partition key.",
-				`${!json("date")}`,
-			).IsInterpolated(),
-			docs.FieldString("row_key", "The row key.",
-				`${!json("device")}-${!uuid_v4()}`,
-			).IsInterpolated(),
-			docs.FieldString("properties", "A map of properties to store into the table.").IsInterpolated().Map(),
-			docs.FieldString("insert_type", "Type of insert operation").HasOptions(
-				"INSERT", "INSERT_MERGE", "INSERT_REPLACE",
-			).IsInterpolated().Advanced(),
+			docs.FieldInterpolatedString("table_name", "The table to store messages into.",
+				`${! meta("kafka_topic") }`, `${! json("table") }`),
+			docs.FieldInterpolatedString("partition_key", "The partition key.",
+				`${! json("date") }`),
+			docs.FieldInterpolatedString("row_key", "The row key.",
+				`${! json("device")}-${!uuid_v4() }`),
+			docs.FieldInterpolatedString("properties", "A map of properties to store into the table.").Map(),
+			docs.FieldInterpolatedString("insert_type",
+				"Type of insert operation. Valid options are `INSERT`, `INSERT_MERGE` and `INSERT_REPLACE`",
+				`${! json("operation") }`, `${! meta("operation") }`, `INSERT`).Advanced().Deprecated(),
+			docs.FieldInterpolatedString("transaction_type",
+				"Type of transaction operation. Valid options are `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`, `UPDATE_MERGE`, `UPDATE_REPLACE` and `DELETE`",
+				`${! json("operation") }`, `${! meta("operation") }`, `INSERT`).Advanced(),
 			docs.FieldInt("max_in_flight",
 				"The maximum number of parallel message batches to have in flight at any given time."),
-			docs.FieldString("timeout", "The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
+			docs.FieldString("timeout",
+				"The maximum period to wait on an upload before abandoning it and reattempting.").Advanced(),
 			policy.FieldSpec(),
 		).ChildDefaultAndTypesFromStruct(output.NewAzureTableStorageConfig()),
 		Categories: []string{
@@ -118,14 +119,15 @@ func newAzureTableStorageOutput(conf output.Config, mgr bundle.NewManagement) (o
 }
 
 type azureTableStorageWriter struct {
-	conf         output.AzureTableStorageConfig
-	tableName    *field.Expression
-	partitionKey *field.Expression
-	rowKey       *field.Expression
-	properties   map[string]*field.Expression
-	client       *aztables.ServiceClient
-	timeout      time.Duration
-	log          log.Modular
+	conf            output.AzureTableStorageConfig
+	transactionType *field.Expression
+	tableName       *field.Expression
+	partitionKey    *field.Expression
+	rowKey          *field.Expression
+	properties      map[string]*field.Expression
+	client          *aztables.ServiceClient
+	timeout         time.Duration
+	log             log.Modular
 }
 
 func newAzureTableStorageWriter(conf output.AzureTableStorageConfig, mgr bundle.NewManagement) (*azureTableStorageWriter, error) {
@@ -158,13 +160,19 @@ func newAzureTableStorageWriter(conf output.AzureTableStorageConfig, mgr bundle.
 	if a.rowKey, err = mgr.BloblEnvironment().NewField(conf.RowKey); err != nil {
 		return nil, fmt.Errorf("failed to parse row key expression: %v", err)
 	}
+	if conf.InsertType != "" {
+		if a.transactionType, err = mgr.BloblEnvironment().NewField(conf.InsertType); err != nil {
+			return nil, fmt.Errorf("failed to parse transaction type expression: %v", err)
+		}
+	} else if a.transactionType, err = mgr.BloblEnvironment().NewField(conf.TransactionType); err != nil {
+		return nil, fmt.Errorf("failed to parse transaction type expression: %v", err)
+	}
 	a.properties = make(map[string]*field.Expression)
 	for property, value := range conf.Properties {
 		if a.properties[property], err = mgr.BloblEnvironment().NewField(value); err != nil {
 			return nil, fmt.Errorf("failed to parse property expression: %v", err)
 		}
 	}
-
 	return a, nil
 }
 
@@ -173,18 +181,22 @@ func (a *azureTableStorageWriter) Connect(ctx context.Context) error {
 }
 
 func (a *azureTableStorageWriter) WriteBatch(wctx context.Context, msg message.Batch) error {
-	writeReqs := make(map[string]map[string][]*aztables.EDMEntity)
+	writeReqs := make(map[string]map[string]map[string][]*aztables.EDMEntity)
 	if err := output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		entity := &aztables.EDMEntity{}
+		transactionType := a.transactionType.String(i, msg)
 		tableName := a.tableName.String(i, msg)
 		partitionKey := a.partitionKey.String(i, msg)
 		entity.PartitionKey = a.partitionKey.String(i, msg)
 		entity.RowKey = a.rowKey.String(i, msg)
 		entity.Properties = a.getProperties(i, p, msg)
 		if writeReqs[tableName] == nil {
-			writeReqs[tableName] = make(map[string][]*aztables.EDMEntity)
+			writeReqs[tableName] = make(map[string]map[string][]*aztables.EDMEntity)
 		}
-		writeReqs[tableName][partitionKey] = append(writeReqs[tableName][partitionKey], entity)
+		if writeReqs[tableName][partitionKey] == nil {
+			writeReqs[tableName][partitionKey] = make(map[string][]*aztables.EDMEntity)
+		}
+		writeReqs[tableName][partitionKey][transactionType] = append(writeReqs[tableName][partitionKey][transactionType], entity)
 		return nil
 	}); err != nil {
 		return err
@@ -217,35 +229,37 @@ func (a *azureTableStorageWriter) getProperties(i int, p *message.Part, msg mess
 	return properties
 }
 
-func (a *azureTableStorageWriter) execBatch(ctx context.Context, writeReqs map[string]map[string][]*aztables.EDMEntity) error {
+func (a *azureTableStorageWriter) execBatch(ctx context.Context, writeReqs map[string]map[string]map[string][]*aztables.EDMEntity) error {
 	for tn, pks := range writeReqs {
 		table := a.client.NewClient(tn)
-		var err error
-		for _, entities := range pks {
-			var batch []aztables.TransactionAction
-			ne := len(entities)
-			for i, entity := range entities {
-				batch, err = a.addToBatch(batch, a.conf.InsertType, entity)
-				if err != nil {
-					return err
-				}
-				if reachedBatchLimit(i) || isLastEntity(i, ne) {
-					if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
-						tErr, ok := err.(*azcore.ResponseError)
-						if !ok {
-							return err
-						}
-						if !strings.Contains(tErr.Error(), "TableNotFound") {
-							return err
-						}
-						if _, err = table.CreateTable(ctx, nil); err != nil {
-							return err
-						}
-						if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
-							return err
-						}
+		for _, tts := range pks {
+			var err error
+			for tt, entities := range tts {
+				var batch []aztables.TransactionAction
+				ne := len(entities)
+				for i, entity := range entities {
+					batch, err = a.addToBatch(batch, tt, entity)
+					if err != nil {
+						return err
 					}
-					batch = nil
+					if reachedBatchLimit(i) || isLastEntity(i, ne) {
+						if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
+							tErr, ok := err.(*azcore.ResponseError)
+							if !ok {
+								return err
+							}
+							if !strings.Contains(tErr.Error(), "TableNotFound") {
+								return err
+							}
+							if _, err = table.Table(ctx, nil); err != nil {
+								return err
+							}
+							if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
+								return err
+							}
+						}
+						batch = nil
+					}
 				}
 			}
 		}
@@ -262,9 +276,8 @@ func reachedBatchLimit(i int) bool {
 	return (i+1)%batchSizeLimit == 0
 }
 
-func (a *azureTableStorageWriter) addToBatch(batch []aztables.TransactionAction, insertType string, entity *aztables.EDMEntity) ([]aztables.TransactionAction, error) {
+func (a *azureTableStorageWriter) addToBatch(batch []aztables.TransactionAction, transactionType string, entity *aztables.EDMEntity) ([]aztables.TransactionAction, error) {
 	appendFunc := func(b []aztables.TransactionAction, t aztables.TransactionType, e *aztables.EDMEntity) ([]aztables.TransactionAction, error) {
-		// marshal entity
 		m, err := json.Marshal(e)
 		if err != nil {
 			return nil, fmt.Errorf("error marshalling entity: %v", err)
@@ -275,18 +288,22 @@ func (a *azureTableStorageWriter) addToBatch(batch []aztables.TransactionAction,
 		})
 		return b, nil
 	}
-	var err error
-	switch strings.ToUpper(insertType) {
+	switch transactionType {
 	case "INSERT":
-		batch, err = appendFunc(batch, aztables.TransactionTypeAdd, entity)
+		return appendFunc(batch, aztables.TransactionTypeAdd, entity)
 	case "INSERT_MERGE":
-		batch, err = appendFunc(batch, aztables.TransactionTypeInsertMerge, entity)
+		return appendFunc(batch, aztables.TransactionTypeInsertMerge, entity)
 	case "INSERT_REPLACE":
-		batch, err = appendFunc(batch, aztables.TransactionTypeInsertReplace, entity)
+		return appendFunc(batch, aztables.TransactionTypeInsertReplace, entity)
+	case "UPDATE_MERGE":
+		return appendFunc(batch, aztables.TransactionTypeUpdateMerge, entity)
+	case "UPDATE_REPLACE":
+		return appendFunc(batch, aztables.TransactionTypeUpdateReplace, entity)
+	case "DELETE":
+		return appendFunc(batch, aztables.TransactionTypeDelete, entity)
 	default:
-		return batch, fmt.Errorf("invalid insert type")
+		return nil, errors.New("invalid transaction type")
 	}
-	return batch, err
 }
 
 func (a *azureTableStorageWriter) Close(context.Context) error {
