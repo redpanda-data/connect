@@ -107,11 +107,25 @@ func newAzureTableStorage(conf input.AzureTableStorageConfig, log log.Modular, s
 // Connect attempts to establish a connection to the target Azure Storage Table.
 func (a *azureTableStorage) Connect(ctx context.Context) error {
 	options := &aztables.ListEntitiesOptions{
-		Filter: a.conf.Filter,
-		Select: a.conf.Select,
-		Top:    a.conf.PageSize,
+		Filter: stringOrNil(a.conf.Filter),
+		Select: stringOrNil(a.conf.Select),
+		Top:    int32OrNil(a.conf.PageSize),
 	}
 	a.pager = a.client.NewListEntitiesPager(options)
+	return nil
+}
+
+func stringOrNil(val string) *string {
+	if len(val) > 0 {
+		return &val
+	}
+	return nil
+}
+
+func int32OrNil(val int32) *int32 {
+	if val > 0 {
+		return &val
+	}
 	return nil
 }
 
@@ -121,7 +135,7 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (msg message.Batch, a
 		resp, nerr := a.pager.NextPage(ctx)
 		if nerr != nil {
 			a.log.Warnf("error fetching next page", nerr)
-			err = component.ErrTypeClosed
+			return nil, nil, component.ErrTypeClosed
 		}
 		for _, entity := range resp.Entities {
 			p := message.NewPart(entity)
@@ -133,12 +147,11 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (msg message.Batch, a
 			part.MetaSet("row_num", strconv.Itoa(a.row))
 			return nil
 		})
-	} else {
-		err = component.ErrTypeClosed
+		return msg, func(rctx context.Context, res error) error {
+			return nil
+		}, err
 	}
-	return msg, func(rctx context.Context, res error) error {
-		return nil
-	}, err
+	return nil, nil, component.ErrTypeClosed
 }
 
 // Close is called when the pipeline ends

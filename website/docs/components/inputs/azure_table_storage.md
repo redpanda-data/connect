@@ -56,7 +56,7 @@ input:
     table_name: ""
     filter: ""
     select: ""
-    page_size: ""
+    page_size: 1000
 ```
 
 </TabItem>
@@ -145,7 +145,7 @@ Maximum number of records to return on each page.
 
 
 Type: `int`  
-Default: `""`  
+Default: `1000`  
 
 ```yml
 # Examples
