@@ -3,10 +3,11 @@ package azure
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
@@ -129,32 +130,15 @@ type azureTableStorageWriter struct {
 
 func newAzureTableStorageWriter(conf output.AzureTableStorageConfig, mgr bundle.NewManagement) (*azureTableStorageWriter, error) {
 	var timeout time.Duration
-	var err error
 	if tout := conf.Timeout; len(tout) > 0 {
+		var err error
 		if timeout, err = time.ParseDuration(tout); err != nil {
 			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
 		}
 	}
-	if conf.StorageAccount == "" && conf.StorageConnectionString == "" {
-		return nil, errors.New("invalid azure storage account credentials")
-	}
-	var client *aztables.ServiceClient
-	if conf.StorageConnectionString != "" {
-		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
-			// Only here to support legacy configs that pass UseDevelopmentStorage=true;
-			// `UseDevelopmentStorage=true` is not available in the current SDK, neither `storage.NewEmulatorClient()` (which was used in the previous SDK).
-			// Instead, we use the http connection string to connect to the emulator endpoints with the default table storage port.
-			// https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azurite?tabs=visual-studio#http-connection-strings
-			client, err = aztables.NewServiceClientFromConnectionString("DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;", nil)
-		} else {
-			client, err = aztables.NewServiceClientFromConnectionString(conf.StorageConnectionString, nil)
-		}
-	} else {
-		cred, credErr := aztables.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
-		if credErr != nil {
-			return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
-		}
-		client, err = aztables.NewServiceClientWithSharedKey(fmt.Sprintf("https://%s.table.core.windows.net/", conf.StorageAccount), cred, nil)
+	client, err := shared.GetServiceClient(conf.StorageAccount, conf.StorageAccessKey, conf.StorageConnectionString)
+	if err != nil {
+		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
