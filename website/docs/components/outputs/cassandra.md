@@ -371,7 +371,7 @@ Options: `ANY`, `ONE`, `TWO`, `THREE`, `QUORUM`, `ALL`, `LOCAL_QUORUM`, `EACH_QU
 
 ### `logged_batch`
 
-If enabled the driver will perform a logged batch.
+If enabled the driver will perform a logged batch. Disabling this prompts unlogged batches to be used instead, which are less efficient but necessary for alternative storages that do not support logged batches.
 
 
 Type: `bool`  
