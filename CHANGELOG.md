@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `nats_jetstream` input now adds a range of useful metadata information to messages.
+- Field `transaction_type` added to the `azure_table_storage` output, which deprecates the previous `insert_type` field and supports interpolation functions.
+
 ## 4.9.1 - 2022-10-06
 
 ### Added

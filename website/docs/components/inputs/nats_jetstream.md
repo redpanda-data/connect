@@ -82,6 +82,12 @@ This input adds the following metadata fields to each message:
 
 ```text
 - nats_subject
+- nats_sequence_stream
+- nats_sequence_consumer
+- nats_num_delivered
+- nats_num_pending
+- nats_domain
+- nats_timestamp_unix_nano
 ```
 
 You can access these metadata fields using
