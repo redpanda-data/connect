@@ -31,11 +31,20 @@ func sqlRawInputConfig() *service.ConfigSpec {
 
 	spec = spec.
 		Version("3.59.0").
-		Example("Consume a Table (PostgreSQL)",
+		Example("Consumes an SQL table using a query as an input.",
 			`
-todo`,
+Here we preform an aggregate over a list of names in a table that are less than 3600 seconds old.`,
 			`
-todo
+input:
+  sql_raw:
+    driver: postgres
+    dsn: postgres://foouser:foopass@localhost:5432/testdb?sslmode=disable
+    query: "SELECT name, count(*) FROM person WHERE last_updated < $1 GROUP BY name;"
+    args_mapping: |
+      root = [
+        now().ts_unix() - 3600
+      ]
+]
 `,
 		)
 	return spec
