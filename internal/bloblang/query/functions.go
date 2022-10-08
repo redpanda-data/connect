@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/Jeffail/gabs/v2"
 	"github.com/gofrs/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
@@ -245,6 +247,23 @@ var _ = registerSimpleFunction(
 			return nil, nil
 		}
 		return span.TextMap()
+	},
+)
+
+//------------------------------------------------------------------------------
+
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
+		FunctionCategoryMessage, "trace_id",
+		"Provides the message trace id. The returned value will be zeroed if the message does not have a span.",
+		NewExampleSpec("",
+			`meta trace_id = trace_id()`,
+		),
+	).Experimental(),
+	func(fCtx FunctionContext) (any, error) {
+		msgCtx := fCtx.MsgBatch.Get(fCtx.Index).GetContext()
+		span := trace.SpanFromContext(msgCtx)
+		return span.SpanContext().TraceID().String(), nil
 	},
 )
 
