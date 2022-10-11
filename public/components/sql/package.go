@@ -13,4 +13,5 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/sijms/go-ora/v2"
+	_ "github.com/snowflakedb/gosnowflake"
 )
