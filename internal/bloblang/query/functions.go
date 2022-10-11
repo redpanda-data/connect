@@ -250,6 +250,22 @@ var _ = registerSimpleFunction(
 
 //------------------------------------------------------------------------------
 
+var _ = registerSimpleFunction(
+	NewFunctionSpec(
+		FunctionCategoryMessage, "tracing_id",
+		"Provides the message trace id. The returned value will be zeroed if the message does not contain a span.",
+		NewExampleSpec("",
+			`meta trace_id = tracing_id()`,
+		),
+	).Experimental(),
+	func(fCtx FunctionContext) (any, error) {
+		traceID := tracing.GetTraceID(fCtx.MsgBatch.Get(fCtx.Index))
+		return traceID, nil
+	},
+)
+
+//------------------------------------------------------------------------------
+
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryGeneral, "count",
