@@ -351,18 +351,18 @@ The key parameter is optional and if omitted the entire metadata contents are re
 root.all_metadata = root_meta()
 ```
 
-### `trace_id`
+### `tracing_id`
 
 :::caution EXPERIMENTAL
 This function is experimental and therefore breaking changes could be made to it outside of major version releases.
 :::
-Provides the message trace id. The returned value will be zeroed if the message does not have a span.
+Provides the message trace id. The returned value will be zeroed if the message does not contain a span.
 
 #### Examples
 
 
 ```coffee
-meta trace_id = trace_id()
+meta trace_id = tracing_id()
 ```
 
 ### `tracing_span`
