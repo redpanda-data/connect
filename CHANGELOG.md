@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - All `sql` components now support Snowflake.
 - New `azure_table_storage` input.
 - New `sql_raw` input.
+- New `tracing_id` bloblang function.
 
 ## 4.9.1 - 2022-10-06
 
