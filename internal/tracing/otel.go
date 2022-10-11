@@ -34,6 +34,14 @@ func GetActiveSpan(p *message.Part) *Span {
 	return otelSpan(ctx, t)
 }
 
+// GetTraceID returns the traceID from a span attached to a message part. Returns a zeroed traceID if the part
+// doesn't have a span attached.
+func GetTraceID(p *message.Part) string {
+	ctx := message.GetContext(p)
+	span := trace.SpanFromContext(ctx)
+	return span.SpanContext().TraceID().String()
+}
+
 // WithChildSpan takes a message, extracts a span, creates a new child span,
 // and returns a new message with that span embedded. The original message is
 // unchanged.
