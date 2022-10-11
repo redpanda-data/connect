@@ -197,7 +197,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 	if s.argsMapping != nil {
 		var iargs any
 		if iargs, err = s.argsMapping.Query(nil); err != nil {
-			return err
+			return
 		}
 
 		var ok bool

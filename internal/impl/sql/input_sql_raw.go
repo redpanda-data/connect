@@ -71,7 +71,7 @@ type sqlRawInput struct {
 	driver string
 	dsn    string
 	db     *sql.DB
-	dbMut  sync.RWMutex
+	dbMut  sync.Mutex
 
 	rows *sql.Rows
 
@@ -125,25 +125,27 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 	s.dbMut.Lock()
 	defer s.dbMut.Unlock()
 
-	if s.db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+	if s.db != nil {
+		return nil
+	}
+
+	var db *sql.DB
+	if db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
 		return err
 	}
-	s.connSettings.apply(s.db)
-	go func() {
-		<-s.shutSig.CloseNowChan()
-
-		s.dbMut.Lock()
-		_ = s.db.Close()
-		s.dbMut.Unlock()
-
-		s.shutSig.ShutdownComplete()
+	defer func() {
+		if err != nil {
+			_ = db.Close()
+		}
 	}()
+
+	s.connSettings.apply(db)
 
 	var args []any
 	if s.argsMapping != nil {
 		var iargs any
 		if iargs, err = s.argsMapping.Query(nil); err != nil {
-			return err
+			return
 		}
 
 		var ok bool
@@ -153,18 +155,44 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 		}
 	}
 
-	if s.rows, err = s.db.QueryContext(ctx, s.queryStatic, args...); err != nil {
-		return fmt.Errorf("failed to run query: %w", err)
+	var rows *sql.Rows
+	if rows, err = db.QueryContext(ctx, s.queryStatic, args...); err != nil {
+		return
 	}
 
+	s.db = db
+	s.rows = rows
+
+	go func() {
+		<-s.shutSig.CloseNowChan()
+
+		s.dbMut.Lock()
+		if s.rows != nil {
+			_ = s.rows.Close()
+			s.rows = nil
+		}
+		if s.db != nil {
+			_ = s.db.Close()
+			s.db = nil
+		}
+		s.dbMut.Unlock()
+
+		s.shutSig.ShutdownComplete()
+	}()
 	return nil
 }
 
 func (s *sqlRawInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
-	s.dbMut.RLock()
-	defer s.dbMut.RUnlock()
+	s.dbMut.Lock()
+	defer s.dbMut.Unlock()
 
-	msg := service.NewMessage(nil)
+	if s.db == nil && s.rows == nil {
+		return nil, nil, service.ErrNotConnected
+	}
+
+	if s.rows == nil {
+		return nil, nil, service.ErrEndOfInput
+	}
 
 	if !s.rows.Next() {
 		err := s.rows.Err()
@@ -176,13 +204,15 @@ func (s *sqlRawInput) Read(ctx context.Context) (*service.Message, service.AckFu
 		return nil, nil, err
 	}
 
-	arrayRows, newerror := sqlRowToMap(s.rows)
-	if newerror != nil {
-		return nil, nil, newerror
+	obj, err := sqlRowToMap(s.rows)
+	if err != nil {
+		_ = s.rows.Close()
+		s.rows = nil
+		return nil, nil, err
 	}
 
-	msg.SetStructured(arrayRows)
-
+	msg := service.NewMessage(nil)
+	msg.SetStructured(obj)
 	return msg, func(ctx context.Context, err error) error {
 		// Nacks are handled by AutoRetryNacks because we don't have an explicit
 		// ack mechanism right now.

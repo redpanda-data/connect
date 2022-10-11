@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Field `logged_batch` added to the `cassandra` output.
 - All `sql` components now support Snowflake.
 - New `azure_table_storage` input.
+- New `sql_raw` input.
 
 ## 4.9.1 - 2022-10-06
 

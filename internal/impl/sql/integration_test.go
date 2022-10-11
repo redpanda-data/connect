@@ -452,12 +452,10 @@ sql_raw:
 `)
 
 		inputConf := confReplacer.Replace(`
-sql_select:
+sql_raw:
   driver: $driver
   dsn: $dsn
-  table: $table
-  columns: [ "*" ]
-  suffix: ' ORDER BY "bar" ASC'
+  query: 'select * from $table ORDER BY "bar" ASC'
 processors:
   # For some reason MySQL driver doesn't resolve to integer by default.
   - bloblang: |
