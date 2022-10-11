@@ -82,7 +82,7 @@ func parquetSchemaConfig() *service.ConfigField {
 				"type": "BYTE_ARRAY",
 			},
 		}),
-	)
+	).Description("Parquet schema.")
 }
 
 func parquetGroupFromConfig(columnConfs []*service.ParsedConfig) (parquet.Group, error) {

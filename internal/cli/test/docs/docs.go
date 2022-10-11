@@ -98,7 +98,7 @@ It is also possible to target processors in a separate file by prefixing the tar
 			docs.FieldString("metadata", "A map of metadata key/values to add to the input message.").Map().Optional(),
 		),
 		docs.FieldObject(
-			"output_batches", "",
+			"output_batches", "List of output batches.",
 		).ArrayOfArrays().Optional().WithChildren(
 			docs.FieldString("content", "The raw content of the input message.").HasDefault(""),
 			docs.FieldString("metadata", "A map of metadata key/values to add to the input message.").Map().Optional(),
