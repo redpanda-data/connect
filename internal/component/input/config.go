@@ -20,6 +20,7 @@ type Config struct {
 	AWSSQS            AWSSQSConfig            `json:"aws_sqs" yaml:"aws_sqs"`
 	AzureBlobStorage  AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
 	AzureQueueStorage AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
+	AzureTableStorage AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
 	Broker            BrokerConfig            `json:"broker" yaml:"broker"`
 	CSVFile           CSVFileConfig           `json:"csv" yaml:"csv"`
 	Dynamic           DynamicConfig           `json:"dynamic" yaml:"dynamic"`
