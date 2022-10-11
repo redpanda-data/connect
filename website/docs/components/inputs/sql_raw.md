@@ -20,7 +20,7 @@ This component is experimental and therefore subject to change or removal outsid
 :::
 Executes a select query and creates a message for each row received.
 
-Introduced in version 3.59.0.
+Introduced in version 4.10.0.
 
 
 <Tabs defaultValue="common" values={[
@@ -85,7 +85,6 @@ input:
       root = [
         now().ts_unix() - 3600
       ]
-]
 ```
 
 </TabItem>

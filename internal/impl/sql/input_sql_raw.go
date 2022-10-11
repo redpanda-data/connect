@@ -31,7 +31,7 @@ func sqlRawInputConfig() *service.ConfigSpec {
 	}
 
 	spec = spec.
-		Version("3.59.0").
+		Version("4.10.0").
 		Example("Consumes an SQL table using a query as an input.",
 			`
 Here we preform an aggregate over a list of names in a table that are less than 3600 seconds old.`,
@@ -45,7 +45,6 @@ input:
       root = [
         now().ts_unix() - 3600
       ]
-]
 `,
 		)
 	return spec
@@ -154,13 +153,8 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 		}
 	}
 
-	rows, err := s.db.QueryContext(ctx, s.queryStatic, args...)
-	if err != nil {
-		s.logger.Warnf("Failed to run query: %v", err)
-	} else {
-		// this is only re-assigned so linting will be happy : \. Will throw error if s.rows
-		// is immediately assigned straight out of QueryContext
-		s.rows = rows
+	if s.rows, err = s.db.QueryContext(ctx, s.queryStatic, args...); err != nil {
+		return fmt.Errorf("failed to run query: %w", err)
 	}
 
 	return nil
