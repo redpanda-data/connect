@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `transaction_type` added to the `azure_table_storage` output, which deprecates the previous `insert_type` field and supports interpolation functions.
 - Field `logged_batch` added to the `cassandra` output.
 - All `sql` components now support Snowflake.
+- New `azure_table_storage` input.
 
 ## 4.9.1 - 2022-10-06
 
