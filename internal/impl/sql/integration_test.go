@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -849,13 +847,9 @@ func msSQLIntegration(t *testing.T) {
 func sqliteIntegration(t *testing.T) {
 	t.Parallel()
 
-	testDBFile := filepath.Join(t.TempDir(), "foo.db")
-
 	var db *sql.DB
 	var err error
 	t.Cleanup(func() {
-		os.Remove(testDBFile)
-
 		if db != nil {
 			db.Close()
 		}
@@ -871,7 +865,7 @@ func sqliteIntegration(t *testing.T) {
 		return err
 	}
 
-	dsn := "file:" + testDBFile
+	dsn := "file::memory:?cache=shared"
 
 	require.NoError(t, func() error {
 		db, err = sql.Open("sqlite", dsn)
@@ -889,20 +883,7 @@ func sqliteIntegration(t *testing.T) {
 		return nil
 	}())
 
-	// Custom suite without parallel test.
-	for _, fn := range []testFn{
-		testBatchProcessorBasic,
-		testBatchInputOutputBatch,
-		testBatchInputOutputRaw,
-		testRawProcessorsBasic,
-		testDeprecatedProcessorsBasic,
-	} {
-		tableName, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 40)
-		require.NoError(t, err)
-
-		require.NoError(t, createTable(tableName), tableName)
-		fn(t, "sqlite", dsn, tableName)
-	}
+	testSuite(t, "sqlite", dsn, createTable)
 }
 
 func oracleIntegration(t *testing.T) {
