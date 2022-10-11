@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/benthosdev/benthos/v4/internal/impl/azure/shared"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 
@@ -137,27 +139,7 @@ func newAzureTableStorageWriter(conf output.AzureTableStorageConfig, mgr bundle.
 			return nil, fmt.Errorf("failed to parse timeout period string: %v", err)
 		}
 	}
-	if conf.StorageAccount == "" && conf.StorageConnectionString == "" {
-		return nil, errors.New("invalid azure storage account credentials")
-	}
-	var client *aztables.ServiceClient
-	if conf.StorageConnectionString != "" {
-		if strings.Contains(conf.StorageConnectionString, "UseDevelopmentStorage=true;") {
-			// Only here to support legacy configs that pass UseDevelopmentStorage=true;
-			// `UseDevelopmentStorage=true` is not available in the current SDK, neither `storage.NewEmulatorClient()` (which was used in the previous SDK).
-			// Instead, we use the http connection string to connect to the emulator endpoints with the default table storage port.
-			// https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azurite?tabs=visual-studio#http-connection-strings
-			client, err = aztables.NewServiceClientFromConnectionString("DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;", nil)
-		} else {
-			client, err = aztables.NewServiceClientFromConnectionString(conf.StorageConnectionString, nil)
-		}
-	} else {
-		cred, credErr := aztables.NewSharedKeyCredential(conf.StorageAccount, conf.StorageAccessKey)
-		if credErr != nil {
-			return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
-		}
-		client, err = aztables.NewServiceClientWithSharedKey(fmt.Sprintf("https://%s.table.core.windows.net/", conf.StorageAccount), cred, nil)
-	}
+	client, err := shared.GetServiceClient(conf.StorageAccount, conf.StorageAccessKey, conf.StorageConnectionString)
 	if err != nil {
 		return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
 	}
@@ -267,7 +249,7 @@ func (a *azureTableStorageWriter) execBatch(ctx context.Context, writeReqs map[s
 							if !strings.Contains(tErr.Error(), "TableNotFound") {
 								return err
 							}
-							if _, err = table.Create(ctx, nil); err != nil {
+							if _, err = table.CreateTable(ctx, nil); err != nil {
 								return err
 							}
 							if _, err = table.SubmitTransaction(ctx, batch, nil); err != nil {
