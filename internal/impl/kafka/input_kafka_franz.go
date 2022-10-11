@@ -367,17 +367,25 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			pollDone()
 
 			if errs := fetches.Errors(); len(errs) > 0 {
-				// TODO: The documentation from franz-go is top-tier, it should
-				// be straight forward to use some checks to determine whether
-				// restarting the client is actually necessary.
-				cl.Close()
+				// Any non-temporal error sets this true and we close the client
+				// forcing a reconnect.
+				nonTemporalErr := false
+
 				for _, kerr := range errs {
-					if errors.Is(kerr.Err, context.Canceled) {
+					// TODO: The documentation from franz-go is top-tier, it
+					// should be straight forward to expand this to include more
+					// errors that are safe to disregard.
+					if errors.Is(kerr.Err, context.DeadlineExceeded) {
 						continue
 					}
+					nonTemporalErr = true
 					f.log.Errorf("Kafka poll error on topic %v, partition %v: %v", kerr.Topic, kerr.Partition, kerr.Err)
 				}
-				return
+
+				if nonTemporalErr {
+					cl.Close()
+					return
+				}
 			}
 			if closeCtx.Err() != nil {
 				return
