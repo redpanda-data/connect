@@ -27,7 +27,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
@@ -119,7 +118,6 @@ func NewWriter(
 		log:       log,
 		stats:     stats,
 		operation: operation,
-		shutSig:   shutdown.NewSignaller(),
 	}
 
 	if conf.MongoConfig.URL == "" {
@@ -202,8 +200,6 @@ type Writer struct {
 	collection                   *field.Expression
 	database                     *mongo.Database
 	writeConcernCollectionOption *options.CollectionOptions
-
-	shutSig *shutdown.Signaller
 }
 
 // Connect attempts to establish a connection to the target mongo DB.

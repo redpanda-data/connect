@@ -23,7 +23,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/old/util/retries"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/tracing"
 )
 
@@ -112,8 +111,6 @@ type Processor struct {
 	documentMap *mapping.Executor
 	hintMap     *mapping.Executor
 	operation   client.Operation
-
-	shutSig *shutdown.Signaller
 }
 
 // NewProcessor returns a MongoDB processor.
@@ -131,8 +128,6 @@ func NewProcessor(conf processor.Config, mgr bundle.NewManagement) (processor.V2
 		tracer: mgr.Tracer(),
 
 		operation: operation,
-
-		shutSig: shutdown.NewSignaller(),
 	}
 
 	if conf.MongoDB.MongoDB.URL == "" {

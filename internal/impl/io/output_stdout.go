@@ -10,7 +10,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 func init() {
@@ -41,8 +40,7 @@ Prints messages to stdout as a continuous stream of data, dividing messages acco
 }
 
 type stdoutWriter struct {
-	handle  codec.Writer
-	shutSig *shutdown.Signaller
+	handle codec.Writer
 }
 
 func newStdoutWriter(codecStr string) (*stdoutWriter, error) {
@@ -57,8 +55,7 @@ func newStdoutWriter(codecStr string) (*stdoutWriter, error) {
 	}
 
 	return &stdoutWriter{
-		handle:  handle,
-		shutSig: shutdown.NewSignaller(),
+		handle: handle,
 	}, nil
 }
 
