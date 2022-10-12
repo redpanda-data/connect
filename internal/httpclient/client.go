@@ -9,7 +9,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -226,12 +225,12 @@ func (h *Client) ResponseToBatch(res *http.Response) (resMsg message.Batch, err 
 	resMsg = message.QuickBatch(nil)
 
 	annotatePart := func(p *message.Part) {
-		p.MetaSet("http_status_code", strconv.Itoa(res.StatusCode))
+		p.MetaSetMut("http_status_code", res.StatusCode)
 		if h.metaExtractFilter.IsSet() {
 			for k, values := range res.Header {
 				normalisedHeader := strings.ToLower(k)
 				if len(values) > 0 && h.metaExtractFilter.Match(normalisedHeader) {
-					p.MetaSet(normalisedHeader, values[0])
+					p.MetaSetMut(normalisedHeader, values[0])
 				}
 			}
 		}

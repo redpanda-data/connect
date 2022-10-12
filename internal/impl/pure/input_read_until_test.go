@@ -97,10 +97,10 @@ func testReadUntilBasic(inConf input.Config, t *testing.T) {
 			t.Errorf("Wrong message contents: %v != %v", act, exp)
 		}
 		if i == len(expMsgs)-1 {
-			if exp, act := "final", tran.Payload.Get(0).MetaGet("benthos_read_until"); exp != act {
+			if exp, act := "final", tran.Payload.Get(0).MetaGetStr("benthos_read_until"); exp != act {
 				t.Errorf("Metadata missing from final message: %v != %v", act, exp)
 			}
-		} else if exp, act := "", tran.Payload.Get(0).MetaGet("benthos_read_until"); exp != act {
+		} else if exp, act := "", tran.Payload.Get(0).MetaGetStr("benthos_read_until"); exp != act {
 			t.Errorf("Metadata final message metadata added to non-final message: %v", act)
 		}
 		require.NoError(t, tran.Ack(ctx, nil))

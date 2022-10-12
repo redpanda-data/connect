@@ -219,7 +219,7 @@ runLoop:
 			continue
 		}
 
-		tran.Payload.Get(0).MetaSet("benthos_read_until", "final")
+		tran.Payload.Get(0).MetaSetMut("benthos_read_until", "final")
 
 		// If this transaction succeeds we shut down.
 		tmpRes := make(chan error)

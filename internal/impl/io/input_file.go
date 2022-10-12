@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -196,9 +195,9 @@ func (f *fileConsumer) ReadBatch(ctx context.Context) (message.Batch, input.Asyn
 				continue
 			}
 
-			part.MetaSet("path", scannerInfo.currentPath)
-			part.MetaSet("mod_time_unix", modTimeUnix)
-			part.MetaSet("mod_time", modTime)
+			part.MetaSetMut("path", scannerInfo.currentPath)
+			part.MetaSetMut("mod_time_unix", modTimeUnix)
+			part.MetaSetMut("mod_time", modTime)
 
 			msg = append(msg, part)
 		}
@@ -225,9 +224,9 @@ func (f *fileConsumer) Close(ctx context.Context) (err error) {
 	return
 }
 
-func (f *fileConsumer) getModTime(t time.Time) (modTimeUnix, modTime string) {
+func (f *fileConsumer) getModTime(t time.Time) (modTimeUnix int, modTime string) {
 	utcModTime := t.UTC()
-	modTimeUnix = strconv.Itoa(int(utcModTime.Unix()))
+	modTimeUnix = int(utcModTime.Unix())
 	modTime = utcModTime.Format(time.RFC3339)
 	return modTimeUnix, modTime
 }

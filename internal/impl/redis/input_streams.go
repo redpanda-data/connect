@@ -304,9 +304,9 @@ func (r *redisStreamsReader) read() (pendingRedisStreamMsg, error) {
 			}
 
 			part := message.NewPart(bodyBytes)
-			part.MetaSet("redis_stream", xmsg.ID)
+			part.MetaSetMut("redis_stream", xmsg.ID)
 			for k, v := range xmsg.Values {
-				part.MetaSet(k, fmt.Sprintf("%v", v))
+				part.MetaSetMut(k, v)
 			}
 
 			nextMsg := pendingRedisStreamMsg{

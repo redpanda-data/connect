@@ -167,7 +167,7 @@ func (h *httpClientInput) Connect(ctx context.Context) (err error) {
 	p := message.NewPart(nil)
 	for k, values := range res.Header {
 		if len(values) > 0 {
-			p.MetaSet(strings.ToLower(k), values[0])
+			p.MetaSetMut(strings.ToLower(k), values[0])
 		}
 	}
 	h.prevResponse = message.Batch{p}
@@ -226,7 +226,7 @@ func (h *httpClientInput) readStreamed(ctx context.Context) (message.Batch, inpu
 	}
 
 	meta := map[string]string{}
-	_ = h.prevResponse.Get(0).MetaIter(func(k, v string) error {
+	_ = h.prevResponse.Get(0).MetaIterStr(func(k, v string) error {
 		meta[k] = v
 		return nil
 	})
@@ -235,7 +235,7 @@ func (h *httpClientInput) readStreamed(ctx context.Context) (message.Batch, inpu
 	_ = msg.Iter(func(i int, p *message.Part) error {
 		part := message.NewPart(p.AsBytes())
 		for k, v := range meta {
-			part.MetaSet(k, v)
+			part.MetaSetMut(k, v)
 		}
 		resParts = append(resParts, part)
 		return nil

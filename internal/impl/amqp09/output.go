@@ -273,7 +273,7 @@ func (a *amqp09Writer) WriteBatch(wctx context.Context, msg message.Batch) error
 		}
 
 		headers := amqp.Table{}
-		_ = a.metaFilter.Iter(p, func(k, v string) error {
+		_ = a.metaFilter.Iter(p, func(k string, v any) error {
 			headers[strings.ReplaceAll(k, "_", "-")] = v
 			return nil
 		})

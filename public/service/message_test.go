@@ -14,12 +14,12 @@ import (
 
 func TestMessageCopyAirGap(t *testing.T) {
 	p := message.NewPart([]byte("hello world"))
-	p.MetaSet("foo", "bar")
+	p.MetaSetMut("foo", "bar")
 	g1 := newMessageFromPart(p.ShallowCopy())
 	g2 := g1.Copy()
 
 	b := p.AsBytes()
-	v := p.MetaGet("foo")
+	v := p.MetaGetStr("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
@@ -39,7 +39,7 @@ func TestMessageCopyAirGap(t *testing.T) {
 	g2.MetaSet("foo", "baz")
 
 	b = p.AsBytes()
-	v = p.MetaGet("foo")
+	v = p.MetaGetStr("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
@@ -59,7 +59,7 @@ func TestMessageCopyAirGap(t *testing.T) {
 	g1.MetaSet("foo", "buz")
 
 	b = p.AsBytes()
-	v = p.MetaGet("foo")
+	v = p.MetaGetStr("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
@@ -78,8 +78,8 @@ func TestMessageCopyAirGap(t *testing.T) {
 
 func TestMessageQuery(t *testing.T) {
 	p := message.NewPart([]byte(`{"foo":"bar"}`))
-	p.MetaSet("foo", "bar")
-	p.MetaSet("bar", "baz")
+	p.MetaSetMut("foo", "bar")
+	p.MetaSetMut("bar", "baz")
 	g1 := newMessageFromPart(p)
 
 	b, err := g1.AsBytes()
@@ -116,8 +116,8 @@ func TestMessageQuery(t *testing.T) {
 
 func TestMessageMutate(t *testing.T) {
 	p := message.NewPart([]byte(`not a json doc`))
-	p.MetaSet("foo", "bar")
-	p.MetaSet("bar", "baz")
+	p.MetaSetMut("foo", "bar")
+	p.MetaSetMut("bar", "baz")
 	g1 := newMessageFromPart(p.ShallowCopy())
 
 	_, err := g1.AsStructured()

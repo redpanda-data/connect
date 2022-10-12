@@ -637,10 +637,10 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 
 	// Function overrides
 	customFuncs["metadata_get"] = func(k string) string {
-		return msg.MetaGet(k)
+		return msg.MetaGetStr(k)
 	}
 	customFuncs["metadata_set"] = func(k, v string) {
-		msg.MetaSet(k, v)
+		msg.MetaSetMut(k, v)
 	}
 	customFuncs["json_get"] = func(path string) (string, error) {
 		jsonPart, err := msg.AsStructured()
@@ -789,7 +789,7 @@ func (a *awkProc) Process(ctx context.Context, msg *message.Part) ([]*message.Pa
 	}
 
 	if a.codec != "none" {
-		_ = msg.MetaIter(func(k, v string) error {
+		_ = msg.MetaIterStr(func(k, v string) error {
 			config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
 			return nil
 		})

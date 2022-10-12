@@ -3,7 +3,6 @@ package mqtt
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -260,11 +259,11 @@ func (m *mqttReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncA
 		message := message.QuickBatch([][]byte{msg.Payload()})
 
 		p := message.Get(0)
-		p.MetaSet("mqtt_duplicate", strconv.FormatBool(msg.Duplicate()))
-		p.MetaSet("mqtt_qos", strconv.Itoa(int(msg.Qos())))
-		p.MetaSet("mqtt_retained", strconv.FormatBool(msg.Retained()))
-		p.MetaSet("mqtt_topic", msg.Topic())
-		p.MetaSet("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
+		p.MetaSetMut("mqtt_duplicate", msg.Duplicate())
+		p.MetaSetMut("mqtt_qos", int(msg.Qos()))
+		p.MetaSetMut("mqtt_retained", msg.Retained())
+		p.MetaSetMut("mqtt_topic", msg.Topic())
+		p.MetaSetMut("mqtt_message_id", int(msg.MessageID()))
 
 		return message, func(ctx context.Context, res error) error {
 			if res == nil {

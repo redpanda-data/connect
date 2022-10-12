@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -170,8 +171,8 @@ func (r *RequestCreator) body(refBatch message.Batch) (body io.Reader, overrideC
 		headers := textproto.MIMEHeader{
 			"Content-Type": []string{contentType},
 		}
-		_ = r.metaInsertFilter.Iter(p, func(k, v string) error {
-			headers[k] = append(headers[k], v)
+		_ = r.metaInsertFilter.Iter(p, func(k string, v any) error {
+			headers[k] = append(headers[k], query.IToString(v))
 			return nil
 		})
 
@@ -210,8 +211,8 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 		req.Header.Add(k, v.String(0, refBatch))
 	}
 	if len(refBatch) > 0 {
-		_ = r.metaInsertFilter.Iter(refBatch[0], func(k, v string) error {
-			req.Header.Add(k, v)
+		_ = r.metaInsertFilter.Iter(refBatch[0], func(k string, v any) error {
+			req.Header.Add(k, query.IToString(v))
 			return nil
 		})
 	}

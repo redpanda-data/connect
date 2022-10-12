@@ -254,7 +254,7 @@ func TestFallbackHappyishPath(t *testing.T) {
 				if !bytes.Equal(ts.Payload.Get(0).AsBytes(), content[0]) {
 					t.Errorf("Wrong content returned %s != %s", ts.Payload.Get(0).AsBytes(), content[0])
 				}
-				assert.Equal(t, ts.Payload.Get(0).MetaGet("fallback_error"), "test err")
+				assert.Equal(t, ts.Payload.Get(0).MetaGetStr("fallback_error"), "test err")
 			case <-mockOutputs[0].TChan:
 				t.Error("Received message in wrong order")
 				return

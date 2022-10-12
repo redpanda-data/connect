@@ -12,18 +12,18 @@ import (
 func TestExcludeFilter(t *testing.T) {
 	tests := []struct {
 		name       string
-		inputMeta  map[string]string
-		outputMeta map[string]string
+		inputMeta  map[string]any
+		outputMeta map[string]any
 		conf       ExcludeFilterConfig
 	}{
 		{
 			name: "no filter",
-			inputMeta: map[string]string{
+			inputMeta: map[string]any{
 				"foo": "foo1",
 				"bar": "bar1",
 				"baz": "baz1",
 			},
-			outputMeta: map[string]string{
+			outputMeta: map[string]any{
 				"foo": "foo1",
 				"bar": "bar1",
 				"baz": "baz1",
@@ -32,12 +32,12 @@ func TestExcludeFilter(t *testing.T) {
 		},
 		{
 			name: "foo filter",
-			inputMeta: map[string]string{
+			inputMeta: map[string]any{
 				"foo": "foo1",
 				"bar": "bar1",
 				"baz": "baz1",
 			},
-			outputMeta: map[string]string{
+			outputMeta: map[string]any{
 				"bar": "bar1",
 				"baz": "baz1",
 			},
@@ -47,12 +47,12 @@ func TestExcludeFilter(t *testing.T) {
 		},
 		{
 			name: "empty filter",
-			inputMeta: map[string]string{
+			inputMeta: map[string]any{
 				"foo": "foo1",
 				"bar": "bar1",
 				"baz": "baz1",
 			},
-			outputMeta: map[string]string{},
+			outputMeta: map[string]any{},
 			conf: ExcludeFilterConfig{
 				ExcludePrefixes: []string{""},
 			},
@@ -64,13 +64,13 @@ func TestExcludeFilter(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			part := message.NewPart(nil)
 			for k, v := range test.inputMeta {
-				part.MetaSet(k, v)
+				part.MetaSetMut(k, v)
 			}
 			filter, err := test.conf.Filter()
 			require.NoError(t, err)
 
-			outputMeta := map[string]string{}
-			require.NoError(t, filter.Iter(part, func(k, v string) error {
+			outputMeta := map[string]any{}
+			require.NoError(t, filter.Iter(part, func(k string, v any) error {
 				outputMeta[k] = v
 				return nil
 			}))

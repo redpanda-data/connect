@@ -289,11 +289,11 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 	}
 
 	_ = msg.Iter(func(i int, p *message.Part) error {
-		p.MetaSet("http_server_user_agent", r.UserAgent())
-		p.MetaSet("http_server_request_path", r.URL.Path)
-		p.MetaSet("http_server_verb", r.Method)
+		p.MetaSetMut("http_server_user_agent", r.UserAgent())
+		p.MetaSetMut("http_server_request_path", r.URL.Path)
+		p.MetaSetMut("http_server_verb", r.Method)
 		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-			p.MetaSet("http_server_remote_ip", host)
+			p.MetaSetMut("http_server_remote_ip", host)
 		}
 
 		if r.TLS != nil {
@@ -308,27 +308,27 @@ func (h *httpServerInput) extractMessageFromRequest(r *http.Request) (message.Ba
 			case tls.VersionTLS13:
 				tlsVersion = "TLSv1.3"
 			}
-			p.MetaSet("http_server_tls_version", tlsVersion)
+			p.MetaSetMut("http_server_tls_version", tlsVersion)
 			if len(r.TLS.VerifiedChains) > 0 && len(r.TLS.VerifiedChains[0]) > 0 {
-				p.MetaSet("http_server_tls_subject", r.TLS.VerifiedChains[0][0].Subject.String())
+				p.MetaSetMut("http_server_tls_subject", r.TLS.VerifiedChains[0][0].Subject.String())
 			}
-			p.MetaSet("http_server_tls_cipher_suite", tls.CipherSuiteName(r.TLS.CipherSuite))
+			p.MetaSetMut("http_server_tls_cipher_suite", tls.CipherSuiteName(r.TLS.CipherSuite))
 		}
 		for k, v := range r.Header {
 			if len(v) > 0 {
-				p.MetaSet(k, v[0])
+				p.MetaSetMut(k, v[0])
 			}
 		}
 		for k, v := range r.URL.Query() {
 			if len(v) > 0 {
-				p.MetaSet(k, v[0])
+				p.MetaSetMut(k, v[0])
 			}
 		}
 		for k, v := range mux.Vars(r) {
-			p.MetaSet(k, v)
+			p.MetaSetMut(k, v)
 		}
 		for _, c := range r.Cookies() {
-			p.MetaSet(c.Name, c.Value)
+			p.MetaSetMut(c.Name, c.Value)
 		}
 		return nil
 	})
@@ -450,11 +450,8 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 
 		if plen := responseMsg.Len(); plen == 1 {
 			part := responseMsg.Get(0)
-			_ = part.MetaIter(func(k, v string) error {
-				if h.metaFilter.Match(k) {
-					w.Header().Set(k, v)
-					return nil
-				}
+			_ = h.metaFilter.IterStr(part, func(k, v string) error {
+				w.Header().Set(k, v)
 				return nil
 			})
 			payload := part.AsBytes()
@@ -472,11 +469,8 @@ func (h *httpServerInput) postHandler(w http.ResponseWriter, r *http.Request) {
 			var merr error
 			for i := 0; i < plen && merr == nil; i++ {
 				part := responseMsg.Get(i)
-				_ = part.MetaIter(func(k, v string) error {
-					if h.metaFilter.Match(k) {
-						w.Header().Set(k, v)
-						return nil
-					}
+				_ = h.metaFilter.IterStr(part, func(k, v string) error {
+					w.Header().Set(k, v)
 					return nil
 				})
 				payload := part.AsBytes()
@@ -571,22 +565,22 @@ func (h *httpServerInput) wsHandler(w http.ResponseWriter, r *http.Request) {
 		startedAt := time.Now()
 
 		part := msg.Get(0)
-		part.MetaSet("http_server_user_agent", r.UserAgent())
+		part.MetaSetMut("http_server_user_agent", r.UserAgent())
 		for k, v := range r.Header {
 			if len(v) > 0 {
-				part.MetaSet(k, v[0])
+				part.MetaSetMut(k, v[0])
 			}
 		}
 		for k, v := range r.URL.Query() {
 			if len(v) > 0 {
-				part.MetaSet(k, v[0])
+				part.MetaSetMut(k, v[0])
 			}
 		}
 		for k, v := range mux.Vars(r) {
-			part.MetaSet(k, v)
+			part.MetaSetMut(k, v)
 		}
 		for _, c := range r.Cookies() {
-			part.MetaSet(c.Name, c.Value)
+			part.MetaSetMut(c.Name, c.Value)
 		}
 		tracing.InitSpans(h.mgr.Tracer(), "input_http_server_websocket", msg)
 

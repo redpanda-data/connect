@@ -126,7 +126,7 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, msg message.Batch) 
 
 	partToMap := func(p *message.Part) map[string]any {
 		values := map[string]any{}
-		_ = r.metaFilter.Iter(p, func(k, v string) error {
+		_ = r.metaFilter.Iter(p, func(k string, v any) error {
 			values[k] = v
 			return nil
 		})

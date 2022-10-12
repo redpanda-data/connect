@@ -16,7 +16,7 @@ import (
 func TestFunctionQueries(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 		err     error
 	}
 
@@ -125,7 +125,7 @@ func TestFunctionQueries(t *testing.T) {
 			messages: []easyMsg{
 				{
 					content: `{"foo":{"bar":"this"}}`,
-					meta: map[string]string{
+					meta: map[string]any{
 						"path": "foo.bar",
 					},
 				},
@@ -176,7 +176,7 @@ func TestFunctionQueries(t *testing.T) {
 			messages: []easyMsg{
 				{},
 				{
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo":    "bar",
 						"baz":    "qux",
 						"duck,1": "quack",
@@ -192,7 +192,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo\nbar": "bar",
 						"baz":      "qux",
 						"duck,1":   "quack",
@@ -207,7 +207,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo":    "bar",
 						"baz":    "qux",
 						"duck,1": "quack",
@@ -220,7 +220,7 @@ bar""")`,
 			output: "null",
 			messages: []easyMsg{
 				{
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo":    "bar",
 						"baz":    "qux",
 						"duck,1": "quack",
@@ -233,7 +233,7 @@ bar""")`,
 			output: `{"baz":"qux","duck,1":"quack","foo":"bar"}`,
 			messages: []easyMsg{
 				{
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo":    "bar",
 						"baz":    "qux",
 						"duck,1": "quack",
@@ -246,7 +246,7 @@ bar""")`,
 			output: "quack",
 			messages: []easyMsg{
 				{
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo":    "bar",
 						"baz":    "qux",
 						"duck,1": "quack",
@@ -261,7 +261,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo":    "bar",
 						"baz":    "qux",
 						"duck,1": "quack",
@@ -275,7 +275,7 @@ bar""")`,
 			index:  1,
 			messages: []easyMsg{
 				{
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo":    "bar",
 						"baz":    "qux",
 						"duck,1": "quack",
@@ -289,7 +289,7 @@ bar""")`,
 			output: `{}`,
 			messages: []easyMsg{
 				{
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo":    "bar",
 						"baz":    "qux",
 						"duck,1": "quack",
@@ -303,7 +303,7 @@ bar""")`,
 			messages: []easyMsg{
 				{},
 				{
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo":    "bar",
 						"baz":    "qux",
 						"duck,1": "quack",
@@ -662,7 +662,7 @@ bar""")`,
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				if m.err != nil {

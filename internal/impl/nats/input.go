@@ -180,12 +180,12 @@ func (n *natsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncA
 
 	bmsg := message.QuickBatch([][]byte{msg.Data})
 	part := bmsg.Get(0)
-	part.MetaSet("nats_subject", msg.Subject)
+	part.MetaSetMut("nats_subject", msg.Subject)
 	// process message headers if server supports the feature
 	if natsConn.HeadersSupported() {
 		for key := range msg.Header {
 			value := msg.Header.Get(key)
-			part.MetaSet(key, value)
+			part.MetaSetMut(key, value)
 		}
 	}
 

@@ -490,7 +490,7 @@ var _ = registerFunction(
 		}
 		if len(key) > 0 {
 			return ClosureFunction("meta field "+key, func(ctx FunctionContext) (any, error) {
-				v := ctx.MsgBatch.Get(ctx.Index).MetaGet(key)
+				v := ctx.MsgBatch.Get(ctx.Index).MetaGetStr(key)
 				if v == "" {
 					return nil, nil
 				}
@@ -505,10 +505,8 @@ var _ = registerFunction(
 		}
 		return ClosureFunction("meta object", func(ctx FunctionContext) (any, error) {
 			kvs := map[string]any{}
-			_ = ctx.MsgBatch.Get(ctx.Index).MetaIter(func(k, v string) error {
-				if len(v) > 0 {
-					kvs[k] = v
-				}
+			_ = ctx.MsgBatch.Get(ctx.Index).MetaIterStr(func(k, v string) error {
+				kvs[k] = v
 				return nil
 			})
 			return kvs, nil
@@ -547,7 +545,7 @@ var _ = registerFunction(
 				if ctx.NewMeta == nil {
 					return nil, errors.New("root metadata cannot be queried in this context")
 				}
-				v := ctx.NewMeta.MetaGet(key)
+				v := ctx.NewMeta.MetaGetStr(key)
 				if v == "" {
 					return nil, nil
 				}
@@ -565,10 +563,8 @@ var _ = registerFunction(
 				return nil, errors.New("root metadata cannot be queried in this context")
 			}
 			kvs := map[string]any{}
-			_ = ctx.NewMeta.MetaIter(func(k, v string) error {
-				if len(v) > 0 {
-					kvs[k] = v
-				}
+			_ = ctx.NewMeta.MetaIterStr(func(k, v string) error {
+				kvs[k] = v
 				return nil
 			})
 			return kvs, nil

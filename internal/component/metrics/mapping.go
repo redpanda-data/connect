@@ -59,7 +59,7 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 	part := message.NewPart(nil)
 	part.SetStructuredMut(path)
 	for i, v := range labelNames {
-		part.MetaSet(v, labelValues[i])
+		part.MetaSetMut(v, labelValues[i])
 	}
 	msg := message.Batch{part}
 
@@ -87,14 +87,14 @@ func (m *Mapping) mapPath(path string, labelNames, labelValues []string) (outPat
 		return path, nil, nil
 	}
 
-	_ = outPart.MetaIter(func(k, v string) error {
+	_ = outPart.MetaIterStr(func(k, v string) error {
 		outLabelNames = append(outLabelNames, k)
 		return nil
 	})
 	if len(outLabelNames) > 0 {
 		sort.Strings(outLabelNames)
 		for _, k := range outLabelNames {
-			v := outPart.MetaGet(k)
+			v := outPart.MetaGetStr(k)
 			m.logger.Tracef("Metrics label '%v' created with static value '%v'.\n", k, v)
 			outLabelValues = append(outLabelValues, v)
 		}

@@ -20,8 +20,8 @@ func TestSingleMessageHeaders(t *testing.T) {
 	require.NoError(t, err)
 
 	part := message.NewPart([]byte("hello world"))
-	part.MetaSet("more_bar", "barvalue")
-	part.MetaSet("ignore_baz", "bazvalue")
+	part.MetaSetMut("more_bar", "barvalue")
+	part.MetaSetMut("ignore_baz", "bazvalue")
 
 	b := message.Batch{part}
 

@@ -88,8 +88,19 @@ func (f *IncludeFilter) Match(str string) bool {
 
 // Iter applies a function to each metadata key value pair that passes the
 // filter.
-func (f *IncludeFilter) Iter(m *message.Part, fn func(k, v string) error) error {
-	return m.MetaIter(func(k, v string) error {
+func (f *IncludeFilter) Iter(m *message.Part, fn func(k string, v any) error) error {
+	return m.MetaIterMut(func(k string, v any) error {
+		if !f.Match(k) {
+			return nil
+		}
+		return fn(k, v)
+	})
+}
+
+// IterStr applies a function to each metadata key value pair that passes the
+// filter with the value serialised as a string.
+func (f *IncludeFilter) IterStr(m *message.Part, fn func(k, v string) error) error {
+	return m.MetaIterStr(func(k, v string) error {
 		if !f.Match(k) {
 			return nil
 		}

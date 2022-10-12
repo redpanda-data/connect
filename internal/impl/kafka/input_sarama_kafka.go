@@ -387,7 +387,7 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage) *message.Part
 	part := message.NewPart(data.Value)
 
 	for _, hdr := range data.Headers {
-		part.MetaSet(string(hdr.Key), string(hdr.Value))
+		part.MetaSetMut(string(hdr.Key), string(hdr.Value))
 	}
 
 	lag := highestOffset - data.Offset - 1
@@ -395,12 +395,12 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage) *message.Part
 		lag = 0
 	}
 
-	part.MetaSet("kafka_key", string(data.Key))
-	part.MetaSet("kafka_partition", strconv.Itoa(int(data.Partition)))
-	part.MetaSet("kafka_topic", data.Topic)
-	part.MetaSet("kafka_offset", strconv.Itoa(int(data.Offset)))
-	part.MetaSet("kafka_lag", strconv.FormatInt(lag, 10))
-	part.MetaSet("kafka_timestamp_unix", strconv.FormatInt(data.Timestamp.Unix(), 10))
+	part.MetaSetMut("kafka_key", string(data.Key))
+	part.MetaSetMut("kafka_partition", int(data.Partition))
+	part.MetaSetMut("kafka_topic", data.Topic)
+	part.MetaSetMut("kafka_offset", int(data.Offset))
+	part.MetaSetMut("kafka_lag", lag)
+	part.MetaSetMut("kafka_timestamp_unix", data.Timestamp.Unix())
 
 	return part
 }

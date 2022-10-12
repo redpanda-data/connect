@@ -329,14 +329,14 @@ func (a *awsSQSReader) resetMessages(ctx context.Context, msgs ...sqsMessageHand
 }
 
 func addSQSMetadata(p *message.Part, sqsMsg *sqs.Message) {
-	p.MetaSet("sqs_message_id", *sqsMsg.MessageId)
-	p.MetaSet("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
+	p.MetaSetMut("sqs_message_id", *sqsMsg.MessageId)
+	p.MetaSetMut("sqs_receipt_handle", *sqsMsg.ReceiptHandle)
 	if rCountStr := sqsMsg.Attributes["ApproximateReceiveCount"]; rCountStr != nil {
-		p.MetaSet("sqs_approximate_receive_count", *rCountStr)
+		p.MetaSetMut("sqs_approximate_receive_count", *rCountStr)
 	}
 	for k, v := range sqsMsg.MessageAttributes {
 		if v.StringValue != nil {
-			p.MetaSet(k, *v.StringValue)
+			p.MetaSetMut(k, *v.StringValue)
 		}
 	}
 }

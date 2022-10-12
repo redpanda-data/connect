@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 )
@@ -188,8 +189,11 @@ func (m *Message) GetError() error {
 // MetaGet attempts to find a metadata key from the message and returns a string
 // result and a boolean indicating whether it was found.
 func (m *Message) MetaGet(key string) (string, bool) {
-	v := m.part.MetaGet(key)
-	return v, len(v) > 0
+	v, exists := m.part.MetaGetMut(key)
+	if !exists {
+		return "", false
+	}
+	return query.IToString(v), true
 }
 
 // MetaSet sets the value of a metadata key. If the value is an empty string the
@@ -198,7 +202,7 @@ func (m *Message) MetaSet(key, value string) {
 	if value == "" {
 		m.part.MetaDelete(key)
 	} else {
-		m.part.MetaSet(key, value)
+		m.part.MetaSetMut(key, value)
 	}
 }
 
@@ -211,7 +215,7 @@ func (m *Message) MetaDelete(key string) {
 // closure on each iteration. To stop iterating, return an error from the
 // closure. An error returned by the closure will be returned by this function.
 func (m *Message) MetaWalk(fn func(string, string) error) error {
-	return m.part.MetaIter(fn)
+	return m.part.MetaIterStr(fn)
 }
 
 //------------------------------------------------------------------------------

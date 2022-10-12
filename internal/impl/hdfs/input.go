@@ -117,8 +117,8 @@ func (h *hdfsReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncA
 	}
 
 	msg := message.QuickBatch([][]byte{msgBytes})
-	msg.Get(0).MetaSet("hdfs_name", fileName)
-	msg.Get(0).MetaSet("hdfs_path", filePath)
+	msg.Get(0).MetaSetMut("hdfs_name", fileName)
+	msg.Get(0).MetaSetMut("hdfs_path", filePath)
 	return msg, func(ctx context.Context, err error) error {
 		return nil
 	}, nil

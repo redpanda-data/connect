@@ -13,7 +13,7 @@ import (
 func TestMethodParser(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	tests := map[string]struct {
@@ -158,9 +158,9 @@ func TestMethodParser(t *testing.T) {
 			input:  `meta("foo").from_all()`,
 			output: `["bar",null,"baz"]`,
 			messages: []easyMsg{
-				{meta: map[string]string{"foo": "bar"}},
+				{meta: map[string]any{"foo": "bar"}},
 				{},
-				{meta: map[string]string{"foo": "baz"}},
+				{meta: map[string]any{"foo": "baz"}},
 			},
 		},
 		"or json null": {
@@ -198,10 +198,10 @@ func TestMethodParser(t *testing.T) {
 			input:  `meta("foo").or( meta("bar") == "yep" ).from_all()`,
 			output: `["from foo",true,false,"from foo 2"]`,
 			messages: []easyMsg{
-				{meta: map[string]string{"foo": "from foo"}},
-				{meta: map[string]string{"bar": "yep"}},
-				{meta: map[string]string{"bar": "nope"}},
-				{meta: map[string]string{"foo": "from foo 2", "bar": "yep"}},
+				{meta: map[string]any{"foo": "from foo"}},
+				{meta: map[string]any{"bar": "yep"}},
+				{meta: map[string]any{"bar": "nope"}},
+				{meta: map[string]any{"foo": "from foo 2", "bar": "yep"}},
 			},
 		},
 		"map each": {
@@ -386,7 +386,7 @@ func TestMethodParser(t *testing.T) {
 			input:  `"foo %v bar".format(meta("foo"))`,
 			output: `foo test bar`,
 			messages: []easyMsg{{
-				meta: map[string]string{"foo": "test"},
+				meta: map[string]any{"foo": "test"},
 			}},
 		},
 		"test format method 3": {
@@ -394,7 +394,7 @@ func TestMethodParser(t *testing.T) {
 			output: `foo yup, bar, 3 bar`,
 			messages: []easyMsg{{
 				content: `{"value":"yup"}`,
-				meta:    map[string]string{"foo": "bar"},
+				meta:    map[string]any{"foo": "bar"},
 			}},
 		},
 		"test length string": {
@@ -459,7 +459,7 @@ func TestMethodParser(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)
@@ -505,7 +505,7 @@ func TestMethodErrors(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)
@@ -526,7 +526,7 @@ func TestMethodErrors(t *testing.T) {
 func TestMethodMaps(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	tests := map[string]struct {
@@ -575,7 +575,7 @@ func TestMethodMaps(t *testing.T) {
 			},
 			messages: []easyMsg{{
 				content: `{"foo":"this value","bar":"and this value"}`,
-				meta: map[string]string{
+				meta: map[string]any{
 					"dyn_map": "foo",
 				},
 			}},
@@ -589,7 +589,7 @@ func TestMethodMaps(t *testing.T) {
 			},
 			messages: []easyMsg{{
 				content: `{"foo":"this value","bar":"and this value"}`,
-				meta: map[string]string{
+				meta: map[string]any{
 					"dyn_map": "bar",
 				},
 			}},
@@ -606,7 +606,7 @@ func TestMethodMaps(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)

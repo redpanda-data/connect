@@ -252,7 +252,7 @@ func (s *sftpReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncA
 	}
 
 	for _, part := range parts {
-		part.MetaSet("sftp_path", s.currentPath)
+		part.MetaSetMut("sftp_path", s.currentPath)
 	}
 
 	msg := message.Batch(parts)

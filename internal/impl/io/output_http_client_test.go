@@ -284,7 +284,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 		resMsg := resMsgs[0]
 		require.Equal(t, 1, resMsg.Len())
 		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).AsBytes()))
-		assert.Equal(t, "", resMsg.Get(0).MetaGet("fooheader"))
+		assert.Equal(t, "", resMsg.Get(0).MetaGetStr("fooheader"))
 	}
 
 	require.NoError(t, h.Close(ctx))
@@ -332,7 +332,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 		resMsg := resMsgs[0]
 		require.Equal(t, 1, resMsg.Len())
 		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).AsBytes()))
-		assert.Equal(t, "foovalue", resMsg.Get(0).MetaGet("fooheader"))
+		assert.Equal(t, "foovalue", resMsg.Get(0).MetaGetStr("fooheader"))
 	}
 
 	require.NoError(t, h.Close(ctx))

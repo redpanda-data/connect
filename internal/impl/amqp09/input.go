@@ -306,7 +306,7 @@ func amqpSetMetadata(p *message.Part, k string, v any) {
 	}
 
 	if metaValue != "" {
-		p.MetaSet(metaKey, metaValue)
+		p.MetaSetMut(metaKey, metaValue)
 	}
 }
 

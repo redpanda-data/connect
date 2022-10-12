@@ -16,6 +16,7 @@ import (
 	batchInternal "github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -259,10 +260,10 @@ func strToPartitioner(str string) (sarama.PartitionerConstructor, error) {
 func (k *kafkaWriter) buildSystemHeaders(part *message.Part) []sarama.RecordHeader {
 	if k.version.IsAtLeast(sarama.V0_11_0_0) {
 		out := []sarama.RecordHeader{}
-		_ = k.metaFilter.Iter(part, func(k, v string) error {
+		_ = k.metaFilter.Iter(part, func(k string, v any) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
-				Value: []byte(v),
+				Value: []byte(query.IToString(v)),
 			})
 			return nil
 		})

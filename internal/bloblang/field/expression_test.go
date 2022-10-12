@@ -44,7 +44,7 @@ func TestStaticExpressionOptimization(t *testing.T) {
 func TestExpressions(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	tests := map[string]struct {
@@ -228,7 +228,7 @@ func TestExpressions(t *testing.T) {
 			numDyn: 1,
 			output: `from foo`,
 			messages: []easyMsg{
-				{content: `hello world`, meta: map[string]string{
+				{content: `hello world`, meta: map[string]any{
 					"foo": "from foo",
 					"bar": "from bar",
 				}},
@@ -245,7 +245,7 @@ func TestExpressions(t *testing.T) {
 			numDyn: 1,
 			output: `from foo`,
 			messages: []easyMsg{
-				{content: `hello world`, meta: map[string]string{
+				{content: `hello world`, meta: map[string]any{
 					"foo": "from foo",
 					"bar": "from bar",
 				}},
@@ -262,7 +262,7 @@ func TestExpressions(t *testing.T) {
 			numDyn: 1,
 			output: `null`,
 			messages: []easyMsg{
-				{content: `hello world`, meta: map[string]string{
+				{content: `hello world`, meta: map[string]any{
 					"bar": "from bar",
 				}},
 			},
@@ -278,7 +278,7 @@ func TestExpressions(t *testing.T) {
 			numDyn: 1,
 			output: `{"bar":"from bar","foo":"from foo"}`,
 			messages: []easyMsg{
-				{content: `hello world`, meta: map[string]string{
+				{content: `hello world`, meta: map[string]any{
 					"foo": "from foo",
 					"bar": "from bar",
 				}},
@@ -295,7 +295,7 @@ func TestExpressions(t *testing.T) {
 			numDyn: 1,
 			output: `{"bar":"from bar","foo":"from foo"}`,
 			messages: []easyMsg{
-				{content: `hello world`, meta: map[string]string{
+				{content: `hello world`, meta: map[string]any{
 					"foo": "from foo",
 					"bar": "from bar",
 				}},
@@ -314,11 +314,11 @@ func TestExpressions(t *testing.T) {
 			numDyn: 1,
 			output: `from bar from 1`,
 			messages: []easyMsg{
-				{content: `first`, meta: map[string]string{
+				{content: `first`, meta: map[string]any{
 					"foo": "from foo from 0",
 					"bar": "from bar from 0",
 				}},
-				{content: `second`, meta: map[string]string{
+				{content: `second`, meta: map[string]any{
 					"foo": "from foo from 1",
 					"bar": "from bar from 1",
 				}},
@@ -336,7 +336,7 @@ func TestExpressions(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)

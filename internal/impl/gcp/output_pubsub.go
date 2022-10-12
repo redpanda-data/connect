@@ -180,7 +180,7 @@ func (c *gcpPubSubWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 	_ = msg.Iter(func(i int, part *message.Part) error {
 		topic := topics[i]
 		attr := map[string]string{}
-		_ = c.metaFilter.Iter(part, func(k, v string) error {
+		_ = c.metaFilter.IterStr(part, func(k, v string) error {
 			attr[k] = v
 			return nil
 		})

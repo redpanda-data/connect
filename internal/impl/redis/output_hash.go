@@ -179,7 +179,7 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, msg message.Batch) err
 		key := r.keyStr.String(i, msg)
 		fields := map[string]any{}
 		if r.conf.WalkMetadata {
-			_ = p.MetaIter(func(k, v string) error {
+			_ = p.MetaIterMut(func(k string, v any) error {
 				fields[k] = v
 				return nil
 			})

@@ -2,18 +2,7 @@ package message
 
 import (
 	"context"
-	"os"
 )
-
-var useNumber = true
-
-func init() {
-	if os.Getenv("BENTHOS_USE_NUMBER") == "false" {
-		useNumber = false
-	}
-}
-
-//------------------------------------------------------------------------------
 
 // Part represents a single Benthos message.
 type Part struct {
@@ -129,15 +118,28 @@ func (p *Part) SetStructured(jObj any) {
 
 //------------------------------------------------------------------------------
 
-// MetaGet returns a metadata value if a key exists, otherwise an empty string.
-func (p *Part) MetaGet(key string) string {
-	v, _ := p.data.MetaGet(key)
-	return v
+// MetaGetStr returns a metadata value if a key exists as a string, otherwise an
+// empty string.
+func (p *Part) MetaGetStr(key string) string {
+	v, exists := p.data.MetaGetMut(key)
+	if !exists {
+		return ""
+	}
+	return metaToString(v)
 }
 
-// MetaSet sets the value of a metadata key.
-func (p *Part) MetaSet(key, value string) {
-	p.data.MetaSet(key, value)
+// MetaGetMut returns a metadata value if a key exists.
+func (p *Part) MetaGetMut(key string) (any, bool) {
+	v, exists := p.data.MetaGetMut(key)
+	if !exists {
+		return nil, false
+	}
+	return v, true
+}
+
+// MetaSetMut sets the value of a metadata key to any value.
+func (p *Part) MetaSetMut(key string, value any) {
+	p.data.MetaSetMut(key, value)
 }
 
 // MetaDelete removes the value of a metadata key.
@@ -145,9 +147,20 @@ func (p *Part) MetaDelete(key string) {
 	p.data.MetaDelete(key)
 }
 
-// MetaIter iterates each metadata key/value pair.
-func (p *Part) MetaIter(f func(k, v string) error) error {
-	return p.data.MetaIter(f)
+// MetaIterStr iterates each metadata key/value pair with the value serialised
+// as a string.
+func (p *Part) MetaIterStr(f func(string, string) error) error {
+	return p.data.MetaIterMut(func(k string, v any) error {
+		vStr := metaToString(v)
+		return f(k, vStr)
+	})
+}
+
+// MetaIterMut iterates each metadata key/value pair.
+func (p *Part) MetaIterMut(f func(string, any) error) error {
+	return p.data.MetaIterMut(func(k string, v any) error {
+		return f(k, v)
+	})
 }
 
 //------------------------------------------------------------------------------

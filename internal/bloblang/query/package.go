@@ -51,10 +51,12 @@ type MessageBatch interface {
 
 // MetaMsg provides access to the metadata of a message.
 type MetaMsg interface {
-	MetaSet(key, value string)
-	MetaGet(key string) string
+	MetaSetMut(key string, value any)
+	MetaGetStr(key string) string
+	MetaGetMut(key string) (any, bool)
 	MetaDelete(key string)
-	MetaIter(f func(k, v string) error) error
+	MetaIterMut(f func(k string, v any) error) error
+	MetaIterStr(f func(k, v string) error) error
 }
 
 // FunctionContext provides access to a range of query targets for functions to

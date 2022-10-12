@@ -80,7 +80,7 @@ func TestFieldExpressionParserErrors(t *testing.T) {
 func TestFieldExpressions(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	tests := map[string]struct {
@@ -197,7 +197,7 @@ func TestFieldExpressions(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)

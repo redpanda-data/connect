@@ -186,7 +186,7 @@ func (t *fallbackBroker) loop() {
 			}
 			newPayload := tran.Payload.ShallowCopy()
 			_ = newPayload.Iter(func(i int, p *message.Part) error {
-				p.MetaSet("fallback_error", err.Error())
+				p.MetaSetMut("fallback_error", err.Error())
 				return nil
 			})
 			select {

@@ -604,7 +604,7 @@ func TestAWK(t *testing.T) {
 			},
 		)
 		for k, v := range test.metadata {
-			inMsg.Get(0).MetaSet(k, v)
+			inMsg.Get(0).MetaSetMut(k, v)
 		}
 		msgs, _ := a.ProcessBatch(context.Background(), inMsg)
 		if len(msgs) != 1 {
@@ -613,7 +613,7 @@ func TestAWK(t *testing.T) {
 
 		if exp := test.metadataAfter; len(exp) > 0 {
 			act := map[string]string{}
-			_ = msgs[0].Get(0).MetaIter(func(k, v string) error {
+			_ = msgs[0].Get(0).MetaIterStr(func(k, v string) error {
 				act[k] = v
 				return nil
 			})

@@ -278,8 +278,8 @@ func (n *natsStreamReader) ReadBatch(ctx context.Context) (message.Batch, input.
 
 	bmsg := message.QuickBatch([][]byte{msg.Data})
 	part := bmsg.Get(0)
-	part.MetaSet("nats_stream_subject", msg.Subject)
-	part.MetaSet("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
+	part.MetaSetMut("nats_stream_subject", msg.Subject)
+	part.MetaSetMut("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
 
 	return bmsg, func(rctx context.Context, res error) error {
 		if res == nil {

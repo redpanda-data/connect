@@ -3,7 +3,6 @@ package azure
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
@@ -144,8 +143,8 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (msg message.Batch, a
 		}
 		_ = msg.Iter(func(_ int, part *message.Part) error {
 			a.row++
-			part.MetaSet("table_storage_name", a.conf.TableName)
-			part.MetaSet("row_num", strconv.Itoa(a.row))
+			part.MetaSetMut("table_storage_name", a.conf.TableName)
+			part.MetaSetMut("row_num", a.row)
 			return nil
 		})
 		return msg, func(rctx context.Context, res error) error {

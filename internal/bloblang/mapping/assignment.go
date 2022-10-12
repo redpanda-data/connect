@@ -14,9 +14,9 @@ import (
 //------------------------------------------------------------------------------
 
 type metaMsg interface {
-	MetaSet(key, value string)
+	MetaSetMut(key string, value any)
 	MetaDelete(key string)
-	MetaIter(f func(k, v string) error) error
+	MetaIterMut(f func(k string, v any) error) error
 }
 
 // AssignmentContext contains references to all potential assignment
@@ -86,20 +86,23 @@ func (m *MetaAssignment) Apply(value any, ctx AssignmentContext) error {
 		return errors.New("unable to assign metadata in the current context")
 	}
 	_, deleted := value.(query.Delete)
+	if !deleted {
+		value = query.IClone(value)
+	}
 	if m.key == nil {
 		if deleted {
-			_ = ctx.Meta.MetaIter(func(k, _ string) error {
+			_ = ctx.Meta.MetaIterMut(func(k string, _ any) error {
 				ctx.Meta.MetaDelete(k)
 				return nil
 			})
 		} else {
 			if m, ok := value.(map[string]any); ok {
-				_ = ctx.Meta.MetaIter(func(k, _ string) error {
+				_ = ctx.Meta.MetaIterMut(func(k string, _ any) error {
 					ctx.Meta.MetaDelete(k)
 					return nil
 				})
 				for k, v := range m {
-					ctx.Meta.MetaSet(k, query.IToString(v))
+					ctx.Meta.MetaSetMut(k, v)
 				}
 			} else {
 				return fmt.Errorf("setting root meta object requires object value, received: %T", value)
@@ -110,7 +113,7 @@ func (m *MetaAssignment) Apply(value any, ctx AssignmentContext) error {
 	if deleted {
 		ctx.Meta.MetaDelete(*m.key)
 	} else {
-		ctx.Meta.MetaSet(*m.key, query.IToString(value))
+		ctx.Meta.MetaSetMut(*m.key, value)
 	}
 	return nil
 }

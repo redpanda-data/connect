@@ -14,8 +14,8 @@ import (
 
 // InputPart defines an input part for a test case.
 type InputPart struct {
-	Content  string            `yaml:"content"`
-	Metadata map[string]string `yaml:"metadata"`
+	Content  string                 `yaml:"content"`
+	Metadata map[string]interface{} `yaml:"metadata"`
 	filePath string
 }
 
@@ -170,7 +170,7 @@ func (c *Case) ExecuteFrom(dir string, provider ProcProvider) (failures []CaseFa
 			}
 			part := message.NewPart([]byte(content))
 			for k, v := range v.Metadata {
-				part.MetaSet(k, v)
+				part.MetaSetMut(k, v)
 			}
 			parts[i] = part
 		}

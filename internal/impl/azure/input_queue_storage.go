@@ -3,7 +3,6 @@ package azure
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/Azure/azure-storage-queue-go/azqueue"
@@ -153,17 +152,17 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (msg message.Batch, a
 		for i := int32(0); i < n; i++ {
 			queueMsg := dequeue.Message(i)
 			part := message.NewPart([]byte(queueMsg.Text))
-			part.MetaSet("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
-			part.MetaSet("queue_storage_queue_name", queueName)
+			part.MetaSetMut("queue_storage_insertion_time", queueMsg.InsertionTime.Format(time.RFC3339))
+			part.MetaSetMut("queue_storage_queue_name", queueName)
 			if a.conf.TrackProperties {
 				msgLag := 0
 				if approxMsgCount >= n {
 					msgLag = int(approxMsgCount - n)
 				}
-				part.MetaSet("queue_storage_message_lag", strconv.Itoa(msgLag))
+				part.MetaSetMut("queue_storage_message_lag", msgLag)
 			}
 			for k, v := range metadata {
-				part.MetaSet(k, v)
+				part.MetaSetMut(k, v)
 			}
 			msg = append(msg, part)
 			dqm[i] = queueMsg
