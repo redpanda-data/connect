@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - New `azure_table_storage` input.
 - New `sql_raw` input.
 - New `tracing_id` bloblang function.
+- New `with` bloblang method.
 
 ## 4.9.1 - 2022-10-06
 
