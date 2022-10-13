@@ -30,6 +30,7 @@ APPS = benthos
 all: $(APPS)
 
 install: $(APPS)
+	@install -d $(INSTALL_DIR)
 	@rm -f $(INSTALL_DIR)/benthos
 	@cp $(PATHINSTBIN)/* $(INSTALL_DIR)/
 
