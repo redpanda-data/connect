@@ -8,6 +8,8 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAWKValidation(t *testing.T) {
@@ -140,6 +142,7 @@ func TestAWK(t *testing.T) {
 		program       string
 		input         string
 		output        string
+		errContains   string
 	}
 
 	tests := []jTest{
@@ -220,11 +223,12 @@ func TestAWK(t *testing.T) {
 			output:  `{"obj":[{"foo":11},{"foo":"nope"}]}`,
 		},
 		{
-			name:    "json get 3",
-			codec:   "none",
-			program: `{ print json_get("obj.bar") }`,
-			input:   `not json content`,
-			output:  `not json content`,
+			name:        "json get 3",
+			codec:       "none",
+			program:     `{ print json_get("obj.bar") }`,
+			input:       `not json content`,
+			output:      `not json content`,
+			errContains: "invalid character 'o' in literal null (expecting 'u')",
 		},
 		{
 			name:    "json get 4",
@@ -241,11 +245,12 @@ func TestAWK(t *testing.T) {
 			output:  `{"obj":{"foo":"hello world"}}`,
 		},
 		{
-			name:    "json set 2",
-			codec:   "none",
-			program: `{ json_set("obj.foo", "hello world") }`,
-			input:   `not json content`,
-			output:  `not json content`,
+			name:        "json set 2",
+			codec:       "none",
+			program:     `{ json_set("obj.foo", "hello world") }`,
+			input:       `not json content`,
+			output:      `not json content`,
+			errContains: "invalid character 'o' in literal null (expecting 'u')",
 		},
 		{
 			name:    "json delete 1",
@@ -255,11 +260,12 @@ func TestAWK(t *testing.T) {
 			output:  `{"obj":{"bar":"baz"}}`,
 		},
 		{
-			name:    "json delete 2",
-			codec:   "none",
-			program: `{ json_delete("obj.foo") }`,
-			input:   `not json content`,
-			output:  `not json content`,
+			name:        "json delete 2",
+			codec:       "none",
+			program:     `{ json_delete("obj.foo") }`,
+			input:       `not json content`,
+			output:      `not json content`,
+			errContains: "invalid character 'o' in literal null (expecting 'u')",
 		},
 		{
 			name:    "json delete 3",
@@ -585,6 +591,24 @@ func TestAWK(t *testing.T) {
 			input:   `{"foo":""}`,
 			output:  `0`,
 		},
+		{
+			name:    "base64_encode",
+			codec:   "none",
+			program: `{ print base64_encode("blobs are cool") }`,
+			output:  "YmxvYnMgYXJlIGNvb2w=",
+		},
+		{
+			name:    "base64_decode succeeds",
+			codec:   "none",
+			program: `{ print base64_decode("YmxvYnMgYXJlIGNvb2w=") }`,
+			output:  "blobs are cool",
+		},
+		{
+			name:        "base64_decode fails on invalid input",
+			codec:       "none",
+			program:     `{ print base64_decode("$$^^**") }`,
+			errContains: "illegal base64 data at input byte 0",
+		},
 	}
 
 	for _, test := range tests {
@@ -594,9 +618,7 @@ func TestAWK(t *testing.T) {
 		conf.AWK.Program = test.program
 
 		a, err := mock.NewManager().NewProcessor(conf)
-		if err != nil {
-			t.Fatalf("Error for test '%v': %v", test.name, err)
-		}
+		require.NoError(t, err, "Test '%s' failed", test.name)
 
 		inMsg := message.QuickBatch(
 			[][]byte{
@@ -606,9 +628,10 @@ func TestAWK(t *testing.T) {
 		for k, v := range test.metadata {
 			inMsg.Get(0).MetaSetMut(k, v)
 		}
-		msgs, _ := a.ProcessBatch(context.Background(), inMsg)
+		msgs, err := a.ProcessBatch(context.Background(), inMsg)
+		require.NoError(t, err, "Test '%s' failed", test.name)
 		if len(msgs) != 1 {
-			t.Fatalf("Test '%v' did not succeed", test.name)
+			t.Fatalf("Test '%s' did not succeed", test.name)
 		}
 
 		if exp := test.metadataAfter; len(exp) > 0 {
@@ -622,6 +645,13 @@ func TestAWK(t *testing.T) {
 			}
 		}
 
+		if err := msgs[0].Get(0).ErrorGet(); err != nil {
+			if test.errContains != "" {
+				assert.ErrorContains(t, err, test.errContains, "Test '%s' failed", test.name)
+			} else {
+				assert.NoError(t, err, "Test '%s' failed", test.name)
+			}
+		}
 		if exp, act := test.output, string(message.GetAllBytes(msgs[0])[0]); exp != act {
 			t.Errorf("Wrong result '%v': %v != %v", test.name, act, exp)
 		}

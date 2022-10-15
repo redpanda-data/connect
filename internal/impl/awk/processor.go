@@ -3,6 +3,7 @@ package awk
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -292,6 +293,19 @@ Signature: ` + "`print_log(message, level)`" + `
 
 Prints a Benthos log message at a particular log level. The log level is
 optional, and if omitted the level ` + "`INFO`" + ` will be used.
+
+` + "### `base64_encode`" + `
+
+Signature: ` + "`base64_encode(data)`" + `
+
+Encodes the input data to a base64 string.
+
+` + "### `base64_encode`" + `
+
+Signature: ` + "`base64_decode(data)`" + `
+
+Attempts to base64-decode the input data and returns the decoded string if
+successful. It will emit an error otherwise.
 
 [goawk]: https://github.com/benhoyt/goawk
 [goawk.differences]: https://github.com/benhoyt/goawk#differences-from-awk`,
@@ -589,6 +603,13 @@ var awkFunctionsMap = map[string]any{
 	},
 	"print_log": func(value, level string) {
 		// Do nothing, this is a placeholder for compilation.
+	},
+	"base64_encode": func(data string) string {
+		return base64.StdEncoding.EncodeToString([]byte(data))
+	},
+	"base64_decode": func(data string) (string, error) {
+		output, err := base64.StdEncoding.DecodeString(data)
+		return string(output), err
 	},
 }
 

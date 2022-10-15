@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - New `with` bloblang method.
 - Field `multi_header` added to the `kafka` and `kafka_franz` inputs.
 - New `cassandra` input.
+- New `base64_encode` and `base64_decode` functions for the awk processor.
 
 ## 4.9.1 - 2022-10-06
 
