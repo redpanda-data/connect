@@ -597,21 +597,21 @@ func (a *awsS3Reader) Connect(ctx context.Context) error {
 func s3MsgFromParts(p *s3PendingObject, parts []*message.Part) message.Batch {
 	msg := message.Batch(parts)
 	_ = msg.Iter(func(_ int, part *message.Part) error {
-		part.MetaSet("s3_key", p.target.key)
-		part.MetaSet("s3_bucket", p.target.bucket)
+		part.MetaSetMut("s3_key", p.target.key)
+		part.MetaSetMut("s3_bucket", p.target.bucket)
 		if p.obj.LastModified != nil {
-			part.MetaSet("s3_last_modified", p.obj.LastModified.Format(time.RFC3339))
-			part.MetaSet("s3_last_modified_unix", strconv.FormatInt(p.obj.LastModified.Unix(), 10))
+			part.MetaSetMut("s3_last_modified", p.obj.LastModified.Format(time.RFC3339))
+			part.MetaSetMut("s3_last_modified_unix", p.obj.LastModified.Unix())
 		}
 		if p.obj.ContentType != nil {
-			part.MetaSet("s3_content_type", *p.obj.ContentType)
+			part.MetaSetMut("s3_content_type", *p.obj.ContentType)
 		}
 		if p.obj.ContentEncoding != nil {
-			part.MetaSet("s3_content_encoding", *p.obj.ContentEncoding)
+			part.MetaSetMut("s3_content_encoding", *p.obj.ContentEncoding)
 		}
 		for k, v := range p.obj.Metadata {
 			if v != nil {
-				part.MetaSet(k, *v)
+				part.MetaSetMut(k, *v)
 			}
 		}
 		return nil

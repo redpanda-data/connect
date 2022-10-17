@@ -14,7 +14,7 @@ var (
 	EventError   EventType = "ERROR"
 )
 
-// NodeEvent represents a single event that occured within the stream.
+// NodeEvent represents a single event that occurred within the stream.
 type NodeEvent struct {
 	Type    EventType
 	Content string

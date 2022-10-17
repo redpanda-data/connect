@@ -140,11 +140,8 @@ func TestAsyncPreserverNackThenClose(t *testing.T) {
 		assert.NoError(t, ackFn1(ctx, errors.New("rejected")))
 	}()
 
-	_, _, err = pres.ReadBatch(ctx)
-	assert.Equal(t, component.ErrTimeout, err)
-
 	_, ackFn2, err := pres.ReadBatch(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NoError(t, ackFn2(ctx, nil))
 
 	_, _, err = pres.ReadBatch(ctx)
@@ -300,9 +297,6 @@ func TestAsyncPreserverCloseThenNackThenAck(t *testing.T) {
 		assert.NoError(t, ackFn1(ctx, errors.New("huh")))
 	}()
 
-	_, _, err = pres.ReadBatch(ctx)
-	assert.Equal(t, component.ErrTimeout, err)
-
 	_, ackFn2, err := pres.ReadBatch(ctx)
 	require.NoError(t, err)
 
@@ -405,9 +399,6 @@ func TestAsyncPreserverMutateThenNack(t *testing.T) {
 		assert.NoError(t, ackFn1(ctx, errors.New("huh")))
 	}()
 
-	_, _, err = pres.ReadBatch(ctx)
-	assert.Equal(t, component.ErrTimeout, err)
-
 	msgTwo, ackFn2, err := pres.ReadBatch(ctx)
 	require.NoError(t, err)
 
@@ -500,15 +491,12 @@ func TestAsyncPreserverCloseViaConnectThenAck(t *testing.T) {
 	assert.Equal(t, component.ErrNotConnected, err)
 
 	err = pres.Connect(ctx)
-	assert.NoError(t, err)
+	assert.Equal(t, component.ErrTypeClosed, err)
 
 	go func() {
 		time.Sleep(time.Millisecond * 100)
 		assert.NoError(t, ackFn1(ctx, nil))
 	}()
-
-	_, _, err = pres.ReadBatch(ctx)
-	assert.Equal(t, component.ErrTypeClosed, err)
 
 	assert.NoError(t, pres.Close(ctx))
 	wg.Wait()
@@ -643,7 +631,7 @@ func TestAsyncPreserverErrorBackoff(t *testing.T) {
 	for {
 		_, aFn, actErr := pres.ReadBatch(ctx)
 		if actErr != nil {
-			assert.EqualError(t, actErr, "context deadline exceeded")
+			assert.Error(t, ctx.Err(), actErr)
 			break
 		}
 		require.NoError(t, aFn(ctx, errors.New("no thanks")))
@@ -679,7 +667,8 @@ func TestAsyncPreserverBatchError(t *testing.T) {
 				[]byte("baz"),
 				[]byte("buz"),
 				[]byte("bev"),
-			})}
+			}),
+		}
 		select {
 		case readerImpl.readChan <- nil:
 		case <-time.After(time.Second):
@@ -742,7 +731,8 @@ func TestAsyncPreserverBatchErrorUnordered(t *testing.T) {
 				[]byte("baz"),
 				[]byte("buz"),
 				[]byte("bev"),
-			})}
+			}),
+		}
 		select {
 		case readerImpl.readChan <- nil:
 		case <-time.After(time.Second):

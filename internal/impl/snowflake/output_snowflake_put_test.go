@@ -130,7 +130,7 @@ snowpipe: '` + snowpipe + `'
 	conf, err := spec.ParseYAML(outputConfig, env)
 	require.NoError(t, err)
 
-	return newSnowflakeWriterFromConfig(conf, nil, nil)
+	return newSnowflakeWriterFromConfig(conf, service.MockResources())
 }
 
 func TestSnowflakeOutput(t *testing.T) {

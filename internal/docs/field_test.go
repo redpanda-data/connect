@@ -66,5 +66,4 @@ func TestBloblLinter(t *testing.T) {
 			assert.Equal(t, test.expected, lints)
 		})
 	}
-
 }

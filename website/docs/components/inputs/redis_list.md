@@ -15,7 +15,6 @@ categories: ["Services"]
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-
 Pops messages from the beginning of a Redis list using the BLPop command.
 
 
@@ -54,6 +53,7 @@ input:
       root_cas_file: ""
       client_certs: []
     key: ""
+    max_in_flight: 0
     timeout: 5s
 ```
 
@@ -64,11 +64,10 @@ input:
 
 ### `url`
 
-The URL of the target Redis server. Database is optional and is supplied as the URL path. The scheme `tcp` is equivalent to `redis`.
+The URL of the target Redis server. Database is optional and is supplied as the URL path.
 
 
 Type: `string`  
-Default: `""`  
 
 ```yml
 # Examples
@@ -93,16 +92,7 @@ Specifies a simple, cluster-aware, or failover-aware redis client.
 
 Type: `string`  
 Default: `"simple"`  
-
-```yml
-# Examples
-
-kind: simple
-
-kind: cluster
-
-kind: failover
-```
+Options: `simple`, `cluster`, `failover`.
 
 ### `master`
 
@@ -191,7 +181,6 @@ A list of client certificates to use. For each certificate either the fields `ce
 
 
 Type: `array`  
-Default: `[]`  
 
 ```yml
 # Examples
@@ -259,7 +248,15 @@ The key of a list to read from.
 
 
 Type: `string`  
-Default: `""`  
+
+### `max_in_flight`
+
+Optionally sets a limit on the number of messages that can be flowing through a Benthos stream pending acknowledgment from the input at any given time. Once a message has been either acknowledged or rejected (nacked) it is no longer considered pending. If the input produces logical batches then each batch is considered a single count against the maximum. **WARNING**: Batching policies at the output level will stall if this field limits the number of messages below the batching threshold. Zero (default) or lower implies no limit.
+
+
+Type: `int`  
+Default: `0`  
+Requires version 4.9.0 or newer  
 
 ### `timeout`
 

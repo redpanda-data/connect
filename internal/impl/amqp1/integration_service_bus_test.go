@@ -17,7 +17,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 )
 
 func TestIntegrationAzureServiceBus(t *testing.T) {
@@ -51,7 +51,7 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	conf.SourceAddress = sourceAddress
 	conf.AzureRenewLock = true
 
-	m, err := newAMQP1Reader(conf, log.Noop())
+	m, err := newAMQP1Reader(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	err = m.Connect(ctx)
@@ -111,8 +111,8 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 			defer wg.Done()
 
 			assert.True(t, testMsgs[string(actM.Get(0).AsBytes())], "Unexpected message")
-			assert.Equal(t, "plain/text", actM.Get(0).MetaGet("amqp_content_type"))
-			assert.Equal(t, "utf-8", actM.Get(0).MetaGet("amqp_content_encoding"))
+			assert.Equal(t, "plain/text", actM.Get(0).MetaGetStr("amqp_content_type"))
+			assert.Equal(t, "utf-8", actM.Get(0).MetaGetStr("amqp_content_encoding"))
 
 			time.Sleep(6 * time.Second) // Simulate long processing before ack so message lock expires and lock renewal is requires
 
@@ -125,7 +125,6 @@ func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
 	defer cancel()
 	_, _, err = m.ReadBatch(readCtx)
 	assert.Error(t, err, "got unexpected message (redelivery?)")
-
 }
 
 func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
@@ -136,7 +135,7 @@ func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
 	conf.SourceAddress = sourceAddress
 	conf.AzureRenewLock = true
 
-	m, err := newAMQP1Reader(conf, log.Noop())
+	m, err := newAMQP1Reader(conf, mock.NewManager())
 	require.NoError(t, err)
 
 	err = m.Connect(ctx)

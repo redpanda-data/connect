@@ -91,9 +91,8 @@ func init() {
 	err := service.RegisterBatchProcessor(
 		"schema_registry_encode", schemaRegistryEncoderConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-			return newSchemaRegistryEncoderFromConfig(conf, mgr.Logger())
+			return newSchemaRegistryEncoderFromConfig(conf, mgr)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -116,10 +115,11 @@ type schemaRegistryEncoder struct {
 	shutSig    *shutdown.Signaller
 
 	logger *service.Logger
+	mgr    *service.Resources
 	nowFn  func() time.Time
 }
 
-func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*schemaRegistryEncoder, error) {
+func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*schemaRegistryEncoder, error) {
 	urlStr, err := conf.FieldString("url")
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, logger *serv
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryEncoder(urlStr, authSigner, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, logger)
+	return newSchemaRegistryEncoder(urlStr, authSigner, tlsConf, subject, avroRawJSON, refreshPeriod, refreshTicker, mgr)
 }
 
 func newSchemaRegistryEncoder(
@@ -162,7 +162,7 @@ func newSchemaRegistryEncoder(
 	subject *service.InterpolatedString,
 	avroRawJSON bool,
 	schemaRefreshAfter, schemaRefreshTicker time.Duration,
-	logger *service.Logger,
+	mgr *service.Resources,
 ) (*schemaRegistryEncoder, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
@@ -177,7 +177,8 @@ func newSchemaRegistryEncoder(
 		schemaRefreshAfter:    schemaRefreshAfter,
 		schemas:               map[string]*cachedSchemaEncoder{},
 		shutSig:               shutdown.NewSignaller(),
-		logger:                logger,
+		logger:                mgr.Logger(),
+		mgr:                   mgr,
 		nowFn:                 time.Now,
 	}
 
@@ -328,7 +329,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		return nil, 0, err
 	}
 	req.Header.Add("Accept", "application/vnd.schemaregistry.v1+json")
-	if err := s.requestSigner(req); err != nil {
+	if err := s.requestSigner(s.mgr.FS(), req); err != nil {
 		return nil, 0, err
 	}
 

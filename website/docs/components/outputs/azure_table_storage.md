@@ -65,7 +65,7 @@ output:
     partition_key: ""
     row_key: ""
     properties: {}
-    insert_type: INSERT
+    transaction_type: INSERT
     max_in_flight: 64
     timeout: 5s
     batching:
@@ -162,7 +162,9 @@ Default: `""`
 ```yml
 # Examples
 
-table_name: ${!meta("kafka_topic")}
+table_name: ${! meta("kafka_topic") }
+
+table_name: ${! json("table") }
 ```
 
 ### `partition_key`
@@ -177,7 +179,7 @@ Default: `""`
 ```yml
 # Examples
 
-partition_key: ${!json("date")}
+partition_key: ${! json("date") }
 ```
 
 ### `row_key`
@@ -192,7 +194,7 @@ Default: `""`
 ```yml
 # Examples
 
-row_key: ${!json("device")}-${!uuid_v4()}
+row_key: ${! json("device")}-${!uuid_v4() }
 ```
 
 ### `properties`
@@ -204,15 +206,24 @@ This field supports [interpolation functions](/docs/configuration/interpolation#
 Type: `object`  
 Default: `{}`  
 
-### `insert_type`
+### `transaction_type`
 
-Type of insert operation
+Type of transaction operation. Valid options are `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`, `UPDATE_MERGE`, `UPDATE_REPLACE` and `DELETE`
 This field supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries).
 
 
 Type: `string`  
 Default: `"INSERT"`  
-Options: `INSERT`, `INSERT_MERGE`, `INSERT_REPLACE`.
+
+```yml
+# Examples
+
+transaction_type: ${! json("operation") }
+
+transaction_type: ${! meta("operation") }
+
+transaction_type: INSERT
+```
 
 ### `max_in_flight`
 

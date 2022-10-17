@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"path/filepath"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 
@@ -162,12 +163,12 @@ pipeline:
 
 type protobufOperator func(part *message.Part) error
 
-func newProtobufToJSONOperator(msg string, importPaths []string) (protobufOperator, error) {
+func newProtobufToJSONOperator(f ifs.FS, msg string, importPaths []string) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
 
-	descriptors, err := loadDescriptors(importPaths)
+	descriptors, err := loadDescriptors(f, importPaths)
 	if err != nil {
 		return nil, err
 	}
@@ -197,12 +198,12 @@ func newProtobufToJSONOperator(msg string, importPaths []string) (protobufOperat
 	}, nil
 }
 
-func newProtobufFromJSONOperator(msg string, importPaths []string) (protobufOperator, error) {
+func newProtobufFromJSONOperator(f ifs.FS, msg string, importPaths []string) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
 
-	descriptors, err := loadDescriptors(importPaths)
+	descriptors, err := loadDescriptors(f, importPaths)
 	if err != nil {
 		return nil, err
 	}
@@ -232,17 +233,17 @@ func newProtobufFromJSONOperator(msg string, importPaths []string) (protobufOper
 	}, nil
 }
 
-func strToProtobufOperator(opStr, message string, importPaths []string) (protobufOperator, error) {
+func strToProtobufOperator(f ifs.FS, opStr, message string, importPaths []string) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
-		return newProtobufToJSONOperator(message, importPaths)
+		return newProtobufToJSONOperator(f, message, importPaths)
 	case "from_json":
-		return newProtobufFromJSONOperator(message, importPaths)
+		return newProtobufFromJSONOperator(f, message, importPaths)
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
-func loadDescriptors(importPaths []string) ([]*desc.FileDescriptor, error) {
+func loadDescriptors(f ifs.FS, importPaths []string) ([]*desc.FileDescriptor, error) {
 	var parser protoparse.Parser
 	if len(importPaths) == 0 {
 		importPaths = []string{"."}
@@ -252,7 +253,7 @@ func loadDescriptors(importPaths []string) ([]*desc.FileDescriptor, error) {
 
 	var files []string
 	for _, importPath := range importPaths {
-		if err := filepath.Walk(importPath, func(path string, info os.FileInfo, ferr error) error {
+		if err := fs.WalkDir(f, importPath, func(path string, info fs.DirEntry, ferr error) error {
 			if ferr != nil || info.IsDir() {
 				return ferr
 			}
@@ -303,7 +304,7 @@ func newProtobuf(conf processor.ProtobufConfig, mgr bundle.NewManagement) (*prot
 		log: mgr.Logger(),
 	}
 	var err error
-	if p.operator, err = strToProtobufOperator(conf.Operator, conf.Message, conf.ImportPaths); err != nil {
+	if p.operator, err = strToProtobufOperator(mgr.FS(), conf.Operator, conf.Message, conf.ImportPaths); err != nil {
 		return nil, err
 	}
 	return p, nil

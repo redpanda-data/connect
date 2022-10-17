@@ -186,9 +186,9 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 		// checkpointer that uses it already does this, but it's not
 		// particularly clear, hence this comment.
 		fn: func(topic string, partition int32, offset int64, metadata string) {
-			//TODO: Since offsetVersion() returns v1 we can set leaderEpoch to 0 for now
+			// TODO: Since offsetVersion() returns v1 we can set leaderEpoch to 0 for now
 			// Per sarama and kafka protocol docs leaderEpoch is in v7 payload
-			offsetPutReq.AddBlock(topic, partition, offset, 0, time.Now().Unix(), metadata)
+			offsetPutReq.AddBlock(topic, partition, offset, time.Now().Unix(), metadata)
 		},
 	}
 

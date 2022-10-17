@@ -284,7 +284,7 @@ func TestHTTPClientSyncResponse(t *testing.T) {
 		resMsg := resMsgs[0]
 		require.Equal(t, 1, resMsg.Len())
 		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).AsBytes()))
-		assert.Equal(t, "", resMsg.Get(0).MetaGet("fooheader"))
+		assert.Equal(t, "", resMsg.Get(0).MetaGetStr("fooheader"))
 	}
 
 	require.NoError(t, h.Close(ctx))
@@ -332,7 +332,7 @@ func TestHTTPClientSyncResponseCopyHeaders(t *testing.T) {
 		resMsg := resMsgs[0]
 		require.Equal(t, 1, resMsg.Len())
 		assert.Equal(t, "echo: "+testStr, string(resMsg.Get(0).AsBytes()))
-		assert.Equal(t, "foovalue", resMsg.Get(0).MetaGet("fooheader"))
+		assert.Equal(t, "foovalue", resMsg.Get(0).MetaGetStr("fooheader"))
 	}
 
 	require.NoError(t, h.Close(ctx))
@@ -475,11 +475,13 @@ func TestHTTPOutputClientMultipartBody(t *testing.T) {
 		{
 			ContentDisposition: `form-data; name="text"`,
 			ContentType:        "text/plain",
-			Body:               "PART-A"},
+			Body:               "PART-A",
+		},
 		{
 			ContentDisposition: `form-data; name="file1"; filename="a.txt"`,
 			ContentType:        "text/plain",
-			Body:               "PART-B"},
+			Body:               "PART-B",
+		},
 	}
 	h, err := newHTTPClientWriter(conf, mock.NewManager())
 	if err != nil {
@@ -558,11 +560,13 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 		{
 			ContentDisposition: `form-data; name="text"`,
 			ContentType:        "text/plain",
-			Body:               "PART-A"},
+			Body:               "PART-A",
+		},
 		{
 			ContentDisposition: `form-data; name="file1"; filename="a.txt"`,
 			ContentType:        "text/plain",
-			Body:               "PART-B"},
+			Body:               "PART-B",
+		},
 	}
 	h, err := newHTTPClientWriter(conf, mock.NewManager())
 	if err != nil {
@@ -595,7 +599,6 @@ func TestHTTPOutputClientMultipartHeaders(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Errorf("Action timed out")
 		return
-
 	}
 
 	require.NoError(t, h.Close(ctx))

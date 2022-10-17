@@ -297,7 +297,8 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamInt64("second", "").Default(5)).
 				Add(ParamBool("third", "").Default(true)),
 			input: map[string]any{
-				"first": "foo", "second": 10, "third": false, "fourth": "bar"},
+				"first": "foo", "second": 10, "third": false, "fourth": "bar",
+			},
 			errContains: "unknown parameter fourth",
 		},
 		{
@@ -307,7 +308,8 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamInt64("second", "")).
 				Add(ParamBool("third", "").Default(true)),
 			input: map[string]any{
-				"first": "foo", "seconde": 10, "third": false},
+				"first": "foo", "seconde": 10, "third": false,
+			},
 			errContains: "unknown parameter seconde, did you mean second?",
 		},
 		{
@@ -317,7 +319,8 @@ func TestParamsNamed(t *testing.T) {
 				Add(ParamInt64("second", "")).
 				Add(ParamBool("third", "")),
 			input: map[string]any{
-				"first": "foo", "seconde": 10, "thirde": false},
+				"first": "foo", "seconde": 10, "thirde": false,
+			},
 			errContains: "unknown parameters seconde, thirde, expected second, third",
 		},
 		{

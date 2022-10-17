@@ -76,7 +76,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return NewSQLInsertProcessorFromConfig(conf, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -110,6 +109,7 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service
 	}
 	if _, in := map[string]struct{}{
 		"clickhouse": {},
+		"oracle":     {},
 	}[driverStr]; in {
 		s.useTxStmt = true
 	}
@@ -138,6 +138,16 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, logger *service
 	s.builder = squirrel.Insert(tableStr).Columns(columns...)
 	if driverStr == "postgres" || driverStr == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
+	} else if driverStr == "oracle" {
+		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
+	}
+
+	if s.useTxStmt {
+		values := make([]any, 0, len(columns))
+		for _, c := range columns {
+			values = append(values, c)
+		}
+		s.builder = s.builder.Values(values...)
 	}
 
 	if conf.Contains("prefix") {
@@ -192,7 +202,7 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		if tx, err = s.db.Begin(); err != nil {
 			return nil, err
 		}
-		sqlStr, _, err := insertBuilder.Values().ToSql()
+		sqlStr, _, err := insertBuilder.ToSql()
 		if err != nil {
 			return nil, err
 		}

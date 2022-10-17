@@ -412,7 +412,7 @@ func (e *Environment) RegisterMetricsExporter(name string, spec *ConfigSpec, cto
 
 // WalkMetrics executes a provided function argument for every metrics component
 // that has been registered to the environment. Note that metrics components
-// available to an environment cannot be modified
+// available to an environment cannot be modified.
 func (e *Environment) WalkMetrics(fn func(name string, config *ConfigView)) {
 	for _, v := range bundle.AllMetrics.Docs() {
 		fn(v.Name, &ConfigView{
@@ -448,7 +448,7 @@ func (e *Environment) RegisterOtelTracerProvider(name string, spec *ConfigSpec, 
 
 // WalkTracers executes a provided function argument for every tracer component
 // that has been registered to the environment. Note that tracer components
-// available to an environment cannot be modified
+// available to an environment cannot be modified.
 func (e *Environment) WalkTracers(fn func(name string, config *ConfigView)) {
 	for _, v := range bundle.AllTracers.Docs() {
 		fn(v.Name, &ConfigView{

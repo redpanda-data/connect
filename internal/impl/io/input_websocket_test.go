@@ -13,7 +13,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
-	"github.com/benthosdev/benthos/v4/internal/log"
+	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -50,7 +50,7 @@ func TestWebsocketBasic(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := newWebsocketReader(conf, log.Noop())
+	m, err := newWebsocketReader(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestWebsocketOpenMsg(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := newWebsocketReader(conf, log.Noop())
+	m, err := newWebsocketReader(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestWebsocketClose(t *testing.T) {
 		conf.URL = wsURL.String()
 	}
 
-	m, err := newWebsocketReader(conf, log.Noop())
+	m, err := newWebsocketReader(conf, mock.NewManager())
 	if err != nil {
 		t.Fatal(err)
 	}

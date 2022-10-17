@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/fatih/color"
 	"github.com/nsf/jsondiff"
@@ -14,6 +13,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 )
 
@@ -183,7 +183,7 @@ func (c Config) Test() ([]string, error) {
 // ReadConfig attempts to read a template configuration file.
 func ReadConfig(path string) (conf Config, lints []docs.Lint, err error) {
 	var templateBytes []byte
-	if templateBytes, err = os.ReadFile(path); err != nil {
+	if templateBytes, err = ifs.ReadFile(ifs.OS(), path); err != nil {
 		return
 	}
 

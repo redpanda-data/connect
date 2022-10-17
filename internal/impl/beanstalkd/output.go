@@ -13,7 +13,7 @@ import (
 func beanstalkdOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Version("3.46.0").
+		Version("4.7.0").
 		Summary("Write messages to a Beanstalkd queue.").
 		Field(service.NewStringField("address").
 			Description("An address to connect to.").
@@ -34,7 +34,6 @@ func init() {
 			w, err := newBeanstalkdWriterFromConfig(conf, mgr.Logger())
 			return w, maxInFlight, err
 		})
-
 	if err != nil {
 		panic(err)
 	}

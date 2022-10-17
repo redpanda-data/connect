@@ -13,7 +13,7 @@ import (
 func TestExpressions(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	mustFunc := func(fn Function, err error) Function {
@@ -238,7 +238,7 @@ func TestExpressions(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)

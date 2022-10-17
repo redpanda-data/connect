@@ -5,10 +5,50 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- The `nats_jetstream` input now adds a range of useful metadata information to messages.
+- Field `transaction_type` added to the `azure_table_storage` output, which deprecates the previous `insert_type` field and supports interpolation functions.
+- Field `logged_batch` added to the `cassandra` output.
+- All `sql` components now support Snowflake.
+- New `azure_table_storage` input.
+- New `sql_raw` input.
+- New `tracing_id` bloblang function.
+- New `with` bloblang method.
+
+## 4.9.1 - 2022-10-06
+
+### Added
+
+- Go API: A new `BatchError` type added for distinguishing errors of a given batch.
+
+### Fixed
+
+- Rolled back `kafka` input and output underlying sarama client library to fix a regression introduced in 4.9.0 😅 where `invalid configuration (Consumer.Group.Rebalance.GroupStrategies and Consumer.Group.Rebalance.Strategy cannot be set at the same time)` errors would prevent consumption under certain configurations. We've decided to roll back rather than upgrade as a breaking API change was introduced that could cause issues for Go API importers (more info here: https://github.com/Shopify/sarama/issues/2358).
+
+## 4.9.0 - 2022-10-03
+
+### Added
+
+- New `parquet` input for reading a batch of Parquet files from disk.
+- Field `max_in_flight` added to the `redis_list` input.
+
+### Fixed
+
+- Upgraded `kafka` input and output underlying sarama client library to fix a regression introduced in 4.7.0 where `The requested offset is outside the range of offsets maintained by the server for the given topic/partition` errors would prevent consumption of partitions.
+- The `cassandra` output now inserts logged batches of data rather than the less efficient (and unnecessary) unlogged form.
+
+## 4.8.0 - 2022-09-30
+
+### Added
+
+- All `sql` components now support Oracle DB.
+
 ### Fixed
 
 - All SQL components now accept an empty or unspecified `args_mapping` as an alias for no arguments.
 - Field `unsafe_dynamic_query` added to the `sql_raw` output.
+- Fixed a regression in 4.7.0 where HTTP client components were sending duplicate request headers.
 
 ## 4.7.0 - 2022-09-27
 

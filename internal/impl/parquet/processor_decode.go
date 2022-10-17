@@ -55,7 +55,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newParquetDecodeProcessorFromConfig(conf, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -96,11 +95,7 @@ func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Messa
 		return nil, err
 	}
 
-	pRdrConf, err := parquet.NewReaderConfig()
-	if err != nil {
-		return nil, err
-	}
-	pRdr := parquet.NewReader(inFile, pRdrConf)
+	pRdr := parquet.NewGenericReader[any](inFile)
 
 	rowBuf := make([]parquet.Row, 10)
 	var resBatch service.MessageBatch

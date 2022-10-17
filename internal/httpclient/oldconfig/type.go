@@ -1,6 +1,10 @@
 package oldconfig
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
+)
 
 // AuthConfig contains configuration params for various HTTP auth strategies.
 type AuthConfig struct {
@@ -19,11 +23,11 @@ func NewAuthConfig() AuthConfig {
 }
 
 // Sign method to sign an HTTP request for configured auth strategies.
-func (c AuthConfig) Sign(req *http.Request) error {
+func (c AuthConfig) Sign(f ifs.FS, req *http.Request) error {
 	if err := c.OAuth.Sign(req); err != nil {
 		return err
 	}
-	if err := c.JWT.Sign(req); err != nil {
+	if err := c.JWT.Sign(f, req); err != nil {
 		return err
 	}
 	return c.BasicAuth.Sign(req)

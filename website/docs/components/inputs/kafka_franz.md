@@ -132,7 +132,7 @@ Default: `false`
 
 ### `consumer_group`
 
-A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically commited and resumed under this name.
+A consumer group to consume as. Partitions are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name.
 
 
 Type: `string`  

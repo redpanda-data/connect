@@ -51,10 +51,12 @@ type MessageBatch interface {
 
 // MetaMsg provides access to the metadata of a message.
 type MetaMsg interface {
-	MetaSet(key, value string)
-	MetaGet(key string) string
+	MetaSetMut(key string, value any)
+	MetaGetStr(key string) string
+	MetaGetMut(key string) (any, bool)
 	MetaDelete(key string)
-	MetaIter(f func(k, v string) error) error
+	MetaIterMut(f func(k string, v any) error) error
+	MetaIterStr(f func(k, v string) error) error
 }
 
 // FunctionContext provides access to a range of query targets for functions to
@@ -86,8 +88,7 @@ type namedContextValue struct {
 
 // IncrStackCount increases the count stored in the function context of how many
 // maps we've entered and returns the current count.
-// nolint:gocritic // Ignore unnamedResult false positive
-func (ctx FunctionContext) IncrStackCount() (FunctionContext, int) {
+func (ctx FunctionContext) IncrStackCount() (FunctionContext, int) { //nolint: gocritic // Ignore unnamedResult false positive
 	ctx.stackCount++
 	return ctx, ctx.stackCount
 }
@@ -160,7 +161,7 @@ func (ctx FunctionContext) PopValue() (*any, FunctionContext) {
 
 //------------------------------------------------------------------------------
 
-// ExecToString returns a string from a function exection.
+// ExecToString returns a string from a function execution.
 func ExecToString(fn Function, ctx FunctionContext) string {
 	v, err := fn.Exec(ctx)
 	if err != nil {
@@ -172,7 +173,7 @@ func ExecToString(fn Function, ctx FunctionContext) string {
 	return IToString(v)
 }
 
-// ExecToBytes returns a byte slice from a function exection.
+// ExecToBytes returns a byte slice from a function execution.
 func ExecToBytes(fn Function, ctx FunctionContext) []byte {
 	v, err := fn.Exec(ctx)
 	if err != nil {

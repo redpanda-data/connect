@@ -1,5 +1,4 @@
 //go:build x_benthos_extra
-// +build x_benthos_extra
 
 package all
 

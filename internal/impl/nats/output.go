@@ -96,7 +96,7 @@ func newNATSWriter(conf output.NATSConfig, mgr bundle.NewManagement, log log.Mod
 	n.urls = strings.Join(conf.URLs, ",")
 
 	if conf.TLS.Enabled {
-		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+		if n.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}

@@ -175,7 +175,7 @@ func NewElasticsearchV2(conf output.ElasticsearchConfig, mgr bundle.NewManagemen
 
 	if conf.TLS.Enabled {
 		var err error
-		if e.tlsConf, err = conf.TLS.Get(); err != nil {
+		if e.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -209,7 +209,6 @@ func (e *Elasticsearch) Connect(ctx context.Context) error {
 			},
 			Timeout: e.timeout,
 		}))
-
 	} else {
 		opts = append(opts, elastic.SetHttpClient(&http.Client{
 			Timeout: e.timeout,

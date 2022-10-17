@@ -3,7 +3,6 @@ package mqtt
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,7 +23,7 @@ import (
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		m, err := newMQTTReader(conf.MQTT, nm.Logger())
+		m, err := newMQTTReader(conf.MQTT, nm)
 		if err != nil {
 			return nil, err
 		}
@@ -86,13 +85,15 @@ type mqttReader struct {
 	urls []string
 
 	log log.Modular
+	mgr bundle.NewManagement
 }
 
-func newMQTTReader(conf input.MQTTConfig, log log.Modular) (*mqttReader, error) {
+func newMQTTReader(conf input.MQTTConfig, mgr bundle.NewManagement) (*mqttReader, error) {
 	m := &mqttReader{
 		conf:          conf,
 		interruptChan: make(chan struct{}),
-		log:           log,
+		log:           mgr.Logger(),
+		mgr:           mgr,
 	}
 
 	var err error
@@ -189,7 +190,7 @@ func (m *mqttReader) Connect(ctx context.Context) error {
 	}
 
 	if m.conf.TLS.Enabled {
-		tlsConf, err := m.conf.TLS.Get()
+		tlsConf, err := m.conf.TLS.Get(m.mgr.FS())
 		if err != nil {
 			return err
 		}
@@ -260,11 +261,11 @@ func (m *mqttReader) ReadBatch(ctx context.Context) (message.Batch, input.AsyncA
 		message := message.QuickBatch([][]byte{msg.Payload()})
 
 		p := message.Get(0)
-		p.MetaSet("mqtt_duplicate", strconv.FormatBool(msg.Duplicate()))
-		p.MetaSet("mqtt_qos", strconv.Itoa(int(msg.Qos())))
-		p.MetaSet("mqtt_retained", strconv.FormatBool(msg.Retained()))
-		p.MetaSet("mqtt_topic", msg.Topic())
-		p.MetaSet("mqtt_message_id", strconv.Itoa(int(msg.MessageID())))
+		p.MetaSetMut("mqtt_duplicate", msg.Duplicate())
+		p.MetaSetMut("mqtt_qos", int(msg.Qos()))
+		p.MetaSetMut("mqtt_retained", msg.Retained())
+		p.MetaSetMut("mqtt_topic", msg.Topic())
+		p.MetaSetMut("mqtt_message_id", int(msg.MessageID()))
 
 		return message, func(ctx context.Context, res error) error {
 			if res == nil {

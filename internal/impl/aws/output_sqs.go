@@ -17,6 +17,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -164,8 +165,8 @@ func isValidSQSAttribute(k, v string) bool {
 func (a *sqsWriter) getSQSAttributes(msg message.Batch, i int) sqsAttributes {
 	p := msg.Get(i)
 	keys := []string{}
-	_ = a.metaFilter.Iter(p, func(k, v string) error {
-		if isValidSQSAttribute(k, v) {
+	_ = a.metaFilter.Iter(p, func(k string, v any) error {
+		if isValidSQSAttribute(k, query.IToString(v)) {
 			keys = append(keys, k)
 		} else {
 			a.log.Debugf("Rejecting metadata key '%v' due to invalid characters\n", k)
@@ -180,7 +181,7 @@ func (a *sqsWriter) getSQSAttributes(msg message.Batch, i int) sqsAttributes {
 		for i, k := range keys {
 			values[k] = &sqs.MessageAttributeValue{
 				DataType:    aws.String("String"),
-				StringValue: aws.String(p.MetaGet(k)),
+				StringValue: aws.String(p.MetaGetStr(k)),
 			}
 			if i == 9 {
 				break

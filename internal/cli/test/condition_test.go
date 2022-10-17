@@ -112,26 +112,18 @@ func TestConditionCheckAll(t *testing.T) {
 	}
 
 	part := message.NewPart([]byte("foo bar"))
-	part.MetaSet("foo", "bar")
+	part.MetaSetMut("foo", "bar")
 	errs := conds.CheckAll("", part)
-	if errs != nil {
-		t.Errorf("Unexpected errors: %v", errs)
-	}
+	require.Len(t, errs, 0)
 
 	part = message.NewPart([]byte("nope"))
 	errs = conds.CheckAll("", part)
-	if exp, act := 2, len(errs); exp != act {
-		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
-	}
-	if exp, act := "content_equals: content mismatch\n  expected: foo bar\n  received: nope", errs[0].Error(); exp != act {
-		t.Errorf("Wrong error: %v != %v", act, exp)
-	}
-	if exp, act := "metadata_equals: metadata key 'foo' mismatch\n  expected: bar\n  received: ", errs[1].Error(); exp != act {
-		t.Errorf("Wrong error: %v != %v", act, exp)
-	}
+	require.Len(t, errs, 2)
+	assert.Contains(t, "content_equals: content mismatch\n  expected: foo bar\n  received: nope", errs[0].Error())
+	assert.Contains(t, "metadata_equals: metadata key 'foo' expected but not found", errs[1].Error())
 
 	part = message.NewPart([]byte("foo bar"))
-	part.MetaSet("foo", "wrong")
+	part.MetaSetMut("foo", "wrong")
 	errs = conds.CheckAll("", part)
 	if exp, act := 1, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
@@ -141,7 +133,7 @@ func TestConditionCheckAll(t *testing.T) {
 	}
 
 	part = message.NewPart([]byte("wrong"))
-	part.MetaSet("foo", "bar")
+	part.MetaSetMut("foo", "bar")
 	errs = conds.CheckAll("", part)
 	if exp, act := 1, len(errs); exp != act {
 		t.Fatalf("Wrong count of errors: %v != %v", act, exp)
@@ -271,7 +263,7 @@ func TestMetadataEqualsCondition(t *testing.T) {
 		{
 			name:     "negative 1",
 			input:    map[string]string{},
-			expected: errors.New("metadata key 'foo' mismatch\n  expected: bar\n  received: "),
+			expected: errors.New("metadata key 'foo' expected but not found"),
 		},
 		{
 			name: "negative 2",
@@ -286,7 +278,7 @@ func TestMetadataEqualsCondition(t *testing.T) {
 		t.Run(test.name, func(tt *testing.T) {
 			part := message.NewPart(nil)
 			for k, v := range test.input {
-				part.MetaSet(k, v)
+				part.MetaSetMut(k, v)
 			}
 			actErr := cond.Check(part)
 			if test.expected == nil && actErr == nil {

@@ -36,7 +36,7 @@ func (t *Tracked) Message() message.Batch {
 	return t.msg
 }
 
-func (t *Tracked) getResFromGroup(walkable batch.WalkableError) error {
+func (t *Tracked) getResFromGroup(walkable *batch.Error) error {
 	remainingIndexes := make(map[int]struct{}, t.msg.Len())
 	for i := 0; i < t.msg.Len(); i++ {
 		remainingIndexes[i] = struct{}{}
@@ -68,7 +68,7 @@ func (t *Tracked) getResFromGroup(walkable batch.WalkableError) error {
 
 func (t *Tracked) resFromError(err error) error {
 	if err != nil {
-		if walkable, ok := err.(batch.WalkableError); ok {
+		if walkable, ok := err.(*batch.Error); ok {
 			err = t.getResFromGroup(walkable)
 		}
 	}

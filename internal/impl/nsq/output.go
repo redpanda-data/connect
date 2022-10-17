@@ -72,7 +72,7 @@ func newNSQWriter(conf output.NSQConfig, mgr bundle.NewManagement) (*nsqWriter, 
 		return nil, fmt.Errorf("failed to parse topic expression: %v", err)
 	}
 	if conf.TLS.Enabled {
-		if n.tlsConf, err = conf.TLS.Get(); err != nil {
+		if n.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}

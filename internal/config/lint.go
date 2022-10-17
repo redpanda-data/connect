@@ -2,12 +2,12 @@ package config
 
 import (
 	"bytes"
-	"os"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 // LintOptions specifies the linters that will be enabled.
@@ -60,7 +60,7 @@ func LintBytes(opts LintOptions, rawBytes []byte) ([]docs.Lint, error) {
 // the file has an unexpected higher level format, such as invalid utf-8
 // encoding.
 func ReadFileEnvSwap(path string) (configBytes []byte, lints []docs.Lint, err error) {
-	configBytes, err = os.ReadFile(path)
+	configBytes, err = ifs.ReadFile(ifs.OS(), path)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -83,11 +83,11 @@ A database [driver](#drivers) to use.
 
 
 Type: `string`  
-Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`.
+Options: `mysql`, `postgres`, `clickhouse`, `mssql`, `sqlite`, `oracle`, `snowflake`.
 
 ### `data_source_name`
 
-Sorry! This field is missing documentation.
+Data source name.
 
 
 Type: `string`  
@@ -103,6 +103,8 @@ The query to execute. The style of placeholder to use depends on the driver, som
 | `postgres` | Dollar sign |
 | `mssql` | Question mark |
 | `sqlite` | Question mark |
+| `oracle` | Colon |
+| `snowflake` | Question mark |
 
 
 Type: `string`  

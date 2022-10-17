@@ -82,7 +82,6 @@ func init() {
 			}
 			return service.AutoRetryNacks(i), nil
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -148,6 +147,8 @@ func newSQLSelectInputFromConfig(conf *service.ParsedConfig, logger *service.Log
 	s.builder = squirrel.Select(columns...).From(tableStr)
 	if s.driver == "postgres" || s.driver == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
+	} else if s.driver == "oracle" {
+		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
 	}
 
 	if conf.Contains("prefix") {
@@ -196,7 +197,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 	if s.argsMapping != nil {
 		var iargs any
 		if iargs, err = s.argsMapping.Query(nil); err != nil {
-			return err
+			return
 		}
 
 		var ok bool

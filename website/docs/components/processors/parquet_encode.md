@@ -70,7 +70,7 @@ output:
 
 ### `schema`
 
-Sorry! This field is missing documentation.
+Parquet schema.
 
 
 Type: `array`  

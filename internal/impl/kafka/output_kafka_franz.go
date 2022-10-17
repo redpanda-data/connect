@@ -12,7 +12,6 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -89,7 +88,6 @@ func init() {
 			output, err = newFranzKafkaWriterFromConfig(conf, mgr.Logger())
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -112,14 +110,12 @@ type franzKafkaWriter struct {
 
 	client *kgo.Client
 
-	log     *service.Logger
-	shutSig *shutdown.Signaller
+	log *service.Logger
 }
 
 func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) (*franzKafkaWriter, error) {
 	f := franzKafkaWriter{
-		log:     log,
-		shutSig: shutdown.NewSignaller(),
+		log: log,
 	}
 
 	brokerList, err := conf.FieldStringList("seed_brokers")

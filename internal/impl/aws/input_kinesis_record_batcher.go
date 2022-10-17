@@ -48,12 +48,12 @@ func (k *kinesisReader) newAWSKinesisRecordBatcher(streamID, shardID, sequence s
 
 func (a *awsKinesisRecordBatcher) AddRecord(r *kinesis.Record) bool {
 	p := message.NewPart(r.Data)
-	p.MetaSet("kinesis_stream", a.streamID)
-	p.MetaSet("kinesis_shard", a.shardID)
+	p.MetaSetMut("kinesis_stream", a.streamID)
+	p.MetaSetMut("kinesis_shard", a.shardID)
 	if r.PartitionKey != nil {
-		p.MetaSet("kinesis_partition_key", *r.PartitionKey)
+		p.MetaSetMut("kinesis_partition_key", *r.PartitionKey)
 	}
-	p.MetaSet("kinesis_sequence_number", *r.SequenceNumber)
+	p.MetaSetMut("kinesis_sequence_number", *r.SequenceNumber)
 
 	a.batchedSequence = *r.SequenceNumber
 	if a.flushedMessage != nil {

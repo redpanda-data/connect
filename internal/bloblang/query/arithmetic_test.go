@@ -269,10 +269,11 @@ func TestArithmeticComparisons(t *testing.T) {
 		})
 	}
 }
+
 func TestArithmetic(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	arithmetic := func(fns []Function, ops []ArithmeticOperator) Function {
@@ -794,7 +795,7 @@ func TestArithmetic(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)

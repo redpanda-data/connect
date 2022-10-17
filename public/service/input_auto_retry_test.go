@@ -9,8 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/benthosdev/benthos/v4/internal/component"
 )
 
 type mockInput struct {
@@ -35,7 +33,7 @@ func newMockInput() *mockInput {
 func (i *mockInput) Connect(ctx context.Context) error {
 	cerr, open := <-i.connChan
 	if !open {
-		return component.ErrNotConnected
+		return ErrEndOfInput
 	}
 	return cerr
 }
@@ -43,10 +41,10 @@ func (i *mockInput) Connect(ctx context.Context) error {
 func (i *mockInput) Read(ctx context.Context) (*Message, AckFunc, error) {
 	select {
 	case <-ctx.Done():
-		return nil, nil, component.ErrTimeout
+		return nil, nil, ctx.Err()
 	case err, open := <-i.readChan:
 		if !open {
-			return nil, nil, component.ErrNotConnected
+			return nil, nil, ErrEndOfInput
 		}
 		if err != nil {
 			return nil, nil, err
@@ -222,7 +220,7 @@ func TestAutoRetryErrorBackoff(t *testing.T) {
 	for {
 		_, aFn, actErr := pres.Read(ctx)
 		if actErr != nil {
-			assert.EqualError(t, actErr, "context deadline exceeded")
+			assert.Equal(t, ctx.Err(), actErr)
 			break
 		}
 		require.NoError(t, aFn(ctx, errors.New("no thanks")))

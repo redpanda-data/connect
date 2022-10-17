@@ -102,7 +102,7 @@ BBB,Emma,28
 CCC,Geri,45
 ` + "```" + `
 
-And the second file called "hobbies.ndjson" contains JSON documents, one per line, that associate an identifer with an array of hobbies. However, these data objects are in a nested format:
+And the second file called "hobbies.ndjson" contains JSON documents, one per line, that associate an identifier with an array of hobbies. However, these data objects are in a nested format:
 
 ` + "```json" + `
 {"document":{"uuid":"CCC","hobbies":[{"type":"pokemon go"}]}}
@@ -170,16 +170,15 @@ Each message must be structured (JSON or otherwise processed into a structured f
 //------------------------------------------------------------------------------
 
 type joinedMessage struct {
-	metadata map[string]string
+	metadata map[string]any
 	fields   *gabs.Container
 }
 
 func (j *joinedMessage) ToMsg() message.Batch {
 	part := message.NewPart(nil)
-	jCopy, _ := message.CopyJSON(j.fields)
-	part.SetStructuredMut(jCopy)
+	part.SetStructuredMut(message.CopyJSON(j.fields))
 	for k, v := range j.metadata {
-		part.MetaSet(k, v)
+		part.MetaSetMut(k, v)
 	}
 	msg := message.Batch{part}
 	return msg
@@ -253,8 +252,8 @@ func (m *messageJoiner) Add(msg message.Batch, lastInSequence bool, fn func(msg 
 			return nil
 		}
 
-		meta := map[string]string{}
-		_ = p.MetaIter(func(k, v string) error {
+		meta := map[string]any{}
+		_ = p.MetaIterMut(func(k string, v any) error {
 			meta[k] = v
 			return nil
 		})
@@ -276,7 +275,7 @@ func (m *messageJoiner) Add(msg message.Batch, lastInSequence bool, fn func(msg 
 		_ = gIncoming.Delete(m.idPath)
 		_ = jObj.fields.MergeFn(gIncoming, m.collisionFn)
 
-		_ = p.MetaIter(func(k, v string) error {
+		_ = p.MetaIterMut(func(k string, v any) error {
 			jObj.metadata[k] = v
 			return nil
 		})

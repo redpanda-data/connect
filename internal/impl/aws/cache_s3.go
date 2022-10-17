@@ -56,7 +56,6 @@ func init() {
 			}
 			return s, nil
 		})
-
 	if err != nil {
 		panic(err)
 	}

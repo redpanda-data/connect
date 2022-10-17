@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -334,17 +333,17 @@ func (a *azureBlobStorage) getObjectTarget(ctx context.Context) (*azurePendingOb
 func blobStorageMsgFromParts(p *azurePendingObject, parts []*message.Part) message.Batch {
 	msg := message.Batch(parts)
 	_ = msg.Iter(func(_ int, part *message.Part) error {
-		part.MetaSet("blob_storage_key", p.target.key)
+		part.MetaSetMut("blob_storage_key", p.target.key)
 		if p.obj.Container != nil {
-			part.MetaSet("blob_storage_container", p.obj.Container.Name)
+			part.MetaSetMut("blob_storage_container", p.obj.Container.Name)
 		}
-		part.MetaSet("blob_storage_last_modified", time.Time(p.obj.Properties.LastModified).Format(time.RFC3339))
-		part.MetaSet("blob_storage_last_modified_unix", strconv.FormatInt(time.Time(p.obj.Properties.LastModified).Unix(), 10))
-		part.MetaSet("blob_storage_content_type", p.obj.Properties.ContentType)
-		part.MetaSet("blob_storage_content_encoding", p.obj.Properties.ContentEncoding)
+		part.MetaSetMut("blob_storage_last_modified", time.Time(p.obj.Properties.LastModified).Format(time.RFC3339))
+		part.MetaSetMut("blob_storage_last_modified_unix", time.Time(p.obj.Properties.LastModified).Unix())
+		part.MetaSetMut("blob_storage_content_type", p.obj.Properties.ContentType)
+		part.MetaSetMut("blob_storage_content_encoding", p.obj.Properties.ContentEncoding)
 
 		for k, v := range p.obj.Metadata {
-			part.MetaSet(k, v)
+			part.MetaSetMut(k, v)
 		}
 		return nil
 	})

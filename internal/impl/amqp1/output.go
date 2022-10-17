@@ -22,7 +22,7 @@ import (
 
 func init() {
 	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		a, err := newAMQP1Writer(c.AMQP1, nm.Logger())
+		a, err := newAMQP1Writer(c.AMQP1, nm)
 		if err != nil {
 			return nil, err
 		}
@@ -76,14 +76,14 @@ type amqp1Writer struct {
 	connLock sync.RWMutex
 }
 
-func newAMQP1Writer(conf output.AMQP1Config, log log.Modular) (*amqp1Writer, error) {
+func newAMQP1Writer(conf output.AMQP1Config, mgr bundle.NewManagement) (*amqp1Writer, error) {
 	a := amqp1Writer{
-		log:  log,
+		log:  mgr.Logger(),
 		conf: conf,
 	}
 	var err error
 	if conf.TLS.Enabled {
-		if a.tlsConf, err = conf.TLS.Get(); err != nil {
+		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -184,7 +184,7 @@ func (a *amqp1Writer) WriteBatch(ctx context.Context, msg message.Batch) error {
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		m := amqp.NewMessage(p.AsBytes())
-		_ = a.metaFilter.Iter(p, func(k, v string) error {
+		_ = a.metaFilter.Iter(p, func(k string, v any) error {
 			if m.Annotations == nil {
 				m.Annotations = amqp.Annotations{}
 			}

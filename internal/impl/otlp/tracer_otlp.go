@@ -46,7 +46,6 @@ func init() {
 			}
 			return newOtlp(c)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +73,6 @@ func newOtlpConfig(conf *service.ParsedConfig) (*otlp, error) {
 	}
 
 	tags, err := conf.FieldStringMap("tags")
-
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +107,6 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	var opts []tracesdk.TracerProviderOption
 
 	opts, err := addGrpcCollectors(ctx, config.grpc, opts)
-
 	if err != nil {
 		return nil, err
 	}

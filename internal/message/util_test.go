@@ -44,10 +44,7 @@ func TestCloneGeneric(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if cloned, err = cloneGeneric(original); err != nil {
-		t.Fatal(err)
-	}
-
+	cloned = cloneGeneric(original)
 	if exp, act := original, cloned; !reflect.DeepEqual(exp, act) {
 		t.Fatalf("Wrong cloned contents: %v != %v", act, exp)
 	}
@@ -79,13 +76,8 @@ func TestCloneGenericYAML(t *testing.T) {
 			},
 		},
 	}
-	var cloned any
-	var err error
 
-	if cloned, err = cloneGeneric(original); err != nil {
-		t.Fatal(err)
-	}
-
+	cloned := cloneGeneric(original)
 	if exp, act := original, cloned; !reflect.DeepEqual(exp, act) {
 		t.Fatalf("Wrong cloned contents: %v != %v", act, exp)
 	}
@@ -132,9 +124,7 @@ func BenchmarkCloneGeneric(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if cloned, err = cloneGeneric(generic); err != nil {
-			b.Fatal(err)
-		}
+		cloned = cloneGeneric(generic)
 	}
 	b.StopTimer()
 

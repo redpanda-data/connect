@@ -14,12 +14,12 @@ import (
 
 func TestMessageCopyAirGap(t *testing.T) {
 	p := message.NewPart([]byte("hello world"))
-	p.MetaSet("foo", "bar")
+	p.MetaSetMut("foo", "bar")
 	g1 := newMessageFromPart(p.ShallowCopy())
 	g2 := g1.Copy()
 
 	b := p.AsBytes()
-	v := p.MetaGet("foo")
+	v, _ := p.MetaGetMut("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
@@ -30,47 +30,47 @@ func TestMessageCopyAirGap(t *testing.T) {
 	assert.Equal(t, "bar", v)
 
 	b, err = g2.AsBytes()
-	v, _ = g2.MetaGet("foo")
+	v, _ = g2.MetaGetMut("foo")
 	require.NoError(t, err)
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
 	g2.SetBytes([]byte("and now this"))
-	g2.MetaSet("foo", "baz")
+	g2.MetaSetMut("foo", "baz")
 
 	b = p.AsBytes()
-	v = p.MetaGet("foo")
+	v, _ = p.MetaGetMut("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
 	b, err = g1.AsBytes()
-	v, _ = g1.MetaGet("foo")
+	v, _ = g1.MetaGetMut("foo")
 	require.NoError(t, err)
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
 	b, err = g2.AsBytes()
-	v, _ = g2.MetaGet("foo")
+	v, _ = g2.MetaGetMut("foo")
 	require.NoError(t, err)
 	assert.Equal(t, "and now this", string(b))
 	assert.Equal(t, "baz", v)
 
 	g1.SetBytes([]byte("but not this"))
-	g1.MetaSet("foo", "buz")
+	g1.MetaSetMut("foo", "buz")
 
 	b = p.AsBytes()
-	v = p.MetaGet("foo")
+	v, _ = p.MetaGetMut("foo")
 	assert.Equal(t, "hello world", string(b))
 	assert.Equal(t, "bar", v)
 
 	b, err = g1.AsBytes()
-	v, _ = g1.MetaGet("foo")
+	v, _ = g1.MetaGetMut("foo")
 	require.NoError(t, err)
 	assert.Equal(t, "but not this", string(b))
 	assert.Equal(t, "buz", v)
 
 	b, err = g2.AsBytes()
-	v, _ = g2.MetaGet("foo")
+	v, _ = g2.MetaGetMut("foo")
 	require.NoError(t, err)
 	assert.Equal(t, "and now this", string(b))
 	assert.Equal(t, "baz", v)
@@ -78,8 +78,8 @@ func TestMessageCopyAirGap(t *testing.T) {
 
 func TestMessageQuery(t *testing.T) {
 	p := message.NewPart([]byte(`{"foo":"bar"}`))
-	p.MetaSet("foo", "bar")
-	p.MetaSet("bar", "baz")
+	p.MetaSetMut("foo", "bar")
+	p.MetaSetMut("bar", "baz")
 	g1 := newMessageFromPart(p)
 
 	b, err := g1.AsBytes()
@@ -90,25 +90,25 @@ func TestMessageQuery(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, map[string]any{"foo": "bar"}, s)
 
-	m, ok := g1.MetaGet("foo")
+	m, ok := g1.MetaGetMut("foo")
 	assert.True(t, ok)
 	assert.Equal(t, "bar", m)
 
-	seen := map[string]string{}
-	err = g1.MetaWalk(func(k, v string) error {
+	seen := map[string]any{}
+	err = g1.MetaWalkMut(func(k string, v any) error {
 		seen[k] = v
 		return errors.New("stop")
 	})
 	assert.EqualError(t, err, "stop")
 	assert.Len(t, seen, 1)
 
-	seen = map[string]string{}
-	err = g1.MetaWalk(func(k, v string) error {
+	seen = map[string]any{}
+	err = g1.MetaWalkMut(func(k string, v any) error {
 		seen[k] = v
 		return nil
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, map[string]string{
+	assert.Equal(t, map[string]any{
 		"foo": "bar",
 		"bar": "baz",
 	}, seen)
@@ -116,8 +116,8 @@ func TestMessageQuery(t *testing.T) {
 
 func TestMessageMutate(t *testing.T) {
 	p := message.NewPart([]byte(`not a json doc`))
-	p.MetaSet("foo", "bar")
-	p.MetaSet("bar", "baz")
+	p.MetaSetMut("foo", "bar")
+	p.MetaSetMut("bar", "baz")
 	g1 := newMessageFromPart(p.ShallowCopy())
 
 	_, err := g1.AsStructured()
@@ -146,29 +146,29 @@ func TestMessageMutate(t *testing.T) {
 
 	g1.MetaDelete("foo")
 
-	seen := map[string]string{}
-	err = g1.MetaWalk(func(k, v string) error {
+	seen := map[string]any{}
+	err = g1.MetaWalkMut(func(k string, v any) error {
 		seen[k] = v
 		return nil
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, map[string]string{"bar": "baz"}, seen)
+	assert.Equal(t, map[string]any{"bar": "baz"}, seen)
 
-	g1.MetaSet("foo", "new bar")
+	g1.MetaSetMut("foo", "new bar")
 
-	seen = map[string]string{}
-	err = g1.MetaWalk(func(k, v string) error {
+	seen = map[string]any{}
+	err = g1.MetaWalkMut(func(k string, v any) error {
 		seen[k] = v
 		return nil
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, map[string]string{"foo": "new bar", "bar": "baz"}, seen)
+	assert.Equal(t, map[string]any{"foo": "new bar", "bar": "baz"}, seen)
 }
 
 func TestNewMessageMutate(t *testing.T) {
 	g0 := NewMessage([]byte(`not a json doc`))
-	g0.MetaSet("foo", "bar")
-	g0.MetaSet("bar", "baz")
+	g0.MetaSetMut("foo", "bar")
+	g0.MetaSetMut("bar", "baz")
 
 	g1 := g0.Copy()
 
@@ -202,23 +202,23 @@ func TestNewMessageMutate(t *testing.T) {
 
 	g1.MetaDelete("foo")
 
-	seen := map[string]string{}
-	err = g1.MetaWalk(func(k, v string) error {
+	seen := map[string]any{}
+	err = g1.MetaWalkMut(func(k string, v any) error {
 		seen[k] = v
 		return nil
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, map[string]string{"bar": "baz"}, seen)
+	assert.Equal(t, map[string]any{"bar": "baz"}, seen)
 
-	g1.MetaSet("foo", "new bar")
+	g1.MetaSetMut("foo", "new bar")
 
-	seen = map[string]string{}
-	err = g1.MetaWalk(func(k, v string) error {
+	seen = map[string]any{}
+	err = g1.MetaWalkMut(func(k string, v any) error {
 		seen[k] = v
 		return nil
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, map[string]string{"foo": "new bar", "bar": "baz"}, seen)
+	assert.Equal(t, map[string]any{"foo": "new bar", "bar": "baz"}, seen)
 }
 
 func TestMessageMapping(t *testing.T) {

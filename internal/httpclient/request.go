@@ -10,7 +10,9 @@ import (
 	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/httpclient/oldconfig"
 	"github.com/benthosdev/benthos/v4/internal/message"
 	"github.com/benthosdev/benthos/v4/internal/metadata"
@@ -28,7 +30,7 @@ type MultipartExpressions struct {
 
 // RequestSigner is a closure configured to enrich requests with various
 // functions, usually authentication.
-type RequestSigner func(req *http.Request) error
+type RequestSigner func(f ifs.FS, req *http.Request) error
 
 // RequestCreator creates *http.Request types from messages based on various
 // configurable parameters.
@@ -37,6 +39,7 @@ type RequestCreator struct {
 	explicitBody       *field.Expression
 	explicitMultiparts []MultipartExpressions
 
+	fs        ifs.FS
 	reqSigner RequestSigner
 
 	url              *field.Expression
@@ -54,6 +57,7 @@ type RequestOpt func(r *RequestCreator)
 // service style parses, but it'll take a while so we have this for now.
 func RequestCreatorFromOldConfig(conf oldconfig.OldConfig, mgr bundle.NewManagement, opts ...RequestOpt) (*RequestCreator, error) {
 	r := &RequestCreator{
+		fs:        mgr.FS(),
 		reqSigner: conf.AuthConfig.Sign,
 		verb:      conf.Verb,
 		headers:   map[string]*field.Expression{},
@@ -170,8 +174,8 @@ func (r *RequestCreator) body(refBatch message.Batch) (body io.Reader, overrideC
 		headers := textproto.MIMEHeader{
 			"Content-Type": []string{contentType},
 		}
-		_ = r.metaInsertFilter.Iter(p, func(k, v string) error {
-			headers[k] = append(headers[k], v)
+		_ = r.metaInsertFilter.Iter(p, func(k string, v any) error {
+			headers[k] = append(headers[k], query.IToString(v))
 			return nil
 		})
 
@@ -210,8 +214,8 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 		req.Header.Add(k, v.String(0, refBatch))
 	}
 	if len(refBatch) > 0 {
-		_ = r.metaInsertFilter.Iter(refBatch[0], func(k, v string) error {
-			req.Header.Add(k, v)
+		_ = r.metaInsertFilter.Iter(refBatch[0], func(k string, v any) error {
+			req.Header.Add(k, query.IToString(v))
 			return nil
 		})
 	}
@@ -224,28 +228,6 @@ func (r *RequestCreator) Create(refBatch message.Batch) (req *http.Request, err 
 		req.Header.Add("Content-Type", overrideContentType)
 	}
 
-	if err = r.reqSigner(req); err != nil {
-		return
-	}
-
-	for k, v := range r.headers {
-		req.Header.Add(k, v.String(0, refBatch))
-	}
-	if len(refBatch) > 0 {
-		_ = r.metaInsertFilter.Iter(refBatch[0], func(k, v string) error {
-			req.Header.Add(k, v)
-			return nil
-		})
-	}
-
-	if r.host != nil {
-		req.Host = r.host.String(0, refBatch)
-	}
-	if overrideContentType != "" {
-		req.Header.Del("Content-Type")
-		req.Header.Add("Content-Type", overrideContentType)
-	}
-
-	err = r.reqSigner(req)
+	err = r.reqSigner(r.fs, req)
 	return
 }

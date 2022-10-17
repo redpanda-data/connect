@@ -199,7 +199,7 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, msg message.Batc
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		metadata := map[string]string{}
-		_ = p.MetaIter(func(k, v string) error {
+		_ = p.MetaIterStr(func(k, v string) error {
 			metadata[k] = v
 			return nil
 		})

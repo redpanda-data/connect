@@ -5,7 +5,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"os"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 // ClientCertConfig contains config fields for a client certificate.
@@ -50,7 +51,7 @@ func defaultTLSConfig() *tls.Config {
 // GetNonToggled returns a valid *tls.Config based on the configuration values
 // of Config. If none of the config fields are set then a nil config is
 // returned.
-func (c *Config) GetNonToggled() (*tls.Config, error) {
+func (c *Config) GetNonToggled(f ifs.FS) (*tls.Config, error) {
 	var tlsConf *tls.Config
 	initConf := func() {
 		if tlsConf != nil {
@@ -64,7 +65,7 @@ func (c *Config) GetNonToggled() (*tls.Config, error) {
 	}
 
 	if len(c.RootCAsFile) > 0 {
-		caCert, err := os.ReadFile(c.RootCAsFile)
+		caCert, err := ifs.ReadFile(f, c.RootCAsFile)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +81,7 @@ func (c *Config) GetNonToggled() (*tls.Config, error) {
 	}
 
 	for _, conf := range c.ClientCertificates {
-		cert, err := conf.Load()
+		cert, err := conf.Load(f)
 		if err != nil {
 			return nil, err
 		}
@@ -103,11 +104,11 @@ func (c *Config) GetNonToggled() (*tls.Config, error) {
 
 // Get returns a valid *tls.Config based on the configuration values of Config,
 // or nil if tls is not enabled.
-func (c *Config) Get() (*tls.Config, error) {
+func (c *Config) Get(f ifs.FS) (*tls.Config, error) {
 	if !c.Enabled {
 		return nil, nil
 	}
-	tConf, err := c.GetNonToggled()
+	tConf, err := c.GetNonToggled(f)
 	if err != nil {
 		return nil, err
 	}
@@ -137,8 +138,7 @@ func loadKeyPair(cert, key []byte, password string) (tls.Certificate, error) {
 
 // Load returns a TLS certificate, based on either file paths in the
 // config or the raw certs as strings.
-func (c *ClientCertConfig) Load() (tls.Certificate, error) {
-
+func (c *ClientCertConfig) Load(f ifs.FS) (tls.Certificate, error) {
 	if c.CertFile != "" || c.KeyFile != "" {
 		if c.CertFile == "" {
 			return tls.Certificate{}, errors.New("missing cert_file field in client certificate config")
@@ -147,12 +147,12 @@ func (c *ClientCertConfig) Load() (tls.Certificate, error) {
 			return tls.Certificate{}, errors.New("missing key_file field in client certificate config")
 		}
 
-		cert, err := os.ReadFile(c.CertFile)
+		cert, err := ifs.ReadFile(f, c.CertFile)
 		if err != nil {
 			return tls.Certificate{}, err
 		}
 
-		key, err := os.ReadFile(c.KeyFile)
+		key, err := ifs.ReadFile(f, c.KeyFile)
 		if err != nil {
 			return tls.Certificate{}, err
 		}

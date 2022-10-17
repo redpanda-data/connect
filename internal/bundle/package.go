@@ -24,12 +24,15 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
-var nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
-var nameRegexp = regexp.MustCompile(nameRegexpRaw)
+var (
+	nameRegexpRaw = `^[a-z0-9]+(_[a-z0-9]+)*$`
+	nameRegexp    = regexp.MustCompile(nameRegexpRaw)
+)
 
 // NewManagement defines the latest API for a Benthos manager, which will become
 // the only API (internally) in Benthos V4.
@@ -44,6 +47,7 @@ type NewManagement interface {
 	Metrics() metrics.Type
 	Logger() log.Modular
 	Tracer() trace.TracerProvider
+	FS() ifs.FS
 	BloblEnvironment() *bloblang.Environment
 
 	RegisterEndpoint(path, desc string, h http.HandlerFunc)

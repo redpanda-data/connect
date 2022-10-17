@@ -27,7 +27,7 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
+	pool.MaxWait = time.Minute
 
 	kafkaPort, err := integration.GetFreePort()
 	require.NoError(t, err)
@@ -261,7 +261,6 @@ input:
 			integration.StreamTestOptVarThree("false"),
 		)
 	})
-
 }
 
 func TestIntegrationSaramaOld(t *testing.T) {

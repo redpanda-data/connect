@@ -11,6 +11,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 )
 
 func CreateCertificates() (certPem, keyPem []byte) {
@@ -48,7 +50,6 @@ func CreateCertificates() (certPem, keyPem []byte) {
 }
 
 func CreateCertificatesWithEncryptedKey(password string) (certPem, keyPem []byte) {
-
 	certPem, keyPem = CreateCertificates()
 	decodedKey, _ := pem.Decode(keyPem)
 
@@ -80,14 +81,13 @@ func TestCertificateFileWithEncryptedKey(t *testing.T) {
 		Password: "benthos",
 	}
 
-	_, err := c.Load()
+	_, err := c.Load(ifs.OS())
 	if err != nil {
 		t.Errorf("Failed to load certificate %s", err)
 	}
 }
 
 func TestCertificateWithEncryptedKey(t *testing.T) {
-
 	cert, key := CreateCertificatesWithEncryptedKey("benthos")
 
 	c := ClientCertConfig{
@@ -96,11 +96,10 @@ func TestCertificateWithEncryptedKey(t *testing.T) {
 		Password: "benthos",
 	}
 
-	_, err := c.Load()
+	_, err := c.Load(ifs.OS())
 	if err != nil {
 		t.Errorf("Failed to load certificate %s", err)
 	}
-
 }
 
 func TestCertificateFileWithEncryptedKeyAndWrongPassword(t *testing.T) {
@@ -120,14 +119,13 @@ func TestCertificateFileWithEncryptedKeyAndWrongPassword(t *testing.T) {
 		Password: "not_bentho",
 	}
 
-	_, err := c.Load()
+	_, err := c.Load(ifs.OS())
 	if err == nil {
 		t.Error("Should have failed with wrong password")
 	}
 }
 
 func TestEncryptedKeyWithWrongPassword(t *testing.T) {
-
 	cert, key := CreateCertificatesWithEncryptedKey("benthos")
 
 	c := ClientCertConfig{
@@ -136,7 +134,7 @@ func TestEncryptedKeyWithWrongPassword(t *testing.T) {
 		Password: "not_bentho",
 	}
 
-	_, err := c.Load()
+	_, err := c.Load(ifs.OS())
 	if err == nil {
 		t.Error("Should have failed with wrong password")
 	}
@@ -158,13 +156,13 @@ func TestCertificateFileWithNoEncryption(t *testing.T) {
 		CertFile: fCert.Name(),
 	}
 
-	_, err := c.Load()
+	_, err := c.Load(ifs.OS())
 	if err != nil {
 		t.Errorf("Failed to load certificate %s", err)
 	}
 }
-func TestCertificateWithNoEncryption(t *testing.T) {
 
+func TestCertificateWithNoEncryption(t *testing.T) {
 	cert, key := CreateCertificates()
 
 	c := ClientCertConfig{
@@ -172,7 +170,7 @@ func TestCertificateWithNoEncryption(t *testing.T) {
 		Cert: string(cert),
 	}
 
-	_, err := c.Load()
+	_, err := c.Load(ifs.OS())
 	if err != nil {
 		t.Errorf("Failed to load certificate %s", err)
 	}

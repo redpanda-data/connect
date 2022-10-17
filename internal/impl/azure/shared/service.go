@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
+
 	"github.com/Azure/azure-storage-queue-go/azqueue"
 )
 
@@ -27,7 +29,7 @@ func GetQueueServiceURL(storageAccount, storageAccessKey, storageConnectionStrin
 	if storageAccount == "" && storageConnectionString == "" {
 		return nil, errors.New("invalid azure storage account credentials")
 	}
-	var endpointExp = azQueueEndpointExp
+	endpointExp := azQueueEndpointExp
 	var err error
 	if storageConnectionString != "" {
 		if strings.Contains(storageConnectionString, "UseDevelopmentStorage=true;") {
@@ -62,6 +64,33 @@ func GetQueueServiceURL(storageAccount, storageAccessKey, storageConnectionStrin
 	serviceURL := azqueue.NewServiceURL(*endpoint, p)
 
 	return &serviceURL, err
+}
+
+// GetServiceClient creates a aztables.ServiceClient to access a storage account table storage
+func GetServiceClient(account, accessKey, connectionString string) (*aztables.ServiceClient, error) {
+	var err error
+	if account == "" && connectionString == "" {
+		return nil, errors.New("invalid azure storage account credentials")
+	}
+	var client *aztables.ServiceClient
+	if connectionString != "" {
+		if strings.Contains(connectionString, "UseDevelopmentStorage=true;") {
+			// Only here to support legacy configs that pass UseDevelopmentStorage=true;
+			// `UseDevelopmentStorage=true` is not available in the current SDK, neither `storage.NewEmulatorClient()` (which was used in the previous SDK).
+			// Instead, we use the http connection string to connect to the emulator endpoints with the default table storage port.
+			// https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azurite?tabs=visual-studio#http-connection-strings
+			client, err = aztables.NewServiceClientFromConnectionString("DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;", nil)
+		} else {
+			client, err = aztables.NewServiceClientFromConnectionString(connectionString, nil)
+		}
+	} else {
+		cred, credErr := aztables.NewSharedKeyCredential(account, accessKey)
+		if credErr != nil {
+			return nil, fmt.Errorf("invalid azure storage account credentials: %v", err)
+		}
+		client, err = aztables.NewServiceClientWithSharedKey(fmt.Sprintf("https://%s.table.core.windows.net/", account), cred, nil)
+	}
+	return client, err
 }
 
 // parseConnectionString extracts the credentials from the connection string.

@@ -44,7 +44,7 @@ func NewBasicAuthConfig() BasicAuthConfig {
 	}
 }
 
-// Validate confirms that the BasicAuth is properly configured
+// Validate confirms that the BasicAuth is properly configured.
 func (b BasicAuthConfig) Validate() error {
 	if !b.Enabled {
 		return nil
@@ -100,7 +100,7 @@ func (b BasicAuthConfig) WrapHandler(next http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
-// BasicAuthFieldSpec returns the spec for an HTTP BasicAuth component
+// BasicAuthFieldSpec returns the spec for an HTTP BasicAuth component.
 func BasicAuthFieldSpec() docs.FieldSpec {
 	return docs.FieldObject("basic_auth", "Allows you to enforce and customise basic authentication for requests to the HTTP server.").WithChildren(
 		docs.FieldBool("enabled", "Enable basic authentication").HasDefault(false),

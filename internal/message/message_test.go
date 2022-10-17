@@ -19,7 +19,6 @@ func TestMessageSerialization(t *testing.T) {
 	}
 
 	m2, err := FromBytes(SerializeBytes(input))
-
 	if err != nil {
 		t.Error(err)
 		return
@@ -120,39 +119,30 @@ func TestMessageJSONGet(t *testing.T) {
 		[][]byte{[]byte(`{"foo":{"bar":"baz"}}`)},
 	)
 
-	if _, err := msg.Get(1).AsStructuredMut(); err == nil {
-		t.Error("Error not returned on bad part")
-	}
+	_, err := msg.Get(1).AsStructuredMut()
+	require.Error(t, err)
 
 	jObj, err := msg.Get(0).AsStructuredMut()
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	exp := map[string]any{
 		"foo": map[string]any{
 			"bar": "baz",
 		},
 	}
-	if act := jObj; !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong output from jsonGet: %v != %v", act, exp)
-	}
+	assert.Equal(t, exp, jObj)
 
 	msg.Get(0).SetBytes([]byte(`{"foo":{"bar":"baz2"}}`))
 
 	jObj, err = msg.Get(0).AsStructuredMut()
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	exp = map[string]any{
 		"foo": map[string]any{
 			"bar": "baz2",
 		},
 	}
-	if act := jObj; !reflect.DeepEqual(act, exp) {
-		t.Errorf("Wrong output from jsonGet: %v != %v", act, exp)
-	}
+	assert.Equal(t, exp, jObj)
 }
 
 func TestMessageJSONSet(t *testing.T) {
@@ -196,18 +186,18 @@ func TestMessageMetadata(t *testing.T) {
 		[]byte("bar"),
 	})
 
-	m.Get(0).MetaSet("foo", "bar")
-	if exp, act := "bar", m.Get(0).MetaGet("foo"); exp != act {
+	m.Get(0).MetaSetMut("foo", "bar")
+	if exp, act := "bar", m.Get(0).MetaGetStr("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m.Get(0).MetaSet("foo", "bar2")
-	if exp, act := "bar2", m.Get(0).MetaGet("foo"); exp != act {
+	m.Get(0).MetaSetMut("foo", "bar2")
+	if exp, act := "bar2", m.Get(0).MetaGetStr("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m.Get(0).MetaSet("bar", "baz")
-	m.Get(0).MetaSet("baz", "qux")
+	m.Get(0).MetaSetMut("bar", "baz")
+	m.Get(0).MetaSetMut("baz", "qux")
 
 	exp := map[string]string{
 		"foo": "bar2",
@@ -215,7 +205,7 @@ func TestMessageMetadata(t *testing.T) {
 		"baz": "qux",
 	}
 	act := map[string]string{}
-	require.NoError(t, m.Get(0).MetaIter(func(k, v string) error {
+	require.NoError(t, m.Get(0).MetaIterStr(func(k, v string) error {
 		act[k] = v
 		return nil
 	}))
@@ -229,28 +219,28 @@ func TestMessageCopy(t *testing.T) {
 		[]byte(`foo`),
 		[]byte(`bar`),
 	})
-	m.Get(0).MetaSet("foo", "bar")
+	m.Get(0).MetaSetMut("foo", "bar")
 
 	m2 := m.ShallowCopy()
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m2.Get(0).MetaGet("foo"); exp != act {
+	if exp, act := "bar", m2.Get(0).MetaGetStr("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m2.Get(0).MetaSet("foo", "bar2")
+	m2.Get(0).MetaSetMut("foo", "bar2")
 	m2.Get(0).SetBytes([]byte(`baz`))
 	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar2", m2.Get(0).MetaGet("foo"); exp != act {
+	if exp, act := "bar2", m2.Get(0).MetaGetStr("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m.Get(0).MetaGet("foo"); exp != act {
+	if exp, act := "bar", m.Get(0).MetaGetStr("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }
@@ -286,28 +276,28 @@ func TestMessageDeepCopy(t *testing.T) {
 		[]byte(`foo`),
 		[]byte(`bar`),
 	})
-	m.Get(0).MetaSet("foo", "bar")
+	m.Get(0).MetaSetMut("foo", "bar")
 
 	m2 := m.DeepCopy()
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m2.Get(0).MetaGet("foo"); exp != act {
+	if exp, act := "bar", m2.Get(0).MetaGetStr("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 
-	m2.Get(0).MetaSet("foo", "bar2")
+	m2.Get(0).MetaSetMut("foo", "bar2")
 	m2.Get(0).SetBytes([]byte(`baz`))
 	if exp, act := [][]byte{[]byte(`baz`), []byte(`bar`)}, GetAllBytes(m2); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar2", m2.Get(0).MetaGet("foo"); exp != act {
+	if exp, act := "bar2", m2.Get(0).MetaGetStr("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 	if exp, act := [][]byte{[]byte(`foo`), []byte(`bar`)}, GetAllBytes(m); !reflect.DeepEqual(exp, act) {
 		t.Errorf("Wrong result: %s != %s", act, exp)
 	}
-	if exp, act := "bar", m.Get(0).MetaGet("foo"); exp != act {
+	if exp, act := "bar", m.Get(0).MetaGetStr("foo"); exp != act {
 		t.Errorf("Wrong result: %v != %v", act, exp)
 	}
 }

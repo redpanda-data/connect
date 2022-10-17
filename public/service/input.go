@@ -97,7 +97,7 @@ type BatchInput interface {
 
 //------------------------------------------------------------------------------
 
-// Implements input.AsyncReader
+// Implements input.AsyncReader.
 type airGapReader struct {
 	r Input
 }
@@ -137,7 +137,7 @@ func (a *airGapReader) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// Implements input.AsyncReader
+// Implements input.AsyncReader.
 type airGapBatchReader struct {
 	r BatchInput
 }
@@ -170,6 +170,7 @@ func (a *airGapBatchReader) ReadBatch(ctx context.Context) (message.Batch, input
 		mBatch[i] = p.part
 	}
 	return mBatch, func(c context.Context, r error) error {
+		r = toPublicBatchError(r)
 		return ackFn(c, r)
 	}, nil
 }
@@ -213,7 +214,10 @@ func (r *ResourceInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, e
 		b = append(b, newMessageFromPart(part))
 		return nil
 	})
-	return b, tran.Ack, nil
+	return b, func(c context.Context, r error) error {
+		r = fromPublicBatchError(r)
+		return tran.Ack(c, r)
+	}, nil
 }
 
 //------------------------------------------------------------------------------
@@ -250,7 +254,10 @@ func (o *OwnedInput) ReadBatch(ctx context.Context) (MessageBatch, AckFunc, erro
 		b = append(b, newMessageFromPart(part))
 		return nil
 	})
-	return b, tran.Ack, nil
+	return b, func(c context.Context, r error) error {
+		r = fromPublicBatchError(r)
+		return tran.Ack(c, r)
+	}, nil
 }
 
 // Close the input.

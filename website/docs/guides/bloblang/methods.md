@@ -2025,6 +2025,22 @@ root.foo_vals = this.foo.values().sort()
 # Out: {"foo_vals":[1,2]}
 ```
 
+### `with`
+
+Returns an object where all but one or more [field path][field_paths] arguments are removed. Each path specifies a specific field to be retained from the input object, allowing for nested fields.
+
+If a key within a nested path does not exist then it is ignored.
+
+#### Examples
+
+
+```coffee
+root = this.with("inner.a","inner.c","d")
+
+# In:  {"inner":{"a":"first","b":"second","c":"third"},"d":"fourth","e":"fifth"}
+# Out: {"d":"fourth","inner":{"a":"first","c":"third"}}
+```
+
 ### `without`
 
 Returns an object where one or more [field path][field_paths] arguments are removed. Each path specifies a specific field to be deleted from the input object, allowing for nested fields.

@@ -308,16 +308,17 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			pqDataBytes, err := readerResBatches[0][0].AsBytes()
 			require.NoError(t, err)
 
-			pRdr := parquet.NewReader(bytes.NewReader(pqDataBytes), parquet.SchemaOf(testMP{}))
+			pRdr := parquet.NewGenericReader[testMP](bytes.NewReader(pqDataBytes))
 			require.NoError(t, err)
 
-			var outRow testMP
-			require.NoError(t, pRdr.Read(&outRow))
+			outRows := make([]testMP, 1)
+			_, err = pRdr.Read(outRows)
+			require.NoError(t, err)
 			require.NoError(t, err)
 
 			require.NoError(t, pRdr.Close())
 
-			actualDataBytes, err := json.Marshal(outRow)
+			actualDataBytes, err := json.Marshal(outRows[0])
 			require.NoError(t, err)
 
 			assert.JSONEq(t, string(expectedDataBytes), string(actualDataBytes))
@@ -351,17 +352,18 @@ func TestParquetEncodeProcessor(t *testing.T) {
 		pqDataBytes, err := readerResBatches[0][0].AsBytes()
 		require.NoError(t, err)
 
-		pRdr := parquet.NewReader(bytes.NewReader(pqDataBytes), parquet.SchemaOf(testMP{}))
+		pRdr := parquet.NewGenericReader[testMP](bytes.NewReader(pqDataBytes))
 		require.NoError(t, err)
 
 		var outRows []testMP
 		for {
-			var outRow testMP
-			if err := pRdr.Read(&outRow); err != nil {
+			outRowsTmp := make([]testMP, 1)
+			_, err := pRdr.Read(outRowsTmp)
+			if err != nil {
 				require.ErrorIs(t, err, io.EOF)
 				break
 			}
-			outRows = append(outRows, outRow)
+			outRows = append(outRows, outRowsTmp[0])
 		}
 		require.NoError(t, pRdr.Close())
 

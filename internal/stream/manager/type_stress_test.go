@@ -14,7 +14,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/stream"
 	"github.com/benthosdev/benthos/v4/internal/stream/manager"
 
-	// Import pure components for tests
+	// Import pure components for tests.
 	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
 )
 

@@ -54,7 +54,6 @@ func init() {
 			w, err := newJetStreamWriterFromConfig(conf, mgr.Logger())
 			return w, maxInFlight, err
 		})
-
 	if err != nil {
 		panic(err)
 	}

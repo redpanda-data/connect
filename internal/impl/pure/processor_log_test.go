@@ -30,6 +30,7 @@ func (m *mockLog) WithFields(fields map[string]string) log.Modular {
 	m.fields = append(m.fields, fields)
 	return m
 }
+
 func (m *mockLog) With(args ...any) log.Modular {
 	m.mappingFields = append(m.mappingFields, args...)
 	return m
@@ -39,16 +40,19 @@ func (m *mockLog) Fatalf(format string, v ...any) {}
 func (m *mockLog) Errorf(format string, v ...any) {
 	m.errors = append(m.errors, fmt.Sprintf(format, v...))
 }
+
 func (m *mockLog) Warnf(format string, v ...any) {
 	m.warns = append(m.warns, fmt.Sprintf(format, v...))
-
 }
+
 func (m *mockLog) Infof(format string, v ...any) {
 	m.infos = append(m.infos, fmt.Sprintf(format, v...))
 }
+
 func (m *mockLog) Debugf(format string, v ...any) {
 	m.debugs = append(m.debugs, fmt.Sprintf(format, v...))
 }
+
 func (m *mockLog) Tracef(format string, v ...any) {
 	m.traces = append(m.traces, fmt.Sprintf(format, v...))
 }
@@ -57,15 +61,19 @@ func (m *mockLog) Fatalln(message string) {}
 func (m *mockLog) Errorln(message string) {
 	m.errors = append(m.errors, message)
 }
+
 func (m *mockLog) Warnln(message string) {
 	m.warns = append(m.warns, message)
 }
+
 func (m *mockLog) Infoln(message string) {
 	m.infos = append(m.infos, message)
 }
+
 func (m *mockLog) Debugln(message string) {
 	m.debugs = append(m.debugs, message)
 }
+
 func (m *mockLog) Traceln(message string) {
 	m.traces = append(m.traces, message)
 }

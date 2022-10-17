@@ -9,7 +9,7 @@ import (
 
 // Config is the all encompassing configuration struct for all input types.
 // Deprecated: Do not add new components here. Instead, use the public plugin
-// APIs. Examples can be found in: ./internal/impl
+// APIs. Examples can be found in: ./internal/impl.
 type Config struct {
 	Label             string                  `json:"label" yaml:"label"`
 	Type              string                  `json:"type" yaml:"type"`
@@ -20,6 +20,7 @@ type Config struct {
 	AWSSQS            AWSSQSConfig            `json:"aws_sqs" yaml:"aws_sqs"`
 	AzureBlobStorage  AzureBlobStorageConfig  `json:"azure_blob_storage" yaml:"azure_blob_storage"`
 	AzureQueueStorage AzureQueueStorageConfig `json:"azure_queue_storage" yaml:"azure_queue_storage"`
+	AzureTableStorage AzureTableStorageConfig `json:"azure_table_storage" yaml:"azure_table_storage"`
 	Broker            BrokerConfig            `json:"broker" yaml:"broker"`
 	CSVFile           CSVFileConfig           `json:"csv" yaml:"csv"`
 	Dynamic           DynamicConfig           `json:"dynamic" yaml:"dynamic"`
@@ -39,7 +40,6 @@ type Config struct {
 	NSQ               NSQConfig               `json:"nsq" yaml:"nsq"`
 	Plugin            any                     `json:"plugin,omitempty" yaml:"plugin,omitempty"`
 	ReadUntil         ReadUntilConfig         `json:"read_until" yaml:"read_until"`
-	RedisList         RedisListConfig         `json:"redis_list" yaml:"redis_list"`
 	RedisPubSub       RedisPubSubConfig       `json:"redis_pubsub" yaml:"redis_pubsub"`
 	RedisStreams      RedisStreamsConfig      `json:"redis_streams" yaml:"redis_streams"`
 	Resource          string                  `json:"resource" yaml:"resource"`
@@ -55,7 +55,7 @@ type Config struct {
 
 // NewConfig returns a configuration struct fully populated with default values.
 // Deprecated: Do not add new components here. Instead, use the public plugin
-// APIs. Examples can be found in: ./internal/impl
+// APIs. Examples can be found in: ./internal/impl.
 func NewConfig() Config {
 	return Config{
 		Label:             "",
@@ -86,7 +86,6 @@ func NewConfig() Config {
 		NSQ:               NewNSQConfig(),
 		Plugin:            nil,
 		ReadUntil:         NewReadUntilConfig(),
-		RedisList:         NewRedisListConfig(),
 		RedisPubSub:       NewRedisPubSubConfig(),
 		RedisStreams:      NewRedisStreamsConfig(),
 		Resource:          "",

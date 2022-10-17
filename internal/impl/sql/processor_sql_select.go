@@ -84,7 +84,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return NewSQLSelectProcessorFromConfig(conf, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -147,6 +146,8 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, logger *service
 	s.builder = squirrel.Select(columns...).From(tableStr)
 	if driverStr == "postgres" || driverStr == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
+	} else if driverStr == "oracle" {
+		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
 	}
 
 	if conf.Contains("prefix") {

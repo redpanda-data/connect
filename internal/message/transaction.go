@@ -21,10 +21,10 @@ type Transaction struct {
 	// Payload is the message payload of this transaction.
 	Payload Batch
 
-	// ResponseChan should receive a response at the end of a transaction (once
+	// responseChan should receive a response at the end of a transaction (once
 	// the message is no longer owned by the receiver.) The response itself
 	// indicates whether the message has been propagated successfully.
-	ResponseChan chan<- error
+	responseChan chan<- error
 
 	// responseFunc should be called with an error at the end of a transaction
 	// (once the message is no longer owned by the receiver.) The error
@@ -44,7 +44,7 @@ type Transaction struct {
 func NewTransaction(payload Batch, resChan chan<- error) Transaction {
 	return Transaction{
 		Payload:      payload,
-		ResponseChan: resChan,
+		responseChan: resChan,
 		ctx:          context.Background(),
 	}
 }
@@ -88,7 +88,7 @@ func (t *Transaction) Ack(ctx context.Context, err error) error {
 		return t.responseFunc(ctx, err)
 	}
 	select {
-	case t.ResponseChan <- err:
+	case t.responseChan <- err:
 	case <-ctx.Done():
 		return ctx.Err()
 	}

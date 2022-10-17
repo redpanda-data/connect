@@ -13,7 +13,7 @@ import (
 func TestArithmeticParser(t *testing.T) {
 	type easyMsg struct {
 		content string
-		meta    map[string]string
+		meta    map[string]any
 	}
 
 	tests := map[string]struct {
@@ -127,7 +127,7 @@ func TestArithmeticParser(t *testing.T) {
 			messages: []easyMsg{
 				{
 					content: `{"foo":5,"bar":12}`,
-					meta: map[string]string{
+					meta: map[string]any{
 						"baz": "this aint a number",
 					},
 				},
@@ -146,7 +146,7 @@ func TestArithmeticParser(t *testing.T) {
 			messages: []easyMsg{
 				{
 					content: `{"foo":5,"bar":12}`,
-					meta: map[string]string{
+					meta: map[string]any{
 						"baz": "3",
 					},
 				},
@@ -172,7 +172,7 @@ func TestArithmeticParser(t *testing.T) {
 			messages: []easyMsg{
 				{
 					content: `{"foo":5,"bar":12}`,
-					meta: map[string]string{
+					meta: map[string]any{
 						"foo": "3",
 						"bar": "8",
 					},
@@ -309,7 +309,7 @@ func TestArithmeticParser(t *testing.T) {
 				part := message.NewPart([]byte(m.content))
 				if m.meta != nil {
 					for k, v := range m.meta {
-						part.MetaSet(k, v)
+						part.MetaSetMut(k, v)
 					}
 				}
 				msg = append(msg, part)

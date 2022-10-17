@@ -18,6 +18,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
 	ifilepath "github.com/benthosdev/benthos/v4/internal/filepath"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/manager"
 )
 
@@ -66,7 +67,7 @@ func resInfoFromConfig(conf *manager.ResourceConfig) resourceFileInfo {
 }
 
 func (r *Reader) resourcePathsExpanded() ([]string, error) {
-	resourcePaths, err := ifilepath.Globs(r.resourcePaths)
+	resourcePaths, err := ifilepath.Globs(ifs.OS(), r.resourcePaths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve resource glob pattern: %w", err)
 	}

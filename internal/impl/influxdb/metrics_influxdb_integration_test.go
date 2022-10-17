@@ -133,5 +133,4 @@ func testInfluxConnect(t *testing.T, i metrics.Type, c client.Client) {
 	if val != 31337 {
 		t.Errorf("unexpected value")
 	}
-
 }

@@ -2,8 +2,7 @@ package filepath
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
+	"io/fs"
 	"runtime"
 	"strings"
 )
@@ -12,7 +11,7 @@ import (
 // patterns and super paths (the ... thing) to a list of explicit file paths.
 // Extensions must be provided, and limit the file types that are captured with
 // a super path.
-func GlobsAndSuperPaths(paths []string, extensions ...string) ([]string, error) {
+func GlobsAndSuperPaths(f fs.FS, paths []string, extensions ...string) ([]string, error) {
 	if len(extensions) == 0 {
 		return nil, errors.New("must specify at least one extension for super paths")
 	}
@@ -25,7 +24,7 @@ func GlobsAndSuperPaths(paths []string, extensions ...string) ([]string, error) 
 			} else {
 				p = strings.TrimSuffix(p, "/...")
 			}
-			if err := filepath.Walk(p, func(path string, info os.FileInfo, werr error) error {
+			if err := fs.WalkDir(f, p, func(path string, info fs.DirEntry, werr error) error {
 				if werr != nil {
 					return werr
 				}
@@ -49,7 +48,7 @@ func GlobsAndSuperPaths(paths []string, extensions ...string) ([]string, error) 
 
 	resultPaths := append([]string{}, superPaths...)
 	if len(skippedPaths) > 0 {
-		globPaths, err := Globs(skippedPaths)
+		globPaths, err := Globs(f, skippedPaths)
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +60,7 @@ func GlobsAndSuperPaths(paths []string, extensions ...string) ([]string, error) 
 // hasMeta reports whether path contains any of the magic characters
 // recognized by Match.
 //
-// Taken from path/filepath/match.go
+// Taken from path/filepath/match.go.
 func hasMeta(path string) bool {
 	magicChars := `*?[`
 	if runtime.GOOS != "windows" {
@@ -73,7 +72,7 @@ func hasMeta(path string) bool {
 // Globs attempts to expand a list of paths, which may include glob patterns, to
 // a list of explicit file paths. The paths are de-duplicated but are not
 // sorted.
-func Globs(paths []string) ([]string, error) {
+func Globs(f fs.FS, paths []string) ([]string, error) {
 	var expandedPaths []string
 	seenPaths := map[string]struct{}{}
 
@@ -81,9 +80,9 @@ func Globs(paths []string) ([]string, error) {
 		var globbed []string
 		var err error
 		if segments := strings.Split(path, "**"); len(segments) == 1 {
-			globbed, err = filepath.Glob(path)
+			globbed, err = fs.Glob(f, path)
 		} else {
-			globbed, err = superGlobs(segments)
+			globbed, err = superGlobs(f, segments)
 		}
 		if err != nil {
 			return nil, err
@@ -106,7 +105,7 @@ func Globs(paths []string) ([]string, error) {
 }
 
 // Inspired by https://github.com/yargevad/filepathx/blob/master/filepathx.go
-func superGlobs(segments []string) ([]string, error) {
+func superGlobs(f fs.FS, segments []string) ([]string, error) {
 	matches := map[string]struct{}{"": {}}
 
 	for i, segment := range segments {
@@ -114,12 +113,12 @@ func superGlobs(segments []string) ([]string, error) {
 		lastSegment := (len(segments) - 1) == i
 
 		for match := range matches {
-			paths, err := filepath.Glob(match + segment)
+			paths, err := fs.Glob(f, match+segment)
 			if err != nil {
 				return nil, err
 			}
 			for _, path := range paths {
-				if err := filepath.Walk(path, func(newPath string, info os.FileInfo, err error) error {
+				if err := fs.WalkDir(f, path, func(newPath string, info fs.DirEntry, err error) error {
 					if err != nil {
 						return err
 					}

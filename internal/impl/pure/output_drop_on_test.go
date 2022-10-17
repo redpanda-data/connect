@@ -178,7 +178,7 @@ func TestDropOnBackpressureWithErrors(t *testing.T) {
 
 	require.NoError(t, d.Consume(tChan))
 
-	sendAndGet := func(msg string, expErr string) {
+	sendAndGet := func(msg, expErr string) {
 		t.Helper()
 
 		select {
@@ -268,7 +268,7 @@ func TestDropOnDisconnectBackpressureNoErrors(t *testing.T) {
 
 	require.NoError(t, d.Consume(tChan))
 
-	sendAndGet := func(msg string, expErr string) {
+	sendAndGet := func(msg, expErr string) {
 		t.Helper()
 
 		select {

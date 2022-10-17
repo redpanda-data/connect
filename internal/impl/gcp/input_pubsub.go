@@ -2,7 +2,6 @@ package gcp
 
 import (
 	"context"
-	"strconv"
 	"sync"
 
 	"cloud.google.com/go/pubsub"
@@ -154,9 +153,9 @@ func (c *gcpPubSubReader) ReadBatch(ctx context.Context) (message.Batch, input.A
 
 	part := message.NewPart(gmsg.Data)
 	for k, v := range gmsg.Attributes {
-		part.MetaSet(k, v)
+		part.MetaSetMut(k, v)
 	}
-	part.MetaSet("gcp_pubsub_publish_time_unix", strconv.FormatInt(gmsg.PublishTime.Unix(), 10))
+	part.MetaSetMut("gcp_pubsub_publish_time_unix", gmsg.PublishTime.Unix())
 
 	msg := message.Batch{part}
 	return msg, func(ctx context.Context, res error) error {

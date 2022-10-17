@@ -14,9 +14,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofrs/uuid"
@@ -26,6 +26,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/benthosdev/benthos/v4/internal/component/output"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -33,19 +34,19 @@ const (
 	defaultJWTTimeout = 60 * time.Second
 )
 
-// CompressionType represents the compression used for the payloads sent to Snowflake
+// CompressionType represents the compression used for the payloads sent to Snowflake.
 type CompressionType string
 
 const (
-	// CompressionTypeNone No compression
+	// CompressionTypeNone No compression.
 	CompressionTypeNone CompressionType = "NONE"
-	// CompressionTypeAuto Automatic compression (gzip)
+	// CompressionTypeAuto Automatic compression (gzip).
 	CompressionTypeAuto CompressionType = "AUTO"
-	// CompressionTypeGzip Gzip compression
+	// CompressionTypeGzip Gzip compression.
 	CompressionTypeGzip CompressionType = "GZIP"
-	// CompressionTypeDeflate Deflate compression using zlib algorithm (with zlib header, RFC1950)
+	// CompressionTypeDeflate Deflate compression using zlib algorithm (with zlib header, RFC1950).
 	CompressionTypeDeflate CompressionType = "DEFLATE"
-	// CompressionTypeRawDeflate Deflate compression using flate algorithm (without header, RFC1951)
+	// CompressionTypeRawDeflate Deflate compression using flate algorithm (without header, RFC1951).
 	CompressionTypeRawDeflate CompressionType = "RAW_DEFLATE"
 )
 
@@ -314,10 +315,9 @@ func init() {
 			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
 				return
 			}
-			output, err = newSnowflakeWriterFromConfig(conf, mgr.Logger(), mgr.Metrics())
+			output, err = newSnowflakeWriterFromConfig(conf, mgr)
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -327,8 +327,8 @@ func init() {
 
 // getPrivateKey reads and parses the private key
 // Inspired from https://github.com/chanzuckerberg/terraform-provider-snowflake/blob/c07d5820bea7ac3d8a5037b0486c405fdf58420e/pkg/provider/provider.go#L367
-func getPrivateKey(path, passphrase string) (*rsa.PrivateKey, error) {
-	privateKeyBytes, err := os.ReadFile(path)
+func getPrivateKey(f ifs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
+	privateKeyBytes, err := ifs.ReadFile(f, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key %s: %s", path, err)
 	}
@@ -413,15 +413,16 @@ type snowflakeWriter struct {
 	publicKeyFingerprint string
 	dsn                  string
 
+	connMut       sync.Mutex
 	uuidGenerator uuidGenI
 	httpClient    httpClientI
 	nowFn         func() time.Time
 	db            dbI
 }
 
-func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, logger *service.Logger, metrics *service.Metrics) (*snowflakeWriter, error) {
+func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*snowflakeWriter, error) {
 	s := snowflakeWriter{
-		logger:        logger,
+		logger:        mgr.Logger(),
 		uuidGenerator: uuid.NewGen(),
 		httpClient:    http.DefaultClient,
 		nowFn:         time.Now,
@@ -548,7 +549,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, logger *service.Lo
 			}
 		}
 
-		if s.privateKey, err = getPrivateKey(privateKeyFile, privateKeyPass); err != nil {
+		if s.privateKey, err = getPrivateKey(mgr.FS(), privateKeyFile, privateKeyPass); err != nil {
 			return nil, fmt.Errorf("failed to read private key: %s", err)
 		}
 
@@ -671,6 +672,12 @@ func (s *snowflakeWriter) callSnowpipe(ctx context.Context, snowpipe, requestID,
 }
 
 func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+	s.connMut.Lock()
+	defer s.connMut.Unlock()
+	if s.db == nil {
+		return service.ErrNotConnected
+	}
+
 	type File struct {
 		Stage    string
 		Snowpipe string
@@ -723,5 +730,8 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 }
 
 func (s *snowflakeWriter) Close(ctx context.Context) error {
+	s.connMut.Lock()
+	defer s.connMut.Unlock()
+
 	return s.db.Close()
 }

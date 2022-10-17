@@ -325,6 +325,6 @@ func TestAvroSchemaPathNotExist(t *testing.T) {
 
 	_, err := mock.NewManager().NewProcessor(conf)
 	if err == nil {
-		t.Error("expected error from loading non existant schema file")
+		t.Error("expected error from loading non existent schema file")
 	}
 }

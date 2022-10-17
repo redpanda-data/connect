@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -126,16 +125,16 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 		// Easy, just do a single request.
 		resultMsg, err := h.client.Send(context.Background(), msg)
 		if err != nil {
-			var codeStr string
+			var code int
 			var hErr component.ErrUnexpectedHTTPRes
 			if ok := errors.As(err, &hErr); ok {
-				codeStr = strconv.Itoa(hErr.Code)
+				code = hErr.Code
 			}
 			h.log.Errorf("HTTP request to '%v' failed: %v", h.rawURL, err)
 			responseMsg = msg.ShallowCopy()
 			_ = responseMsg.Iter(func(i int, p *message.Part) error {
-				if len(codeStr) > 0 {
-					p.MetaSet("http_status_code", codeStr)
+				if code > 0 {
+					p.MetaSetMut("http_status_code", code)
 				}
 				p.ErrorSet(err)
 				return nil
@@ -149,8 +148,8 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 					parts[i] = msg.Get(0).ShallowCopy()
 				}
 				parts[i].SetBytes(p.AsBytes())
-				_ = p.MetaIter(func(k, v string) error {
-					parts[i].MetaSet(k, v)
+				_ = p.MetaIterMut(func(k string, v any) error {
+					parts[i].MetaSetMut(k, v)
 					return nil
 				})
 				return nil
@@ -170,7 +169,7 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 				errPart := p.ShallowCopy()
 				var hErr component.ErrUnexpectedHTTPRes
 				if ok := errors.As(err, &hErr); ok {
-					errPart.MetaSet("http_status_code", strconv.Itoa(hErr.Code))
+					errPart.MetaSetMut("http_status_code", hErr.Code)
 				}
 				errPart.ErrorSet(err)
 				responseMsg = append(responseMsg, errPart)
@@ -180,8 +179,8 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 			_ = result.Iter(func(i int, rp *message.Part) error {
 				tmpPart := p.ShallowCopy()
 				tmpPart.SetBytes(rp.AsBytes())
-				_ = rp.MetaIter(func(k, v string) error {
-					tmpPart.MetaSet(k, v)
+				_ = rp.MetaIterMut(func(k string, v any) error {
+					tmpPart.MetaSetMut(k, v)
 					return nil
 				})
 				responseMsg = append(responseMsg, tmpPart)
@@ -208,14 +207,14 @@ func (h *httpProc) ProcessBatch(ctx context.Context, spans []*tracing.Span, msg 
 					}
 					if err == nil {
 						results[index].SetBytes(result.Get(0).AsBytes())
-						_ = result.Get(0).MetaIter(func(k, v string) error {
-							results[index].MetaSet(k, v)
+						_ = result.Get(0).MetaIterMut(func(k string, v any) error {
+							results[index].MetaSetMut(k, v)
 							return nil
 						})
 					} else {
 						var hErr component.ErrUnexpectedHTTPRes
 						if ok := errors.As(err, &hErr); ok {
-							results[index].MetaSet("http_status_code", strconv.Itoa(hErr.Code))
+							results[index].MetaSetMut("http_status_code", hErr.Code)
 						}
 						results[index].ErrorSet(err)
 					}

@@ -15,7 +15,7 @@ import (
 func TestAssignments(t *testing.T) {
 	type part struct {
 		Content string
-		Meta    map[string]string
+		Meta    map[string]any
 	}
 
 	metaKey := func(k string) *string {
@@ -115,7 +115,7 @@ func TestAssignments(t *testing.T) {
 			input: []part{{Content: `{}`}},
 			output: &part{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "exists now",
 				},
 			},
@@ -126,14 +126,14 @@ func TestAssignments(t *testing.T) {
 			),
 			input: []part{{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"ignore": "me",
 					"and":    "delete me",
 				},
 			}},
 			output: &part{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"ignore": "me",
 				},
 			},
@@ -154,14 +154,14 @@ func TestAssignments(t *testing.T) {
 			),
 			input: []part{{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "first",
 					"bar": "second",
 				},
 			}},
 			output: &part{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"new1": "value1",
 					"new2": "value2",
 				},
@@ -173,7 +173,7 @@ func TestAssignments(t *testing.T) {
 			),
 			input: []part{{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "first",
 					"bar": "second",
 				},
@@ -187,13 +187,13 @@ func TestAssignments(t *testing.T) {
 			),
 			input: []part{{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "old value",
 				},
 			}},
 			output: &part{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "new value",
 					"bar": "old value",
 				},
@@ -207,7 +207,7 @@ func TestAssignments(t *testing.T) {
 			input: []part{{Content: `{}`}},
 			output: &part{
 				Content: `{}`,
-				Meta: map[string]string{
+				Meta: map[string]any{
 					"foo": "exists now",
 					"bar": "exists now",
 				},
@@ -243,7 +243,7 @@ func TestAssignments(t *testing.T) {
 					part = message.NewPart(nil)
 				}
 				for k, v := range p.Meta {
-					part.MetaSet(k, v)
+					part.MetaSetMut(k, v)
 				}
 				msg = append(msg, part)
 			}
@@ -258,14 +258,14 @@ func TestAssignments(t *testing.T) {
 
 			if test.output != nil {
 				if test.output.Meta == nil {
-					test.output.Meta = map[string]string{}
+					test.output.Meta = map[string]any{}
 				}
 
 				newPart := part{
 					Content: string(resPart.AsBytes()),
-					Meta:    map[string]string{},
+					Meta:    map[string]any{},
 				}
-				_ = resPart.MetaIter(func(k, v string) error {
+				_ = resPart.MetaIterMut(func(k string, v any) error {
 					newPart.Meta[k] = v
 					return nil
 				})
@@ -456,7 +456,7 @@ func TestExec(t *testing.T) {
 func TestQueries(t *testing.T) {
 	type part struct {
 		Content string
-		Meta    map[string]string
+		Meta    map[string]any
 	}
 
 	initFunc := func(name string, args ...any) query.Function {
@@ -525,7 +525,7 @@ func TestQueries(t *testing.T) {
 			for _, p := range test.input {
 				part := message.NewPart([]byte(p.Content))
 				for k, v := range p.Meta {
-					part.MetaSet(k, v)
+					part.MetaSetMut(k, v)
 				}
 				msg = append(msg, part)
 			}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -281,15 +280,15 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 func gcpCloudStorageMsgFromParts(p *gcpCloudStoragePendingObject, parts []*message.Part) message.Batch {
 	msg := message.Batch(parts)
 	_ = msg.Iter(func(_ int, part *message.Part) error {
-		part.MetaSet("gcs_key", p.target.key)
-		part.MetaSet("gcs_bucket", p.obj.Bucket)
-		part.MetaSet("gcs_last_modified", p.obj.Updated.Format(time.RFC3339))
-		part.MetaSet("gcs_last_modified_unix", strconv.FormatInt(p.obj.Updated.Unix(), 10))
-		part.MetaSet("gcs_content_type", p.obj.ContentType)
-		part.MetaSet("gcs_content_encoding", p.obj.ContentEncoding)
+		part.MetaSetMut("gcs_key", p.target.key)
+		part.MetaSetMut("gcs_bucket", p.obj.Bucket)
+		part.MetaSetMut("gcs_last_modified", p.obj.Updated.Format(time.RFC3339))
+		part.MetaSetMut("gcs_last_modified_unix", p.obj.Updated.Unix())
+		part.MetaSetMut("gcs_content_type", p.obj.ContentType)
+		part.MetaSetMut("gcs_content_encoding", p.obj.ContentEncoding)
 
 		for k, v := range p.obj.Metadata {
-			part.MetaSet(k, v)
+			part.MetaSetMut(k, v)
 		}
 		return nil
 	})

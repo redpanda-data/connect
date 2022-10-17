@@ -307,8 +307,8 @@ func TestHTTPClientReceive(t *testing.T) {
 
 		assert.Equal(t, 1, resMsg.Len())
 		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).AsBytes()))
-		assert.Equal(t, "", resMsg.Get(0).MetaGet("foo-bar"))
-		assert.Equal(t, "201", resMsg.Get(0).MetaGet("http_status_code"))
+		assert.Equal(t, "", resMsg.Get(0).MetaGetStr("foo-bar"))
+		assert.Equal(t, "201", resMsg.Get(0).MetaGetStr("http_status_code"))
 	}
 }
 
@@ -338,10 +338,10 @@ bar_b: %v
 
 	sendMsg := message.QuickBatch([][]byte{[]byte("hello world")})
 	part := sendMsg.Get(0)
-	part.MetaSet("foo_a", "foo a value")
-	part.MetaSet("foo_b", "foo b value")
-	part.MetaSet("bar_a", "bar a value")
-	part.MetaSet("bar_b", "bar b value")
+	part.MetaSetMut("foo_a", "foo a value")
+	part.MetaSetMut("foo_b", "foo b value")
+	part.MetaSetMut("bar_a", "bar a value")
+	part.MetaSetMut("bar_b", "bar b value")
 
 	resMsg, err := h.Send(context.Background(), sendMsg)
 	require.NoError(t, err)
@@ -398,16 +398,16 @@ func TestHTTPClientReceiveHeadersWithMetadataFiltering(t *testing.T) {
 		}
 
 		metadataCount := 0
-		_ = resMsg.Get(0).MetaIter(func(_, _ string) error { metadataCount++; return nil })
+		_ = resMsg.Get(0).MetaIterStr(func(_, _ string) error { metadataCount++; return nil })
 
 		if tt.noExtraMetadata {
 			if metadataCount > 1 {
 				t.Errorf("%s: wrong number of metadata items: %d", tt.name, metadataCount)
 			}
-			if exp, act := "", resMsg.Get(0).MetaGet("foobar"); exp != act {
+			if exp, act := "", resMsg.Get(0).MetaGetStr("foobar"); exp != act {
 				t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
 			}
-		} else if exp, act := "baz", resMsg.Get(0).MetaGet("foobar"); exp != act {
+		} else if exp, act := "baz", resMsg.Get(0).MetaGetStr("foobar"); exp != act {
 			t.Errorf("%s: wrong metadata value: %v != %v", tt.name, act, exp)
 		}
 	}
@@ -460,9 +460,9 @@ func TestHTTPClientReceiveMultipart(t *testing.T) {
 		assert.Equal(t, 2, resMsg.Len())
 		assert.Equal(t, testStr+"PART-A", string(resMsg.Get(0).AsBytes()))
 		assert.Equal(t, testStr+"PART-B", string(resMsg.Get(1).AsBytes()))
-		assert.Equal(t, "", resMsg.Get(0).MetaGet("foo-bar"))
-		assert.Equal(t, "201", resMsg.Get(0).MetaGet("http_status_code"))
-		assert.Equal(t, "", resMsg.Get(1).MetaGet("foo-bar"))
-		assert.Equal(t, "201", resMsg.Get(1).MetaGet("http_status_code"))
+		assert.Equal(t, "", resMsg.Get(0).MetaGetStr("foo-bar"))
+		assert.Equal(t, "201", resMsg.Get(0).MetaGetStr("http_status_code"))
+		assert.Equal(t, "", resMsg.Get(1).MetaGetStr("foo-bar"))
+		assert.Equal(t, "201", resMsg.Get(1).MetaGetStr("http_status_code"))
 	}
 }

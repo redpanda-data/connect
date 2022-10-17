@@ -345,12 +345,12 @@ func TestHTTPServerMetadata(t *testing.T) {
 	assert.Equal(t, dummyData, message.GetAllBytes(msg)[0])
 
 	part := msg.Get(0)
-	assert.Equal(t, dummyPath, part.MetaGet("http_server_request_path"))
-	assert.Equal(t, "POST", part.MetaGet("http_server_verb"))
-	assert.Regexp(t, "^Go-http-client/", part.MetaGet("http_server_user_agent"))
-	assert.Equal(t, "127.0.0.1", part.MetaGet("http_server_remote_ip"))
+	assert.Equal(t, dummyPath, part.MetaGetStr("http_server_request_path"))
+	assert.Equal(t, "POST", part.MetaGetStr("http_server_verb"))
+	assert.Regexp(t, "^Go-http-client/", part.MetaGetStr("http_server_user_agent"))
+	assert.Equal(t, "127.0.0.1", part.MetaGetStr("http_server_remote_ip"))
 	// Make sure query params are set in the metadata
-	assert.Contains(t, "bar", part.MetaGet("foo"))
+	assert.Contains(t, "bar", part.MetaGetStr("foo"))
 }
 
 func TestHTTPtServerPathParameters(t *testing.T) {
@@ -412,11 +412,11 @@ func TestHTTPtServerPathParameters(t *testing.T) {
 
 	part := msg.Get(0)
 
-	assert.Equal(t, dummyPath, part.MetaGet("http_server_request_path"))
-	assert.Equal(t, "PUT", part.MetaGet("http_server_verb"))
-	assert.Equal(t, "foo1", part.MetaGet("foo"))
-	assert.Equal(t, "bar1", part.MetaGet("bar"))
-	assert.Equal(t, "will go on", part.MetaGet("mylove"))
+	assert.Equal(t, dummyPath, part.MetaGetStr("http_server_request_path"))
+	assert.Equal(t, "PUT", part.MetaGetStr("http_server_verb"))
+	assert.Equal(t, "foo1", part.MetaGetStr("foo"))
+	assert.Equal(t, "bar1", part.MetaGetStr("bar"))
+	assert.Equal(t, "will go on", part.MetaGetStr("mylove"))
 }
 
 func TestHTTPBadRequests(t *testing.T) {
@@ -1057,7 +1057,7 @@ func TestHTTPSyncResponseHeadersStatus(t *testing.T) {
 		if res := string(ts.Payload.Get(0).AsBytes()); res != input {
 			t.Errorf("Wrong result, %v != %v", ts.Payload, res)
 		}
-		ts.Payload.Get(0).MetaSet("status", "400")
+		ts.Payload.Get(0).MetaSetMut("status", "400")
 		require.NoError(t, transaction.SetAsResponse(ts.Payload))
 	case <-time.After(time.Second):
 		t.Fatal("Timed out waiting for message")

@@ -13,10 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-var noopReqSign = func(*http.Request) error { return nil }
+var noopReqSign = func(ifs.FS, *http.Request) error { return nil }
 
 func TestSchemaRegistryEncoderConfigParse(t *testing.T) {
 	configTests := []struct {
@@ -87,7 +88,7 @@ subject: foo
 			conf, err := spec.ParseYAML(test.config, env)
 			require.NoError(t, err)
 
-			e, err := newSchemaRegistryEncoderFromConfig(conf, nil)
+			e, err := newSchemaRegistryEncoderFromConfig(conf, service.MockResources())
 			if e != nil {
 				assert.Equal(t, test.expectedBaseURL, e.schemaRegistryBaseURL.String())
 			}
@@ -125,7 +126,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -207,7 +208,7 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -289,7 +290,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -366,7 +367,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -431,7 +432,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 
@@ -492,7 +493,7 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 	subj, err := service.NewInterpolatedString("foo")
 	require.NoError(t, err)
 
-	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, nil)
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
 	require.NoError(t, encoder.Close(context.Background()))
 

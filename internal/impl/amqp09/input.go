@@ -28,7 +28,7 @@ func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(func(c input.Config, nm bundle.NewManagement) (input.Streamed, error) {
 		var a input.Async
 		var err error
-		if a, err = newAMQP09Reader(c.AMQP09, nm.Logger()); err != nil {
+		if a, err = newAMQP09Reader(c.AMQP09, nm); err != nil {
 			return nil, err
 		}
 		return input.NewAsyncReader("amqp_0_9", true, a, nm)
@@ -132,10 +132,10 @@ type amqp09Reader struct {
 	m sync.RWMutex
 }
 
-func newAMQP09Reader(conf input.AMQP09Config, log log.Modular) (*amqp09Reader, error) {
+func newAMQP09Reader(conf input.AMQP09Config, mgr bundle.NewManagement) (*amqp09Reader, error) {
 	a := amqp09Reader{
 		conf: conf,
-		log:  log,
+		log:  mgr.Logger(),
 	}
 
 	if len(conf.URLs) == 0 {
@@ -160,7 +160,7 @@ func newAMQP09Reader(conf input.AMQP09Config, log log.Modular) (*amqp09Reader, e
 
 	if conf.TLS.Enabled {
 		var err error
-		if a.tlsConf, err = conf.TLS.Get(); err != nil {
+		if a.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -267,7 +267,7 @@ func (a *amqp09Reader) disconnect() error {
 
 func amqpSetMetadata(p *message.Part, k string, v any) {
 	var metaValue string
-	var metaKey = strings.ReplaceAll(k, "-", "_")
+	metaKey := strings.ReplaceAll(k, "-", "_")
 
 	switch v := v.(type) {
 	case bool:
@@ -306,7 +306,7 @@ func amqpSetMetadata(p *message.Part, k string, v any) {
 	}
 
 	if metaValue != "" {
-		p.MetaSet(metaKey, metaValue)
+		p.MetaSetMut(metaKey, metaValue)
 	}
 }
 
@@ -392,7 +392,7 @@ func (a *amqp09Reader) Close(ctx context.Context) error {
 	return a.disconnect()
 }
 
-// reDial connection to amqp with one or more fallback URLs
+// reDial connection to amqp with one or more fallback URLs.
 func (a *amqp09Reader) reDial(urls []string) (conn *amqp.Connection, err error) {
 	for _, u := range urls {
 		conn, err = a.dial(u)
@@ -407,7 +407,7 @@ func (a *amqp09Reader) reDial(urls []string) (conn *amqp.Connection, err error) 
 	return nil, err
 }
 
-// dial attempts to connect to amqp URL
+// dial attempts to connect to amqp URL.
 func (a *amqp09Reader) dial(amqpURL string) (conn *amqp.Connection, err error) {
 	u, err := url.Parse(amqpURL)
 	if err != nil {

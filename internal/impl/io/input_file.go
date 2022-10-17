@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -22,7 +20,7 @@ import (
 
 func init() {
 	err := bundle.AllInputs.Add(processors.WrapConstructor(func(conf input.Config, nm bundle.NewManagement) (input.Streamed, error) {
-		rdr, err := newFileConsumer(conf.File, nm.Logger())
+		rdr, err := newFileConsumer(conf.File, nm)
 		if err != nil {
 			return nil, err
 		}
@@ -81,6 +79,7 @@ type scannerInfo struct {
 
 type fileConsumer struct {
 	log log.Modular
+	nm  bundle.NewManagement
 
 	paths       []string
 	scannerCtor codec.ReaderConstructor
@@ -91,8 +90,8 @@ type fileConsumer struct {
 	delete bool
 }
 
-func newFileConsumer(conf input.FileConfig, log log.Modular) (*fileConsumer, error) {
-	expandedPaths, err := filepath.Globs(conf.Paths)
+func newFileConsumer(conf input.FileConfig, nm bundle.NewManagement) (*fileConsumer, error) {
+	expandedPaths, err := filepath.Globs(nm.FS(), conf.Paths)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +104,8 @@ func newFileConsumer(conf input.FileConfig, log log.Modular) (*fileConsumer, err
 	}
 
 	return &fileConsumer{
-		log:         log,
+		nm:          nm,
+		log:         nm.Logger(),
 		scannerCtor: ctor,
 		paths:       expandedPaths,
 		delete:      conf.DeleteOnFinish,
@@ -130,14 +130,14 @@ func (f *fileConsumer) getReader(ctx context.Context) (scannerInfo, error) {
 
 	nextPath := f.paths[0]
 
-	file, err := os.Open(nextPath)
+	file, err := f.nm.FS().Open(nextPath)
 	if err != nil {
 		return scannerInfo{}, err
 	}
 
 	scanner, err := f.scannerCtor(nextPath, file, func(ctx context.Context, err error) error {
 		if err == nil && f.delete {
-			return os.Remove(nextPath)
+			return f.nm.FS().Remove(nextPath)
 		}
 		return nil
 	})
@@ -196,9 +196,9 @@ func (f *fileConsumer) ReadBatch(ctx context.Context) (message.Batch, input.Asyn
 				continue
 			}
 
-			part.MetaSet("path", scannerInfo.currentPath)
-			part.MetaSet("mod_time_unix", modTimeUnix)
-			part.MetaSet("mod_time", modTime)
+			part.MetaSetMut("path", scannerInfo.currentPath)
+			part.MetaSetMut("mod_time_unix", modTimeUnix)
+			part.MetaSetMut("mod_time", modTime)
 
 			msg = append(msg, part)
 		}
@@ -225,9 +225,9 @@ func (f *fileConsumer) Close(ctx context.Context) (err error) {
 	return
 }
 
-func (f *fileConsumer) getModTime(t time.Time) (modTimeUnix, modTime string) {
+func (f *fileConsumer) getModTime(t time.Time) (modTimeUnix int, modTime string) {
 	utcModTime := t.UTC()
-	modTimeUnix = strconv.Itoa(int(utcModTime.Unix()))
+	modTimeUnix = int(utcModTime.Unix())
 	modTime = utcModTime.Format(time.RFC3339)
 	return modTimeUnix, modTime
 }

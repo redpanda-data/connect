@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,12 @@ This input adds the following metadata fields to each message:
 
 ` + "```text" + `
 - nats_subject
+- nats_sequence_stream
+- nats_sequence_consumer
+- nats_num_delivered
+- nats_num_pending
+- nats_domain
+- nats_timestamp_unix_nano
 ` + "```" + `
 
 You can access these metadata fields using
@@ -81,7 +88,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newJetStreamReaderFromConfig(conf, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -373,6 +379,17 @@ func (j *jetStreamReader) Close(ctx context.Context) error {
 func convertMessage(m *nats.Msg) (*service.Message, service.AckFunc, error) {
 	msg := service.NewMessage(m.Data)
 	msg.MetaSet("nats_subject", m.Subject)
+
+	metadata, err := m.Metadata()
+	if err == nil {
+		msg.MetaSet("nats_sequence_stream", strconv.Itoa(int(metadata.Sequence.Stream)))
+		msg.MetaSet("nats_sequence_consumer", strconv.Itoa(int(metadata.Sequence.Consumer)))
+		msg.MetaSet("nats_num_delivered", strconv.Itoa(int(metadata.NumDelivered)))
+		msg.MetaSet("nats_num_pending", strconv.Itoa(int(metadata.NumPending)))
+		msg.MetaSet("nats_domain", metadata.Domain)
+		msg.MetaSet("nats_timestamp_unix_nano", strconv.Itoa(int(metadata.Timestamp.UnixNano())))
+	}
+
 	for k := range m.Header {
 		v := m.Header.Get(k)
 		if v != "" {

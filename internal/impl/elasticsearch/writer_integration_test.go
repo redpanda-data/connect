@@ -84,7 +84,6 @@ func TestIntegrationWriter(t *testing.T) {
 					Body(index).
 					Do(context.Background())
 			}
-
 		}
 		return cerr
 	}); err != nil {
@@ -167,7 +166,7 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+
 		get, err := client.Get().
 			Index("does_not_exist").
 			Id(id).
@@ -377,7 +376,7 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 	}
 	for i := 0; i < N; i++ {
 		msg := message.QuickBatch(testMsgs[i])
-		msg.Get(0).MetaSet("index", "test_conn_index")
+		msg.Get(0).MetaSetMut("index", "test_conn_index")
 		if err = m.Write(msg); err != nil {
 			t.Fatal(err)
 		}
@@ -440,7 +439,7 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 	}
 	msg := message.QuickBatch(testMsg)
 	for i := 0; i < N; i++ {
-		msg.Get(i).MetaSet("index", "test_conn_index")
+		msg.Get(i).MetaSetMut("index", "test_conn_index")
 	}
 	if err = m.Write(msg); err != nil {
 		t.Fatal(err)
@@ -504,8 +503,8 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 	}
 	msg := message.QuickBatch(testMsg)
 	for i := 0; i < N; i++ {
-		msg.Get(i).MetaSet("index", "test_conn_index")
-		msg.Get(i).MetaSet("elastic_action", "index")
+		msg.Get(i).MetaSetMut("index", "test_conn_index")
+		msg.Get(i).MetaSetMut("elastic_action", "index")
 	}
 	if err = m.Write(msg); err != nil {
 		t.Fatal(err)
@@ -536,7 +535,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 
 	// Set elastic_action to deleted for some message parts
 	for i := N / 2; i < N; i++ {
-		msg.Get(i).MetaSet("elastic_action", "delete")
+		msg.Get(i).MetaSetMut("elastic_action", "delete")
 	}
 
 	if err = m.Write(msg); err != nil {
@@ -554,7 +553,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 		if err != nil {
 			t.Fatalf("Failed to get doc '%v': %v", id, err)
 		}
-		partAction := msg.Get(i).MetaGet("elastic_action")
+		partAction := msg.Get(i).MetaGetStr("elastic_action")
 		if partAction == "deleted" && get.Found {
 			t.Errorf("document %v found when it should have been deleted", i)
 		} else if partAction != "deleted" && !get.Found {
@@ -596,8 +595,8 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 	}
 
 	msg := message.QuickBatch(testMsg)
-	msg.Get(0).MetaSet("index", "test_conn_index")
-	msg.Get(1).MetaSet("index", "test_conn_index_2")
+	msg.Get(0).MetaSetMut("index", "test_conn_index")
+	msg.Get(1).MetaSetMut("index", "test_conn_index_2")
 
 	if err = m.Write(msg); err != nil {
 		t.Fatal(err)
@@ -605,7 +604,7 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 	for i := 0; i < N; i++ {
 		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
-			Index(msg.Get(i).MetaGet("index")).
+			Index(msg.Get(i).MetaGetStr("index")).
 			Type("_doc").
 			Id(conf.ID).
 			Do(context.Background())
@@ -660,7 +659,6 @@ func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testi
 		Type("_doc").
 		Id(conf.ID).
 		Do(context.Background())
-
 	if err != nil {
 		t.Fatalf("Failed to get doc '%v': %v", conf.ID, err)
 	}

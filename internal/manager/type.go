@@ -21,6 +21,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/component/ratelimit"
 	"github.com/benthosdev/benthos/v4/internal/docs"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/manager/mock"
 	"github.com/benthosdev/benthos/v4/internal/message"
@@ -67,6 +68,7 @@ type Type struct {
 	label string
 
 	apiReg APIReg
+	fs     ifs.FS
 
 	inputs       map[string]*inputWrapper
 	caches       map[string]cache.V1
@@ -178,6 +180,8 @@ func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
 		stats:  metrics.Noop(),
 		tracer: trace.NewNoopTracerProvider(),
 
+		fs: ifs.OS(),
+
 		pipes:    map[string]<-chan message.Transaction{},
 		pipeLock: &sync.RWMutex{},
 	}
@@ -273,7 +277,7 @@ func New(conf ResourceConfig, opts ...OptFunc) (*Type, error) {
 //------------------------------------------------------------------------------
 
 // ForStream returns a variant of this manager to be used by a particular stream
-// identifer, where APIs registered will be namespaced by that id.
+// identifier, where APIs registered will be namespaced by that id.
 func (t *Type) ForStream(id string) bundle.NewManagement {
 	return t.forStream(id)
 }
@@ -350,6 +354,13 @@ func (t *Type) RegisterEndpoint(apiPath, desc string, h http.HandlerFunc) {
 	}
 }
 
+// FS returns an ifs.FS implementation that provides access to a filesystem. By
+// default this simply access the os package, with relative paths resolved from
+// the directory that the process is running from.
+func (t *Type) FS() ifs.FS {
+	return t.fs
+}
+
 // SetPipe registers a new transaction chan to a named pipe.
 func (t *Type) SetPipe(name string, tran <-chan message.Transaction) {
 	t.pipeLock.Lock()
@@ -357,7 +368,7 @@ func (t *Type) SetPipe(name string, tran <-chan message.Transaction) {
 	t.pipeLock.Unlock()
 }
 
-// GetPipe attempts to obtain and return a named output Pipe
+// GetPipe attempts to obtain and return a named output Pipe.
 func (t *Type) GetPipe(name string) (<-chan message.Transaction, error) {
 	t.pipeLock.RLock()
 	pipe, exists := t.pipes[name]

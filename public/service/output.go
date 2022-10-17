@@ -71,7 +71,7 @@ type BatchOutput interface {
 
 //------------------------------------------------------------------------------
 
-// Implements output.AsyncSink
+// Implements output.AsyncSink.
 type airGapWriter struct {
 	w Output
 }
@@ -98,7 +98,7 @@ func (a *airGapWriter) Close(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// Implements output.AsyncSink
+// Implements output.AsyncSink.
 type airGapBatchWriter struct {
 	w BatchOutput
 }
@@ -121,6 +121,7 @@ func (a *airGapBatchWriter) WriteBatch(ctx context.Context, msg message.Batch) e
 	if err != nil && errors.Is(err, ErrNotConnected) {
 		err = component.ErrNotConnected
 	}
+	err = fromPublicBatchError(err)
 	return err
 }
 
@@ -153,7 +154,7 @@ func (o *ResourceOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
 	for i, m := range b {
 		payload[i] = m.part
 	}
-	return o.writeMsg(ctx, payload)
+	return toPublicBatchError(o.writeMsg(ctx, payload))
 }
 
 func (o *ResourceOutput) writeMsg(ctx context.Context, payload message.Batch) error {
@@ -233,7 +234,7 @@ func (o *OwnedOutput) WriteBatch(ctx context.Context, b MessageBatch) error {
 
 	select {
 	case res := <-resChan:
-		return res
+		return toPublicBatchError(res)
 	case <-ctx.Done():
 		return ctx.Err()
 	}

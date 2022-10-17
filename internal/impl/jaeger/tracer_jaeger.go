@@ -19,9 +19,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/docs"
 )
 
-var (
-	exporterInitFn = func(epOpt jaeger.EndpointOption) (tracesdk.SpanExporter, error) { return jaeger.New(epOpt) }
-)
+var exporterInitFn = func(epOpt jaeger.EndpointOption) (tracesdk.SpanExporter, error) { return jaeger.New(epOpt) }
 
 func init() {
 	_ = bundle.AllTracers.Add(NewJaeger, docs.ComponentSpec{

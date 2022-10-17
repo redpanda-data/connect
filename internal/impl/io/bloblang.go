@@ -71,6 +71,7 @@ func init() {
 				return nil, err
 			}
 
+			// TODO: Obtain FS from bloblang environment.
 			pathBytes, err := os.ReadFile(path)
 			if err != nil {
 				return nil, err

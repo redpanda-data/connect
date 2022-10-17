@@ -73,7 +73,6 @@ func init() {
 			}
 			return d, nil
 		})
-
 	if err != nil {
 		panic(err)
 	}

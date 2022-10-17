@@ -12,7 +12,6 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/component/output/processors"
 	"github.com/benthosdev/benthos/v4/internal/docs"
@@ -23,9 +22,7 @@ import (
 )
 
 func init() {
-	err := bundle.AllOutputs.Add(processors.WrapConstructor(func(c output.Config, nm bundle.NewManagement) (output.Streamed, error) {
-		return newWebsocketOutput(c, nm, nm.Logger(), nm.Metrics())
-	}), docs.ComponentSpec{
+	err := bundle.AllOutputs.Add(processors.WrapConstructor(newWebsocketOutput), docs.ComponentSpec{
 		Name:    "websocket",
 		Summary: `Sends messages to an HTTP server via a websocket connection.`,
 		Config: docs.FieldComponent().WithChildren(
@@ -41,8 +38,8 @@ func init() {
 	}
 }
 
-func newWebsocketOutput(conf output.Config, mgr bundle.NewManagement, log log.Modular, stats metrics.Type) (output.Streamed, error) {
-	w, err := newWebsocketWriter(conf.Websocket, log)
+func newWebsocketOutput(conf output.Config, mgr bundle.NewManagement) (output.Streamed, error) {
+	w, err := newWebsocketWriter(conf.Websocket, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +52,7 @@ func newWebsocketOutput(conf output.Config, mgr bundle.NewManagement, log log.Mo
 
 type websocketWriter struct {
 	log log.Modular
+	mgr bundle.NewManagement
 
 	lock *sync.Mutex
 
@@ -63,15 +61,16 @@ type websocketWriter struct {
 	tlsConf *tls.Config
 }
 
-func newWebsocketWriter(conf output.WebsocketConfig, log log.Modular) (*websocketWriter, error) {
+func newWebsocketWriter(conf output.WebsocketConfig, mgr bundle.NewManagement) (*websocketWriter, error) {
 	ws := &websocketWriter{
-		log:  log,
+		log:  mgr.Logger(),
+		mgr:  mgr,
 		lock: &sync.Mutex{},
 		conf: conf,
 	}
 	if conf.TLS.Enabled {
 		var err error
-		if ws.tlsConf, err = conf.TLS.Get(); err != nil {
+		if ws.tlsConf, err = conf.TLS.Get(mgr.FS()); err != nil {
 			return nil, err
 		}
 	}
@@ -100,7 +99,7 @@ func (w *websocketWriter) Connect(ctx context.Context) error {
 		return err
 	}
 
-	if err := w.conf.Sign(&http.Request{
+	if err := w.conf.Sign(w.mgr.FS(), &http.Request{
 		URL:    purl,
 		Header: headers,
 	}); err != nil {
@@ -114,7 +113,6 @@ func (w *websocketWriter) Connect(ctx context.Context) error {
 		}
 		if client, _, err = dialer.Dial(w.conf.URL, headers); err != nil {
 			return err
-
 		}
 	} else if client, _, err = websocket.DefaultDialer.Dial(w.conf.URL, headers); err != nil {
 		return err

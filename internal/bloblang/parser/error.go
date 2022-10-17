@@ -244,7 +244,7 @@ func (e *Error) ErrorAtPositionStructured(filepath string, input []rune) string 
 }
 
 // ImportError wraps a parser error with an import file path. When a fatal error
-// wraps
+// wraps.
 type ImportError struct {
 	filepath string
 	content  []rune

@@ -84,7 +84,6 @@ func init() {
 			out, err = newSQLInsertOutputFromConfig(conf, mgr.Logger())
 			return
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -121,6 +120,7 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, logger *service.Lo
 	}
 	if _, in := map[string]struct{}{
 		"clickhouse": {},
+		"oracle":     {},
 	}[s.driver]; in {
 		s.useTxStmt = true
 	}
@@ -148,6 +148,16 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, logger *service.Lo
 	s.builder = squirrel.Insert(tableStr).Columns(columns...)
 	if s.driver == "postgres" || s.driver == "clickhouse" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
+	} else if s.driver == "oracle" {
+		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
+	}
+
+	if s.useTxStmt {
+		values := make([]any, 0, len(columns))
+		for _, c := range columns {
+			values = append(values, c)
+		}
+		s.builder = s.builder.Values(values...)
 	}
 
 	if conf.Contains("prefix") {
@@ -212,7 +222,7 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 		if tx, err = s.db.Begin(); err != nil {
 			return err
 		}
-		sqlStr, _, err := insertBuilder.Values().ToSql()
+		sqlStr, _, err := insertBuilder.ToSql()
 		if err != nil {
 			return err
 		}

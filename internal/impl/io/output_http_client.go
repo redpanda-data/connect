@@ -125,8 +125,8 @@ func (h *httpClientWriter) WriteBatch(ctx context.Context, msg message.Batch) er
 			}
 			parts[i].SetBytes(p.AsBytes())
 
-			_ = p.MetaIter(func(k, v string) error {
-				parts[i].MetaSet(k, v)
+			_ = p.MetaIterMut(func(k string, v any) error {
+				parts[i].MetaSetMut(k, v)
 				return nil
 			})
 

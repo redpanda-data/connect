@@ -15,6 +15,7 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/parser"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/message"
 )
 
@@ -226,7 +227,7 @@ func run(c *cli.Context) error {
 			fmt.Fprintln(os.Stderr, red("invalid flags, unable to execute both a file mapping and an inline mapping"))
 			os.Exit(1)
 		}
-		mappingBytes, err := os.ReadFile(file)
+		mappingBytes, err := ifs.ReadFile(ifs.OS(), file)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, red("failed to read mapping file: %v\n"), err)
 			os.Exit(1)

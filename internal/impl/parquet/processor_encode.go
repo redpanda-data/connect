@@ -58,7 +58,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return newParquetEncodeProcessorFromConfig(conf, mgr.Logger())
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -83,7 +82,7 @@ func parquetSchemaConfig() *service.ConfigField {
 				"type": "BYTE_ARRAY",
 			},
 		}),
-	)
+	).Description("Parquet schema.")
 }
 
 func parquetGroupFromConfig(columnConfs []*service.ParsedConfig) (parquet.Group, error) {
@@ -201,7 +200,7 @@ func newParquetEncodeProcessor(logger *service.Logger, schema *parquet.Schema, c
 
 func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	buf := bytes.NewBuffer(nil)
-	pWtr := parquet.NewWriter(buf, s.schema, parquet.Compression(s.compressionType))
+	pWtr := parquet.NewGenericWriter[any](buf, s.schema, parquet.Compression(s.compressionType))
 
 	rows := make([]parquet.Row, len(batch))
 	for i, m := range batch {

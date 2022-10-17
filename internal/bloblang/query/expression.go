@@ -21,7 +21,7 @@ func NewMatchCase(caseFn, queryFn Function) MatchCase {
 }
 
 // NewMatchFunction takes a contextual mapping and a list of MatchCases, when
-// the function is executed
+// the function is executed.
 func NewMatchFunction(contextFn Function, cases ...MatchCase) Function {
 	if contextFn == nil {
 		contextFn = ClosureFunction("this", func(ctx FunctionContext) (any, error) {

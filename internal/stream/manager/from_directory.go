@@ -2,11 +2,13 @@ package manager
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/benthosdev/benthos/v4/internal/config"
+	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
 	"github.com/benthosdev/benthos/v4/internal/stream"
 )
 
@@ -21,7 +23,7 @@ func LoadStreamConfigsFromDirectory(replaceEnvVars bool, dir string) (map[string
 
 	dir = filepath.Clean(dir)
 
-	if info, err := os.Stat(dir); err != nil {
+	if info, err := ifs.OS().Stat(dir); err != nil {
 		if os.IsNotExist(err) {
 			return streamMap, nil
 		}
@@ -30,7 +32,7 @@ func LoadStreamConfigsFromDirectory(replaceEnvVars bool, dir string) (map[string
 		return streamMap, nil
 	}
 
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, werr error) error {
+	err := fs.WalkDir(ifs.OS(), dir, func(path string, info fs.DirEntry, werr error) error {
 		if werr != nil {
 			return werr
 		}

@@ -3,7 +3,6 @@ package cassandra
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -18,16 +17,13 @@ import (
 
 func TestIntegrationCassandra(t *testing.T) {
 	integration.CheckSkip(t)
-	if runtime.GOOS == "darwin" {
-		t.Skip("skipping test on macos")
-	}
 
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 60
+	pool.MaxWait = time.Minute * 3
 	resource, err := pool.Run("cassandra", "latest", nil)
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -139,53 +135,6 @@ output:
 				require.NoError(t, session.Query(
 					fmt.Sprintf(
 						"CREATE TABLE testspace.table%v (id int primary key, content text, created_at timestamp, meows list<text>);",
-						vars.ID,
-					),
-				).Exec())
-			}),
-		)
-	})
-
-	t.Run("with old style values", func(t *testing.T) {
-		template := `
-output:
-  cassandra:
-    addresses:
-      - localhost:$PORT
-    query: 'INSERT INTO testspace.table$ID (id, content, created_at) VALUES (?, ?, ?)'
-    args:
-      - ${! json("id") }
-      - ${! json("content") }
-      - ${! timestamp("2006-01-02T15:04:05.999Z07:00") }
-`
-		queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
-			var resID int
-			var resContent string
-			var createdAt time.Time
-			if err := session.Query(
-				fmt.Sprintf("select id, content, created_at from testspace.table%v where id = ?;", testID), messageID,
-			).Scan(&resID, &resContent, &createdAt); err != nil {
-				return "", nil, err
-			}
-			if time.Since(createdAt) > time.Hour || time.Since(createdAt) < 0 {
-				return "", nil, fmt.Errorf("received bad created_at: %v", createdAt)
-			}
-			return fmt.Sprintf(`{"content":"%v","id":%v}`, resContent, resID), nil, err
-		}
-		suite := integration.StreamTests(
-			integration.StreamTestOutputOnlySendSequential(10, queryGetFn),
-			integration.StreamTestOutputOnlySendBatch(10, queryGetFn),
-		)
-		suite.Run(
-			t, template,
-			integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
-			integration.StreamTestOptSleepAfterInput(time.Second*10),
-			integration.StreamTestOptSleepAfterOutput(time.Second*10),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				vars.ID = strings.ReplaceAll(testID, "-", "")
-				require.NoError(t, session.Query(
-					fmt.Sprintf(
-						"CREATE TABLE testspace.table%v (id int primary key, content text, created_at timestamp);",
 						vars.ID,
 					),
 				).Exec())

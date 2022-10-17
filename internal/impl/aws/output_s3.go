@@ -15,6 +15,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/bloblang/field"
+	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
@@ -275,8 +276,8 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg message.Batch) err
 
 	return output.IterateBatchedSend(msg, func(i int, p *message.Part) error {
 		metadata := map[string]*string{}
-		_ = a.metaFilter.Iter(p, func(k, v string) error {
-			metadata[k] = aws.String(v)
+		_ = a.metaFilter.Iter(p, func(k string, v any) error {
+			metadata[k] = aws.String(query.IToString(v))
 			return nil
 		})
 

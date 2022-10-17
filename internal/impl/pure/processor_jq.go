@@ -138,7 +138,7 @@ func newJQ(conf processor.JQConfig, mgr bundle.NewManagement) (*jqProc, error) {
 
 func (j *jqProc) getPartMetadata(part *message.Part) map[string]any {
 	metadata := map[string]any{}
-	_ = part.MetaIter(func(k, v string) error {
+	_ = part.MetaIterMut(func(k string, v any) error {
 		metadata[k] = v
 		return nil
 	})

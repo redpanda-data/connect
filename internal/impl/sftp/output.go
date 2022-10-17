@@ -71,6 +71,7 @@ type sftpWriter struct {
 	client *sftp.Client
 
 	log log.Modular
+	mgr bundle.NewManagement
 
 	path      *field.Expression
 	codec     codec.WriterConstructor
@@ -85,6 +86,7 @@ func newSFTPWriter(conf output.SFTPConfig, mgr bundle.NewManagement) (*sftpWrite
 	s := &sftpWriter{
 		conf: conf,
 		log:  mgr.Logger(),
+		mgr:  mgr,
 	}
 
 	var err error
@@ -107,7 +109,7 @@ func (s *sftpWriter) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	s.client, err = s.conf.Credentials.GetClient(s.conf.Address)
+	s.client, err = s.conf.Credentials.GetClient(s.mgr.FS(), s.conf.Address)
 	return err
 }
 

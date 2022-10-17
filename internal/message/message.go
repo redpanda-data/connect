@@ -98,7 +98,7 @@ v                                        v           v
               # Of bytes in message part 1 (u32 big endian)
 */
 
-// Reserve bytes for our length counter (4 * 8 = 32 bit)
+// Reserve bytes for our length counter (4 * 8 = 32 bit).
 var intLen uint32 = 4
 
 // SerializeBytes returns a 2D byte-slice serialized.
