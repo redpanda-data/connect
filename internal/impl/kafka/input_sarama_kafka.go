@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jeffail/gabs/v2"
 	"github.com/Shopify/sarama"
 
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
@@ -103,7 +102,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				docs.FieldString("rebalance_timeout", "A period after which rebalancing is abandoned if unresolved.").Advanced(),
 			).Advanced(),
 			docs.FieldInt("fetch_buffer_cap", "The maximum number of unprocessed messages to fetch at a given time.").Advanced(),
-			docs.FieldBool("multi_header", "Decode headers into an extra set of `meta` keys with the suffix `_multi`, containing strings of JSON arrays so that duplicate header values can be accessed. These can be used from bloblang with code like `meta(\"key_multi\").parse_json().contains(\"foo\")`").Advanced(),
+			docs.FieldBool("multi_header", "Decode headers into lists to allow handling of multiple values with the same key").Advanced(),
 			func() docs.FieldSpec {
 				b := policy.FieldSpec()
 				b.IsAdvanced = true
@@ -389,7 +388,7 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 	part := message.NewPart(data.Value)
 
 	if multiHeader {
-		// in multi header mode we gather headers so we can encode them as json lists
+		// in multi header mode we gather headers so we can encode them as lists
 		var headers = map[string][]string{}
 
 		for _, hdr := range data.Headers {
@@ -398,22 +397,12 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 		}
 
 		for key, values := range headers {
-			json := gabs.New()
-			_, err := json.Array("r")
-			if err != nil {
-				panic(err)
-			}
-			for _, s := range values {
-				err := json.ArrayAppend(s, "r")
-				if err != nil {
-					panic(err)
-				}
-			}
-			part.MetaSet(key+"_multi", json.Path("r").String())
+			part.MetaSetMut(key, values)
 		}
-	}
-	for _, hdr := range data.Headers {
-		part.MetaSetMut(string(hdr.Key), string(hdr.Value))
+	} else {
+		for _, hdr := range data.Headers {
+			part.MetaSetMut(string(hdr.Key), string(hdr.Value))
+		}
 	}
 
 	lag := highestOffset - data.Offset - 1

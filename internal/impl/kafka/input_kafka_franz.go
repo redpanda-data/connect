@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Jeffail/gabs/v2"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"github.com/twmb/franz-go/pkg/sasl"
@@ -74,7 +73,7 @@ This input adds the following metadata fields to each message:
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
 		Field(saslField()).
-		Field(service.NewBoolField("multi_header").Description("Decode headers into an extra set of `meta` keys with the suffix `_multi`, containing strings of JSON arrays so that duplicate header values can be accessed. These can be used from bloblang with code like `meta(\"key_multi\").parse_json().contains(\"foo\")`").Default(false).Advanced())
+		Field(service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced())
 }
 
 func init() {
@@ -468,7 +467,7 @@ func recordToMessage(record *kgo.Record, multiHeader bool) *service.Message {
 	msg.MetaSet("kafka_offset", strconv.Itoa(int(record.Offset)))
 	msg.MetaSet("kafka_timestamp_unix", strconv.FormatInt(record.Timestamp.Unix(), 10))
 	if multiHeader {
-		// in multi header mode we gather headers so we can encode them as json lists
+		// in multi header mode we gather headers so we can encode them as lists
 		var headers = map[string][]string{}
 
 		for _, hdr := range record.Headers {
@@ -476,22 +475,12 @@ func recordToMessage(record *kgo.Record, multiHeader bool) *service.Message {
 		}
 
 		for key, values := range headers {
-			json := gabs.New()
-			_, err := json.Array("r")
-			if err != nil {
-				panic(err)
-			}
-			for _, s := range values {
-				err := json.ArrayAppend(s, "r")
-				if err != nil {
-					panic(err)
-				}
-			}
-			msg.MetaSet(key+"_multi", json.Path("r").String())
+			msg.MetaSetMut(key, values)
 		}
-	}
-	for _, hdr := range record.Headers {
-		msg.MetaSet(hdr.Key, string(hdr.Value))
+	} else {
+		for _, hdr := range record.Headers {
+			msg.MetaSet(hdr.Key, string(hdr.Value))
+		}
 	}
 	return msg
 }
